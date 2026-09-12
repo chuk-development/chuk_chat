@@ -16,7 +16,9 @@ import 'package:cowork/theme/theme_presets.dart';
 import 'package:cowork/utils/chat_font_resolver.dart';
 import 'package:cowork/utils/color_extensions.dart';
 import 'package:cowork/utils/theme_extensions.dart';
+import 'package:cowork/widgets/anchored_menu.dart';
 import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 
 class ThemePage extends StatefulWidget {
   final AppShellConfig config;
@@ -978,47 +980,42 @@ class _PresetPicker extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<ThemePreset>(
-                value: selected,
-                isExpanded: true,
-                dropdownColor: m3.surfaceContainerHigh,
-                borderRadius: kBorderRadiusMenu,
-                focusColor: Colors.transparent,
-                hint: Text(
-                  customLabel,
-                  style: TextStyle(color: m3.onSurfaceVariant),
-                ),
-                items: presets
-                    .map(
-                      (p) => DropdownMenuItem<ThemePreset>(
-                        value: p,
-                        child: Row(
-                          children: [
-                            _PresetDots(preset: p, brightness: brightness),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: cs.onSurface),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (p) {
-                  if (p != null) onSelected(p);
-                },
-              ),
+            child: MenuAnchorButton(
+              label: selected?.name ?? customLabel,
+              expand: true,
+              leading: selected == null
+                  ? null
+                  : _PresetDots(preset: selected!, brightness: brightness),
+              labelStyle: selected == null
+                  ? TextStyle(color: m3.onSurfaceVariant)
+                  : TextStyle(color: cs.onSurface),
+              onTap: _pick,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _pick(BuildContext anchorContext) async {
+    final ThemePreset? picked = await showAnchoredMenu<ThemePreset>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<ThemePreset>>[
+        for (final ThemePreset p in presets)
+          PopupMenuItem<ThemePreset>(
+            padding: EdgeInsets.zero,
+            value: p,
+            child: MenuActionRow(
+              label: p.name,
+              leading: _PresetDots(preset: p, brightness: brightness),
+              selected: p == selected,
+            ),
+          ),
+      ],
+    );
+    if (picked != null) onSelected(picked);
   }
 }
 
@@ -1099,31 +1096,14 @@ class _FontCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                dropdownColor: m3.surfaceContainerHigh,
-                borderRadius: kBorderRadiusMenu,
-                focusColor: Colors.transparent,
-                items: options
-                    .map(
-                      (id) => DropdownMenuItem<String>(
-                        value: id,
-                        child: Text(
-                          labelFor(id),
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontFamily: resolveChatFontFamily(id),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null && v != value) onChanged(v);
-                },
+            child: MenuAnchorButton(
+              label: labelFor(value),
+              expand: true,
+              labelStyle: TextStyle(
+                color: cs.onSurface,
+                fontFamily: resolveChatFontFamily(value),
               ),
+              onTap: _pick,
             ),
           ),
           const SizedBox(height: 10),
@@ -1146,4 +1126,26 @@ class _FontCard extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _pick(BuildContext anchorContext) async {
+    final String? picked = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<String>>[
+        for (final String id in options)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: id,
+            child: MenuActionRow(label: labelFor(id), selected: id == value),
+          ),
+      ],
+    );
+    if (picked != null && picked != value) onChanged(picked);
+  }
 }
+
+/// The visible half of a dropdown: the current value and the arrow.
+///
+/// A tap opens the house menu ([showAnchoredMenu]) instead of the Material
+/// popup, so a settings picker reads like every other menu in the app.

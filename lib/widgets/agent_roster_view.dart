@@ -56,8 +56,10 @@ import 'package:cowork/ui/expressive/agent_face.dart';
 import 'package:cowork/services/profile_service.dart';
 import 'package:cowork/services/supabase_service.dart';
 import 'package:cowork/widgets/agent_avatar.dart';
+import 'package:cowork/widgets/anchored_menu.dart';
 import 'package:cowork/widgets/coworker_name_dialog.dart';
 import 'package:cowork/widgets/credit_display.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
 
 // The name dialog moved to its own file when it was rebuilt in the app's
@@ -628,6 +630,56 @@ class _AgentTileState extends State<_AgentTile> {
     return (own == null || own.isEmpty) ? null : own;
   }
 
+  /// The row menu, on the app's one menu surface. Same entries, same order
+  /// and same conditions as the popup it replaces. The value of a row IS its
+  /// action, so nothing has to be decoded again after the pick.
+  Future<void> _openRowMenu(BuildContext anchor) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final VoidCallback? picked = await showAnchoredMenu<VoidCallback>(
+      anchor,
+      color: scheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<VoidCallback>>[
+        if (widget.onOpenProfile != null)
+          PopupMenuItem<VoidCallback>(
+            value: widget.onOpenProfile,
+            padding: EdgeInsets.zero,
+            child: const MenuActionRow(
+              icon: Icons.person_outline,
+              label: 'Profile',
+            ),
+          ),
+        if (widget.onRename != null)
+          PopupMenuItem<VoidCallback>(
+            value: widget.onRename,
+            padding: EdgeInsets.zero,
+            child: const MenuActionRow(
+              icon: Icons.edit_outlined,
+              label: 'Rename',
+            ),
+          ),
+        PopupMenuItem<VoidCallback>(
+          value: widget.onHide,
+          padding: EdgeInsets.zero,
+          child: const MenuActionRow(
+            icon: Icons.visibility_off_outlined,
+            label: 'Hide',
+          ),
+        ),
+        if (widget.onDelete != null)
+          PopupMenuItem<VoidCallback>(
+            value: widget.onDelete,
+            padding: EdgeInsets.zero,
+            child: MenuActionRow(
+              icon: Icons.delete_outline,
+              label: 'Delete',
+              tone: scheme.error,
+            ),
+          ),
+      ],
+    );
+    if (mounted) picked?.call();
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = SidebarTokens.of(context);
@@ -748,65 +800,18 @@ class _AgentTileState extends State<_AgentTile> {
                   duration: kExpressiveShort,
                   curve: kExpressiveDecelerate,
                   opacity: _hovered || selected ? 1 : 0.45,
-                  child: PopupMenuButton<String>(
-                    tooltip: 'More',
-                    padding: EdgeInsets.zero,
-                    iconSize: 18,
-                    icon: AppIcon(
-                      Icons.more_vert,
-                      size: 18,
-                      color: t.iconFg.withValues(alpha: 0.7),
-                    ),
-                    onSelected: (value) {
-                      if (value == 'profile') widget.onOpenProfile?.call();
-                      if (value == 'rename') widget.onRename?.call();
-                      if (value == 'hide') widget.onHide();
-                      if (value == 'delete') widget.onDelete?.call();
-                    },
-                    itemBuilder: (context) => [
-                      if (widget.onOpenProfile != null)
-                        const PopupMenuItem<String>(
-                          value: 'profile',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: AppIcon(Icons.person_outline, size: 18),
-                            title: Text('Profile'),
-                          ),
-                        ),
-                      if (widget.onRename != null)
-                        const PopupMenuItem<String>(
-                          value: 'rename',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: AppIcon(Icons.edit_outlined, size: 18),
-                            title: Text('Rename'),
-                          ),
-                        ),
-                      const PopupMenuItem<String>(
-                        value: 'hide',
-                        child: ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          leading: AppIcon(
-                            Icons.visibility_off_outlined,
-                            size: 18,
-                          ),
-                          title: Text('Hide'),
-                        ),
+                  child: Builder(
+                    builder: (BuildContext anchor) => IconButton(
+                      tooltip: 'More',
+                      padding: EdgeInsets.zero,
+                      iconSize: 18,
+                      icon: AppIcon(
+                        Icons.more_vert,
+                        size: 18,
+                        color: t.iconFg.withValues(alpha: 0.7),
                       ),
-                      if (widget.onDelete != null)
-                        const PopupMenuItem<String>(
-                          value: 'delete',
-                          child: ListTile(
-                            dense: true,
-                            contentPadding: EdgeInsets.zero,
-                            leading: AppIcon(Icons.delete_outline, size: 18),
-                            title: Text('Delete'),
-                          ),
-                        ),
-                    ],
+                      onPressed: () => _openRowMenu(anchor),
+                    ),
                   ),
                 ),
               ],

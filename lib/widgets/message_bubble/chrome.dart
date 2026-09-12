@@ -222,95 +222,47 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   /// each opening its page in the browser on tap.
   void _showSourcesSheet(List<AgentActivitySource> sources) {
     final colorScheme = Theme.of(context).colorScheme;
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-      ),
-      isScrollControlled: true,
-      constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.7,
-      ),
-      builder: (ctx) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 32,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: colorScheme.onSurface.withValues(alpha: 0.2),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
-                    children: [
-                      AppIcon(
-                        Icons.language,
-                        size: 18,
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${sources.length} source'
-                        '${sources.length == 1 ? '' : 's'}',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Flexible(
-                  child: ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: sources.length,
-                    itemBuilder: (ctx, index) {
-                      final source = sources[index];
-                      return ListTile(
-                        leading: _buildFavicon(source.host, colorScheme, 24),
-                        title: Text(
-                          source.title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: colorScheme.onSurface,
-                          ),
-                        ),
-                        subtitle: Text(
-                          source.host,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ),
-                        trailing: AppIcon(
-                          Icons.open_in_new,
-                          size: 22,
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        onTap: () => _openSourceUrl(source),
-                      );
-                    },
-                  ),
-                ),
-              ],
+    final String label =
+        '${sources.length} source${sources.length == 1 ? '' : 's'}';
+    unawaited(
+      showMenuSheet<void>(
+        context,
+        header: Row(
+          children: [
+            AppIcon(
+              Icons.language,
+              size: 18,
+              color: colorScheme.onSurfaceVariant,
             ),
-          ),
-        );
-      },
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: 15,
+                color: colorScheme.onSurface,
+              ),
+            ),
+          ],
+        ),
+        groups: <List<Widget>>[
+          <Widget>[
+            for (final AgentActivitySource source in sources)
+              MenuActionRow(
+                label: source.title,
+                maxLines: 2,
+                subtitle: source.host,
+                leading: _buildFavicon(source.host, colorScheme, 24),
+                trailing: AppIcon(
+                  Icons.open_in_new,
+                  size: 20,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                onTap: () => _openSourceUrl(source),
+              ),
+          ],
+        ],
+      ),
     );
   }
 

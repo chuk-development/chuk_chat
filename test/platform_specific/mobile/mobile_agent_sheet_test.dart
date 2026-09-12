@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:cowork/widgets/menu_tile_group.dart';
 
 import 'mobile_support.dart';
 
@@ -64,16 +65,17 @@ void main() {
     expect(find.text('Rooms'), findsNothing);
     expect(find.text('Settings'), findsNothing);
 
-    // Every row is a full-width, ≥ 48 dp target.
+    // Every row is a full-width, ≥ 48 dp target. The menu surface keeps a
+    // 16 dp margin on each side, so "full width" is the sheet's width.
     final Size row = tester.getSize(
-      find.widgetWithText(ListTile, 'Copy Debug Chat'),
+      find.widgetWithText(MenuActionRow, 'Copy Debug Chat'),
     );
     expect(row.height, greaterThanOrEqualTo(48));
-    expect(row.width, kPhoneSize.width);
+    expect(row.width, kPhoneSize.width - 32);
 
     await tester.tap(find.text('Copy Debug Chat'));
     await tester.pumpAndSettle();
     expect(copies, 1);
-    expect(find.byType(MobileAgentSheet), findsNothing, reason: 'sheet closed');
+    expect(find.text('Copy Debug Chat'), findsNothing, reason: 'sheet closed');
   });
 }
