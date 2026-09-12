@@ -86,6 +86,10 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   // watch or drive the screen. The RFB widget is only built once it is known.
   String? _password;
   bool _started = false;
+  // True once the first sealed `browser_data` frame has landed. It is the
+  // difference between "the tunnel is quiet" and "the picture is on its way",
+  // and the connecting note says which.
+  bool _sawBytes = false;
   // Full-screen mode: the app bar and status banner go away and the frame gets
   // the whole window; a small floating button (and the same toggle) brings the
   // chrome back. Errors still surface as an overlay so a dead stream is never
@@ -97,6 +101,18 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   final bool _touchInput = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
   final RemoteFrameBufferController _rfbController =
       RemoteFrameBufferController();
+  // The one thing the full-screen toggle must NOT rebuild.
+  //
+  // Full screen swaps a bare `Scaffold` for an `ExpressiveScreen`, so the
+  // framebuffer widget changed position in the tree and Flutter threw its
+  // element away: the RFB isolate was killed, the loopback socket closed, the
+  // bridge latched `_bridgeClosed` — and the fresh RFB client that dialled
+  // straight back in was refused by `_onRfbClient`. One tap on "full screen"
+  // and the stream was dead for good, with the virtual cursor and the zoom
+  // reset on top (Bead cowork-prsd). A global key moves the whole subtree to
+  // the new parent instead of rebuilding it, so the isolate, the socket, the
+  // cursor and the zoom all survive the toggle.
+  final GlobalKey _frameHost = GlobalKey(debugLabel: 'browser view frame');
   // End-to-end bandwidth meter (debug builds only): what this view really
   // receives off the sealed channel, after base64 decode. Logged every 2 s so
   // "is it compressed?" is a number in the console, not a feeling.
@@ -112,6 +128,9 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
 
   Future<void> _start() async {
     _sub = widget.controller.inbound.listen(_onInbound);
+    // The note over the stream names the step it waits on, and the last two
+    // steps are only visible on the RFB controller.
+    _rfbController.addListener(_onStreamStateChanged);
     if (kDebugMode) {
       _meter = Timer.periodic(const Duration(seconds: 2), (_) {
         if (_meterChunks == 0) return;
@@ -194,11 +213,19 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     }
   }
 
+  void _onStreamStateChanged() {
+    if (mounted) setState(() {});
+  }
+
   void _onInbound(CoworkRelayInbound event) {
     switch (event) {
       case CoworkRelayBrowserData(:final bytes):
         _meterBytes += bytes.length;
         _meterChunks++;
+        if (!_sawBytes) {
+          _sawBytes = true;
+          if (mounted) setState(() {});
+        }
         _safeAdd(bytes);
       case CoworkRelayBrowserView(
         :final status,
@@ -235,6 +262,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   @override
   void dispose() {
     _meter?.cancel();
+    _rfbController.removeListener(_onStreamStateChanged);
     _rfbController.dispose();
     _sub?.cancel();
     _teardownBridge();
@@ -249,7 +277,8 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final Widget frame = _buildFrame();
+    // Same widget, same element, both modes: see [_frameHost].
+    final Widget frame = KeyedSubtree(key: _frameHost, child: _buildFrame());
     if (_fullscreen) {
       // Full screen means the stream owns every pixel — it does NOT mean the
       // system bars go away. On a phone the status bar still paints over the
@@ -268,6 +297,11 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         // The darkest ground the scheme has, not a hard black: the stream sits
         // on it and the scheme still owns the colour.
         backgroundColor: cs.surfaceContainerLowest,
+        // The soft keyboard must not squeeze the remote screen: a resize would
+        // change the fit, move every pixel under the virtual cursor and undo
+        // the zoom the moment typing starts. The overlay lifts its own controls
+        // over the keyboard inset instead.
+        resizeToAvoidBottomInset: false,
         body: Stack(
           fit: StackFit.expand,
           children: [
@@ -357,64 +391,129 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     );
   }
 
-  /// The framebuffer (or the spinner while it is not ready), independent of
-  /// the chrome around it so full-screen and windowed mode share one widget.
+  /// What the view is still waiting for, or null once there is a picture.
+  ///
+  /// The steps are the real ones: our end of the tunnel, the executor's
+  /// `started` event (it carries the per-view VNC secret), the first bytes off
+  /// the sealed channel, and the first decoded frame. A spinner that only turns
+  /// says none of that.
+  String? get _waitingFor {
+    if (_status == 'error') return null;
+    if (_port == null) return 'Opening the channel…';
+    if (!_started) return 'Waiting for the sandbox screen…';
+    if (!_sawBytes) return 'Connecting to the screen…';
+    if (!_rfbController.isReady) return 'Waiting for the first picture…';
+    return null;
+  }
+
+  /// The framebuffer and, over it, the note about what is still missing.
+  ///
+  /// The note used to be the RFB widget's `connectingWidget`: a 48 px spinner
+  /// in a 1280x800 box, which the contain fit then scaled UP to the width of
+  /// the window — a spinner the size of a fist that said nothing (Bead
+  /// cowork-prsd). It is drawn in screen pixels now, small, and it names the
+  /// step it waits on.
   Widget _buildFrame() {
-    // Wait for BOTH the loopback port and the executor's `started` event: the
-    // event carries the per-view VNC secret, and the RFB client needs it at
-    // handshake time. Server bytes that arrive meanwhile are buffered.
-    if (_port == null || !_started) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    // Scale the framebuffer to fit the viewport (phone or wide window).
-    // FittedBox lays the RFB widget out under unbounded constraints, so
-    // RawImage keeps its native framebuffer size and SizeTrackingWidget
-    // still measures that size — which is what the gesture detector maps
-    // input against. FittedBox only scales at paint time, and Flutter
-    // inverts that transform for hit-testing, so taps land on the right
-    // pixel at any scale.
-    final Widget frame = Center(
-      child: FittedBox(
-        fit: BoxFit.contain,
-        child: RemoteFrameBufferWidget(
-          hostName: InternetAddress.loopbackIPv4.address,
-          port: _port!,
-          password: _password,
-          // On touch platforms the trackpad overlay owns pointer input, so the
-          // built-in absolute tap/wheel mapping is switched off and the overlay
-          // drives this controller instead. Desktop keeps the normal mouse.
-          controller: _touchInput ? _rfbController : null,
-          enableBuiltInPointerInput: !_touchInput,
-          // A bare Center() would ask for infinite size under
-          // FittedBox's unbounded constraints and throw. Give the
-          // connecting placeholder a definite footprint so it scales
-          // like the live frame and the spinner stays a sane size.
-          connectingWidget: const SizedBox(
-            width: 1280,
-            height: 800,
-            child: Center(
-              child: SizedBox(
-                width: 48,
-                height: 48,
-                child: CircularProgressIndicator(),
-              ),
-            ),
+    final String? waiting = _waitingFor;
+    return Stack(
+      fit: StackFit.expand,
+      children: <Widget>[
+        if (_port != null && _started) _buildStream(),
+        if (waiting != null)
+          Positioned.fill(
+            child: IgnorePointer(child: _ConnectingNote(label: waiting)),
           ),
-          onError: (error) {
-            if (mounted) {
-              setState(() {
-                _status = 'error';
-                _message = '$error';
-              });
-            }
-          },
+      ],
+    );
+  }
+
+  /// The live stream. Both the loopback port and the executor's `started` event
+  /// are in by the time this is built: the event carries the VNC secret and the
+  /// RFB client needs it at handshake time. Server bytes that arrived meanwhile
+  /// were buffered.
+  Widget _buildStream() {
+    final Widget stream = RemoteFrameBufferWidget(
+      hostName: InternetAddress.loopbackIPv4.address,
+      port: _port!,
+      password: _password,
+      // The controller is attached on every platform: touch drives the pointer
+      // through it, and both platforms read `isReady` and the framebuffer size
+      // off it. Only the built-in absolute tap mapping is platform-dependent.
+      controller: _rfbController,
+      enableBuiltInPointerInput: !_touchInput,
+      // Deliberately empty, and deliberately a definite box: this placeholder
+      // is laid out where the framebuffer will go and would be scaled with it,
+      // so anything drawn here comes out the size of the window. The note in
+      // [_buildFrame] is the one that talks.
+      connectingWidget: const SizedBox(width: 1280, height: 800),
+      onError: (error) {
+        if (mounted) {
+          setState(() {
+            _status = 'error';
+            _message = '$error';
+          });
+        }
+      },
+    );
+    if (!_touchInput) {
+      // Desktop keeps the plain contain fit and the real mouse. FittedBox lays
+      // the RFB widget out under unbounded constraints, so RawImage keeps its
+      // native framebuffer size and Flutter inverts the paint transform for
+      // hit-testing — taps land on the right pixel at any scale.
+      return Center(
+        child: FittedBox(fit: BoxFit.contain, child: stream),
+      );
+    }
+    // On touch the overlay owns the placement as well as the input, so the
+    // zoom, the pan and the virtual cursor all read one transform
+    // ([VncViewFit]). It must get the bare framebuffer widget, never one
+    // already wrapped in a fit of its own.
+    return VncTrackpadOverlay(controller: _rfbController, child: stream);
+  }
+}
+
+/// The small, quiet note that says what the view is waiting for.
+class _ConnectingNote extends StatelessWidget {
+  const _ConnectingNote({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    return Center(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: cs.scrim.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 18, 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: cs.onInverseSurface,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(color: cs.onInverseSurface, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (!_touchInput) return frame;
-    // The overlay fills the same box the framebuffer is contain-fit into, so
-    // its virtual cursor maps back onto the exact remote pixel at any scale.
-    return VncTrackpadOverlay(controller: _rfbController, child: frame);
   }
 }
 
