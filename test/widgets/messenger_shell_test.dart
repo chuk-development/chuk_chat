@@ -177,7 +177,7 @@ class _FakeRelayController implements CoworkRelayController {
   Future<void> sendRunAck(String runId) async {}
 
   @override
-  Future<void> startBrowserView() async {}
+  Future<void> startBrowserView({String? sessionKey}) async {}
 
   @override
   Future<void> stopBrowserView() async {}

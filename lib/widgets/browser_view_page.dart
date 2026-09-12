@@ -36,21 +36,32 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 /// so every write is guarded AND `done` is drained — otherwise a "Broken pipe"
 /// becomes an unhandled exception and takes the whole app down (seen live).
 class BrowserViewPage extends StatefulWidget {
-  const BrowserViewPage({super.key, required this.controller});
+  const BrowserViewPage({
+    super.key,
+    required this.controller,
+    this.sessionKey,
+  });
 
   final CoworkRelayController controller;
+
+  /// The thread whose box holds the browser. Without it the executor has to
+  /// guess, and it guesses the primary environment — with one container per
+  /// coworker that is almost never the right one (bead cowork-5eo6).
+  final String? sessionKey;
 
   /// The one way into the view (Bead cowork-vzm): a full-screen route on every
   /// form factor, never a side panel. `fullscreenDialog` gives the close
   /// affordance and the bottom-up transition of a modal surface.
   static Future<void> open(
     BuildContext context,
-    CoworkRelayController controller,
-  ) {
+    CoworkRelayController controller, {
+    String? sessionKey,
+  }) {
     return Navigator.of(context, rootNavigator: true).push(
       MaterialPageRoute<void>(
         fullscreenDialog: true,
-        builder: (context) => BrowserViewPage(controller: controller),
+        builder: (context) =>
+            BrowserViewPage(controller: controller, sessionKey: sessionKey),
       ),
     );
   }
@@ -113,7 +124,9 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
       });
     }
     try {
-      await widget.controller.startBrowserView();
+      await widget.controller.startBrowserView(
+        sessionKey: widget.sessionKey,
+      );
       final server = await ServerSocket.bind(InternetAddress.loopbackIPv4, 0);
       _server = server;
       server.listen(_onRfbClient, onError: (_) {}, cancelOnError: false);
