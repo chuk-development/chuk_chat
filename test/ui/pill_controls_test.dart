@@ -62,11 +62,18 @@ Future<void> _pumpInsideAScrollView(
 void main() {
   group('the numbers', () {
     test('the capsule, the ring and the target agree', () {
-      expect(PillGeometry.inset, 4);
-      expect(PillGeometry.segmentHeight, 52);
-      expect(PillGeometry.segmentRadius, 26);
+      expect(PillGeometry.inset, 8);
+      expect(PillGeometry.segmentHeight, 44);
+      expect(PillGeometry.segmentRadius, 22);
       expect(PillGeometry.radius, 30);
       expect(PillGeometry.height, 60);
+      // The switch above a list is its own control: flatter, and its capsule
+      // all but fills it.
+      expect(PillGeometry.filterInset, 4);
+      expect(PillGeometry.filterSegmentHeight, 48);
+      expect(PillGeometry.filterSegmentRadius, 24);
+      expect(PillGeometry.filterRadius, 28);
+      expect(PillGeometry.filterHeight, 56);
       // The ring is the same thickness everywhere: what the shell does not pad
       // at the top and the bottom, the segment carries as tap slop.
       expect(
@@ -83,7 +90,7 @@ void main() {
   });
 
   group('the filter switch', () {
-    testWidgets('the whole pill is 60 tall and the target is 52', (
+    testWidgets('the whole switch is 56 tall and each target is 48', (
       tester,
     ) async {
       await _pumpPhone(
@@ -98,12 +105,12 @@ void main() {
 
       expect(
         tester.getSize(find.byType(ConnectedGroup)).height,
-        PillGeometry.height,
+        PillGeometry.filterHeight,
       );
       for (final Element element
           in find.byType(MorphTap).evaluate().toList()) {
         final Size size = tester.getSize(find.byWidget(element.widget));
-        expect(size.height, PillGeometry.tapHeight);
+        expect(size.height, PillGeometry.filterSegmentHeight);
         expect(
           size.height,
           greaterThanOrEqualTo(MobileLayout.minTouchTarget),
