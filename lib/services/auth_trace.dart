@@ -24,13 +24,20 @@ class AuthTrace {
   /// that followed it.
   static const int keep = 20;
 
+  /// The writes run one after another. Two events can land in the same frame
+  /// — a signedOut and the recovery it starts — and a read-modify-write of the
+  /// same list from both would keep only the later one.
+  static Future<void> _chain = Future<void>.value();
+
   /// Notes one auth event. [event] is a short tag ('signed-out',
   /// 'recovery-unreachable'); [detail] carries whatever names the cause.
   static void note(String event, {Map<String, Object?> detail = const {}}) {
     final String line = detail.isEmpty ? event : '$event ${jsonEncode(detail)}';
     // Not behind kDebugMode: a release build is where this is needed.
     debugPrint('COWORK-AUTH $line');
-    unawaited(_append('${DateTime.now().toIso8601String()} $line'));
+    final String entry = '${DateTime.now().toIso8601String()} $line';
+    _chain = _chain.then((_) => _append(entry));
+    unawaited(_chain);
   }
 
   static Future<void> _append(String line) async {
@@ -56,6 +63,7 @@ class AuthTrace {
   }
 
   static Future<void> clear() async {
+    await settled();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(prefsKey);
@@ -63,6 +71,10 @@ class AuthTrace {
       // Nothing to do.
     }
   }
+
+  /// Resolves once every pending write has landed. [note] is deliberately
+  /// fire-and-forget, so a reader (and a test) needs a way to wait.
+  static Future<void> settled() => _chain;
 }
 
 /// Local `unawaited`, so this file pulls in nothing but what it uses.
