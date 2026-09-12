@@ -874,3 +874,187 @@ def test_the_auto_open_switch_turns_the_nudge_off(tmp_path, monkeypatch):
         assert connection.calls == []
     finally:
         executor._vnc_teardown(notify=False)
+
+
+# -- a dropped pipe dials back in (bead cowork-c0zd) ------------------------
+#
+# "The connection is bad" was, measured, a pipe that died once and stayed dead:
+# the executor said `stopped`, the app latched its loopback bridge shut, and a
+# five-second tunnel cost the whole view. x11vnc survives a dropped client — it
+# is `-forever` and it still holds the screen — so the answer to a dropped pipe
+# is another pipe, not a dead view.
+
+
+def _reconnect_rig(tmp_path, monkeypatch, *, vnc_up_rc=0):
+    """An executor whose bridges are scripted, one per `_VncBridge` call.
+
+    Each fake bridge exposes `fire_close()` so a test can drop the pipe exactly
+    when it wants to, and `saw_bytes` so it can say whether the view was ever
+    live — the executor only dials back in for a pipe that carried a picture.
+    """
+    import subprocess as sp
+
+    from cowork_executor import executor as ex_mod
+
+    executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
+    events: list[dict] = []
+    executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
+    bridges: list = []
+
+    class _ScriptedBridge:
+        def __init__(self, _argv, *, emit, on_closed, **_kw) -> None:
+            self.emit = emit
+            self.on_closed = on_closed
+            self.closed = False
+            self.started = False
+            self.saw_bytes = True
+            bridges.append(self)
+
+        def start(self) -> None:
+            self.started = True
+
+        def feed(self, _data: bytes) -> None:
+            pass
+
+        def close(self) -> None:
+            self.closed = True
+
+        def fire_close(self) -> None:
+            self.on_closed()
+
+    def fake_run(argv, **_kwargs):
+        argv = list(argv)
+        if "cowork-vnc-up" in argv:
+            return sp.CompletedProcess(
+                args=argv, returncode=vnc_up_rc, stdout=b"WINDOWS=1\n"
+            )
+        if any("xwininfo" in str(a) for a in argv):
+            return sp.CompletedProcess(args=argv, returncode=0, stdout="1\n")
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", fake_run)
+    monkeypatch.setattr(ex_mod, "_VncBridge", _ScriptedBridge)
+    return executor, events, bridges
+
+
+def _views(events: list[dict]) -> list[tuple[str, str]]:
+    return [
+        (e.get("status", ""), e.get("reason", ""))
+        for e in events
+        if e.get("type") == "browser_view"
+    ]
+
+
+def test_a_dropped_pipe_reconnects_instead_of_ending_the_view(tmp_path, monkeypatch):
+    executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
+    executor._vnc_start("req-live", {})
+    assert len(bridges) == 1
+    first_password = [
+        e["password"] for e in events
+        if e.get("type") == "browser_view" and e.get("status") == "started"
+    ][0]
+
+    bridges[0].fire_close()
+
+    assert _wait_for(lambda: ("started", "reconnected") in _views(events)), _views(events)
+    statuses = _views(events)
+    # The app is told the pipe is being re-dialled BEFORE it is told it is back,
+    # and it is never told the view stopped: the last picture still stands.
+    assert ("reconnecting", "reconnecting") in statuses
+    assert statuses.index(("reconnecting", "reconnecting")) < statuses.index(
+        ("started", "reconnected")
+    )
+    assert all(status != "stopped" for status, _reason in statuses)
+    # A new pipe, registered as the live one, pumping.
+    assert len(bridges) == 2
+    assert executor._vnc is bridges[1]
+    assert bridges[1].started is True
+    # The RFB session is new, so the secret is rotated with it and the app is
+    # handed the new one — a reconnect that reused the old secret would be a
+    # view the agent's own code could have watched in the meantime.
+    reconnected = [
+        e for e in events
+        if e.get("type") == "browser_view" and e.get("reason") == "reconnected"
+    ][0]
+    assert reconnected["password"] and reconnected["password"] != first_password
+
+
+def test_a_pipe_that_never_carried_a_picture_is_not_retried(tmp_path, monkeypatch):
+    """socat never reached x11vnc: there was no view to lose, and a retry only
+    makes the same failure take five seconds longer to report."""
+    executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
+    executor._vnc_start("req-dead", {})
+    bridges[0].saw_bytes = False
+
+    bridges[0].fire_close()
+
+    assert _wait_for(lambda: any(s == "stopped" for s, _ in _views(events)))
+    assert all(status != "reconnecting" for status, _ in _views(events))
+    assert len(bridges) == 1
+    assert executor._vnc is None
+
+
+def test_a_display_that_went_away_ends_the_view_instead_of_retrying(
+    tmp_path, monkeypatch
+):
+    """Exit 3 from `cowork-vnc-up` is "there is no browser display any more".
+    No number of retries brings a closed browser back, so the view ends."""
+    executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
+    executor._vnc_start("req-gone", {})
+    from cowork_executor import executor as ex_mod
+    import subprocess as sp
+
+    monkeypatch.setattr(
+        ex_mod.subprocess,
+        "run",
+        lambda argv, **_k: sp.CompletedProcess(args=list(argv), returncode=3, stdout=b""),
+    )
+
+    bridges[0].fire_close()
+
+    assert _wait_for(lambda: any(s == "stopped" for s, _ in _views(events)))
+    assert ("reconnecting", "reconnecting") in _views(events)
+    assert len(bridges) == 1, "a box with no display must not be dialled again"
+    assert executor._vnc is None
+
+
+def test_a_stop_during_a_reconnect_wins(tmp_path, monkeypatch):
+    """The user closed the view while the executor was dialling back in. The
+    reconnect must not resurrect it behind them."""
+    executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
+    executor._vnc_start("req-stop", {})
+    gate = threading.Event()
+    from cowork_executor import executor as ex_mod
+    import subprocess as sp
+
+    def slow_run(argv, **_k):
+        argv = list(argv)
+        if "cowork-vnc-up" in argv:
+            gate.wait(5.0)
+        return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
+
+    monkeypatch.setattr(ex_mod.subprocess, "run", slow_run)
+
+    bridges[0].fire_close()
+    assert _wait_for(lambda: ("reconnecting", "reconnecting") in _views(events))
+    executor._handle_browser_kind("browser_stop", "req-stop", {})
+    gate.set()
+
+    time.sleep(0.3)
+    assert executor._vnc is None
+    assert ("started", "reconnected") not in _views(events)
+
+
+def test_the_start_path_is_timed(tmp_path, monkeypatch, caplog):
+    """The user's complaint was "it loads forever"; the only honest answer is a
+    number per step, in the log, on his own machine."""
+    import logging
+
+    executor, _events, _bridges = _reconnect_rig(tmp_path, monkeypatch)
+    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+        executor._vnc_start("req-timed", {})
+
+    lines = [r.getMessage() for r in caplog.records if "start path" in r.getMessage()]
+    assert lines, [r.getMessage() for r in caplog.records]
+    for step in ("container", "targets", "vnc-up", "bridge", "windows", "total"):
+        assert step in lines[0], lines[0]

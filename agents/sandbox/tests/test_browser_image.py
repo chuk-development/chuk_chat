@@ -95,6 +95,20 @@ def test_launcher_uses_preinstalled_server_and_profile_supervisor():
     assert "playwright-mcp --version" in BROWSER.read_text()
 
 
+def test_the_agents_mouse_is_big_enough_to_see():
+    """x11vnc sends the REAL remote pointer, so what the watcher sees is the
+    shape Chromium sets. With no cursor theme in the image that is the X core
+    cursor font at a fixed 10x16 px — a few specks once a 1280x800 screen is
+    scaled onto a phone. A theme plus XCURSOR_SIZE makes the same pointer
+    48x48 (measured in a live container)."""
+    launcher = (DOCKER_DIR / "browser-mcp.sh").read_text()
+    assert "export XCURSOR_THEME=" in launcher
+    assert "export XCURSOR_SIZE=" in launcher
+    # Exported BEFORE the server is launched, or Chromium never sees them.
+    assert launcher.index("export XCURSOR_SIZE=") < launcher.index("exec python3")
+    assert "dmz-cursor-theme" in BROWSER.read_text()
+
+
 def singleton(profile, host="old-container", pid=42):
     (profile / "SingletonLock").symlink_to(f"{host}-{pid}")
     (profile / "SingletonCookie").symlink_to("cookie")
