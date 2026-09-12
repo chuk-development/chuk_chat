@@ -126,6 +126,18 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     _sub = _changes()?.listen(_onAuth, onError: (Object _) {});
     WidgetsBinding.instance.addObserver(this);
     final stash = widget.stash ?? SessionStash.pending;
+    // The startup line has to be written here, not from the stream: gotrue
+    // emits `initialSession` inside Supabase.initialize(), which runs in
+    // main() before this gate exists, and the stream does not replay it. So
+    // the one event that says what the app STARTED with would be the one
+    // missing from the trace.
+    AuthTrace.note('gate-start', detail: <String, Object?>{
+      'session': _session != null,
+      'stash': stash != null,
+      if (_session?.expiresAt != null)
+        'seconds_left':
+            _session!.expiresAt! - DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    });
     if (_session == null && stash != null) {
       _startRecovery(stash);
     }
