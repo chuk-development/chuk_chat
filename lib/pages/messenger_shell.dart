@@ -324,16 +324,29 @@ class _MessengerShellState extends State<MessengerShell>
   /// whatever snack is up, because it answers a tap the user just made.
   void _explainNoScreen() {
     if (!mounted) return;
+    // The host says WHY in a code of its own (`browser_view.reason`, bead
+    // cowork-qp5i), and the app parks the target itself when the host falls
+    // silent (bead cowork-8ptj). Both beat "no screen yet", which is only the
+    // answer when nobody ever said anything about a screen.
+    final String text = switch (_browserPresence?.parkedBecause ?? '') {
+      'no_browser' => 'The coworker has no page open right now.',
+      'no_sandbox' =>
+        'This coworker runs without a sandbox, so there is no screen to show.',
+      'no_display' => 'The coworker has no browser screen running.',
+      'vnc_start_failed' =>
+        'The screen server would not start on the coworker\'s machine.',
+      'exec_failed' => 'The coworker\'s machine could not be reached.',
+      'bridge_failed' => 'The connection to the screen broke.',
+      BrowserPresence.staleReason =>
+        'No word about the screen for a while, so it is off the table. Ask '
+            'the coworker to open a page again.',
+      _ =>
+        'No screen yet. Ask the coworker to open a page, then take over '
+            'here.',
+    };
     ScaffoldMessenger.of(context)
       ..removeCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text(
-            'No screen yet. Ask the coworker to open a page, then take over '
-            'here.',
-          ),
-        ),
-      );
+      ..showSnackBar(SnackBar(content: Text(text)));
   }
 
   @override
