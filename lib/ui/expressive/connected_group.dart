@@ -13,7 +13,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/pill_geometry.dart';
 
@@ -115,39 +114,21 @@ class _Segment extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12),
         child: SizedBox(
           height: PillGeometry.segmentHeight,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              AnimatedSize(
-                duration: kExpressiveShort,
-                curve: kExpressiveDecelerate,
-                child: selected
-                    ? Padding(
-                        padding: const EdgeInsets.only(right: 5),
-                        child: AppIcon(
-                          Icons.check_rounded,
-                          size: 17,
-                          color: scheme.onPrimary,
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+          // No tick: the filled capsule already says which segment is on, and
+          // a mark that appears on one side only pushes its label off centre.
+          // Every label sits in the middle of its own segment.
+          child: Center(
+            child: Text(
+              count > 0 ? '$label $count' : label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+                color: selected ? scheme.onPrimary : scheme.onSurfaceVariant,
               ),
-              Flexible(
-                child: Text(
-                  count > 0 ? '$label $count' : label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                    color: selected
-                        ? scheme.onPrimary
-                        : scheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ),
