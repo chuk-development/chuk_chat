@@ -132,6 +132,15 @@ RUN set -eux; \
 # user can watch and take control over the sealed E2E channel (§9 login hand-off,
 # §9.1 renderer path 3). Both are plain apt packages. The startup wiring (which
 # display, on-demand vs entrypoint) lives with the runtime, not baked here.
+#
+# dmz-cursor-theme is here for the WATCHER, not for the browser. Without a
+# cursor theme installed, libXcursor has nothing to load and Chromium falls back
+# to the X core cursor font, whose glyphs are a fixed 10x16 pixels. x11vnc sends
+# that real pointer (measured: a RichCursor rectangle of exactly 10x16), and on
+# a 1280x800 screen scaled onto a phone it is all but invisible — the user asked
+# to SEE the agent's mouse. With this theme and XCURSOR_SIZE (set by the
+# launcher) the same pointer arrives as 48x48. It is a ~600 KB package of
+# cursor bitmaps; no daemon, no dependency.
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -140,7 +149,8 @@ RUN set -eux; \
         x11-utils \
         xauth \
         xdotool \
-        socat; \
+        socat \
+        dmz-cursor-theme; \
     rm -rf /var/lib/apt/lists/*
 
 # The display the browser view uses. Not exported globally (a stray DISPLAY makes

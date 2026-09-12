@@ -88,38 +88,122 @@ if [ -n "${COWORK_VNC_PASSWD:-}" ]; then
     fi
 fi
 
+# Latency/stability tuning, measured with executor/tests/live_vnc_connect_probe.py
+# against a live sandbox container (cowork-c0zd). Every flag below is here
+# because a number moved:
+#
+# -sb 0        x11vnc's default is `-sb 60`: after 60 s with nothing happening
+#              it "really throttles down the screen polls (sleep about 1.5 s)".
+#              A view opened while the agent was quiet then waits for that sleep
+#              loop before ANY picture arrives. Measured on a live box: first
+#              full frame 3973 ms after 70 s idle vs 5 ms when busy — the whole
+#              of "it loads forever". With -sb 0 the same idle box answers in
+#              5-60 ms. It costs nothing while nobody watches: with no client
+#              connected x11vnc burns 0 CPU ticks over 20 s either way.
+# -nonap       the other half of the same throttle (`-nap` is the default and
+#              "takes longer naps between screen polls" when activity is low).
+#              Only safe TOGETHER with DAMAGE: measured with -noxdamage it
+#              costs 391 CPU ticks/15 s against 168 for the default, while with
+#              DAMAGE on it costs 154 — less than the default.
+# (no -noxdamage)
+#              The Xvfb in this image advertises DAMAGE, so x11vnc is told what
+#              changed instead of re-scanning 1280x800. Measured: the pixels are
+#              byte-identical to the polling capture over repeated full frames,
+#              and CPU while watching drops (154 vs 175 ticks/15 s).
+#              COWORK_VNC_XDAMAGE=0 forces the old polling behaviour back for a
+#              display where DAMAGE misbehaves; x11vnc itself already falls back
+#              when the extension is absent.
+# -ping 30     a 1x1 framebuffer update every 30 s. The stream leaves this
+#              container through a docker-exec pipe, the sealed relay and a
+#              phone's mobile link; a view that is quiet for minutes is exactly
+#              what an idle timeout on that path reaps. Bytes keep flowing.
+# -readtimeout 120
+#              libvncserver's rfbMaxClientWait, default 20 s: when a write to
+#              the client cannot complete for that long, the client is DROPPED.
+#              Our writes stall whenever the phone's link stalls — the executor
+#              pump stops draining socat, socat stops reading, x11vnc blocks —
+#              so a 20 s tunnel hiccup killed the view for good. 120 s rides out
+#              a tunnel or a lift.
+# -desktop     a version marker, nothing else. It is how the block below tells
+#              an x11vnc started by an OLDER copy of this script (an image that
+#              was already running when the flags changed) from a current one,
+#              so the stale one is replaced instead of reused forever.
+# (no -nocursor)
+#              x11vnc's cursor defaults are already the ones we want and must
+#              stay: `-cursor` (on) and `-cursorpos` (on). Measured against a
+#              live box — a client that advertises the cursor pseudo-encodings
+#              is sent the REAL remote pointer as RichCursor (-239) rectangles
+#              plus CursorPos (-232); a client that does not gets the same
+#              pointer composited into the framebuffer. Either way the user sees
+#              the agent's actual mouse, so nothing here has to draw a fake one.
+#              How BIG it is comes from the cursor theme, which the browser
+#              launcher sets (XCURSOR_SIZE), not from x11vnc.
+#              Note for whoever wires a new client: this x11vnc (0.9.16) does
+#              NOT support ContinuousUpdates. It never sends
+#              EndOfContinuousUpdates, and a client that sends
+#              EnableContinuousUpdates (message 150) anyway has its connection
+#              CLOSED — measured. noVNC only sends it after the server offers
+#              it, so noVNC is safe; a hand-written client must not assume.
+# -noshm       stays. MIT-SHM is advertised, but x11vnc runs as ROOT against an
+#              Xvfb owned by `cowork`, and XShmAttach then fails with BadAccess
+#              (measured; x11vnc aborts on the X error). Shared memory is not
+#              available to us, whatever the extension list says.
+#
+# Throughput tuning (measured earlier, executor/tests/live_vnc_speed_probe.py):
+# x11vnc's defaults (-defer 30, -wait 20, no threads) throttled a full 1280x800
+# frame to ~3.9 MB/s = 0.9 FPS through the docker-exec pipe, while the pipe
+# itself does ~82 MB/s. -threads + -defer 1 -wait 2 lifts a full refresh to
+# ~19 MB/s = ~5 FPS (5x), and incremental updates stay tiny. Frame size is
+# handled by the client negotiating the Tight encoding (JPEG for photos, zlib'd
+# palette/copy for UI): ~0.2 MB per full 1280x800 frame instead of the 4 MB raw
+# pixels the client asked for before it could decode Tight.
+#
+# Bump COWORK_VNC_REVISION whenever the flag list changes, so a container that
+# is already running picks the new flags up on the next view instead of serving
+# the old ones until it is recreated.
+COWORK_VNC_REVISION=2
+DESKTOP_NAME="cowork-vnc/${COWORK_VNC_REVISION}"
+DAMAGE_ARGS="-nonap"
+if [ "${COWORK_VNC_XDAMAGE:-1}" = "0" ]; then
+    DAMAGE_ARGS="-noxdamage"
+fi
+
+# An x11vnc from an older copy of this script serves the port with the old
+# flags — including the 4-second wake-up and the 20-second write timeout. It
+# does not carry our marker, so replace it. `browser_start` has already torn
+# the previous view down by the time we run, so nothing is watching.
+if pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1 \
+   && ! pgrep -f "x11vnc.*-rfbport ${PORT}.*-desktop ${DESKTOP_NAME}" >/dev/null 2>&1; then
+    pkill -f "x11vnc.*-rfbport ${PORT}" || true
+    sleep 0.3
+fi
+
 # Start x11vnc only if none is already serving the port. `setsid … </dev/null
 # >>LOG 2>&1` fully detaches the daemon from this script's stdin/stdout/stderr,
 # so `docker exec` gets EOF and returns at once and no fd is leaked into the
 # long-lived process. -localhost: reachable only inside the container. -nopw: no
 # VNC secret — the boundary is the sealed E2E channel and device approval.
 # -forever -shared: survive client disconnects; allow the agent's view alongside.
-# -noxdamage/-noshm: robust capture under headless Xvfb in a container.
 if ! pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1; then
     setsid x11vnc \
         -display "${DISPLAY_NUM}" \
         -rfbport "${PORT}" \
         -localhost \
         ${AUTH_ARGS} \
+        -desktop "${DESKTOP_NAME}" \
         -forever \
         -shared \
-        -noxdamage \
+        ${DAMAGE_ARGS} \
         -noshm \
         -quiet \
         -threads \
         -defer 1 \
         -wait 2 \
+        -sb 0 \
+        -ping 30 \
+        -readtimeout 120 \
         -o "${LOG}" \
         -bg </dev/null >>"${LOG}" 2>&1 || true
-        # Throughput tuning (measured with executor/tests/live_vnc_speed_probe.py):
-        # x11vnc's defaults (-defer 30, -wait 20, no threads) throttled a full
-        # 1280x800 frame to ~3.9 MB/s = 0.9 FPS through the docker-exec pipe,
-        # while the pipe itself does ~82 MB/s. -threads + -defer 1 -wait 2 lifts a
-        # full refresh to ~19 MB/s = ~5 FPS (5x), and incremental updates stay
-        # tiny. Frame size is handled by the client negotiating the Tight
-        # encoding (JPEG for photos, zlib'd palette/copy for UI): ~0.2 MB per
-        # full 1280x800 frame instead of the 4 MB raw pixels the client asked
-        # for before it could decode Tight.
 
     # Wait briefly for the RFB port to accept connections. If a concurrent caller
     # won the port race our own x11vnc exited, but theirs is coming up — either

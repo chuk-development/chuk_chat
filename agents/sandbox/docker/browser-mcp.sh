@@ -42,6 +42,20 @@ if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
 fi
 
 export DISPLAY="${DISPLAY_NUM}"
+
+# Make the agent's mouse visible to the person watching it (bead cowork-c0zd).
+# x11vnc sends the REAL remote pointer — as a cursor pseudo-encoding to a client
+# that asks for one, composited into the framebuffer for a client that does not
+# — so what the user sees is whatever shape Chromium sets. With no cursor theme
+# installed that is the X core cursor font at a fixed 10x16 pixels, which on a
+# 1280x800 screen scaled onto a phone is a few specks. libXcursor honours these
+# two variables and picks the nearest size the theme ships, so 64 lands on DMZ's
+# 48x48 bitmaps: measured 10x16 -> 48x48, about five times the height. The theme
+# comes from Dockerfile.browser; if it is ever missing, libXcursor simply falls
+# back to the old core font and nothing breaks.
+export XCURSOR_THEME="${COWORK_BROWSER_CURSOR_THEME:-DMZ-White}"
+export XCURSOR_SIZE="${COWORK_BROWSER_CURSOR_SIZE:-64}"
+
 mkdir -p "${PROFILE}"
 
 # Headed by default (no --headless), so it renders to Xvfb; the single installed

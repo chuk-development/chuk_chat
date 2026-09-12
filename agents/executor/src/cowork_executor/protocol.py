@@ -844,6 +844,16 @@ def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> 
 #:   ``opening``     live, but empty: the browser is being opened right now and
 #:                   the picture grows into this same stream
 #:   ``no_browser``  live and empty, and nothing here can open a page
+#:   ``reconnected`` the pipe had dropped and is live again. The RFB SESSION is
+#:                   new — x11vnc starts its protocol from the version string
+#:                   again — so the app must dial a fresh RFB client at the
+#:                   loopback socket instead of feeding the old one. The picture
+#:                   on screen may stay until the new one paints over it.
+#: On ``reconnecting``:
+#:   ``reconnecting`` the pipe dropped and the executor is dialling back in.
+#:                   Nothing is wrong yet and nothing was torn down; the last
+#:                   picture is still the truth about the remote screen, so the
+#:                   app should keep showing it rather than go black.
 #: On ``error``:
 #:   ``no_sandbox``        this executor has no docker sandbox to watch
 #:   ``no_display``        no box has a browser display (nothing is running)
@@ -853,6 +863,7 @@ def browser_data_payload(data: bytes, *, max_bytes: int = MAX_BROWSER_CHUNK) -> 
 BROWSER_VIEW_REASONS = (
     "opening", "no_browser", "no_sandbox", "no_display",
     "vnc_start_failed", "exec_failed", "bridge_failed",
+    "reconnecting", "reconnected",
 )
 
 
@@ -863,7 +874,9 @@ def browser_view_payload(
     """Executor -> app status for the live browser view.
 
     ``status`` is ``"started"`` (the stream is live, the app may show the view),
-    ``"stopped"`` (torn down — user asked, or the pipe/container went away), or
+    ``"reconnecting"`` (the pipe dropped and the executor is dialling back in —
+    nothing is torn down and the last picture still stands), ``"stopped"``
+    (torn down — user asked, or the pipe/container went away for good), or
     ``"error"`` (could not bring the view up; ``message`` says why). Two more
     are unsolicited and about the BROWSER, not the stream (Bead cowork-vzm):
     ``"opened"`` — the agent has a browser window now — and ``"closed"``. They
