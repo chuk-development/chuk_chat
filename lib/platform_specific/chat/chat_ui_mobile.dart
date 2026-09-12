@@ -706,7 +706,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// because a thread was opened either: the keyboard belongs to the tap on
   /// the composer. With a hardware keyboard (a desktop window that is narrow
   /// enough for this layout) the focus costs nothing and stays.
-  bool get _mayAutoFocusComposer => true;
+  bool get _mayAutoFocusComposer =>
+      !kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.android &&
+      defaultTargetPlatform != TargetPlatform.iOS;
 
   void _initializeListeners() {
     // Scroll listener for scroll-to-bottom button

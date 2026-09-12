@@ -24,6 +24,7 @@ import 'package:cowork/services/cowork/agent_roster_source.dart';
 import 'package:cowork/services/cowork/cowork_pairing_store.dart';
 import 'package:cowork/services/cowork/cowork_relay_client.dart';
 import 'package:cowork/widgets/agent_roster_view.dart';
+import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/widgets/browser_view_page.dart';
 import 'package:cowork/models/cowork_room.dart';
 import 'package:cowork/services/cowork/room_source.dart';
@@ -615,10 +616,10 @@ void main() {
 
     await tester.tap(findIcon(Icons.person_add_alt));
     await tester.pumpAndSettle();
-    // chuk's rename-dialog shape: an AlertDialog with one TextField.
-    expect(find.byType(AlertDialog), findsOneWidget);
+    // The app's own name dialog: one filled TextField, Cancel and Create.
+    expect(find.byType(CoworkerNameDialog), findsOneWidget);
     final nameField = find.descendant(
-      of: find.byType(AlertDialog),
+      of: find.byType(CoworkerNameDialog),
       matching: find.byType(TextField),
     );
     expect(nameField, findsOneWidget);
@@ -626,10 +627,10 @@ void main() {
     expect(tester.widget<TextField>(nameField).controller!.text, isNotEmpty);
 
     await tester.enterText(nameField, '  Crypto Desk ');
-    await tester.tap(find.widgetWithText(TextButton, 'Create'));
+    await tester.tap(find.widgetWithText(ExpressiveButton, 'Create'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(CoworkerNameDialog), findsNothing);
     expect(roster.agents, hasLength(1));
     expect(roster.agents.single.name, 'Crypto Desk');
     // An app-created agent is never claimed to be installed on the host.
@@ -651,10 +652,10 @@ void main() {
 
     await tester.tap(findIcon(Icons.person_add_alt));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.tap(find.widgetWithText(ExpressiveButton, 'Cancel'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(AlertDialog), findsNothing);
+    expect(find.byType(CoworkerNameDialog), findsNothing);
     expect(roster.agents, isEmpty);
     expect(controller.createdAgents, isEmpty);
   });
@@ -677,12 +678,12 @@ void main() {
     await tester.pumpAndSettle();
 
     final nameField = find.descendant(
-      of: find.byType(AlertDialog),
+      of: find.byType(CoworkerNameDialog),
       matching: find.byType(TextField),
     );
     expect(tester.widget<TextField>(nameField).controller!.text, 'amber');
     await tester.enterText(nameField, 'Amber Desk');
-    await tester.tap(find.widgetWithText(TextButton, 'Rename'));
+    await tester.tap(find.widgetWithText(ExpressiveButton, 'Rename'));
     await tester.pumpAndSettle();
 
     expect(roster.byId(agent.id)!.name, 'Amber Desk');
@@ -1549,5 +1550,78 @@ void main() {
 
     // The user's own pick is never moved out from under them.
     expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
+  });
+
+  testWidgets('nothing in the chat layer takes the focus while it is behind '
+      'the inbox', (tester) async {
+    // The shell keeps the thread mounted behind the coworker list, because it
+    // owns the socket. If the composer takes the focus there, the soft
+    // keyboard opens over the list at start-up — the bug this pins.
+    final (controller, _) = await pumpShell(tester, size: const Size(420, 900));
+    controller.pair();
+    await tester.pumpAndSettle();
+
+    expect(find.byType(MobileAgentList), findsOneWidget);
+    expect(find.byType(MobileChatScreen, skipOffstage: false), findsOneWidget);
+
+    final BuildContext? focused = FocusManager.instance.primaryFocus?.context;
+    expect(
+      focused?.findAncestorWidgetOfExactType<MobileChatScreen>(),
+      isNull,
+      reason: 'the offstage chat layer must not hold the focus',
+    );
+    expect(
+      tester.testTextInput.isVisible,
+      isFalse,
+      reason: 'no keyboard while the coworker list is what is on screen',
+    );
+  });
+
+  testWidgets('the composer rides the keyboard: a bottom view inset lifts the '
+      'chat layer instead of hiding it', (tester) async {
+    final (controller, roster) = await pumpShell(
+      tester,
+      size: const Size(420, 900),
+    );
+    controller.pair();
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(ValueKey<String>('mobile-agent-${roster.agents.single.id}')),
+    );
+    await tester.pumpAndSettle();
+
+    final Finder chat = find.byType(MobileChatScreen);
+    expect(tester.getRect(chat).bottom, 900);
+    final double composerBefore = tester
+        .getRect(findId('message_input'))
+        .bottom;
+    expect(composerBefore, lessThanOrEqualTo(900));
+
+    // The keyboard: the platform reports it as a bottom view inset, and the
+    // shell's Scaffold turns that into a shorter body. The chat layer has to
+    // be laid out in THAT height — laid out at the full screen height it keeps
+    // its composer under the keyboard, which is what the phone showed.
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getRect(chat).bottom,
+      moreOrLessEquals(600, epsilon: 1),
+      reason: 'the chat layer stops above the keyboard',
+    );
+    expect(
+      tester.getRect(findId('message_input')).bottom,
+      lessThanOrEqualTo(601),
+      reason: 'the composer travels up with it',
+    );
+
+    tester.view.resetViewInsets();
+    await tester.pumpAndSettle();
+    expect(tester.getRect(chat).bottom, 900);
+    expect(
+      tester.getRect(findId('message_input')).bottom,
+      moreOrLessEquals(composerBefore, epsilon: 1),
+    );
   });
 }
