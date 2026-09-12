@@ -830,10 +830,12 @@ class SbAccountLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // No fill and no corners of its own. The bar is not a card: it sits on
+    // the panel's own ground, and the list scrolls through underneath it. A
+    // rounded box here reads as one more row of the list instead of as the
+    // chrome under it.
     return Material(
-      color: theme.m3.surfaceContainer.withValues(alpha: 0.45),
-      borderRadius: BorderRadius.circular(kSbCardRadius),
-      clipBehavior: Clip.antiAlias,
+      type: MaterialType.transparency,
       child: InkWell(
         onTap: onTap,
         child: Padding(
