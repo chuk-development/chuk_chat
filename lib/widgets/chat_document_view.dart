@@ -13,6 +13,7 @@ import 'package:cowork/services/file_save_service.dart';
 import 'package:cowork/utils/theme_extensions.dart';
 import 'package:cowork/widgets/agent_markdown.dart';
 import 'package:cowork/widgets/chat_document_inline.dart';
+import 'package:cowork/widgets/charts/chuk_chart.dart';
 import 'package:cowork/ui/expressive/huge_icon.dart';
 import 'package:cowork/ui/expressive/motion.dart';
 import 'package:cowork/ui/expressive/top_veil.dart';
@@ -179,7 +180,7 @@ class ChatDocumentView extends StatefulWidget {
   /// markdown source for prose.
   static (Uint8List, String) _fileOf(Map<String, dynamic> document) {
     final bool isTable =
-        document['kind'] == 'table' || document['kind'] == 'bar_chart';
+        document['kind'] == 'table' || documentIsChart(document);
     final String text = isTable
         ? const JsonEncoder.withIndent('  ').convert(document)
         : '${document['text'] ?? ''}';
@@ -249,14 +250,14 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
   Widget build(BuildContext context) {
     final document = widget.document;
     final theme = Theme.of(context);
-    final isChart = document['kind'] == 'bar_chart';
+    final isChart = documentIsChart(document);
     final isTable = document['kind'] == 'table' || isChart;
     final columns = (document['columns'] as List? ?? [])
         .map((v) => '$v')
         .toList();
     final rows = (document['rows'] as List? ?? []).whereType<Map>().toList();
     final shape = isChart
-        ? '${rows.length} parties · Percent'
+        ? documentChart(document).countLabel
         : isTable
         ? '${rows.length} rows'
         : 'Markdown document';
@@ -326,14 +327,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
             // the closing paragraph sat flush against the dialog edge.
             padding: EdgeInsets.only(bottom: 24, top: widget.topInset),
             child: isChart
-                // A chart row without a numeric value has no bar to draw;
-                // casting it would take the whole view down over one row.
-                // Table rows carry no value at all, so this filter belongs
-                // here and not on the shared list.
-                ? _chart(
-                    context,
-                    rows.where((row) => row['value'] is num).toList(),
-                  )
+                ? _chart(context)
                 : isTable && columns.isNotEmpty
                 ? _table(context)
                 : _prose(context, '${document['text'] ?? ''}'),
@@ -384,10 +378,18 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
     );
   }
 
-  Widget _chart(BuildContext context, List<Map> rows) {
+  /// The chart, whole.
+  ///
+  /// The same [ChukChart] the thread draws, from the same [documentChart]
+  /// mapping — the reader is the thread's chart without the six-bar cap, not a
+  /// second drawing of the same numbers. The caption travels into the chart as
+  /// its subtitle, so it is not printed twice.
+  ///
+  /// The source keeps its own block below the card: a painted footer cannot be
+  /// tapped, and a source URL exists to be opened.
+  Widget _chart(BuildContext context) {
     final document = widget.document;
     final theme = Theme.of(context);
-    final caption = '${document['caption'] ?? ''}';
     final source = '${document['source_url'] ?? ''}';
     final retrieved = '${document['retrieved_at'] ?? ''}';
     return Align(
@@ -397,21 +399,11 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (caption.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 20),
-                child: Text(
-                  caption,
-                  // A caption is read, not scanned: it gets the same line
-                  // height as the prose and the muted colour that keeps it
-                  // behind the numbers.
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    height: 1.55,
-                    color: theme.m3.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            DocumentBarList(rows: rows),
+            ChukChart(
+              spec: documentChart(document, withSource: false).spec,
+              accentColor: theme.colorScheme.primary,
+            ),
+            const SizedBox(height: 12),
             // A rule under nothing is furniture: the footer only appears when
             // the document carries a source or a retrieval time.
             if (source.isNotEmpty || retrieved.isNotEmpty) ...[

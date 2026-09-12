@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:cowork/widgets/charts/chuk_chart.dart';
 import 'package:cowork/widgets/chuk_table.dart';
 import 'package:cowork/widgets/markdown_message.dart';
 
@@ -224,9 +225,19 @@ void main() {
 
       expect(tester.takeException(), isNull);
       expect(_pastRightEdge(tester, find.byType(ChatDocumentView)), isEmpty);
-      // The numbers still read, they were not ellipsised away.
+      // The chart paints its own text, so the numbers are read back from the
+      // label a screen reader gets rather than from a Text widget.
+      final String spoken = tester
+          .widget<Semantics>(
+            find.descendant(
+              of: find.byType(ChukChart),
+              matching: find.byType(Semantics),
+            ),
+          )
+          .properties
+          .label!;
       for (final String value in ['43.8 %', '17.2 %', '9.3 %', '8.9 %']) {
-        expect(find.text(value), findsOneWidget);
+        expect(spoken, contains(value));
       }
     });
   }
@@ -332,29 +343,22 @@ void main() {
     );
   });
 
-  testWidgets('a chart bar is drawn to its own percentage', (tester) async {
+  testWidgets('a chart document draws its own percentages', (tester) async {
     tester.view.physicalSize = const Size(1600, 1000);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
     await _open(tester, _chartDocument());
 
-    final Finder track = find
-        .ancestor(
-          of: find.byWidgetPredicate(
-            (w) =>
-                w is Container &&
-                w.decoration is BoxDecoration &&
-                (w.decoration! as BoxDecoration).color ==
-                    const Color(0xff80cdec),
-          ),
-          matching: find.byType(FractionallySizedBox),
-        )
-        .first;
-    // 43.8 / 100 in binary is 0.43799999999999994, so compare, do not equate.
-    expect(
-      tester.widget<FractionallySizedBox>(track).widthFactor,
-      closeTo(0.438, 1e-9),
-    );
+    final ChartSpec spec = tester.widget<ChukChart>(find.byType(ChukChart)).spec;
+    // The percentages are the document's own; nothing was rescaled to 100.
+    expect(spec.series.single.points.map((p) => p.value).toList(), [
+      43.8,
+      17.2,
+      9.3,
+      8.9,
+    ]);
+    expect(spec.unit, '%');
+    expect(spec.series.single.points.first.color, const Color(0xff80cdec));
   });
 
   testWidgets('a chart with no source draws no rule under nothing', (

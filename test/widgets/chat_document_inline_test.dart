@@ -3,14 +3,15 @@
 // The block used to be a row — a title, "Version 31 · Saved document" and a
 // chevron — so the numbers the user asked for were never in the chat. These
 // tests hold the line that they are: the table draws its cells, the markdown
-// draws its prose, the chart draws its bars, and a real file keeps its own
-// attachment row.
+// draws its prose, the chart draws as the app's chart, and a real file keeps
+// its own attachment row.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:cowork/models/content_block.dart';
 import 'package:cowork/widgets/chat_document_inline.dart';
+import 'package:cowork/widgets/charts/chuk_chart.dart';
 import 'package:cowork/widgets/chuk_table.dart';
 import 'package:cowork/widgets/markdown_message.dart';
 import 'package:cowork/widgets/sandbox_artifact_block.dart';
@@ -42,6 +43,51 @@ Map<String, dynamic> tableDocument({int rows = 3}) => <String, dynamic>{
     for (int i = 0; i < rows; i++)
       <String, dynamic>{'Partei': 'Partei ${i + 1}', 'Prozent': '${40 - i}.5'},
   ],
+};
+
+/// A chart document as the tool wrote it before the renderer landed: rows of
+/// {label, value, color}, the value a percentage.
+Map<String, dynamic> legacyChartDocument() => <String, dynamic>{
+  'id': 'staerkste',
+  'title': 'Sachsen-Anhalt 2026 · Vier stärkste Parteien',
+  'kind': 'bar_chart',
+  'version': 31,
+  'rows': <Map<String, dynamic>>[
+    <String, dynamic>{'label': 'AfD', 'value': 40.5, 'color': '#80cdec'},
+    <String, dynamic>{'label': 'CDU', 'value': 22.3, 'color': '#000000'},
+  ],
+};
+
+/// A chart document as the tool writes one now: the spec itself, under `chart`.
+Map<String, dynamic> specChartDocument() => <String, dynamic>{
+  'id': 'lt26',
+  'title': 'Landtagswahl Sachsen-Anhalt',
+  'kind': 'bar_chart',
+  'version': 4,
+  'caption': 'Vorläufiges Endergebnis, Zweitstimmen',
+  'source_url': 'https://wahlergebnisse.sachsen-anhalt.de/wahlen/lt26/',
+  'retrieved_at': '2026-09-12T20:15:00Z',
+  'chart': <String, Object?>{
+    'kind': 'bar',
+    'unit': '%',
+    'decimals': 1,
+    'decimal_separator': ',',
+    'sort': 'desc',
+    'reference_line': <String, Object?>{'value': 5, 'label': '5 %-Hürde'},
+    'source': 'Landeswahlleiter Sachsen-Anhalt',
+    'points': <Map<String, Object?>>[
+      <String, Object?>{'label': 'CDU', 'value': 17.2, 'color': '#32302E'},
+      <String, Object?>{'label': 'AfD', 'value': 43.8, 'color': '#009EE0'},
+      <String, Object?>{'label': 'SPD', 'value': 9.3, 'color': '#E3000F'},
+      <String, Object?>{'label': 'Grüne', 'value': 8.9, 'color': '#46962B'},
+      <String, Object?>{'label': 'Linke', 'value': 8.6, 'color': '#BE3075'},
+      <String, Object?>{'label': 'BSW', 'value': 5.3, 'color': '#792350'},
+      <String, Object?>{'label': 'FDP', 'value': 2.6, 'color': '#FFED00'},
+      <String, Object?>{'label': 'FW', 'value': 1.2, 'color': '#FF8000'},
+      <String, Object?>{'label': 'Tierschutz', 'value': 1.1, 'color': '#00543D'},
+      <String, Object?>{'label': 'Sonst.', 'value': 2.1, 'color': '#8C8C8C'},
+    ],
+  },
 };
 
 void main() {
@@ -179,39 +225,105 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a bar chart document draws its bars', (tester) async {
+  testWidgets('a legacy bar chart document draws as a chart', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1200));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(wrap(blockFor(legacyChartDocument())));
+    await tester.pump();
+
+    // The stored rows are read as a chart spec — the same widget a spec
+    // document draws with, so the two cannot drift apart.
+    final ChartSpec spec = tester.widget<ChukChart>(find.byType(ChukChart)).spec;
+    expect(spec.kind, ChartKind.bar);
+    expect(spec.unit, '%');
+    expect(spec.categories, <String>['AfD', 'CDU']);
+    expect(spec.series.single.points.first.value, 40.5);
+    expect(spec.series.single.points.first.color, const Color(0xff80cdec));
+    // The block already carries the title; the card does not repeat it.
+    expect(spec.title, isNull);
+    expect(find.textContaining('2 bars'), findsOneWidget);
+    expect(find.textContaining('Open all'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a chart document draws the spec the agent described', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(wrap(blockFor(specChartDocument())));
+    await tester.pump();
+
+    final ChartSpec spec = tester.widget<ChukChart>(find.byType(ChukChart)).spec;
+    expect(spec.kind, ChartKind.bar);
+    expect(spec.unit, '%');
+    expect(spec.decimalSeparator, ',');
+    expect(spec.referenceLine?.value, 5);
+    expect(spec.referenceLine?.label, '5 %-Hürde');
+    // The source line travels with the card in the thread.
+    expect(spec.source, 'Landeswahlleiter Sachsen-Anhalt');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long chart stops at six bars and offers the rest', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(400, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(wrap(blockFor(specChartDocument())));
+    await tester.pump();
+
+    final ChartSpec spec = tester.widget<ChukChart>(find.byType(ChukChart)).spec;
+    expect(spec.categories.length, kInlineDocumentRows);
+    // Sorted first, then cut: the six biggest, not the six written first.
+    expect(spec.categories.first, 'AfD');
+    expect(spec.categories.last, 'BSW');
+    expect(find.text('Open all 10 bars'), findsOneWidget);
+    // The meta line still names the whole document.
+    expect(find.textContaining('10 bars · v4'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a line chart keeps every point in the thread', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 1200));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     await tester.pumpWidget(
       wrap(
         blockFor(<String, dynamic>{
-          'id': 'staerkste',
-          'title': 'Sachsen-Anhalt 2026 · Vier stärkste Parteien',
+          'id': 'btc',
+          'title': 'BTC, 10 Tage',
           'kind': 'bar_chart',
-          'version': 31,
-          'rows': <Map<String, dynamic>>[
-            <String, dynamic>{
-              'label': 'AfD',
-              'value': 40.5,
-              'color': '#80cdec',
-            },
-            <String, dynamic>{
-              'label': 'CDU',
-              'value': 22.3,
-              'color': '#000000',
-            },
-          ],
+          'version': 2,
+          'chart': <String, Object?>{
+            'kind': 'line',
+            'unit': r'$',
+            'series': <Map<String, Object?>>[
+              <String, Object?>{
+                'name': 'BTC',
+                'direction': 'up',
+                'points': <Map<String, Object?>>[
+                  for (int i = 0; i < 10; i++)
+                    <String, Object?>{'label': 'T$i', 'value': 60000 + i * 200},
+                ],
+              },
+            ],
+          },
         }),
       ),
     );
     await tester.pump();
 
-    expect(find.byType(DocumentBarList), findsOneWidget);
-    expect(find.text('AfD'), findsOneWidget);
-    expect(find.text('40.5 %'), findsOneWidget);
-    expect(find.text('22.3 %'), findsOneWidget);
+    // A line is one stroke, not ten rows: cutting it to six days would be a
+    // different week, so the cap does not apply to it.
+    final ChartSpec spec = tester.widget<ChukChart>(find.byType(ChukChart)).spec;
+    expect(spec.kind, ChartKind.line);
+    expect(spec.categories.length, 10);
     expect(find.textContaining('Open all'), findsNothing);
+    expect(find.textContaining('10 points'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
