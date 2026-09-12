@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -14,7 +15,7 @@ import 'package:chuk_chat/services/user_preferences_service.dart';
 /// `_cacheOwnerUserId` still says "A" — which is precisely why ownership must be
 /// re-checked against **live auth** and not against the cached owner.
 ///
-/// Each test flips [debugCurrentUserIdOverride] between starting a future and
+/// Each test flips [CurrentUser.debugIdOverride] between starting a future and
 /// awaiting it. That is a real suspension point (the first `await` inside the
 /// call has already yielded), so the switch genuinely lands mid-flight.
 void main() {
@@ -28,24 +29,20 @@ void main() {
   setUp(() {
     activeUser = null;
     SharedPreferences.setMockInitialValues({});
-    UserPreferencesService.debugCurrentUserIdOverride = () => activeUser;
-    PerModelSystemPromptService.debugCurrentUserIdOverride = () => activeUser;
-    TitleGenerationService.debugCurrentUserIdOverride = () => activeUser;
+    CurrentUser.debugIdOverride = () => activeUser;
     UserPreferencesService.debugPrimeCachesForUser(null);
     PerModelSystemPromptService.debugReset();
     TitleGenerationService.debugPrimeCachesForUser(null);
   });
 
   tearDown(() {
-    UserPreferencesService.debugCurrentUserIdOverride = null;
-    PerModelSystemPromptService.debugCurrentUserIdOverride = null;
-    TitleGenerationService.debugCurrentUserIdOverride = null;
+    CurrentUser.debugIdOverride = null;
     UserPreferencesService.debugPrimeCachesForUser(null);
     PerModelSystemPromptService.debugReset();
     TitleGenerationService.debugPrimeCachesForUser(null);
   });
 
-  group('_stillOwns consults live auth, not the cached owner', () {
+  group('CurrentUser.stillOwns consults live auth, not the cached owner', () {
     // This is the root defect. `_cacheOwnerUserId` only advances when a public
     // entry point runs, so after a silent A->B switch it still names A. A
     // predicate that only compares against it answers "A still owns this" while

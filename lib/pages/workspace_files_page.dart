@@ -7,7 +7,6 @@
 //   - Pick image
 //   - Create new document (inline markdown editor)
 
-import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -23,6 +22,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:chuk_chat/constants.dart';
 
@@ -35,9 +35,9 @@ class WorkspaceFilesPage extends StatefulWidget {
   State<WorkspaceFilesPage> createState() => _WorkspaceFilesPageState();
 }
 
-class _WorkspaceFilesPageState extends State<WorkspaceFilesPage> {
+class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
+    with WorkspaceActionsMixin<WorkspaceFilesPage> {
   Workspace? _workspace;
-  StreamSubscription<void>? _sub;
   String? _modelId;
 
   bool _uploading = false;
@@ -46,18 +46,19 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage> {
   String _uploadStatus = '';
 
   @override
+  String get workspaceId => widget.workspaceId;
+
+  @override
   void initState() {
     super.initState();
     _load();
     _loadModel();
-    _sub = WorkspaceStorageService.changes.listen((_) {
-      if (mounted) _load();
-    });
+    listenToWorkspaceChanges(_load);
   }
 
   @override
   void dispose() {
-    _sub?.cancel();
+    cancelWorkspaceChangesSubscription();
     super.dispose();
   }
 
@@ -330,36 +331,16 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage> {
 
   // ─── File actions ──────────────────────────────────────────────────────
 
-  Future<void> _deleteFile(WorkspaceFile file) async {
+  Future<void> _deleteFile(WorkspaceFile file) {
     final l = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(l.projectDeleteFileTitle),
-        content: Text(l.projectDeleteFileBody(file.fileName)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l.cancel),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text(l.delete),
-          ),
-        ],
-      ),
+    return deleteWorkspaceFile(
+      file,
+      title: l.projectDeleteFileTitle,
+      body: l.projectDeleteFileBody(file.fileName),
+      cancelLabel: l.cancel,
+      deleteLabel: l.delete,
+      failedMessage: l.projectDeleteFailed,
     );
-    if (confirmed != true) return;
-    try {
-      await WorkspaceStorageService.deleteFile(widget.workspaceId, file.id);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.projectDeleteFailed(e.toString()))));
-      }
-    }
   }
 
   // ─── Build ─────────────────────────────────────────────────────────────

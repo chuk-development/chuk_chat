@@ -590,15 +590,41 @@ class _BalanceBadgeState extends State<BalanceBadge> {
   RealtimeChannel? _channel;
   VoidCallback? _networkListener;
 
+  /// Set while the badge is waiting for the Supabase client to exist.
+  VoidCallback? _readyListener;
+
   @override
   void initState() {
     super.initState();
+    // Every path below reaches `Supabase.instance.client`, which throws until
+    // the app has initialised it — and main() runs the app without awaiting
+    // that, so a sidebar can be built first. Waiting for the client beats
+    // both crashing and sitting on the placeholder for the widget's lifetime.
+    if (!SupabaseService.isInitialized) {
+      // _loading stays true on purpose: it renders the €-- placeholder, and
+      // the alternative would show €0.00 as if it were the real balance.
+      _readyListener = () {
+        if (!mounted || !SupabaseService.isInitialized) return;
+        _dropReadyListener();
+        unawaited(_loadFromCacheThenRemote());
+        _initListener();
+      };
+      SupabaseService.initializedListenable.addListener(_readyListener!);
+      return;
+    }
     _loadFromCacheThenRemote();
     _initListener();
   }
 
+  void _dropReadyListener() {
+    if (_readyListener == null) return;
+    SupabaseService.initializedListenable.removeListener(_readyListener!);
+    _readyListener = null;
+  }
+
   @override
   void dispose() {
+    _dropReadyListener();
     if (_channel != null) {
       _supabase.removeChannel(_channel!);
       _channel = null;

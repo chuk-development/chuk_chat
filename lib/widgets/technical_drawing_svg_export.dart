@@ -5,6 +5,7 @@
 
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:chuk_chat/widgets/technical_drawing_layers.dart';
 
 /// Converts a technical_drawing JSON string into an SVG document string.
 ///
@@ -132,7 +133,7 @@ String? technicalDrawingToSvg(String jsonString) {
     );
 
   final ordered = [...elements]..sort(
-      (a, b) => _priority(a).compareTo(_priority(b)),
+      (a, b) => technicalDrawingLayerPriority(a).compareTo(technicalDrawingLayerPriority(b)),
     );
   for (final e in ordered) {
     _writeElement(sb, e);
@@ -407,18 +408,6 @@ void _writeNote(StringBuffer sb, Map<String, dynamic> e) {
       '<text x="${_f(x)}" y="${_f(y)}" font-family="sans-serif" '
       'font-size="3.2" fill="$color">$text</text>',
     );
-}
-
-int _priority(Map<String, dynamic> e) {
-  final type = e['type'] as String? ?? '';
-  if (type == 'note') return 4;
-  if (type == 'dimension') return 3;
-  final style = e['lineStyle'] as String? ?? 'solid';
-  if (style == 'centerline' || style == 'dashed' || style == 'hidden') {
-    return 0;
-  }
-  final weight = e['weight'] as String? ?? 'thin';
-  return weight == 'thick' ? 2 : 1;
 }
 
 void _writeTitleBlock(

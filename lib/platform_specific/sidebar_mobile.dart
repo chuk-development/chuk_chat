@@ -1,4 +1,10 @@
 // lib/platform_specific/sidebar_mobile.dart
+//
+// Same structure as the desktop sidebar, and deliberately so: an account
+// card, a navigation block, one block of chats per time group under its own
+// header, and a bar at the foot with the search field and the two round
+// actions. What differs here is only what the phone needs — a debounced,
+// off-thread search and a bottom sheet instead of a right-click menu.
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -10,11 +16,11 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/color_extensions.dart'; // Assuming this exists
 import 'package:chuk_chat/services/update_check_service.dart';
-import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/update_banner.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -27,6 +33,9 @@ class SidebarMobile extends StatefulWidget {
   final Function() onMediaTapped;
   final Function() onNewChatTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
+
+  /// Slides the drawer shut. Null hides the profile card's collapse button.
+  final VoidCallback? onCollapseTapped;
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
@@ -38,6 +47,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onMediaTapped,
     required this.onNewChatTapped,
     this.onChatDeleted,
+    this.onCollapseTapped,
     required this.selectedChatId,
     required this.isCompactMode,
   });
@@ -47,8 +57,6 @@ class SidebarMobile extends StatefulWidget {
 }
 
 class _SidebarMobileState extends State<SidebarMobile> {
-  // Common padding for sidebar list items and headers
-  static const double _sidebarHorizontalPadding = 16.0;
   static const Duration _searchDebounceDuration = Duration(milliseconds: 300);
   static const int _searchMessageLimit = 50;
   static const int _kPageSize = 40;
@@ -58,12 +66,10 @@ class _SidebarMobileState extends State<SidebarMobile> {
   List<StoredChat> _filteredRecentChats = [];
   int _displayLimit = _kPageSize;
   final ScrollController _scrollController = ScrollController();
-  String _currentBucket = '';
-  final List<_BucketBound> _sectionMarkers = [];
-  static const double _kEstimatedRowHeight = 32.0;
-  // Tall enough for the label's descenders: the y of "Today" and the p of
-  // "Pinned" were cut off when the label grew and this did not.
-  static const double _kStickyHeaderHeight = 42.0;
+
+  /// Headers the user has folded shut, by label. Kept per label rather than
+  /// per index so a group keeps its state while chats move between buckets.
+  final Set<String> _collapsedGroups = <String>{};
   ProfileRecord? _profile;
   Future<void>? _refreshInFlight;
   bool _refreshPending = false;
@@ -73,7 +79,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
   Timer? _deleteNotificationTimer;
   String? _lastDeletedChatTitle;
   bool _isOfflineMode = false;
-  bool _searchVisible = false;
   final FocusNode _searchFocus = FocusNode();
 
   @override
@@ -119,8 +124,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   // Auto-load older chats as the user scrolls near the bottom — no
-  // Show-more button needed. Also keeps the sticky overlay header in
-  // sync with the topmost-visible bucket.
+  // Show-more button needed.
   void _onScrollForAutoLoad() {
     if (!_scrollController.hasClients) return;
     final pos = _scrollController.position;
@@ -133,47 +137,33 @@ class _SidebarMobileState extends State<SidebarMobile> {
         });
       }
     }
-    _refreshCurrentBucket();
   }
 
-  void _refreshCurrentBucket() {
-    if (_sectionMarkers.isEmpty) {
-      if (_currentBucket.isNotEmpty) {
-        setState(() => _currentBucket = '');
-      }
-      return;
-    }
-    final double offset =
-        _scrollController.hasClients ? _scrollController.position.pixels : 0.0;
-    String found = _sectionMarkers.first.label;
-    for (final m in _sectionMarkers) {
-      if (offset >= m.startOffset) {
-        found = m.label;
-      } else {
-        break;
-      }
-    }
-    if (found != _currentBucket) {
-      setState(() => _currentBucket = found);
-    }
+  // The Search nav card doesn't open a second field — it hands the caret to
+  // the one already sitting in the bottom bar.
+  void _focusSearch() {
+    _searchFocus.requestFocus();
   }
 
-  void _toggleSearch() {
+  void _toggleGroup(String label) {
     setState(() {
-      _searchVisible = !_searchVisible;
+      if (!_collapsedGroups.remove(label)) _collapsedGroups.add(label);
     });
-    if (_searchVisible) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _searchFocus.requestFocus();
-      });
-    } else {
-      _searchController.clear();
-    }
+    // Folding a group can leave the content shorter than the viewport, and
+    // the scroll listener only fires near the bottom — so without a nudge
+    // here the list would sit there with pages left unloaded and no gesture
+    // able to ask for them.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onScrollForAutoLoad();
+    });
   }
 
   void _onSearchChanged() {
     _searchDebounce?.cancel();
     _displayLimit = _kPageSize;
+    // Repaint now so the field's own clear button appears with the first
+    // keystroke; the expensive filtering still waits for the debounce.
+    if (mounted) setState(() {});
     _searchDebounce = Timer(_searchDebounceDuration, () {
       if (!mounted) return;
       unawaited(_filterRecentChats());
@@ -198,6 +188,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
   }
 
   Future<void> _loadProfile() async {
+    // Reading `auth` before Supabase is initialised throws, which is exactly
+    // what happens in a widget test that only wants to see the layout.
+    if (!SupabaseService.isInitialized) return;
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
 
@@ -322,40 +315,38 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       await _filterRecentChats();
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, 'Error: $error');
     }
+  }
+
+  // One snack shape for the whole sidebar, so an error, a rename failure and
+  // a delete confirmation all look the same.
+  void _showSnack(ScaffoldMessengerState messenger, String message) {
+    // The messenger is captured before an await and outlives this sidebar, so
+    // a failure that lands after the drawer closed would otherwise put a snack
+    // on a screen the user already left.
+    if (!mounted) return;
+    // Two failures in a row otherwise queue: the second message would wait out
+    // the first one's two seconds before the user ever sees it.
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+        ),
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
+      ),
+    );
   }
 
   void _showDebouncedDeleteNotification(String chatTitle) {
@@ -370,22 +361,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
       final displayTitle = title != null && title.length > 30
           ? '${title.substring(0, 30)}...'
           : title;
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            '"$displayTitle" deleted',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, '"$displayTitle" deleted');
     });
   }
 
@@ -432,39 +408,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       }
       _showDebouncedDeleteNotification(chatTitle);
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Error: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, 'Error: $error');
     }
   }
 
@@ -588,274 +534,50 @@ class _SidebarMobileState extends State<SidebarMobile> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final l = AppLocalizations.of(context)!;
-    final Color iconColorDefault = theme.resolvedIconColor.withValues(
-      alpha: 0.7,
-    );
-    final Color textColorDefault =
-        theme.textTheme.bodyMedium?.color ?? theme.colorScheme.onSurface;
     final Color accentColor = theme.colorScheme.primary;
     final Color sidebarBg = theme.cardColor.darken(0.02);
 
-    final List<StoredChat> pinnedChats =
-        _filteredRecentChats.where((c) => c.isStarred).toList();
-    final List<StoredChat> restChats =
-        _filteredRecentChats.where((c) => !c.isStarred).toList();
-
     // Use the real device safe-area inset instead of a magic 40.0 — a
-    // fixed value puts the brand row under the dynamic island / camera
+    // fixed value puts the first block under the dynamic island / camera
     // notch on devices with larger top insets. Add 8 px of breathing
-    // room on top of the inset so the brand sits visually below the
+    // room on top of the inset so the account card sits visually below the
     // status indicators, not flush against them.
-    final double topStatusBarSpacing =
-        MediaQuery.paddingOf(context).top + 8.0;
-    final bool showSearchField = _searchVisible || _searchQuery.isNotEmpty;
+    final EdgeInsets viewPadding = MediaQuery.paddingOf(context);
 
     return Container(
       color: sidebarBg,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SizedBox(height: topStatusBarSpacing),
+          SizedBox(height: viewPadding.top + 8.0),
 
-          SbBrand(
-            label: 'Chuk Chat',
-            padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
-            trailing: AccentIconButton(
-              icon: Icons.edit_square,
-              onTap: widget.onNewChatTapped,
-              accent: accentColor,
-              tooltip: 'New Chat',
-              semanticsId: 'sidebar_new_chat_button',
+          Expanded(
+            child: CustomScrollView(
+              controller: _scrollController,
+              slivers: _buildSlivers(accentColor),
             ),
           ),
 
-          // Match desktop ordering: Workspaces → Media → Search at the bottom.
-          // The Search row morphs in-place into the input field when tapped
-          // (search row disappears, input takes the same slot) so the text
-          // field never pushes other rows out of place.
-          if (kFeatureWorkspaces)
-            SbNavItem(
-              icon: Icons.folder_rounded,
-              label: l.workspaces,
-              onTap: widget.onWorkspacesTapped,
-            ),
-          if (kFeatureMediaManager)
-            SbNavItem(
-              icon: Icons.image_rounded,
-              label: l.media,
-              onTap: widget.onMediaTapped,
-            ),
-          if (!showSearchField)
-            SbNavItem(
-              icon: Icons.search_rounded,
-              label: 'Search',
-              onTap: _toggleSearch,
-            ),
-          if (showSearchField)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-              child: Container(
-                height: 38,
-                decoration: BoxDecoration(
-                  color: textColorDefault.withValues(alpha: 0.06),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: TextField(
-                  controller: _searchController,
-                  focusNode: _searchFocus,
-                  decoration: InputDecoration(
-                    hintText: 'Search chats',
-                    hintStyle: TextStyle(
-                      color: textColorDefault.withValues(alpha: 0.5),
-                      fontSize: 13.5,
-                    ),
-                    prefixIcon: Icon(
-                      Icons.search_rounded,
-                      size: 17,
-                      color: textColorDefault.withValues(alpha: 0.6),
-                    ),
-                    prefixIconConstraints: const BoxConstraints(
-                      minWidth: 36,
-                      minHeight: 38,
-                    ),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 11),
-                    border: InputBorder.none,
-                    suffixIcon: InkResponse(
-                      radius: 14,
-                      onTap: () {
-                        // Tapping the X always collapses the search row back —
-                        // mirrors desktop. The text is cleared on the way out
-                        // so a future re-open starts fresh.
-                        _clearSearchQuery();
-                        setState(() => _searchVisible = false);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Icon(
-                          Icons.close_rounded,
-                          size: 15,
-                          color: textColorDefault.withValues(alpha: 0.55),
-                        ),
-                      ),
-                    ),
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 28,
-                      minHeight: 28,
-                    ),
-                  ),
-                  style: TextStyle(
-                    color: textColorDefault,
-                    fontSize: 13.5,
-                  ),
-                  cursorColor: accentColor,
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
+          const UpdateBanner(),
 
-          if (_isOfflineMode)
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: _sidebarHorizontalPadding,
-                vertical: 4,
+          KeyedSubtree(
+            key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
+            child: SbBottomBar(
+              // The home indicator sits below the bar, so the bar keeps its
+              // own 10 px and adds whatever the device reserves.
+              padding: EdgeInsets.fromLTRB(
+                kSbBlockInset,
+                6,
+                kSbBlockInset,
+                10 + viewPadding.bottom,
               ),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3),
-                    width: 1,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.cloud_off_rounded,
-                        size: 14, color: Colors.orange),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        'Offline - Cached chats',
-                        style: TextStyle(
-                          color: Colors.orange,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    IconButton(
-                      icon: Icon(Icons.refresh_rounded,
-                          size: 14, color: Colors.orange),
-                      tooltip: 'Check for updates',
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints.tightFor(
-                        width: 20,
-                        height: 20,
-                      ),
-                      onPressed: () async {
-                        final isOnline =
-                            await NetworkStatusService.quickCheck();
-                        if (isOnline && mounted) {
-                          await _loadChatsAndRefresh();
-                        }
-                      },
-                    ),
-                  ],
-                ),
+              search: SbSearchField(
+                controller: _searchController,
+                focusNode: _searchFocus,
+                onClear: _clearSearchQuery,
               ),
-            ),
-
-          Expanded(
-            child: Stack(
-              children: [
-                Column(
-                  children: [
-                    if (pinnedChats.isNotEmpty)
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxHeight: 220),
-                        child: _buildPinnedSticky(
-                          pinnedChats,
-                          iconColorDefault,
-                          textColorDefault,
-                          accentColor,
-                        ),
-                      ),
-                    Expanded(
-                      child: Stack(
-                        children: [
-                          CustomScrollView(
-                            controller: _scrollController,
-                            slivers: _buildScrollableSlivers(
-                              restChats,
-                              iconColorDefault,
-                              textColorDefault,
-                              accentColor,
-                              sidebarBg,
-                            ),
-                          ),
-                          if (_currentBucket.isNotEmpty)
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child: IgnorePointer(
-                                child: Container(
-                                  height: _kStickyHeaderHeight,
-                                  color: sidebarBg,
-                                  child: SbSectionLabel(
-                                    label: _currentBucket,
-                                    color: accentColor,
-                                    padding: const EdgeInsets.fromLTRB(
-                                        20, 8, 16, 8),
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // No gradient scrim behind the footer any more. The
-                      // top-to-bottom fade banded into visible lines on some
-                      // screens and made the transparency crawl unevenly as
-                      // the list scrolled under it. The blocks now carry their
-                      // own uniform translucency (see _buildFooterRow) and
-                      // float over the list with nothing painted around them.
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const SizedBox(height: 34),
-                          const UpdateBanner(),
-                          KeyedSubtree(
-                            key: TourKeyRegistry.instance.keyFor(
-                              TourSlots.settingsEntry,
-                            ),
-                            child: _buildFooterRow(
-                              iconColorDefault,
-                              textColorDefault,
-                              accentColor,
-                              sidebarBg,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              onSettings: widget.onSettingsTapped,
+              onNewChat: widget.onNewChatTapped,
             ),
           ),
         ],
@@ -863,277 +585,188 @@ class _SidebarMobileState extends State<SidebarMobile> {
     );
   }
 
-  // Sticky pinned block — sits above the scrolling time-bucketed list.
-  Widget _buildPinnedSticky(
-    List<StoredChat> pinned,
-    Color iconColor,
-    Color textColor,
-    Color accent,
-  ) {
-    Widget chatTile(StoredChat c) => _buildRecentItem(
-          c,
-          onTap: () => _onChatTapped(c),
-          onDelete: () => _confirmAndDeleteChat(c),
-          accentColor: accent,
-          iconColor: iconColor,
-          textColor: textColor,
-        );
-    // A tinted box, not just a label: pinned chats are a place, and the
-    // reader should see where that place ends without reading anything.
-    return Container(
-      margin: const EdgeInsets.fromLTRB(12, 4, 12, 8),
-      padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
-      decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.07),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withValues(alpha: 0.25)),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          SbSectionLabel(
-            label: 'Pinned',
-            count: pinned.length,
-            color: accent,
-            padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-          ),
-          Flexible(
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: pinned.map(chatTile).toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  // The whole scrolling column, top to bottom: account, navigation, the
+  // offline notice, then one header + block per time group.
+  List<Widget> _buildSlivers(Color accent) {
+    final theme = Theme.of(context);
+    final List<StoredChat> pinnedChats =
+        _filteredRecentChats.where((c) => c.isStarred).toList();
+    final List<StoredChat> restChats =
+        _filteredRecentChats.where((c) => !c.isStarred).toList();
 
-  // Time-bucketed slivers with pinned section headers — TODAY stays at
-  // the top while scrolling today's chats, then THIS WEEK pins as the
-  // user scrolls past, then OLDER. Pagination is invisible: more chats
-  // stream in as the user scrolls (see `_onScrollForAutoLoad`).
-  List<Widget> _buildScrollableSlivers(
-    List<StoredChat> rest,
-    Color iconColor,
-    Color textColor,
-    Color accent,
-    Color sidebarBg,
-  ) {
-    final List<Widget> slivers = [];
-    _sectionMarkers.clear();
-
-    if (rest.isEmpty) {
-      _currentBucket = '';
-      // Buffer so the empty-state text isn't hidden by the (now empty)
-      // overlay region.
-      slivers.add(const SliverToBoxAdapter(
-        child: SizedBox(height: _kStickyHeaderHeight),
-      ));
-      final String msg = _searchQuery.isEmpty
-          ? 'No recent chats yet.'
-          : 'No chats found for "$_searchQuery".';
-      slivers.add(SliverToBoxAdapter(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: _sidebarHorizontalPadding,
-            vertical: 8.0,
-          ),
-          child: Text(msg,
-              style: TextStyle(color: iconColor.withValues(alpha: 0.4))),
-        ),
-      ));
-      slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 130)));
-      return slivers;
-    }
-
-    final int visible = rest.length < _displayLimit ? rest.length : _displayLimit;
-    final List<StoredChat> visibleRest = rest.take(visible).toList();
-
-    final DateTime now = DateTime.now();
-    final DateTime today0 = DateTime(now.year, now.month, now.day);
-    final DateTime weekStart = today0.subtract(const Duration(days: 6));
-
-    final List<StoredChat> today = [];
-    final List<StoredChat> week = [];
-    final List<StoredChat> older = [];
-    for (final c in visibleRest) {
-      // Bucket by last activity (the same field that drives recent
-      // ordering) so a long-running chat that got a new message today
-      // shows up under "Today" rather than under its creation date.
-      final d = c.updatedAt ?? c.createdAt;
-      if (!d.isBefore(today0)) {
-        today.add(c);
-      } else if (!d.isBefore(weekStart)) {
-        week.add(c);
-      } else {
-        older.add(c);
-      }
-    }
-
-    double cursor = 0;
-    void addBucket(String label, List<StoredChat> chats) {
-      if (chats.isEmpty) return;
-      // Marker is the scroll position at which this bucket's inline label
-      // arrives at viewport y = overlay height — clamped to 0 for the
-      // first bucket so it's the default. Mirrors the desktop layout so
-      // mobile and desktop swap the sticky header at the same boundary.
-      _sectionMarkers.add(_BucketBound(
-        label,
-        math.max(0.0, cursor - _kStickyHeaderHeight),
-      ));
-      // Fixed to the overlay's height so the sticky overlay header lands
-      // exactly on top of this inline label and never spills onto the first
-      // item below it — that overlap was clipping the first row's hover and
-      // selection highlight at the top.
-      slivers.add(SliverToBoxAdapter(
-        child: SizedBox(
-          height: _kStickyHeaderHeight,
-          child: SbSectionLabel(
-            label: label,
-            color: accent,
-            padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
-          ),
-        ),
-      ));
-      cursor += _kStickyHeaderHeight;
-      slivers.add(SliverList(
-        delegate: SliverChildBuilderDelegate(
-          (context, i) => _buildRecentItem(
-            chats[i],
-            onTap: () => _onChatTapped(chats[i]),
-            onDelete: () => _confirmAndDeleteChat(chats[i]),
-            accentColor: accent,
-            iconColor: iconColor,
-            textColor: textColor,
-          ),
-          childCount: chats.length,
-        ),
-      ));
-      cursor += chats.length * _kEstimatedRowHeight;
-    }
-
-    addBucket('Today', today);
-    addBucket('This week', week);
-    addBucket('Older', older);
-
-    if (_sectionMarkers.isNotEmpty) {
-      final double offset = _scrollController.hasClients
-          ? _scrollController.position.pixels
-          : 0.0;
-      String found = _sectionMarkers.first.label;
-      for (final m in _sectionMarkers) {
-        if (offset >= m.startOffset) {
-          found = m.label;
-        } else {
-          break;
-        }
-      }
-      _currentBucket = found;
-    } else {
-      _currentBucket = '';
-    }
-
-    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 130)));
-
-    return slivers;
-  }
-
-  Widget _buildFooterRow(
-    Color iconColor,
-    Color textColor,
-    Color accent,
-    Color sidebarBg,
-  ) {
-    final String name = _displayNameFor(_profile);
-    final ThemeData theme = Theme.of(context);
-    // Each control is its own block — the name, the balance and the gear no
-    // longer share one bar. Only faintly translucent (alpha 0.96) so it reads
-    // as a near-solid block, uniform across its whole face. No elevation: the
-    // blocks end hard at their edge, no shadow bleeding into the background.
-    // The balance and the gear both build on floatBg, so this one value sets
-    // all three blocks.
-    final Color floatBg = Color.alphaBlend(
-      theme.colorScheme.surface.withValues(alpha: 0.62),
-      sidebarBg,
-    ).withValues(alpha: 0.96);
-    const double elevation = 0;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 18),
-      child: Row(
-        children: [
-          // Name — the widest block, taps through to settings.
-          Expanded(
-            child: Material(
-              color: floatBg,
-              borderRadius: BorderRadius.circular(20),
-              elevation: elevation,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: widget.onSettingsTapped,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 11),
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: textColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Balance — its own accent-tinted floating block.
-          Material(
-            color: Color.alphaBlend(accent.withValues(alpha: 0.24), floatBg),
-            borderRadius: BorderRadius.circular(20),
-            elevation: elevation,
-            child: Padding(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-              child: BalanceBadge(
+    final List<Widget> slivers = <Widget>[
+      SliverToBoxAdapter(
+        child: SbBlock(
+          children: [
+            SbProfileCard(
+              name: _displayNameFor(_profile),
+              onTap: widget.onSettingsTapped,
+              onCollapse: widget.onCollapseTapped,
+              subtitle: BalanceBadge(
                 textStyle: TextStyle(
                   color: accent,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
                 placeholderStyle: TextStyle(
-                  color: textColor.withValues(alpha: 0.55),
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
+                  color: theme.m3.onSurfaceVariant,
+                  fontSize: 13,
                 ),
                 padding: EdgeInsets.zero,
               ),
             ),
+          ],
+        ),
+      ),
+      const SliverToBoxAdapter(child: SizedBox(height: 10)),
+      SliverToBoxAdapter(child: SbBlock(children: _buildNavCards())),
+      if (_isOfflineMode)
+        SliverToBoxAdapter(
+          child: SbOfflineNotice(
+            label: 'Offline - cached chats',
+            onRetry: () async {
+              final isOnline = await NetworkStatusService.quickCheck();
+              if (isOnline && mounted) {
+                await _loadChatsAndRefresh();
+              }
+            },
           ),
-          const SizedBox(width: 8),
-          // Settings — its own round floating block.
-          Material(
-            color: floatBg,
-            shape: const CircleBorder(),
-            elevation: elevation,
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              customBorder: const CircleBorder(),
-              onTap: widget.onSettingsTapped,
-              child: Padding(
-                padding: const EdgeInsets.all(11),
-                child: Icon(Icons.settings_rounded,
-                    size: 22, color: iconColor),
-              ),
+        ),
+    ];
+
+    if (pinnedChats.isEmpty && restChats.isEmpty) {
+      slivers.add(
+        SliverToBoxAdapter(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+            child: Text(
+              _searchQuery.isEmpty
+                  ? 'No recent chats yet.'
+                  : 'No chats found for "$_searchQuery".',
+              style: TextStyle(color: theme.m3.onSurfaceVariant),
             ),
           ),
-        ],
-      ),
+        ),
+      );
+      slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
+      return slivers;
+    }
+
+    if (pinnedChats.isNotEmpty) {
+      slivers.addAll(_buildGroup(
+        AppLocalizations.of(context)?.pinned ?? 'Pinned',
+        pinnedChats,
+        accent,
+      ));
+    }
+
+    // Grouping runs on the whole unpinned list so a header's number is the
+    // size of the real bucket. Pagination then walks the groups in order and
+    // stops once the page budget is spent — a count that only described the
+    // loaded page would read as a total and grow as the user scrolled.
+    final MaterialLocalizations localizations =
+        MaterialLocalizations.of(context);
+    // The month buckets follow the locale through formatMonthYear; the three
+    // named buckets have to be handed in, or they sit in English next to them.
+    final AppLocalizations? l = AppLocalizations.of(context);
+    final List<SbChatGroup<StoredChat>> groups = sbGroupByTime<StoredChat>(
+      restChats,
+      (chat) => chat.updatedAt ?? chat.createdAt,
+      monthLabel: localizations.formatMonthYear,
+      todayLabel: l?.today ?? 'Today',
+      weekLabel: l?.thisWeek ?? 'This week',
+      thisMonthLabel: l?.thisMonth ?? 'This month',
     );
+    int budget = _displayLimit;
+    for (final group in groups) {
+      // A folded group renders no tiles, so it must not spend the page
+      // either — otherwise folding the top group empties the ones below it.
+      final bool folded = _collapsedGroups.contains(group.label);
+      if (!folded && budget <= 0) break;
+      final int shown = folded ? 0 : math.min(budget, group.items.length);
+      budget -= shown;
+      slivers.addAll(
+        _buildGroup(
+          group.label,
+          group.items.take(shown).toList(),
+          accent,
+          total: group.items.length,
+        ),
+      );
+    }
+
+    slivers.add(const SliverToBoxAdapter(child: SizedBox(height: 12)));
+    return slivers;
+  }
+
+  List<Widget> _buildNavCards() {
+    // Null-safe like every other lookup here: a host that builds the sidebar
+    // without the delegate should get English labels, not a crashed nav block.
+    final AppLocalizations? l = AppLocalizations.of(context);
+    return <Widget>[
+      if (kFeatureWorkspaces)
+        SbNavCard(
+          icon: Icons.folder_rounded,
+          label: l?.workspaces ?? 'Workspaces',
+          onTap: widget.onWorkspacesTapped,
+        ),
+      if (kFeatureMediaManager)
+        SbNavCard(
+          icon: Icons.image_rounded,
+          label: l?.media ?? 'Media',
+          onTap: widget.onMediaTapped,
+        ),
+      SbNavCard(
+        icon: Icons.search_rounded,
+        label: l?.search ?? 'Search',
+        onTap: _focusSearch,
+      ),
+    ];
+  }
+
+  // A header and the chats under it. The chats stay in a SliverList rather
+  // than a single box so a long group is still built lazily.
+  List<Widget> _buildGroup(
+    String label,
+    List<StoredChat> chats,
+    Color accent, {
+    /// The size of the whole bucket, which is larger than [chats] once
+    /// pagination has cut the group short. Null means the two are the same.
+    int? total,
+  }) {
+    final bool collapsed = _collapsedGroups.contains(label);
+    return <Widget>[
+      SliverToBoxAdapter(
+        child: SbGroupHeader(
+          label: label,
+          count: total ?? chats.length,
+          collapsed: collapsed,
+          onToggle: () => _toggleGroup(label),
+        ),
+      ),
+      if (!collapsed)
+        SliverList(
+          delegate: SliverChildBuilderDelegate(
+            (context, i) => Padding(
+              // The gap belongs between the cards, so the last one in a
+              // group carries none and the header below it sets the spacing.
+              padding: EdgeInsets.fromLTRB(
+                kSbBlockInset,
+                0,
+                kSbBlockInset,
+                i == chats.length - 1 ? 0 : kSbCardGap,
+              ),
+              child: _buildRecentItem(
+                chats[i],
+                onTap: () => _onChatTapped(chats[i]),
+                onDelete: () => _confirmAndDeleteChat(chats[i]),
+                accentColor: accent,
+              ),
+            ),
+            childCount: chats.length,
+          ),
+        ),
+    ];
   }
 
   void _onChatTapped(StoredChat storedChat) {
@@ -1147,38 +780,56 @@ class _SidebarMobileState extends State<SidebarMobile> {
 
   Widget _buildRecentItem(
     StoredChat chat, {
-    bool isLast = false,
     VoidCallback? onTap,
     VoidCallback? onDelete,
     required Color accentColor,
-    required Color iconColor,
-    required Color textColor,
-    bool compact = false,
   }) {
-    bool isSelected = chat.id == widget.selectedChatId;
+    final theme = Theme.of(context);
+    final bool isSelected = chat.id == widget.selectedChatId;
     final bool isLocked = chat.isLocked;
-    final bool isPinned = chat.isStarred;
+    final bool isStreaming = StreamingManager().isStreaming(chat.id);
     final String title =
         isLocked ? 'Locked encrypted chat' : _deriveChatTitle(chat);
+    void openSheet() => _showChatOptionsBottomSheet(
+          chat,
+          onDelete: onDelete,
+          accentColor: accentColor,
+          iconColor: theme.m3.onSurfaceVariant,
+        );
     return SbChatTile(
       title: title,
-      createdAt: chat.updatedAt ?? chat.createdAt,
+      dateLine: sbChatDateLine(context, chat.updatedAt ?? chat.createdAt),
       selected: isSelected,
-      pinned: isPinned,
       locked: isLocked,
-      dimmed: isLast,
-      compact: compact,
+      streaming: isStreaming,
       onTap: isLocked
           ? () => _showLockedChatDialog(accentColor: accentColor)
           : onTap,
-      onLongPress: isLocked
+      // Long press stays as it was; the button is only a second, visible way
+      // into the same sheet.
+      onLongPress: isLocked ? null : openSheet,
+      trailing: isLocked
           ? null
-          : () => _showChatOptionsBottomSheet(
-              chat,
-              onDelete: onDelete,
-              accentColor: accentColor,
-              iconColor: iconColor,
-              textColor: textColor,
+          // The glyph stays small, but the box around it is Material's 48 px
+          // minimum: it sits right beside the tile's own tap area, and a
+          // near miss on a smaller target opens the chat instead of the
+          // sheet.
+          : SizedBox(
+              width: 48,
+              height: 48,
+              child: IconButton(
+                icon: Icon(
+                  Icons.more_horiz_rounded,
+                  size: 18,
+                  color: theme.m3.onSurfaceVariant,
+                ),
+                padding: EdgeInsets.zero,
+                splashRadius: 24,
+                tooltip: 'Chat options',
+                constraints:
+                    const BoxConstraints.tightFor(width: 48, height: 48),
+                onPressed: openSheet,
+              ),
             ),
     );
   }
@@ -1196,7 +847,7 @@ class _SidebarMobileState extends State<SidebarMobile> {
         ),
         content: const Text(
           'This chat is encrypted with a previous password and can\'t be '
-          'opened with your current one. Go to Account Settings \u2192 Chat '
+          'opened with your current one. Go to Account Settings → Chat '
           'Recovery and enter your old password to unlock it.',
         ),
         actions: [
@@ -1214,7 +865,6 @@ class _SidebarMobileState extends State<SidebarMobile> {
     VoidCallback? onDelete,
     required Color accentColor,
     required Color iconColor,
-    required Color textColor,
   }) {
     final bool isPinned = chat.isStarred;
 
@@ -1319,39 +969,9 @@ class _SidebarMobileState extends State<SidebarMobile> {
       if (!mounted) return;
       await _filterRecentChats();
     } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, error.message);
     } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            'Failed to rename chat: $error',
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      _showSnack(messenger, 'Failed to rename chat: $error');
     }
   }
 }
@@ -1388,10 +1008,4 @@ List<String> _filterChatsIsolate(Map<String, dynamic> params) {
   }
 
   return matches;
-}
-
-class _BucketBound {
-  final String label;
-  final double startOffset;
-  const _BucketBound(this.label, this.startOffset);
 }

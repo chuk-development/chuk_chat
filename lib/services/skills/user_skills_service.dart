@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/current_user.dart';
 
 /// Thrown for storage-level failures. Spec violations surface as
 /// [SkillParseException] from the shared parser instead.
@@ -63,14 +64,6 @@ class UserSkillsService {
     if (_cachedUserId == userId) return;
     _cachedUserId = userId;
     _memCache = null;
-  }
-
-  static String? _currentUserId() {
-    try {
-      return SupabaseService.auth.currentUser?.id;
-    } catch (_) {
-      return null;
-    }
   }
 
   static String _nowIso() => DateTime.now().toUtc().toIso8601String();
@@ -120,7 +113,7 @@ class UserSkillsService {
   /// Returns an empty list when signed out — a user with no skills and a user
   /// we cannot resolve both mean "no user skills in the prompt".
   static Future<List<Skill>> load({bool forceRefresh = false}) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return const [];
 
@@ -276,7 +269,7 @@ class UserSkillsService {
     String? catalogName,
     String? baselineHash,
   }) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) {
       throw const UserSkillException('You must be signed in to save a skill.');
@@ -373,7 +366,7 @@ class UserSkillsService {
   /// never fails silently, or the row reappears on the next sync with no
   /// explanation.
   static Future<void> delete(String id) async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) {
       throw const UserSkillException(

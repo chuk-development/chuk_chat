@@ -9,7 +9,7 @@
 //
 // Methods in this file:
 //   - _submitEditedMessage (edit/resend flow with streaming + tool loop)
-//   - _reconstructAttachedFilesForResend, _extractResendUserQueryFromDisplayText,
+//   - reconstructAttachedFilesForResend, _extractResendUserQueryFromDisplayText,
 //     _buildResendUserPrompt (resend helpers)
 //   - _beginSendOperation, _isSendOperationCancelled, _clearSendOperation
 //   - _markLastAssistantMessageCancelled, _cancelPendingSendOperation,
@@ -19,7 +19,7 @@
 //   - _detectImageMimeType
 //   - _buildApiHistoryWithPendingMessage
 //   - _resolveHistoryImages
-//   - _updateAiMessage, _updateToolCallsForMessage, _appendDebugRequestForMessage
+//   - _updateToolCallsForMessage, _appendDebugRequestForMessage
 //   - _processToolImages
 //   - _finalizeAiMessage
 
@@ -41,20 +41,20 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     List<AttachedFile>? attachedFilesOverride,
     bool isRegenerate = false,
   }) async {
-    if (!_isValidMessageIndex(index)) return;
+    if (!isValidMessageIndex(index)) return;
     final String trimmedText = newText.trim();
     final bool hasOverrideAttachments =
         attachedFilesOverride != null && attachedFilesOverride.isNotEmpty;
     if (trimmedText.isEmpty && !hasOverrideAttachments) {
-      _showSnackBar('Message cannot be empty.');
+      showSnackBar('Message cannot be empty.');
       return;
     }
     if (_isStreaming) {
-      _showSnackBar('Please wait for the current response to finish.');
+      showSnackBar('Please wait for the current response to finish.');
       return;
     }
     if (_isSending) {
-      _showSnackBar('Please wait for the current send to finish.');
+      showSnackBar('Please wait for the current send to finish.');
       return;
     }
 
@@ -62,7 +62,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       _activeChatId = widget.selectedChatId;
     }
     if (_activeChatId == null) {
-      _showSnackBar('Cannot resend message without an active chat.');
+      showSnackBar('Cannot resend message without an active chat.');
       return;
     }
 
@@ -79,7 +79,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // Store the edited message
       setState(() {
         _messages[index]['text'] = trimmedText;
-        _messageActionsHandler.cancelEdit();
+        messageActionsHandler.cancelEdit();
       });
 
       // Answer-version pager: on a regenerate, archive the answer we are about
@@ -87,7 +87,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       // run BEFORE the tail is removed below. Not a regenerate (a real prompt
       // edit is a new question) → clear any stale seed so nothing folds.
       final List<Map<String, dynamic>>? regenVariantSeed =
-          isRegenerate ? _captureRegenSeed(index) : null;
+          isRegenerate ? captureRegenSeed(index) : null;
 
       // For resend flows on older messages, reset the chat branch from this
       // point by clearing everything below the resent message. Before removing
@@ -160,7 +160,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         );
       }
 
-      _persistChat();
+      unawaited(persistChat());
 
       // Prepare to send the edited message
       final String originalUserInput = trimmedText;
@@ -169,8 +169,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Always use the currently selected model and provider for resend
       // This allows users to switch models and resend with the new selection
-      final String modelIdToUse = _selectedModelId;
-      final String? providerToUse = _selectedProviderSlug;
+      final String modelIdToUse = selectedModelId;
+      final String? providerToUse = selectedProviderSlug;
 
       // Update the user message with the new model/provider
       _messages[index]['modelId'] = modelIdToUse;
@@ -236,7 +236,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       // Reconstruct attached files from stored JSON for resend.
-      final attachedFilesForResend = _reconstructAttachedFilesForResend(index);
+      final attachedFilesForResend = reconstructAttachedFilesForResend(index);
       if (attachedFilesForResend.isNotEmpty) {
         final resendUserQuery = _extractResendUserQueryFromDisplayText(
           originalUserInput,
@@ -287,7 +287,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       });
 
       // Don't persist "Thinking..." placeholder - wait for actual response
-      // _persistChat(); // Removed - will persist after streaming completes
+      // persistChat(); // Removed - will persist after streaming completes
       scrollChatToBottom(force: true);
 
       final session =
@@ -379,7 +379,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         systemPrompt: systemPrompt,
       );
       if (resendBudget.error != null) {
-        _showSnackBar(resendBudget.error!);
+        showSnackBar(resendBudget.error!);
         return;
       }
       final int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
@@ -390,7 +390,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         accessToken: accessToken,
         discoveryContextKey: _activeChatId,
         baseSystemPrompt: systemPrompt,
-        modelId: _selectedModelId,
+        modelId: selectedModelId,
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
         skipIdentity: skipIdentity,
@@ -449,7 +449,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           systemPrompt: passSystemPrompt,
           maxTokens: resendMaxTokens,
           images: passImages,
-          reasoningEffort: _clampedReasoningEffort(modelIdToUse, providerToUse),
+          reasoningEffort: clampedReasoningEffort(modelIdToUse, providerToUse),
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -465,7 +465,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           stream: eventStream,
           onUpdate: (content, reasoning) {
             if (mounted &&
-                _isValidMessageIndex(placeholderIndex) &&
+                isValidMessageIndex(placeholderIndex) &&
                 _activeChatId == chatIdForStream) {
               // Structural, no text matching: the streamed content is the
               // model working (not the answer) whenever we're mid tool-loop
@@ -482,7 +482,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   ? displayContent
                   : '$prefix$displayContent';
 
-              _updateAiMessage(placeholderIndex, fullDisplay, reasoning);
+              updateAiMessage(
+                placeholderIndex,
+                fullDisplay,
+                reasoning,
+                activeChatId,
+              );
               // Follow the answer as it streams in, but only while pinned.
               pinToBottomDuringStream();
             }
@@ -611,7 +616,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     accessToken: accessToken,
                     discoveryContextKey: chatIdForStream,
                     baseSystemPrompt: systemPrompt,
-                    modelId: _selectedModelId,
+                    modelId: selectedModelId,
                     toolCallingEnabled: widget.toolCallingEnabled,
                     discoveryMode: widget.toolDiscoveryMode,
                     skipIdentity: skipIdentity,
@@ -864,14 +869,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
   }
 
-  List<AttachedFile> _reconstructAttachedFilesForResend(int index) {
-    if (!_isValidMessageIndex(index)) return <AttachedFile>[];
-    return ChatUiHelpers.reconstructAttachedFilesForResend(
-      _messages[index],
-      _uuid,
-    );
-  }
-
   String _extractResendUserQueryFromDisplayText(
     String displayText,
     List<AttachedFile> attachedFiles,
@@ -945,10 +942,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (_activeChatId != null) {
       _persistChatWithId(_activeChatId!);
     } else {
-      _persistChat();
+      unawaited(persistChat());
     }
 
-    _showSnackBar('Response cancelled');
+    showSnackBar('Response cancelled');
   }
 
   Future<void> _cancelStream() async {
@@ -965,8 +962,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _markLastAssistantMessageCancelled();
       });
 
-      _persistChat();
-      _showSnackBar('Response cancelled');
+      unawaited(persistChat());
+      showSnackBar('Response cancelled');
     }
   }
 
@@ -1168,7 +1165,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       if (_isStreaming) {
         // AI is still streaming — queue the message instead of cancelling.
-        final text = _controller.text.trim();
+        final text = composerController.text.trim();
         if (text.isNotEmpty) {
           if (mounted) {
             setState(() {
@@ -1177,7 +1174,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           } else {
             _pendingMessageText = text;
           }
-          _controller.clear();
+          composerController.clear();
           if (kDebugMode) {
             debugPrint(
               '📋 [SendMessage] Queued pending message '
@@ -1217,7 +1214,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       // Check if a model is selected
-      if (_selectedModelId.isEmpty) {
+      if (selectedModelId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -1247,7 +1244,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Credit/free message checks are handled server-side (API returns 402)
 
-      final String originalUserInput = _controller.text.trim();
+      final String originalUserInput = composerController.text.trim();
 
       // Use MessageCompositionService to prepare the message
       final List<Map<String, dynamic>> apiHistory =
@@ -1257,7 +1254,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       final result = await MessageCompositionService.prepareMessage(
         userInput: originalUserInput,
         attachedFiles: _fileHandler.attachedFiles,
-        selectedModelId: _selectedModelId,
+        selectedModelId: selectedModelId,
         apiHistory: apiHistory,
         systemPrompt: resolvedSystemPrompt,
         getProviderSlug: ensureProviderSlugForCurrentModel,
@@ -1355,7 +1352,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       // Generate chat ID ONCE at the start for truly NEW chats only
-      // This prevents race conditions where multiple _persistChat calls
+      // This prevents race conditions where multiple persistChat calls
       // each generate their own UUID before the first one completes
       if (_activeChatId == null) {
         _activeChatId = _uuid.v4();
@@ -1427,7 +1424,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'sender': 'user',
           'text': displayMessageText,
           'reasoning': '',
-          'modelId': _selectedModelId,
+          'modelId': selectedModelId,
           'provider': providerSlug,
         };
 
@@ -1477,7 +1474,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           );
         }
 
-        _controller.clear();
+        composerController.clear();
         _isSending = true;
         if (hasAttachments) {
           _fileHandler.attachedFiles.clear();
@@ -1486,7 +1483,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'sender': 'ai',
           'text': 'Thinking...',
           'reasoning': '',
-          'modelId': _selectedModelId,
+          'modelId': selectedModelId,
           'provider': providerSlug,
           'startedAt': DateTime.now().toIso8601String(),
         });
@@ -1512,7 +1509,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
               ? jsonEncode(imageDataUrls)
               : null,
           maxTokens: maxResponseTokens,
-          reasoningEffort: _clampedReasoningEffort(_selectedModelId, providerSlug),
+          reasoningEffort: clampedReasoningEffort(selectedModelId, providerSlug),
         );
         ChatStorageService.isMessageOperationInProgress = false;
         if (enqueued) return;
@@ -1537,7 +1534,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       // Don't persist "Thinking..." placeholder - wait for actual response
-      // _persistChat(); // Removed - will persist after streaming completes
+      // persistChat(); // Removed - will persist after streaming completes
 
       if (_isSendOperationCancelled(sendOperationId)) {
         return;
@@ -1545,7 +1542,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       if (firstMessageInChat) _animCtrl.forward();
       scrollChatToBottom(force: true);
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
 
       // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
       final String chatIdForStream = _activeChatId!;
@@ -1588,7 +1585,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         accessToken: accessToken,
         discoveryContextKey: chatIdForStream,
         baseSystemPrompt: systemPrompt,
-        modelId: _selectedModelId,
+        modelId: selectedModelId,
         toolCallingEnabled: widget.toolCallingEnabled,
         discoveryMode: widget.toolDiscoveryMode,
         skipIdentity: skipIdentity,
@@ -1641,13 +1638,13 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         final stream = WebSocketChatService.sendStreamingChat(
           accessToken: accessToken,
           message: message,
-          modelId: _selectedModelId,
+          modelId: selectedModelId,
           providerSlug: providerSlug,
           history: history.isEmpty ? null : history,
           systemPrompt: passSystemPrompt,
           maxTokens: maxResponseTokens,
           images: passImages,
-          reasoningEffort: _clampedReasoningEffort(_selectedModelId, providerSlug),
+          reasoningEffort: clampedReasoningEffort(selectedModelId, providerSlug),
           // Pin the chat id so MultiplexSession enforces single-stream-
           // per-chat and cancels any racing concurrent send (e.g. an
           // overlapping title generation call) before this pass starts.
@@ -1674,7 +1671,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 _messages[placeholderIndex]['text'] = displayContent;
                 _messages[placeholderIndex]['reasoning'] = reasoning;
               }
-              _updateAiMessage(placeholderIndex, displayContent, reasoning);
+              updateAiMessage(
+                placeholderIndex,
+                displayContent,
+                reasoning,
+                activeChatId,
+              );
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
@@ -1813,7 +1815,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       accessToken: accessToken,
                       discoveryContextKey: chatIdForStream,
                       baseSystemPrompt: systemPrompt,
-                      modelId: _selectedModelId,
+                      modelId: selectedModelId,
                       toolCallingEnabled: widget.toolCallingEnabled,
                       discoveryMode: widget.toolDiscoveryMode,
                       skipIdentity: skipIdentity,
@@ -2039,8 +2041,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       ? jsonEncode(imageDataUrls)
                       : null,
                   maxTokens: maxResponseTokens,
-                  reasoningEffort: _clampedReasoningEffort(
-                    _selectedModelId,
+                  reasoningEffort: clampedReasoningEffort(
+                    selectedModelId,
                     providerSlug,
                   ),
                 );
@@ -2190,47 +2192,6 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   );
 
   /// Resolve image storage paths from a JSON-encoded list to Base64 data URLs
-
-  void _updateAiMessage(int index, String content, String reasoning) {
-    if (!mounted || index < 0 || index >= _messages.length) return;
-    final String? chatId = _activeChatId;
-    if (chatId == null) return;
-
-    // Keep the backing list in sync (persistence + finalize) but WITHOUT a
-    // screen-wide setState per token. The single streaming bubble rebuilds
-    // itself by listening to the runtime's `streamingLive` notifier (see the
-    // list itemBuilder). This replaces a ~30fps rebuild of every visible
-    // bubble + the composer + overlays with a rebuild of just the streaming
-    // bubble's body.
-    final Map<String, String> message = Map<String, String>.from(
-      _messages[index],
-    );
-    message['text'] = content;
-    message['reasoning'] = reasoning;
-    _messages[index] = message;
-
-    final ChatRuntime runtime = ChatRuntimeRegistry.instance.get(chatId);
-    // First token of the turn: the placeholder was first built before the
-    // stream manager flipped streaming on, so it isn't yet wrapped in its
-    // scoped ValueListenableBuilder. Do exactly one setState now to install
-    // the wrapper; every subsequent token updates only the notifier.
-    final bool firstToken = runtime.streamingLive.value == null;
-    runtime.pushStreamingText(
-      index: index,
-      text: content,
-      reasoning: reasoning,
-    );
-    if (firstToken) {
-      setState(() {});
-    }
-
-    // Follow the answer as it streams in, but only while the user is pinned to
-    // the bottom. The edit/resend path did this and the normal send path did
-    // not, so a fresh answer grew off-screen while resending the same message
-    // tracked correctly. The layout's streaming slack was removed on the
-    // assumption that this runs.
-    pinToBottomDuringStream();
-  }
 
   void _updateToolCallsForMessage(
     int index,
@@ -2426,8 +2387,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
     if (mounted) {
       scrollChatToBottom();
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-      _persistChat();
+      Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+      unawaited(persistChat());
 
       // Drain the message queue — if the user typed while AI was responding.
       _drainPendingMessage();
@@ -2448,11 +2409,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     } else {
       _pendingMessageText = null;
     }
-    if (_controller.text.trim().isEmpty) {
-      _controller.text = pending;
-      _controller.selection = TextSelection.collapsed(offset: pending.length);
+    if (composerController.text.trim().isEmpty) {
+      composerController.text = pending;
+      composerController.selection = TextSelection.collapsed(offset: pending.length);
     }
-    _textFieldFocusNode.requestFocus();
+    composerFocusNode.requestFocus();
   }
 
   void _drainPendingMessage() {
@@ -2473,9 +2434,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
 
     // Put the text back into the controller so _sendMessage picks it up
-    // via its normal `_controller.text.trim()` path.
-    _controller.text = pending;
-    _controller.selection = TextSelection.collapsed(offset: pending.length);
+    // via its normal `composerController.text.trim()` path.
+    composerController.text = pending;
+    composerController.selection = TextSelection.collapsed(offset: pending.length);
     unawaited(_sendMessage());
   }
 
@@ -2501,7 +2462,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     final payload = OfflineSendPayload(
       chatId: chatId,
       messageText: messageText,
-      modelId: _selectedModelId,
+      modelId: selectedModelId,
       providerSlug: providerSlug,
       systemPrompt: systemPrompt,
       imagesJson: imagesJson,

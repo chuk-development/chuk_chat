@@ -17,6 +17,14 @@ Future<void> initChatStorageCache() async {
   sharedPrefsInstance ??= await SharedPreferences.getInstance();
 }
 
+/// kv_cache key holding the sidebar title list for [userId].
+///
+/// The titles moved out of SharedPreferences (where the ~175 KB blob bloated
+/// the prefs file the legacy plugin re-parses on every getInstance) into the
+/// SQLite kv_cache. The key string is unchanged so a one-time migration can
+/// look the old prefs value up under the same name.
+String chatTitlesCacheKey(String userId) => 'chat_titles_v1_$userId';
+
 /// Central state management for chat storage.
 /// Provides the single source of truth for all chats and notification handling.
 ///

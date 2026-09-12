@@ -1,6 +1,5 @@
 // lib/platform_specific/chat/handlers/file_attachment_handler.dart
 import 'dart:async';
-import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
@@ -13,6 +12,7 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/file_upload_validator.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/scanned_pdf_pages.dart';
 
 /// Handles file and image attachments
 class FileAttachmentHandler {
@@ -378,11 +378,14 @@ class FileAttachmentHandler {
         );
         if (hasPages) {
           unawaited(
-            _replaceWithScannedPages(
-              pageImages,
-              fileId,
-              _attachedFiles[index].fileName,
-              markdownContent,
+            replaceWithScannedPages(
+              dataUrls: pageImages,
+              fileId: fileId,
+              fileName: _attachedFiles[index].fileName,
+              note: markdownContent,
+              attachedFiles: _attachedFiles,
+              onUpdate: onUpdate,
+              onError: onError,
             ),
           );
         }
@@ -394,76 +397,6 @@ class FileAttachmentHandler {
         );
       }
       onUpdate?.call();
-    }
-  }
-
-  /// Replace a scanned PDF with its rendered pages.
-  ///
-  /// The PDF itself has no text layer, so keeping it in the tray would show
-  /// the user a document nobody can read. The pages take its place as
-  /// ordinary image attachments — the same encrypted storage, the same send
-  /// path — and the note explaining that this is a scan rides on the first
-  /// one so it still reaches the model.
-  Future<void> _replaceWithScannedPages(
-    List<String> dataUrls,
-    String fileId,
-    String fileName,
-    String? note,
-  ) async {
-    final paths = <String>[];
-    try {
-      for (final dataUrl in dataUrls) {
-        final comma = dataUrl.indexOf(',');
-        if (comma < 0) continue;
-        final bytes = base64Decode(dataUrl.substring(comma + 1));
-        paths.add(await ImageStorageService.uploadEncryptedImage(bytes));
-      }
-    } catch (error) {
-      await _discardPages(paths);
-      final index = _attachedFiles.indexWhere((f) => f.id == fileId);
-      if (index != -1) {
-        _attachedFiles.removeAt(index);
-        onUpdate?.call();
-      }
-      onError?.call('Failed to prepare the scanned pages of "$fileName": $error');
-      return;
-    }
-
-    final index = _attachedFiles.indexWhere((f) => f.id == fileId);
-    if (index == -1) {
-      // Removed while we were uploading: do not leave orphans in storage.
-      await _discardPages(paths);
-      return;
-    }
-    if (paths.isEmpty) {
-      _attachedFiles.removeAt(index);
-      onUpdate?.call();
-      onError?.call('No readable pages found in "$fileName".');
-      return;
-    }
-
-    const uuid = Uuid();
-    final pageFiles = <AttachedFile>[
-      for (int i = 0; i < paths.length; i++)
-        AttachedFile(
-          id: uuid.v4(),
-          fileName: '$fileName — page ${i + 1}',
-          encryptedImagePath: paths[i],
-          isImage: true,
-          // Only the first page carries the note; repeating it per page
-          // would send the model the same paragraph ten times.
-          markdownContent: i == 0 ? note : null,
-        ),
-    ];
-    _attachedFiles.replaceRange(index, index + 1, pageFiles);
-    onUpdate?.call();
-  }
-
-  Future<void> _discardPages(List<String> paths) async {
-    for (final path in paths) {
-      unawaited(
-        ImageStorageService.deleteEncryptedImage(path).catchError((_) {}),
-      );
     }
   }
 

@@ -3,25 +3,25 @@
 
 default_platform(:mac)
 
+require_relative "../../fastlane/env_guard"
+
+def ensure_env_file!
+  EnvGuard.env_file!
+end
+
+
 platform :mac do
   desc "Build and sign macOS release"
   lane :build do
-    # Ensure environment variables are set
-    supabase_url = ENV['SUPABASE_URL']
-    supabase_key = ENV['SUPABASE_ANON_KEY']
+    ensure_env_file!
 
-    raise "SUPABASE_URL not set" unless supabase_url
-    raise "SUPABASE_ANON_KEY not set" unless supabase_key
-
-    # Build macOS release with Flutter
     build_timestamp = Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
     sh("cd ../.. && flutter build macos --release " \
-       "--dart-define=SUPABASE_URL=#{supabase_url} " \
-       "--dart-define=SUPABASE_ANON_KEY=#{supabase_key} " \
+       "--dart-define-from-file=.env " \
        "--dart-define=BUILD_TIMESTAMP=#{build_timestamp} " \
-       "--dart-define=FEATURE_PROJECTS=true " \
-       "--dart-define=FEATURE_IMAGE_GEN=true " \
-       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--dart-define=PLATFORM_DESKTOP=true " \
+       "--dart-define=FEATURE_VOICE_MODE=false " \
+       "--dart-define=FEATURE_SERVER_TOOLS=false " \
        "--tree-shake-icons")
   end
 
@@ -102,14 +102,18 @@ platform :mac do
   desc "Upload to Mac App Store"
   lane :deploy do
     # Build for App Store (different signing)
+    ensure_env_file!
+
     build_timestamp = Time.now.utc.strftime('%Y-%m-%dT%H:%M:%SZ')
+    # The Mac App Store takes its cut of in-app purchases, so the direct
+    # Stripe flow is compiled out of this build.
     sh("cd ../.. && flutter build macos --release " \
-       "--dart-define=SUPABASE_URL=#{ENV['SUPABASE_URL']} " \
-       "--dart-define=SUPABASE_ANON_KEY=#{ENV['SUPABASE_ANON_KEY']} " \
+       "--dart-define-from-file=.env " \
        "--dart-define=BUILD_TIMESTAMP=#{build_timestamp} " \
-       "--dart-define=FEATURE_PROJECTS=true " \
-       "--dart-define=FEATURE_IMAGE_GEN=true " \
-       "--dart-define=FEATURE_VOICE_MODE=true " \
+       "--dart-define=PLATFORM_DESKTOP=true " \
+       "--dart-define=FEATURE_PAYMENTS_DIRECT=false " \
+       "--dart-define=FEATURE_VOICE_MODE=false " \
+       "--dart-define=FEATURE_SERVER_TOOLS=false " \
        "--tree-shake-icons")
 
     # Upload to App Store Connect

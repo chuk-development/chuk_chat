@@ -35,13 +35,12 @@ import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_model_selection_mixin.dart';
 import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
-import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
-import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
-import 'package:chuk_chat/services/model_prefetch_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -73,6 +72,7 @@ import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_clipboard_handler.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -149,14 +149,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         SingleTickerProviderStateMixin,
         ChatScrollMixin,
         ModelProviderResolutionMixin,
-        RegenVariantSeedMixin<ChukChatUIDesktop> {
+        ChatModelSelectionMixin,
+        ChatMessageEditMixin,
+        RegenVariantSeedMixin<ChukChatUIDesktop>
+    implements
+        ChatDebugSnapshot {
   // RENAMED STATE
-  final TextEditingController _controller = TextEditingController();
+  @override
+  final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
   String? _activeChatId;
   final ScrollController _composerScrollController = ScrollController();
   late ChatApiService _chatApiService;
-  late final FocusNode _textFieldFocusNode;
+  @override
+  late final FocusNode composerFocusNode;
   final FocusNode _rawKeyboardListenerFocusNode = FocusNode();
 
   /// Focus of the message-list selection region. Held here so a pointer down on
@@ -167,46 +173,71 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   );
 
   late AnimationController _animCtrl;
-  String _selectedModelId = ''; // Will be loaded from user preferences
-  String? _selectedProviderSlug;
 
   /// UI key of the message that was just sent, so its list item plays the
   /// fly-up entrance once. Transient, never persisted.
   String? _flyInKey;
 
-  // Bridge the private fields above to ModelProviderResolutionMixin.
-  @override
-  String get selectedModelId => _selectedModelId;
-  @override
-  String? get selectedProviderSlug => _selectedProviderSlug;
-  @override
-  set selectedProviderSlug(String? value) => _selectedProviderSlug = value;
-
-  ChatMode _chatMode = ChatModeService.fallbackMode;
-
-  /// The active mode's reasoning level (`none` … `xhigh`, `none` = off).
-  /// Loaded from the mode's config; each mode remembers its own.
-  String _reasoningEffort =
-      ChatModeService.defaultConfig(ChatModeService.fallbackMode).reasoningEffort;
-
-  /// Human name of the selected model, for the mode menu. Null until the
-  /// model list has been cached — the menu then shows the raw id.
-  String? _selectedModelName;
-
-  /// Models the reader picked on the model screen, shown one level deeper.
-  List<ChatModelChoice> _pickedModels = const <ChatModelChoice>[];
-
-  /// Human name of the model Custom last ran, remembered across mode switches
-  /// so the third point in the mode menu names it even under Fast or Thinking.
-  /// Null until Custom has been used at least once.
-  String? _customModelName;
   String? _systemPrompt;
   String? _selectedWorkspaceId;
   late final VoidCallback _modelSelectionListener;
 
   late final AudioRecordingHandler _audioHandler;
-  late final MessageActionsHandler _messageActionsHandler;
-  late final ChatPersistenceHandler _persistenceHandler;
+  @override
+  late final MessageActionsHandler messageActionsHandler;
+  @override
+  late final ChatPersistenceHandler persistenceHandler;
+
+  // --- ChatMessageEditMixin plumbing -------------------------------------
+  // The mixin owns the edit/resend/branch/variant logic; the storage below
+  // stays here because the two States hold it differently.
+
+  @override
+  List<Map<String, String>> get messages => _messages;
+
+  @override
+  String? get activeChatId => _activeChatId;
+
+  @override
+  set activeChatId(String? value) => _activeChatId = value;
+
+  @override
+  Function(String?) get onChatIdChanged => widget.onChatIdChanged;
+
+  @override
+  List<AttachedFile> get composerAttachedFiles => _fileHandler.attachedFiles;
+
+  @override
+  void deleteComposerAttachment(String fileId) =>
+      _fileHandler.removeAttachedFile(fileId);
+
+  /// Desktop hands focus back to the composer after an attachment goes.
+  @override
+  void onComposerAttachmentRemoved() {
+    Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+  }
+
+  // The real send/submit live in desktop_send_logic.dart as extension methods,
+  // which cannot implement an abstract mixin member. Forward to them.
+  @override
+  Future<void> sendMessage() => _sendMessage();
+
+  @override
+  Future<void> submitEditedMessage(
+    int index,
+    String newText, {
+    bool removeFollowingAssistant = true,
+    bool clearMessagesBelow = false,
+    List<AttachedFile>? attachedFilesOverride,
+    bool isRegenerate = false,
+  }) => _submitEditedMessage(
+    index,
+    newText,
+    removeFollowingAssistant: removeFollowingAssistant,
+    clearMessagesBelow: clearMessagesBelow,
+    attachedFilesOverride: attachedFilesOverride,
+    isRegenerate: isRegenerate,
+  );
 
   /// Per-chat send-in-flight flag, backed by the ChatRuntime for the
   /// currently visible chat. See chat_ui_mobile.dart for rationale.
@@ -256,7 +287,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// belong to the saved message, so removing them must NOT delete from storage
   /// (the original survives if the edit is cancelled); attachments uploaded
   /// fresh during the edit are not in this set and ARE deleted on removal.
-  final Set<String> _restoredAttachmentIds = <String>{};
+  @override
+  final Set<String> restoredAttachmentIds = <String>{};
   final Uuid _uuid = Uuid();
   late final DesktopClipboardHandler _clipboardHandler;
   bool get _isLinuxDesktop =>
@@ -298,11 +330,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     super.initState();
     initShiftKeyTracker();
     // Mode + its config (model, provider, reasoning) restore once, via
-    // _loadSavedModelPreference in the post-frame pass below — the single
+    // loadSavedModelPreference in the post-frame pass below — the single
     // entry point, so startup writes and picked-model refreshes run once.
     _audioHandler = AudioRecordingHandler();
-    _messageActionsHandler = MessageActionsHandler()
-      ..onShowSnackBar = _showSnackBar
+    messageActionsHandler = MessageActionsHandler()
+      ..onShowSnackBar = showSnackBar
       ..onSubmitEdit = (index, newText) {
         unawaited(
           _submitEditedMessage(
@@ -313,9 +345,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           ),
         );
       }
-      ..onResend = _resendMessageAt;
-    _persistenceHandler = ChatPersistenceHandler()
-      ..onShowSnackBar = _showSnackBar
+      ..onResend = resendMessageAt;
+    persistenceHandler = ChatPersistenceHandler()
+      ..onShowSnackBar = showSnackBar
       ..onChatIdAssigned = (chatId) {
         if (mounted && _activeChatId != chatId) {
           setState(() {
@@ -329,7 +361,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           }));
         }
       };
-    _textFieldFocusNode = FocusNode(
+    composerFocusNode = FocusNode(
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
 
@@ -342,8 +374,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
         // Escape: cancel editing mode
         if (event.logicalKey == LogicalKeyboardKey.escape &&
-            _messageActionsHandler.isEditing) {
-          _cancelEditMessage();
+            messageActionsHandler.isEditing) {
+          cancelEditMessage();
           return KeyEventResult.handled;
         }
 
@@ -353,10 +385,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
         // Shift+Enter: insert newline manually
         if (isShiftKeyPressed) {
-          final text = _controller.text;
-          final sel = _controller.selection;
+          final text = composerController.text;
+          final sel = composerController.selection;
           final newText = text.replaceRange(sel.start, sel.end, '\n');
-          _controller.value = TextEditingValue(
+          composerController.value = TextEditingValue(
             text: newText,
             selection: TextSelection.collapsed(offset: sel.start + 1),
           );
@@ -364,9 +396,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         }
 
         // Bare Enter: send message (or submit edit), consume to prevent newline.
-        // Route through _sendOrSubmitEdit so an edit keeps its (possibly
+        // Route through sendOrSubmitEdit so an edit keeps its (possibly
         // modified) attachment set instead of dropping the user's changes.
-        unawaited(_sendOrSubmitEdit());
+        unawaited(sendOrSubmitEdit());
         return KeyEventResult.handled;
       },
     );
@@ -375,7 +407,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       vsync: this,
     );
     _fileHandler = DesktopFileHandler()
-      ..onShowSnackBar = _showSnackBar
+      ..onShowSnackBar = showSnackBar
       ..onUpdate = () {
         if (mounted) setState(() {});
       }
@@ -395,11 +427,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Defer network-dependent loading to after first frame for faster startup
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+      Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
       unawaited(
         Future<void>.delayed(Duration.zero, () async {
           if (!mounted) return;
-          await _loadSavedModelPreference();
+          await loadSavedModelPreference();
         }),
       );
       unawaited(
@@ -413,12 +445,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _modelSelectionListener = () {
       final String newModelId =
           ModelSelectionDropdown.selectedModelNotifier.value;
-      if (newModelId != _selectedModelId) {
+      if (newModelId != selectedModelId) {
         setState(() {
-          _selectedModelId = newModelId;
+          selectedModelId = newModelId;
         });
       }
-      unawaited(_refreshSelectedModelName(newModelId));
+      unawaited(refreshSelectedModelName(newModelId));
       unawaited(loadProviderSlugForModel(newModelId));
     };
     ModelSelectionDropdown.selectedModelListenable.addListener(
@@ -430,7 +462,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         .listen((_) {
           // Reload provider slug when settings are changed —
           // skip dropdown cache (may be stale) and read from prefs directly
-          unawaited(loadProviderSlugForModel(_selectedModelId, forceFromPrefs: true));
+          unawaited(loadProviderSlugForModel(selectedModelId, forceFromPrefs: true));
         });
   }
 
@@ -511,7 +543,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // Persisting here causes data corruption because _messages may already contain
       // the NEW chat's content by the time didUpdateWidget fires (due to async timing).
       // Instead, we rely on:
-      // 1. Immediate persist after message send/receive (via _persistenceHandler)
+      // 1. Immediate persist after message send/receive (via persistenceHandler)
       // 2. Auto-save timer
       // 3. Persist in newChat() before clearing
       // 4. Chats are already saved to Supabase during message operations
@@ -545,15 +577,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _audioHandler.onLevelsChanged = null;
     _providerRefreshSubscription?.cancel();
     scrollController.removeListener(onScrollChanged);
-    _controller.dispose();
+    composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
-    _textFieldFocusNode.dispose();
+    composerFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     _messageSelectionFocusNode.dispose();
     _animCtrl.dispose();
     unawaited(_audioHandler.dispose());
-    _persistenceHandler.dispose();
+    persistenceHandler.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _modelSelectionListener,
     );
@@ -604,8 +636,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _streamingManager.setBackgroundMessages(
         _activeChatId!,
         messagesCopy,
-        modelId: _selectedModelId,
-        provider: _selectedProviderSlug,
+        modelId: selectedModelId,
+        provider: selectedProviderSlug,
       );
       if (kDebugMode) {
         debugPrint(
@@ -769,7 +801,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     scrollChatToBottom(animate: false, force: true);
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
   }
 
   Future<void> _loadChatByIdAsync(String? chatId) async {
@@ -803,7 +835,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _messages.clear();
       _animCtrl.reset();
       _fileHandler.attachedFiles.clear();
-      _messageActionsHandler.cancelEdit();
+      messageActionsHandler.cancelEdit();
     } else {
       // Find chat by ID
       StoredChat? storedChat = ChatStorageService.getChatById(chatId);
@@ -873,7 +905,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           _messages.clear();
           _animCtrl.reset();
           _fileHandler.attachedFiles.clear();
-          _messageActionsHandler.cancelEdit();
+          messageActionsHandler.cancelEdit();
           _activeChatId = null;
         }
       } else {
@@ -894,7 +926,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _messages.clear();
         _animCtrl.reset();
         _fileHandler.attachedFiles.clear();
-        _messageActionsHandler.cancelEdit();
+        messageActionsHandler.cancelEdit();
         _activeChatId = null;
       }
     }
@@ -964,7 +996,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       showScrollToBottom = false;
     });
     scrollChatToBottom(animate: false, force: true);
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
     stopwatch.stop();
     unawaited(
       DiagnosticsLogService.timing(
@@ -1009,6 +1041,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ChatUiHelpers.messageToRawMap(message);
 
   /// Returns the current messages list for debug export.
+  @override
   List<Map<String, String>> get debugMessages =>
       _messages.map((m) => Map<String, String>.from(m)).toList();
 
@@ -1016,22 +1049,27 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   String? get debugSystemPrompt => _systemPrompt;
 
   /// Current model id used for outgoing requests. Debug only.
-  String get debugModelId => _selectedModelId;
+  @override
+  String get debugModelId => selectedModelId;
 
   /// Current provider slug used for outgoing requests. Debug only.
-  String? get debugProviderSlug => _selectedProviderSlug;
+  @override
+  String? get debugProviderSlug => selectedProviderSlug;
 
   /// Current workspace id, if any. Debug only.
+  @override
   String? get debugWorkspaceId => _selectedWorkspaceId;
 
   /// Whether reasoning is enabled for the active mode. Debug only.
-  bool get debugReasoningEnabled => _reasoningEffort != ChatModeService.reasoningOff;
+  bool get debugReasoningEnabled => reasoningEffort != ChatModeService.reasoningOff;
 
   /// Effort actually sent with each request — shown in the debug export,
   /// where "true/false" hid which of the two modes was running.
-  String get debugReasoningEffort => _reasoningEffort;
+  @override
+  String get debugReasoningEffort => reasoningEffort;
 
   /// Current active chat id. Debug only.
+  @override
   String? get debugActiveChatId => _activeChatId;
 
   void newChat() {
@@ -1056,8 +1094,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         _streamingManager.setBackgroundMessages(
           chatIdToSave,
           messagesToSave,
-          modelId: _selectedModelId,
-          provider: _selectedProviderSlug,
+          modelId: selectedModelId,
+          provider: selectedProviderSlug,
         );
         if (kDebugMode) {
           debugPrint(
@@ -1078,13 +1116,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       _activeChatId = null;
       _isSending = false; // Reset for new chat
       _fileHandler.attachedFiles.clear();
-      _messageActionsHandler.cancelEdit();
+      messageActionsHandler.cancelEdit();
     });
 
     // Notify parent that we're now on a new chat (null ID)
     widget.onChatIdChanged(null);
     scrollChatToBottom(force: true);
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+    Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
 
     // Persist old chat in background (don't await)
     // CRITICAL: Use silent=true to prevent persistence handler from changing
@@ -1099,7 +1137,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         chatIdToSave != null &&
         !ChatStorageState.wasRecentlyDeleted(chatIdToSave)) {
       unawaited(
-        _persistenceHandler.persistChat(
+        persistenceHandler.persistChat(
           messages: messagesToSave
               .map((m) => Map<String, String>.from(m))
               .toList(),
@@ -1127,22 +1165,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _openComingSoonFeature(String featureName) {
     if (!mounted) return;
     ChatUiHelpers.openComingSoonFeature(context, featureName);
-  }
-
-  /// Load the user's saved model preference
-  Future<void> _loadSavedModelPreference() async {
-    // The active mode's config is the single source of truth for the model,
-    // provider and reasoning level. It always yields a model (baked
-    // defaults), so this simply projects it — no separate saved-vs-default
-    // branch to keep in step.
-    try {
-      await _restoreChatMode();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error loading saved model preference: $e');
-      }
-      // Keep empty on error - user must select
-    }
   }
 
   Future<void> _loadSystemPrompt() async {
@@ -1302,7 +1324,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           },
         );
       } else {
-        _showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
+        showSnackBar(AppLocalizations.of(context)!.micAccessFailed);
       }
     }
     if (kDebugMode) {
@@ -1324,7 +1346,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     final session = SupabaseService.auth.currentSession;
     if (session == null) {
-      _showSnackBar(AppLocalizations.of(context)!.sessionExpired);
+      showSnackBar(AppLocalizations.of(context)!.sessionExpired);
       return;
     }
 
@@ -1339,7 +1361,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     if (!mounted) return;
 
     if (!result.success) {
-      _showSnackBar(
+      showSnackBar(
         result.error ?? AppLocalizations.of(context)!.transcriptionFailed,
       );
       setState(() {});
@@ -1350,10 +1372,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       // When editing, the transcription must go through the edit-submit path,
       // which guards on `_isSending` — so do NOT pre-set the flag in that case
       // or the submit would bail. _sendMessage() sets the flag itself.
-      final bool editing = _messageActionsHandler.isEditing;
+      final bool editing = messageActionsHandler.isEditing;
       setState(() {
-        _controller.text = result.text!;
-        _controller.selection = TextSelection.fromPosition(
+        composerController.text = result.text!;
+        composerController.selection = TextSelection.fromPosition(
           TextPosition(offset: result.text!.length),
         );
         // Set sending flag instantly so loading indicator shows without gap
@@ -1363,136 +1385,15 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       });
 
       // If auto-send is enabled, send the message immediately. Route through
-      // _sendOrSubmitEdit so a transcription produced while editing replaces the
+      // sendOrSubmitEdit so a transcription produced while editing replaces the
       // edited message (and truncates below) instead of appending a new one.
       if (widget.autoSendVoiceTranscription) {
-        await _sendOrSubmitEdit();
+        await sendOrSubmitEdit();
       } else {
         // Otherwise, focus the text field so user can review before sending
-        Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
+        Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
       }
     }
-  }
-
-  void _showSnackBar(String message) {
-    ChatUiHelpers.showSnackBar(context, message);
-  }
-
-  bool _isValidMessageIndex(int index) =>
-      index >= 0 && index < _messages.length;
-
-  void _editMessageAt(int index) {
-    if (!_isValidMessageIndex(index)) return;
-    final String text = (_messages[index]['text'] ?? '').trim();
-    // Restore the message's attachments into the composer so the user can see
-    // and remove them while editing. Removal is list-only (see
-    // _removeComposerAttachment) so the saved message is never corrupted if the
-    // edit is cancelled.
-    final List<AttachedFile> attached = _reconstructAttachedFilesForResend(
-      index,
-    );
-    if (text.isEmpty && attached.isEmpty) return;
-    setState(() {
-      _messageActionsHandler.startEdit(index);
-      _controller.text = text;
-      _controller.selection = TextSelection.fromPosition(
-        TextPosition(offset: text.length),
-      );
-      _restoredAttachmentIds
-        ..clear()
-        ..addAll(attached.map((f) => f.id));
-      _fileHandler.attachedFiles
-        ..clear()
-        ..addAll(attached);
-    });
-  }
-
-  void _cancelEditMessage() {
-    setState(() {
-      _messageActionsHandler.cancelEdit();
-      _controller.clear();
-      // List-only clear: the restored attachments still belong to the saved
-      // message until an edit is submitted, so do NOT delete them from storage.
-      _fileHandler.attachedFiles.clear();
-      _restoredAttachmentIds.clear();
-    });
-  }
-
-  /// Remove an attachment from the composer.
-  /// - While editing, attachments restored from the saved message are removed
-  ///   list-only (they still belong to that message until submit, and a cancel
-  ///   must leave the original intact).
-  /// - Attachments uploaded fresh during the edit (not in the restored set),
-  ///   and all removals outside editing, also delete the file from storage.
-  void _removeComposerAttachment(String fileId) {
-    if (_messageActionsHandler.isEditing &&
-        _restoredAttachmentIds.contains(fileId)) {
-      setState(() {
-        _fileHandler.attachedFiles.removeWhere((f) => f.id == fileId);
-      });
-    } else {
-      _fileHandler.removeAttachedFile(fileId);
-    }
-    Future.delayed(Duration.zero, () => _textFieldFocusNode.requestFocus());
-  }
-
-  /// Sends the message, or submits an edited message if in edit mode.
-  Future<void> _sendOrSubmitEdit() async {
-    if (_messageActionsHandler.isEditing) {
-      final editIndex = _messageActionsHandler.editingMessageIndex!;
-      final newText = _controller.text.trim();
-      // Snapshot the (possibly reduced) attachment set BEFORE cancel clears it.
-      final attachedSnapshot = List<AttachedFile>.from(
-        _fileHandler.attachedFiles,
-      );
-      _cancelEditMessage();
-      if (newText.isNotEmpty || attachedSnapshot.isNotEmpty) {
-        await _submitEditedMessage(
-          editIndex,
-          newText,
-          attachedFilesOverride: attachedSnapshot,
-          removeFollowingAssistant: false,
-          clearMessagesBelow: true,
-        );
-      }
-    } else {
-      await _sendMessage();
-    }
-  }
-
-  Future<void> _resendMessageAt(int index) async {
-    if (!_isValidMessageIndex(index)) return;
-
-    int sourceIndex = index;
-    if (_messages[sourceIndex]['sender'] != 'user') {
-      sourceIndex = -1;
-      for (int i = index - 1; i >= 0; i--) {
-        if (_messages[i]['sender'] == 'user') {
-          sourceIndex = i;
-          break;
-        }
-      }
-    }
-
-    if (!_isValidMessageIndex(sourceIndex)) {
-      _showSnackBar('Nothing to resend.');
-      return;
-    }
-
-    final String text = (_messages[sourceIndex]['text'] ?? '').trim();
-    if (text.isEmpty) {
-      _showSnackBar('Nothing to resend.');
-      return;
-    }
-    // Use the same logic as editing and submitting. This is a regenerate, so
-    // the discarded answer is archived as a variant instead of being lost.
-    await _submitEditedMessage(
-      sourceIndex,
-      text,
-      removeFollowingAssistant: false,
-      clearMessagesBelow: true,
-      isRegenerate: true,
-    );
   }
 
   /// Returns a callback for the ask_user interactive buttons if [index] is
@@ -1534,7 +1435,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     }
 
     return (String answer) {
-      _controller.text = answer;
+      composerController.text = answer;
       _sendMessage();
     };
   }
@@ -1582,7 +1483,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     return (String id) {
       final name = catalogueEntryById(id)?.name ?? 'the';
-      _controller.text =
+      composerController.text =
           'Connected the $name server — its tools are now available. '
           'Continue with what I asked.';
       _sendMessage();
@@ -1593,105 +1494,46 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     int index,
     MessageRenderData data,
   ) {
-    if (!_isValidMessageIndex(index)) {
+    if (!isValidMessageIndex(index)) {
       return const <MessageBubbleAction>[];
     }
 
     final Map<String, String> rawMessage = _messages[index];
     final String messageText = rawMessage['text'] ?? '';
 
-    return _messageActionsHandler.buildActionsForMessage(
+    return messageActionsHandler.buildActionsForMessage(
       index: index,
       messageText: messageText,
       isUser: data.isUser,
       isStreaming: data.isReasoningStreaming,
-      onEdit: _editMessageAt,
-      onResendMessage: _resendMessageAt,
-      onBranch: _branchFromIndex,
+      onEdit: editMessageAt,
+      onResendMessage: resendMessageAt,
+      onBranch: branchFromIndex,
     );
-  }
-
-  /// Fork the conversation into a brand-new chat, up to and including the
-  /// message at [index]. The current chat is left untouched in storage; the
-  /// new chat becomes the active one.
-  Future<void> _branchFromIndex(int index) async {
-    if (!_isValidMessageIndex(index)) return;
-    final List<Map<String, String>> branchMessages = _messages
-        .sublist(0, index + 1)
-        .map((m) => Map<String, String>.from(m))
-        .toList();
-    if (branchMessages.isEmpty) return;
-
-    final StoredChat? created = await _persistenceHandler.persistChat(
-      messages: branchMessages,
-      chatId: null,
-      waitForCompletion: true,
-      silent: true,
-    );
-    if (created == null) {
-      _showSnackBar('Could not branch chat');
-      return;
-    }
-    if (!mounted) return;
-    setState(() {
-      _messages
-        ..clear()
-        ..addAll(branchMessages);
-      _activeChatId = created.id;
-      _messageActionsHandler.cancelEdit();
-    });
-    widget.onChatIdChanged(created.id);
-    scrollChatToBottom(force: true);
-    _showSnackBar('Branched into a new chat');
   }
 
   // ---------------------------------------------------------------------------
   // Answer-version pager (OpenAI-style ‹ k/n › on regenerated answers).
   // ---------------------------------------------------------------------------
 
-  /// Capture the answer(s) about to be discarded by a regenerate at
-  /// [userIndex] (the preceding user message). Returns the archive to seed the
-  /// new answer's variant list with: the assistant answer directly below the
-  /// user message, using its own variant archive when it already has one (so
-  /// repeated regenerates keep stacking) or a single fresh snapshot otherwise.
-  /// Returns null when there is no assistant answer to preserve.
-  List<Map<String, dynamic>>? _captureRegenSeed(int userIndex) {
-    final int aiIndex = userIndex + 1;
-    if (aiIndex >= _messages.length) return null;
-    final Map<String, String> old = _messages[aiIndex];
-    if (old['sender'] != 'ai') return null;
-    final existing = ChatUiHelpers.decodeVariants(old['variants']);
-    if (existing.isNotEmpty) return existing;
-    return <Map<String, dynamic>>[ChatUiHelpers.variantSnapshotOf(old)];
-  }
-
   // RegenVariantSeedMixin hook: the seed logic is shared with mobile; this
   // State only has to name the chat that owns the visible message list.
   @override
   String? get variantActiveChatId => _activeChatId;
 
-  /// Switch the answer shown by the message at [index] to variant [newIndex]
-  /// and persist. Wired to the pager arrows.
-  void _switchVariantAt(int index, int newIndex) {
-    if (!_isValidMessageIndex(index)) return;
-    if (!ChatUiHelpers.switchVariant(_messages[index], newIndex)) return;
-    setState(() {});
-    unawaited(_persistChat());
-  }
-
   List<MessageBubbleAction> _buildUserMessageActionsForIndex(
     int index,
     MessageRenderData data,
   ) {
-    if (!_isValidMessageIndex(index) || !data.isUser) {
+    if (!isValidMessageIndex(index) || !data.isUser) {
       return const <MessageBubbleAction>[];
     }
     final String messageText = (_messages[index]['text'] ?? '');
-    return _messageActionsHandler.buildUserMessageActions(
+    return messageActionsHandler.buildUserMessageActions(
       index: index,
       messageText: messageText,
-      onEdit: _editMessageAt,
-      onResendMessage: _resendMessageAt,
+      onEdit: editMessageAt,
+      onResendMessage: resendMessageAt,
     );
   }
 
@@ -1709,7 +1551,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         PasteTextIntent: CallbackAction<PasteTextIntent>(
           onInvoke: (PasteTextIntent intent) {
             _fileHandler.modelSupportsImageInput = modelSupportsImageInput;
-            unawaited(_clipboardHandler.handleSmartPaste(_controller));
+            unawaited(_clipboardHandler.handleSmartPaste(composerController));
             return null;
           },
         ),
@@ -1798,9 +1640,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
 
-  Future<void> _persistChat({bool waitForCompletion = false}) async {
+  @override
+  Future<void> persistChat({bool waitForCompletion = false}) async {
     if (_messages.isEmpty) return;
-    await _persistenceHandler.persistChat(
+    await persistenceHandler.persistChat(
       messages: _messages.map((m) => Map<String, String>.from(m)).toList(),
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
@@ -1811,7 +1654,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void _persistChatWithId(String chatId) {
     if (_messages.isEmpty) return;
     unawaited(
-      _persistenceHandler.persistChat(
+      persistenceHandler.persistChat(
         messages: _messages.map((m) => Map<String, String>.from(m)).toList(),
         chatId: chatId,
       ),
@@ -1826,7 +1669,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   ) {
     if (messages.isEmpty) return;
     unawaited(
-      _persistenceHandler.persistChat(
+      persistenceHandler.persistChat(
         messages: messages.map((m) => Map<String, String>.from(m)).toList(),
         chatId: chatId,
         silent: true,
@@ -2125,7 +1968,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             i == _messages.length - 1 ||
                                             nextIsUser != data.isUser;
                                         final bool isBeingEdited =
-                                            _messageActionsHandler
+                                            messageActionsHandler
                                                 .editingMessageIndex ==
                                             i;
                                         // Build the bubble from a (text,
@@ -2195,13 +2038,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           variantIndex: data.variantIndex,
                                           variantCount: data.variantCount,
                                           onPrevVariant: data.variantCount > 1
-                                              ? () => _switchVariantAt(
+                                              ? () => switchVariantAt(
                                                     i,
                                                     data.variantIndex - 1,
                                                   )
                                               : null,
                                           onNextVariant: data.variantCount > 1
-                                              ? () => _switchVariantAt(
+                                              ? () => switchVariantAt(
                                                     i,
                                                     data.variantIndex + 1,
                                                   )
@@ -2428,11 +2271,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   ),
                   child: AttachmentPreviewBar(
                     files: _fileHandler.attachedFiles,
-                    onRemove: _removeComposerAttachment,
+                    onRemove: removeComposerAttachment,
                   ),
                 ),
               // Editing indicator
-              if (_messageActionsHandler.isEditing)
+              if (messageActionsHandler.isEditing)
                 Padding(
                   // Clear the floating top-right send button so the "Cancel"
                   // action isn't hidden underneath it.
@@ -2455,7 +2298,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                       const Spacer(),
                       GestureDetector(
-                        onTap: _cancelEditMessage,
+                        onTap: cancelEditMessage,
                         child: Text(
                           'Cancel',
                           style: TextStyle(
@@ -2525,8 +2368,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           TourSlots.chatInput,
                         ),
                         child: TextField(
-                        controller: _controller,
-                        focusNode: _textFieldFocusNode,
+                        controller: composerController,
+                        focusNode: composerFocusNode,
                         contextMenuBuilder: _buildComposerContextMenu,
                         autofocus: true,
                         showCursor: true,
@@ -2542,7 +2385,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           height: 1.4,
                         ),
                         decoration: InputDecoration(
-                          hintText: _messageActionsHandler.isEditing
+                          hintText: messageActionsHandler.isEditing
                               ? AppLocalizations.of(context)!.editYourMessage
                               : hasAttachments
                               ? AppLocalizations.of(context)!.addMessageOrDocs
@@ -2629,7 +2472,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                         );
                                       }
                                     },
-                                    textFieldFocusNode: _textFieldFocusNode,
+                                    textFieldFocusNode: composerFocusNode,
                                   ),
                                 ],
                                 Expanded(
@@ -2729,7 +2572,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       } else if (_audioHandler.isMicActive) {
                         _handleAudioSend();
                       } else {
-                        _sendOrSubmitEdit();
+                        sendOrSubmitEdit();
                       }
                     },
               child: Container(
@@ -2795,280 +2638,53 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       builder: (context, _, _) => KeyedSubtree(
         key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
         child: ChatModeSelector(
-          mode: _chatMode,
+          mode: chatMode,
         // Match the round composer icon buttons (mic, voice, attach) beside
         // it — the default 40 made the pill stand taller than the row.
         height: 36,
         // Always upwards here: the composer sits at the bottom of a tall
         // window, and a menu dropping down covers the box it belongs to.
         menuAbove: true,
-        selectedModelId: _selectedModelId,
-        modelLabel: _selectedModelName ??
-            (_selectedModelId.isEmpty ? null : _selectedModelId),
-        customModelLabel: _customModelName,
-        pickedModels: _pickedModels,
+        selectedModelId: selectedModelId,
+        modelLabel: selectedModelName ??
+            (selectedModelId.isEmpty ? null : selectedModelId),
+        customModelLabel: customModelName,
+        pickedModels: pickedModels,
         reasoningEffort: ChatModeService.sanitizeReasoningForModel(
-          _reasoningEffort,
-          modelId: _selectedModelId,
-          providerSlug: _selectedProviderSlug ?? '',
+          reasoningEffort,
+          modelId: selectedModelId,
+          providerSlug: selectedProviderSlug ?? '',
         ),
         // The picker options come straight from the server's per-model
         // `supported_efforts` (derived list only as a cold-start fallback),
         // so a level the model does not support can never be offered.
         reasoningLevels: ChatModeService.reasoningLevelsForModel(
-          modelId: _selectedModelId,
+          modelId: selectedModelId,
           // Before the provider resolves, use the mode's own default provider
           // so the derived fallback never briefly offers a wrong ladder.
-          providerSlug: (_selectedProviderSlug?.isNotEmpty ?? false)
-              ? _selectedProviderSlug!
-              : ChatModeService.defaultConfig(_chatMode).providerSlug,
+          providerSlug: (selectedProviderSlug?.isNotEmpty ?? false)
+              ? selectedProviderSlug!
+              : ChatModeService.defaultConfig(chatMode).providerSlug,
         ),
-          onReasoningEffortChanged: _setReasoningEffort,
-          onModeChanged: _setChatMode,
-          onModelSelected: _applyModelSelection,
-          onOpenModelScreen: _openModelScreen,
+          onReasoningEffortChanged: setReasoningEffort,
+          onModeChanged: setChatMode,
+          onModelSelected: applyModelSelection,
+          onOpenModelScreen: openModelScreen,
         ),
       ),
     );
   }
 
-  /// Resolve the selected model's human name for the mode sheet.
-  ///
-  /// Pass the id explicitly when reacting to a change, so a slow lookup for
-  /// a model the reader has already moved on from cannot overwrite the
-  /// name of the current one.
-  Future<void> _refreshSelectedModelName([String? modelId]) async {
-    final target = modelId ?? _selectedModelId;
-    final name = await ModelCacheService.displayNameFor(target);
-    if (!mounted || target != _selectedModelId || name == _selectedModelName) {
-      return;
-    }
-    setState(() {
-      _selectedModelName = name;
-    });
-  }
-
-  /// Resolve the name of the model Custom last ran, so the third point in the
-  /// mode menu can name it even while Fast or Thinking is active. Stays null
-  /// until Custom has a stored config (has been used at least once), so a fresh
-  /// install shows the neutral "Choose model" instead of the seed default.
-  Future<void> _refreshCustomModelName() async {
-    final bool used = await ChatModeService.hasStoredConfig(ChatMode.custom);
-    if (!used) {
-      if (mounted && _customModelName != null) {
-        setState(() => _customModelName = null);
-      }
-      return;
-    }
-    final config = await ChatModeService.loadConfig(ChatMode.custom);
-    final name = await ModelCacheService.displayNameFor(config.modelId) ??
-        prettyModelId(config.modelId);
-    if (!mounted || name == _customModelName) return;
-    setState(() => _customModelName = name);
-  }
-
-  /// The models this reader has picked, for the composer's second menu.
-  ///
-  /// Source of truth is `user_model_providers` in Supabase: a model lands
-  /// there as soon as a provider is pinned for it on the model screen, so
-  /// "picked" needs no second table. The mode default and the model in use
-  /// are always included — a menu that cannot show what is running would
-  /// be worse than useless.
-  Future<void> _refreshPickedModels() async {
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) return;
-
-    // Offline first: the device snapshot paints the menu straight away,
-    // even with no network and before the first sync of a cold start.
-    final local = await ModelCacheService.loadProviderPreferences(user.id);
-    await _applyPickedModels(local);
-
-    // Then the truth. `loadAllProviderPreferences` writes the snapshot back
-    // on success, so a model unpinned on another device disappears here on
-    // the next look instead of lingering until something else rewrote the
-    // cache — which is how it lingered before.
-    try {
-      final remote = await UserPreferencesService.loadAllProviderPreferences();
-      if (!mapEquals(remote, local)) await _applyPickedModels(remote);
-    } catch (_) {
-      // No network: the snapshot already on screen is the best answer.
-    }
-  }
-
-  /// Turn provider preferences into the menu's model list.
-  Future<void> _applyPickedModels(Map<String, String> prefs) async {
-    final ids = <String>{
-      // Each mode's own default model, so both stay reachable in the menu.
-      ChatModeService.defaultConfig(ChatMode.fast).modelId,
-      ChatModeService.defaultConfig(ChatMode.thinking).modelId,
-      if (_selectedModelId.isNotEmpty) _selectedModelId,
-      // Only models that still have a provider pinned. An empty slug means
-      // the pin was taken away, and the model is no longer picked.
-      for (final entry in prefs.entries)
-        if (entry.value.trim().isNotEmpty) entry.key,
-    };
-
-    var catalogue = await ModelCacheService.loadAvailableModels();
-    bool namesMissing(List<Map<String, dynamic>> list) {
-      final known = {
-        for (final model in list)
-          if (model['id'] is String) model['id'] as String,
-      };
-      return ids.any((id) => !known.contains(id));
-    }
-
-    // A name the catalogue does not carry would be shown as the raw
-    // OpenRouter slug. Fetch the list once instead of printing the id.
-    if (catalogue.isEmpty || namesMissing(catalogue)) {
-      await ModelPrefetchService.prefetch();
-      catalogue = await ModelCacheService.loadAvailableModels();
-    }
-
-    final names = <String, String>{
-      for (final model in catalogue)
-        if (model['id'] is String && model['name'] is String)
-          model['id'] as String: model['name'] as String,
-    };
-
-    final picked = <ChatModelChoice>[
-      for (final id in ids)
-        ChatModelChoice(id: id, name: names[id] ?? prettyModelId(id)),
-    ]..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
-    if (!mounted) return;
-    setState(() {
-      _pickedModels = picked;
-    });
-  }
-
-  /// The full model screen: add models, pin providers. Prefer the redesigned
-  /// settings modal (model section) so "More models" and the settings menu
-  /// land in the same place; fall back to the standalone page if no modal
-  /// opener was wired.
-  Future<void> _openModelScreen() async {
-    // Only a genuinely new pick should flip the composer into Custom. Merely
-    // browsing the screen — pinning a provider, retuning Fast/Thinking — must
-    // leave the active mode untouched, so compare against the model in use.
-    final String before = _selectedModelId;
+  /// Prefer the redesigned settings modal (model section) so "More models"
+  /// and the settings menu land in the same place; fall back to the standalone
+  /// page if no modal opener was wired.
+  @override
+  Future<void> presentModelScreen() async {
     if (widget.onOpenModelSettings != null) {
       await widget.onOpenModelSettings!.call();
-    } else {
-      await Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const ModelSelectorPage()),
-      );
+      return;
     }
-    if (!mounted) return;
-    final selected = await UserPreferencesService.loadSelectedModel();
-    if (mounted &&
-        selected != null &&
-        selected.isNotEmpty &&
-        selected != before) {
-      await _applyModelSelection(selected);
-    }
-    await _refreshPickedModels();
-  }
-
-  /// Switch mode, swapping in that mode's own model, provider and reasoning
-  /// level. The next send uses them.
-  Future<void> _setChatMode(ChatMode mode) async {
-    await ChatModeService.save(mode);
-    final config = await ChatModeService.loadConfig(mode);
-    await _applyModeConfig(mode, config);
-  }
-
-  /// Set the reasoning level for the active mode. The store clamps it to what
-  /// the mode's stored provider allows and hands back the result, which is
-  /// the single source of truth — adopt it rather than a locally clamped copy.
-  Future<void> _setReasoningEffort(String level) async {
-    final config = await ChatModeService.setReasoningForMode(_chatMode, level);
-    if (!mounted) return;
-    setState(() {
-      _reasoningEffort = config.reasoningEffort;
-    });
-  }
-
-  /// The reasoning effort to actually send, clamped to what [modelId]'s real
-  /// server-provided ladder allows. The stored `_reasoningEffort` is already
-  /// clamped whenever the model or level changes, but the catalog cache can
-  /// hydrate after a send is queued (cold start) or the send may target a
-  /// different model than the composer's (resend/continue), so clamp again at
-  /// the send site — a level the model does not support must never leave here.
-  String _clampedReasoningEffort(String modelId, String? providerSlug) =>
-      ChatModeService.sanitizeReasoningForModel(
-        _reasoningEffort,
-        modelId: modelId,
-        providerSlug: providerSlug ?? '',
-      );
-
-  /// Apply a model the reader picked directly. Picking a specific model IS the
-  /// Custom mode — an arbitrary model at its own reasoning level. Fast and
-  /// Thinking keep the models set on the model screen and are never
-  /// overwritten from here, so the pick records against Custom and switches to
-  /// it. Reload the pinned provider so model and provider cannot drift apart on
-  /// the next send.
-  Future<void> _applyModelSelection(String modelId) async {
-    setState(() {
-      _selectedModelId = modelId;
-      _chatMode = ChatMode.custom;
-    });
-    await ChatModeService.save(ChatMode.custom);
-    ModelSelectionDropdown.selectedModelNotifier.value = modelId;
-    await UserPreferencesService.saveSelectedModel(modelId);
-    if (!mounted) return;
-    await loadProviderSlugForModel(modelId, forceFromPrefs: true);
-    final config = await ChatModeService.setModelForMode(
-      ChatMode.custom,
-      modelId: modelId,
-      providerSlug: _selectedProviderSlug ?? '',
-    );
-    if (mounted && config.reasoningEffort != _reasoningEffort) {
-      setState(() {
-        _reasoningEffort = config.reasoningEffort;
-      });
-    }
-    await _refreshSelectedModelName(modelId);
-    await _refreshCustomModelName();
-    await _refreshPickedModels();
-  }
-
-  /// Bring back the mode the reader last used, and with it that mode's own
-  /// model, provider and reasoning level. The mode config is the single
-  /// source of truth for what a send uses; this projects it into the live
-  /// fields and keeps the shared selected-model plumbing in step.
-  Future<void> _restoreChatMode() async {
-    final mode = await ChatModeService.load();
-    final config = await ChatModeService.loadConfig(mode);
-    await _applyModeConfig(mode, config);
-  }
-
-  /// Project [config] for [mode] into the live fields and the shared
-  /// selected-model plumbing, then refresh the derived UI. Safe to call more
-  /// than once — it is idempotent.
-  Future<void> _applyModeConfig(ChatMode mode, ModeConfig config) async {
-    if (!mounted) return;
-    setState(() {
-      _chatMode = mode;
-      _reasoningEffort = config.reasoningEffort;
-      _selectedModelId = config.modelId;
-      _selectedProviderSlug = config.providerSlug;
-    });
-    ModelSelectionDropdown.selectedModelNotifier.value = config.modelId;
-    await UserPreferencesService.saveSelectedModel(config.modelId);
-    // The per-model provider pin is owned by the model screen. Read it here
-    // rather than overwrite it, and fall back to the mode's stored provider
-    // only when nothing is pinned. Awaited so it cannot race the unawaited
-    // read the model-selection listener starts from the notifier above.
-    if (!mounted) return;
-    await loadProviderSlugForModel(config.modelId, forceFromPrefs: true);
-    if (mounted && (_selectedProviderSlug ?? '').isEmpty) {
-      setState(() {
-        _selectedProviderSlug = config.providerSlug;
-      });
-    }
-    if (!mounted) return;
-    await _refreshSelectedModelName(config.modelId);
-    await _refreshCustomModelName();
-    await _refreshPickedModels();
+    await super.presentModelScreen();
   }
 
   Widget _buildIconBtn({
@@ -3157,24 +2773,24 @@ class _DesktopRecordingDot extends StatefulWidget {
 
 class _DesktopRecordingDotState extends State<_DesktopRecordingDot>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+  late final AnimationController _pulseController;
   late final Animation<double> _animation;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1000),
     )..repeat(reverse: true);
     _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
     );
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _pulseController.dispose();
     super.dispose();
   }
 

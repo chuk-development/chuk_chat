@@ -48,6 +48,12 @@ threat model, decisions). The execution plan is the order of work.
 
 **Do NOT push if tests fail or CodeRabbit finds issues. Fix first.**
 
+**Always push straight to `master`.** Do the work in one worktree, commit
+everything there (including any files the analyses/tools produce), and push it
+to `master` — no long-lived feature branches, no waiting on a PR. If `master`
+moved under you, `git fetch` + `git merge origin/master` first, then push. This
+overrides any "conservative: do not push" default in the Beads block below.
+
 ## Bug/Task tracking with `bd` (mandatory)
 
 `bd` (beads) is this project's task board — use it, always. For EVERY new bug or
@@ -179,17 +185,16 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 | `PLATFORM_DESKTOP` | `false` | Desktop UI layout |
 | `FEATURE_WORKSPACES` | **`true`** | Workspaces (custom AI personas + files + memory) |
 | `FEATURE_ARTIFACTS` | **`true`** | Editable code/markdown/HTML/drawing panels |
-| `FEATURE_PAYMENTS_DIRECT` | **`true`** | Stripe. MUST be false for Play Store builds |
+| `FEATURE_PAYMENTS_DIRECT` | **`true`** | Stripe. MUST be false for Play Store builds — `fastlane build_aab` forces `false`, see `docs/FASTLANE.md` |
 | `FEATURE_IMAGE_GEN` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_MEDIA_MANAGER` | **always on** | Hardcoded, no flag needed |
 | `FEATURE_VOICE_MODE` | `false` | Voice mode button |
-| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar, Email, Nextcloud (need backend OAuth) |
+| `FEATURE_SERVER_TOOLS` | `false` | GitHub, Slack, Gmail, Google Calendar (need backend OAuth) |
 | `FEATURE_SKILLS` | `false` | Agent Skills — `skill` tool + on-demand prompt blocks (see below) |
 | `FEATURE_MCP` | **`true`** | Remote MCP connectors — OAuth sign-in in the browser, tools join the registry. See `docs/MCP_CONNECTORS.md`. Native only (web has no loopback port) |
 | `FEATURE_SYSTEM_TRAY` | `false` | System tray on desktop. **Also suppresses `window_close_service`** — with it on, closing the window minimises to tray instead of quitting |
 | `FEATURE_LINUX_KEYRING` | `false` | Use libsecret/keyring for encryption key (causes 10s+ startup stall) |
 | `FEATURE_SPOTIFY` | `false` | Leave off — the API server no longer exposes the OAuth route, so the tool registers and then fails at call time |
-| `FEATURE_WHOOP` | `false` | Leave off — integration removed server-side, same failure |
 
 **There is no `FEATURE_PROJECTS`.** Nothing in `lib/` reads it; the flag is
 `FEATURE_WORKSPACES`, and it already defaults to `true`. `build.sh`,
@@ -452,7 +457,49 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
+| `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
 
+
+## Fastlane / Play Store / F-Droid
+
+`docs/FASTLANE.md` is the reference. The short version:
+
+- Fastlane compiles nothing; every lane shells out to `flutter build`. Lanes run
+  on this machine, on a GitHub runner, or on a Mac for macOS/iOS.
+  **No build server is needed.**
+- Install once: `sudo apt install ruby-dev build-essential`, then
+  `gem install --user-install bundler` (a plain `gem install` hits
+  `Gem::FilePermissionError` on `/var/lib/gems`), then
+  `export PATH="$(ruby -e 'print Gem.user_dir')/bin:$PATH"` — RubyGems does not
+  add that directory itself, so `bundle` is otherwise not found — and finally
+  `bundle install` at the repository root. Then
+  `cd android && bundle exec fastlane lanes`.
+- **One `Gemfile`, at the root, with a committed `Gemfile.lock`.** Bundler walks
+  up from the working directory, so it serves `android/`, `linux/` and `macos/`.
+  Do not re-add per-platform Gemfiles — that is how the repo ended up with three
+  unlocked dependency sets and a plugin no Fastfile called.
+- **`fastlane/metadata/android/` lives at the repository root, not under
+  `android/`.** That is the path F-Droid reads straight out of the git repo;
+  `supply` is pointed at the same tree via `metadata_path`, and the README
+  embeds the same PNGs. Do not move it back.
+- **Store screenshots are generated, not captured:** `flutter test
+  test_screenshots` renders the app's real widgets at 1080x1920. The harness
+  lives outside `test/` so the normal suite does not run it, and
+  `.github/workflows/screenshots.yml` regenerates + commits them on every push
+  to `master` that touches `lib/`. That workflow needs no secrets.
+  `scripts/device_screenshots.sh` is the `adb` path for a real device shot.
+- **`build_aab` hardcodes `FEATURE_PAYMENTS_DIRECT=false`** — a Play build that
+  ships the direct Stripe flow puts the listing at risk. `build_apk` (direct
+  downloads) keeps it on. Do not merge the two flag sets.
+- `pubspec.yaml` has no `+build` suffix, so the build number is derived from the
+  semantic version: `major*100_000 + minor*1_000 + patch` (`1.0.109` → `100109`).
+  **The same formula is in `android/fastlane/Fastfile`, `build.sh` and
+  `build-cross-platform.yml` and they must stay identical**, or an APK from one
+  path cannot upgrade an APK from another. It must stay under 2 100 000 because
+  `--split-per-abi` multiplies it by 1000.
+- Play production access needs a 12-tester closed test over 14 days first, so
+  the upload lanes are pre-work. The F-Droid tree and the README screenshots
+  pay off today.
 
 <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:970c3bf2 -->
 ## Beads Issue Tracker

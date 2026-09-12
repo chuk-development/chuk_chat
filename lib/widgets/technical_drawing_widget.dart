@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/technical_drawing_layers.dart';
 
 // ---------------------------------------------------------------------------
 // Public widget
@@ -228,24 +229,6 @@ class TechDrawPainter extends CustomPainter {
     _drawTitleBlock(canvas, size);
   }
 
-  /// Draw priority so overlays read correctly:
-  ///  0 = construction lines (centerline / dashed / hidden)
-  ///  1 = thin solid geometry (extension, hatch, auxiliary)
-  ///  2 = thick solid geometry (main contours)
-  ///  3 = dimensions
-  ///  4 = notes (always on top, opaque background)
-  int _priority(Map<String, dynamic> e) {
-    final type = e['type'] as String? ?? '';
-    if (type == 'note') return 4;
-    if (type == 'dimension') return 3;
-    final style = e['lineStyle'] as String? ?? 'solid';
-    if (style == 'centerline' || style == 'dashed' || style == 'hidden') {
-      return 0;
-    }
-    final weight = e['weight'] as String? ?? 'thin';
-    return weight == 'thick' ? 2 : 1;
-  }
-
   // ── Sheet ──────────────────────────────────────────────────
 
   void _drawSheet(Canvas canvas, Size size) {
@@ -272,7 +255,7 @@ class TechDrawPainter extends CustomPainter {
 
   void _drawElements(Canvas canvas) {
     final ordered = [...data.elements]
-      ..sort((a, b) => _priority(a).compareTo(_priority(b)));
+      ..sort((a, b) => technicalDrawingLayerPriority(a).compareTo(technicalDrawingLayerPriority(b)));
 
     for (final e in ordered) {
       final type = e['type'] as String? ?? '';

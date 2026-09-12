@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/artifact_diff_engine.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 class ArtifactStorageService {
   const ArtifactStorageService._();
@@ -1862,7 +1863,7 @@ class ArtifactStorageService {
   static Future<String> _decryptMaybe(String value) async {
     if (value.isEmpty) return '';
 
-    if (!_looksLikeEncryptedPayload(value)) {
+    if (!looksLikeEncryptedPayload(value)) {
       return value;
     }
 
@@ -1883,16 +1884,4 @@ class ArtifactStorageService {
     }
   }
 
-  static bool _looksLikeEncryptedPayload(String value) {
-    try {
-      final decoded = jsonDecode(value);
-      if (decoded is! Map<String, dynamic>) return false;
-      return decoded['v'] != null &&
-          decoded['nonce'] != null &&
-          decoded['ciphertext'] != null &&
-          decoded['mac'] != null;
-    } catch (_) {
-      return false;
-    }
-  }
 }

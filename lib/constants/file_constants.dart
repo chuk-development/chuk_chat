@@ -121,15 +121,6 @@ class FileConstants {
     'heif',
   };
 
-  /// Set of audio file extensions for quick lookup
-  static const Set<String> audioExtensions = <String>{
-    'wav',
-    'mp3',
-    'm4a',
-    'aac',
-    'flac',
-    'ogg',
-  };
 
   /// Set of plain text file extensions that should be read directly
   /// without going through the convert-file API endpoint.

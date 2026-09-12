@@ -62,7 +62,6 @@ Complete map of all Dart files in the codebase.
 | `message_composition_service.dart` | Prepare messages for API |
 | `local_chat_cache_service.dart` | In-memory cache |
 | `title_generation_service.dart` | AI-powered chat title generation |
-| `session_helper.dart` | Session validation utilities |
 
 ### Projects
 | File | Purpose |
@@ -73,9 +72,18 @@ Complete map of all Dart files in the codebase.
 ### Models
 | File | Purpose |
 |------|---------|
-| `model_prefetch_service.dart` | Preload models |
 | `model_cache_service.dart` | Cache models |
 | `model_capabilities_service.dart` | Model features |
+
+### Shared service helpers
+| File | Purpose |
+|------|---------|
+| `current_user.dart` | `CurrentUser.id` / `CurrentUser.stillOwns` — the ownership check every user-scoped static cache needs |
+| `oauth_loopback_server.dart` | The desktop OAuth redirect server + its result page (GitHub, Google) |
+| `workspace_file_upload.dart` | Pick + upload one workspace file, with progress callbacks and an optional size confirmation |
+| `local_chat_cache_rows.dart` | Row shapes shared by the SQLite and the SharedPreferences cache |
+| `streaming_manager_base.dart` | Platform-independent stream registry; the io build layers notifications and throttling on top |
+| `supabase_schema_errors.dart` | `isMissingPreferencesColumn` |
 
 ### Config
 | File | Purpose |
@@ -91,7 +99,6 @@ Complete map of all Dart files in the codebase.
 | File | Purpose |
 |------|---------|
 | `image_storage_service.dart` | Encrypted image storage |
-| `image_generation_service.dart` | AI image gen |
 | `image_compression_service.dart` | JPEG compression |
 | `file_conversion_service.dart` | Doc conversion |
 
@@ -107,7 +114,6 @@ Complete map of all Dart files in the codebase.
 | `attachment_preview_bar.dart` | Pre-send attachments |
 | `model_selection_dropdown.dart` | Model dropdown |
 | `credit_display.dart` | Credit balance |
-| `free_message_display.dart` | Free message quota |
 | `password_strength_meter.dart` | Password strength |
 | `project_file_viewer.dart` | Project file viewer dialog |
 | `project_panel.dart` | Right-side project settings panel |
@@ -135,6 +141,9 @@ Complete map of all Dart files in the codebase.
 | `chat_ui_desktop.dart` | Desktop chat |
 | `chat_ui_mobile.dart` | Mobile chat |
 | `chat_api_service.dart` | API layer |
+| `chat_model_selection_mixin.dart` | Model / mode / reasoning-effort state, shared by both chat States |
+| `chat_message_edit_mixin.dart` | Edit, resend, branch, variant switch, composer attachments — shared by both chat States |
+| `chat_debug_snapshot.dart` | What "copy debug chat" reads out of a chat screen, and the context block it writes |
 
 ### Chat Widgets (`lib/platform_specific/chat/widgets/`)
 | File | Purpose |
@@ -147,7 +156,9 @@ Complete map of all Dart files in the codebase.
 |------|---------|
 | `streaming_message_handler.dart` | Message streaming |
 | `chat_persistence_handler.dart` | Chat save/load |
-| `file_attachment_handler.dart` | File attachments |
+| `file_attachment_handler.dart` | File attachments (mobile) |
+| `desktop_file_handler.dart` | File attachments (desktop) |
+| `scanned_pdf_pages.dart` | Replaces a text-layer-less PDF with its rendered pages — used by both handlers |
 | `audio_recording_handler.dart` | Audio recording |
 | `message_actions_handler.dart` | Copy/edit/delete |
 
@@ -161,14 +172,16 @@ Complete map of all Dart files in the codebase.
 | `token_estimator.dart` | Token counting |
 | `secure_token_handler.dart` | Token handling |
 | `api_rate_limiter.dart` | Rate limiting |
-| `api_request_queue.dart` | Request queuing |
 | `exponential_backoff.dart` | Retry logic |
 | `file_upload_validator.dart` | File validation |
 | `upload_rate_limiter.dart` | Upload rate limiting (DoS protection) |
 | `certificate_pinning.dart` | SSL certificate pinning |
-| `service_logger.dart` | Logging |
 | `service_error_handler.dart` | Error handling |
 | `highlight_registry.dart` | Syntax highlighting |
+| `json_helpers.dart` | `tryDecodeJsonObject` (HTTP error bodies), `tryParseLenientJson` (model output), `looksLikeEncryptedPayload` |
+| `format_bytes.dart` | `formatBytes` — the one byte formatter |
+| `url_launcher_helper.dart` | `launchExternalUrl` for footer links |
+| `map_geometry.dart` | `hasPointSpread` — do these points cover more than one place |
 
 ## Constants (`lib/constants/`)
 | File | Purpose |

@@ -14,29 +14,6 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     return _visualBlockStartRegex.hasMatch(content);
   }
 
-  dynamic _tryParseJson(String raw) {
-    var s = raw.trim();
-    try {
-      return jsonDecode(s);
-    } catch (_) {}
-
-    if (s.startsWith('{') && s.endsWith(']')) {
-      s = s.substring(0, s.length - 1).trim();
-      if (s.endsWith('}')) {
-        try {
-          return jsonDecode(s);
-        } catch (_) {}
-      }
-    }
-
-    s = raw.trim().replaceAll(RegExp(r',\s*([}\]])'), r'$1');
-    try {
-      return jsonDecode(s);
-    } catch (_) {}
-
-    return jsonDecode(raw.trim());
-  }
-
   /// Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
   /// / `<weather>` / `<news>` / `<image>` blocks. Returns ONE Column —
   /// no external margin. The `Padding(symmetric(vertical: 4))` on each
@@ -74,7 +51,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
 
       try {
         if (blockType == 'diff') {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
@@ -82,31 +59,31 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
         } else if (blockType == 'map') {
           widgets.add(MapBlockWidget(jsonString: blockJson));
         } else if (blockType == 'email') {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildEmailBlock(parsed));
         } else if (blockType == 'weather') {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(WeatherBlockWidget(data: parsed));
         } else if (blockType == 'news') {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildNewsBlock(parsed));
         } else if (blockType == 'image') {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildImageBlock(parsed));
         } else {
-          final parsed = _tryParseJson(blockJson);
+          final parsed = tryParseLenientJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }

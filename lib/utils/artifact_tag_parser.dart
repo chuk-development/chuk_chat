@@ -122,13 +122,6 @@ String _stripWrappingFence(String content) {
   return stripped.trim();
 }
 
-/// Returns true when [content] starts (or contains) a partial
-/// `<artifact` tag that has not been closed yet. Used during streaming to
-/// decide whether to hide trailing text.
-bool hasArtifactTagStartMarker(String content) {
-  return _artifactStartPattern.hasMatch(content);
-}
-
 /// Strips complete `<artifact>...</artifact>` blocks from [content]. When
 /// [stripIncomplete] is true (default), any remaining partial opening tag is
 /// also cut so the raw protocol does not flash in the UI while streaming.

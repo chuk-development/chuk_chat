@@ -10,7 +10,7 @@ import 'dart:math' as math;
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
-import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/current_user.dart';
 
 const int _defaultChatLimit = 10;
 const int _maxChatLimit = 50;
@@ -125,21 +125,13 @@ String? _normalizeRole(dynamic raw) {
   return value == 'ai' ? 'assistant' : value;
 }
 
-String? _currentUserId() {
-  try {
-    return SupabaseService.auth.currentUser?.id;
-  } catch (_) {
-    return null;
-  }
-}
-
 Future<String> _findChats({required String query, required int limit}) async {
   final queryLower = query.toLowerCase();
   final candidatesById = <String, _ChatCandidate>{};
   var totalSearched = ChatStorageState.chatsById.length;
   final currentChatId = ChatStorageState.selectedChatId;
 
-  final userId = _currentUserId();
+  final userId = CurrentUser.id;
   if (userId != null) {
     final cachedCount = await LocalChatCacheService.count(userId);
     totalSearched = math.max(totalSearched, cachedCount);
@@ -152,10 +144,16 @@ Future<String> _findChats({required String query, required int limit}) async {
       query,
       limit: localScanLimit,
     );
-    for (final row in rows) {
-      final candidate = _candidateFromCacheRow(row, queryLower);
-      if (candidate != null && candidate.chatId != currentChatId) {
-        _upsertCandidate(candidatesById, candidate);
+    // The cache reads above can finish after an account switch. Merging their
+    // rows then would put the previous user's chat titles and snippets into
+    // this user's result, so they are dropped; the in-memory pass below still
+    // covers the current user.
+    if (CurrentUser.id == userId) {
+      for (final row in rows) {
+        final candidate = _candidateFromCacheRow(row, queryLower);
+        if (candidate != null && candidate.chatId != currentChatId) {
+          _upsertCandidate(candidatesById, candidate);
+        }
       }
     }
   }
@@ -408,10 +406,12 @@ Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
     );
   }
 
-  final userId = _currentUserId();
+  final userId = CurrentUser.id;
   if (userId != null) {
     final cached = await LocalChatCacheService.loadById(userId, chatId);
-    if (cached != null) {
+    // loadById can complete after an account switch — never hand back the
+    // previous user's plaintext messages.
+    if (cached != null && CurrentUser.id == userId) {
       final parsed = _parsePayload(cached['payload'] as String?);
       if (parsed != null) {
         final title = _rowTitle(
