@@ -12,6 +12,7 @@ import 'package:chuk_chat/utils/client_platform.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Page shown after a user clicks a password reset link.
 /// Lets them set a new password and initializes a new encryption key.
@@ -151,7 +152,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Icon(
+                    AppIcon(
                       Icons.lock_reset,
                       size: 48,
                       color: theme.colorScheme.primary,
@@ -178,7 +179,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                       decoration: InputDecoration(
                         labelText: l.newPassword,
                         suffixIcon: IconButton(
-                          icon: Icon(
+                          icon: AppIcon(
                             _obscurePassword
                                 ? Icons.visibility_off
                                 : Icons.visibility,
@@ -205,7 +206,7 @@ class _SetNewPasswordPageState extends State<SetNewPasswordPage> {
                       decoration: InputDecoration(
                         labelText: l.confirmNewPassword,
                         suffixIcon: IconButton(
-                          icon: Icon(
+                          icon: AppIcon(
                             _obscureConfirm
                                 ? Icons.visibility_off
                                 : Icons.visibility,

@@ -17,6 +17,7 @@ import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class McpConnectorsPage extends StatefulWidget {
   const McpConnectorsPage({super.key});
@@ -241,7 +242,7 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       onSubmitted: (_) => _searchRegistry(),
       decoration: InputDecoration(
         hintText: 'Search connectors…',
-        prefixIcon: const Icon(Icons.search),
+        prefixIcon: const AppIcon(Icons.search),
         filled: true,
         fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
           alpha: 0.4,
@@ -856,7 +857,7 @@ class _McpConnectorIconState extends State<McpConnectorIcon> {
       ),
       alignment: Alignment.center,
       child: widget.fallback != null || initial.isEmpty
-          ? Icon(
+          ? AppIcon(
               widget.fallback ?? Icons.extension_outlined,
               size: widget.size * 0.5,
               color: theme.colorScheme.onPrimaryContainer,

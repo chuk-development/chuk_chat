@@ -58,6 +58,7 @@ import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 part 'message_bubble/models.dart';
 part 'message_bubble/layout.dart';

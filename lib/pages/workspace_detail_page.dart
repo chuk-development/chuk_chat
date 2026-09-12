@@ -12,6 +12,7 @@ import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceDetailPage extends StatelessWidget {
   final String workspaceId;
@@ -239,7 +240,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                 color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(_project!.displayIcon, color: displayColor, size: 16),
+              child: AppIcon(_project!.displayIcon, color: displayColor, size: 16),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -248,7 +249,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
           ],
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: iconFg),
+          icon: AppIcon(Icons.arrow_back, color: iconFg),
           onPressed: () => Navigator.pop(context),
         ),
         bottom: TabBar(
@@ -260,7 +261,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.description_outlined, size: 18),
+                  const AppIcon(Icons.description_outlined, size: 18),
                   const SizedBox(width: 6),
                   const Text('Files'),
                   if (_project!.fileCount > 0)
@@ -278,7 +279,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.chat_bubble_outline, size: 18),
+                  const AppIcon(Icons.chat_bubble_outline, size: 18),
                   const SizedBox(width: 6),
                   const Text('Chats'),
                   if (_project!.chatCount > 0)
@@ -296,7 +297,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.settings_outlined, size: 18),
+                  AppIcon(Icons.settings_outlined, size: 18),
                   SizedBox(width: 6),
                   Text('Settings'),
                 ],
@@ -315,7 +316,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                 widget.onStartNewChat!(widget.workspaceId);
                 Navigator.pop(context);
               },
-              icon: const Icon(Icons.add_comment),
+              icon: const AppIcon(Icons.add_comment),
               label: const Text('New Chat'),
               backgroundColor: displayColor,
               foregroundColor: Colors.white,
@@ -374,7 +375,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                   : () => uploadFileToWorkspace(
                       confirmOversizedUpload: _confirmContextBudget,
                     ),
-              icon: const Icon(Icons.upload_file),
+              icon: const AppIcon(Icons.upload_file),
               label: Text(isOverBudget ? 'Context budget full' : 'Upload File'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -465,7 +466,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                             ),
                           if (file.hasMarkdownSummary) ...[
                             const SizedBox(width: 6),
-                            Icon(
+                            AppIcon(
                               Icons.check_circle,
                               size: 13,
                               color: Colors.green[600],
@@ -485,7 +486,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
+                AppIcon(
                   Icons.storage_outlined,
                   size: 14,
                   color: iconFg.withValues(alpha: 0.4),
@@ -567,7 +568,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                           ),
                           borderRadius: BorderRadius.circular(14),
                         ),
-                        child: Icon(
+                        child: AppIcon(
                           _project!.displayIcon,
                           color: displayColor,
                           size: 24,
@@ -659,7 +660,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.tune, color: displayColor, size: 20),
+                      AppIcon(Icons.tune, color: displayColor, size: 20),
                       const SizedBox(width: 8),
                       Text(
                         'Custom System Prompt',
@@ -705,7 +706,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
               width: double.infinity,
               child: FilledButton.icon(
                 onPressed: _saveSettings,
-                icon: const Icon(Icons.save, size: 18),
+                icon: const AppIcon(Icons.save, size: 18),
                 label: const Text('Save Changes'),
                 style: FilledButton.styleFrom(
                   backgroundColor: displayColor,
@@ -792,7 +793,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                           }
                         }
                       },
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: const AppIcon(Icons.delete_outline, size: 18),
                       label: const Text('Delete Workspace'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
@@ -878,7 +879,7 @@ class _ContextUsageBar extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(Icons.memory_outlined, size: 14, color: barColor),
+              AppIcon(Icons.memory_outlined, size: 14, color: barColor),
               const SizedBox(width: 6),
               Text(
                 'Context Usage',
@@ -981,7 +982,7 @@ class _ChatSelectorDialogState extends State<_ChatSelectorDialog> {
                   controller: _searchController,
                   decoration: InputDecoration(
                     hintText: 'Search chats...',
-                    prefixIcon: const Icon(Icons.search, size: 20),
+                    prefixIcon: const AppIcon(Icons.search, size: 20),
                     isDense: true,
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12),
                   ),

@@ -2,6 +2,7 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../helpers/icon_finder.dart';
 
 void main() {
   setUp(() {
@@ -33,8 +34,8 @@ void main() {
   testWidgets('no pager when there is a single variant', (tester) async {
     await tester.pumpWidget(host(variantIndex: 0, variantCount: 1));
     await tester.pump();
-    expect(find.byIcon(Icons.chevron_left), findsNothing);
-    expect(find.byIcon(Icons.chevron_right), findsNothing);
+    expect(findIcon(Icons.chevron_left), findsNothing);
+    expect(findIcon(Icons.chevron_right), findsNothing);
   });
 
   testWidgets('renders ‹ k/n › and both arrows in the middle', (tester) async {
@@ -47,8 +48,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('2/3'), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_left), findsOneWidget);
-    expect(find.byIcon(Icons.chevron_right), findsOneWidget);
+    expect(findIcon(Icons.chevron_left), findsOneWidget);
+    expect(findIcon(Icons.chevron_right), findsOneWidget);
   });
 
   testWidgets('prev disabled at first, next disabled at last', (tester) async {
@@ -63,8 +64,8 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.chevron_left));
-    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.tap(findIcon(Icons.chevron_left));
+    await tester.tap(findIcon(Icons.chevron_right));
     await tester.pump();
     expect(prevTaps, 0, reason: 'prev disabled at first variant');
     expect(nextTaps, 1);
@@ -78,8 +79,8 @@ void main() {
     ));
     await tester.pump();
 
-    await tester.tap(find.byIcon(Icons.chevron_left));
-    await tester.tap(find.byIcon(Icons.chevron_right));
+    await tester.tap(findIcon(Icons.chevron_left));
+    await tester.tap(findIcon(Icons.chevron_right));
     await tester.pump();
     expect(prevTaps, 1);
     expect(nextTaps, 1, reason: 'next disabled at last variant');

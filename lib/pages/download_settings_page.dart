@@ -7,6 +7,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/download_preferences_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class DownloadSettingsPage extends StatefulWidget {
   const DownloadSettingsPage({super.key});
@@ -112,11 +113,11 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
                     : l.downloadsDefaultFolderUnset,
                 trailing: hasFolder
                     ? IconButton(
-                        icon: const Icon(Icons.close),
+                        icon: const AppIcon(Icons.close),
                         tooltip: l.downloadsClear,
                         onPressed: _busy ? null : _clearFolder,
                       )
-                    : Icon(
+                    : AppIcon(
                         Icons.chevron_right,
                         size: 20,
                         color: m3.onSurfaceVariant,

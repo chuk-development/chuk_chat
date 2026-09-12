@@ -9,6 +9,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 enum _MediaFilter { images, artifacts }
 
@@ -169,7 +170,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                                 ),
                                 child: Row(
                                   children: [
-                                    const Icon(
+                                    const AppIcon(
                                       Icons.chat_bubble_outline,
                                       size: 16,
                                     ),
@@ -527,17 +528,17 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                   const Spacer(),
                   if (!kIsWeb)
                     IconButton(
-                      icon: Icon(Icons.download, color: iconFg),
+                      icon: AppIcon(Icons.download, color: iconFg),
                       onPressed: _downloadSelectedImages,
                       tooltip: l.downloadSelected,
                     ),
                   IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
+                    icon: const AppIcon(Icons.delete, color: Colors.red),
                     onPressed: _deleteSelectedImages,
                     tooltip: l.deleteSelected,
                   ),
                   IconButton(
-                    icon: Icon(Icons.close, color: iconFg),
+                    icon: AppIcon(Icons.close, color: iconFg),
                     onPressed: _exitSelectionMode,
                     tooltip: l.cancel,
                   ),
@@ -548,7 +549,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: Icon(Icons.refresh, color: iconFg),
+                    icon: AppIcon(Icons.refresh, color: iconFg),
                     onPressed: _loadImages,
                     tooltip: l.refresh,
                   ),
@@ -570,29 +571,29 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         ),
         leading: _isSelectionMode
             ? IconButton(
-                icon: const Icon(Icons.close),
+                icon: const AppIcon(Icons.close),
                 onPressed: _exitSelectionMode,
               )
             : IconButton(
-                icon: Icon(Icons.arrow_back, color: iconFg),
+                icon: AppIcon(Icons.arrow_back, color: iconFg),
                 onPressed: () => Navigator.pop(context),
               ),
         actions: [
           if (_isSelectionMode) ...[
             if (!kIsWeb)
               IconButton(
-                icon: Icon(Icons.download, color: iconFg),
+                icon: AppIcon(Icons.download, color: iconFg),
                 onPressed: _downloadSelectedImages,
                 tooltip: l.downloadSelected,
               ),
             IconButton(
-              icon: const Icon(Icons.delete, color: Colors.red),
+              icon: const AppIcon(Icons.delete, color: Colors.red),
               onPressed: _deleteSelectedImages,
               tooltip: l.deleteSelected,
             ),
           ] else
             IconButton(
-              icon: Icon(Icons.refresh, color: iconFg),
+              icon: AppIcon(Icons.refresh, color: iconFg),
               onPressed: _loadImages,
               tooltip: l.refresh,
             ),
@@ -612,13 +613,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red.shade300),
+            AppIcon(Icons.error_outline, size: 64, color: Colors.red.shade300),
             const SizedBox(height: 16),
             Text(l.errorLoadingImages, style: TextStyle(color: iconFg)),
             const SizedBox(height: 8),
             TextButton.icon(
               onPressed: _loadImages,
-              icon: const Icon(Icons.refresh),
+              icon: const AppIcon(Icons.refresh),
               label: Text(l.retry),
             ),
           ],
@@ -674,7 +675,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
+          AppIcon(
             Icons.image_not_supported,
             size: 64,
             color: iconFg.withValues(alpha: 0.3),
@@ -706,7 +707,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
+            AppIcon(
               Icons.description_outlined,
               size: 64,
               color: iconFg.withValues(alpha: 0.3),
@@ -838,7 +839,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                 if (bytes == null) {
                   return Container(
                     color: iconFg.withValues(alpha: 0.1),
-                    child: Icon(
+                    child: AppIcon(
                       Icons.broken_image,
                       color: iconFg.withValues(alpha: 0.3),
                     ),
@@ -851,7 +852,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                   cacheWidth: 400, // 200px grid cell × 2 for retina
                   errorBuilder: (context, error, stackTrace) => Container(
                     color: iconFg.withValues(alpha: 0.1),
-                    child: Icon(
+                    child: AppIcon(
                       Icons.broken_image,
                       color: iconFg.withValues(alpha: 0.3),
                     ),
@@ -871,7 +872,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                   color: isSelected ? accentColor : Colors.black54,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(
+                child: AppIcon(
                   isSelected ? Icons.check_circle : Icons.circle_outlined,
                   color: Colors.white,
                   size: 24,
@@ -895,7 +896,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                           color: Colors.black54,
                           borderRadius: BorderRadius.circular(4),
                         ),
-                        child: const Icon(
+                        child: const AppIcon(
                           Icons.download,
                           color: Colors.white,
                           size: 18,
@@ -911,7 +912,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
                         color: Colors.black54,
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: const Icon(
+                      child: const AppIcon(
                         Icons.delete,
                         color: Colors.white,
                         size: 18,
@@ -1079,7 +1080,7 @@ class _ArtifactTile extends StatelessWidget {
                   color: cs.primaryContainer,
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Icon(
+                child: AppIcon(
                   _iconForType(artifact.type),
                   color: cs.onPrimaryContainer,
                   size: 22,
@@ -1131,7 +1132,7 @@ class _ArtifactTile extends StatelessWidget {
                   ],
                 ),
               ),
-              Icon(Icons.chevron_right, color: m3.onSurfaceVariant),
+              AppIcon(Icons.chevron_right, color: m3.onSurfaceVariant),
             ],
           ),
         ),

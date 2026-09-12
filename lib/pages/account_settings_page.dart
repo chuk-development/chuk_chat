@@ -17,6 +17,7 @@ import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});
@@ -199,7 +200,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               icon: Icons.lock_open,
               title: l.encryptedChatRecovery,
               subtitle: l.recoverChats,
-              trailing: const Icon(Icons.chevron_right, size: 20),
+              trailing: const AppIcon(Icons.chevron_right, size: 20),
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -290,7 +291,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded, color: cs.error, size: 28),
+            AppIcon(Icons.warning_amber_rounded, color: cs.error, size: 28),
             const SizedBox(width: 10),
             Expanded(child: Text(l.deleteAccountQuestion)),
           ],
@@ -319,7 +320,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       builder: (ctx) => AlertDialog(
         title: Row(
           children: [
-            Icon(Icons.delete_forever, color: cs.error, size: 28),
+            AppIcon(Icons.delete_forever, color: cs.error, size: 28),
             const SizedBox(width: 10),
             Expanded(child: Text(l.thisIsPermanent)),
           ],
@@ -402,7 +403,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                   decoration: InputDecoration(
                     labelText: l.password,
                     errorText: errorText,
-                    prefixIcon: const Icon(Icons.lock_outline),
+                    prefixIcon: const AppIcon(Icons.lock_outline),
                   ),
                   onSubmitted:
                       isVerifying ? null : (_) => verify(setDialogState),
@@ -537,7 +538,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             textCapitalization: TextCapitalization.words,
             decoration: InputDecoration(
               hintText: l.displayNameHint,
-              prefixIcon: const Icon(Icons.person_outline),
+              prefixIcon: const AppIcon(Icons.person_outline),
             ),
           ),
           const SizedBox(height: 12),
@@ -547,7 +548,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             keyboardType: TextInputType.emailAddress,
             decoration: InputDecoration(
               hintText: l.emailAddressHint,
-              prefixIcon: const Icon(Icons.mail_outline),
+              prefixIcon: const AppIcon(Icons.mail_outline),
             ),
           ),
           const SizedBox(height: 16),
@@ -565,7 +566,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.check),
+                  : const AppIcon(Icons.check),
               label: Text(_isSaving ? l.saving : l.saveChanges),
               onPressed: _isSaving || _profile == null
                   ? null
@@ -599,9 +600,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             obscureText: _obscureCurrentPassword,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.lock_outline),
+              prefixIcon: const AppIcon(Icons.lock_outline),
               suffixIcon: IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   _obscureCurrentPassword
                       ? Icons.visibility_off
                       : Icons.visibility,
@@ -622,9 +623,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
             obscureText: _obscureNewPassword,
             textInputAction: TextInputAction.next,
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.lock_reset),
+              prefixIcon: const AppIcon(Icons.lock_reset),
               suffixIcon: IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   _obscureNewPassword
                       ? Icons.visibility_off
                       : Icons.visibility,
@@ -650,9 +651,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
               }
             },
             decoration: InputDecoration(
-              prefixIcon: const Icon(Icons.check_circle_outline),
+              prefixIcon: const AppIcon(Icons.check_circle_outline),
               suffixIcon: IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   _obscureConfirmPassword
                       ? Icons.visibility_off
                       : Icons.visibility,
@@ -681,7 +682,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.password),
+                  : const AppIcon(Icons.password),
               label: Text(l.updatePassword),
               onPressed: _isChangingPassword ? null : _changePassword,
             ),
@@ -718,7 +719,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                         strokeWidth: 2,
                       ),
                     )
-                  : const Icon(Icons.delete_forever),
+                  : const AppIcon(Icons.delete_forever),
               onPressed: _isDeletingAccount ? null : _deleteAccount,
               label: Text(l.deleteAccount),
             ),

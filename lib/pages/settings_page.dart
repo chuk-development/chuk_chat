@@ -40,6 +40,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -817,7 +818,7 @@ class _AccountRowState extends State<_AccountRow> {
             SizedBox(
               width: 26,
               height: 26,
-              child: Icon(
+              child: AppIcon(
                 Icons.account_circle_outlined,
                 size: 24,
                 color: cs.primary,
@@ -877,7 +878,7 @@ class _AccountRowState extends State<_AccountRow> {
               },
             ),
             const SizedBox(width: 10),
-            Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+            AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
           ],
         ),
       ),
@@ -968,7 +969,7 @@ class _DevTile extends StatelessWidget {
                 SizedBox(
                   width: 26,
                   height: 26,
-                  child: Icon(
+                  child: AppIcon(
                     Icons.developer_mode,
                     size: 24,
                     color: m3.onSurfaceVariant,
@@ -1005,7 +1006,7 @@ class _DevTile extends StatelessWidget {
                 const SizedBox(width: 10),
                 const _Badge('Dev', tone: BadgeTone.warning),
                 const SizedBox(width: 10),
-                Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+                AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
               ],
             ),
           ),

@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import '../app_palette.dart';
 import '../demo_data.dart';
 import '../shared_widgets.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class VariantFinal extends StatelessWidget {
   final List<DemoChat> chats;
@@ -124,7 +125,7 @@ class _SearchTrigger extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.search, size: 14, color: p.muted),
+              AppIcon(Icons.search, size: 14, color: p.muted),
               const SizedBox(width: 6),
               Text('Search',
                   style: TextStyle(

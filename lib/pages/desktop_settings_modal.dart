@@ -48,6 +48,7 @@ import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Opens the desktop settings modal over the current chat UI.
 Future<void> showDesktopSettingsModal(
@@ -412,7 +413,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   color: m3.surfaceContainerHigh,
                   shape: const CircleBorder(),
                   child: IconButton(
-                    icon: Icon(Icons.close, color: theme.resolvedIconColor),
+                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
                     tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
@@ -454,7 +455,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           child: Row(
             children: [
               IconButton(
-                icon: Icon(Icons.arrow_back, color: theme.resolvedIconColor),
+                icon: AppIcon(Icons.arrow_back, color: theme.resolvedIconColor),
                 tooltip: MaterialLocalizations.of(context).backButtonTooltip,
                 onPressed: () => setState(() => _compactPageId = null),
               ),
@@ -470,7 +471,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 ),
               ),
               IconButton(
-                icon: Icon(Icons.close, color: theme.resolvedIconColor),
+                icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
                 tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
                 onPressed: () => Navigator.of(context).pop(),
               ),
@@ -556,7 +557,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 ),
                 if (compact)
                   IconButton(
-                    icon: Icon(Icons.close, color: theme.resolvedIconColor),
+                    icon: AppIcon(Icons.close, color: theme.resolvedIconColor),
                     tooltip:
                         MaterialLocalizations.of(context).closeButtonTooltip,
                     onPressed: () => Navigator.of(context).pop(),
@@ -575,7 +576,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 isDense: true,
                 hintText: '${l.settings}…',
                 hintStyle: TextStyle(color: m3.onSurfaceVariant, fontSize: 14),
-                prefixIcon: Icon(
+                prefixIcon: AppIcon(
                   Icons.search,
                   size: 18,
                   color: m3.onSurfaceVariant,
@@ -623,7 +624,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(dest.icon, size: 20, color: iconColor),
+                AppIcon(dest.icon, size: 20, color: iconColor),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
@@ -638,7 +639,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                   ),
                 ),
                 if (dest.onAction != null)
-                  Icon(
+                  AppIcon(
                     Icons.chevron_right,
                     size: 18,
                     color: m3.onSurfaceVariant.withValues(alpha: 0.6),
@@ -670,7 +671,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
-                Icon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
+                AppIcon(Icons.logout, size: 18, color: m3.onSurfaceVariant),
                 const SizedBox(width: 14),
                 Text(
                   l.logout,

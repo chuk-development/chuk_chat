@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_palette.dart';
 import '../demo_data.dart';
 import '../shared_widgets.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class VariantGlass extends StatelessWidget {
   final List<DemoChat> chats;
@@ -41,7 +42,7 @@ class VariantGlass extends StatelessWidget {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         alignment: Alignment.center,
-                        child: Icon(Icons.bolt, size: 16, color: p.accent),
+                        child: AppIcon(Icons.bolt, size: 16, color: p.accent),
                       ),
                       const SizedBox(width: 10),
                       Text('chuk',
@@ -56,7 +57,7 @@ class VariantGlass extends StatelessWidget {
                         tooltip: 'Workspaces',
                         onPressed: cb.onWorkspaces,
                         splashRadius: 16,
-                        icon: Icon(Icons.folder_outlined,
+                        icon: AppIcon(Icons.folder_outlined,
                             size: 18, color: p.muted),
                       ),
                     ],

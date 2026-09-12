@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// One parsed hit from a web_search result.
 class WebSearchSource {
@@ -266,7 +267,7 @@ class _Favicon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double size = 20;
-    final Widget fallback = Icon(Icons.public_rounded, size: 14, color: muted);
+    final Widget fallback = AppIcon(Icons.public_rounded, size: 14, color: muted);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(5),

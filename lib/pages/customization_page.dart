@@ -12,6 +12,7 @@ import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -594,7 +595,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 icon: Icons.folder_outlined,
                 title: l.downloads,
                 subtitle: l.downloadsSubtitle,
-                trailing: Icon(
+                trailing: AppIcon(
                   Icons.chevron_right,
                   size: 20,
                   color: m3.onSurfaceVariant,
@@ -668,7 +669,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
         icon: Icons.edit_note,
         title: l.titleGenerationPrompt,
         subtitle: _hasCustomPrompt ? l.usingCustomPrompt : l.usingDefaultPrompt,
-        trailing: Icon(
+        trailing: AppIcon(
           _isPromptExpanded ? Icons.expand_less : Icons.expand_more,
           color: m3.onSurfaceVariant,
         ),
@@ -705,13 +706,13 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 children: [
                   TextButton.icon(
                     onPressed: _resetSystemPrompt,
-                    icon: const Icon(Icons.restore, size: 18),
+                    icon: const AppIcon(Icons.restore, size: 18),
                     label: Text(l.reset),
                   ),
                   const SizedBox(width: 8),
                   FilledButton.icon(
                     onPressed: _saveSystemPrompt,
-                    icon: const Icon(Icons.save, size: 18),
+                    icon: const AppIcon(Icons.save, size: 18),
                     label: Text(l.save),
                   ),
                 ],

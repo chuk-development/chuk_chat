@@ -15,6 +15,7 @@ import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/route_map_widget.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
 import 'package:chuk_chat/utils/map_geometry.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Regex to find <map> blocks in message content.
 final RegExp mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true);
@@ -350,7 +351,7 @@ Widget _buildMapPreview(
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.touch_app, color: Colors.white70, size: 16),
+                  AppIcon(Icons.touch_app, color: Colors.white70, size: 16),
                   SizedBox(width: 4),
                   Text(
                     'Tap to explore',
@@ -421,7 +422,7 @@ class _MarkersMapBlock extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                const Icon(
+                const AppIcon(
                   Icons.location_on,
                   color: Colors.redAccent,
                   size: 26,
@@ -743,7 +744,7 @@ class _PlaceCard extends StatelessWidget {
                         onTap: onShowOnMap,
                         child: Padding(
                           padding: const EdgeInsets.all(6),
-                          child: Icon(
+                          child: AppIcon(
                             Icons.map,
                             size: 22,
                             color: Colors.blue.shade300,
@@ -882,7 +883,7 @@ class _PlaceCard extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 12, color: Colors.white54),
+          AppIcon(icon, size: 12, color: Colors.white54),
           const SizedBox(width: 3),
           Flexible(
             child: Text(
@@ -908,11 +909,11 @@ class _PlaceCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         for (int i = 0; i < fullStars; i++)
-          Icon(Icons.star, size: size, color: Colors.amber.shade400),
+          AppIcon(Icons.star, size: size, color: Colors.amber.shade400),
         if (hasHalf)
-          Icon(Icons.star_half, size: size, color: Colors.amber.shade400),
+          AppIcon(Icons.star_half, size: size, color: Colors.amber.shade400),
         for (int i = 0; i < emptyStars; i++)
-          Icon(Icons.star_border, size: size, color: Colors.amber.shade700),
+          AppIcon(Icons.star_border, size: size, color: Colors.amber.shade700),
       ],
     );
   }

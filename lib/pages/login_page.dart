@@ -13,6 +13,7 @@ import 'package:chuk_chat/widgets/password_strength_meter.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/url_launcher_helper.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -306,7 +307,7 @@ class _LoginPageState extends State<LoginPage> {
                         decoration: InputDecoration(
                           labelText: l.password,
                           suffixIcon: IconButton(
-                            icon: Icon(
+                            icon: AppIcon(
                               _obscurePassword
                                   ? Icons.visibility_off
                                   : Icons.visibility,
@@ -369,7 +370,7 @@ class _LoginPageState extends State<LoginPage> {
                           decoration: InputDecoration(
                             labelText: l.confirmPassword,
                             suffixIcon: IconButton(
-                              icon: Icon(
+                              icon: AppIcon(
                                 _obscureConfirmPassword
                                     ? Icons.visibility_off
                                     : Icons.visibility,

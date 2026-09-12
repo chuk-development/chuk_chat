@@ -82,7 +82,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
       padding: const EdgeInsets.only(top: 2, bottom: 2),
       child: Row(
         children: [
-          Icon(Icons.smart_toy_outlined, size: 13, color: muted),
+          AppIcon(Icons.smart_toy_outlined, size: 13, color: muted),
           const SizedBox(width: 6),
           Expanded(
             child: Text(

@@ -16,6 +16,7 @@ import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -262,7 +263,7 @@ class _ImageAttachmentCard extends StatelessWidget {
     // Fallback placeholder
     return Container(
       color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-      child: Icon(
+      child: AppIcon(
         Icons.image_outlined,
         color: theme.colorScheme.primary.withValues(alpha: 0.5),
         size: 32,
@@ -321,7 +322,7 @@ class _RemoveButton extends StatelessWidget {
           message: tooltip ?? 'Remove',
           child: Padding(
             padding: EdgeInsets.all(size * 0.18),
-            child: Icon(Icons.close, size: size * 0.6, color: Colors.white),
+            child: AppIcon(Icons.close, size: size * 0.6, color: Colors.white),
           ),
         ),
       ),
@@ -713,12 +714,12 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                   if (_isPlainText && !_isLoading) ...[
                     if (_isEditing) ...[
                       IconButton(
-                        icon: Icon(Icons.check_rounded, color: accent),
+                        icon: AppIcon(Icons.check_rounded, color: accent),
                         tooltip: AppLocalizations.of(context)!.save,
                         onPressed: _saveEdits,
                       ),
                       IconButton(
-                        icon: Icon(
+                        icon: AppIcon(
                           Icons.close_rounded,
                           color: textColor.withValues(alpha: 0.5),
                         ),
@@ -727,7 +728,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                       ),
                     ] else
                       IconButton(
-                        icon: Icon(
+                        icon: AppIcon(
                           Icons.edit_rounded,
                           color: textColor.withValues(alpha: 0.7),
                         ),
@@ -737,7 +738,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                   ],
                   // Close button
                   IconButton(
-                    icon: Icon(
+                    icon: AppIcon(
                       Icons.close,
                       color: textColor.withValues(alpha: 0.7),
                     ),
@@ -796,7 +797,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            AppIcon(
               Icons.picture_as_pdf,
               size: 48,
               color: accent.withValues(alpha: 0.5),
@@ -932,7 +933,7 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
+          AppIcon(
             Icons.insert_drive_file_outlined,
             size: 48,
             color: accent.withValues(alpha: 0.5),

@@ -10,6 +10,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace/workspace_common_widgets.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Mobile-friendly workspace management page
 /// Allows managing files, instructions, chats, and starting new chats with workspace context
@@ -146,7 +147,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                 color: displayColor.withValues(alpha: isDark ? 0.2 : 0.12),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(_project!.displayIcon, color: displayColor, size: 16),
+              child: AppIcon(_project!.displayIcon, color: displayColor, size: 16),
             ),
             const SizedBox(width: 10),
             Flexible(
@@ -155,12 +156,12 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
           ],
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: iconFg),
+          icon: AppIcon(Icons.arrow_back, color: iconFg),
           onPressed: () => Navigator.pop(context),
         ),
         actions: [
           IconButton(
-            icon: Icon(Icons.edit, color: iconFg),
+            icon: AppIcon(Icons.edit, color: iconFg),
             onPressed: _showEditProjectDialog,
             tooltip: 'Edit workspace',
           ),
@@ -174,7 +175,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.folder_outlined, size: 18),
+                  const AppIcon(Icons.folder_outlined, size: 18),
                   const SizedBox(width: 6),
                   const Text('Files'),
                   if (_project!.fileCount > 0)
@@ -192,7 +193,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.chat_bubble_outline, size: 18),
+                  const AppIcon(Icons.chat_bubble_outline, size: 18),
                   const SizedBox(width: 6),
                   const Text('Chats'),
                   if (_project!.chatCount > 0)
@@ -210,7 +211,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.settings_outlined, size: 18),
+                  AppIcon(Icons.settings_outlined, size: 18),
                   SizedBox(width: 6),
                   Text('Settings'),
                 ],
@@ -225,7 +226,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _startNewChatWithProject,
-        icon: const Icon(Icons.add_comment),
+        icon: const AppIcon(Icons.add_comment),
         label: const Text('New Chat'),
         backgroundColor: displayColor,
         foregroundColor: onProjectColor,
@@ -251,7 +252,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
               onPressed: isUploadingFile
                   ? null
                   : uploadFileToWorkspace,
-              icon: const Icon(Icons.upload_file),
+              icon: const AppIcon(Icons.upload_file),
               label: const Text('Upload File'),
               style: OutlinedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
@@ -299,7 +300,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
+                AppIcon(
                   Icons.lock_outlined,
                   size: 12,
                   color: iconFg.withValues(alpha: 0.35),
@@ -334,7 +335,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
           Text(file.fileSizeFormatted, style: const TextStyle(fontSize: 12)),
           if (file.hasMarkdownSummary) ...[
             const SizedBox(width: 8),
-            Icon(Icons.check_circle, size: 14, color: Colors.green[600]),
+            AppIcon(Icons.check_circle, size: 14, color: Colors.green[600]),
             const SizedBox(width: 3),
             Text(
               'Processed',
@@ -391,7 +392,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                           ),
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: Icon(
+                        child: AppIcon(
                           _project!.displayIcon,
                           color: displayColor,
                           size: 20,
@@ -452,7 +453,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.tune, color: displayColor, size: 18),
+                          AppIcon(Icons.tune, color: displayColor, size: 18),
                           const SizedBox(width: 8),
                           Text(
                             'Custom Instructions',
@@ -464,7 +465,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                       ),
                       if (!_isEditingInstructions)
                         IconButton(
-                          icon: const Icon(Icons.edit, size: 18),
+                          icon: const AppIcon(Icons.edit, size: 18),
                           onPressed: () =>
                               setState(() => _isEditingInstructions = true),
                         ),
@@ -564,7 +565,7 @@ class _WorkspaceManagementPageState extends State<WorkspaceManagementPage>
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       onPressed: _showDeleteProjectDialog,
-                      icon: const Icon(Icons.delete_outline, size: 18),
+                      icon: const AppIcon(Icons.delete_outline, size: 18),
                       label: const Text('Delete Workspace'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
@@ -724,7 +725,7 @@ class _ChatSelectorSheet extends StatelessWidget {
                 itemBuilder: (context, index) {
                   final chat = chats[index];
                   return ListTile(
-                    leading: const Icon(Icons.chat),
+                    leading: const AppIcon(Icons.chat),
                     title: Text(
                       chat.customName ?? chat.previewText,
                       maxLines: 1,

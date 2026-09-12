@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Build a tiny icon button widget
 Widget buildTinyIconButton({
@@ -43,7 +44,7 @@ Widget buildTinyIconButton({
                 height: iconSize,
                 colorFilter: ColorFilter.mode(effectiveColor, BlendMode.srcIn),
               )
-            : Icon(icon!, size: iconSize, color: effectiveColor),
+            : AppIcon(icon!, size: iconSize, color: effectiveColor),
       ),
     ),
   );
@@ -110,7 +111,7 @@ Widget buildTinyActionButton({
                 height: iconSize,
                 colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
               )
-            : Icon(icon!, size: iconSize, color: foregroundColor),
+            : AppIcon(icon!, size: iconSize, color: foregroundColor),
       ),
     ),
   );
@@ -156,7 +157,7 @@ Widget buildAttachmentSheetOption({
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, color: foreground, size: 22),
+              AppIcon(icon, color: foreground, size: 22),
               const SizedBox(height: 6),
               Text(
                 label,

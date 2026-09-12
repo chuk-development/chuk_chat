@@ -11,6 +11,7 @@ import 'package:chuk_chat/widgets/workspace/workspace_actions_mixin.dart';
 import 'package:chuk_chat/widgets/workspace_file_viewer.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Right-side panel for workspace settings (Instructions + Files)
 class WorkspacePanel extends StatefulWidget {
@@ -193,7 +194,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : Icon(
+                              : AppIcon(
                                   _project!.displayIcon,
                                   color: displayColor,
                                   size: 18,
@@ -209,7 +210,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                             color: iconFg.withValues(alpha: 0.7),
                             borderRadius: BorderRadius.circular(6),
                           ),
-                          child: Icon(
+                          child: AppIcon(
                             Icons.camera_alt,
                             size: 10,
                             color: bgColor,
@@ -234,7 +235,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                 ),
                 if (widget.onClose != null)
                   IconButton(
-                    icon: Icon(Icons.close, color: iconFg, size: 20),
+                    icon: AppIcon(Icons.close, color: iconFg, size: 20),
                     onPressed: widget.onClose,
                     tooltip: 'Close workspace panel',
                   ),
@@ -299,7 +300,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Icon(
+                AppIcon(
                   Icons.lock_outlined,
                   size: 12,
                   color: iconFg.withAlpha(80),
@@ -396,7 +397,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                 ),
                 if (onAdd != null)
                   IconButton(
-                    icon: Icon(Icons.add, color: accentColor, size: 20),
+                    icon: AppIcon(Icons.add, color: accentColor, size: 20),
                     onPressed: onAdd,
                     tooltip: 'Add',
                     padding: EdgeInsets.zero,
@@ -511,7 +512,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
             // File name
             Row(
               children: [
-                Icon(Icons.insert_drive_file, size: 16, color: accentColor),
+                AppIcon(Icons.insert_drive_file, size: 16, color: accentColor),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -592,7 +593,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
         onTap: uploadFileToWorkspace,
         child: Column(
           children: [
-            Icon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
+            AppIcon(Icons.upload_file, size: 40, color: iconFg.withAlpha(100)),
             const SizedBox(height: 8),
             Text(
               'Add PDFs, documents, or other text\nto reference in this workspace.',
@@ -616,7 +617,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.add, size: 16, color: accentColor.withAlpha(180)),
+                AppIcon(Icons.add, size: 16, color: accentColor.withAlpha(180)),
                 const SizedBox(width: 4),
                 Text(
                   'Add more files',
@@ -655,7 +656,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                 color: accentColor.withValues(alpha: isDark ? 0.15 : 0.1),
                 borderRadius: BorderRadius.circular(7),
               ),
-              child: Icon(file.fileIcon, size: 16, color: accentColor),
+              child: AppIcon(file.fileIcon, size: 16, color: accentColor),
             ),
             const SizedBox(width: 8),
             Expanded(
@@ -679,7 +680,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
                       ),
                       if (file.hasMarkdownSummary) ...[
                         const SizedBox(width: 8),
-                        Icon(
+                        AppIcon(
                           Icons.check_circle,
                           size: 12,
                           color: Colors.green[600],
@@ -691,7 +692,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
               ),
             ),
             IconButton(
-              icon: Icon(Icons.close, size: 16, color: iconFg.withAlpha(150)),
+              icon: AppIcon(Icons.close, size: 16, color: iconFg.withAlpha(150)),
               onPressed: () => deleteWorkspaceFile(file),
               padding: EdgeInsets.zero,
               constraints: const BoxConstraints(minWidth: 24, minHeight: 24),

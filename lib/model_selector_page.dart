@@ -27,6 +27,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug;
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -707,7 +708,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
             width: size,
             height: size,
             child: Center(
-              child: Icon(
+              child: AppIcon(
                 Icons.downloading,
                 color: tint,
                 size: size / 2,
@@ -727,12 +728,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
             if (kDebugMode) {
               debugPrint('Error loading image from $imageUrl: $error');
             }
-            return Icon(fallbackIcon, color: tint, size: size);
+            return AppIcon(fallbackIcon, color: tint, size: size);
           },
         );
       }
     } else {
-      return Icon(fallbackIcon, color: tint, size: size);
+      return AppIcon(fallbackIcon, color: tint, size: size);
     }
   }
 
@@ -761,7 +762,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        AppIcon(
                           Icons.error_outline,
                           color: colorScheme.error,
                           size: 48,
@@ -777,7 +778,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                         const SizedBox(height: 24),
                         FilledButton.icon(
                           onPressed: _initializeModelSelections,
-                          icon: const Icon(Icons.refresh),
+                          icon: const AppIcon(Icons.refresh),
                           label: Text(l.retry),
                           style: FilledButton.styleFrom(
                             padding: const EdgeInsets.symmetric(
@@ -1100,7 +1101,7 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         _descriptionExpanded
                             ? Icons.keyboard_arrow_up
                             : Icons.keyboard_arrow_down,
@@ -1223,7 +1224,7 @@ class _NameRow extends StatelessWidget {
                 ? (l?.perModelPromptEditConfigured ?? 'Edit system prompt')
                 : (l?.perModelPromptEdit ?? 'Set system prompt'),
             visualDensity: VisualDensity.compact,
-            icon: Icon(
+            icon: AppIcon(
               hasPromptConfig
                   ? Icons.edit_note
                   : Icons.note_alt_outlined,
@@ -1349,7 +1350,7 @@ class _ProviderPill extends StatelessWidget {
               children: [
                 _buildCollapsedFace(context),
                 const SizedBox(width: 2),
-                Icon(Icons.arrow_drop_down, color: m3.onSurfaceVariant),
+                AppIcon(Icons.arrow_drop_down, color: m3.onSurfaceVariant),
               ],
             ),
           ),
@@ -1372,14 +1373,14 @@ class _ProviderPill extends StatelessWidget {
     final Widget iconWidget;
     final String label;
     if (isAutoSelected) {
-      iconWidget = Icon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
+      iconWidget = AppIcon(Icons.bolt, color: m3.onSurfaceVariant, size: 16);
       label = 'Auto';
     } else if (selectedProvider != null) {
       iconWidget =
           buildIconWidget(selectedProvider!.iconUrl, Icons.business, size: 16);
       label = selectedProvider!.name;
     } else {
-      iconWidget = Icon(Icons.block, color: m3.onSurfaceVariant, size: 16);
+      iconWidget = AppIcon(Icons.block, color: m3.onSurfaceVariant, size: 16);
       label = 'Disabled';
     }
 
@@ -1416,7 +1417,7 @@ class _ProviderPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.block, color: m3.onSurfaceVariant, size: 16),
+        AppIcon(Icons.block, color: m3.onSurfaceVariant, size: 16),
         const SizedBox(width: 6),
         Text(
           'Disabled',
@@ -1458,7 +1459,7 @@ class _ProviderPill extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.bolt, color: textColor, size: 16),
+        AppIcon(Icons.bolt, color: textColor, size: 16),
         const SizedBox(width: 6),
         Flexible(
           child: Column(
@@ -1578,14 +1579,14 @@ class _SearchField extends StatelessWidget {
         hintStyle: theme.textTheme.bodyMedium?.copyWith(
           color: m3.onSurfaceVariant,
         ),
-        prefixIcon: Icon(
+        prefixIcon: AppIcon(
           Icons.search,
           color: m3.onSurfaceVariant,
           size: 20,
         ),
         suffixIcon: hasQuery
             ? IconButton(
-                icon: Icon(
+                icon: AppIcon(
                   Icons.clear,
                   color: m3.onSurfaceVariant,
                   size: 20,
@@ -1713,7 +1714,7 @@ class _ModePickerPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(data.icon, size: 20, color: m3.onSurfaceVariant),
+              AppIcon(data.icon, size: 20, color: m3.onSurfaceVariant),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -1896,7 +1897,7 @@ class _ModePickerPanel extends StatelessWidget {
             ),
           ),
           if (selected)
-            Icon(Icons.check, size: 18, color: theme.colorScheme.primary),
+            AppIcon(Icons.check, size: 18, color: theme.colorScheme.primary),
         ],
       ),
     );
@@ -1946,7 +1947,7 @@ class _ModePickerPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 2),
-                Icon(
+                AppIcon(
                   Icons.arrow_drop_down,
                   color: m3.onSurfaceVariant,
                   size: 20,

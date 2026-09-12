@@ -15,6 +15,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/services/github_connection_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class GitHubConnectionPage extends StatefulWidget {
   const GitHubConnectionPage({super.key});
@@ -236,7 +237,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
         children: [
           Row(
             children: [
-              Icon(Icons.code, color: scheme.primary),
+              AppIcon(Icons.code, color: scheme.primary),
               const SizedBox(width: 8),
               Text('AI can use your GitHub',
                   style: Theme.of(context).textTheme.titleMedium),
@@ -278,7 +279,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
             ),
             const SizedBox(height: 16),
             FilledButton.icon(
-              icon: const Icon(Icons.link),
+              icon: const AppIcon(Icons.link),
               label: const Text('Connect GitHub'),
               onPressed: _startConnect,
             ),
@@ -294,7 +295,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.check_circle, color: scheme.primary),
+                AppIcon(Icons.check_circle, color: scheme.primary),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -319,12 +320,12 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
               spacing: 8,
               children: [
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.refresh),
+                  icon: const AppIcon(Icons.refresh),
                   label: const Text('Refresh'),
                   onPressed: _refreshStatus,
                 ),
                 FilledButton.tonalIcon(
-                  icon: const Icon(Icons.link_off),
+                  icon: const AppIcon(Icons.link_off),
                   label: const Text('Disconnect'),
                   onPressed: _disconnect,
                 ),
@@ -358,7 +359,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
         break;
       case GitHubConnectPollState.success:
         header = Row(children: [
-          Icon(Icons.check_circle, color: scheme.primary),
+          AppIcon(Icons.check_circle, color: scheme.primary),
           const SizedBox(width: 8),
           Text('Connected!', style: Theme.of(context).textTheme.titleSmall),
         ]);
@@ -408,7 +409,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
                   const SizedBox(width: 12),
                   IconButton(
                     tooltip: 'Copy',
-                    icon: const Icon(Icons.copy, size: 20),
+                    icon: const AppIcon(Icons.copy, size: 20),
                     onPressed: () async {
                       await Clipboard.setData(
                           ClipboardData(text: flow.userCode));
@@ -430,7 +431,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
             Row(
               children: [
                 TextButton.icon(
-                  icon: const Icon(Icons.open_in_new),
+                  icon: const AppIcon(Icons.open_in_new),
                   label: const Text('Open GitHub'),
                   onPressed: () {
                     final uri = Uri.tryParse(flow.verificationUri);

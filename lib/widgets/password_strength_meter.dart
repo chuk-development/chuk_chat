@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// A widget that displays password strength with visual indicators.
 ///
@@ -97,7 +98,7 @@ class PasswordStrengthMeter extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          Icon(
+          AppIcon(
             isMet ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 16,
             color: isMet ? Colors.green : Colors.grey,

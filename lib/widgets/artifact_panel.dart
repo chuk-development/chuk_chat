@@ -25,6 +25,7 @@ import 'package:chuk_chat/widgets/html_artifact_view.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 import 'package:pdfrx/pdfrx.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ArtifactPanel extends StatefulWidget {
   const ArtifactPanel({
@@ -538,7 +539,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                 ));
 
     final actionMenu = PopupMenuButton<String>(
-      icon: const Icon(Icons.more_vert, size: 20),
+      icon: const AppIcon(Icons.more_vert, size: 20),
       tooltip: 'More',
       onSelected: (v) {
         switch (v) {
@@ -553,7 +554,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           value: 'copy',
           child: Row(
             children: [
-              Icon(Icons.copy_outlined, size: 18),
+              AppIcon(Icons.copy_outlined, size: 18),
               SizedBox(width: 10),
               Text('Copy source'),
             ],
@@ -563,7 +564,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
           value: 'download',
           child: Row(
             children: [
-              Icon(Icons.download_outlined, size: 18),
+              AppIcon(Icons.download_outlined, size: 18),
               SizedBox(width: 10),
               Text('Download'),
             ],
@@ -594,7 +595,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               height: 48,
               child: Row(
                 children: [
-                  Icon(_iconForType(_effectiveType), size: 22),
+                  AppIcon(_iconForType(_effectiveType), size: 22),
                   const SizedBox(width: 10),
                   Expanded(
                     child: _ArtifactSwitcher(
@@ -606,7 +607,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   ),
                   if (widget.onOpenSourceChat != null)
                     IconButton(
-                      icon: const Icon(Icons.forum_outlined, size: 22),
+                      icon: const AppIcon(Icons.forum_outlined, size: 22),
                       onPressed: () =>
                           widget.onOpenSourceChat!(widget.artifact.chatId),
                       tooltip: 'Open source chat',
@@ -614,7 +615,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                   actionMenu,
                   if (widget.onClose != null)
                     IconButton(
-                      icon: const Icon(Icons.close, size: 22),
+                      icon: const AppIcon(Icons.close, size: 22),
                       onPressed: widget.onClose,
                       tooltip: 'Close',
                     ),
@@ -659,7 +660,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         ),
         child: Row(
           children: [
-            const Icon(Icons.article_outlined, size: 18),
+            const AppIcon(Icons.article_outlined, size: 18),
             const SizedBox(width: 8),
             Expanded(
               child: _ArtifactSwitcher(
@@ -680,24 +681,24 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
               ),
             if (widget.onOpenSourceChat != null)
               IconButton(
-                icon: const Icon(Icons.forum_outlined, size: 18),
+                icon: const AppIcon(Icons.forum_outlined, size: 18),
                 onPressed: () =>
                     widget.onOpenSourceChat!(widget.artifact.chatId),
                 tooltip: 'Open source chat',
               ),
             IconButton(
-              icon: const Icon(Icons.copy_outlined, size: 18),
+              icon: const AppIcon(Icons.copy_outlined, size: 18),
               onPressed: _copyContent,
               tooltip: 'Copy source',
             ),
             IconButton(
-              icon: const Icon(Icons.download_outlined, size: 18),
+              icon: const AppIcon(Icons.download_outlined, size: 18),
               onPressed: _busy ? null : _showDownloadMenu,
               tooltip: 'Download',
             ),
             if (widget.onClose != null)
               IconButton(
-                icon: const Icon(Icons.close, size: 18),
+                icon: const AppIcon(Icons.close, size: 18),
                 onPressed: widget.onClose,
                 tooltip: 'Close',
               ),
@@ -1484,7 +1485,7 @@ class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor> {
               onTap: _centerCanvas,
               child: const Padding(
                 padding: EdgeInsets.all(8),
-                child: Icon(Icons.center_focus_strong, size: 18),
+                child: AppIcon(Icons.center_focus_strong, size: 18),
               ),
             ),
           ),
@@ -1780,7 +1781,7 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 36, color: Colors.redAccent),
+            const AppIcon(Icons.error_outline, size: 36, color: Colors.redAccent),
             const SizedBox(height: 12),
             const Text(
               'Typst compile failed',
@@ -1794,7 +1795,7 @@ class _TypstPdfRendererState extends State<_TypstPdfRenderer> {
             const SizedBox(height: 12),
             FilledButton.tonalIcon(
               onPressed: _compile,
-              icon: const Icon(Icons.refresh),
+              icon: const AppIcon(Icons.refresh),
               label: const Text('Retry'),
             ),
           ],
@@ -1897,12 +1898,12 @@ class _ViewModeToggle extends StatelessWidget {
       segments: [
         ButtonSegment(
           value: _ArtifactViewMode.preview,
-          icon: Icon(Icons.visibility_outlined, size: compact ? 14 : 16),
+          icon: AppIcon(Icons.visibility_outlined, size: compact ? 14 : 16),
           label: const Text('Preview'),
         ),
         ButtonSegment(
           value: _ArtifactViewMode.code,
-          icon: Icon(Icons.code, size: compact ? 14 : 16),
+          icon: AppIcon(Icons.code, size: compact ? 14 : 16),
           label: const Text('Code'),
         ),
       ],
@@ -2044,7 +2045,7 @@ class _HistoryReadOnlyBanner extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         child: Row(
           children: [
-            Icon(
+            AppIcon(
               Icons.history,
               size: 18,
               color: scheme.onTertiaryContainer,
@@ -2127,7 +2128,7 @@ class _ArtifactSwitcher extends StatelessWidget {
               value: a.id,
               child: Row(
                 children: [
-                  Icon(_iconForType(a.type), size: 16),
+                  AppIcon(_iconForType(a.type), size: 16),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -2166,7 +2167,7 @@ class _ArtifactSwitcher extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 4),
-          Icon(Icons.arrow_drop_down, size: fontSize + 6),
+          AppIcon(Icons.arrow_drop_down, size: fontSize + 6),
         ],
       ),
     );
@@ -2189,7 +2190,7 @@ class _ZoomButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(icon, size: 18),
+          child: AppIcon(icon, size: 18),
         ),
       ),
     );

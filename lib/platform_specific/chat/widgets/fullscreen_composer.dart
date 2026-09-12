@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Opens a fullscreen text composition sheet for the chat composer.
 /// Returns the edited text, or null if dismissed.
@@ -82,7 +83,7 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
               child: Row(
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.edit_note_rounded,
                     size: 18,
                     color: iconFg.withValues(alpha: 0.6),
@@ -98,7 +99,7 @@ class _FullscreenComposerBodyState extends State<_FullscreenComposerBody> {
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: Icon(
+                    icon: AppIcon(
                       Icons.close_fullscreen_rounded,
                       size: 18,
                       color: iconFg.withValues(alpha: 0.5),

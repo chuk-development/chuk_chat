@@ -6,6 +6,7 @@ import 'package:chuk_chat/services/token_activity_stats.dart';
 import 'package:chuk_chat/services/usage_logs_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 const List<String> _kMonthNames = <String>[
   'Jan',
@@ -654,7 +655,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Icon(
+            child: AppIcon(
               entry.isMediaRequest
                   ? Icons.perm_media_outlined
                   : Icons.chat_bubble_outline,
@@ -725,7 +726,7 @@ class _UsageDetailsPageState extends State<UsageDetailsPage> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.warning_amber_rounded, size: 18, color: m3.warning),
+          AppIcon(Icons.warning_amber_rounded, size: 18, color: m3.warning),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
@@ -1122,7 +1123,7 @@ class _StreakTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(icon, size: 15, color: m3.onSurfaceVariant),
+              AppIcon(icon, size: 15, color: m3.onSurfaceVariant),
               const SizedBox(width: 6),
               Expanded(
                 child: Text(

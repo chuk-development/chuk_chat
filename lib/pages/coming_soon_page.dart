@@ -1,5 +1,6 @@
 // lib/pages/coming_soon_page.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ComingSoonPage extends StatelessWidget {
   final String title;
@@ -33,7 +34,7 @@ class ComingSoonPage extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.rocket_launch, color: iconFg, size: 48),
+            AppIcon(Icons.rocket_launch, color: iconFg, size: 48),
             const SizedBox(height: 16),
             Text('Coming soon!', style: titleStyle),
             if (message != null) ...[

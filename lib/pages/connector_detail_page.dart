@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/tool_executor.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Full-screen detail page for a single tool, showing enable/disable,
 /// model prompt editor, and parameter details.
@@ -75,7 +76,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: iconFg),
         leading: IconButton(
-          icon: Icon(Icons.chevron_left, color: iconFg),
+          icon: AppIcon(Icons.chevron_left, color: iconFg),
           onPressed: () => Navigator.of(context).pop(),
         ),
         leadingWidth: 40,

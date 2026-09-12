@@ -7,6 +7,7 @@ import 'package:chuk_chat/assistant/assistant_config.dart';
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// One job: make Chuk Chat the assistant of this phone.
 ///
@@ -191,7 +192,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
           IconButton(
             tooltip: 'Status aktualisieren',
             onPressed: _loading ? null : () => unawaited(_refresh()),
-            icon: const Icon(Icons.refresh),
+            icon: const AppIcon(Icons.refresh),
           ),
         ],
       ),
@@ -214,7 +215,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
                     subtitle: grant.required
                         ? '${grant.buys} Ohne das läuft nichts.'
                         : grant.buys,
-                    trailing: Icon(
+                    trailing: AppIcon(
                       Icons.chevron_right,
                       color: scheme.onSurfaceVariant,
                     ),
@@ -280,7 +281,7 @@ class _HowTo extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(
+              AppIcon(
                 isDefault
                     ? Icons.check_circle_rounded
                     : Icons.graphic_eq_rounded,
@@ -388,7 +389,7 @@ class _AllSet extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: Row(
         children: [
-          Icon(Icons.done_all_rounded, size: 18, color: scheme.primary),
+          AppIcon(Icons.done_all_rounded, size: 18, color: scheme.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Text(

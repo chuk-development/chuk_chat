@@ -14,6 +14,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/utils/url_launcher_helper.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
@@ -231,7 +232,7 @@ class _AboutPageState extends State<AboutPage> {
                     icon: Icons.article_outlined,
                     title: l.openSourceLicenses,
                     subtitle: l.openSourceLicensesSubtitle,
-                    trailing: Icon(
+                    trailing: AppIcon(
                       Icons.chevron_right,
                       size: 20,
                       color: m3.onSurfaceVariant,
@@ -242,7 +243,7 @@ class _AboutPageState extends State<AboutPage> {
                   ExpressiveRow(
                     icon: Icons.description_outlined,
                     title: l.termsOfService,
-                    trailing: Icon(
+                    trailing: AppIcon(
                       Icons.north_east,
                       size: 18,
                       color: m3.onSurfaceVariant,
@@ -255,7 +256,7 @@ class _AboutPageState extends State<AboutPage> {
                   ExpressiveRow(
                     icon: Icons.lock_outline,
                     title: l.privacyPolicy,
-                    trailing: Icon(
+                    trailing: AppIcon(
                       Icons.north_east,
                       size: 18,
                       color: m3.onSurfaceVariant,
@@ -269,7 +270,7 @@ class _AboutPageState extends State<AboutPage> {
                     icon: Icons.code,
                     title: 'GitHub',
                     subtitle: 'chuk-development/chuk_chat',
-                    trailing: Icon(
+                    trailing: AppIcon(
                       Icons.north_east,
                       size: 18,
                       color: m3.onSurfaceVariant,
@@ -425,7 +426,7 @@ class _LicenseTile extends StatelessWidget {
       title: package.name,
       subtitle: AppLocalizations.of(context)!.tapToViewLicense,
       trailing: licenseLabel == null
-          ? Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant)
+          ? AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant)
           : ExpressiveBadge(licenseLabel, tone: m3.primaryContainer),
       onTap: () {
         Navigator.of(context).push(

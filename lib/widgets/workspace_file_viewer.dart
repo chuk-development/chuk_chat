@@ -8,6 +8,7 @@ import 'package:pdfx/pdfx.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Dialog to view and edit workspace files and their markdown summaries
 class WorkspaceFileViewer extends StatefulWidget {
@@ -213,7 +214,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
             // Header
             Row(
               children: [
-                Icon(widget.file.fileIcon, color: accentColor, size: 24),
+                AppIcon(widget.file.fileIcon, color: accentColor, size: 24),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -240,7 +241,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                   ),
                 ),
                 IconButton(
-                  icon: Icon(Icons.close, color: iconFg),
+                  icon: AppIcon(Icons.close, color: iconFg),
                   onPressed: () => Navigator.of(context).pop(),
                 ),
               ],
@@ -259,7 +260,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
+                      AppIcon(
                         widget.file.isPdf
                             ? Icons.picture_as_pdf
                             : widget.file.isImage
@@ -276,7 +277,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.description, size: 18),
+                      const AppIcon(Icons.description, size: 18),
                       const SizedBox(width: 8),
                       const Text('Markdown'),
                     ],
@@ -313,7 +314,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, color: Colors.red, size: 48),
+            AppIcon(Icons.error_outline, color: Colors.red, size: 48),
             const SizedBox(height: 16),
             Text(
               'Failed to load file',
@@ -344,7 +345,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.picture_as_pdf, color: accentColor, size: 64),
+            AppIcon(Icons.picture_as_pdf, color: accentColor, size: 64),
             const SizedBox(height: 16),
             Text(
               'PDF Preview Not Available',
@@ -367,7 +368,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
             if (widget.file.hasMarkdownSummary)
               OutlinedButton.icon(
                 onPressed: () => _tabController.animateTo(1),
-                icon: const Icon(Icons.description, size: 18),
+                icon: const AppIcon(Icons.description, size: 18),
                 label: const Text('View Markdown Summary'),
               ),
           ],
@@ -473,7 +474,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                 ),
               ] else
                 IconButton(
-                  icon: Icon(Icons.edit, color: iconFg),
+                  icon: AppIcon(Icons.edit, color: iconFg),
                   onPressed: () => setState(() => _isEditingContent = true),
                   tooltip: 'Edit',
                 ),
@@ -555,7 +556,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
               ),
             ] else
               IconButton(
-                icon: Icon(Icons.edit, color: iconFg),
+                icon: AppIcon(Icons.edit, color: iconFg),
                 onPressed: () => setState(() => _isEditingMarkdown = true),
                 tooltip: 'Edit',
               ),
@@ -640,7 +641,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(
+                        AppIcon(
                           Icons.description_outlined,
                           size: 48,
                           color: iconFg.withValues(alpha: 0.3),
@@ -656,7 +657,7 @@ class _WorkspaceFileViewerState extends State<WorkspaceFileViewer>
                         TextButton.icon(
                           onPressed: () =>
                               setState(() => _isEditingMarkdown = true),
-                          icon: const Icon(Icons.add),
+                          icon: const AppIcon(Icons.add),
                           label: const Text('Add summary'),
                         ),
                       ],

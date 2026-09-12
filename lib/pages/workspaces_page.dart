@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Sort options for workspace list
 enum ProjectSortMode { recentlyUpdated, name, mostFiles, mostChats }
@@ -243,7 +244,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
               IconButton(
                 tooltip: l.newWorkspace,
                 onPressed: _createProject,
-                icon: Icon(Icons.add, color: iconFg),
+                icon: AppIcon(Icons.add, color: iconFg),
               ),
             ],
           ),
@@ -258,10 +259,10 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: l.searchWorkspacesHint,
-                prefixIcon: Icon(Icons.search, color: iconFg, size: 22),
+                prefixIcon: AppIcon(Icons.search, color: iconFg, size: 22),
                 suffixIcon: _searchQuery.isNotEmpty
                     ? IconButton(
-                        icon: Icon(Icons.clear, color: iconFg, size: 18),
+                        icon: AppIcon(Icons.clear, color: iconFg, size: 18),
                         onPressed: () => _searchController.clear(),
                       )
                     : null,
@@ -302,7 +303,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
           elevation: 0,
           scrolledUnderElevation: 0,
           leading: IconButton(
-            icon: Icon(Icons.arrow_back, color: iconFg),
+            icon: AppIcon(Icons.arrow_back, color: iconFg),
             onPressed: () => Navigator.pop(context),
           ),
         ),
@@ -338,7 +339,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                     Positioned(
                       left: 0,
                       bottom: 8,
-                      child: Icon(
+                      child: AppIcon(
                         Icons.folder_rounded,
                         size: 48,
                         color: displayColorOrFallback(0, 0.2),
@@ -347,13 +348,13 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                     Positioned(
                       right: 0,
                       bottom: 8,
-                      child: Icon(
+                      child: AppIcon(
                         Icons.folder_rounded,
                         size: 48,
                         color: displayColorOrFallback(3, 0.2),
                       ),
                     ),
-                    Icon(
+                    AppIcon(
                       Icons.folder_rounded,
                       size: 56,
                       color: displayColorOrFallback(9, 0.3),
@@ -386,7 +387,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: _createProject,
-                  icon: const Icon(Icons.add, size: 18),
+                  icon: const AppIcon(Icons.add, size: 18),
                   label: const Text('Create your first workspace'),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(
@@ -456,7 +457,7 @@ class _SortButton extends StatelessWidget {
       height: 42,
       width: 42,
       child: PopupMenuButton<ProjectSortMode>(
-        icon: Icon(Icons.sort, color: iconFg, size: 20),
+        icon: AppIcon(Icons.sort, color: iconFg, size: 20),
         tooltip: 'Sort projects',
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         onSelected: onChanged,
@@ -484,12 +485,12 @@ class _SortButton extends StatelessWidget {
       value: mode,
       child: Row(
         children: [
-          Icon(icon, size: 18),
+          AppIcon(icon, size: 18),
           const SizedBox(width: 12),
           Text(label),
           if (isSelected) ...[
             const Spacer(),
-            const Icon(Icons.check, size: 18),
+            const AppIcon(Icons.check, size: 18),
           ],
         ],
       ),
@@ -531,7 +532,7 @@ class _ProjectRow extends StatelessWidget {
           value: 'archive',
           child: Row(
             children: [
-              const Icon(Icons.archive_outlined, size: 18),
+              const AppIcon(Icons.archive_outlined, size: 18),
               const SizedBox(width: 10),
               Text(l.archive),
             ],
@@ -541,7 +542,7 @@ class _ProjectRow extends StatelessWidget {
           value: 'delete',
           child: Row(
             children: [
-              const Icon(Icons.delete_outline, color: Colors.red, size: 18),
+              const AppIcon(Icons.delete_outline, color: Colors.red, size: 18),
               const SizedBox(width: 10),
               Text(l.delete, style: const TextStyle(color: Colors.red)),
             ],
@@ -696,7 +697,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                           ),
                           borderRadius: BorderRadius.circular(16),
                         ),
-                        child: Icon(previewIcon, color: previewColor, size: 28),
+                        child: AppIcon(previewIcon, color: previewColor, size: 28),
                       ),
                       const SizedBox(height: 12),
                       Text(
@@ -731,7 +732,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                         decoration: InputDecoration(
                           labelText: 'Workspace Name',
                           hintText: 'e.g., AI Research, Website Redesign',
-                          prefixIcon: const Icon(Icons.folder_outlined),
+                          prefixIcon: const AppIcon(Icons.folder_outlined),
                         ),
                         autofocus: true,
                         textInputAction: TextInputAction.next,
@@ -751,7 +752,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                         decoration: InputDecoration(
                           labelText: 'Description (optional)',
                           hintText: 'What is this workspace about?',
-                          prefixIcon: const Icon(Icons.notes_outlined),
+                          prefixIcon: const AppIcon(Icons.notes_outlined),
                         ),
                         maxLines: 2,
                         textInputAction: TextInputAction.next,
@@ -767,7 +768,7 @@ class _CreateProjectDialogState extends State<_CreateProjectDialog> {
                           padding: const EdgeInsets.symmetric(vertical: 8),
                           child: Row(
                             children: [
-                              Icon(
+                              AppIcon(
                                 _showAdvanced
                                     ? Icons.expand_less
                                     : Icons.expand_more,

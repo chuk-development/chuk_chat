@@ -11,6 +11,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class WorkspaceInstructionsPage extends StatefulWidget {
   final String workspaceId;
@@ -140,7 +141,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
+                  AppIcon(Icons.info_outline, size: 18, color: m3.onSurfaceVariant),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
@@ -196,7 +197,7 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
                           strokeWidth: 2,
                         ),
                       )
-                    : const Icon(Icons.check, size: 20),
+                    : const AppIcon(Icons.check, size: 20),
                 label: Text(_saving ? l.saving : l.saveChanges),
                 onPressed: _saving || !_hasChanges ? null : _save,
                 style: FilledButton.styleFrom(

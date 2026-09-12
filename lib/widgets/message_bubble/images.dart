@@ -171,7 +171,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome, size: 18, color: fg),
+            AppIcon(Icons.auto_awesome, size: 18, color: fg),
             const SizedBox(height: 8),
             const SizedBox(
               width: 26,
@@ -431,7 +431,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
+                  AppIcon(
                     Icons.auto_awesome,
                     size: 10,
                     color: Colors.white.withValues(alpha: 0.9),
@@ -507,7 +507,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.delete_outline, size: 18, color: Colors.red),
+              const AppIcon(Icons.delete_outline, size: 18, color: Colors.red),
               const SizedBox(width: 8),
               Text(l.delete, style: const TextStyle(color: Colors.red)),
             ],
@@ -619,7 +619,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.description, size: 18, color: iconColor),
+                  AppIcon(Icons.description, size: 18, color: iconColor),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
@@ -633,7 +633,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  Icon(
+                  AppIcon(
                     Icons.open_in_new,
                     size: 14,
                     color: iconColor.withValues(alpha: 0.7),

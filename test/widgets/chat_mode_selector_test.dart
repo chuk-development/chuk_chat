@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 
 import '../support/kv_cache_test_env.dart';
+import '../helpers/icon_finder.dart';
 
 // Fireworks levels, the common case in the composer.
 const _fireworksLevels = <String>['none', 'low', 'high'];
@@ -136,7 +137,7 @@ void main() {
       await _pump(tester, mode: ChatMode.fast);
 
       expect(find.text('Fast'), findsOneWidget);
-      expect(find.byIcon(Icons.bolt), findsOneWidget);
+      expect(findIcon(Icons.bolt), findsOneWidget);
       expect(find.text('Thinking'), findsNothing);
     });
 
@@ -150,7 +151,7 @@ void main() {
 
       expect(find.text('Fast'), findsOneWidget);
       expect(find.text('Thinking'), findsNWidgets(2)); // pill + menu row
-      expect(find.byIcon(Icons.check), findsOneWidget);
+      expect(findIcon(Icons.check), findsOneWidget);
     });
 
     testWidgets('has no reasoning row at level 1', (tester) async {
@@ -224,7 +225,7 @@ void main() {
         onModelSelected: (_) {},
       );
 
-      await tester.tap(find.byIcon(Icons.tune).first);
+      await tester.tap(findIcon(Icons.tune).first);
       await tester.pumpAndSettle();
       // In Custom the third point is the chosen model, lab prefix stripped.
       expect(find.text('V4 Flash'), findsWidgets);

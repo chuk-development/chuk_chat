@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../app_palette.dart';
 import '../demo_data.dart';
 import '../shared_widgets.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class VariantDense extends StatelessWidget {
   final List<DemoChat> chats;
@@ -41,13 +42,13 @@ class VariantDense extends StatelessWidget {
                     tooltip: 'New chat',
                     onPressed: cb.onNewChat,
                     splashRadius: 16,
-                    icon: Icon(Icons.edit_outlined, size: 18, color: p.fg),
+                    icon: AppIcon(Icons.edit_outlined, size: 18, color: p.fg),
                   ),
                   IconButton(
                     tooltip: 'Media',
                     onPressed: cb.onMedia,
                     splashRadius: 16,
-                    icon: Icon(Icons.image_outlined,
+                    icon: AppIcon(Icons.image_outlined,
                         size: 18, color: p.muted),
                   ),
                 ],

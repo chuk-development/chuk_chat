@@ -132,6 +132,7 @@ flutter:
     - assets/logo.svg
     - assets/wordmark.svg
     - assets/icons/
+    - assets/icons/hugeicons/
     - assets/icons/chuk_chat_tray_brand.png
     - assets/mcp_icons/
     - web/icons/Icon-512.png

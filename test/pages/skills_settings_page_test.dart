@@ -7,6 +7,7 @@ import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/services/skills/builtin_skills.g.dart';
 import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
+import '../helpers/icon_finder.dart';
 
 Widget _host(Widget child) => MaterialApp(
   localizationsDelegates: const [AppLocalizations.delegate],
@@ -55,9 +56,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       await tester.pumpAndSettle();
 
-      expect(find.byIcon(Icons.delete_outline), findsNothing);
+      expect(findIcon(Icons.delete_outline), findsNothing);
       expect(
-        find.byIcon(Icons.lock_outline),
+        findIcon(Icons.lock_outline),
         findsNWidgets(kBuiltinSkills.length),
       );
     });

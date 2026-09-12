@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'app_palette.dart';
 import 'demo_data.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Brand row: optional logo square + name. Trailing widget on the right.
 class SbBrand extends StatelessWidget {
@@ -91,7 +92,7 @@ class SbNewChatPill extends StatelessWidget {
           child: Row(
             mainAxisSize: wide ? MainAxisSize.max : MainAxisSize.min,
             children: [
-              Icon(icon, size: wide ? 17 : 15, color: onAccent),
+              AppIcon(icon, size: wide ? 17 : 15, color: onAccent),
               const SizedBox(width: 8),
               Text(label,
                   style: TextStyle(
@@ -156,7 +157,7 @@ class SbSearch extends StatelessWidget {
           style: TextStyle(fontSize: 14, color: p.fg),
           decoration: InputDecoration(
             isDense: true,
-            prefixIcon: Icon(Icons.search, size: 17, color: p.muted),
+            prefixIcon: AppIcon(Icons.search, size: 17, color: p.muted),
             prefixIconConstraints:
                 const BoxConstraints(minWidth: 38, minHeight: 38),
             hintText: hint,
@@ -242,7 +243,7 @@ class SbChatRow extends StatelessWidget {
       child: Row(
         children: [
           if (showPin && chat.pinned) ...[
-            Icon(Icons.push_pin, size: 13, color: p.accent),
+            AppIcon(Icons.push_pin, size: 13, color: p.accent),
             const SizedBox(width: 6),
           ],
           Expanded(
@@ -375,7 +376,7 @@ class SbFooter extends StatelessWidget {
             tooltip: 'Settings',
             onPressed: onSettings,
             splashRadius: 18,
-            icon: Icon(Icons.settings_outlined, size: 18, color: p.muted),
+            icon: AppIcon(Icons.settings_outlined, size: 18, color: p.muted),
           ),
         ],
       ),
@@ -414,7 +415,7 @@ class SbNavItem extends StatelessWidget {
               const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
           child: Row(
             children: [
-              Icon(icon, size: 19, color: iconColor),
+              AppIcon(icon, size: 19, color: iconColor),
               const SizedBox(width: 14),
               Text(label,
                   style: TextStyle(
@@ -515,7 +516,7 @@ class SbPinnedBento extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(4, 2, 4, 4),
               child: Row(
                 children: [
-                  Icon(Icons.push_pin, size: 13, color: p.accent),
+                  AppIcon(Icons.push_pin, size: 13, color: p.accent),
                   const SizedBox(width: 6),
                   Text('PINNED',
                       style: TextStyle(
@@ -590,7 +591,7 @@ class SbQuickTile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(9),
                 ),
                 alignment: Alignment.center,
-                child: Icon(icon,
+                child: AppIcon(icon,
                     size: 17, color: primary ? onBg : p.accent),
               ),
               const SizedBox(height: 8),

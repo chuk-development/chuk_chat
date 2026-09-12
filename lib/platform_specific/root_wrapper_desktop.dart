@@ -25,6 +25,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /* ---------- ROOT WRAPPER DESKTOP (for Desktop, Web, and Tablets) ---------- */
 class RootWrapperDesktop extends StatefulWidget {
@@ -371,7 +372,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           width: kMenuButtonHeight,
           height: kButtonVisualHeight,
           child: IconButton(
-            icon: Icon(icon, color: iconFg, size: 24),
+            icon: AppIcon(icon, color: iconFg, size: 24),
             padding: EdgeInsets.zero,
             visualDensity: VisualDensity.standard,
             constraints: BoxConstraints.tightFor(
@@ -628,7 +629,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                             ),
                             child: Row(
                               children: [
-                                Icon(
+                                AppIcon(
                                   effectivePanel == 'projects'
                                       ? Icons.folder_open
                                       : Icons.photo_library_outlined,
@@ -647,7 +648,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                                 ),
                                 const Spacer(),
                                 IconButton(
-                                  icon: Icon(Icons.close, color: iconFg),
+                                  icon: AppIcon(Icons.close, color: iconFg),
                                   onPressed: _closePanel,
                                   tooltip: 'Close',
                                 ),
@@ -749,7 +750,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 width: kMenuButtonHeight,
                 height: kButtonVisualHeight,
                 child: IconButton(
-                  icon: Icon(Icons.menu_rounded, color: iconFg, size: 24),
+                  icon: AppIcon(Icons.menu_rounded, color: iconFg, size: 24),
                   padding: EdgeInsets.zero,
                   visualDensity: VisualDensity.standard,
                   constraints: const BoxConstraints.tightFor(
@@ -775,7 +776,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
               top: kTopInitialSpacing,
               right: (showPanel ? panelWidth : 0) + 12,
               child: IconButton(
-                icon: Icon(Icons.copy_all_rounded, color: iconFg, size: 20),
+                icon: AppIcon(Icons.copy_all_rounded, color: iconFg, size: 20),
                 onPressed: _copyDebugChat,
                 tooltip: 'Copy full chat',
               ),

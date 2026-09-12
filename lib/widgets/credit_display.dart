@@ -10,6 +10,7 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -436,7 +437,7 @@ class _CreditDisplayState extends State<CreditDisplay>
               children: [
                 Row(
                   children: [
-                    Icon(Icons.event_repeat_outlined, color: muted, size: 16),
+                    AppIcon(Icons.event_repeat_outlined, color: muted, size: 16),
                     const SizedBox(width: 8),
                     Text(
                       'Billing cycle',

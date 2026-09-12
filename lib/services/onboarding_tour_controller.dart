@@ -23,6 +23,7 @@ import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Step in the interactive tour state machine.
 enum _Step {
@@ -1003,7 +1004,7 @@ class _TourBannerOverlayState extends State<_TourBannerOverlay>
                       IconButton(
                         onPressed: widget.onEndTour,
                         tooltip: l.tourEndTour,
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: const AppIcon(Icons.close, size: 18),
                         color: m3.onSurfaceVariant,
                         visualDensity: VisualDensity.compact,
                         padding: EdgeInsets.zero,

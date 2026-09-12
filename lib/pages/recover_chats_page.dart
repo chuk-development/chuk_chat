@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/password_reset_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Page for recovering or deleting chats encrypted with old passwords.
 class RecoverChatsPage extends StatefulWidget {
@@ -224,7 +225,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.lock_open, size: 48, color: iconFg.withValues(alpha: 0.3)),
+                  AppIcon(Icons.lock_open, size: 48, color: iconFg.withValues(alpha: 0.3)),
                   const SizedBox(height: 16),
                   Text(
                     l.noLockedChats,
@@ -276,7 +277,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
           children: [
             Row(
               children: [
-                Icon(Icons.lock, color: theme.colorScheme.primary, size: 20),
+                AppIcon(Icons.lock, color: theme.colorScheme.primary, size: 20),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -306,7 +307,7 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 labelText: l.oldPassword,
                 hintText: l.enterOldPassword,
                 suffixIcon: IconButton(
-                  icon: Icon(
+                  icon: AppIcon(
                     (_obscurePasswords[version] ?? true)
                         ? Icons.visibility_off
                         : Icons.visibility,
@@ -359,14 +360,14 @@ class _RecoverChatsPageState extends State<RecoverChatsPage> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: isWorking ? null : () => _recoverVersion(version),
-                    icon: const Icon(Icons.lock_open, size: 18),
+                    icon: const AppIcon(Icons.lock_open, size: 18),
                     label: Text(l.recover),
                   ),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: isWorking ? null : () => _deleteVersion(version),
-                  icon: const Icon(Icons.delete_forever, size: 18),
+                  icon: const AppIcon(Icons.delete_forever, size: 18),
                   label: Text(l.delete),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.red,

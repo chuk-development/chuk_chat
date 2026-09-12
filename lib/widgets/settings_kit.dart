@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Shared building blocks for the settings-style pages.
 ///
@@ -98,7 +99,7 @@ class SettingsLeadingIcon extends StatelessWidget {
       width: 40,
       height: 40,
       child: Center(
-        child: Icon(
+        child: AppIcon(
           icon,
           size: 22,
           color: tint ?? Theme.of(context).m3.onSurfaceVariant,
@@ -188,7 +189,7 @@ class SettingsRow extends StatelessWidget {
             ],
             if (showChevron) ...[
               const SizedBox(width: 10),
-              Icon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
+              AppIcon(Icons.chevron_right, size: 20, color: m3.onSurfaceVariant),
             ],
           ],
         ),
@@ -245,7 +246,7 @@ class SettingsInfoCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon ?? _defaultIcon, size: 18, color: foreground),
+          AppIcon(icon ?? _defaultIcon, size: 18, color: foreground),
           const SizedBox(width: 12),
           Expanded(
             child: Text(

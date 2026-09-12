@@ -28,6 +28,7 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Maximum number of characters of text content we inline. Anything larger
 /// gets a "Save full file" affordance instead.
@@ -343,7 +344,7 @@ class _SandboxArtifactBlockState extends State<SandboxArtifactBlock> {
                   padding: const EdgeInsets.only(top: 6),
                   child: Row(
                     children: [
-                      const Icon(Icons.info_outline, size: 14),
+                      const AppIcon(Icons.info_outline, size: 14),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
@@ -449,7 +450,7 @@ class _ArtifactCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Icon(_icon, size: 22, color: scheme.primary),
+              AppIcon(_icon, size: 22, color: scheme.primary),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -478,14 +479,14 @@ class _ArtifactCard extends StatelessWidget {
               if (onOpen != null) ...[
                 FilledButton.tonalIcon(
                   onPressed: onOpen,
-                  icon: const Icon(Icons.open_in_new, size: 18),
+                  icon: const AppIcon(Icons.open_in_new, size: 18),
                   label: const Text('Open'),
                 ),
                 const SizedBox(width: 8),
               ],
               FilledButton.tonalIcon(
                 onPressed: onSave,
-                icon: const Icon(Icons.download, size: 18),
+                icon: const AppIcon(Icons.download, size: 18),
                 label: const Text('Download'),
               ),
             ],
@@ -510,7 +511,7 @@ class _ArtifactErrorRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        const Icon(Icons.error_outline, size: 18, color: Colors.redAccent),
+        const AppIcon(Icons.error_outline, size: 18, color: Colors.redAccent),
         const SizedBox(width: 8),
         Expanded(
           child: Text(

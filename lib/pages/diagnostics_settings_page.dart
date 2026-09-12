@@ -11,6 +11,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class DeveloperOptionsPage extends StatefulWidget {
   const DeveloperOptionsPage({super.key});
@@ -248,7 +249,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                             onPressed: _busy || !_developerOptionsEnabled
                                 ? null
                                 : _refreshLogs,
-                            icon: const Icon(Icons.refresh, size: 18),
+                            icon: const AppIcon(Icons.refresh, size: 18),
                             label: Text(l.refresh),
                           ),
                           OutlinedButton.icon(
@@ -258,14 +259,14 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                                     _logPreview.isEmpty
                                 ? null
                                 : _copyRecentLogs,
-                            icon: const Icon(Icons.copy, size: 18),
+                            icon: const AppIcon(Icons.copy, size: 18),
                             label: Text(l.copyRecent),
                           ),
                           OutlinedButton.icon(
                             onPressed: _busy || !_developerOptionsEnabled
                                 ? null
                                 : _copyFocusedModelMenuDebug,
-                            icon: const Icon(
+                            icon: const AppIcon(
                               Icons.bug_report_outlined,
                               size: 18,
                             ),
@@ -275,14 +276,14 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                             onPressed: _busy || !_developerOptionsEnabled
                                 ? null
                                 : _shareLogFile,
-                            icon: const Icon(Icons.ios_share, size: 18),
+                            icon: const AppIcon(Icons.ios_share, size: 18),
                             label: Text(l.shareFile),
                           ),
                           OutlinedButton.icon(
                             onPressed: _busy || !_developerOptionsEnabled
                                 ? null
                                 : _clearLogs,
-                            icon: Icon(
+                            icon: AppIcon(
                               Icons.delete_outline,
                               size: 18,
                               color: cs.error,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/assistant/assistant_bridge.dart';
 import 'package:chuk_chat/assistant/assistant_result.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Renders one [AssistantCard]. Every colour comes from the running theme, so
 /// the surface follows whatever accent and background the user picked in Chuk
@@ -34,7 +35,7 @@ class _CardHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: scheme.primary),
+          AppIcon(icon, size: 16, color: scheme.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -178,7 +179,7 @@ class _PlaceRow extends StatelessWidget {
             if (place.hasCoordinates)
               Padding(
                 padding: const EdgeInsets.only(left: 6, top: 2),
-                child: Icon(
+                child: AppIcon(
                   Icons.navigation_outlined,
                   size: 16,
                   color: scheme.primary,
@@ -209,7 +210,7 @@ class _RatingChip extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.star_rounded, size: 13, color: scheme.primary),
+          AppIcon(Icons.star_rounded, size: 13, color: scheme.primary),
           const SizedBox(width: 3),
           Text(
             rating.toStringAsFixed(1),
@@ -319,7 +320,7 @@ class _ActionCardView extends StatelessWidget {
             shape: BoxShape.circle,
             color: scheme.primary.withValues(alpha: 0.16),
           ),
-          child: Icon(card.icon, size: 18, color: scheme.primary),
+          child: AppIcon(card.icon, size: 18, color: scheme.primary),
         ),
         const SizedBox(width: 12),
         Expanded(

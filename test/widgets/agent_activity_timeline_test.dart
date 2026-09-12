@@ -10,6 +10,7 @@ import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
+import '../helpers/icon_finder.dart';
 
 final DateTime _t0 = DateTime.utc(2026, 8, 13, 10, 0, 0);
 
@@ -343,9 +344,9 @@ void main() {
       );
 
       expect(find.text('Working for 10s'), findsOneWidget);
-      expect(find.byIcon(Icons.keyboard_arrow_down), findsOneWidget);
-      expect(find.byIcon(Icons.search), findsOneWidget);
-      expect(find.byIcon(Icons.language), findsOneWidget);
+      expect(findIcon(Icons.keyboard_arrow_down), findsOneWidget);
+      expect(findIcon(Icons.search), findsOneWidget);
+      expect(findIcon(Icons.language), findsOneWidget);
     });
 
     testWidgets('once finished it folds to one line', (tester) async {
@@ -358,9 +359,9 @@ void main() {
       );
 
       expect(find.text('Worked for 13s'), findsOneWidget);
-      expect(find.byIcon(Icons.keyboard_arrow_right), findsOneWidget);
+      expect(findIcon(Icons.keyboard_arrow_right), findsOneWidget);
       // The steps are hidden, not removed from the tree by accident.
-      expect(find.byIcon(Icons.search), findsNothing);
+      expect(findIcon(Icons.search), findsNothing);
     });
 
     testWidgets('tapping the header opens and closes it', (tester) async {
@@ -374,12 +375,12 @@ void main() {
 
       await tester.tap(find.text('Worked for 13s'));
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.search), findsOneWidget);
+      expect(findIcon(Icons.search), findsOneWidget);
       expect(find.text('quarterly report'), findsNothing); // rendered in a rich span
 
       await tester.tap(find.text('Worked for 13s'));
       await tester.pumpAndSettle();
-      expect(find.byIcon(Icons.search), findsNothing);
+      expect(findIcon(Icons.search), findsNothing);
     });
 
     testWidgets('every search gets its own line', (tester) async {
@@ -394,7 +395,7 @@ void main() {
         now: _t0.add(const Duration(seconds: 4)),
       );
 
-      expect(find.byIcon(Icons.search), findsNWidgets(3));
+      expect(findIcon(Icons.search), findsNWidgets(3));
     });
 
     testWidgets('a search shows its pages as chips', (tester) async {
@@ -446,7 +447,7 @@ void main() {
         onStepTap: tapped.add,
       );
 
-      await tester.tap(find.byIcon(Icons.language));
+      await tester.tap(findIcon(Icons.language));
       await tester.pump();
 
       expect(tapped, [page]);

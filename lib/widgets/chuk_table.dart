@@ -13,6 +13,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// One parsed markdown table plus the metadata needed to render it.
 class ParsedTable {
@@ -476,7 +477,7 @@ class _CopyButton extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(6),
-          child: Icon(
+          child: AppIcon(
             copied ? Icons.check_rounded : Icons.copy_rounded,
             size: 15,
             color: copied ? accent : color.withValues(alpha: 0.55),

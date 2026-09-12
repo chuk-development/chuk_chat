@@ -1,5 +1,6 @@
 // lib/platform_specific/chat/widgets/desktop_chat_widgets.dart
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Build icon button for desktop UI
 Widget buildDesktopIconButton({
@@ -52,7 +53,7 @@ Widget buildDesktopIconButton({
                 width: effectiveBorderWidth,
               ),
             ),
-            child: Icon(icon, color: effectiveIconColor, size: 20),
+            child: AppIcon(icon, color: effectiveIconColor, size: 20),
           );
         },
       ),
