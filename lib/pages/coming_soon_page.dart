@@ -26,6 +26,8 @@ class ComingSoonPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: scaffoldBg,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(title, style: titleStyle),
       ),

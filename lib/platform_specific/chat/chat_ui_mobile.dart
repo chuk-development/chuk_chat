@@ -221,6 +221,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// fly-up entrance once. Transient, never persisted.
   String? _flyInKey;
 
+  /// The stable ui key of the message pinned to the top of the viewport.
+  /// Null when nothing is pinned. See [ChatScrollMixin.pinMessageToTop].
+  String? _pinnedUiKey;
+
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
@@ -795,6 +799,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   // --- CHAT MANAGEMENT ---
 
   void _loadChatById(String? chatId) {
+    // The pin belongs to the chat we are leaving, and so does the room it
+    // reserved: carried into another chat it would open that one on a screen
+    // of blank space.
+    hasTopPin = false;
+    pinnedExtraSpace = 0;
+    _pinnedUiKey = null;
+
     // The regenerate seed belongs to the chat we are leaving. If its turn is
     // still running it keeps going in the background, so hand the seed over
     // instead of dropping it — otherwise the background completion cannot fold
@@ -1165,6 +1176,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final messagesToSave = _messages.isNotEmpty
         ? _messages.map((m) => Map<String, String>.from(m)).toList()
         : null;
+
+    // Nothing is pinned in an empty chat, and the room the pin reserved must
+    // go with it or the fresh chat opens with a screen of blank space.
+    hasTopPin = false;
+    pinnedExtraSpace = 0;
+    _pinnedUiKey = null;
 
     // Clear UI immediately for instant response
     setState(() {
@@ -2183,8 +2200,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       }
 
       _messages.add(userMessage);
-      // Mark this message so its list item flies up on entrance.
+      // Mark this message so its list item flies up on entrance, and pin it:
+      // the question goes to the top of the viewport and the answer arrives
+      // underneath it, instead of the list staying glued to the bottom and
+      // scrolling the question away after the first few lines.
       _flyInKey = ChatUiHelpers.stableUiKey(userMessage, _uuid);
+      _pinnedUiKey = _flyInKey;
       if (kDebugMode) {
         debugPrint(
           '💾 [MessageDebug] Message added to _messages list. Total messages: ${_messages.length}',
@@ -2209,7 +2230,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final int placeholderIndex = _messages.length - 1;
     composerFocusNode.requestFocus();
-    scrollChatToBottom(force: true);
+    pinMessageToTop();
 
     // ── Offline short-circuit ──────────────────────────────────────
     // If offline, enqueue the send, flip the user bubble to pending, drop
@@ -2866,12 +2887,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     final resolvedSystemPrompt = await _resolveSystemPromptForSend();
 
-    const String continuePrompt =
-        'Continue your previous response. Do not repeat what you already '
-        'wrote. Pick up exactly where you left off.';
-
     await _streamingHandler.sendMessage(
-      userInput: continuePrompt,
+      userInput: ChatUiHelpers.continueGenerationPrompt,
       attachedFiles: const <AttachedFile>[],
       selectedModelId: modelIdToUse,
       selectedProviderSlug: providerToUse,
@@ -3022,7 +3039,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         (composerHeight > 0
             ? composerHeight + bottomPadding
             : composerEstimate) +
-        16.0;
+        16.0 +
+        // Room for the pinned question to reach the top. Zero when nothing
+        // is pinned, and dropped again once the reader has read to the end.
+        pinnedExtraSpace;
     final EdgeInsets listPadding = EdgeInsets.fromLTRB(
       effectiveHorizontalPadding,
       10 + widget.topInset,
@@ -3099,7 +3119,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                               onResendMessage: resendMessageAt,
                                             )
                                       : const <MessageBubbleAction>[];
+                                  // The message the reader just sent carries
+                                  // the pin key, so the scroll mixin can put
+                                  // it at the top and hold it there while the
+                                  // answer arrives underneath.
+                                  final bool isPinned =
+                                      hasTopPin &&
+                                      _pinnedUiKey != null &&
+                                      ChatUiHelpers.stableUiKey(
+                                            _messages[i],
+                                            _uuid,
+                                          ) ==
+                                          _pinnedUiKey;
                                   return ChatMessageListItem(
+                                    key: isPinned ? pinnedTopKey : null,
                                     messages: _messages,
                                     index: i,
                                     data: data,

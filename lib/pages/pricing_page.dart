@@ -282,6 +282,8 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     if (_isLoading) {
       return Scaffold(
         backgroundColor: colorScheme.surface,
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: Text(l.subscription),
         ),

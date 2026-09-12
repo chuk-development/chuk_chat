@@ -31,6 +31,66 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   /// scrolled up and is left alone.
   bool isStickyBottom = true;
 
+  /// The message currently pinned to the top of the viewport, if any.
+  ///
+  /// Sending a message puts that message at the top and leaves it there while
+  /// the answer streams in underneath, the way a reader would hold a page
+  /// still to read down it. Without the pin the list stays glued to the
+  /// bottom and the question the answer belongs to scrolls off the top after
+  /// the first few lines.
+  final GlobalKey pinnedTopKey = GlobalKey(debugLabel: 'chat pinned message');
+
+  /// True while a message is pinned. The stream must not pull the list back
+  /// to the bottom while it is.
+  bool hasTopPin = false;
+
+  /// Room added under the last message so the pinned one can actually reach
+  /// the top: without it the list has nothing left to scroll and the message
+  /// stops halfway. Zero when nothing is pinned.
+  double pinnedExtraSpace = 0;
+
+  /// Put the message carrying [pinnedTopKey] at the top of the viewport.
+  ///
+  /// Call it right after the message is added, inside or straight after the
+  /// setState that adds it. The room is reserved first and the scroll happens
+  /// a frame later, once the list has been laid out with that room.
+  void pinMessageToTop() {
+    if (!mounted || !scrollController.hasClients) return;
+    setState(() {
+      hasTopPin = true;
+      // A viewport of slack is all the pin can ever need: the message goes
+      // from wherever it is to the top, which is at most one viewport.
+      pinnedExtraSpace = scrollController.position.viewportDimension;
+      // The stream keeps its hands off the scroll position from here.
+      isStickyBottom = false;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final BuildContext? target = pinnedTopKey.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        alignment: 0,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+      );
+    });
+  }
+
+  /// Drop the pin and the room it reserved.
+  void clearTopPin() {
+    if (!hasTopPin && pinnedExtraSpace == 0) return;
+    if (!mounted) {
+      hasTopPin = false;
+      pinnedExtraSpace = 0;
+      return;
+    }
+    setState(() {
+      hasTopPin = false;
+      pinnedExtraSpace = 0;
+    });
+  }
+
   /// Real measured height of the composer (search bar + disclaimer + banners),
   /// fed by a `MeasureSize` wrapper so the list's reserved bottom space tracks
   /// the composer as it grows multi-line. 0 until the first layout pass.
@@ -82,6 +142,13 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
       // At the bottom, whatever brought us here (including a fling that ran
       // all the way down): pin again, so new content keeps arriving in view.
       nextStickyBottom = true;
+      // And the reader has read past the pinned message, so the room held
+      // open for it is no longer doing anything. Dropping it here is the one
+      // moment it cannot yank the text out from under them: they are already
+      // at the end of it.
+      if (hasTopPin) {
+        WidgetsBinding.instance.addPostFrameCallback((_) => clearTopPin());
+      }
     } else if (pulledTowardsHistory || distanceToBottom > 100) {
       nextStickyBottom = false;
     }
@@ -136,6 +203,10 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   /// freshly-grown bottom, and bails out if the user has scrolled away or is
   /// actively dragging the list.
   void pinToBottomDuringStream() {
+    // A message pinned to the top outranks the bottom pin: the reader asked
+    // to watch the answer arrive under their question, not to be dragged
+    // along behind the last token.
+    if (hasTopPin) return;
     if (!isStickyBottom) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !scrollController.hasClients) return;
@@ -155,6 +226,9 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
 
   void scrollChatToBottom({bool animate = true, bool force = false}) {
     if (!mounted) return;
+    // Same rule as the stream pin, and for the same reason — except for a
+    // forced call, which is the reader pressing the button or opening a chat.
+    if (!force && hasTopPin) return;
     if (!force && !isStickyBottom) return;
 
     // Instant jump (e.g. opening an existing chat): ListView.builder only

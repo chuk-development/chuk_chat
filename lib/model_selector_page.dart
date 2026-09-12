@@ -748,6 +748,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
 
     return Scaffold(
       backgroundColor: colorScheme.surface,
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.models),
       ),
@@ -798,7 +800,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                   behavior: ScrollConfiguration.of(context)
                       .copyWith(scrollbars: false),
                   child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(
+                    16,
+                  ).add(floatingHeaderInset(context)),
                   // +3 header slots: search field, mode picker, section header.
                   itemCount: _displayModels.length + 3,
                   itemBuilder: (context, index) {

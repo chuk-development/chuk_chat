@@ -179,6 +179,8 @@ class _SandboxManagementPageState extends State<SandboxManagementPage> {
     final String? login = _github.githubLogin;
 
     return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: const Text('Sandboxes'),
         actions: [

@@ -27,6 +27,17 @@ const double kFloatingAppBarChip = 42;
 /// Corner radius of the title pill. The chat's title pill.
 const double _kTitleRadius = 18;
 
+/// The room a scroll view has to leave above its first item so the floating
+/// header does not cover it.
+///
+/// It reads the Scaffold's own figure: a Scaffold that extends its body
+/// behind the app bar reports the bar's height as the body's top padding, and
+/// one that does not reports zero. So this is the right number on both, and
+/// it belongs *inside* the scroll view — padding put outside would stop the
+/// content at the header instead of letting it pass behind.
+EdgeInsets floatingHeaderInset(BuildContext context) =>
+    EdgeInsets.only(top: MediaQuery.paddingOf(context).top);
+
 /// A round floating chip for the header — the back arrow, and whatever a
 /// page puts on the right.
 class FloatingHeaderButton extends StatelessWidget {

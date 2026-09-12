@@ -208,6 +208,8 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
 
     if (_isLoading) {
       return Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: const Text('Loading...'),
         ),
@@ -217,6 +219,8 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
 
     if (_project == null) {
       return Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: const Text('Workspace Not Found'),
         ),
@@ -228,6 +232,8 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Row(
           mainAxisSize: MainAxisSize.min,
@@ -410,7 +416,9 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
                       'Upload PDFs, documents, or code files\nto reference in your chats',
                 )
               : ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                  ).add(floatingHeaderInset(context)),
                   itemCount: _project!.files.length,
                   itemBuilder: (context, index) {
                     final file = _project!.files[index];
@@ -541,7 +549,7 @@ class _WorkspaceDetailPageState extends State<_WorkspaceDetailDesktop>
     final isDark = theme.brightness == Brightness.dark;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16).add(floatingHeaderInset(context)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [

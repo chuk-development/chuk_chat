@@ -106,6 +106,8 @@ class _WorkspaceInstructionsPageState extends State<WorkspaceInstructionsPage> {
 
     if (_workspace == null) {
       return Scaffold(
+        // The page runs underneath the floating header.
+        extendBodyBehindAppBar: true,
         appBar: FloatingAppBar(
           title: Text(l.projectInstructions),
         ),

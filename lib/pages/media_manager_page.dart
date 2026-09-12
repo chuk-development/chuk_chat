@@ -541,6 +541,8 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     }
 
     return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(
           _isSelectionMode
@@ -709,7 +711,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(
+        16,
+        8,
+        16,
+        16,
+      ).add(floatingHeaderInset(context)),
       itemCount: _artifacts.length,
       separatorBuilder: (_, i) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
