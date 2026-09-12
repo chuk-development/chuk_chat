@@ -1,8 +1,15 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show Session, User;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show
+        AuthApiException,
+        AuthException,
+        AuthRetryableFetchException,
+        Session,
+        User;
 
 import 'package:cowork/services/account_session.dart';
 import 'package:cowork/services/session_recovery.dart';
@@ -111,7 +118,7 @@ void main() {
 
       final result = await recovery(link, g).run();
 
-      expect(result?.refreshToken, 'r-host-next');
+      expect(result.session?.refreshToken, 'r-host-next');
       expect(g.exchanged, ['r-host']);
       expect(link.provisioned.single.accessToken, 'stale-access');
       expect(link.disposed, isTrue);
@@ -131,7 +138,7 @@ void main() {
 
       expect(g.exchanged, ['r-stash']);
       expect(answered?.refreshToken, 'r-stash-next');
-      expect(result?.refreshToken, 'r-stash-next');
+      expect(result.session?.refreshToken, 'r-stash-next');
     });
 
     test('a reprovision during an adoption waits for it instead of spending',
@@ -151,7 +158,7 @@ void main() {
 
       expect(g.exchanged, ['r-host']);
       expect(answered?.refreshToken, 'r-host-next');
-      expect(result?.refreshToken, 'r-host-next');
+      expect(result.session?.refreshToken, 'r-host-next');
     });
 
     test('falls back to its own token when the host is unreachable', () async {
@@ -161,7 +168,7 @@ void main() {
       final result = await recovery(link, g).run();
 
       expect(g.exchanged, ['r-stash']);
-      expect(result?.refreshToken, 'r-stash-next');
+      expect(result.session?.refreshToken, 'r-stash-next');
       expect(link.disposed, isTrue);
     });
 
@@ -172,7 +179,7 @@ void main() {
       final result = await recovery(link, g).run();
 
       expect(g.exchanged, ['r-stash']);
-      expect(result, isNotNull);
+      expect(result.isRecovered, isTrue);
     });
 
     test('spends its own token with no host paired', () async {
@@ -181,7 +188,7 @@ void main() {
       final result = await recovery(null, g).run();
 
       expect(g.exchanged, ['r-stash']);
-      expect(result?.refreshToken, 'r-stash-next');
+      expect(result.session?.refreshToken, 'r-stash-next');
     });
 
     test('gives up when both pairs are dead', () async {
@@ -193,7 +200,8 @@ void main() {
 
       final result = await recovery(link, g).run();
 
-      expect(result, isNull);
+      expect(result.outcome, RecoveryOutcome.tokenRejected);
+      expect(result.session, isNull);
       // The rotation was reported: our own token is known dead, never sent.
       expect(g.exchanged, ['r-host']);
       expect(link.disposed, isTrue);
@@ -215,6 +223,103 @@ void main() {
       expect(before?.accessToken, 'stale-access');
       expect(after?.refreshToken, 'r-host-next');
     });
+
+    // Bead cowork-h1fr. A phone with no signal at startup used to end on the
+    // login page with the stash deleted: the transport failure was read as a
+    // refused token, so the last copy of a perfectly good pair was thrown
+    // away and the account was gone for good.
+    test('a refresh that never reaches GoTrue keeps the pair', () async {
+      final exchanged = <String>[];
+      final recovery = SessionRecovery(
+        stash: stash,
+        link: null,
+        currentSession: () => null,
+        refreshFromToken: (String token) async {
+          exchanged.add(token);
+          throw AuthRetryableFetchException(
+            message: 'Failed host lookup',
+          );
+        },
+        pollInterval: const Duration(milliseconds: 10),
+      );
+
+      final result = await recovery.run();
+
+      expect(exchanged, ['r-stash'], reason: 'it did try');
+      expect(result.outcome, RecoveryOutcome.unreachable);
+      expect(result.keepStash, isTrue, reason: 'the pair survives');
+    });
+
+    test('a timeout keeps the pair too', () async {
+      final recovery = SessionRecovery(
+        stash: stash,
+        link: null,
+        currentSession: () => null,
+        refreshFromToken: (_) async => throw TimeoutException('no answer'),
+        pollInterval: const Duration(milliseconds: 10),
+      );
+
+      expect((await recovery.run()).outcome, RecoveryOutcome.unreachable);
+    });
+
+    test('a refused token is final and the pair is dropped', () async {
+      final recovery = SessionRecovery(
+        stash: stash,
+        link: null,
+        currentSession: () => null,
+        refreshFromToken: (_) async => throw AuthApiException(
+          'Invalid Refresh Token: Refresh Token Not Found',
+          statusCode: '400',
+        ),
+        pollInterval: const Duration(milliseconds: 10),
+      );
+
+      final result = await recovery.run();
+
+      expect(result.outcome, RecoveryOutcome.tokenRejected);
+      expect(result.keepStash, isFalse);
+    });
+
+    test('an unreachable host plus an unreachable GoTrue is not a sign-out',
+        () async {
+      final link = _FakeLink()..attachFails = true;
+      final recovery = SessionRecovery(
+        stash: stash,
+        link: link,
+        currentSession: () => null,
+        refreshFromToken: (_) async =>
+            throw AuthRetryableFetchException(message: 'offline'),
+        hostTimeout: const Duration(milliseconds: 100),
+        pollInterval: const Duration(milliseconds: 10),
+      );
+
+      final result = await recovery.run();
+
+      expect(result.outcome, RecoveryOutcome.unreachable);
+      expect(link.disposed, isTrue);
+    });
+  });
+
+  group('isTransportFailure', () {
+    test('separates what GoTrue said from what never got there', () {
+      expect(
+        isTransportFailure(
+          AuthRetryableFetchException(message: 'offline'),
+        ),
+        isTrue,
+      );
+      expect(isTransportFailure(TimeoutException('slow')), isTrue);
+      expect(
+        isTransportFailure(
+          AuthApiException('Invalid Refresh Token', statusCode: '400'),
+        ),
+        isFalse,
+        reason: 'GoTrue answered: the token is dead',
+      );
+      expect(isTransportFailure(AuthException('bad')), isFalse);
+      expect(isTransportFailure(null), isFalse);
+    });
+
   });
 
   group('SessionStash.setAsideExpiredSession', () {
