@@ -13,23 +13,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
 
 const Duration _requestTimeout = Duration(seconds: 45);
-
-Map<String, dynamic>? _tryDecodeJsonObject(String body) {
-  try {
-    final decoded = jsonDecode(body);
-    if (decoded is Map<String, dynamic>) {
-      return decoded;
-    }
-    if (decoded is Map) {
-      return Map<String, dynamic>.from(decoded);
-    }
-  } catch (_) {
-    // Ignore decode failures and return null for non-JSON payloads.
-  }
-  return null;
-}
 
 /// Builds the human/model-readable success string from a service response.
 String _formatSuccess(Map<String, dynamic> data) {
@@ -63,7 +49,7 @@ String _formatSuccess(Map<String, dynamic> data) {
 /// (`looksLikeToolFailure`) marks the tool call as failed — otherwise a 401 /
 /// 404 / 429 would reach the model as a successful call.
 String _formatError(int statusCode, String body) {
-  final data = _tryDecodeJsonObject(body);
+  final data = tryDecodeJsonObject(body);
   final detail = data?['error']?.toString() ?? data?['message']?.toString();
   switch (statusCode) {
     case 401:
@@ -150,7 +136,7 @@ Future<String> executeCreateArtifact({
       return _formatError(response.statusCode, response.body);
     }
 
-    final data = _tryDecodeJsonObject(response.body);
+    final data = tryDecodeJsonObject(response.body);
     if (data == null) {
       return 'Error: artifact publish failed — invalid server response.';
     }
@@ -204,7 +190,7 @@ Future<String> executeUpdateArtifact({
       return _formatError(response.statusCode, response.body);
     }
 
-    final data = _tryDecodeJsonObject(response.body);
+    final data = tryDecodeJsonObject(response.body);
     if (data == null) {
       return 'Error: artifact update failed — invalid server response.';
     }

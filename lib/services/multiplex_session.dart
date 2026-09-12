@@ -381,13 +381,6 @@ class MultiplexSession {
     return outbound.stream;
   }
 
-  /// True when [chatId] currently has an in-flight chat stream
-  /// tracked by [chatForChat]. Diagnostic helper for callers that
-  /// want to serialize background work (e.g. title generation) after
-  /// the main response finishes.
-  static bool hasActiveChatStream(String chatId) {
-    return _activeChatStreams.containsKey(chatId);
-  }
 
   /// Wait until no in-flight chat stream for [chatId] remains, or
   /// [timeout] elapses (returns false on timeout). Used by title

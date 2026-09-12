@@ -754,22 +754,6 @@ class EncryptionService {
     }
   }
 
-  /// Encrypt with a specific key and key version tag.
-  /// Used by the recovery flow to re-encrypt old chats with the current key.
-  static Future<String> encryptWithKey(
-    String plaintext,
-    SecretKey key,
-    int keyVersion,
-  ) async {
-    final keyBytes = await key.extractBytes();
-    final params = _EncryptionParams(
-      bytes: Uint8List.fromList(utf8.encode(plaintext)),
-      keyBytes: keyBytes,
-      payloadVersion: _payloadVersion,
-      keyVersion: keyVersion,
-    );
-    return await compute(_encryptBytesInBackground, params);
-  }
 
   /// Derive a key from a password and a base64-encoded salt.
   /// Public for use by KeyVersionService during recovery.

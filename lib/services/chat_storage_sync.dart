@@ -109,9 +109,9 @@ Future<List<ChatPayload?>> deserializePayloadBatchAsync(
   return await compute(_deserializeBatchIsolate, jsonPayloads);
 }
 
-/// Extract title from messages (first user message, truncated).
-/// Duplicated here to avoid circular import with chat_storage_crud.dart.
-String _extractTitle(List<ChatMessage> messages) {
+/// The title a chat gets when nobody named it: its first user message,
+/// truncated to 100 characters.
+String chatTitleFromMessages(List<ChatMessage> messages) {
   if (messages.isEmpty) return '';
   for (final msg in messages) {
     if (msg.role == 'user' && msg.text.isNotEmpty) {
@@ -124,9 +124,11 @@ String _extractTitle(List<ChatMessage> messages) {
   return first.length > 100 ? '${first.substring(0, 100)}...' : first;
 }
 
-/// Build a plaintext payload JSON string from a ChatPayload.
-/// Used to store decrypted Supabase data into plaintext local cache.
-String _buildPlaintextPayloadJson(ChatPayload chatPayload) {
+/// Serialises a decrypted [ChatPayload] for the plaintext local cache.
+///
+/// The local SQLite cache holds plaintext on purpose (the key sits on the same
+/// device), so this is deliberately not the encrypted Supabase shape.
+String plaintextPayloadJson(ChatPayload chatPayload) {
   return jsonEncode({
     'v': kChatPayloadVersion,
     if (chatPayload.customName != null) 'customName': chatPayload.customName,
@@ -251,12 +253,12 @@ class ChatStorageSync {
     ChatPayload chatPayload,
     StoredChat chat,
   ) {
-    final title = chat.title ?? _extractTitle(chatPayload.messages);
+    final title = chat.title ?? chatTitleFromMessages(chatPayload.messages);
     return LocalChatCacheService.upsert(
       userId,
       LocalChatCacheService.buildPlaintextRow(
         id: chatId,
-        payload: _buildPlaintextPayloadJson(chatPayload),
+        payload: plaintextPayloadJson(chatPayload),
         createdAt: row['created_at'] as String,
         isStarred: (row['is_starred'] as bool?) ?? false,
         updatedAt: row['updated_at'] as String?,

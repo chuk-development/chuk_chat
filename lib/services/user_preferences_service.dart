@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/current_user.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
@@ -50,41 +51,9 @@ class UserPreferencesService {
     _systemPromptMemCache = null;
   }
 
-  /// The active user id, or null when signed out or Supabase is not up yet
-  /// (`SupabaseService.auth` throws before initialization).
-  static String? _currentUserId() {
-    // Gated on kDebugMode so the override is tree-shaken out of release
-    // builds: it is a mutable static that decides ownership, and
-    // @visibleForTesting is a lint, not a runtime guard. Tests run in debug.
-    if (kDebugMode) {
-      final override = debugCurrentUserIdOverride;
-      if (override != null) return override();
-    }
-    try {
-      return SupabaseService.auth.currentUser?.id;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  /// True while [userId] is *still the live signed-in user*, so an async
-  /// continuation that started as [userId] may keep its result.
-  ///
-  /// This deliberately consults live auth and not just [_cacheOwnerUserId].
-  /// [_cacheOwnerUserId] only advances when a public entry point calls
-  /// [_syncCacheToCurrentUser], so between a sign-out and the next entry point
-  /// it still names the *previous* user — comparing against it alone would
-  /// answer "yes, A still owns this" while B is already signed in, which is the
-  /// exact leak this class exists to prevent. Checking [_currentUserId] closes
-  /// that window without depending on anything having been called first.
-  static bool _stillOwns(String? userId) =>
-      userId != null &&
-      _cacheOwnerUserId == userId &&
-      _currentUserId() == userId;
-
   /// Save the user's selected model to Supabase
   static Future<bool> saveSelectedModel(String modelId) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -113,7 +82,7 @@ class UserPreferencesService {
         // The save succeeded for `userId`, but if they signed out during the
         // round-trip their choice must not populate the new user's cache or be
         // announced to the new user's UI on the event bus.
-        if (!_stillOwns(userId)) return true;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return true;
         // Update in-memory cache immediately
         _cachedSelectedModel = modelId;
         _selectedModelFetchedAt = DateTime.now();
@@ -127,7 +96,7 @@ class UserPreferencesService {
         return false;
       }
     } catch (e) {
-      final userId = _currentUserId();
+      final userId = CurrentUser.id;
       if (userId != null) {
         await ModelCacheService.saveSelectedModel(userId, modelId);
       }
@@ -146,7 +115,7 @@ class UserPreferencesService {
 
   /// Load the user's selected model - cache first, then sync from network
   static Future<String?> loadSelectedModel() async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     final DateTime now = DateTime.now();
 
     // Return in-flight request if one exists
@@ -158,7 +127,7 @@ class UserPreferencesService {
     if (_cachedSelectedModel != null &&
         _selectedModelFetchedAt != null &&
         now.difference(_selectedModelFetchedAt!) < _kSelectedModelTtl) {
-      final String? userId = _currentUserId();
+      final String? userId = CurrentUser.id;
       if (userId != null) {
         // Keep UI fast with in-memory cache while still checking for
         // remote preference changes in the background.
@@ -171,7 +140,7 @@ class UserPreferencesService {
     }
 
     Future<String?> performFetch() async {
-      final userId = _currentUserId();
+      final userId = CurrentUser.id;
       if (userId == null) {
         if (kDebugMode) {
           debugPrint('No authenticated user found');
@@ -188,7 +157,7 @@ class UserPreferencesService {
         // The user changed while the local read was in flight — abort rather
         // than return, or the previous user's model selection reaches the new
         // user's UI through the return value.
-        if (!_stillOwns(userId)) return null;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
         _cachedSelectedModel = cachedModel;
         _selectedModelFetchedAt = DateTime.now();
 
@@ -213,7 +182,7 @@ class UserPreferencesService {
   /// Force-load the selected model directly from Supabase, bypassing cache.
   /// Used when no cached model exists and we need the Supabase trigger default.
   static Future<String?> forceLoadSelectedModel() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return null;
     return _fetchModelFromNetwork(userId);
@@ -243,13 +212,13 @@ class UserPreferencesService {
         await ModelCacheService.saveSelectedModel(userId, modelId);
         // Never hand another user's model to whoever is signed in now, and
         // never write it into their cache.
-        if (!_stillOwns(userId)) return null;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
         _cachedSelectedModel = modelId;
         _selectedModelFetchedAt = DateTime.now();
         return modelId;
       } else {
         await ModelCacheService.saveSelectedModel(userId, '');
-        if (!_stillOwns(userId)) return null;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
         _cachedSelectedModel = null;
         _selectedModelFetchedAt = DateTime.now();
         if (kDebugMode) {
@@ -290,7 +259,7 @@ class UserPreferencesService {
           await ModelCacheService.saveSelectedModel(userId, modelId);
           // A background sync must never resurrect the previous user's model
           // after a sign-out, nor announce it on the event bus.
-          if (!_stillOwns(userId)) return;
+          if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
           _cachedSelectedModel = modelId;
           _selectedModelFetchedAt = DateTime.now();
           // Notify via event bus
@@ -306,7 +275,7 @@ class UserPreferencesService {
 
   /// Clear the user's model preference
   static Future<bool> clearSelectedModel() async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -352,7 +321,7 @@ class UserPreferencesService {
     String modelId,
     String providerSlug,
   ) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -385,8 +354,12 @@ class UserPreferencesService {
           modelId,
           providerSlug,
         );
-        // Update in-memory cache immediately to avoid stale data
-        if (_cachedProviderPreferences != null) {
+        // Update in-memory cache immediately to avoid stale data — but only
+        // while this is still the signed-in user. The upsert above can finish
+        // after an account switch, and writing then would put A's provider
+        // into B's cache.
+        if (_cachedProviderPreferences != null &&
+            CurrentUser.stillOwns(userId, _cacheOwnerUserId)) {
           _cachedProviderPreferences![modelId] = providerSlug;
         }
         return true;
@@ -397,7 +370,7 @@ class UserPreferencesService {
         return false;
       }
     } catch (e) {
-      final userId = _currentUserId();
+      final userId = CurrentUser.id;
       if (userId != null) {
         await ModelCacheService.updateProviderPreference(
           userId,
@@ -414,7 +387,7 @@ class UserPreferencesService {
 
   /// Remove the saved provider preference for a specific model
   static Future<bool> clearSelectedProvider(String modelId) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -451,7 +424,7 @@ class UserPreferencesService {
       }
       return false;
     } catch (e) {
-      final userId = _currentUserId();
+      final userId = CurrentUser.id;
       if (userId != null) {
         await ModelCacheService.clearProviderPreference(userId, modelId);
       }
@@ -464,7 +437,7 @@ class UserPreferencesService {
 
   /// Load the user's selected provider for a specific model
   static Future<String?> loadSelectedProvider(String modelId) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -495,7 +468,7 @@ class UserPreferencesService {
         );
         // Abort if the user switched during the fetch — do not hand the
         // previous user's provider choice to the current one.
-        if (!_stillOwns(userId)) return null;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
         return providerSlug;
       } else {
         if (kDebugMode) {
@@ -504,7 +477,7 @@ class UserPreferencesService {
         return null;
       }
     } catch (e) {
-      final userId = _currentUserId();
+      final userId = CurrentUser.id;
       if (userId != null) {
         final cached = await ModelCacheService.loadProviderPreferences(userId);
         if (cached.containsKey(modelId)) {
@@ -526,7 +499,7 @@ class UserPreferencesService {
 
   /// Load all user's provider preferences
   static Future<Map<String, String>> loadAllProviderPreferences() async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     final DateTime now = DateTime.now();
     if (_providerPrefsInFlight != null) {
       return await _providerPrefsInFlight!;
@@ -566,12 +539,12 @@ class UserPreferencesService {
         await ModelCacheService.saveProviderPreferences(userId, preferences);
         // The user changed while the request was in flight — abort rather than
         // return the previous user's preferences.
-        if (!_stillOwns(userId)) return <String, String>{};
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return <String, String>{};
         _cachedProviderPreferences = preferences;
         _providerPrefsFetchedAt = DateTime.now();
         return Map<String, String>.from(preferences);
       } catch (e) {
-        final userId = _currentUserId();
+        final userId = CurrentUser.id;
         if (userId != null) {
           final cached = await ModelCacheService.loadProviderPreferences(
             userId,
@@ -582,7 +555,7 @@ class UserPreferencesService {
                 'Loaded ${cached.length} cached provider preferences for offline use',
               );
             }
-            if (!_stillOwns(userId)) return <String, String>{};
+            if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return <String, String>{};
             _cachedProviderPreferences = cached;
             _providerPrefsFetchedAt = DateTime.now();
             return Map<String, String>.from(cached);
@@ -619,50 +592,6 @@ class UserPreferencesService {
     _selectedModelFetchedAt = null;
   }
 
-  /// Clear all provider preferences for a user
-  static Future<bool> clearAllProviderPreferences() async {
-    _syncCacheToCurrentUser(_currentUserId());
-    try {
-      final session = SupabaseService.auth.currentSession;
-      if (session == null) {
-        if (kDebugMode) {
-          debugPrint('No authenticated session found');
-        }
-        return false;
-      }
-
-      final userId = session.user.id;
-
-      final List<dynamic> response = await SupabaseService.client
-          .from('user_model_providers')
-          .delete()
-          .eq('user_id', userId)
-          .select();
-
-      final int deletedCount = response.length;
-
-      // Clear in-memory and persistent cache to prevent stale data
-      _cachedProviderPreferences = null;
-      _providerPrefsFetchedAt = null;
-      await ModelCacheService.saveProviderPreferences(userId, {});
-
-      if (deletedCount > 0) {
-        if (kDebugMode) {
-          debugPrint('Cleared $deletedCount provider preference(s) for user');
-        }
-        return true;
-      }
-      if (kDebugMode) {
-        debugPrint('No provider preferences found to clear for user');
-      }
-      return false;
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('Error clearing provider preferences: $e');
-      }
-      return false;
-    }
-  }
 
   /// SharedPreferences key holding [userId]'s cached system-prompt ciphertext.
   ///
@@ -704,7 +633,7 @@ class UserPreferencesService {
   /// Edits go through [saveSystemPrompt]/[clearSystemPrompt], which keep all
   /// three layers in sync, so cache-first is correct for the same device.
   static Future<String?> loadSystemPromptFast() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return null;
     if (_systemPromptMemCache != null) return _systemPromptMemCache;
@@ -716,7 +645,7 @@ class UserPreferencesService {
     // message even though the cache itself stayed clean. Returning null means
     // "no custom prompt for this send" — fail-safe, and the next send reloads
     // correctly for whoever is now signed in.
-    if (!_stillOwns(userId)) return null;
+    if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
     if (local != null) {
       _systemPromptMemCache = local;
       return local;
@@ -729,7 +658,7 @@ class UserPreferencesService {
   /// if no user is signed in, or if decryption fails (e.g. encryption key not
   /// yet loaded).
   static Future<String?> loadSystemPromptLocal() async {
-    final userId = _currentUserId();
+    final userId = CurrentUser.id;
     _syncCacheToCurrentUser(userId);
     if (userId == null) return null;
     return _loadSystemPromptLocalForUser(userId);
@@ -744,7 +673,7 @@ class UserPreferencesService {
       final decrypted = await EncryptionService.decrypt(encrypted);
       // Decryption is async; the user can change during it. Never hand back
       // the previous user's plaintext to whoever is signed in now.
-      if (!_stillOwns(userId)) return null;
+      if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
       return decrypted;
     } catch (_) {
       return null;
@@ -753,7 +682,7 @@ class UserPreferencesService {
 
   /// Save the user's system prompt (encrypted)
   static Future<bool> saveSystemPrompt(String systemPrompt) async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -810,7 +739,7 @@ class UserPreferencesService {
         } catch (_) {
           // Non-critical — caching is best-effort.
         }
-        if (_stillOwns(userId)) _systemPromptMemCache = systemPrompt;
+        if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _systemPromptMemCache = systemPrompt;
         if (kDebugMode) {
           debugPrint('Successfully saved encrypted system prompt');
         }
@@ -831,7 +760,7 @@ class UserPreferencesService {
 
   /// Load the user's system prompt (decrypted)
   static Future<String?> loadSystemPrompt() async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -860,7 +789,7 @@ class UserPreferencesService {
         // Abort if the user switched during the fetch/decrypt: returning this
         // plaintext would leak it to the new user through the return value,
         // even with the memory cache left untouched.
-        if (!_stillOwns(userId)) return null;
+        if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
 
         // Cache the encrypted value locally for instant page loads.
         try {
@@ -883,7 +812,7 @@ class UserPreferencesService {
         // re-hit the network on every send for users without a custom prompt.
         // `''` (loaded, none set) is deliberately distinct from null (not
         // loaded); only write it while this user still owns the cache.
-        if (_stillOwns(userId)) _systemPromptMemCache = '';
+        if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _systemPromptMemCache = '';
         if (kDebugMode) {
           debugPrint('No system prompt found for user');
         }
@@ -899,7 +828,7 @@ class UserPreferencesService {
 
   /// Clear the user's system prompt
   static Future<bool> clearSystemPrompt() async {
-    _syncCacheToCurrentUser(_currentUserId());
+    _syncCacheToCurrentUser(CurrentUser.id);
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -925,7 +854,7 @@ class UserPreferencesService {
           await _dropLegacySystemPromptCache(prefs);
           await prefs.remove(_systemPromptCacheKey(userId));
         } catch (_) {}
-        if (_stillOwns(userId)) _systemPromptMemCache = '';
+        if (CurrentUser.stillOwns(userId, _cacheOwnerUserId)) _systemPromptMemCache = '';
         if (kDebugMode) {
           debugPrint('Successfully cleared system prompt');
         }
@@ -951,16 +880,8 @@ class UserPreferencesService {
   // not a sign-out hook — correctness comes from [_syncCacheToCurrentUser]
   // running on every access.
 
-  /// Replaces the live auth lookup used by [_currentUserId] and [_stillOwns].
-  ///
-  /// Lets a test flip the signed-in user *while an async operation is
-  /// suspended*, which is the only way to reproduce the sign-out-mid-flight
-  /// race without a live backend. Null (the default) outside tests.
   @visibleForTesting
-  static String? Function()? debugCurrentUserIdOverride;
-
-  @visibleForTesting
-  static bool debugStillOwns(String? userId) => _stillOwns(userId);
+  static bool debugStillOwns(String? userId) => CurrentUser.stillOwns(userId, _cacheOwnerUserId);
 
   @visibleForTesting
   static void debugPrimeCachesForUser(

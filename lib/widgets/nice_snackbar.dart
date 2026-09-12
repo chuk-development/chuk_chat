@@ -14,7 +14,22 @@ class NiceSnackBar {
     Duration duration = const Duration(seconds: 2),
     Color? backgroundColor,
   }) {
-    final messenger = ScaffoldMessenger.of(context);
+    return showOn(
+      ScaffoldMessenger.of(context),
+      message,
+      duration: duration,
+      backgroundColor: backgroundColor,
+    );
+  }
+
+  /// Same as [show] for callers that captured the messenger before an await,
+  /// where using the [BuildContext] again would be unsafe.
+  static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showOn(
+    ScaffoldMessengerState messenger,
+    String message, {
+    Duration duration = const Duration(seconds: 2),
+    Color? backgroundColor,
+  }) {
     messenger.hideCurrentSnackBar();
     return messenger.showSnackBar(_build(message, duration, backgroundColor));
   }

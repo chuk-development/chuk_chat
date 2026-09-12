@@ -1,2 +1,11 @@
-json_key_file("") # Path to the json secret file - Follow https://docs.fastlane.tools/actions/supply/#setup to get one
-package_name("dev.chuk.chat") # e.g. com.krausefx.app
+# Play Console identity.
+#
+# The service-account JSON is never committed. Point SUPPLY_JSON_KEY at it, or
+# drop it at android/play-store-key.json (gitignored). How to create one:
+# https://docs.fastlane.tools/actions/supply/#setup
+json_key_file(
+  ENV["SUPPLY_JSON_KEY"] ||
+    File.expand_path("../play-store-key.json", __dir__)
+)
+
+package_name("dev.chuk.chat")

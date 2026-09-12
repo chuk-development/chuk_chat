@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:chuk_chat/utils/map_geometry.dart';
 
 /// Displays a route map with OSRM polyline, start/end markers,
 /// summary bar, and optional turn-by-turn steps.
@@ -107,18 +108,6 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
     }
   }
 
-  bool _hasPointSpread(List<LatLng> points) {
-    if (points.length < 2) return false;
-    final first = points.first;
-    return points
-        .skip(1)
-        .any(
-          (p) =>
-              (p.latitude - first.latitude).abs() > 1e-6 ||
-              (p.longitude - first.longitude).abs() > 1e-6,
-        );
-  }
-
   @override
   Widget build(BuildContext context) {
     final routeLine =
@@ -169,7 +158,7 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
       LatLng(widget.fromLat, widget.fromLon),
       LatLng(widget.toLat, widget.toLon),
     ];
-    final mapOptions = _hasPointSpread(fitPoints)
+    final mapOptions = hasPointSpread(fitPoints)
         ? MapOptions(
             initialCameraFit: CameraFit.bounds(
               bounds: LatLngBounds.fromPoints(fitPoints),

@@ -3,7 +3,6 @@
 // Parses and renders <map> blocks embedded in AI message text.
 // The AI writes JSON inside <map>...</map> tags as part of its response.
 
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -14,43 +13,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/pages/fullscreen_map_page.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/route_map_widget.dart';
+import 'package:chuk_chat/utils/json_helpers.dart';
+import 'package:chuk_chat/utils/map_geometry.dart';
 
 /// Regex to find <map> blocks in message content.
 final RegExp mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true);
 
 /// Returns true if [content] contains at least one <map> block.
 bool hasMapBlocks(String content) => content.contains('<map>');
-
-/// Splits message content into text segments and map widgets.
-///
-/// Use this from [_buildMessageBody] to interleave plain text with
-/// rendered map blocks.
-List<MapContentSegment> parseMapSegments(String content) {
-  if (!hasMapBlocks(content)) {
-    return [MapContentSegment.text(content)];
-  }
-
-  final segments = <MapContentSegment>[];
-  var lastEnd = 0;
-
-  for (final match in mapBlockRegex.allMatches(content)) {
-    final textBefore = content.substring(lastEnd, match.start).trim();
-    if (textBefore.isNotEmpty) {
-      segments.add(MapContentSegment.text(textBefore));
-    }
-
-    final blockJson = match.group(1)!.trim();
-    segments.add(MapContentSegment.map(blockJson));
-    lastEnd = match.end;
-  }
-
-  final textAfter = content.substring(lastEnd).trim();
-  if (textAfter.isNotEmpty) {
-    segments.add(MapContentSegment.text(textAfter));
-  }
-
-  return segments;
-}
 
 /// A segment of message content — either plain text or a map block.
 class MapContentSegment {
@@ -72,7 +42,7 @@ class MapBlockWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     try {
-      final parsed = _tryParseJson(jsonString);
+      final parsed = tryParseLenientJson(jsonString);
       if (parsed is! Map<String, dynamic>) {
         throw FormatException(
           'Expected JSON object, got ${parsed.runtimeType}',
@@ -105,29 +75,6 @@ class MapBlockWidget extends StatelessWidget {
         ),
       );
     }
-  }
-
-  /// Lenient JSON parser — handles common LLM mistakes like trailing commas.
-  static dynamic _tryParseJson(String raw) {
-    var s = raw.trim();
-    try {
-      return jsonDecode(s);
-    } catch (_) {}
-    // Strip trailing ] if the JSON is an object
-    if (s.startsWith('{') && s.endsWith(']')) {
-      s = s.substring(0, s.length - 1).trim();
-      if (s.endsWith('}')) {
-        try {
-          return jsonDecode(s);
-        } catch (_) {}
-      }
-    }
-    // Strip trailing commas before } or ]
-    s = s.replaceAll(RegExp(r',\s*([}\]])'), r'$1');
-    try {
-      return jsonDecode(s);
-    } catch (_) {}
-    return jsonDecode(raw.trim());
   }
 }
 
@@ -289,24 +236,12 @@ double _calculateRouteZoom(
   return 5;
 }
 
-bool _hasPointSpread(List<LatLng> points) {
-  if (points.length < 2) return false;
-  final first = points.first;
-  return points
-      .skip(1)
-      .any(
-        (p) =>
-            (p.latitude - first.latitude).abs() > 1e-6 ||
-            (p.longitude - first.longitude).abs() > 1e-6,
-      );
-}
-
 MapOptions _buildMapOptions({
   required LatLng center,
   required double zoom,
   List<LatLng>? fitPoints,
 }) {
-  if (fitPoints != null && _hasPointSpread(fitPoints)) {
+  if (fitPoints != null && hasPointSpread(fitPoints)) {
     return MapOptions(
       initialCameraFit: CameraFit.bounds(
         bounds: LatLngBounds.fromPoints(fitPoints),

@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:chuk_chat/services/approval_config.dart';
 import 'package:chuk_chat/services/bash_sandbox.dart';
 import 'package:chuk_chat/services/device_services.dart';
-import 'package:chuk_chat/services/email_service.dart';
 import 'package:chuk_chat/services/github_oauth.dart';
 import 'package:chuk_chat/services/google_oauth.dart';
 import 'package:chuk_chat/services/slack_oauth.dart';
@@ -14,7 +13,6 @@ final BashSandbox _bashSandbox = BashSandbox();
 final GitHubOAuth _gitHubOAuth = GitHubOAuth();
 final SlackOAuth _slackOAuth = SlackOAuth();
 final GoogleOAuth _googleOAuth = GoogleOAuth();
-final EmailService _emailService = EmailService();
 final DeviceServices _deviceServices = DeviceServices();
 final ApprovalConfig _approvalConfig = ApprovalConfig();
 
@@ -25,7 +23,6 @@ Future<void> initPlatformServices() async {
     _gitHubOAuth.loadSavedToken(),
     _slackOAuth.isAuthenticated(), // loads tokens internally
     _googleOAuth.getAccessToken().then((_) {}), // loads tokens internally
-    _emailService.loadSavedConfig(),
     _bashSandbox.loadSavedFolder(),
   ]);
 }
@@ -41,8 +38,6 @@ bool isPlatformServiceConnected(String service) {
       return _slackOAuth.hasToken;
     case 'google':
       return _googleOAuth.isAuthenticated;
-    case 'email':
-      return _emailService.isConfigured;
     default:
       return false;
   }
@@ -83,12 +78,21 @@ Future<void> disconnectPlatformService(String service) async {
       await _slackOAuth.logout();
     case 'google':
       await _googleOAuth.logout();
-    case 'email':
-      await _emailService.clearConfig();
   }
 }
 
 // ============== Bash ==============
+
+/// Folder the local bash tool is confined to, null while unset.
+String? get bashSandboxFolder => _bashSandbox.sandboxFolder;
+
+/// Confine the local bash tool to [path]. Throws [StateError] if the folder
+/// is gone by the time it is picked.
+Future<void> setBashSandboxFolder(String path) =>
+    _bashSandbox.setSandboxFolder(path);
+
+/// Forget the sandbox folder; bash commands are refused until a new one is set.
+Future<void> clearBashSandboxFolder() => _bashSandbox.clearSandboxFolder();
 
 Future<String> executeBash(Map<String, dynamic> args) async {
   final command = args['command'] as String?;
@@ -529,134 +533,6 @@ Future<String> executeGmail(Map<String, dynamic> args) async {
     }
   } catch (e) {
     return 'Gmail error: $e';
-  }
-}
-
-// ============== Email (IMAP/SMTP) ==============
-
-Future<String> executeEmail(Map<String, dynamic> args) async {
-  if (!_emailService.isConfigured) {
-    return 'Error: Email not configured. '
-        'Please set up IMAP/SMTP in Settings.';
-  }
-
-  final action = args['action'] as String?;
-  if (action == null) return 'Error: No action specified';
-
-  try {
-    switch (action.toLowerCase()) {
-      case 'list_mailboxes':
-        final result = await _emailService.listMailboxes();
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        final mailboxes = result['mailboxes'] as List? ?? [];
-        if (mailboxes.isEmpty) return 'No mailboxes found';
-        return 'Mailboxes:\n${mailboxes.map((m) => '- ${m['name']}${m['isInbox'] == true ? ' (Inbox)' : ''}').join('\n')}';
-
-      case 'list_emails':
-        final mailbox = args['mailbox'] as String? ?? 'INBOX';
-        final limit = args['limit'] as int? ?? 20;
-        final offset = args['offset'] as int? ?? 0;
-        final result = await _emailService.listEmails(
-          mailbox,
-          limit: limit,
-          offset: offset,
-        );
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        final emails = result['emails'] as List? ?? [];
-        if (emails.isEmpty) {
-          return 'No emails found in $mailbox';
-        }
-        final total = result['total'] ?? emails.length;
-        return 'Emails in $mailbox ($total total):\n${emails.map((e) => '- [${(e as Map<String, dynamic>)['isRead'] == true ? 'R' : 'U'}] ${e['subject'] ?? 'No subject'} from ${e['from']} (ID: ${e['sequenceId']})').join('\n')}';
-
-      case 'search_emails':
-        final mailbox = args['mailbox'] as String? ?? 'INBOX';
-        DateTime? since;
-        DateTime? before;
-        if (args['since'] != null) {
-          since = DateTime.tryParse(args['since'] as String);
-        }
-        if (args['before'] != null) {
-          before = DateTime.tryParse(args['before'] as String);
-        }
-        final result = await _emailService.searchEmails(
-          mailbox,
-          from: args['from'] as String?,
-          to: args['to'] as String?,
-          subject: args['subject'] as String?,
-          text: args['text'] as String?,
-          since: since,
-          before: before,
-          unreadOnly: args['unread_only'] as bool? ?? false,
-          limit: args['limit'] as int? ?? 20,
-        );
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        final emails = result['emails'] as List? ?? [];
-        if (emails.isEmpty) {
-          return 'No emails found matching search';
-        }
-        final total = result['total'] ?? emails.length;
-        return 'Search results ($total found):\n${emails.map((e) => '- ${(e as Map<String, dynamic>)['subject'] ?? 'No subject'} from ${e['from']} (ID: ${e['sequenceId']})').join('\n')}';
-
-      case 'read_email':
-        final sequenceId = args['sequence_id'] as int?;
-        if (sequenceId == null) {
-          return 'Error: sequence_id required';
-        }
-        final mailbox = args['mailbox'] as String? ?? 'INBOX';
-        final result = await _emailService.readEmail(mailbox, sequenceId);
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        final emailMsg = result['email'] as Map<String, dynamic>? ?? {};
-        return 'From: ${emailMsg['from'] ?? 'Unknown'}\n'
-            'Subject: ${emailMsg['subject'] ?? 'No subject'}\n'
-            'Date: ${emailMsg['date'] ?? 'Unknown'}\n\n'
-            '${emailMsg['textBody'] ?? emailMsg['htmlBody'] ?? 'No content'}';
-
-      case 'send_email':
-        final to = args['to'] as String?;
-        final subject = args['subject'] as String?;
-        final body = args['body'] as String?;
-        if (to == null || subject == null || body == null) {
-          return 'Error: to, subject, and body required';
-        }
-        final ccStr = args['cc'] as String?;
-        final bccStr = args['bcc'] as String?;
-        final result = await _emailService.sendEmail(
-          to: to,
-          subject: subject,
-          body: body,
-          cc: ccStr?.split(',').map((s) => s.trim()).toList(),
-          bcc: bccStr?.split(',').map((s) => s.trim()).toList(),
-        );
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        return result['message'] as String? ?? 'Email sent successfully';
-
-      case 'unread_count':
-        final mailbox = args['mailbox'] as String? ?? 'INBOX';
-        final result = await _emailService.getUnreadCount(mailbox);
-        if (result['success'] != true) {
-          return 'Error: ${result['error']}';
-        }
-        return '$mailbox: ${result['unread']} unread '
-            'of ${result['total']} total';
-
-      default:
-        return 'Unknown email action: $action. '
-            'Available: list_mailboxes, list_emails, '
-            'search_emails, read_email, send_email, unread_count';
-    }
-  } catch (e) {
-    return 'Email error: $e';
   }
 }
 

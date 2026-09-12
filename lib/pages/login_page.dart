@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 
@@ -9,9 +10,9 @@ import 'package:chuk_chat/supabase_config.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/widgets/password_strength_meter.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/utils/url_launcher_helper.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -117,22 +118,7 @@ class _LoginPageState extends State<LoginPage> {
           error.code == AuthServiceException.codeEmailAlreadyRegistered;
       if (isEmailAlreadyRegistered && mounted) {
         final messenger = ScaffoldMessenger.of(context);
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              error.message,
-              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        NiceSnackBar.showOn(messenger, error.message);
       }
       setState(() {
         if (isEmailAlreadyRegistered) {
@@ -220,15 +206,6 @@ class _LoginPageState extends State<LoginPage> {
 
     // For sign-in, just check it's not empty (already done above)
     return null;
-  }
-
-  Future<void> _launchUrl(String url) async {
-    final Uri uri = Uri.parse(url);
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (kDebugMode) {
-        debugPrint('Could not launch $url');
-      }
-    }
   }
 
   @override
@@ -477,8 +454,10 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl(
-                                            'https://chuk.chat/en/terms/',
+                                          unawaited(
+                                            launchExternalUrl(
+                                              'https://chuk.chat/en/terms/',
+                                            ),
                                           );
                                         },
                                     ),
@@ -491,8 +470,10 @@ class _LoginPageState extends State<LoginPage> {
                                       ),
                                       recognizer: TapGestureRecognizer()
                                         ..onTap = () {
-                                          _launchUrl(
-                                            'https://chuk.chat/en/privacy/',
+                                          unawaited(
+                                            launchExternalUrl(
+                                              'https://chuk.chat/en/privacy/',
+                                            ),
                                           );
                                         },
                                     ),

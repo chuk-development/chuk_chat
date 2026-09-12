@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/map_geometry.dart';
 
 class FullscreenMapPage extends StatefulWidget {
   final LatLng center;
@@ -357,7 +358,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
             ? <LatLng>[_routeStart!, _routeEnd!]
             : null);
 
-    final useFit = fitPoints != null && _hasPointSpread(fitPoints);
+    final useFit = fitPoints != null && hasPointSpread(fitPoints);
 
     if (useFit) {
       return fm.MapOptions(
@@ -402,7 +403,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     if (_initialCameraApplied) return;
 
     final fitPoints = widget.fitPoints;
-    if (fitPoints != null && _hasPointSpread(fitPoints)) {
+    if (fitPoints != null && hasPointSpread(fitPoints)) {
       _initialCameraApplied = true;
       await _fitToPoints(fitPoints);
       return;
@@ -410,7 +411,7 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
 
     if (_hasRouteEndpoints && _routeStart != null && _routeEnd != null) {
       final points = [_routeStart!, _routeEnd!];
-      if (_hasPointSpread(points)) {
+      if (hasPointSpread(points)) {
         _initialCameraApplied = true;
         await _fitToPoints(points);
         return;
@@ -1110,18 +1111,6 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
           Icon(Icons.star_border, size: size, color: Colors.amber.shade700),
       ],
     );
-  }
-
-  static bool _hasPointSpread(List<LatLng> points) {
-    if (points.length < 2) return false;
-    final first = points.first;
-    return points
-        .skip(1)
-        .any(
-          (p) =>
-              (p.latitude - first.latitude).abs() > 1e-6 ||
-              (p.longitude - first.longitude).abs() > 1e-6,
-        );
   }
 
   static double _toDouble(dynamic value) {

@@ -128,14 +128,6 @@ class ChatRuntime {
     messages.value = updated;
   }
 
-  /// Replace one message in place. No-op if [index] is out of range.
-  void replaceMessage(int index, Map<String, String> message) {
-    final current = messages.value;
-    if (index < 0 || index >= current.length) return;
-    final updated = List<Map<String, String>>.from(current);
-    updated[index] = Map<String, String>.from(message);
-    messages.value = updated;
-  }
 
   void removeMessageAt(int index) {
     final current = messages.value;

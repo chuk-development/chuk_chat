@@ -13,6 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:chuk_chat/services/chat_cache_search_text.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_rows.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
@@ -330,23 +331,14 @@ class LocalChatCacheService {
     required bool isStarred,
     String? updatedAt,
     String? title,
-  }) {
-    final row = <String, dynamic>{
-      'id': id,
-      'payload': payload,
-      'created_at': createdAt,
-      'is_starred': isStarred,
-    };
-
-    if (updatedAt != null) {
-      row['updated_at'] = updatedAt;
-    }
-    if (title != null) {
-      row['title'] = title;
-    }
-
-    return row;
-  }
+  }) => buildPlaintextCacheRow(
+    id: id,
+    payload: payload,
+    createdAt: createdAt,
+    isStarred: isStarred,
+    updatedAt: updatedAt,
+    title: title,
+  );
 
   // ─── Public API ───────────────────────────────────────────────────────
 
@@ -889,34 +881,8 @@ class LocalChatCacheService {
     };
   }
 
-  static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row) {
-    final id = row['id'];
-    final payload = row['payload'];
-    if (id is! String || payload is! String) return null;
-
-    String? createdAt;
-    final raw = row['created_at'];
-    if (raw is String) {
-      createdAt = raw;
-    } else if (raw is DateTime) {
-      createdAt = raw.toUtc().toIso8601String();
-    }
-    createdAt ??= DateTime.now().toUtc().toIso8601String();
-
-    final starred = row['is_starred'];
-    final isStarred = starred is bool
-        ? starred
-        : (starred is num ? starred != 0 : false);
-
-    return <String, dynamic>{
-      'id': id,
-      'payload': payload,
-      'created_at': createdAt,
-      'is_starred': isStarred,
-      if (row['updated_at'] is String) 'updated_at': row['updated_at'],
-      if (row['title'] is String) 'title': row['title'],
-    };
-  }
+  static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row) =>
+      sanitizeCacheRow(row);
 
   static String _escapeLikePattern(String value) {
     return value

@@ -1,0 +1,142 @@
+# Play Store pipeline, run on demand.
+#
+# Nothing here needs a build server of its own: the GitHub runner checks out
+# the repo, installs Flutter and Ruby, and runs the same fastlane lanes you
+# would run locally.
+#
+# Required repository secrets:
+#   SUPABASE_URL, SUPABASE_ANON_KEY   - baked into the build
+#   ANDROID_KEYSTORE_BASE64           - upload keystore, base64 encoded
+#   ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD, ANDROID_KEY_ALIAS
+#   PLAY_STORE_JSON_KEY               - Play service-account JSON, verbatim
+name: Play Store
+# Actions are pinned to full commit SHAs, not tags: a tag is mutable, and both
+# workflows handle something a moved tag could reach — this one holds
+# `contents: write` and pushes; the Play workflow writes the upload keystore
+# and the Play service-account key into the workspace.
+
+on:
+  workflow_dispatch:
+    inputs:
+      lane:
+        description: 'fastlane lane'
+        required: true
+        default: 'validate'
+        type: choice
+        options:
+          - screenshots
+          - validate
+          - upload_metadata
+          - deploy
+      track:
+        description: 'Play track (deploy only)'
+        required: false
+        default: 'internal'
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+
+jobs:
+  fastlane:
+    name: fastlane
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # No lane writes to the repository.
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          # `fastlane changelog` walks back to the last v* tag.
+          fetch-depth: 0
+          # Do not leave GITHUB_TOKEN in .git/config for the rest of the job.
+          persist-credentials: false
+
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: '3.47.0'
+          cache: true
+
+      # Gemfile.lock is committed, so bundler-cache restores exactly those
+      # versions. BUNDLE_FROZEN makes a lock that drifted fail the job instead
+      # of quietly resolving something else. fastlane wants Ruby >= 3.3.
+      - uses: ruby/setup-ruby@e5517072e87f198d9533967ae13d97c11b604005 # v1.99.0
+        with:
+          ruby-version: '3.3'
+          bundler-cache: true
+        env:
+          BUNDLE_FROZEN: 'true'
+
+      # Secrets go through the environment, never through `${{ }}` inside the
+      # script: an interpolated value is pasted into the shell verbatim, so a
+      # quote or a backtick in a secret would break or reshape the command.
+      - name: Write .env
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          printf 'SUPABASE_URL=%s\nSUPABASE_ANON_KEY=%s\n' \
+            "$SUPABASE_URL" "$SUPABASE_ANON_KEY" > .env
+
+      - name: Write signing config
+        if: inputs.lane != 'screenshots' && inputs.lane != 'upload_metadata'
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode \
+            > android/app/upload-keystore.jks
+          printf 'storePassword=%s\nkeyPassword=%s\nkeyAlias=%s\nstoreFile=%s\n' \
+            "$STORE_PASSWORD" "$KEY_PASSWORD" "$KEY_ALIAS" \
+            'upload-keystore.jks' > android/key.properties
+          chmod 600 android/key.properties android/app/upload-keystore.jks
+
+      - name: Write Play service-account key
+        if: inputs.lane != 'screenshots'
+        env:
+          PLAY_STORE_JSON_KEY: ${{ secrets.PLAY_STORE_JSON_KEY }}
+        run: |
+          printf '%s' "$PLAY_STORE_JSON_KEY" > android/play-store-key.json
+          chmod 600 android/play-store-key.json
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      - name: Run lane
+        working-directory: android
+        env:
+          SUPPLY_JSON_KEY: ${{ github.workspace }}/android/play-store-key.json
+          LANE: ${{ inputs.lane }}
+          TRACK: ${{ inputs.track }}
+        run: |
+          if [ "$LANE" = "deploy" ]; then
+            bundle exec fastlane deploy "track:$TRACK"
+          else
+            bundle exec fastlane "$LANE"
+          fi
+
+      - name: Remove secrets from the workspace
+        if: always()
+        run: |
+          rm -f android/play-store-key.json \
+                android/key.properties \
+                android/app/upload-keystore.jks \
+                .env
+
+      - name: Upload generated screenshots
+        if: inputs.lane == 'screenshots'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: store-screenshots
+          path: fastlane/metadata/android/*/images/**
