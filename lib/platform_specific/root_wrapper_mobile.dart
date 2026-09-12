@@ -3,6 +3,8 @@ import 'dart:async';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
@@ -275,20 +277,9 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger == null) return;
 
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          '$permissionName permission is blocked. Enable it in app settings.',
-        ),
-        action: SnackBarAction(
-          label: 'Settings',
-          onPressed: () {
+    messenger.hideCurrentSnackBar();AppNotifications.showOn(messenger, '$permissionName permission is blocked. Enable it in app settings.', actionLabel: 'Settings', onAction: () {
             unawaited(openAppSettings());
-          },
-        ),
-      ),
-    );
+          });
   }
 
   void _toggleSidebar() {
@@ -603,25 +594,14 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _copyDebugChat() {
     final state = _chatUIMobileKey.currentState;
     final messages = state?.debugMessages;
-    if (messages == null || messages.isEmpty) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('No messages to copy')));
+    if (messages == null || messages.isEmpty) {AppNotifications.show(context, 'No messages to copy');
       return;
     }
     final text = DebugChatFormatter.format(
       messages,
       context: chatDebugContext(state, platform: 'mobile'),
     );
-    Clipboard.setData(ClipboardData(text: text));
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Copied ${messages.length} messages (debug, images redacted)',
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    Clipboard.setData(ClipboardData(text: text));AppNotifications.show(context, 'Copied ${messages.length} messages (debug, images redacted)', duration: Duration(seconds: 2));
   }
 
   @override

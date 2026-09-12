@@ -7,6 +7,8 @@ import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -63,10 +65,7 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
       await WorkspaceStorageService.loadProjects();
       _filterProjects();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load projects: $e')));
+      if (mounted) {AppNotifications.show(context, 'Failed to load projects: $e');
       }
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -114,16 +113,10 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
           description: result['description'],
           customSystemPrompt: result['systemPrompt'],
         );
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Created "${workspace.name}"')));
+        if (mounted) {AppNotifications.show(context, 'Created "${workspace.name}"');
         }
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to create workspace: $e')),
-          );
+        if (mounted) {AppNotifications.show(context, 'Failed to create workspace: $e');
         }
       }
     }
@@ -156,16 +149,10 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     if (confirmed == true && mounted) {
       try {
         await WorkspaceStorageService.deleteProject(workspace.id);
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(const SnackBar(content: Text('Workspace deleted')));
+        if (mounted) {AppNotifications.show(context, 'Workspace deleted');
         }
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Failed to delete workspace: $e')),
-          );
+        if (mounted) {AppNotifications.show(context, 'Failed to delete workspace: $e');
         }
       }
     }
@@ -175,29 +162,24 @@ class _WorkspacesPageState extends State<WorkspacesPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await WorkspaceStorageService.archiveProject(workspace.id, true);
-      if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text('Archived "${workspace.name}"'),
-            action: SnackBarAction(
-              label: 'Undo',
-              onPressed: () async {
+      if (mounted) {AppNotifications.showOn(messenger, 'Archived "${workspace.name}"', actionLabel: 'Undo', onAction: () async {
                 try {
                   await WorkspaceStorageService.archiveProject(workspace.id, false);
                 } catch (e) {
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to restore workspace: $e')),
+                  AppNotifications.showOn(
+                    messenger,
+                    'Failed to restore workspace: $e',
+                    kind: AppNotificationKind.error,
                   );
                 }
-              },
-            ),
-          ),
-        );
+              });
       }
     } catch (e) {
       if (mounted) {
-        messenger.showSnackBar(
-          SnackBar(content: Text('Failed to archive: $e')),
+        AppNotifications.showOn(
+          messenger,
+          'Failed to archive: $e',
+          kind: AppNotificationKind.error,
         );
       }
     }

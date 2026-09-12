@@ -2,6 +2,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -128,24 +130,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _isSaving = false;
       });
 
-      final messenger = ScaffoldMessenger.of(context);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            emailNotice ?? l.saved,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      final messenger = ScaffoldMessenger.of(context);AppNotifications.showOn(messenger, emailNotice ?? l.saved, kind: AppNotificationKind.error, duration: Duration(seconds: 2));
     } on AuthException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -248,24 +233,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       setState(() {
         _isChangingPassword = false;
         _passwordChangeNotice = notice;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            notice,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          backgroundColor: Theme.of(context).colorScheme.primary,
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      });AppNotifications.show(context, notice, kind: AppNotificationKind.error, duration: Duration(seconds: 2));
     } on PasswordChangeException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -464,23 +432,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
       await const AuthService().signOut();
     } catch (error) {
       if (!mounted) return;
-      setState(() => _isDeletingAccount = false);
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            l.failedToDeleteAccount(error.toString()),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 3),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      setState(() => _isDeletingAccount = false);AppNotifications.showOn(messenger, l.failedToDeleteAccount(error.toString()), duration: Duration(seconds: 3));
     }
   }
 

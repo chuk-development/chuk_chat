@@ -2,6 +2,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -188,15 +190,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
     if (mounted) {
       setState(() {
         _hasCustomPrompt = hasCustom;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)?.systemPromptSaved ??
-              'System prompt saved'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+      });AppNotifications.show(context, AppLocalizations.of(context)?.systemPromptSaved ??
+              'System prompt saved', duration: Duration(seconds: 2));
     }
   }
 
@@ -206,16 +201,9 @@ class _CustomizationPageState extends State<CustomizationPage> {
       setState(() {
         _hasCustomPrompt = false;
         _promptController.text = TitleGenerationService.defaultSystemPrompt;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)
+      });AppNotifications.show(context, AppLocalizations.of(context)
                   ?.systemPromptResetToDefault ??
-              'System prompt reset to default'),
-          behavior: SnackBarBehavior.floating,
-          duration: const Duration(seconds: 2),
-        ),
-      );
+              'System prompt reset to default', duration: Duration(seconds: 2));
     }
   }
 

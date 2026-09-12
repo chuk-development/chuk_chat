@@ -14,6 +14,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/workspace_file_upload.dart';
@@ -85,10 +87,7 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
       }
     } catch (e) {
       if (mounted) {
-        setState(onFailed);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to load workspace: $e')));
+        setState(onFailed);AppNotifications.show(context, 'Failed to load workspace: $e');
         Navigator.pop(context);
       }
     }
@@ -193,10 +192,7 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
     } catch (e) {
       if (mounted) {
         final message =
-            failedMessage?.call(e.toString()) ?? 'Delete failed: $e';
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(message)));
+            failedMessage?.call(e.toString()) ?? 'Delete failed: $e';AppNotifications.show(context, message);
       }
     }
   }
@@ -225,17 +221,11 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
         customSystemPrompt: instructions.trim(),
       );
       if (!mounted) return false;
-      if (successMessage != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(successMessage)));
+      if (successMessage != null) {AppNotifications.show(context, successMessage);
       }
       return true;
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (mounted) {AppNotifications.show(context, 'Failed to save: $e');
       }
       return false;
     }
@@ -256,10 +246,7 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
         .where((chat) => !existing.contains(chat.id))
         .toList();
 
-    if (availableChats.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No chats available to add')),
-      );
+    if (availableChats.isEmpty) {AppNotifications.show(context, 'No chats available to add');
       return;
     }
 
@@ -268,15 +255,9 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
 
     try {
       await WorkspaceStorageService.addChatToProject(workspaceId, selected.id);
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Chat added to workspace')));
+      if (!mounted) return;AppNotifications.show(context, 'Chat added to workspace');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to add chat: $e')));
+      if (!mounted) return;AppNotifications.show(context, 'Failed to add chat: $e');
     }
   }
 
@@ -284,15 +265,9 @@ mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T> {
   Future<void> removeChatFromWorkspace(String chatId) async {
     try {
       await WorkspaceStorageService.removeChatFromProject(workspaceId, chatId);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chat removed from workspace')),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Chat removed from workspace');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to remove chat: $e')));
+      if (!mounted) return;AppNotifications.show(context, 'Failed to remove chat: $e');
     }
   }
 }

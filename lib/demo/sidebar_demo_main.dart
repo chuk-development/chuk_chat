@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'app_palette.dart';
 import 'demo_data.dart';
 import 'variants/variant_1_minimal.dart';
@@ -113,14 +115,7 @@ class _DemoHomeState extends State<DemoHome> {
       );
 
   void _toast(String msg) {
-    ScaffoldMessenger.of(context).clearSnackBars();
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        duration: const Duration(milliseconds: 900),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+    ScaffoldMessenger.of(context).clearSnackBars();AppNotifications.show(context, msg, duration: Duration(milliseconds: 900));
   }
 
   Widget _sidebar() {

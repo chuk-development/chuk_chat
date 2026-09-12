@@ -17,6 +17,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/pages/workspace_files_page.dart';
@@ -85,10 +87,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loading = false);
-      final l = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l.projectLoadFailed(e.toString()))));
+      final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectLoadFailed(e.toString()));
     }
   }
 
@@ -134,10 +133,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
       await WorkspaceStorageService.deleteProject(widget.workspaceId);
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.projectDeleteFailed(e.toString()))));
+      if (mounted) {AppNotifications.show(context, l.projectDeleteFailed(e.toString()));
       }
     }
   }
@@ -204,10 +200,7 @@ class _WorkspaceMobileDetailPageState extends State<WorkspaceMobileDetailPage> {
           description: descCtrl.text.trim(),
         );
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text(l.projectSaveFailed(e.toString()))));
+        if (mounted) {AppNotifications.show(context, l.projectSaveFailed(e.toString()));
         }
       }
     }

@@ -5,6 +5,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/chat_model.dart';
@@ -905,23 +907,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
         _errorMessage = 'Session expired. Please sign in again.';
         _selectedModelName = 'Sign In Required';
       });
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text(
-            'Session expired. Please sign in again.',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+      if (!mounted) return;AppNotifications.show(context, 'Session expired. Please sign in again.', duration: Duration(seconds: 2));
       unawaited(
         DiagnosticsLogService.warning(
           'model_menu',
@@ -1311,29 +1297,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
 
                 if (!context.mounted) return;
 
-                final messenger = ScaffoldMessenger.of(context);
-                messenger.showSnackBar(
-                  SnackBar(
-                    content: const Text(
-                      'Failed to save model selection. Please try again.',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    duration: const Duration(seconds: 3),
-                    dismissDirection: DismissDirection.horizontal,
-                  ),
-                );
+                final messenger = ScaffoldMessenger.of(context);AppNotifications.showOn(messenger, 'Failed to save model selection. Please try again.', duration: Duration(seconds: 3));
 
                 setState(() {
                   _selectedModelId = previousModelId;

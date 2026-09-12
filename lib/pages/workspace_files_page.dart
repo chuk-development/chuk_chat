@@ -12,6 +12,8 @@ import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:chuk_chat/constants/file_constants.dart';
@@ -133,19 +135,10 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
         },
       );
       if (mounted) {
-        final l = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l.projectUploaded(fileName))),
-        );
+        final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectUploaded(fileName));
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(e is StateError ? e.message : e.toString()),
-            backgroundColor: Colors.red[700],
-          ),
-        );
+      if (mounted) {AppNotifications.show(context, e is StateError ? e.message : e.toString(), kind: AppNotificationKind.error);
       }
     } finally {
       if (mounted) {
@@ -167,10 +160,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
     if (file == null) return;
     if (file.path == null) {
       if (mounted) {
-        final l = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l.projectNotSupportedPlatform)),
-        );
+        final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectNotSupportedPlatform);
       }
       return;
     }
@@ -195,10 +185,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
       await _uploadBytes(name, bytes, 'jpg', filePath: xfile.path);
     } catch (e) {
       if (mounted) {
-        final l = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.projectCameraFailed(e.toString()))));
+        final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectCameraFailed(e.toString()));
       }
     }
   }
@@ -216,10 +203,7 @@ class _WorkspaceFilesPageState extends State<WorkspaceFilesPage>
       await _uploadBytes(xfile.name, bytes, ext, filePath: xfile.path);
     } catch (e) {
       if (mounted) {
-        final l = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l.projectImagePickFailed(e.toString()))));
+        final l = AppLocalizations.of(context)!;AppNotifications.show(context, l.projectImagePickFailed(e.toString()));
       }
     }
   }

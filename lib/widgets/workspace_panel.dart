@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
@@ -70,10 +72,7 @@ class _WorkspacePanelState extends State<WorkspacePanel>
       if (mounted) setState(() => _isUploadingAvatar = false);
     } catch (e) {
       if (mounted) {
-        setState(() => _isUploadingAvatar = false);
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
+        setState(() => _isUploadingAvatar = false);AppNotifications.show(context, 'Failed to upload image: $e');
       }
     }
   }

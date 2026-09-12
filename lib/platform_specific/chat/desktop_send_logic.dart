@@ -294,23 +294,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           await SupabaseService.refreshSession() ??
           SupabaseService.auth.currentSession;
       if (session == null) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Session expired. Please sign in again.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, 'Session expired. Please sign in again.', duration: Duration(seconds: 2));
         }
         if (mounted) {
           setState(() {
@@ -1188,23 +1172,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       if (_fileHandler.attachedFiles.any((f) => f.isUploading)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Please wait for file uploads to finish.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, 'Please wait for file uploads to finish.', duration: Duration(seconds: 2));
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -1215,23 +1183,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       // Check if a model is selected
       if (selectedModelId.isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: const Text(
-                'Please select a model first.',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 3),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, 'Please select a model first.', duration: Duration(seconds: 3));
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -1261,26 +1213,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       );
 
       if (!result.isValid) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                result.errorMessage ?? 'Invalid message',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+        if (mounted) {AppNotifications.show(context, result.errorMessage ?? 'Invalid message', duration: Duration(seconds: 2));
         }
         ChatStorageService.isMessageOperationInProgress = false;
         if (kDebugMode) {
@@ -2074,29 +2007,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 });
               }
               _finalizeAiMessage(placeholderIndex, errorText);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      errorMessage,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    behavior: SnackBarBehavior.floating,
-                    margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
-                    ),
-                    duration: const Duration(seconds: 2),
-                    dismissDirection: DismissDirection.horizontal,
-                  ),
-                );
+              if (mounted) {AppNotifications.show(context, errorMessage, duration: Duration(seconds: 2));
               }
               _persistChatWithId(chatIdForStream);
             } else {
@@ -2147,26 +2058,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         if (mounted) {
           setState(() {
             _isSending = false;
-          });
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to start streaming: $error',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+          });AppNotifications.show(context, 'Failed to start streaming: $error', duration: Duration(seconds: 2));
         }
         _persistChatWithId(chatIdForStream);
       }

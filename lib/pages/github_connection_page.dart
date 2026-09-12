@@ -8,6 +8,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -413,10 +415,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
                     onPressed: () async {
                       await Clipboard.setData(
                           ClipboardData(text: flow.userCode));
-                      if (!mounted) return;
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Code copied')),
-                      );
+                      if (!mounted) return;AppNotifications.show(context, 'Code copied');
                     },
                   ),
                 ],

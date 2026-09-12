@@ -5,6 +5,8 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -399,52 +401,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   if (navigator.canPop()) {
                     navigator.pop();
                   }
-                } on AuthServiceException catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        error.message,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
-                  );
-                } catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error: $error',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
-                  );
+                } on AuthServiceException catch (error) {AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
+                } catch (error) {AppNotifications.showOn(messenger, 'Error: $error', duration: Duration(seconds: 2));
                 }
               },
               child: Text(
@@ -491,23 +449,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final messenger = ScaffoldMessenger.of(context);
     try {
       await ChatStorageService.loadSavedChatsForSidebar();
-      if (ChatStorageService.savedChats.isEmpty) {
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.noChatsToExport,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+      if (ChatStorageService.savedChats.isEmpty) {AppNotifications.showOn(messenger, l.noChatsToExport, duration: Duration(seconds: 2));
         return;
       }
       final jsonPayload = await ChatStorageService.exportChatsAsJson();
@@ -516,65 +458,14 @@ class _SettingsPageState extends State<SettingsPage> {
       final data = Uint8List.fromList(utf8.encode(jsonPayload));
 
       if (kIsWeb) {
-        await Clipboard.setData(ClipboardData(text: jsonPayload));
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.copiedToClipboard,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        await Clipboard.setData(ClipboardData(text: jsonPayload));AppNotifications.showOn(messenger, l.copiedToClipboard, duration: Duration(seconds: 2));
         return;
       }
 
       if (Platform.isLinux) {
         final savedPath = await _saveExportToLinux(data, fileName);
-        if (savedPath != null) {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l.savedToPath(savedPath),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 2),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
-        } else {
-          messenger.showSnackBar(
-            SnackBar(
-              content: Text(
-                l.exportCancelled,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-              ),
-              behavior: SnackBarBehavior.floating,
-              margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              duration: const Duration(seconds: 1),
-              dismissDirection: DismissDirection.horizontal,
-            ),
-          );
+        if (savedPath != null) {AppNotifications.showOn(messenger, l.savedToPath(savedPath), duration: Duration(seconds: 2));
+        } else {AppNotifications.showOn(messenger, l.exportCancelled, duration: Duration(seconds: 1));
         }
         return;
       }
@@ -591,76 +482,12 @@ class _SettingsPageState extends State<SettingsPage> {
             subject: 'Chuk Chat chat export',
             text: 'Backup of your Chuk Chat conversations.',
           ),
-        );
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.shareOpened,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 1),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        );AppNotifications.showOn(messenger, l.shareOpened, duration: Duration(seconds: 1));
       } on Exception {
-        await Clipboard.setData(ClipboardData(text: jsonPayload));
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(
-              l.copiedToClipboard,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-            ),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            duration: const Duration(seconds: 2),
-            dismissDirection: DismissDirection.horizontal,
-          ),
-        );
+        await Clipboard.setData(ClipboardData(text: jsonPayload));AppNotifications.showOn(messenger, l.copiedToClipboard, duration: Duration(seconds: 2));
       }
-    } on StateError catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            error.message,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
-    } catch (error) {
-      messenger.showSnackBar(
-        SnackBar(
-          content: Text(
-            l.exportFailed(error.toString()),
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-          ),
-          behavior: SnackBarBehavior.floating,
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          duration: const Duration(seconds: 2),
-          dismissDirection: DismissDirection.horizontal,
-        ),
-      );
+    } on StateError catch (error) {AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
+    } catch (error) {AppNotifications.showOn(messenger, l.exportFailed(error.toString()), duration: Duration(seconds: 2));
     }
   }
 

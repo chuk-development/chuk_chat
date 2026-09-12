@@ -1,6 +1,8 @@
 // lib/widgets/per_model_system_prompt_sheet.dart
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -89,8 +91,7 @@ class _PerModelSystemPromptEditorState
     setState(() => _saving = false);
     if (ok) {
       navigator.pop(true);
-    } else {
-      messenger.showSnackBar(SnackBar(content: Text(failureMessage)));
+    } else {AppNotifications.showOn(messenger, failureMessage);
     }
   }
 
@@ -106,8 +107,7 @@ class _PerModelSystemPromptEditorState
     setState(() => _saving = false);
     if (ok) {
       navigator.pop(true);
-    } else {
-      messenger.showSnackBar(SnackBar(content: Text(failureMessage)));
+    } else {AppNotifications.showOn(messenger, failureMessage);
     }
   }
 

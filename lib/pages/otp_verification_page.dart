@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -143,10 +145,7 @@ class _OtpVerificationPageState extends State<OtpVerificationPage> {
     try {
       await widget.onResend();
       if (!mounted) return;
-      _startCooldown();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l.codeResent)),
-      );
+      _startCooldown();AppNotifications.show(context, l.codeResent);
     } catch (error) {
       if (!mounted) return;
       setState(() {

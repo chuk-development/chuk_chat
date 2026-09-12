@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
@@ -100,10 +102,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
       await UserSkillsService.delete(skill.id!);
       await _reload(forceRefresh: true);
     } on UserSkillException catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(error.message)));
+      if (!mounted) return;AppNotifications.show(context, error.message);
     }
   }
 

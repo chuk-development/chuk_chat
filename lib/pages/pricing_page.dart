@@ -9,6 +9,8 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -257,21 +259,7 @@ class _PricingPageState extends State<PricingPage> with WidgetsBindingObserver {
     }
   }
 
-  void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
-        ),
-        backgroundColor: Colors.red,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+  void _showError(String message) {AppNotifications.show(context, message, kind: AppNotificationKind.error, duration: Duration(seconds: 3));
   }
 
   void _openUsageDetails() {

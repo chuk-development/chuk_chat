@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/widgets/app_notification.dart';
+
 import 'package:chuk_chat/assistant/assistant_bridge.dart';
 import 'package:chuk_chat/assistant/assistant_config.dart';
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
@@ -141,12 +143,7 @@ class _AssistantSettingsPageState extends State<AssistantSettingsPage>
       claimed = false;
     }
     if (!mounted) return;
-    if (!claimed) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Wähle in der geöffneten Liste Chuk Chat aus.'),
-        ),
-      );
+    if (!claimed) {AppNotifications.show(context, 'Wähle in der geöffneten Liste Chuk Chat aus.');
     }
   }
 

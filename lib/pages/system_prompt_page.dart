@@ -3,6 +3,8 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
@@ -17,7 +19,6 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
-import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SystemPromptPage extends StatefulWidget {
@@ -510,10 +511,10 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
 
   void _showSnackBar(String text) {
     if (!mounted) return;
-    NiceSnackBar.show(
+    // These are all confirmations — "Saved", "Prompt copied", "Imported".
+    AppNotifications.success(
       context,
       text,
-      backgroundColor: Theme.of(context).colorScheme.primary,
       duration: const Duration(seconds: 1),
     );
   }
