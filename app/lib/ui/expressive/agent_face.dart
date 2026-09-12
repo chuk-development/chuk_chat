@@ -167,13 +167,16 @@ class ExpressiveFace extends StatelessWidget {
             child: photo != null
                 ? null
                 : Center(
-                    child: Text(
-                      AgentAvatar.monogramOf(label),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.w800,
-                        fontSize: size * 0.38,
-                        letterSpacing: -0.5,
+                    child: Transform.translate(
+                      offset: Offset(0, size * monogramDrop(shape)),
+                      child: Text(
+                        AgentAvatar.monogramOf(label),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: size * 0.38,
+                          letterSpacing: -0.5,
+                        ),
                       ),
                     ),
                   ),
@@ -271,13 +274,16 @@ class AgentFace extends StatelessWidget {
               child: hasPhoto
                   ? null
                   : Center(
-                      child: Text(
-                        AgentAvatar.monogramOf(agent.name),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                          fontSize: size * 0.38,
-                          letterSpacing: -0.5,
+                      child: Transform.translate(
+                        offset: Offset(0, size * monogramDrop(shape)),
+                        child: Text(
+                          AgentAvatar.monogramOf(agent.name),
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            fontSize: size * 0.38,
+                            letterSpacing: -0.5,
+                          ),
                         ),
                       ),
                     ),

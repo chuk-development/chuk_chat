@@ -166,8 +166,20 @@ class PolygonShape extends ShapeBorder {
       centre.dx - (left + right) / 2,
       centre.dy - (top + bottom) / 2,
     );
+    // Then fill the box it was given. Inscribed in a circle, an odd-sided
+    // shape covers far less of its box than an even-sided one — a triangle's
+    // ink is two thirds as tall as the square's beside it, which is why it
+    // read as the small face in a list of faces. Growing it until its own
+    // bounds touch the box puts the same amount of colour on screen. An
+    // even-sided shape already touches, so it does not move.
+    final double spanX = right - left;
+    final double spanY = bottom - top;
+    final double fill = spanX <= 0 || spanY <= 0
+        ? 1
+        : math.min(rect.width / spanX, rect.height / spanY);
     final List<Offset> corners = <Offset>[
-      for (final Offset c in raw) c + shift,
+      for (final Offset c in raw)
+        centre + (c + shift - centre) * fill,
     ];
     final double round = (radius * cornerFactor).clamp(0.0, radius);
     final Path path = Path();
@@ -217,3 +229,15 @@ class PolygonShape extends ShapeBorder {
   @override
   EdgeInsetsGeometry get dimensions => EdgeInsets.zero;
 }
+
+/// How far the monogram of a face has to sit below the middle of its box for
+/// the eye to read it as centred, as a fraction of the box.
+///
+/// A shape with an even number of sides is symmetric about its middle, so its
+/// letter goes in the middle. An odd-sided one is not: a triangle carries its
+/// weight along the base, its centroid sits a sixth of its height below the
+/// middle of its bounds, and a letter placed in the geometric middle reads as
+/// floating too high in it. Half the way to the centroid is what the eye
+/// wants — the whole way puts the letter in the narrow part.
+double monogramDrop(ShapeBorder shape) =>
+    shape is PolygonShape && shape.sides.isOdd ? 1 / 12 : 0;
