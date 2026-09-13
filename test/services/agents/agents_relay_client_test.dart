@@ -909,6 +909,36 @@ void main() {
     await client.dispose();
   });
 
+  test('a heartbeat frame opens and surfaces as proof of life', () async {
+    final (client, host, _) = await paired();
+
+    final events = <AgentsRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    await host.emit(<String, dynamic>{
+      'type': 'heartbeat',
+      'run_id': 'run-7',
+      'session_key': 'thread-1',
+      'seq': 3,
+      'elapsed': 31.4,
+    });
+    // A host too old to send the extra fields still says it is alive.
+    await host.emit(<String, dynamic>{'type': 'heartbeat'});
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+
+    final beats = events.whereType<AgentsRelayHeartbeat>().toList();
+    expect(beats, hasLength(2));
+    expect(beats.first.runId, 'run-7');
+    expect(beats.first.sessionKey, 'thread-1');
+    expect(beats.first.seq, 3);
+    expect(beats.first.elapsedSeconds, 31.4);
+    expect(beats.last.seq, 0);
+    expect(beats.last.runId, isNull);
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
   test('delta / tool / done frames from the host open and surface as events',
       () async {
     final (client, host, _) = await paired();

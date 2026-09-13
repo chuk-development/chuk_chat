@@ -987,6 +987,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             runId: runId,
           ),
         );
+      case AgentsRelayHeartbeat():
       case AgentsRelayDelta():
       case AgentsRelayUser():
       case AgentsRelayReasoning():

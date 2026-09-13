@@ -478,6 +478,7 @@ class AgentsReplayLoader extends ChangeNotifier {
           notifyListeners();
         }
 
+      case AgentsRelayHeartbeat():
       case AgentsRelayRunError():
       case AgentsRelaySecretRequest():
       case AgentsRelayDebugContext():

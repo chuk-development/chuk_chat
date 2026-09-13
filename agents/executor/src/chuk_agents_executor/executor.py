@@ -93,6 +93,8 @@ from chuk_agents_runtime import (
     run_stamp_fields,
     skills_inventory,
 )
+from chuk_agents_runtime.trace import get_tracer
+from chuk_agents_runtime.trace import run_scope as trace_run_scope
 from chuk_agents_runtime.mcp_client import auto_open_enabled
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
 from chuk_agents_crypto import (
@@ -133,6 +135,7 @@ from .protocol import (
     extension_mcp_entry,
     file_payload,
     frame_to_b64,
+    heartbeat_payload,
     mcp_credentials_payload,
     mcp_tools_payload,
     reasoning_payload,
@@ -262,6 +265,12 @@ class StreamingModelClient:
         if hasattr(inner, "set_tools"):
             inner.set_tools(tools)  # type: ignore[attr-defined]
 
+    @property
+    def traced_tools(self) -> list[dict] | None:
+        """Forward the inner client's wire ``tools`` array, so the run trace can
+        price the tool schemas even though the loop only ever sees the wrapper."""
+        return getattr(self._inner, "traced_tools", None)
+
     def complete(self, messages: list[dict]) -> ModelResponse:
         response = self._inner.complete(messages)
         # Fallback only: the inner already streamed each chunk, so emitting the
@@ -332,6 +341,24 @@ class _Run:
     automation_id: str | None = None
 
 
+class _Heartbeat:
+    """The repeating ``heartbeat`` emitter of one run (``protocol.py``).
+
+    A thread, not a chain of timers: it wakes on its own switch, so stopping it
+    is one ``set()`` and the run never waits on a pending timer. ``cancel``
+    joins briefly, which is what keeps a beat from landing *after* the run's
+    terminal — a frame for a request the app has already closed.
+    """
+
+    def __init__(self, thread: threading.Thread, stop: threading.Event) -> None:
+        self._thread = thread
+        self._stop = stop
+
+    def cancel(self, *, join_timeout: float = 2.0) -> None:
+        self._stop.set()
+        self._thread.join(join_timeout)
+
+
 #: How long a here.now publish waits for the user before it gives up and denies.
 #: Long enough to walk to the phone and read the prompt; bounded so a run cannot
 #: hang forever on an approval nobody will ever answer.
@@ -345,6 +372,15 @@ APPROVAL_WAIT_SECONDS = 600.0
 RUN_MAX_SECONDS = float(os.environ.get("AGENTS_RUN_MAX_SECONDS", "7200") or 0)
 #: The ``done.reason`` of a run the guard stopped (docs/WIRE_CONTRACT.md, ``done``).
 RUN_TIMEOUT_REASON = "timeout"
+
+#: How often a running task says "still here" (the ``heartbeat`` frame, see
+#: ``protocol.py``). Nothing else on the stream proves a silent run is alive: a
+#: model reading a 290k-token prompt sends no token until the prefill is done,
+#: and a shell command sends none while it runs. Ten seconds is short enough
+#: that a client can keep a tight idle window and still never mistake a working
+#: run for a dead one, and cheap enough to be free (one small sealed frame).
+#: ``0`` (``AGENTS_HEARTBEAT_SECONDS=0``) disables the emitter entirely.
+HEARTBEAT_SECONDS = float(os.environ.get("AGENTS_HEARTBEAT_SECONDS", "10") or 0)
 
 
 #: How long ``request_secrets`` waits for the user before it reports every
@@ -696,6 +732,7 @@ class Executor:
         on_account_frame: Callable[[dict], None] | None = None,
         on_run_ack: Callable[[dict], None] | None = None,
         run_max_seconds: float | None = None,
+        heartbeat_seconds: float | None = None,
         secrets: SecretsVault | None = None,
         on_secret_request_pending: Callable[[dict], None] | None = None,
         automations=None,
@@ -784,6 +821,11 @@ class Executor:
         self._on_run_ack = on_run_ack
         # The wall-clock guard (Bead cowork-qxa); ``None`` = the module default.
         self._run_max_seconds = RUN_MAX_SECONDS if run_max_seconds is None else float(run_max_seconds)
+        # The run heartbeat (``protocol.heartbeat_payload``); ``None`` = the
+        # module default, ``0`` = off.
+        self._heartbeat_seconds = (
+            HEARTBEAT_SECONDS if heartbeat_seconds is None else float(heartbeat_seconds)
+        )
         # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"), owned by
         # the host and shared by every task: ``run_command`` / ``python`` get
         # the values as child environment, the model gets ``set`` / ``missing``,
@@ -3067,8 +3109,21 @@ class Executor:
         # The wall-clock guard (Bead cowork-qxa): armed for the loop's lifetime
         # only; cancelled in the ``finally`` below whatever way the run ends.
         guard = self._arm_run_guard(run)
+        # The heartbeat rides the same lifetime, for the opposite reason: the
+        # guard bounds a run that runs too long, this one proves to the app that
+        # a run which LOOKS stalled is working. Armed here, so it can only ever
+        # beat for a run that is running.
+        heartbeat = self._arm_heartbeat(run)
         try:
-            result = loop.run(session_key, prompt, regenerate=run.regenerate)
+            # The run trace's identity (chuk_agents_runtime.trace): every line the
+            # loop and the model client write inside this block carries this run
+            # id and session key, so `cowork-host trace <run id>` can rebuild the
+            # whole waterfall. A fresh thread starts with a fresh context, so two
+            # concurrent runs never see each other's scope. Costs nothing when
+            # tracing is off — it sets one ContextVar.
+            self._bind_trace_scrubber()
+            with trace_run_scope(run.run_id or run.request_id, session_key):
+                result = loop.run(session_key, prompt, regenerate=run.regenerate)
         except Exception as exc:  # a crashing loop must not kill the serve thread
             message = f"loop failed: {type(exc).__name__}"
             # The durable record closes BEFORE the stream: it must exist even if
@@ -3086,6 +3141,9 @@ class Executor:
         finally:
             if guard is not None:
                 guard.cancel()
+            # Before the terminal below: the last beat must not outlive the run.
+            if heartbeat is not None:
+                heartbeat.cancel()
             env_shim.on_run = None
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
@@ -3160,6 +3218,45 @@ class Executor:
                 tokens_spent=result.tokens_spent,
             ),
         )
+
+    # -- run heartbeat (protocol.heartbeat_payload) ------------------------
+    def _arm_heartbeat(self, run: _Run) -> "_Heartbeat | None":
+        """Start this run's ``heartbeat`` emitter, or ``None`` when it is off.
+
+        One small sealed frame every :attr:`_heartbeat_seconds` on the run's own
+        relay request, from here until the ``finally`` in :meth:`_run_task`
+        cancels it. It is the only frame that says "still running" while the
+        model reads a long prompt or a command works, and it is never persisted
+        — a replay carries transcript, not liveness.
+        """
+        interval = self._heartbeat_seconds
+        if not interval or interval <= 0:
+            return None
+        stop = threading.Event()
+        started = time.monotonic()
+
+        def beat() -> None:
+            seq = 0
+            while not stop.wait(interval):
+                seq += 1
+                try:
+                    self._event(
+                        run.request_id,
+                        heartbeat_payload(
+                            run_id=run.run_id,
+                            session_key=run.session_key,
+                            seq=seq,
+                            elapsed=time.monotonic() - started,
+                        ),
+                    )
+                except Exception:  # noqa: BLE001 — a dead socket ends the beat,
+                    return  # never the run
+
+        thread = threading.Thread(
+            target=beat, name=f"heartbeat-{run.request_id}", daemon=True
+        )
+        thread.start()
+        return _Heartbeat(thread, stop)
 
     # -- wall-clock guard (Bead cowork-qxa) --------------------------------
     def _arm_run_guard(self, run: _Run) -> threading.Timer | None:
@@ -3277,6 +3374,10 @@ class Executor:
                         final_answer=self._scrub_text(result.final_answer),
                         iterations=result.iterations,
                         tokens_spent=result.tokens_spent,
+                        # Where the wall clock went, so a slow run is diagnosable
+                        # from its row instead of from message timestamps.
+                        timings=getattr(result, "timings", None)
+                        and result.timings.as_row(),
                     )
                 return run_stamp_fields(store.get_run(run.run_id))
             finally:
@@ -3749,6 +3850,18 @@ class Executor:
         if self._subagent_limits is not None:
             config.limits = self._subagent_limits
         return config
+
+    def _bind_trace_scrubber(self) -> None:
+        """Hand the run tracer this executor's secret scrubber.
+
+        Content tracing is inert until a scrubber is wired — that is the safe
+        default, and it is why the tracer is built by the CLI long before any
+        vault exists. Structure-only tracing needs nothing from here.
+        """
+        tracer = get_tracer()
+        setter = getattr(tracer, "set_scrubber", None)
+        if setter is not None:
+            setter(self._scrub_text)
 
     def _scrub_text(self, text):
         """Mask secret values in one text bound for a store row or a host

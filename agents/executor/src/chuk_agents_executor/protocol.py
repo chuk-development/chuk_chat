@@ -110,6 +110,9 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "tokens": {"total": 1234, "runs": 3, "last_run": 456},
      "runtime": {"started_at": 1.0, "active_seconds": 12.5, "running": false},
      "sandbox": {"kind": "docker", "container": "agents-...", "workspace": "..."}}
+    {"type": "heartbeat",                                 # this run is alive
+     "run_id": "...", "session_key": "...", "seq": 3,
+     "elapsed": 31.4}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
@@ -119,6 +122,24 @@ app: the run blocks on its worker thread until an ``approval_decision`` with the
 matching ``approval_id`` comes back (a stop or a timeout ends the wait as a
 denial). It is what makes here.now publishing user-gated (§10-style consent) —
 the only executor->app frame that expects a reply.
+
+The ``heartbeat`` event says one thing: *this run is still running*. Nothing
+else on the stream says it. A model reading a 290k-token prompt sends no token
+until the prefill is done, and a shell command or a browser step sends no token
+while it works, so a healthy run can be silent for minutes. Without a frame of
+its own, a client cannot tell that silence from a host that is gone, and it has
+to guess — which is how a working run got reported to the user as a dead server.
+
+It rides the run's own relay request, so it is routed exactly like the deltas of
+that run, and it repeats every :data:`HEARTBEAT_SECONDS` from the moment the loop
+starts until the run closes. It carries ``run_id`` and ``session_key`` (the same
+identifiers ``done`` carries), a ``seq`` that counts up from 1 per run, and
+``elapsed`` seconds since the run started. It is **not persisted**: it is proof
+of life, not transcript, so a replay never contains one. A run that is not
+running emits none, and the emitter stops with the run whatever way the run ends.
+An older client that does not know the type ignores it, and an older host that
+never sends it is not broken by it — a client must treat the heartbeat as an
+addition, never as a requirement.
 
 The ``file`` event (§9, ``send_file_to_user``) is how a produced file reaches the
 chat thread. It rides the same sealed frame as every other event, so a file the
@@ -517,6 +538,30 @@ def room_done_payload(
         "messages_sent": messages_sent,
         "rounds": rounds,
     }
+
+
+def heartbeat_payload(
+    *,
+    run_id: str = "",
+    session_key: str = "",
+    seq: int = 0,
+    elapsed: float | None = None,
+) -> dict[str, Any]:
+    """Build a ``heartbeat``: the run named by ``run_id`` is still running.
+
+    Emitted on a fixed interval for the life of the run and never persisted (see
+    the wire-format note above). ``seq`` counts up from 1 per run, so a client
+    can see a gap; ``elapsed`` is seconds since the run started, left out when
+    the caller does not measure it.
+    """
+    payload: dict[str, Any] = {"type": "heartbeat", "seq": int(seq)}
+    if run_id:
+        payload["run_id"] = run_id
+    if session_key:
+        payload["session_key"] = session_key
+    if elapsed is not None:
+        payload["elapsed"] = round(float(elapsed), 3)
+    return payload
 
 
 def done_payload(

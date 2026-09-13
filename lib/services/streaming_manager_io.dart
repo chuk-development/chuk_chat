@@ -1,11 +1,12 @@
 // lib/services/streaming_manager_io.dart
 // Native implementation: the shared core from streaming_manager_base.dart plus
-// notification, foreground-service, idle-timeout and UI-throttle handling.
+// notification, foreground-service, silence-log and UI-throttle handling.
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/streaming_manager_base.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
@@ -28,70 +29,98 @@ class StreamingManager extends StreamingManagerBase {
   /// no visible difference; the final buffer is always flushed on completion.
   static const _uiUpdateInterval = Duration(milliseconds: 33);
 
-  /// Idle timeout: if no event arrives for this duration, the stream
-  /// is considered dead. This prevents the "Thinking..." state from
-  /// hanging forever when the server silently drops the connection.
-  static const _idleTimeout = Duration(seconds: 60);
+  /// Silence is not a failure, and this class no longer treats it as one.
+  ///
+  /// There used to be a flat 60-second idle timeout here: no event of any kind
+  /// for a minute and the stream was torn down with "No response received —
+  /// the server may be overloaded". That sentence was a guess the app had no
+  /// evidence for, and on this user's own host it was simply wrong. Turns
+  /// carrying 170k–290k prompt tokens run 405 s, 490 s, 631 s, 818 s and
+  /// 1851 s end to end (`~/.cowork/executor-state.db`, table `runs`), and a
+  /// provider sends nothing at all until the prefill is done — so the very
+  /// first gap can pass a minute on its own, and so can any single shell
+  /// command or browser step. The app was killing working runs.
+  ///
+  /// A slow answer is not an error. An error is an error: the socket drops,
+  /// the host sends an `error` frame, the run comes back failed, or the user
+  /// stops it. Every one of those paths still ends the stream at once — they
+  /// are events, not silence. What is gone is the timer that invented a
+  /// failure out of nothing having happened yet.
+  ///
+  /// What remains is a [Timer.periodic] that only ever writes a line to the
+  /// log, so a genuinely stuck run can still be diagnosed afterwards. It ends
+  /// nothing, shows nothing and throws no buffered content away.
+  ///
+  /// Not `const`: a test drives the clock through it instead of waiting.
+  @visibleForTesting
+  static Duration silenceReportInterval = const Duration(seconds: 60);
 
-  /// Start the idle timer — if no events arrive within [_idleTimeout],
-  /// treat the stream as dead and clean up.
+  /// Arms the log-only silence watch for [stream].
+  ///
+  /// Fires every [silenceReportInterval] for as long as the stream is active
+  /// and writes one line when nothing has arrived for at least that long. It
+  /// never touches the stream: no teardown, no error, no completion, and the
+  /// buffered content is not read for anything but its length.
+  ///
+  /// This is the whole of what used to be the idle timeout. The user asked for
+  /// the logging explicitly — a run that really is stuck has to stay
+  /// diagnosable after the fact — and for nothing to be killed on a guess.
   @override
-  void armIdleTimer({
-    required String chatId,
-    required ActiveStream stream,
-    required void Function(String content, String reasoning, double? tps)
-    onComplete,
-    required StreamErrorCallback onError,
-  }) {
-    stream.idleTimer = _startIdleTimer(
-      chatId: chatId,
-      stream: stream,
-      emptyMessage:
-          'No response received — the server may be overloaded. '
-          'Please try again.',
-      onComplete: onComplete,
-      onError: onError,
-    );
+  void armSilenceWatch(ActiveStream stream) {
+    stream.cancelSilenceWatch();
+    stream.silenceTimer = Timer.periodic(silenceReportInterval, (timer) {
+      if (!stream.isActive) {
+        timer.cancel();
+        return;
+      }
+      final since = stream.lastEventAt ?? stream.startedAt;
+      final gap = DateTime.now().difference(since);
+      if (gap < silenceReportInterval) return;
+      _reportSilence(stream, gap);
+    });
   }
 
-
-  /// The idle watchdog: nothing arrived for [_idleTimeout], so the connection
-  /// is treated as dead.
+  /// One log line about an observed gap: which phase it happened in, how long
+  /// it actually was, how many events had arrived (and how many of those were
+  /// heartbeats), and whether any content was already buffered.
   ///
-  /// Armed once when the stream starts and re-armed on every event, which is
-  /// why both paths need the same body — including the
-  /// [StreamErrorCodes.idleTimeout] code. The re-armed timer is the one that
-  /// fires for almost every real timeout, and it used to report no code at
-  /// all, so callers that branch on the code never saw an idle timeout.
-  ///
-  /// Partial content is kept: a stream that stopped halfway is completed with
-  /// what already arrived rather than thrown away.
-  Timer _startIdleTimer({
-    required String chatId,
-    required ActiveStream stream,
-    required String emptyMessage,
-    required void Function(String content, String reasoning, double? tps)
-    onComplete,
-    required StreamErrorCallback onError,
-  }) {
-    return Timer(_idleTimeout, () {
-      // Guard against firing after the stream already completed.
-      if (!stream.isActive) return;
-      stream.isActive = false;
-      if (kDebugMode) {
-        debugPrint(
-          '[StreamingManager] Idle timeout for chat $chatId — '
-          'no data for ${_idleTimeout.inSeconds}s',
-        );
-      }
-      final content = stream.contentBuffer.toString();
-      if (content.isEmpty) {
-        onError(emptyMessage, code: StreamErrorCodes.idleTimeout);
-      } else {
-        onComplete(content, stream.reasoningBuffer.toString(), stream.tps);
-      }
-      cleanupStream(chatId);
-    });
+  /// "waiting for the first event" and "mid-stream" are different failures —
+  /// the first is a request that never got picked up, the second a run that
+  /// went quiet after it started — so the line names which one it is.
+  void _reportSilence(ActiveStream stream, Duration gap) {
+    final waiting = stream.eventCount == 0;
+    final phase = waiting ? 'waiting for the first event' : 'mid-stream';
+    final buffered = stream.contentBuffer.length;
+    final beats = stream.heartbeatCount;
+    if (kDebugMode) {
+      debugPrint(
+        '[StreamingManager] chat ${stream.chatId} quiet for ${gap.inSeconds}s '
+        '($phase, phase=${stream.phase.name}, events=${stream.eventCount}, '
+        'heartbeats=$beats${beats > 0 ? ' (last seq ${stream.lastHeartbeatSeq})' : ''}, '
+        'buffered=$buffered chars). Not an error: the run may still be working '
+        'on the host.',
+      );
+    }
+    // Also to the app's own opt-in logger, because that one survives a release
+    // build — a debug-only line cannot diagnose a stuck run on the phone. Only
+    // metadata goes in: how long, how many, how big. Never the text itself.
+    unawaited(
+      DiagnosticsLogService.info(
+        'streaming',
+        'stream quiet',
+        data: <String, Object?>{
+          'chat_id': stream.chatId,
+          'gap_seconds': gap.inSeconds,
+          'waiting_for_first_event': waiting,
+          'phase': stream.phase.name,
+          'events': stream.eventCount,
+          'heartbeats': beats,
+          'last_heartbeat_seq': stream.lastHeartbeatSeq,
+          'buffered_chars': buffered,
+          'reasoning_chars': stream.reasoningBuffer.length,
+        },
+      ).catchError((Object _) {}),
+    );
   }
 
   @override
@@ -99,25 +128,10 @@ class StreamingManager extends StreamingManagerBase {
     required String chatId,
     required ActiveStream stream,
     required ChatStreamEvent event,
-    required void Function(String content, String reasoning, double? tps)
-    onComplete,
-    required StreamErrorCallback onError,
   }) {
     // The first event of any kind — usually the meta frame — is the proof
     // that the server is there. Everything before it was still connecting.
     stream.firstEventAt ??= DateTime.now();
-
-    // Reset idle timer on every event — connection is still alive
-    stream.cancelIdleTimer();
-    stream.idleTimer = _startIdleTimer(
-      chatId: chatId,
-      stream: stream,
-      emptyMessage:
-          'Response timed out — the server stopped responding. '
-          'Please try again.',
-      onComplete: onComplete,
-      onError: onError,
-    );
 
     // Record time-to-first-token on the first real delta (content or reasoning).
     if ((event is ContentEvent || event is ReasoningEvent) &&
@@ -159,7 +173,7 @@ class StreamingManager extends StreamingManagerBase {
   @override
   void beforeCompletion(ActiveStream stream) {
     stream.isActive = false;
-    stream.cancelIdleTimer();
+    stream.cancelSilenceWatch();
   }
 
   @override

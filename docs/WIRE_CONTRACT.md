@@ -287,6 +287,38 @@ Existing event types stay as they are: `delta`, `reasoning`, `tool`, `file`,
 `subagent`, `user`, `done`, `error`, `debug_context`, `approval_request`, `room_*`,
 `browser_*`. The changes below are additive.
 
+### `heartbeat` (NEW, additive)
+
+```json
+{"type": "heartbeat", "run_id": "<uuid>"?, "session_key": "<key>"?,
+ "seq": 3, "elapsed": 31.4}
+```
+
+The frame that says *this run is still running*, and nothing else. Emitted on
+the run's own relay request every `AGENTS_HEARTBEAT_SECONDS` (default 10) from
+the moment the loop starts until the run closes, whatever way it closes. `seq`
+counts up from 1 per run, so a gap is visible; `elapsed` is seconds since the
+run started.
+
+Why it exists: nothing else on the stream proves a silent run is alive. A model
+reading a 290k-token prompt sends no token until the prefill is done, and a
+shell command or a browser step sends none while it works. On this user's host
+such turns run 405 s to 1851 s end to end. Without this frame the app could not
+tell that silence from a host that was gone, so it guessed — and a 60-second
+client timeout reported working runs to the user as "the server may be
+overloaded".
+
+Rules:
+
+- **Never persisted.** It is liveness, not transcript; a replay never carries
+  one.
+- **Never required.** An older host sends none and must keep working; a client
+  may not treat its absence as failure. The app's rule is the same in the other
+  direction: silence alone never ends a stream.
+- **Never rendered.** It adds no message, no token and no tool card. The one
+  visible thing it may do is move the header out of "Connecting", because the
+  host answering is exactly what `run_state`-less prefill lacked.
+
 ### `browser_view` `started` (extended, additive)
 
 ```json
