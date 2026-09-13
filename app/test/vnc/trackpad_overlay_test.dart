@@ -1,4 +1,4 @@
-import 'package:cowork/widgets/vnc_trackpad_overlay.dart';
+import 'package:chuk_chat/widgets/vnc_trackpad_overlay.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 import 'package:flutter_test/flutter_test.dart';

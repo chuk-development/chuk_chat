@@ -24,8 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session  # noqa: E402
 
-from cowork_agent import BackendModelClient, fetch_models_info, resolve_model  # noqa: E402
-from cowork_agent import backend as backend_mod  # noqa: E402
+from chuk_agents_runtime import BackendModelClient, fetch_models_info, resolve_model  # noqa: E402
+from chuk_agents_runtime import backend as backend_mod  # noqa: E402
 
 
 def main() -> int:

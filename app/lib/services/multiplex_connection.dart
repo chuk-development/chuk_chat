@@ -13,9 +13,9 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/services/tool_result_cache_registry.dart';
-import 'package:cowork/services/websocket_connector.dart' as ws_connector;
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
+import 'package:chuk_chat/services/websocket_connector.dart' as ws_connector;
 
 const _uuid = Uuid();
 

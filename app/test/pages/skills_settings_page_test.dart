@@ -3,18 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/pages/skills_settings_page.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/skills/cowork_skill.dart';
-import 'package:cowork/services/skills/skill_settings_sync.dart';
-import 'package:cowork/services/skills/skills_source.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/skills/agents_skill.dart';
+import 'package:chuk_chat/services/skills/skill_settings_sync.dart';
+import 'package:chuk_chat/services/skills/skills_source.dart';
 
 import '../services/skills/skills_source_test.dart'
     show FakeMirror, FakeSkillsController;
 
-CoworkSkill _skill(String name, {String source = 'workspace', bool enabled = true}) =>
-    CoworkSkill.fromPayload(<String, dynamic>{
+AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true}) =>
+    AgentsSkill.fromPayload(<String, dynamic>{
       'name': name,
       'description': 'Does $name.',
       'source': source,
@@ -27,14 +27,14 @@ void main() {
 
   setUp(() {
     source.reset(mirror: FakeMirror(stored: <String, bool>{}));
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
     controller = FakeSkillsController();
-    CoworkRelayLink.instance.bind(controller);
+    AgentsRelayLink.instance.bind(controller);
   });
 
   tearDown(() {
     source.reset(mirror: const NoopSkillSettingsMirror());
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
   });
 
   Future<void> pump(WidgetTester tester) async {
@@ -52,7 +52,7 @@ void main() {
   testWidgets('shows the host list in two sections with one switch each',
       (tester) async {
     await pump(tester);
-    controller.emit(CoworkRelaySkillsList(
+    controller.emit(AgentsRelaySkillsList(
       skills: [
         _skill('automations', source: 'builtin', enabled: false),
         _skill('youtube-transcript'),
@@ -79,7 +79,7 @@ void main() {
   testWidgets('each section says what it is, and every row carries its mark',
       (tester) async {
     await pump(tester);
-    controller.emit(CoworkRelaySkillsList(skills: [
+    controller.emit(AgentsRelaySkillsList(skills: [
       _skill('automations', source: 'builtin'),
       _skill('youtube-transcript'),
     ]));
@@ -111,7 +111,7 @@ void main() {
     // youtube-transcript is seeded from the repository, but it is a workspace
     // skill: the host says so, and the page must not second-guess a name.
     await pump(tester);
-    controller.emit(CoworkRelaySkillsList(skills: [
+    controller.emit(AgentsRelaySkillsList(skills: [
       _skill('youtube-transcript'),
     ]));
     await tester.pump();
@@ -123,7 +123,7 @@ void main() {
   testWidgets('a switch sends skill_control and the reply settles the row',
       (tester) async {
     await pump(tester);
-    controller.emit(CoworkRelaySkillsList(skills: [_skill('deploy')]));
+    controller.emit(AgentsRelaySkillsList(skills: [_skill('deploy')]));
     await tester.pump();
 
     await tester.tap(find.byType(Switch));
@@ -131,21 +131,21 @@ void main() {
     expect(controller.controls, [('deploy', 'disable')]);
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
 
-    controller.emit(CoworkRelaySkillsList(skills: [_skill('deploy', enabled: false)]));
+    controller.emit(AgentsRelaySkillsList(skills: [_skill('deploy', enabled: false)]));
     await tester.pump();
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
   });
 
   testWidgets('an empty host list says so once the host answered', (tester) async {
     await pump(tester);
-    controller.emit(const CoworkRelaySkillsList(skills: []));
+    controller.emit(const AgentsRelaySkillsList(skills: []));
     await tester.pump();
     expect(find.textContaining('The host has no skills'), findsOneWidget);
   });
 
   testWidgets('without a skills-capable controller the page says offline',
       (tester) async {
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
     await pump(tester);
     expect(find.textContaining('Not connected to the host'), findsOneWidget);
   });

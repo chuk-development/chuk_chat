@@ -3,7 +3,7 @@
 ///
 /// One row per name: the name in plaintext (a label, so the sync can compare
 /// without decrypting) and the value as an [EncryptionService] envelope, the
-/// same per-user password-derived AES-256-GCM key every other CoWork mirror
+/// same per-user password-derived AES-256-GCM key every other Agents mirror
 /// uses. A fresh install signs in, pulls the rows, decrypts, and adopts them
 /// into the local [SecretsStore].
 ///
@@ -15,8 +15,8 @@ library;
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// The pluggable half, so a test and a signed-out app can swap it out.
 abstract interface class SecretsMirror {

@@ -16,13 +16,13 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/feedback.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/feedback.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class MobileAgentSheet extends StatelessWidget {
   const MobileAgentSheet({
@@ -37,7 +37,7 @@ class MobileAgentSheet extends StatelessWidget {
     this.onSignOut,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
 
   /// Opens the coworker's profile page.
   final VoidCallback? onProfile;
@@ -53,7 +53,7 @@ class MobileAgentSheet extends StatelessWidget {
   /// the sheet.
   static Future<void> show(
     BuildContext context, {
-    required CoworkAgent agent,
+    required AgentsAgent agent,
     VoidCallback? onProfile,
     VoidCallback? onControls,
     VoidCallback? onRename,

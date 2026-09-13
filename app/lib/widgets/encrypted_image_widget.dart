@@ -3,8 +3,8 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/services/image_storage_service.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// Widget that downloads, decrypts, and displays an encrypted image from storage
 class EncryptedImageWidget extends StatefulWidget {

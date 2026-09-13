@@ -1,7 +1,7 @@
 """The browser capability is a property of the image, not of its tag.
 
 Bead cowork-3i5c: the host used to decide "this sandbox can browse" by looking
-for the word ``browser`` in ``COWORK_SANDBOX_IMAGE``. With the variable unset —
+for the word ``browser`` in ``AGENTS_SANDBOX_IMAGE``. With the variable unset —
 the normal case — that is always false, so the Playwright MCP server never
 started, every ``mcp__playwright__browser_*`` call came back "unknown tool", and
 the app's "take over the screen" target stayed dead. These tests pin the
@@ -10,7 +10,7 @@ replacement: ask the image whether the launcher is in it.
 
 from __future__ import annotations
 
-from cowork_sandbox.docker import (
+from chuk_agents_sandbox.docker import (
     BASE_IMAGE,
     BROWSER_IMAGE,
     BROWSER_MCP_PATH,
@@ -20,7 +20,7 @@ from cowork_sandbox.docker import (
     image_has_browser,
     image_present,
 )
-from cowork_sandbox.lifecycle import CliResult
+from chuk_agents_sandbox.lifecycle import CliResult
 
 
 class FakeCli:

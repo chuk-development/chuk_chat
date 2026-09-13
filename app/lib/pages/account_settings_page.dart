@@ -3,23 +3,23 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/pages/recover_chats_page.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/key_version_service.dart';
-import 'package:cowork/services/password_change_service.dart';
-import 'package:cowork/services/password_reset_service.dart';
-import 'package:cowork/services/profile_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/pages/recover_chats_page.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/key_version_service.dart';
+import 'package:chuk_chat/services/password_change_service.dart';
+import 'package:chuk_chat/services/password_reset_service.dart';
+import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class AccountSettingsPage extends StatefulWidget {
   const AccountSettingsPage({super.key});

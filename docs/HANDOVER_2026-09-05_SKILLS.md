@@ -1,13 +1,13 @@
 # Handover: Skills-Sync Client <-> Server (session cowork-18, bead cowork-qk7)
 
 Stand 2026-09-05. Auftrag (User): "Die Skills muessen komplett synchronisiert
-sein zwischen dem Cowork-Client und dem Cowork-Server in Python ... Es gibt
+sein zwischen dem Agents-Client und dem Agents-Server in Python ... Es gibt
 Built-in-Skills und weitere Skills im Repository."
 
 ## Befund vorher
 
 - Python kannte nur `<workspace>/skills/<name>/SKILL.md` (Seeds aus `skills/`
-  im Repo, einmalig kopiert durch `cowork_host.seed_skills`). Kein An/Aus.
+  im Repo, einmalig kopiert durch `chuk_agents_host.seed_skills`). Kein An/Aus.
 - Der Client zeigte chuk_chats sechs kompilierte Built-ins (chart-authoring,
   deep-research, ...) und einen Editor fuer Supabase `user_skills`. Nichts davon
   erreichte je den Host. Null Ueberlappung.
@@ -35,10 +35,10 @@ Python (`docs/WIRE_CONTRACT.md`, Abschnitt "Skills"):
 - Tests: `agent/tests/test_skills.py` (+8), `executor/tests/test_skills_frames.py` (4).
 
 Dart:
-- `services/skills/cowork_skill.dart` (Modell + `CoworkSkillsControl`),
+- `services/skills/agents_skill.dart` (Modell + `AgentsSkillsControl`),
   `skills_source.dart` (`SkillsSource.instance`, wie `AutomationsSource`),
   `skill_settings_sync.dart` (Supabase `cowork_skill_settings`, best-effort).
-- `cowork_relay_client.dart`: `CoworkRelaySkillsList`, `case 'skills_list'`,
+- `agents_relay_client.dart`: `AgentsRelaySkillsList`, `case 'skills_list'`,
   `sendSkillControl` / `requestSkillsList`. Die drei Switch-Cases in
   thread_view / replay_loader / websocket_chat_service hat cowork-af gesetzt.
 - `pages/skills_settings_page.dart`: Host-Liste in "Built in" und "Workspace",
@@ -64,18 +64,18 @@ dem Host abgeschaltet (Neuinstallation, zurueckgesetzte Host-DB).
   werden (nicht von cowork-18 angelegt, daher nicht angefasst).
 - Die Liste wird erst angefragt, wenn die Skills-Seite geoeffnet wird. Soll der
   Spiegel auch ohne Seitenaufruf greifen, `SkillsSource.instance.attach()` +
-  `refresh()` nach dem Pairing in `cowork_shell_state.dart` aufrufen (Datei
+  `refresh()` nach dem Pairing in `agents_shell_state.dart` aufrufen (Datei
   gehoert einer anderen Session).
 - Live-Nachweis mit laufendem Host (#5/#6 Neustart) und Screenshot der Seite
   nach "Bildschirm frei".
 
 ## Nachtrag: Connector-Status-Sync mit chuk_chat (bead cowork-hza, session cowork-18)
 
-Symptom: in chuk_chat verbundene MCP-Connectoren zeigten in CoWork "connect".
+Symptom: in chuk_chat verbundene MCP-Connectoren zeigten in Agents "connect".
 Ursache: zwei getrennte Spiegel im selben Supabase-Projekt. chuk_chat schreibt
 `service_credentials` (eine Zeile pro Connector, `service_name = 'mcp_<id>'`,
 `encrypted_data` = Envelope von `{"connection": McpConnection.toJson,
-"secrets": _McpSecrets.toJson | null}`); CoWork las nur seine eigene Tabelle
+"secrets": _McpSecrets.toJson | null}`); Agents las nur seine eigene Tabelle
 `cowork_mcp_connectors` (ein Blob pro User). Gleicher Key, gleiche Modelle,
 gleiche Katalog-Ids, also direkt lesbar.
 
@@ -95,5 +95,5 @@ Gebaut (`app/lib/services/mcp/`):
   Rueckweg-Form, Loeschregeln.
 
 Kein Python, kein Contract, keine Migration (chuks Tabelle existiert). Offen:
-Live-Nachweis nach Login (chuk-Connector erscheint in CoWork als verbunden,
+Live-Nachweis nach Login (chuk-Connector erscheint in Agents als verbunden,
 Token kommt beim naechsten Task am Host an).

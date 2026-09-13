@@ -13,16 +13,16 @@ encrypted task ("run ``echo hello > f.txt`` then tell me done"). Assert:
 from __future__ import annotations
 
 import pytest
-from cowork_crypto import ApprovedDevices, CoworkFrameOpener, CoworkFrameRejected
-from cowork_manager import RosterStore, RuntimeStatus, decode_frames
+from chuk_agents_crypto import ApprovedDevices, AgentsFrameOpener, AgentsFrameRejected
+from chuk_agents_manager import RosterStore, RuntimeStatus, decode_frames
 
-from cowork_executor import (
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     ExecutorSupervisor,
     loopback_pair,
 )
-from cowork_agent import MockModelClient, tool_call_response
+from chuk_agents_runtime import MockModelClient, tool_call_response
 
 from wiring import KEY_VERSION, paired_channel
 
@@ -51,7 +51,7 @@ def test_encrypted_end_to_end_local(tmp_path):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
 
-    from cowork_sandbox import LocalEnvironment
+    from chuk_agents_sandbox import LocalEnvironment
 
     # 3. A real supervisor starts a real Executor for the roster agent.
     def factory(a):
@@ -63,7 +63,7 @@ def test_encrypted_end_to_end_local(tmp_path):
             environment=LocalEnvironment(workdir=a.workspace_dir),
             db_path=str(tmp_path / "executor-state.db"),
             model_factory=_scripted_model,
-            system_prompt="You are a CoWork coworker.",
+            system_prompt="You are a Agents coworker.",
         )
 
     supervisor = ExecutorSupervisor(roster, factory)
@@ -137,12 +137,12 @@ def test_wire_frames_are_encrypted_and_authenticated(tmp_path):
     import base64
 
     sealed = base64.b64decode(frame_b64)
-    stranger = CoworkFrameOpener(
+    stranger = AgentsFrameOpener(
         channel_key=channel.channel_key,
         key_version=KEY_VERSION,
         approved_devices=ApprovedDevices(),  # default deny
     )
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         stranger.open(sealed)
 
     # The executor's real opener (controller approved) opens it fine.
@@ -158,10 +158,10 @@ def test_unapproved_controller_is_rejected(tmp_path):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
 
-    from cowork_sandbox import LocalEnvironment
+    from chuk_agents_sandbox import LocalEnvironment
 
     # Executor with an EMPTY approved set: it trusts no controller.
-    empty_opener = CoworkFrameOpener(
+    empty_opener = AgentsFrameOpener(
         channel_key=channel.channel_key,
         key_version=KEY_VERSION,
         approved_devices=ApprovedDevices(),

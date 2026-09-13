@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cowork_manager import AgentIdentity, GroupRoom, assign_room_handles
+from chuk_agents_manager import AgentIdentity, GroupRoom, assign_room_handles
 
 
 def _id(agent_id, name, device="laptop"):

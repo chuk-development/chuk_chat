@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cowork/utils/tool_sanitizer.dart';
+import 'package:chuk_chat/utils/tool_sanitizer.dart';
 
 // Per-result and per-message caps for prior tool-call context. Past tool
 // results bloat fast (search results often >10k chars each), so cap

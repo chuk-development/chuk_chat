@@ -1,5 +1,5 @@
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 
 /// The transcript line of one automation: ONE [ToolCall] per automation id,
 /// updated on every event (last event wins), the same mapping for the live
@@ -11,7 +11,7 @@ import 'package:cowork/services/cowork/cowork_relay_client.dart';
 /// says what happened and when.
 ToolCall automationCallFromRelay(
   ToolCall? existing,
-  CoworkRelayAutomation event, {
+  AgentsRelayAutomation event, {
   DateTime? now,
 }) {
   final automation = event.automation;
@@ -45,7 +45,7 @@ ToolCall automationCallFromRelay(
 }
 
 /// One line of English for an automation event, for the transcript card.
-String automationEventText(CoworkRelayAutomation event) {
+String automationEventText(AgentsRelayAutomation event) {
   final a = event.automation;
   final what = '${a.name} (${a.specLabel})';
   switch (event.event) {

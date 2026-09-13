@@ -1,7 +1,7 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/websocket_chat_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/services/websocket_chat_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay — this is THE TRANSPORT ADAPTER. Upstream talks to
-// a hosted API over the multiplexed /v2/ws socket; CoWork talks to the paired
-// local Python host through CoworkRelayController.
+// a hosted API over the multiplexed /v2/ws socket; Agents talks to the paired
+// local Python host through AgentsRelayController.
 //
 // It must NEVER emit ToolCallsEvent: that is the invariant that keeps the
 // client-side tool loop dead. Every host tool is RENDERED (through the run
@@ -12,20 +12,20 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_replay_loader.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/services/cowork/cowork_queued_marks.dart';
-import 'package:cowork/services/cowork/cowork_task_outbox.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
+import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 /// Service for handling streaming chat responses.
 ///
 /// Same path, class and static signature as upstream, so every imported call
-/// site binds unchanged. The body is CoWork's: it sends one task over the
+/// site binds unchanged. The body is Agents's: it sends one task over the
 /// paired relay and folds the host's event stream into `ChatStreamEvent`s.
 ///
 /// ## What is ignored, and why
@@ -52,7 +52,7 @@ import 'package:cowork/services/chat_model_selection_service.dart';
 /// | `room_*`, `browser_*` | — | owned elsewhere |
 /// | anything with `replay: true`, and every `user` | — | replay loader only |
 ///
-/// `regenerate` is the one send-side flag CoWork adds to chuk_chat's surface:
+/// `regenerate` is the one send-side flag Agents adds to chuk_chat's surface:
 /// it marks a Retry, so the host replaces the last turn instead of appending a
 /// second copy of the same question.
 class WebSocketChatService {
@@ -122,8 +122,8 @@ class WebSocketChatService {
     bool regenerate = false,
     bool modelSelectionCaptured = false,
   }) {
-    final link = CoworkRelayLink.instance;
-    final ledger = CoworkRunLedger.instance;
+    final link = AgentsRelayLink.instance;
+    final ledger = AgentsRunLedger.instance;
     final sessionKey = (chatId != null && chatId.isNotEmpty)
         ? chatId
         : link.sessionKey.value;
@@ -143,14 +143,14 @@ class WebSocketChatService {
       // attachments. Dropped loudly rather than silently mangled.
       if (kDebugMode) {
         debugPrint(
-          '[cowork-adapter] dropping ${images.length} image(s): the relay has '
+          '[agents-adapter] dropping ${images.length} image(s): the relay has '
           'no image channel yet',
         );
       }
     }
 
     final out = StreamController<ChatStreamEvent>();
-    StreamSubscription<CoworkRelayInbound>? sub;
+    StreamSubscription<AgentsRelayInbound>? sub;
 
     /// Serialises the handlers. A file event writes bytes to the blob store
     /// before its block is appended; without this chain a `done` arriving right
@@ -205,27 +205,27 @@ class WebSocketChatService {
       closeOut();
     }
 
-    Future<void> handle(CoworkRelayInbound event) async {
+    Future<void> handle(AgentsRelayInbound event) async {
       if (terminated) return;
       // The replay loader owns history. A replayed frame must never enter a
       // live run's stream: it would append yesterday's answer to today's.
       if (_isReplay(event)) return;
 
       switch (event) {
-        case CoworkRelayDelta(:final text):
+        case AgentsRelayDelta(:final text):
           // A token is proof the run is alive: it restarts the ceiling that
           // would otherwise declare it lost.
           ledger.touch(sessionKey);
           if (text.isNotEmpty) emit(ContentEvent(text));
 
-        case CoworkRelayReasoning(:final text):
+        case AgentsRelayReasoning(:final text):
           if (text.isNotEmpty) {
             ledger.reasoning(sessionKey, text);
             emit(ReasoningEvent(text));
           }
 
-        case CoworkRelayTool():
-          // cowork's relay emits ONE tool event per completed command, so this
+        case AgentsRelayTool():
+          // agents's relay emits ONE tool event per completed command, so this
           // is an open and a close in one step. A host that grows real start
           // events lands here with `status == 'running'` and only opens.
           final started =
@@ -249,7 +249,7 @@ class WebSocketChatService {
             if (verbose) emit(ReasoningEvent(_toolOutcomeLine(event)));
           }
 
-        case CoworkRelaySubagent():
+        case AgentsRelaySubagent():
           ledger.subagent(
             sessionKey,
             subagentId: event.subagentId,
@@ -259,36 +259,36 @@ class WebSocketChatService {
             error: event.error,
           );
 
-        case CoworkRelayFile():
+        case AgentsRelayFile():
           await ledger.file(sessionKey, event);
 
-        case CoworkRelayAutomation():
+        case AgentsRelayAutomation():
           // One transcript line per automation id (docs/WIRE_CONTRACT.md,
           // "Automations"); the strip and the page read the source.
           ledger.automation(sessionKey, event);
 
-        case CoworkRelayAutomationList():
-        case CoworkRelayDocuments():
-        case CoworkRelaySkillsList():
-        case CoworkRelayAgentList():
+        case AgentsRelayAutomationList():
+        case AgentsRelayDocuments():
+        case AgentsRelaySkillsList():
+        case AgentsRelayAgentList():
           break;
 
-        case CoworkRelayApprovalRequest():
+        case AgentsRelayApprovalRequest():
           ledger.approval(sessionKey, event);
 
-        case CoworkRelaySecretRequest():
+        case AgentsRelaySecretRequest():
           // Answered by the thread view's card (docs/WIRE_CONTRACT.md,
           // "Secrets"); nothing for the transcript. Values never pass here.
           break;
 
-        case CoworkRelayRunError(:final message):
+        case AgentsRelayRunError(:final message):
           terminated = true;
           ledger.finish(sessionKey, reason: 'error');
           emit(ErrorEvent(message, code: StreamErrorCodes.streamFailure));
           emit(DoneEvent());
           closeOut();
 
-        case CoworkRelayDone():
+        case AgentsRelayDone():
           final runId = event.runId;
           // A live turn is written to the local transcript by the UI, not by a
           // replay, so the replay cursor still points BELOW it. Left alone, the
@@ -303,9 +303,9 @@ class WebSocketChatService {
           // stays as drawn.
           final lastMid = event.lastMid;
           if (lastMid != null) {
-            CoworkReplayLoader.instance.advanceCursor(sessionKey, lastMid);
+            AgentsReplayLoader.instance.advanceCursor(sessionKey, lastMid);
           } else {
-            CoworkReplayLoader.instance.invalidateCursor(sessionKey);
+            AgentsReplayLoader.instance.invalidateCursor(sessionKey);
           }
           endRun(
             finalAnswer: event.finalAnswer,
@@ -323,19 +323,19 @@ class WebSocketChatService {
         // after a reconnect that never streamed through here, and it dedups
         // by run id. Acking here as well sent two frames per run (review F14).
 
-        case CoworkRelayDebugContext():
+        case AgentsRelayDebugContext():
           ledger.debugContext(
             sessionKey,
             Map<String, dynamic>.from(event.payload),
           );
 
-        case CoworkRelayRunState():
-        case CoworkRelayUser():
-        case CoworkRelayRoomTurn():
-        case CoworkRelayRoomDone():
-        case CoworkRelayRoomHistory():
-        case CoworkRelayBrowserData():
-        case CoworkRelayBrowserView():
+        case AgentsRelayRunState():
+        case AgentsRelayUser():
+        case AgentsRelayRoomTurn():
+        case AgentsRelayRoomDone():
+        case AgentsRelayRoomHistory():
+        case AgentsRelayBrowserData():
+        case AgentsRelayBrowserView():
           // Owned elsewhere: run state and user turns by the replay loader,
           // rooms by the room view, browser frames by the browser page.
           break;
@@ -344,7 +344,7 @@ class WebSocketChatService {
 
     /// The MetaEvent / UsageEvent pair a `done` produces, emitted before the
     /// DoneEvent so `StreamingManager.getLatestMeta` has them at completion.
-    void emitDoneMeta(CoworkRelayDone done) {
+    void emitDoneMeta(AgentsRelayDone done) {
       emit(
         MetaEvent(<String, dynamic>{
           if (done.reason != null) 'stop_reason': done.reason,
@@ -361,7 +361,7 @@ class WebSocketChatService {
       ledger.begin(sessionKey);
       sub = link.inbound.listen(
         (event) {
-          if (event is CoworkRelayDone && !_isReplay(event)) {
+          if (event is AgentsRelayDone && !_isReplay(event)) {
             chain = chain.then((_) async {
               if (terminated) return;
               emitDoneMeta(event);
@@ -480,7 +480,7 @@ class WebSocketChatService {
       try {
         await controller.requestStop(sessionKey: sessionKey);
       } catch (error) {
-        if (kDebugMode) debugPrint('[cowork-adapter] stop failed: $error');
+        if (kDebugMode) debugPrint('[agents-adapter] stop failed: $error');
       }
     };
 
@@ -489,22 +489,22 @@ class WebSocketChatService {
 
   /// True for anything the replay loader owns: a replayed frame of any kind,
   /// and every `user` turn (which only ever exists in a replay).
-  static bool _isReplay(CoworkRelayInbound event) => switch (event) {
-    CoworkRelayUser() => true,
-    CoworkRelayDelta(:final replay) => replay,
-    CoworkRelayReasoning(:final replay) => replay,
-    CoworkRelayTool(:final replay) => replay,
-    CoworkRelaySubagent(:final replay) => replay,
-    CoworkRelayFile(:final replay) => replay,
-    CoworkRelayApprovalRequest(:final replay) => replay,
-    CoworkRelayAutomation(:final replay) => replay,
-    CoworkRelayDone(:final isReplay) => isReplay,
+  static bool _isReplay(AgentsRelayInbound event) => switch (event) {
+    AgentsRelayUser() => true,
+    AgentsRelayDelta(:final replay) => replay,
+    AgentsRelayReasoning(:final replay) => replay,
+    AgentsRelayTool(:final replay) => replay,
+    AgentsRelaySubagent(:final replay) => replay,
+    AgentsRelayFile(:final replay) => replay,
+    AgentsRelayApprovalRequest(:final replay) => replay,
+    AgentsRelayAutomation(:final replay) => replay,
+    AgentsRelayDone(:final isReplay) => isReplay,
     _ => false,
   };
 
   /// " ✓ exit 0" / " ✗ exit 2" / " ✗ timed out" — the one-line outcome the
   /// verbose view narrates on the reasoning channel.
-  static String _toolOutcomeLine(CoworkRelayTool tool) {
+  static String _toolOutcomeLine(AgentsRelayTool tool) {
     if (tool.timedOut) return ' ✗ timed out\n';
     final exit = tool.exitCode;
     if (tool.failed) {
@@ -533,7 +533,7 @@ Future<OutboxTask?> _queueForLater(
       // No route resolved: the prompt still queues, and the flush sends it
       // with whatever the thread's model is by then.
     }
-    return await CoworkTaskOutbox.enqueue(
+    return await AgentsTaskOutbox.enqueue(
       sessionKey: sessionKey,
       prompt: message,
       modelId: route?.modelId,
@@ -542,7 +542,7 @@ Future<OutboxTask?> _queueForLater(
     );
   } catch (error) {
     if (kDebugMode) {
-      debugPrint('[cowork-outbox] could not queue the prompt: $error');
+      debugPrint('[agents-outbox] could not queue the prompt: $error');
     }
     return null;
   }
@@ -569,7 +569,7 @@ Future<void> _queueAndMark(
     reasoningEffort: reasoningEffort,
   );
   if (task == null) return;
-  await CoworkQueuedMarks.markQueued(
+  await AgentsQueuedMarks.markQueued(
     sessionKey: sessionKey,
     prompt: message,
     queueId: task.localId,

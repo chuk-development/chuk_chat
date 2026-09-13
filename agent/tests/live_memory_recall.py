@@ -25,15 +25,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from live_memory_two_tasks import _StubWriter  # noqa: E402
 
-from cowork_agent import AgentLoop, MockModelClient, StateStore, ToolRegistry  # noqa: E402
-from cowork_agent.memory import MemoryStore  # noqa: E402
+from chuk_agents_runtime import AgentLoop, MockModelClient, StateStore, ToolRegistry  # noqa: E402
+from chuk_agents_runtime.memory import MemoryStore  # noqa: E402
 
 FACT_PROMPT = "For this project: the codename is BLUEFALCON. Remember it."
 RECALL_PROMPT = "What is the codename of this project? Answer from memory."
 
 
 def main() -> int:
-    tmp = Path(tempfile.mkdtemp(prefix="cowork_mem_recall_"))
+    tmp = Path(tempfile.mkdtemp(prefix="agents_mem_recall_"))
     root = tmp / "memory"
     writer = _StubWriter()
     store = MemoryStore(str(root), llm_client=writer)

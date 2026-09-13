@@ -3,7 +3,7 @@
 /// A coworker does not only talk: it works (tool runs), it hands over files
 /// (artifacts, images), and sometimes it breaks off. In the reference messenger
 /// every message kind — text, voice, media, poll — reads differently at a
-/// glance, and this is the same idea with the kinds CoWork actually has:
+/// glance, and this is the same idea with the kinds Agents actually has:
 ///
 ///  * [AgentBubbleKind.answer] — plain text: the neutral surface bubble;
 ///  * [AgentBubbleKind.work] — the turn is mostly tool runs: the secondary tint,

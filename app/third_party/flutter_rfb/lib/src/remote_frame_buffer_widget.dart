@@ -29,11 +29,11 @@ class RemoteFrameBufferWidget extends StatefulWidget {
   final Option<String> _password;
   final int _port;
 
-  /// CoWork fork: an optional handle onto the RFB isolate so app-side UI (the
+  /// Agents fork: an optional handle onto the RFB isolate so app-side UI (the
   /// mobile trackpad overlay) can drive the pointer in remote coordinates.
   final RemoteFrameBufferController? _controller;
 
-  /// CoWork fork: when false, the widget stops mapping local taps and wheel to
+  /// Agents fork: when false, the widget stops mapping local taps and wheel to
   /// remote input itself. The mobile overlay sets this so touch is owned solely
   /// by its virtual cursor; on desktop it stays true (normal mouse behaviour).
   final bool _enableBuiltInPointerInput;
@@ -131,7 +131,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
   SizeTrackingWidget _buildImage({required final Image image}) =>
       SizeTrackingWidget(
         sizeValueNotifier: _sizeValueNotifier,
-        // CoWork fork: on mobile the trackpad overlay owns all touch input, so
+        // Agents fork: on mobile the trackpad overlay owns all touch input, so
         // the built-in local-tap and wheel mapping is switched off to avoid a
         // finger firing an absolute tap AND a cursor move. The framebuffer is
         // still measured for the overlay's own coordinate maths.
@@ -141,7 +141,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
       );
 
   Widget _buildInteractiveImage({required final Image image}) =>
-        // CoWork fork: mouse-wheel / trackpad scroll. Upstream only forwards
+        // Agents fork: mouse-wheel / trackpad scroll. Upstream only forwards
         // taps, so a page in the agent's browser could not be scrolled from
         // the app. RFB carries wheel as pointer buttons 4/5 (vertical) and
         // 6/7 (horizontal), pressed and released at the pointer position.
@@ -256,7 +256,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
           'Received new update message with ${update.update.rectangles.length} rectangles',
         );
         _isolateSendPort = some(update.sendPort);
-        // CoWork fork: hand the isolate port and the current framebuffer size
+        // Agents fork: hand the isolate port and the current framebuffer size
         // to the app-side controller so the mobile trackpad overlay can drive
         // the pointer. Cheap and idempotent; only notifies on a real change.
         widget._controller?.attach(
@@ -283,7 +283,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
                   copyRect: () async {
                     final int sourceX = rectangle.byteData.getUint16(0);
                     final int sourceY = rectangle.byteData.getUint16(2);
-                    // CoWork fork: the SOURCE rect comes off the wire too and
+                    // Agents fork: the SOURCE rect comes off the wire too and
                     // was never bounds-checked — an out-of-range source threw
                     // a RangeError outside any catch and killed the view.
                     // Reject it; and copy whole rows, not one 4-byte view per
@@ -405,7 +405,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
   }
 
   void _rawKeyEventListener(final RawKeyEvent rawKeyEvent) {
-    // CoWork fork: the keyboard listener is global. If anything is pushed on
+    // Agents fork: the keyboard listener is global. If anything is pushed on
     // top of this page (a dialog, a sheet with a text field) the page stays
     // mounted and every keystroke typed there would be forwarded into the
     // sandbox as a KeyEvent. Only forward while this route is the current one.
@@ -435,7 +435,7 @@ class RemoteFrameBufferWidgetState extends State<RemoteFrameBufferWidget> {
   }) =>
       TaskEither<Object, void>.tryCatch(
         () async {
-          // CoWork fork: blit whole rows with setRange instead of one
+          // Agents fork: blit whole rows with setRange instead of one
           // getUint32/setUint32 pair per pixel (~1M calls per full frame on
           // the UI isolate). Byte-exact copy, same [B,G,R,A] layout.
           final int fbWidth = frameBufferSize.width.toInt();

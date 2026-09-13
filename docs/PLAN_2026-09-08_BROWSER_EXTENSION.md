@@ -6,7 +6,7 @@ dort steht, was Chrome und Firefox wirklich anbieten und was Claude for Chrome
 tatsaechlich benutzt. Gueltig bleiben Abschnitt 1 (die Naht) und 3 (Panel).
 
 Heute fährt der Agent einen Browser **in der Sandbox** (Docker + Xvfb + VNC,
-`cowork-browser-mcp`, Tools `mcp__playwright__browser_*`). Das bleibt der
+`agents-browser-mcp`, Tools `mcp__playwright__browser_*`). Das bleibt der
 Hauptweg. Dieses Dokument beschreibt ein **zweites Target**: den echten Browser
 des Nutzers, angebunden über ein Add-on.
 
@@ -15,7 +15,7 @@ des Nutzers, angebunden über ein Add-on.
 `executor.py::_browser_mcp_server()` liefert nur eine Spec:
 
 ```python
-{"name": "playwright", "command": <docker>, "args": [..., cid, "cowork-browser-mcp"]}
+{"name": "playwright", "command": <docker>, "args": [..., cid, "agents-browser-mcp"]}
 ```
 
 Das ist die **einzige** Naht. Wer dahinter sitzt, weiß der Rest des Systems
@@ -35,7 +35,7 @@ browser_target = "sandbox" (Default) | "user_browser"
 ```
 
 Bei `user_browser` gibt `_browser_mcp_server()` statt des Docker-Prefixes
-`{"name": "playwright", "command": "cowork-extension-mcp", "args": [...]}`
+`{"name": "playwright", "command": "agents-extension-mcp", "args": [...]}`
 zurück — ein Prozess auf dem Host, kein Container. VNC (`browser_view started`)
 entfällt dort: der Nutzer sieht seinen Browser ja selbst.
 
@@ -47,7 +47,7 @@ genannte:
 
 ```
 Agent (Python, Host)
-  └─ cowork-extension-mcp (stdio, Host)
+  └─ agents-extension-mcp (stdio, Host)
        └─ neues Frame-Paar über den bestehenden Relay
             └─ Flutter-Desktop-App (schon authentifiziert, schon verbunden)
                  └─ lokaler WebSocket 127.0.0.1:<zufälliger Port>
@@ -92,7 +92,7 @@ Agenten im Namen des Nutzers handeln. Also hart:
 
 Zwei getrennte Dinge, nicht vermischen:
 
-**a) Nutzer chattet über die Seite.** Rechtsklick → "Mit CoWork über diese Seite
+**a) Nutzer chattet über die Seite.** Rechtsklick → "Mit Agents über diese Seite
 reden" → Panel rechts. Das Add-on schickt Seitenkontext (URL, Titel,
 Readability-Text, optional Screenshot, optional Auswahltext) als Anhang an ein
 ganz normales `task`-Frame. **Kein neues Agent-Tool nötig**, nur eine neue
@@ -184,7 +184,7 @@ Heißt: wer zuerst ein brauchbares Firefox-Add-on hat, hat das Feld für sich.
 
 ## 8. Reihenfolge
 
-1. `cowork-extension-mcp`: stdio-MCP-Server mit den `browser_*`-Tools, zuerst
+1. `agents-extension-mcp`: stdio-MCP-Server mit den `browser_*`-Tools, zuerst
    gegen einen Fake-Bridge in den Tests. Kein Browser nötig.
 2. Wire-Frames `browser_cmd` / `browser_result` / `browser_attach` +
    `browser_target` auf `task`.

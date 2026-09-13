@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/ui/expressive/staggered.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 Widget _host({required List<Widget> children, bool reducedMotion = false}) {
   return MaterialApp(

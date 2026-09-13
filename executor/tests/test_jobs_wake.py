@@ -14,11 +14,11 @@ import json
 import time
 from pathlib import Path
 
-from cowork_agent import MockModelClient, StateStore, tool_call_response
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, StateStore, tool_call_response
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor.shell import DATA_MARKER, JOBS_DIRNAME, wake_text
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor.shell import DATA_MARKER, JOBS_DIRNAME, wake_text
 
 from wiring import paired_channel
 
@@ -131,7 +131,7 @@ def test_an_idle_session_gets_a_new_task_with_the_tail(tmp_path):
     prompt = run["prompt"]
     assert DATA_MARKER in prompt.splitlines()[0]
     assert "make all" in prompt
-    assert "--- last 200 lines of .cowork/jobs/j0000aaaa.log ---" in prompt
+    assert "--- last 200 lines of .agents/jobs/j0000aaaa.log ---" in prompt
     assert "line 101" in prompt and "line 100" not in prompt and prompt.endswith("line 300")
     # No run was live, so the frame went through the host's sender...
     assert [p["type"] for p in sent] == ["job"]

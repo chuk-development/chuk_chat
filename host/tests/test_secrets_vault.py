@@ -7,12 +7,12 @@ from __future__ import annotations
 import json
 import os
 
-from cowork_crypto import DeviceIdentity
-from cowork_executor import SecretsVault, secrets_payload
+from chuk_agents_crypto import DeviceIdentity
+from chuk_agents_executor import SecretsVault, secrets_payload
 
-from cowork_host.host import LocalHost
-from cowork_host.identity import load_or_create_identity
-from cowork_host.secrets_key import secrets_at_rest_key
+from chuk_agents_host.host import LocalHost
+from chuk_agents_host.identity import load_or_create_identity
+from chuk_agents_host.secrets_key import secrets_at_rest_key
 
 VALUE = "pexels-0123456789abcdef"
 

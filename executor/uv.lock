@@ -294,7 +294,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cowork-agent"
+name = "chuk-agents-runtime"
 version = "0.1.0"
 source = { editable = "../agent" }
 dependencies = [
@@ -322,9 +322,9 @@ provides-extras = ["dev"]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
-name = "cowork-crypto"
+name = "chuk-agents-crypto"
 version = "0.1.0"
-source = { editable = "../common/cowork_crypto" }
+source = { editable = "../common/chuk_agents_crypto" }
 dependencies = [
     { name = "cryptography" },
 ]
@@ -336,14 +336,14 @@ requires-dist = [{ name = "cryptography", specifier = ">=44" }]
 dev = [{ name = "pytest", specifier = ">=9.1.1" }]
 
 [[package]]
-name = "cowork-executor"
+name = "chuk-agents-executor"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cowork-agent" },
-    { name = "cowork-crypto" },
-    { name = "cowork-manager" },
-    { name = "cowork-sandbox" },
+    { name = "chuk-agents-runtime" },
+    { name = "chuk-agents-crypto" },
+    { name = "chuk-agents-manager" },
+    { name = "chuk-agents-sandbox" },
 ]
 
 [package.dev-dependencies]
@@ -353,27 +353,27 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cowork-agent", editable = "../agent" },
-    { name = "cowork-crypto", editable = "../common/cowork_crypto" },
-    { name = "cowork-manager", editable = "../manager" },
-    { name = "cowork-sandbox", editable = "../sandbox" },
+    { name = "chuk-agents-runtime", editable = "../agent" },
+    { name = "chuk-agents-crypto", editable = "../common/chuk_agents_crypto" },
+    { name = "chuk-agents-manager", editable = "../manager" },
+    { name = "chuk-agents-sandbox", editable = "../sandbox" },
 ]
 
 [package.metadata.requires-dev]
 dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
-name = "cowork-manager"
+name = "chuk-agents-manager"
 version = "0.1.0"
 source = { editable = "../manager" }
 dependencies = [
-    { name = "cowork-sandbox" },
+    { name = "chuk-agents-sandbox" },
     { name = "croniter" },
 ]
 
 [package.metadata]
 requires-dist = [
-    { name = "cowork-sandbox", editable = "../sandbox" },
+    { name = "chuk-agents-sandbox", editable = "../sandbox" },
     { name = "croniter", specifier = ">=3" },
 ]
 
@@ -381,7 +381,7 @@ requires-dist = [
 dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
-name = "cowork-sandbox"
+name = "chuk-agents-sandbox"
 version = "0.1.0"
 source = { editable = "../sandbox" }
 

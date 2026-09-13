@@ -18,7 +18,7 @@ from dataclasses import replace
 
 import pytest
 
-from cowork_agent.context import (
+from chuk_agents_runtime.context import (
     DUP_KEY,
     SUMMARY_PREFIX,
     AuxSummarizer,
@@ -30,7 +30,7 @@ from cowork_agent.context import (
     prompt_tokens_from_usage,
     redact_secrets,
 )
-from cowork_agent.model import ModelResponse
+from chuk_agents_runtime.model import ModelResponse
 
 # -- helpers --------------------------------------------------------------
 
@@ -605,10 +605,10 @@ def _big_result(tag: str) -> str:
 
 def test_loop_sends_the_compressed_payload_and_keeps_the_full_history(tmp_path):
     """The store stays the source of truth; only the wire payload is compressed."""
-    from cowork_agent.loop import AgentLoop, IterationBudget
-    from cowork_agent.model import MockModelClient, tool_call_response
-    from cowork_agent.registry import ToolRegistry
-    from cowork_agent.state import StateStore
+    from chuk_agents_runtime.loop import AgentLoop, IterationBudget
+    from chuk_agents_runtime.model import MockModelClient, tool_call_response
+    from chuk_agents_runtime.registry import ToolRegistry
+    from chuk_agents_runtime.state import StateStore
 
     registry = ToolRegistry()
     payload = _big_result("same")
@@ -648,9 +648,9 @@ def test_loop_sends_the_compressed_payload_and_keeps_the_full_history(tmp_path):
 
 
 def test_loop_feeds_backend_usage_into_the_ladder(tmp_path):
-    from cowork_agent.loop import AgentLoop, IterationBudget
-    from cowork_agent.registry import ToolRegistry
-    from cowork_agent.state import StateStore
+    from chuk_agents_runtime.loop import AgentLoop, IterationBudget
+    from chuk_agents_runtime.registry import ToolRegistry
+    from chuk_agents_runtime.state import StateStore
 
     class UsageModel:
         def complete(self, messages: list[dict]) -> ModelResponse:
@@ -667,8 +667,8 @@ def test_loop_feeds_backend_usage_into_the_ladder(tmp_path):
 
 
 def test_build_runtime_enables_the_ladder_by_default(tmp_path):
-    from cowork_agent.model import MockModelClient
-    from cowork_agent.runtime import build_runtime
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.runtime import build_runtime
 
     loop = build_runtime(MockModelClient([]), db_path=str(tmp_path / "a.db"))
     assert loop.context_ladder is not None

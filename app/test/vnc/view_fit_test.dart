@@ -1,6 +1,6 @@
 import 'dart:ui';
 
-import 'package:cowork/widgets/vnc_view_fit.dart';
+import 'package:chuk_chat/widgets/vnc_view_fit.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// The mapping the whole browser view rests on: a touch has to reach the remote

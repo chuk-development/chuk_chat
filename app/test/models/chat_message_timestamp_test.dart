@@ -1,5 +1,5 @@
-import 'package:cowork/models/chat_message.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/models/chat_message.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

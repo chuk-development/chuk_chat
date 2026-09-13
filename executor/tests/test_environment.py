@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from cowork_agent import MockModelClient, ModelResponse, StopReason, ToolCall, build_runtime
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, ModelResponse, StopReason, ToolCall, build_runtime
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import SandboxEnvironment
+from chuk_agents_executor import SandboxEnvironment
 
 
 def test_shim_adapts_sandbox_result_fields():

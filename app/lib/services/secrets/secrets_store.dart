@@ -11,8 +11,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart'
-    show CoworkSecureKeyValueStore, FlutterSecureKeyValueStore;
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
+    show AgentsSecureKeyValueStore, FlutterSecureKeyValueStore;
 
 /// A snapshot of the set: the values and the revision they belong to.
 @immutable
@@ -57,11 +57,11 @@ class SecretsSet {
 }
 
 class SecretsStore {
-  SecretsStore({CoworkSecureKeyValueStore? backend})
+  SecretsStore({AgentsSecureKeyValueStore? backend})
     : _backend = backend ?? const FlutterSecureKeyValueStore();
 
   /// The one secure-storage key holding the whole set.
-  static const String storageKey = 'cowork_secrets_v1';
+  static const String storageKey = 'agents_secrets_v1';
 
   /// Environment-variable name shape; the host drops anything else.
   static final RegExp _nameShape = RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,127}$');
@@ -71,7 +71,7 @@ class SecretsStore {
   /// to collide with ordinary text). The settings page says so.
   static const int redactMinLength = 8;
 
-  final CoworkSecureKeyValueStore _backend;
+  final AgentsSecureKeyValueStore _backend;
 
   static bool validName(String name) => _nameShape.hasMatch(name);
 

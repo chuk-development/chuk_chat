@@ -17,9 +17,9 @@ library;
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/skill.dart';
-import 'package:cowork/services/skills/builtin_skills.g.dart';
-import 'package:cowork/services/skills/user_skills_service.dart';
+import 'package:chuk_chat/models/skill.dart';
+import 'package:chuk_chat/services/skills/builtin_skills.g.dart';
+import 'package:chuk_chat/services/skills/user_skills_service.dart';
 
 class SkillRegistry {
   const SkillRegistry._();

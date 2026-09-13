@@ -6,14 +6,14 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/icon_finder.dart';
 
-import 'package:cowork/pages/account_settings_page.dart';
-import 'package:cowork/pages/desktop_settings_modal.dart';
-import 'package:cowork/pages/login_page.dart';
-import 'package:cowork/pages/messenger_shell.dart';
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/desktop_settings_modal.dart';
+import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -55,7 +55,7 @@ class _FakeSessionSource implements AccountSessionSource {
 
 /// In-memory secure backend so the shell's store never touches a platform
 /// channel in the test.
-class _MemoryStore implements CoworkSecureKeyValueStore {
+class _MemoryStore implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override
@@ -69,19 +69,19 @@ class _MemoryStore implements CoworkSecureKeyValueStore {
 }
 
 /// Minimal relay controller so the shell can be pumped without a socket.
-class _IdleRelayController implements CoworkRelayController {
-  final ValueNotifier<CoworkRelayState> _state =
-      ValueNotifier<CoworkRelayState>(
-    const CoworkRelayState(phase: CoworkRelayPhase.idle),
+class _IdleRelayController implements AgentsRelayController {
+  final ValueNotifier<AgentsRelayState> _state =
+      ValueNotifier<AgentsRelayState>(
+    const AgentsRelayState(phase: AgentsRelayPhase.idle),
   );
-  final StreamController<CoworkRelayInbound> _inbound =
-      StreamController<CoworkRelayInbound>.broadcast();
+  final StreamController<AgentsRelayInbound> _inbound =
+      StreamController<AgentsRelayInbound>.broadcast();
 
   @override
-  ValueListenable<CoworkRelayState> get state => _state;
+  ValueListenable<AgentsRelayState> get state => _state;
 
   @override
-  Stream<CoworkRelayInbound> get inbound => _inbound.stream;
+  Stream<AgentsRelayInbound> get inbound => _inbound.stream;
 
   @override
   Future<void> connect({
@@ -92,11 +92,11 @@ class _IdleRelayController implements CoworkRelayController {
   @override
   Future<void> reconnect({
     required Uri hostUrl,
-    required CoworkStoredPairing pairing,
+    required AgentsStoredPairing pairing,
   }) async {}
 
   @override
-  CoworkStoredPairing? get establishedTrust => null;
+  AgentsStoredPairing? get establishedTrust => null;
 
   @override
   Future<void> provisionAccount(AccountSession session) async {}
@@ -260,7 +260,7 @@ void main() {
           home: MessengerShell(
             relayControllerBuilder: () async => _IdleRelayController(),
             sessionSource: const _FakeSessionSource(),
-            pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+            pairingStore: AgentsPairingStore(backend: _MemoryStore()),
             shellConfig: testShellConfig(),
           ),
         ),

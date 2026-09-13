@@ -33,7 +33,7 @@ Rules:
   why. Update the existing note; do not start a new file per day.
 - Before your final message: delete what you created only to get there
   (`tmp/`, test output, downloaded archives you extracted).
-- Never write into `transcript/`, `memory/` or `.cowork/`.
+- Never write into `transcript/`, `memory/` or `.agents/`.
 
 ## Finding what happened: `transcript/`
 

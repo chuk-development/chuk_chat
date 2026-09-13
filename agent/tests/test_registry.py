@@ -1,4 +1,4 @@
-from cowork_agent.registry import ERROR_CAP, ToolRegistry
+from chuk_agents_runtime.registry import ERROR_CAP, ToolRegistry
 
 
 def _int_schema():

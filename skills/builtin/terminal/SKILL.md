@@ -7,7 +7,7 @@ metadata:
 
 # Terminal: foreground, background, interactive
 
-The sandbox is yours. You are user `cowork` with passwordless `sudo`, so you
+The sandbox is yours. You are user `agents` with passwordless `sudo`, so you
 can install anything: `sudo apt-get install -y ...`, `pip install ...`,
 `npm install -g ...`. If you break it, you fix it. Keep the workspace clean:
 your files go in the workspace, scratch goes in `/tmp` or a folder you delete
@@ -27,7 +27,7 @@ For a build, a download, an install, a training run, a server you want to
 keep up. It returns at once:
 
 ```json
-{"ok": true, "job_id": "j3f9a12b0", "log_path": ".cowork/jobs/j3f9a12b0.log", "pid": 4711, "state": "running"}
+{"ok": true, "job_id": "j3f9a12b0", "log_path": ".agents/jobs/j3f9a12b0.log", "pid": 4711, "state": "running"}
 ```
 
 Then go on with other work, or end your turn. **You are woken when the job
@@ -41,7 +41,7 @@ to poll.
   `job_id`: every job of this workspace.
 - `job_output(job_id, lines=200, offset=0)` — the last `lines` lines, or a
   window from line `offset`. `total_lines` tells you how much there is. The
-  whole log is a file: `read_file(".cowork/jobs/<job_id>.log")`.
+  whole log is a file: `read_file(".agents/jobs/<job_id>.log")`.
 - `job_cancel(job_id)` — stop it (SIGTERM, then SIGKILL).
 
 A job has no timeout except a 24 h cap. Its output goes only to the log, so

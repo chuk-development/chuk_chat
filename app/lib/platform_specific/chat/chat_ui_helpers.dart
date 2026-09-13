@@ -8,21 +8,21 @@ import 'package:flutter/material.dart';
 
 import 'package:uuid/uuid.dart';
 
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/pages/coming_soon_page.dart';
-import 'package:cowork/platform_config.dart';
-import 'package:cowork/services/artifact_context_service.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/model_capabilities_service.dart';
-import 'package:cowork/services/workspace_message_service.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleGroupPause;
-import 'package:cowork/ui/expressive/day_divider.dart' show sameCalendarDay;
-import 'package:cowork/widgets/message_bubble.dart'
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/artifact_context_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/workspace_message_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart' show kBubbleGroupPause;
+import 'package:chuk_chat/ui/expressive/day_divider.dart' show sameCalendarDay;
+import 'package:chuk_chat/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
-import 'package:cowork/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 /// Data class holding pre-parsed render information for a single chat message.
 ///

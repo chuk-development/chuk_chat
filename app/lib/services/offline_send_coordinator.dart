@@ -1,6 +1,6 @@
-// COWORK ADAPTER. Upstream: chuk_chat/lib/services/offline_send_coordinator.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS ADAPTER. Upstream: chuk_chat/lib/services/offline_send_coordinator.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay. Upstream queues a send while the phone is offline
-// and later replays it against the hosted API, ANSWER AND ALL. CoWork must not
+// and later replays it against the hosted API, ANSWER AND ALL. Agents must not
 // do that: the run belongs to the host and keeps going with no client
 // attached, so only the PROMPT is queued here — never the reply.
 // [OfflineSendPayload] is kept verbatim (it is a plain value object several
@@ -11,13 +11,13 @@
 // `NetworkStatusService.isOnline == false` BEFORE the relay is ever asked, and
 // they call this. With `enqueue` returning `''` the row was written with
 // `status: pending, queueId: ''` and nothing behind it: a prompt typed in
-// airplane mode was silently gone. It now goes into [CoworkTaskOutbox], the
+// airplane mode was silently gone. It now goes into [AgentsTaskOutbox], the
 // same queue the host-unreachable path uses.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
 import 'dart:convert';
 
-import 'package:cowork/services/cowork/cowork_task_outbox.dart';
+import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 
 class OfflineSendPayload {
   const OfflineSendPayload({
@@ -93,11 +93,11 @@ class OfflineSendPayload {
   }
 }
 
-/// The imported send paths' door into [CoworkTaskOutbox].
+/// The imported send paths' door into [AgentsTaskOutbox].
 ///
 /// One id names the same thing everywhere: the payload's [OfflineSendPayload.chatId]
 /// IS the executor's `session_key` AND the imported screen's `selectedChatId`
-/// (see `CoworkThreadView.threadKey`), so the prompt queues under the very key
+/// (see `AgentsThreadView.threadKey`), so the prompt queues under the very key
 /// the flush later sends it on.
 class OfflineSendCoordinator {
   OfflineSendCoordinator._();
@@ -112,7 +112,7 @@ class OfflineSendCoordinator {
   /// prompt, the history, `maxTokens` — is deliberately dropped. The host
   /// composes the run; this side only has to deliver the question.
   static Future<String> enqueue(OfflineSendPayload payload) async {
-    final OutboxTask task = await CoworkTaskOutbox.enqueue(
+    final OutboxTask task = await AgentsTaskOutbox.enqueue(
       sessionKey: payload.chatId,
       prompt: payload.messageText,
       modelId: payload.modelId.isEmpty ? null : payload.modelId,

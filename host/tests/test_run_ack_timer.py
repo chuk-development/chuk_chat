@@ -13,8 +13,8 @@ from __future__ import annotations
 import threading
 import time
 
-import cowork_host.host as host_module
-from cowork_host.host import LocalHost
+import chuk_agents_host.host as host_module
+from chuk_agents_host.host import LocalHost
 
 
 class _Notifier:

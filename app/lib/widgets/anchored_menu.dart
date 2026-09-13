@@ -14,7 +14,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// Gap between the anchor and the menu.
 const double _kAnchorGap = 6;

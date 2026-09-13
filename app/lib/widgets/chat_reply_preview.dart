@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/models/chat_reply.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/models/chat_reply.dart';
 
 class ChatEditNotice extends StatelessWidget {
   const ChatEditNotice({super.key, required this.onCancel});

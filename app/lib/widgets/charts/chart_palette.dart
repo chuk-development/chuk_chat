@@ -7,7 +7,7 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/agent_face.dart' show kAgentAccents;
+import 'package:chuk_chat/ui/expressive/agent_face.dart' show kAgentAccents;
 
 /// The resolved colours for one chart in one theme.
 @immutable

@@ -6,7 +6,7 @@
 //
 // The secret record is chuk_chat's exact shape — the registered client, the
 // tokens (access, refresh, expiry, scope) and the authorization server that
-// issued them. CoWork needs all of it, not just the bearer: the device signs
+// issued them. Agents needs all of it, not just the bearer: the device signs
 // in once and the Python host keeps the connection alive for days, so the
 // host is handed the refresh material as well and mints its own tokens when
 // the app is closed. A record written by an older build was a bare bearer
@@ -21,11 +21,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart'
-    show CoworkSecureKeyValueStore, FlutterSecureKeyValueStore;
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/mcp_oauth.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
+    show AgentsSecureKeyValueStore, FlutterSecureKeyValueStore;
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 
 /// Everything secret about one connection: the client this device registered
 /// with the authorization server, the tokens it issued, and where they came
@@ -121,7 +121,7 @@ class McpSecrets {
 }
 
 class McpStore {
-  McpStore({CoworkSecureKeyValueStore? secrets, McpOAuth? oauth})
+  McpStore({AgentsSecureKeyValueStore? secrets, McpOAuth? oauth})
     : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
       _oauth = oauth ?? McpOAuth();
 
@@ -135,7 +135,7 @@ class McpStore {
   /// map of query-parameter name to value, for an [McpAuth.apiKey] server.
   static const String apiCredsPrefix = 'mcp_apicreds_';
 
-  final CoworkSecureKeyValueStore _secrets;
+  final AgentsSecureKeyValueStore _secrets;
   final McpOAuth _oauth;
 
   /// The refresh in flight for a connection id, if any.

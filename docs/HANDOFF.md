@@ -1,6 +1,6 @@
-# CoWork — Handoff / Takeover
+# Agents — Handoff / Takeover
 
-Read this + `docs/COWORK_AGENT_PLATFORM_PLAN.md` (the canonical plan). This file
+Read this + `docs/AGENTS_AGENT_PLATFORM_PLAN.md` (the canonical plan). This file
 is the live state of the build so a fresh agent can continue.
 
 Repo: `/home/user/git/cowork` (new monorepo, separate from `/home/user/git/chuk_chat`;
@@ -11,15 +11,15 @@ merged later). Git on `master`. Plan is canonical HERE (a stale copy sits in
 
 | Dir | Package | What | Tests |
 |-----|---------|------|-------|
-| `common/cowork_crypto` | cowork_crypto | E2E frame crypto (byte-identical to the Dart in `app/`) + SAS pairing (§15) + X25519 channel key | ~53 pytest |
-| `agent/` | cowork_agent | agent loop (structural continue/finish, dual-counter termination, ESTOP+interrupt), self-registering tool registry, `run_command`, append-only SQLite state (resume by id, session_key routing), model client. **Tool calls are parsed from `<tool_call>` in the assistant CONTENT** (chuk_chat protocol), not structured. `BackendModelClient` talks the real `wss://api.chuk.chat/v2/ws`; `SupabaseSession` = access+refresh token (token only, never password). | ~50 pytest |
-| `sandbox/` | cowork_sandbox | `BaseEnvironment` ABC (`_run_bash`+`cleanup`) + snapshot-file session persistence + Local/Docker backends | 14 pytest |
-| `manager/` | cowork_manager | roster (SQLite, random names), supervisor, scheduler (parse+tick), relay frame contract | ~10 pytest |
-| `executor/` | cowork_executor | `Executor` (compose loop+sandbox+crypto), loopback transport, `ExecutorSupervisor`, backend model factory | 11 pytest |
-| `host/` | cowork_host | **`cowork-host` CLI** — a blind localhost relay + Manager + §15 pairing INITIATOR + task serving. `--mock-model` (offline, no credits). Reads supabase creds from the token or `--supabase-url/--anon-key`/env. | ~10 pytest |
-| `app/` | Flutter | CoWork controller app: security-stack port from chuk_chat, real Supabase login, **real chat UI** (`cowork_thread_view.dart`), `CoworkRelayClient` (connect → pairing JOINER → provision token → sendTask → stream), pairing joiner. | ~40 tests |
+| `common/chuk_agents_crypto` | chuk_agents_crypto | E2E frame crypto (byte-identical to the Dart in `app/`) + SAS pairing (§15) + X25519 channel key | ~53 pytest |
+| `agent/` | chuk_agents_runtime | agent loop (structural continue/finish, dual-counter termination, ESTOP+interrupt), self-registering tool registry, `run_command`, append-only SQLite state (resume by id, session_key routing), model client. **Tool calls are parsed from `<tool_call>` in the assistant CONTENT** (chuk_chat protocol), not structured. `BackendModelClient` talks the real `wss://api.chuk.chat/v2/ws`; `SupabaseSession` = access+refresh token (token only, never password). | ~50 pytest |
+| `sandbox/` | chuk_agents_sandbox | `BaseEnvironment` ABC (`_run_bash`+`cleanup`) + snapshot-file session persistence + Local/Docker backends | 14 pytest |
+| `manager/` | chuk_agents_manager | roster (SQLite, random names), supervisor, scheduler (parse+tick), relay frame contract | ~10 pytest |
+| `executor/` | chuk_agents_executor | `Executor` (compose loop+sandbox+crypto), loopback transport, `ExecutorSupervisor`, backend model factory | 11 pytest |
+| `host/` | chuk_agents_host | **`cowork-host` CLI** — a blind localhost relay + Manager + §15 pairing INITIATOR + task serving. `--mock-model` (offline, no credits). Reads supabase creds from the token or `--supabase-url/--anon-key`/env. | ~10 pytest |
+| `app/` | Flutter | Agents controller app: security-stack port from chuk_chat, real Supabase login, **real chat UI** (`agents_thread_view.dart`), `AgentsRelayClient` (connect → pairing JOINER → provision token → sendTask → stream), pairing joiner. | ~40 tests |
 
-**Subagents (§7.6) landed** — `agent/src/cowork_agent/subagents.py`:
+**Subagents (§7.6) landed** — `agent/src/chuk_agents_runtime/subagents.py`:
 `delegate_task` + `subagent_control`, one child per `task_id` with its own
 environment (built through the sandbox factory) and its own state DB, handles
 persisted in the `subagents` table so the app can list them after a restart, live
@@ -30,12 +30,12 @@ back on success (§7.7). On in the executor with
 `Executor(subagent_sandbox="local"|"docker")`; off by default.
 
 **MCP client + Tool Search + the OAuth bridge landed** (§9 / §7.2 / §10) —
-`agent/src/cowork_agent/{mcp_client,tool_search,oauth_bridge}.py`:
+`agent/src/chuk_agents_runtime/{mcp_client,tool_search,oauth_bridge}.py`:
 
 - **MCP as the fallback protocol**, on the official `mcp` SDK (2.0), all three
   transports (stdio / SSE / streamable HTTP), **one persistent transport thread
   per server** so a session survives across tool calls. Servers come from
-  `<workspace>/.cowork/mcp.json` (or `mcp.json`), editor-shaped
+  `<workspace>/.agents/mcp.json` (or `mcp.json`), editor-shaped
   (`{"mcpServers": {...}}`). Tools register as `mcp__<server>__<tool>` with the
   server's own schema. A server that does not answer costs only its own tools —
   `check_fn` false, error in `MCPManager.errors`, nothing in the prompt.
@@ -51,7 +51,7 @@ back on success (§7.7). On in the executor with
   `docs/MCP_OAUTH_BACKEND_ROUTE.md` and the tests implement it as a fake.
 - Wired in `build_runtime`: `loop.mcp` (close it when the run ends) and
   `loop.tool_search` (the measured decision).
-**browser-use fallback (§8/§9) landed** — `agent/src/cowork_agent/browser.py`:
+**browser-use fallback (§8/§9) landed** — `agent/src/chuk_agents_runtime/browser.py`:
 `browser_task` (a task in plain language, bounded at 12 steps / 40 hard, result
 capped, screenshots pushed through the `send_file_to_user` sink), a
 `BackendChatModel` adapter that makes browser-use's `BaseChatModel` Protocol run
@@ -59,10 +59,10 @@ on **our** `ModelClient` (so every browser step bills the account through
 `api.chuk.chat`; no provider key, no token in the sandbox), and a per-task usage
 block (`model_rounds`, tokens, `structured_retries`) so a browser session can
 never spend invisibly. Chromium lives in a separate image variant,
-`sandbox/docker/Dockerfile.browser` (`cowork-browser:latest`,
-`COWORK_SANDBOX_IMAGE=` to use it); the base image stays browser-free.
+`sandbox/docker/Dockerfile.browser` (`agents-browser:latest`,
+`AGENTS_SANDBOX_IMAGE=` to use it); the base image stays browser-free.
 `check_fn` keeps the tool out of the prompt without browser-use + a Chromium (or
-`COWORK_BROWSER_CDP_URL`). Verified against a real install + real Chromium in a
+`AGENTS_BROWSER_CDP_URL`). Verified against a real install + real Chromium in a
 throwaway container — see the module docstring for the measured numbers.
 **Open wiring:** `build_runtime` only registers it when it is given a
 `browser_model` (or an `aux_model`), because the loop's own client is wrapped for
@@ -73,7 +73,7 @@ milestone.
 
 ## What works (verified live)
 
-- **Local encrypted end-to-end, cross-language**: the real Dart `CoworkRelayClient`
+- **Local encrypted end-to-end, cross-language**: the real Dart `AgentsRelayClient`
   pairs with the live Python `cowork-host` over a `ws://127.0.0.1` relay, the app
   provisions the account token, a task runs in the sandbox, encrypted results
   stream back. Confirmed live: host log reached `paired`; a task created a file.
@@ -154,7 +154,7 @@ unknown payload types, so nothing happened: the run continued and the UI sat on
 - **The loop polls three places** now: loop top, right after the model turn (so a
   stopped run cannot report `finished`), and before each tool call of a multi-call
   turn (each skipped call still gets a result row).
-- **ESTOP** = `touch ~/.cowork/ESTOP` (the host prints the path and `cowork-host
+- **ESTOP** = `touch ~/.agents/ESTOP` (the host prints the path and `cowork-host
   status` shows it). Children inherit the parent's sentinel path, so an engaged
   ESTOP also stops a child nobody is waiting on.
 
@@ -169,13 +169,13 @@ timeouts).
   `uv run cowork-host --mock-model` (offline, no credits). Prints a **single-use**
   code + `ws://127.0.0.1:8787` — but only until the first pairing; after that it
   prints "Already paired" and no code. `--pair` forces a fresh code.
-- Client (debug, shows `[cowork-relay]` logs): `cd app && flutter run -d linux
+- Client (debug, shows `[agents-relay]` logs): `cd app && flutter run -d linux
   --dart-define-from-file=.env`. Release: `cd app && flutter build linux --release
-  --dart-define-from-file=.env` → `./build/linux/x64/release/bundle/cowork`.
+  --dart-define-from-file=.env` → `./build/linux/x64/release/bundle/agents`.
 - In the app: log in → chat → **Connect** (`ws://127.0.0.1:8787` prefilled) → type
   the code → chat.
 - Live interop test: `app/test/interop_smoke_test.dart`, env-gated, three halves.
-  Pair: `COWORK_HOST_URL` + `COWORK_PAIRING_CODE` + `COWORK_TRUST_FILE`. Then
+  Pair: `AGENTS_HOST_URL` + `AGENTS_PAIRING_CODE` + `AGENTS_TRUST_FILE`. Then
   restart the host and drop the code var: the same file drives a **cold-start
   reconnect** and an **imposter rejection** against the live host. Each run is a
   fresh Dart VM, so it is a real app restart, not a simulated one.
@@ -190,7 +190,7 @@ timeouts).
 - **Verify against the RELEASE app / live, not just `flutter test`.** `flutter
   test` runs debug (cert pinning OFF) with an injected plain connector — it MASKED
   both release-only bugs above and the timing race (a 5/5 loop passed by luck).
-  The debug client (`flutter run`) prints `[cowork-relay]` logs; the host logs each
+  The debug client (`flutter run`) prints `[agents-relay]` logs; the host logs each
   pairing step. Use both to localize.
 - **Don't burn real credits** — use `--mock-model` for transport/pairing tests.
 - **`uv run pytest` in `agent/` used to run the SYSTEM python** (`/usr/bin/python3`
@@ -201,7 +201,7 @@ timeouts).
   real dev dependency now, so `uv run pytest` uses `agent/.venv`. If a test
   suddenly cannot import something, check `uv run python -c "import sys;
   print(sys.executable)"` first.
-- Two plan copies exist; edit the one in `cowork/docs/`.
+- Two plan copies exist; edit the one in `agents/docs/`.
 - CodeRabbit has an org-seat error in this environment (`FORBIDDEN`, not the code);
   don't loop on it.
 
@@ -249,14 +249,14 @@ version by morning, set an hourly cron, keep building, research what the
 competitors have." No questions; local cron only (never cloud).
 
 **Merge: DONE.** All 15 agent branches are in `master`. The last open one,
-`agent/live-verify`, merged as `d3ce819` — its `cowork_thread_view` change
+`agent/live-verify`, merged as `d3ce819` — its `agents_thread_view` change
 (remove the status strip) was already achieved by `pairing-persist` on master,
 so master's superset was kept and live-verify's more descriptive test name
 taken. Full suite re-verified green:
 
 | Suite | Result |
 |-------|--------|
-| common/cowork_crypto | 65 pass |
+| common/chuk_agents_crypto | 65 pass |
 | agent | all pass |
 | executor | 34 pass |
 | manager | 93 pass (serial; the "flake" was parallel-load only) |
@@ -326,7 +326,7 @@ credits.
        `room_turn_payload` / `room_done_payload` (the frames a room streams);
        `RoomRunner` gains an `on_turn` hook that fires a `RoomTurn` live after
        each reply (never for a crashed turn); the app parses `room_turn` /
-       `room_done` into `CoworkRelayRoomTurn` / `CoworkRelayRoomDone` inbound
+       `room_done` into `AgentsRelayRoomTurn` / `AgentsRelayRoomDone` inbound
        events. +2 manager, +1 executor, +2 app tests. **Still open
        (4b-drive):** DONE (routing + offline handling). `manager/room_driver.py`
        `RoomDriver` fills `RoomRunner`'s turn seam with per-member routing —
@@ -348,17 +348,17 @@ credits.
        the sealed loopback. The room path is proven end to end **locally**; the
        only remaining gate is pointing the members' controllers at live executors
        over the prod relay — the user-gated transport deploy.
-   4c. **App UI** — create-room flow DONE. `app/lib/models/cowork_room.dart`
-       (`CoworkRoom`/`CoworkRoomMember`/`CoworkRoomDraft`, `kRoomMaxMembers` 6)
+   4c. **App UI** — create-room flow DONE. `app/lib/models/agents_room.dart`
+       (`AgentsRoom`/`AgentsRoomMember`/`AgentsRoomDraft`, `kRoomMaxMembers` 6)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
        coworkers, the six-member cap enforced in the form (the rest disable at
        6, re-enable on uncheck), Create gated on a name + ≥2 members. 6 tests.
-       4c-thread: room thread view DONE. `cowork_room.dart` gains `CoworkRoomTurn`
-       + `CoworkRoomStop` (wire-string parser + human label, matching the
+       4c-thread: room thread view DONE. `agents_room.dart` gains `AgentsRoomTurn`
+       + `AgentsRoomStop` (wire-string parser + human label, matching the
        manager's stop reasons), and `room_thread_view.dart` renders the user
        message, each turn grouped by round with the speaker's avatar/@handle, a
        running indicator, and a footer naming why it ended. 6 tests.
-       4c-wire (part 1): `CoworkRoom` model (id + name + members) +
+       4c-wire (part 1): `AgentsRoom` model (id + name + members) +
        `LocalRoomSource` (a ChangeNotifier room store mirroring
        `LocalAgentRosterSource`: addRoom assigns an id and enforces the
        ≥2/≤6/unique rules defensively, byId, removeRoom). 7 tests.
@@ -373,14 +373,14 @@ credits.
        an honest waiting state (no turns) because driving a room streams over the
        relay from the host, which is the user-gated transport step. +2 shell
        tests (app 205 green). 4c-stream: DONE (the accumulator). `app/lib/widgets/room_thread_page.dart`
-       `RoomThreadPage` subscribes to an injected `Stream<CoworkRelayInbound>`,
+       `RoomThreadPage` subscribes to an injected `Stream<AgentsRelayInbound>`,
        accumulates `room_turn` frames into turns and `room_done` into the stop,
        and renders `RoomThreadView` live (running until done); non-room events are
        ignored. Injected stream = testable with a fake controller (4 tests) and
        drivable by the real relay socket unchanged. **Concurrent rooms:** DONE — `room_turn`/`room_done` now carry a `room_id`
        (executor protocol + app parser require it), and `RoomThreadPage` keeps
        only frames for its own `roomId`, so several rooms stream over one socket
-       without crossing wires. 4c-stream-wire: DONE. `CoworkThreadView` hands its live controller up
+       without crossing wires. 4c-stream-wire: DONE. `AgentsThreadView` hands its live controller up
        through a new `onController` callback (fired on build and rebuild; the
        parent must not dispose it). The shell keeps that `_sharedController` and,
        when a room is opened, feeds `RoomThreadPage` its `inbound` so the room
@@ -423,7 +423,7 @@ credits.
 5c. **Per-child token spend on the subagent line** — DONE. A child's
    `LoopResult.tokens_spent` now flows into its `SubagentRecord` and its
    `subagent_state` summary (omitted at zero), the relay client parses it onto
-   `CoworkRelaySubagent.tokensSpent`, and the child's line reads "writer ·
+   `AgentsRelaySubagent.tokensSpent`, and the child's line reads "writer ·
    succeeded · 4,321 tokens". `TOKEN_BUDGET_EXHAUSTED` maps to a FAILED child
    state, same as the other ceilings. +2 Python tests; app tests extended.
 
@@ -457,7 +457,7 @@ credits.
 
 - **Room task input (app -> host) + composer (§16.1)** — DONE. `room_task_payload`
   (`{type:room_task, room_id, message}`) is the frame that starts a room; the app
-  seals it via `CoworkRelayController.sendRoomTask(roomId, message)`, and
+  seals it via `AgentsRelayController.sendRoomTask(roomId, message)`, and
   `RoomThreadPage` gains a composer (when `onSend` is set) that sends it and
   resets the thread for the new exchange. The shell wires the composer to the
   shared socket, so a room round-trips on the app side: send a message, watch the
@@ -489,7 +489,7 @@ credits.
   tests + 1 service test; manager 164, host 69 green. room-history-wire: DONE. `room_history_request` (app -> host) and
   `room_history` (host -> app) frames; `RoomService.handle_room_history` replays
   the stored transcript (empty, never silent, when there is none); the app parses
-  `room_history` into `CoworkRelayRoomHistory`, `RoomThreadPage` replaces its view
+  `room_history` into `AgentsRelayRoomHistory`, `RoomThreadPage` replaces its view
   with the stored turns (marking the exchange over) and asks for it via a new
   `onReady` once its listener is attached, and the shell wires `onReady` to
   `controller.requestRoomHistory`. So reopening a room now shows its last
@@ -579,7 +579,7 @@ credits.
   closing a resilience gap: a room created while the host was offline never
   reached the host, so `room_task` came back `no_such_room` with no explanation.
   Now opening a room re-sends `room_create` first (idempotent on the host, so it
-  just repairs a missing room) before requesting history, and `CoworkRoomStop`
+  just repairs a missing room) before requesting history, and `AgentsRoomStop`
   gained `noSuchRoom` → "This room is not on your host yet", so the footer names
   it instead of showing nothing. +1 page test, shell test extended; app 228 green.
 
@@ -679,8 +679,8 @@ per member, not the serving one — plus the prod relay). All the pieces it wire
 already exist and are tested; only the credit-spending / prod parts are gated.
 
 - Prod `relay-crossreplica` deploy on the chat server — it can take chat down.
-  (Note: the chat-side `cowork_peers.py` fix already shipped there as `d0732c1`,
-  verified live 2026-08-20; this gate is about pointing CoWork at the prod relay,
+  (Note: the chat-side `agents_peers.py` fix already shipped there as `d0732c1`,
+  verified live 2026-08-20; this gate is about pointing Agents at the prod relay,
   not the fix itself.)
 - Any real-credit task run.
 - The by-hand release-client pairing pass (release build has burned us twice).

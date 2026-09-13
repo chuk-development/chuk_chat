@@ -1,8 +1,8 @@
 // lib/constants.dart
 import 'package:flutter/material.dart';
-import 'package:cowork/utils/color_extensions.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
 
 /* ---------- DEFAULT COLOURS (Material You dark palette) ---------- */
 const Color kDefaultBgColor = Color(0xFF111318);

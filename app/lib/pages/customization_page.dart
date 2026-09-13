@@ -1,16 +1,16 @@
 // lib/pages/customization_page.dart
 import 'package:flutter/material.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/constants.dart';
-import 'package:cowork/models/app_shell_config.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/utils/chat_font_resolver.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -398,11 +398,11 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
 
-          // COWORK: the full log switch. Upstream's "auto chat titles" rows sat
-          // here; CoWork has no client-side title model (a thread is named after
+          // AGENTS: the full log switch. Upstream's "auto chat titles" rows sat
+          // here; Agents has no client-side title model (a thread is named after
           // its coworker), and no client-side download folder either — the host
           // writes files and hands them over. What belongs in their place is the
-          // one display choice CoWork actually has: whether the thread shows
+          // one display choice Agents actually has: whether the thread shows
           // every command, MCP call and browser step, or just the answer
           // (docs/PRODUCT_PHILOSOPHY.md). Default off.
           ExpressiveSectionHeader('Detail'),

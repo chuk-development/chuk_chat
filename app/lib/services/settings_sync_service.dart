@@ -3,11 +3,11 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/app_theme_service.dart';
-import 'package:cowork/services/developer_options_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/title_generation_service.dart';
-import 'package:cowork/tool_handlers/notes_tools.dart' as notes_tools;
+import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/tool_handlers/notes_tools.dart' as notes_tools;
 
 /// Central coordinator for cross-device settings sync.
 ///

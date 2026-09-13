@@ -19,8 +19,8 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/widgets/charts/chart_palette.dart';
-import 'package:cowork/widgets/charts/chart_spec.dart';
+import 'package:chuk_chat/widgets/charts/chart_palette.dart';
+import 'package:chuk_chat/widgets/charts/chart_spec.dart';
 
 /// How the category labels under the plot are laid out, once measured.
 enum ChartLabelLayout {

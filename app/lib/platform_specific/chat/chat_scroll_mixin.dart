@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 
 /// Shared message-list scroll behaviour for the desktop and mobile chat UIs.
 ///

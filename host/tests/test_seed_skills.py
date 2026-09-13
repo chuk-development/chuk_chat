@@ -9,8 +9,8 @@ there is nothing to seed.
 
 from __future__ import annotations
 
-from cowork_agent.skills import SOURCE_BUILTIN, iter_seed_skills, seed_sources
-from cowork_host.seed_skills import seed_skills_dir, seed_workspace_skills
+from chuk_agents_runtime.skills import SOURCE_BUILTIN, iter_seed_skills, seed_sources
+from chuk_agents_host.seed_skills import seed_skills_dir, seed_workspace_skills
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\n\n{body}\n"
 
@@ -31,7 +31,7 @@ def test_the_shipped_seed_dir_holds_the_youtube_skill():
 def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
     """The repository's ``skills/`` layout IS the built-in/workspace split.
 
-    Built-in means the skill documents CoWork's own machinery: schedules,
+    Built-in means the skill documents Agents's own machinery: schedules,
     the secrets vault, the sandbox terminal, the workspace itself, and the
     ``<chart>`` block the app renders. That set is closed and is pinned here,
     so adding a skill to it is a deliberate act.
@@ -136,6 +136,6 @@ def test_a_dir_without_a_skill_md_is_skipped(tmp_path):
 def test_env_override_points_at_a_seed_dir(tmp_path, monkeypatch):
     src = tmp_path / "custom-seed"
     _write_seed(src, "youtube-transcript")
-    monkeypatch.setenv("COWORK_SEED_SKILLS", str(src))
+    monkeypatch.setenv("AGENTS_SEED_SKILLS", str(src))
 
     assert seed_skills_dir() == src

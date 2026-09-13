@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Build the CoWork Android APK the ONLY correct way, then install it with adb.
+# Build the Agents Android APK the ONLY correct way, then install it with adb.
 #
 # The app is broken without its compile-time environment: Supabase keys and the
-# feature flags (FEATURE_COWORK ...) all come from app/.env. A plain
+# feature flags (FEATURE_AGENTS ...) all come from app/.env. A plain
 # `flutter build apk` installs fine and then shows a dead screen. Always use
 # this script; never hand-roll the flutter command. To change what is built,
 # edit app/.env (template: app/.env.example).
@@ -40,7 +40,7 @@ BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 DEFINES=(
   # Everything the app needs lives in app/.env — Supabase keys and the feature
-  # flags (FEATURE_COWORK and friends). Change the build there, not here.
+  # flags (FEATURE_AGENTS and friends). Change the build there, not here.
   "--dart-define-from-file=$ENV_FILE"
   "--dart-define=APP_VERSION=$APP_VERSION"
   "--dart-define=BUILD_TIMESTAMP=$BUILD_TIMESTAMP"

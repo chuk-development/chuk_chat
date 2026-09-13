@@ -8,7 +8,7 @@ error now names the tool that is actually there.
 
 from __future__ import annotations
 
-from cowork_agent.registry import ToolRegistry, unknown_tool_message
+from chuk_agents_runtime.registry import ToolRegistry, unknown_tool_message
 
 
 def test_a_browser_tool_name_points_at_browser_task():
@@ -28,7 +28,7 @@ def test_dispatch_carries_the_hint():
 
 
 def test_the_deferred_bridge_carries_it_too():
-    from cowork_agent.tool_search import make_tool_call_handler
+    from chuk_agents_runtime.tool_search import make_tool_call_handler
 
     registry = ToolRegistry()
     tool_call = make_tool_call_handler(registry)

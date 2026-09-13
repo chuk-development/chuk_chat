@@ -1,4 +1,4 @@
-# Mobile structure — CoWork as a messenger, modelled on Grok Bot
+# Mobile structure — Agents as a messenger, modelled on Grok Bot
 
 Session cowork-c6, 2026-09-05. Source of truth for the design: **Mobbin** (the
 user's instruction: Mobbin for mobile, nothing else). Screens and flows read
@@ -64,9 +64,9 @@ Mobbin flows used:
   agents"; "Meet Your New Bot" sheet with avatar, name, one-line role, black
   **Start Chat** button, "Create My Own" link.
 
-## 2. Mapping to CoWork
+## 2. Mapping to Agents
 
-| Grok Bot | CoWork today | CoWork mobile (this work) |
+| Grok Bot | Agents today | Agents mobile (this work) |
 |---|---|---|
 | Home list of bots | `AgentRosterView` (sidebar buckets working/scheduled/waiting) inside an `IndexedStack` on narrow windows, under a Material `AppBar` | `MobileAgentList`: messenger rows (avatar + presence dot, name, role chip, time, last thread) with the floating home bar (account, search, add). Same `AgentRosterSource`, same `onSelect`. |
 | Chat chrome (back, bot pill, computer chip) | `AppBar` with title + 6 icon actions | `MobileChatChrome` floating over the chat; actions folded into the trailing chips: computer (agent's browser), "…" sheet (controls, rooms, copy full chat, settings, sign out) |
@@ -77,7 +77,7 @@ Mobbin flows used:
 
 Bubbles: chuk_chat renders the assistant full-width (no bubble) and the user in
 a bubble. Grok Bot bubbles both. The chat renderer is verbatim chuk_chat and
-must not be hand-edited (re-sync overwrites it), and the directive "CoWork is
+must not be hand-edited (re-sync overwrites it), and the directive "Agents is
 chuk_chat master" outranks the look of one bubble. So the messenger feel comes
 from navigation, chrome, list, touch targets and keyboard behaviour — not from
 restyling the bubbles. Noted as a possible upstream change in chuk_chat.
@@ -99,7 +99,7 @@ restyling the bubbles. Noted as a possible upstream change in chuk_chat.
   agent controls open as a sheet from the bot pill.
 - **Breakpoint**: phone layout below 600 dp width on any platform (so a
   narrow Linux window shows it), and always on Android/iOS phones.
-- **The thread view stays in the tree — always.** `CoworkThreadView` owns
+- **The thread view stays in the tree — always.** `AgentsThreadView` owns
   the relay controller: it reconnects from the stored pairing at bootstrap,
   reports `onPaired` (which puts the host agent into the roster) and adopts a
   run that is already in flight. If the inbox screen mounted only the list,
@@ -133,20 +133,20 @@ Owned by this session (new):
 Not mine — diff proposals go to the coordinator (cowork-b7):
 - `lib/pages/messenger_shell.dart` (cowork-5c): narrow branch mounts
   `MobileAgentList` / `MobileChatScreen`, no `AppBar` on phones.
-- `lib/widgets/cowork_thread_view.dart`: accept `topInset` and a
+- `lib/widgets/agents_thread_view.dart`: accept `topInset` and a
   `forcePhoneLayout` so a narrow Linux window renders `ChukChatUIMobile`.
 - `lib/platform_specific/chat/chat_ui_mobile.dart` (verbatim): no edit needed.
 
 ## 5. Diff proposals (exact)
 
-Status 2026-09-05: the `cowork_thread_view.dart` hunks below are APPLIED (by
+Status 2026-09-05: the `agents_thread_view.dart` hunks below are APPLIED (by
 c6, announced to 47/84/b5). The shell diff (`docs/diffs_c6_messenger_shell.md`)
 is APPLIED by cowork-5c with one correction: the inbox branch keeps the thread
 view mounted off-stage (see the rule in section 3). 5c's tests: "a phone window
 shows the inbox, then the chat, and back again" (420 px) and a tablet test
 (660 px), both green.
 
-### cowork_thread_view.dart
+### agents_thread_view.dart
 ```dart
 // constructor
 this.topInset = 0,
@@ -202,7 +202,7 @@ return Scaffold(
                 ))
           : IndexedStack(...)                     // unchanged tablet path
 ```
-where `thread(topInset)` builds the existing `CoworkThreadView` with
+where `thread(topInset)` builds the existing `AgentsThreadView` with
 `topInset: topInset, phoneLayout: true` — the `GlobalKey` keeps the socket
 alive across the flip exactly as today.
 

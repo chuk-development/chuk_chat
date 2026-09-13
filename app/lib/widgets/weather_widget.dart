@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 /// Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
 ///

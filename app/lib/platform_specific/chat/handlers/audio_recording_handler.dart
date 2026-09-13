@@ -7,11 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:record/record.dart';
 
-import 'package:cowork/utils/permission_handler_stub.dart'
+import 'package:chuk_chat/utils/permission_handler_stub.dart'
     if (dart.library.io) 'package:permission_handler/permission_handler.dart';
-import 'package:cowork/utils/io_helper.dart';
-import 'package:cowork/platform_specific/chat/chat_api_service.dart';
-import 'package:cowork/services/streaming_transcription_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/services/streaming_transcription_service.dart';
 
 /// Handles microphone recording + transcription.
 ///

@@ -1,20 +1,20 @@
-# Chat UI import (chuk_chat → CoWork)
+# Chat UI import (chuk_chat → Agents)
 
-CoWork does not have its own chat renderer. It imports chuk_chat's, verbatim, and
-replaces the parts that only make sense against a hosted API with CoWork-owned
+Agents does not have its own chat renderer. It imports chuk_chat's, verbatim, and
+replaces the parts that only make sense against a hosted API with Agents-owned
 stubs. This file records what was imported, what was stubbed and why, and how to
 re-sync.
 
 **Upstream:** `chuk_chat` `d31526a229fdde27c82adf3661d5d3a149db8340` (branch `master`).
 
 **Imported:** 100 files, 45,179 lines, into `app/lib/`.
-**Stubbed:** 25 CoWork-owned files (plus one pre-existing stub extended).
-**Excluded:** `lib/services/mcp/*` and everything that binds to it — CoWork's MCP
+**Stubbed:** 25 Agents-owned files (plus one pre-existing stub extended).
+**Excluded:** `lib/services/mcp/*` and everything that binds to it — Agents's MCP
 is the source of truth.
 
 Nothing imported is mounted yet. The running app's behaviour is unchanged; the
 imported screens (`ChukChatUIDesktop` / `ChukChatUIMobile`) are compiled but
-unreachable until P2b/P3 wires them into `CoworkThreadView`.
+unreachable until P2b/P3 wires them into `AgentsThreadView`.
 
 ## Re-syncing with chuk_chat master
 
@@ -26,36 +26,36 @@ git diff                                 # review every hunk
 
 The script copies each path in `tools/chat_ui_manifest.txt` from
 `<chuk_chat>/lib/<p>` to `app/lib/<p>` and rewrites `package:chuk_chat/` to
-`package:cowork/`. It is idempotent and exits non-zero if a manifest path no
+`package:chuk_chat/`. It is idempotent and exits non-zero if a manifest path no
 longer exists upstream, so a file that moved is reported instead of silently
 dropped. It warns when the manifest's pinned SHA and upstream HEAD differ —
 update the `# upstream:` header after reviewing the diff.
 
 Because every imported file is a byte-for-byte copy modulo the package prefix,
 `git diff` after a re-sync is exactly upstream's change set. **Never hand-edit an
-imported file.** If the chat UI needs to behave differently in CoWork, change a
+imported file.** If the chat UI needs to behave differently in Agents, change a
 stub, not an import.
 
 `platform_config.dart` is the one imported file with an append: after the copy
-the script appends `tools/platform_config_cowork_extras.dart.part`, which holds
-the CoWork-only feature flags (guarded by a `COWORK-ONLY FEATURE FLAGS` marker so
+the script appends `tools/platform_config_agents_extras.dart.part`, which holds
+the Agents-only feature flags (guarded by a `AGENTS-ONLY FEATURE FLAGS` marker so
 a re-run does not duplicate them).
 
 ## Deliberate exclusions
 
 These upstream files are in the transitive closure but are **not** imported. The
-CoWork file already in the tree wins.
+Agents file already in the tree wins.
 
 | Upstream file | Decision | Reason |
 |---|---|---|
-| `lib/services/mcp/*` | keep CoWork's | CoWork's MCP is the source of truth (verbatim port + the OAuth work). The chat UI reaches `McpService`, `McpConnection`, `McpCatalogueEntry`, `mcp_availability` and `McpIconCache`; all five resolve against CoWork's files unchanged. No member had to be added. `mcp_client.dart` is not referenced at all. `mcp_sync_service.dart` IS referenced by the verbatim `chat_sync_service.dart` (bead cowork-sha) and is a CoWork stub (`pullAndReconcile` → no-op; owner cowork-47). |
-| `lib/widgets/mcp_connect_card.dart` | keep CoWork's | CoWork's copy is already a verbatim port of the same widget with the identical public API (`McpConnectCard({required entry, required onConnected})`). It differs from upstream only in the page it pushes (`pages/settings/mcp_connectors_page.dart`, CoWork's actively developed one) and one product-name string. Overwriting it would have dragged chuk's whole 896-line `pages/mcp_connectors_page.dart` in as a second, duplicate connectors page. |
+| `lib/services/mcp/*` | keep Agents's | Agents's MCP is the source of truth (verbatim port + the OAuth work). The chat UI reaches `McpService`, `McpConnection`, `McpCatalogueEntry`, `mcp_availability` and `McpIconCache`; all five resolve against Agents's files unchanged. No member had to be added. `mcp_client.dart` is not referenced at all. `mcp_sync_service.dart` IS referenced by the verbatim `chat_sync_service.dart` (bead cowork-sha) and is a Agents stub (`pullAndReconcile` → no-op; owner cowork-47). |
+| `lib/widgets/mcp_connect_card.dart` | keep Agents's | Agents's copy is already a verbatim port of the same widget with the identical public API (`McpConnectCard({required entry, required onConnected})`). It differs from upstream only in the page it pushes (`pages/settings/mcp_connectors_page.dart`, Agents's actively developed one) and one product-name string. Overwriting it would have dragged chuk's whole 896-line `pages/mcp_connectors_page.dart` in as a second, duplicate connectors page. |
 | `lib/pages/mcp_connectors_page.dart` | not imported | Only reachable from `mcp_connect_card.dart`; falls out of the closure with the row above. |
-| `lib/services/websocket_connector_io.dart` | keep CoWork's | CoWork's copy carries a deliberate local change: a 20 s protocol ping interval so a dead/half-open host surfaces as a normal close and drives auto-reconnect. That is a CoWork-specific fix, not a lost upstream hunk, so it is kept. Full diff vs. upstream is exactly the `_kWsPingInterval` constant plus its two use sites. |
+| `lib/services/websocket_connector_io.dart` | keep Agents's | Agents's copy carries a deliberate local change: a 20 s protocol ping interval so a dead/half-open host surfaces as a normal close and drives auto-reconnect. That is a Agents-specific fix, not a lost upstream hunk, so it is kept. Full diff vs. upstream is exactly the `_kWsPingInterval` constant plus its two use sites. |
 
 ## Stub inventory
 
-Every stub carries the fixed three-line header (`COWORK STUB. Upstream: … @ <sha>.`
+Every stub carries the fixed three-line header (`AGENTS STUB. Upstream: … @ <sha>.`
 / `Reason: …` / `Keep the public API signature-compatible …`) and mirrors the
 upstream path. Stubs are derived from the upstream declarations with the bodies
 emptied.
@@ -66,7 +66,7 @@ emptied.
 |---|---|
 | `services/websocket_chat_service.dart` | replaced by relay — **the transport adapter**. Same class and static signature; body currently returns `Stream.error(UnimplementedError('P2b'))`. |
 | `services/tool_call_handler.dart` | replaced by relay — **the fold**. `processAssistantResponse` always returns a final answer (`shouldContinue == false`), `nativeToolDefinitions` → `[]`, `buildInitialSystemPrompt` → `''`. The client tool loop is structurally unreachable. |
-| `services/chat_storage_service.dart` | **no longer a stub** (bead cowork-sha): upstream's facade with recorded divergences — `saveChat`/`updateChat` → `CoworkChatStore.replaceThread`, `loadFullChat` memory-first, the three list loaders no-op with no Supabase client. Everything behind it (`chat_storage_crud/sync/mutations/sidebar`, `chat_preload_service`, `local_chat_cache_*`) is verbatim. See "Chat storage" below. |
+| `services/chat_storage_service.dart` | **no longer a stub** (bead cowork-sha): upstream's facade with recorded divergences — `saveChat`/`updateChat` → `AgentsChatStore.replaceThread`, `loadFullChat` memory-first, the three list loaders no-op with no Supabase client. Everything behind it (`chat_storage_crud/sync/mutations/sidebar`, `chat_preload_service`, `local_chat_cache_*`) is verbatim. See "Chat storage" below. |
 
 ### Replaced by relay (the host owns this)
 
@@ -79,16 +79,16 @@ emptied.
 | `services/offline_send_coordinator.dart` | replaced by relay — `enqueue` is inert. `OfflineSendPayload` is kept verbatim (a plain value object the send logic builds). |
 | `services/offline_queue_service.dart` | replaced by relay — not referenced by the closure; kept as a landing place so a re-sync never pulls the original in (sqflite is in the tree since cowork-sha, but the offline send queue is still relay-less). |
 
-### Replaced by a CoWork service
+### Replaced by a Agents service
 
 | File | Reason |
 |---|---|
 | `services/image_storage_service.dart` | **real, local.** Files under the app-support directory, addressed `cowork://blob/<id>`. Upstream used a Supabase bucket. This is where relayed files land. |
 | `services/pdf_attachment_service.dart` | **real, local.** Delegates to the same blob store; upstream method names (`upload`, `download`, `delete`, `getCached`, …) unchanged. |
-| `services/notification_service.dart` | no-op **during the import only**. WS-7/P7 replaces it with the real port (`flutter_local_notifications` + the host's desktop notifier), because a CoWork run finishes while the app is closed. Do not build on this file. |
-| `services/title_generation_service.dart` | pre-existing CoWork stub, extended here with `generateAndApplyTitle(chatId, firstMessage)` → no-op. The sidebar row is the agent; its name is the user's. |
+| `services/notification_service.dart` | no-op **during the import only**. WS-7/P7 replaces it with the real port (`flutter_local_notifications` + the host's desktop notifier), because a Agents run finishes while the app is closed. Do not build on this file. |
+| `services/title_generation_service.dart` | pre-existing Agents stub, extended here with `generateAndApplyTitle(chatId, firstMessage)` → no-op. The sidebar row is the agent; its name is the user's. |
 
-### Hosted-only (no CoWork equivalent by design)
+### Hosted-only (no Agents equivalent by design)
 
 | File | Reason |
 |---|---|
@@ -108,11 +108,11 @@ emptied.
 
 ## Overwrite decisions
 
-- **`platform_config.dart` — overwritten, CoWork flags re-added.** chuk's version
-  adds `kFeatureMcp` and `kFeatureArtifactHosting`, which CoWork lacked. The five
-  CoWork-only flags — `kFeatureCoWork`, `kFeatureCoworkDemo`, `kFeatureSkills`,
+- **`platform_config.dart` — overwritten, Agents flags re-added.** chuk's version
+  adds `kFeatureMcp` and `kFeatureArtifactHosting`, which Agents lacked. The five
+  Agents-only flags — `kFeatureAgents`, `kFeatureAgentsDemo`, `kFeatureSkills`,
   `kFeatureSpotify`, `kFeatureWhoop` — are re-added by the script from
-  `tools/platform_config_cowork_extras.dart.part`. All 16 `kFeature*` flags plus
+  `tools/platform_config_agents_extras.dart.part`. All 16 `kFeature*` flags plus
   `kPlatformMobile`/`kPlatformDesktop`/`kAutoDetectPlatform` are present after the
   import; no flag was lost and no default value changed.
 - **`utils/io_helper_stub.dart` — overwritten.** The only difference was a missing
@@ -131,7 +131,7 @@ This section used to say every file under `platform_specific/chat/`,
 `widgets/`, `models/` and `utils/` was byte-identical to upstream modulo the
 package prefix. That stopped being true. 41 imported files have diverged, and
 eight of them are rendering widgets carrying roughly two thousand lines of
-CoWork work — none of it upstreamed, all of it visible to the user:
+Agents work — none of it upstreamed, all of it visible to the user:
 
 * `widgets/markdown_message.dart` — inline code keeps its monospace and its chip
   inside headings and quotes (upstream loses both, because a theme style with
@@ -162,13 +162,13 @@ Service layer, deliberate and recorded:
 1. `ToolLoopSession` in the `tool_call_handler.dart` stub **drops the `enforcer`
    field**. Upstream's `ToolEnforcer` is part of the client tool loop and is not
    imported; no imported file reads `session.enforcer`.
-2. `platform_config.dart` carries the appended CoWork-only flag block described
+2. `platform_config.dart` carries the appended Agents-only flag block described
    above.
 3. `services/streaming_manager_io.dart` — carries a `FinalContentEvent` branch
    upstream does not have. An earlier version of this document claimed the file
    was untouched; it is not.
 4. `services/chat_storage_service.dart` (bead cowork-sha): `saveChat` and
-   `updateChat` delegate to `CoworkChatStore.replaceThread` (memory → SQLite →
+   `updateChat` delegate to `AgentsChatStore.replaceThread` (memory → SQLite →
    encrypted upsert on `cowork_chats`, best-effort) instead of upstream's
    INSERT/UPDATE, which refuse to run without a signed-in user and an unlocked
    key and refuse a row that exists (or does not) on the server. `loadFullChat`
@@ -191,17 +191,17 @@ the finished tool timeline comes back through `ToolLoopResult`.
 
 `services/websocket_chat_service.dart` is the transport adapter. Its static
 signature is upstream's, so every imported call site binds unchanged; the body
-is CoWork's.
+is Agents's.
 
 **One id everywhere.** `chatId` (the imported screen's `selectedChatId`) IS the
-executor's `session_key` IS the local cache row id IS `CoworkThreadView.threadKey`.
-A caller that passes no `chatId` falls back to `CoworkRelayLink.instance.sessionKey`.
+executor's `session_key` IS the local cache row id IS `AgentsThreadView.threadKey`.
+A caller that passes no `chatId` falls back to `AgentsRelayLink.instance.sessionKey`.
 
 **Ignored, by design:** `history`, `systemPrompt`, `maxTokens`, `temperature`,
 `tools`. The host owns the session, the prompt and the tools. `images` are logged
 and dropped — `sendTask` has no image channel yet.
 
-| `CoworkRelayInbound` (live only) | `ChatStreamEvent` | `CoworkRunLedger` |
+| `AgentsRelayInbound` (live only) | `ChatStreamEvent` | `AgentsRunLedger` |
 |---|---|---|
 | `Delta` | `ContentEvent(text)` | — |
 | `Reasoning` | `ReasoningEvent(text)` | `reasoning()` |
@@ -231,7 +231,7 @@ and dropped — `sendTask` has no image channel yet.
 ## P2b: the fold
 
 `services/tool_call_handler.dart` `processAssistantResponse` takes the run from
-`CoworkRunLedger.take(session.discoveryContextKey ?? link.sessionKey)` and returns
+`AgentsRunLedger.take(session.discoveryContextKey ?? link.sessionKey)` and returns
 `ToolLoopResult.finalAnswer(...)` with `shouldContinue == false`, always. It fills
 `session.toolCalls` and `session.producedBlocks` from the ledger, calls
 `onToolCallsUpdated`, and finalises anything left running. The host's own
@@ -243,7 +243,7 @@ the tool narration rides the same channel).
 
 ## P2b: history, the replay loader and the cache
 
-`services/cowork/cowork_replay_loader.dart` is the ONLY consumer of replayed
+`services/agents/agents_replay_loader.dart` is the ONLY consumer of replayed
 frames. It folds them into the imported screen's own row shape and writes them
 through `ChatStorageService.saveChat`, which since bead cowork-sha is chuk_chat's
 storage (see "Chat storage" below): memory at once, the SQLite cache, then the
@@ -262,15 +262,15 @@ encrypted `cowork_chats` row. (P2b's interim JSON-file cache is gone.)
 
 **Repainting without touching an imported file.** The imported screen reads its
 rows once, in `initState`, and does not listen to `ChatStorageService.changes`
-(only the sidebar does). So `CoworkThreadView` keys the screen on
+(only the sidebar does). So `AgentsThreadView` keys the screen on
 `'cowork-chat-<threadKey>-<revision>'`: a committed replay bumps the revision,
 which remounts the screen off the fresh rows. The remount is deliberately
-**deferred while a run is in flight** (`CoworkRunLedger.isRunning`), because
+**deferred while a run is in flight** (`AgentsRunLedger.isRunning`), because
 remounting mid-run would throw away the answer streaming into the screen.
 
 ## Chat storage (bead cowork-sha): SQLite + Supabase, like chuk_chat
 
-The user's directive: CoWork threads are stored exactly like chuk_chat chats —
+The user's directive: Agents threads are stored exactly like chuk_chat chats —
 in the local SQL database and in Supabase — and load instantly; the Python host
 stays the source of truth on top.
 
@@ -283,9 +283,9 @@ stays the source of truth on top.
 `sqflite`, `sqflite_common_ffi`, `path`, `sqlite3_flutter_libs` at chuk_chat's
 versions.
 
-**CoWork-owned** (`lib/services/storage/`):
+**Agents-owned** (`lib/services/storage/`):
 
-- `cowork_chat_store.dart` — the write path. `replaceThread(sessionKey, rows)`:
+- `agents_chat_store.dart` — the write path. `replaceThread(sessionKey, rows)`:
   memory synchronously (the caller may paint before awaiting), then the SQLite
   row through `LocalChatCacheService.upsert`, then `EncryptionService.encrypt`
   + `upsert` on `cowork_chats (user_id, id)`; writes per session are chained in
@@ -296,14 +296,14 @@ versions.
   cursor (`cowork.replay_cursor.<key>`) is dropped so the next open asks the
   host for the full thread. `loadThread` is memory-first, then upstream's
   cache-first `loadFullChat`.
-- `cowork_chat_storage_bootstrap.dart` — one auth-stream listener started
+- `agents_chat_storage_bootstrap.dart` — one auth-stream listener started
   from `main.dart`: on a session → `loadSavedChatsForSidebar()` (titles from
   the local cache, instant) then `ChatSyncService.start()` (30 s poll) and the
   cache migration; on sign-out → `stop()` + `reset()`. This is what
-  `AppInitializationService` does in chuk_chat; CoWork has no such service.
+  `AppInitializationService` does in chuk_chat; Agents has no such service.
 
 **What opens a thread now.** The imported screen calls `loadFullChat(threadKey)`
-→ memory → SQLite → cloud. In parallel `CoworkThreadView` asks the host for a
+→ memory → SQLite → cloud. In parallel `AgentsThreadView` asks the host for a
 replay from the persisted cursor; the host's delta is appended and stored
 through the same path. The host stays the truth: a full replay (cursor 0, or a
 host that ignores the cursor) replaces the local copy.
@@ -313,11 +313,11 @@ host that ignores the cursor) replaces the local copy.
 `docs/SUPABASE_SCHEMA.md`. Not `encrypted_chats`: a session key is not a UUID,
 and the two apps share one project.
 
-**Tests.** `test/services/storage/cowork_chat_store_test.dart` (10),
-`cowork_chat_storage_bootstrap_test.dart` (5); the P2b loader test still passes
+**Tests.** `test/services/storage/agents_chat_store_test.dart` (10),
+`agents_chat_storage_bootstrap_test.dart` (5); the P2b loader test still passes
 against the new facade, with no Supabase client in the test.
 
-## P2b: what `CoworkThreadView` is now
+## P2b: what `AgentsThreadView` is now
 
 Constructor unchanged. The transport half is unchanged (bootstrap, controller
 build/rebuild, pairing + connect bar, auto-reconnect with the watchdog,
@@ -326,7 +326,7 @@ connect bar when unpaired, else the imported screen:
 
 ```dart
 ChukChatUIDesktop(          // or ChukChatUIMobile on a phone-sized mobile screen
-  key: ValueKey('cowork-chat-$threadKey-$revision'),
+  key: ValueKey('agents-chat-$threadKey-$revision'),
   onToggleSidebar: <no-op — the sidebar is the shell's Agents roster>,
   selectedChatId: threadKey,
   onChatIdChanged: <pins ChatStorageService.selectedChatId>,
@@ -354,18 +354,18 @@ transcript shows it after the run ends.
 ## P2b: notes for P3 (the shell)
 
 - **The full-chat debug export moved** out of the view into
-  `services/cowork/chat_debug_export.dart`:
+  `services/agents/chat_debug_export.dart`:
   `ChatDebugExport.build({required String threadKey}) → Future<Map<String, dynamic>>`,
   `ChatDebugExport.buildJson({required String threadKey}) → Future<String>` and
   `ChatDebugExport.copyToClipboard({required String threadKey}) → Future<String>`
   (returns the note to show: `'full chat copied'`, or `'copied the transcript'`
   for the plain-text fallback). It reads the transcript from the
   `ChatStorageService` cache and the raw model context from the ledger.
-  `CoworkThreadViewState.copyFullChat()` is the thin delegate that keeps the
+  `AgentsThreadViewState.copyFullChat()` is the thin delegate that keeps the
   action working from the view.
-- `CoworkThreadView`'s state class is public (`CoworkThreadViewState`), so a
+- `AgentsThreadView`'s state class is public (`AgentsThreadViewState`), so a
   `GlobalKey` can reach `copyFullChat()`.
-- The view binds `CoworkRelayLink` itself (on controller build and on `paired`)
+- The view binds `AgentsRelayLink` itself (on controller build and on `paired`)
   and sets `link.sessionKey` on `paired` and on a `threadKey` change, so the shell
   needs no link wiring at all.
 - `fileSaver` is now unused: a relayed file lands in the blob store and renders as
@@ -401,7 +401,7 @@ static Stream<ChatStreamEvent> WebSocketChatService.sendStreamingChat({
   double temperature = 0.7,              // IGNORED
   List<String>? images,                  // v2: log + drop
   String? reasoningEffort,
-  String? chatId,                        // == CoWork sessionKey
+  String? chatId,                        // == Agents sessionKey
   List<Map<String, dynamic>>? tools,     // IGNORED: the host owns tools
 });
 
@@ -452,4 +452,4 @@ artifact cards light up with no edit to any imported file.
 verbatim-imported upstream files (`tool_image_result_service.dart`
 `unawaited_return_in_try_block` ×2; `cacheExtent` deprecation in
 `chat_ui_desktop.dart` / `chat_ui_mobile.dart` ×2). They are upstream's to fix,
-not CoWork's.
+not Agents's.

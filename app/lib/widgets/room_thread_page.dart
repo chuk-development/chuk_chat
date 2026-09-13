@@ -17,11 +17,11 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/widgets/room_thread_view.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/room_thread_view.dart';
 
 class RoomThreadPage extends StatefulWidget {
   const RoomThreadPage({
@@ -30,7 +30,7 @@ class RoomThreadPage extends StatefulWidget {
     required this.roomName,
     required this.userMessage,
     required this.inbound,
-    this.members = const <CoworkRoomMember>[],
+    this.members = const <AgentsRoomMember>[],
     this.rebind,
     this.onSend,
     this.onReady,
@@ -43,7 +43,7 @@ class RoomThreadPage extends StatefulWidget {
   final String roomName;
 
   /// The room's members, shown in the header strip.
-  final List<CoworkRoomMember> members;
+  final List<AgentsRoomMember> members;
 
   /// What the user posted to the room, shown at the top.
   final String userMessage;
@@ -51,14 +51,14 @@ class RoomThreadPage extends StatefulWidget {
   /// The relay client's inbound event stream. Room turns and the room's end are
   /// picked out of it; every other event is ignored here (they belong to the
   /// agent thread).
-  final Stream<CoworkRelayInbound> inbound;
+  final Stream<AgentsRelayInbound> inbound;
 
   /// The shared transport, if the caller wants the page to follow it. When set,
   /// a reconnect (the value changes to a fresh controller) makes the page
   /// re-subscribe to the new inbound and re-run [onReady] — seamless recovery on
   /// a changing network. When null the page uses [inbound] once and shows the
   /// reconnect banner if that stream dies (the tests' path).
-  final ValueListenable<CoworkRelayController?>? rebind;
+  final ValueListenable<AgentsRelayController?>? rebind;
 
   /// Sends a message to the room (starts an exchange). When null the composer is
   /// hidden — the page is read-only.
@@ -73,12 +73,12 @@ class RoomThreadPage extends StatefulWidget {
 }
 
 class _RoomThreadPageState extends State<RoomThreadPage> {
-  final List<CoworkRoomTurn> _turns = <CoworkRoomTurn>[];
+  final List<AgentsRoomTurn> _turns = <AgentsRoomTurn>[];
   final TextEditingController _composer = TextEditingController();
-  CoworkRoomStop? _stop;
+  AgentsRoomStop? _stop;
   bool _running = true;
   bool _disconnected = false;
-  StreamSubscription<CoworkRelayInbound>? _sub;
+  StreamSubscription<AgentsRelayInbound>? _sub;
   // The message the user actually sent, shown at the top once sent. Until then
   // the caller's placeholder ([userMessage]) stands in.
   String? _sentMessage;
@@ -103,17 +103,17 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
 
   /// The inbound to listen to now: the live controller's when following one,
   /// else the fixed stream passed in.
-  Stream<CoworkRelayInbound> _currentInbound() =>
+  Stream<AgentsRelayInbound> _currentInbound() =>
       widget.rebind != null ? _fromRebind() : widget.inbound;
 
-  Stream<CoworkRelayInbound> _fromRebind() {
+  Stream<AgentsRelayInbound> _fromRebind() {
     final controller = widget.rebind!.value;
     // No controller yet -> a stream that never emits; the rebind listener will
     // swap us onto the real one the moment it arrives.
-    return controller?.inbound ?? const Stream<CoworkRelayInbound>.empty();
+    return controller?.inbound ?? const Stream<AgentsRelayInbound>.empty();
   }
 
-  void _subscribe(Stream<CoworkRelayInbound> stream) {
+  void _subscribe(Stream<AgentsRelayInbound> stream) {
     _sub?.cancel();
     _sub = stream.listen(_onInbound, onDone: _onStreamClosed);
   }
@@ -176,10 +176,10 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     });
   }
 
-  void _onInbound(CoworkRelayInbound event) {
+  void _onInbound(AgentsRelayInbound event) {
     if (!mounted) return;
     switch (event) {
-      case CoworkRelayRoomTurn(
+      case AgentsRelayRoomTurn(
         :final roomId,
         :final round,
         :final agentId,
@@ -189,7 +189,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
         if (roomId != widget.roomId) break; // another room on the same socket
         setState(() {
           _turns.add(
-            CoworkRoomTurn(
+            AgentsRoomTurn(
               round: round,
               agentId: agentId,
               handle: handle,
@@ -197,7 +197,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             ),
           );
         });
-      case CoworkRelayRoomHistory(:final roomId, :final turns):
+      case AgentsRelayRoomHistory(:final roomId, :final turns):
         if (roomId != widget.roomId) break;
         setState(() {
           // History replaces the view: it is the last exchange, and it is over.
@@ -205,7 +205,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             ..clear()
             ..addAll(
               turns.map(
-                (t) => CoworkRoomTurn(
+                (t) => AgentsRoomTurn(
                   round: t.round,
                   agentId: t.agentId,
                   handle: t.handle,
@@ -215,10 +215,10 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
             );
           if (_turns.isNotEmpty) _running = false;
         });
-      case CoworkRelayRoomDone(:final roomId, :final reason):
+      case AgentsRelayRoomDone(:final roomId, :final reason):
         if (roomId != widget.roomId) break;
         setState(() {
-          _stop = CoworkRoomStop.fromWire(reason);
+          _stop = AgentsRoomStop.fromWire(reason);
           _running = false;
         });
       default:

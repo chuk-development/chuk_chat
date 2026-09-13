@@ -12,8 +12,8 @@ import 'dart:io';
 import 'package:web_socket_channel/io.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:cowork/utils/certificate_pinning.dart';
-import 'package:cowork/utils/certificate_pinning_io.dart' as pinning_io;
+import 'package:chuk_chat/utils/certificate_pinning.dart';
+import 'package:chuk_chat/utils/certificate_pinning_io.dart' as pinning_io;
 
 /// One long-lived pinned [HttpClient] reused across every WebSocket connect.
 ///

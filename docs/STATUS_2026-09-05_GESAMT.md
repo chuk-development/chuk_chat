@@ -1,9 +1,9 @@
-# Cowork Gesamtstatus, 2026-09-05 (Stand ~21:00, HEAD 4370a48)
+# Agents Gesamtstatus, 2026-09-05 (Stand ~21:00, HEAD 4370a48)
 
 Geschrieben vom Koordinator cowork-b7 beim Abschluss. Koordinator ab jetzt: cowork-76 / cowork-7b.
 Quellen: docs/COORDINATION.md (Log), Beads (`bd list`), Handover-Docs (siehe unten).
 
-## 1. Was fertig und committet ist (181 Commits auf Branch `cowork`, ein Worktree)
+## 1. Was fertig und committet ist (181 Commits auf Branch `agents`, ein Worktree)
 
 ### Python (agent / executor / host)
 - Native OpenAI Tool-Calls, `<tool_call>`-Textprotokoll komplett entfernt (52d429d); Live-Probe bestanden (deepseek-v4-flash @ fireworks/serverless).
@@ -25,7 +25,7 @@ Quellen: docs/COORDINATION.md (Log), Beads (`bd list`), Handover-Docs (siehe unt
 ### Flutter (app)
 - chuk_chat-Chat-UI verbatim importiert (Manifest tools/chat_ui_manifest.txt, Script scripts/import_chat_ui.sh, 103 Dateien in f22a189) mit Relay-Adapter (websocket_chat_service), Ledger, ReplayLoader, lokalem Cache.
 - Shell nach chuk root-wrapper (535756f), Agenten-Sidebar auf chuk-Chrome neu designt, Copy-full-chat oben rechts, Model-Selection 1:1 (Dropdown, Fast/Thinking), Katalog-Default api.chuk.chat.
-- Scroll-Springen beim Streaming gefixt (chat_scroll_mixin, in chuk_chat master UNCOMMITTED, in cowork committet).
+- Scroll-Springen beim Streaming gefixt (chat_scroll_mixin, in chuk_chat master UNCOMMITTED, in agents committet).
 - Storage: chuk-Storage verbatim (SQLite + Supabase-Sync, Tabelle cowork_chats), History-Migration des alten JSON-Caches, verwaiste Cursor werden verworfen (History von gestern kommt beim naechsten Start zurueck), Cloud-Outbox.
 - MCP-OAuth auf dem Geraet verbatim (mcp_oauth, Loopback-Redirect), voller Secret-Record, Spiegel; Connector-Status aus chuk_chats Spiegel (268dcf6).
 - Logout-Fix: kein Netz-Refresh solange Access-Token gueltig, Refresh-Fehler loescht nie die Session, auth_gate holt erst das Host-Paar.
@@ -84,4 +84,4 @@ Braucht "Bildschirm frei" vom User (Sessions bedienen die App nur nach Ansage) u
 
 ## 6. Sessions und Handover-Docs
 Fertig: 13 (VNC), 49 (Python-Kern), 98 (Chat-UI-Import), 5c (Shell/Model/Sidebar), f7 (Shell-Rest, P8-Review), 9e (Logout), 94 (Automations), 75 (Terminal), 47 (Adapter/MCP), 84 (Tool-Karten), b5 (Reasoning/Memory). Aktiv bzw. in Bereitschaft: af (Account/Coworker), 18 (Skills/Connector-Sync), f5 (Browser + Backlog), a4 (Storage), 26 (Secrets), c6 (Mobile, haelt App), 76/7b (Koordinator).
-Docs: docs/COORDINATION.md, docs/WIRE_CONTRACT.md, docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md, docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_ADAPTER_MCP_cowork-47.md, docs/HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md, docs/HANDOVER_2026-09-05_SHELL_cowork-shell.md, docs/HANDOVER_2026-09-05_SECRETS.md, docs/HANDOVER_2026-09-05_AUTOMATIONS.md, docs/HANDOVER_2026-09-05_TERMINAL.md, docs/HANDOVER_2026-09-05_WORKSPACE_MEMORY.md, docs/HANDOVER_2026-09-05_SKILLS.md, docs/HANDTEST_MCP_OAUTH.md, docs/SUPABASE_SCHEMA.md, docs/PLAN_2026-09-04_COWORK_CHUK_ALIGN.md, docs/PRODUCT_PHILOSOPHY.md, docs/MOBILE_GROKBOT_STRUCTURE.md.
+Docs: docs/COORDINATION.md, docs/WIRE_CONTRACT.md, docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md, docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_ADAPTER_MCP_cowork-47.md, docs/HANDOVER_2026-09-05_SHELL_SETTINGS_cowork-5c.md, docs/HANDOVER_2026-09-05_SHELL_cowork-shell.md, docs/HANDOVER_2026-09-05_SECRETS.md, docs/HANDOVER_2026-09-05_AUTOMATIONS.md, docs/HANDOVER_2026-09-05_TERMINAL.md, docs/HANDOVER_2026-09-05_WORKSPACE_MEMORY.md, docs/HANDOVER_2026-09-05_SKILLS.md, docs/HANDTEST_MCP_OAUTH.md, docs/SUPABASE_SCHEMA.md, docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md, docs/PRODUCT_PHILOSOPHY.md, docs/MOBILE_GROKBOT_STRUCTURE.md.

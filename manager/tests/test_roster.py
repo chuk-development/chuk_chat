@@ -6,7 +6,7 @@ import random
 
 import pytest
 
-from cowork_manager.roster import RosterStore
+from chuk_agents_manager.roster import RosterStore
 
 
 @pytest.fixture

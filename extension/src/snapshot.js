@@ -139,7 +139,7 @@
 
   const runtime = (globalThis.browser ?? globalThis.chrome).runtime;
   runtime.onMessage.addListener((msg, _sender, reply) => {
-    if (!msg || msg.channel !== "cowork") return;
+    if (!msg || msg.channel !== "agents") return;
     try {
       if (msg.op === "snapshot") reply({ ok: true, data: build(Boolean(msg.full)) });
       else if (msg.op === "locate") reply({ ok: true, data: locate(msg.address) });

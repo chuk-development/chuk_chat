@@ -1,6 +1,6 @@
 // lib/models/workspace_model.dart
 import 'package:flutter/material.dart';
-import 'package:cowork/constants/file_constants.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
 
 /// Represents a workspace that combines AI persona, system prompts, files,
 /// and chat organization. Unifies the former "Projects" and "Assistants" features.

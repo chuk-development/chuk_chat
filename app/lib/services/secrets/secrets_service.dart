@@ -20,9 +20,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/secrets/secrets_store.dart';
-import 'package:cowork/services/secrets/secrets_sync.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/secrets/secrets_store.dart';
+import 'package:chuk_chat/services/secrets/secrets_sync.dart';
 
 /// Where a `secrets` frame goes. Defaults to the link's bound controller.
 typedef SecretsHostSink =
@@ -82,7 +82,7 @@ class SecretsService {
     SecretsSet set, {
     String? requestId,
   }) async {
-    final controller = CoworkRelayLink.instance.controller.value;
+    final controller = AgentsRelayLink.instance.controller.value;
     if (controller == null) return;
     await controller.sendSecrets(
       values: set.values,

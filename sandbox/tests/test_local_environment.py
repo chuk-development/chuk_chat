@@ -8,8 +8,8 @@ import time
 
 import pytest
 
-from cowork_sandbox import LocalEnvironment, ProcessResult, make_environment
-from cowork_sandbox.result import Environment
+from chuk_agents_sandbox import LocalEnvironment, ProcessResult, make_environment
+from chuk_agents_sandbox.result import Environment
 
 
 @pytest.fixture()
@@ -23,12 +23,12 @@ def env():
 
 def test_env_and_cwd_persist_across_commands(env):
     """Export a var and cd in command 1; observe both in command 2."""
-    first = env.run("export GREETING=hello_cowork && mkdir -p sub && cd sub")
+    first = env.run("export GREETING=hello_agents && mkdir -p sub && cd sub")
     assert first.ok, first.stderr
 
     second = env.run("echo \"$GREETING @ $(pwd)\"")
     assert second.ok, second.stderr
-    assert "hello_cowork" in second.stdout
+    assert "hello_agents" in second.stdout
     # cd in the first command carried over to the second.
     assert second.stdout.strip().endswith("/sub")
     # The environment also tracks cwd out of band.
@@ -45,7 +45,7 @@ def test_alias_persists_across_commands(env):
 def test_cwd_marker_is_stripped_from_output(env):
     result = env.run("printf 'clean'")
     assert result.stdout == "clean"
-    assert "__COWORK_CWD" not in result.stdout
+    assert "__AGENTS_CWD" not in result.stdout
 
 
 def test_bounded_output_truncation():

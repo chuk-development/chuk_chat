@@ -15,8 +15,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 /// Asks for a coworker's name. Returns the trimmed text, or null on Cancel.
 ///

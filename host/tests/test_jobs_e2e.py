@@ -13,8 +13,8 @@ socket, like a fired automation.
 from __future__ import annotations
 
 
-from cowork_agent import MockModelClient, StateStore, tool_call_response
-from cowork_host import LocalHost
+from chuk_agents_runtime import MockModelClient, StateStore, tool_call_response
+from chuk_agents_host import LocalHost
 
 from test_automations_e2e import _WatchingDouble
 
@@ -42,7 +42,7 @@ class _JobAwareModel(MockModelClient):
 
 
 def test_a_finished_job_wakes_the_agent_on_the_real_host(tmp_path, monkeypatch):
-    monkeypatch.setenv("COWORK_DESKTOP_NOTIFY", "0")
+    monkeypatch.setenv("AGENTS_DESKTOP_NOTIFY", "0")
     host = LocalHost(
         port=0,
         workspace_dir=str(tmp_path),
@@ -91,6 +91,6 @@ def test_a_finished_job_wakes_the_agent_on_the_real_host(tmp_path, monkeypatch):
     users = [e["text"] for e in replay if e["type"] == "user"]
     assert users[0] == "build it in the background" and users[1].startswith(f"[job {job_id} finished")
     # The sandbox left the job's files in the agent's workspace.
-    jobs_dir = tmp_path / "agents" / "test-worker" / ".cowork" / "jobs"
+    jobs_dir = tmp_path / "agents" / "test-worker" / ".agents" / "jobs"
     assert (jobs_dir / f"{job_id}.exit").read_text().strip() == "0"
     assert (jobs_dir / f"{job_id}.woken").exists()

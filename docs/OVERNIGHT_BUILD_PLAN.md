@@ -1,11 +1,11 @@
-# CoWork — Overnight Integration Plan (2026-08-28)
+# Agents — Overnight Integration Plan (2026-08-28)
 
-Orchestrated build to land a **fully working CoWork mode** in ONE repo. This doc
+Orchestrated build to land a **fully working Agents mode** in ONE repo. This doc
 is the source of truth for the overnight run; subagents read it.
 
 ## Ground truth (verified by recon)
 
-- **Base branch = `cowork`, branched off `master`.** `master` already ships the
+- **Base branch = `agents`, branched off `master`.** `master` already ships the
   whole platform (87 commits ahead of the old `agent/pairing-persist`): agent
   loop, MCP client (`mcp_client.py`, official SDK, tool-search), context ladder
   (`context.py`), per-agent Docker containers (`sandbox/docker/*`,
@@ -15,10 +15,10 @@ is the source of truth for the overnight run; subagents read it.
 - **Reference (do NOT build on, copy FROM):** `agent/pairing-persist @ 307b1c4`
   holds this session's work (Mem0 memory config, mcp_bridge, compaction,
   python/finish tools) — most is superseded by master; salvage the useful bits.
-  The external `chuk_chat`/`chuk_chat-cowork` repos are porting references for
+  The external `chuk_chat`/`chuk_chat-agents` repos are porting references for
   Flutter UI patterns ONLY and get **trashed later** — never a build target,
   never commit there.
-- **All commits go to the `cowork` branch in `/home/user/git/cowork`. Nowhere
+- **All commits go to the `agents` branch in `/home/user/git/cowork`. Nowhere
   else. One repo, one branch.**
 
 ## Locked decisions (owner, 2026-08-28)
@@ -34,7 +34,7 @@ is the source of truth for the overnight run; subagents read it.
    `BackendModelClient.complete`). Only `/v1/embeddings` is used server-side.
 3. **Keep master's MCP server implementation** (`mcp_client.py`) — the correct
    one. Wire the credential-forwarding flow into it.
-4. **Flutter = unify** the two diverged lines into the full CoWork mode:
+4. **Flutter = unify** the two diverged lines into the full Agents mode:
    master's agent **roster/rooms + control panel** + `agent/pairing-persist`'s
    **per-task composer model-picker** + a **new settings menu** (greenfield) +
    **MCP config UI** (ported from chuk_chat) + a **new embedding-model picker**.
@@ -49,24 +49,24 @@ is the source of truth for the overnight run; subagents read it.
 
 ## Workstreams
 
-Each runs in an **isolated git worktree** off `cowork`; the orchestrator merges
-each back into `cowork` and keeps the suite green. Module ownership is disjoint
+Each runs in an **isolated git worktree** off `agents`; the orchestrator merges
+each back into `agents` and keeps the suite green. Module ownership is disjoint
 to avoid clobbering.
 
 ### Phase 1 — foundation (parallel)
-- **WS-A · Memory → Mem0 + markdown files** (owns `agent/src/cowork_agent/memory.py`,
-  new `mem0_provider.py`, `agent/src/cowork_agent/runtime.py` memory wiring,
+- **WS-A · Memory → Mem0 + markdown files** (owns `agent/src/chuk_agents_runtime/memory.py`,
+  new `mem0_provider.py`, `agent/src/chuk_agents_runtime/runtime.py` memory wiring,
   `agent/pyproject.toml` deps, `soul.md`/`agents.md` seed). Rip `MemoryStore` +
   FTS5; install Mem0 as main memory (custom WS LLM provider + proxy embedder +
   local Qdrant); add the static soul.md/agents.md reader; keep the agent-facing
   `memory` tool, backed by Mem0. Salvage config from `pairing-persist @ 307b1c4`.
   Tests: Mem0 write/recall with a stub, markdown injection, no-network default.
-- **WS-B · `python` + `finish` tools** (owns `agent/src/cowork_agent/tools.py`,
+- **WS-B · `python` + `finish` tools** (owns `agent/src/chuk_agents_runtime/tools.py`,
   `loop.py`, `agent/tests/test_loop.py`). Port the CodeAct `python` tool + the
   explicit `finish` terminator onto master's files (net-new; recon recipe).
 
 ### Phase 2 — integration (after Phase 1 merges)
-- **WS-C · Flutter unify + settings + CoWork mode** (owns `app/`). Reconcile
+- **WS-C · Flutter unify + settings + Agents mode** (owns `app/`). Reconcile
   master's roster/rooms/control-panel with pairing-persist's composer
   model-picker; build the new settings menu (tiles → sub-pages, chuk_chat
   pattern); port the MCP config UI + storage (SharedPreferences config +
@@ -91,9 +91,9 @@ to avoid clobbering.
   at end of day writes a dated markdown file (e.g. `journal/YYYY-MM-DD.md`)
   summarizing what happened, automatically. Complements soul.md/agents.md.
 
-## Outcome (done 2026-08-28, branch `cowork`)
+## Outcome (done 2026-08-28, branch `agents`)
 
-All planned + non-gated workstreams landed and merged into `cowork` (off
+All planned + non-gated workstreams landed and merged into `agents` (off
 `master`), whole-repo green: crypto 65, sandbox 58, manager 183, agent 653,
 executor 56, host 86, Flutter app 257.
 
@@ -112,7 +112,7 @@ executor 56, host 86, Flutter app 257.
 Not done (user-gated or another repo): rooms going live (host `RoomBinding` +
 prod relay), prod `relay-crossreplica` deploy, MCP OAuth **backend** routes
 (api_server repo), opt-in enable of daily-summary per agent. Nothing pushed —
-`cowork` is local; owner decides the merge to `master` / deploy.
+`agents` is local; owner decides the merge to `master` / deploy.
 
 FLAG: a `live` test showed the real model returning tool calls in a
 `<｜DSML｜tool_call｜>` delimiter instead of `<tool_call>` — a model-routing /

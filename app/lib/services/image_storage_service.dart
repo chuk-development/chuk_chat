@@ -1,6 +1,6 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/image_storage_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
-// Reason: replaced by cowork service — upstream stores encrypted blobs in a
-// Supabase bucket. CoWork keeps them LOCAL: one file per blob under the app
+// AGENTS STUB. Upstream: chuk_chat/lib/services/image_storage_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// Reason: replaced by agents service — upstream stores encrypted blobs in a
+// Supabase bucket. Agents keeps them LOCAL: one file per blob under the app
 // support directory, addressed as `cowork://blob/<id>`. This is where relayed
 // files from the host land.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
@@ -8,8 +8,8 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:cowork/utils/io_helper.dart';
-import 'package:cowork/utils/path_provider_stub.dart'
+import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:chuk_chat/utils/path_provider_stub.dart'
     if (dart.library.io) 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
@@ -36,7 +36,7 @@ class ChatUsingImage {
   const ChatUsingImage({required this.chatId, required this.chatName});
 }
 
-/// The CoWork blob store: local files, no network, no encryption at rest
+/// The Agents blob store: local files, no network, no encryption at rest
 /// beyond what the filesystem already gives.
 class ImageStorageService {
   const ImageStorageService._();

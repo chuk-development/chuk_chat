@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_rfb/src/remote_frame_buffer_isolate_messages.dart';
 import 'package:fpdart/fpdart.dart';
 
-/// CoWork fork addition. A thin handle onto the RFB isolate so app-side UI can
+/// Agents fork addition. A thin handle onto the RFB isolate so app-side UI can
 /// drive the remote pointer and keyboard directly, in REMOTE framebuffer
 /// coordinates. The built-in `RemoteFrameBufferGestureDetector` maps a local
 /// tap straight to an absolute remote point — fine for a mouse, wrong for a

@@ -1,4 +1,4 @@
-// The add-on's one long-lived piece: hold the link to CoWork, hand every
+// The add-on's one long-lived piece: hold the link to Agents, hand every
 // command to the driver, and open the panel when the user asks for it.
 
 import { api, hasDebugger, hasTabGroups } from "./api.js";
@@ -13,7 +13,7 @@ const transport = new Transport({
   onCommand: (frame) => run(driver, frame.cmd_id, frame.op, frame.args ?? {}),
   onStatus: (next) => {
     status = next;
-    api.runtime.sendMessage({ channel: "cowork", op: "status", status }).catch(() => {});
+    api.runtime.sendMessage({ channel: "agents", op: "status", status }).catch(() => {});
   },
 });
 
@@ -47,7 +47,7 @@ api.runtime.onInstalled.addListener(() => {
   api.contextMenus.removeAll(() => {
     api.contextMenus.create({
       id: "cowork-page",
-      title: "Talk to CoWork about this page",
+      title: "Talk to Agents about this page",
       contexts: ["page", "selection", "link", "image"],
     });
   });
@@ -65,7 +65,7 @@ api.contextMenus.onClicked.addListener(async (info, tab) => {
   // A right-click is the user handing this tab over.
   driver.leases.grant(tab.id, "user");
   const context = await pageContext(tab.id, info.selectionText);
-  api.runtime.sendMessage({ channel: "cowork", op: "page_context", context }).catch(() => {});
+  api.runtime.sendMessage({ channel: "agents", op: "page_context", context }).catch(() => {});
 });
 
 api.action.onClicked.addListener(openPanel);
@@ -80,7 +80,7 @@ api.commands?.onCommand.addListener(async (name) => {
 async function pageContext(tabId, selection) {
   try {
     await driver.ensureInjected(tabId);
-    const page = await api.tabs.sendMessage(tabId, { channel: "cowork", op: "readable" });
+    const page = await api.tabs.sendMessage(tabId, { channel: "agents", op: "readable" });
     const data = page && page.ok ? page.data : { url: "", title: "", text: "" };
     return { ...data, selection: selection || "", tabId };
   } catch {
@@ -92,7 +92,7 @@ async function pageContext(tabId, selection) {
 // -- the panel talks to us here ----------------------------------------------
 
 api.runtime.onMessage.addListener((msg, _sender, reply) => {
-  if (!msg || msg.channel !== "cowork") return;
+  if (!msg || msg.channel !== "agents") return;
   if (msg.op === "get_status") {
     reply({ status, engine: driver.engineName, driving: driver.tabId });
     return true;
@@ -128,9 +128,9 @@ api.tabs.onRemoved.addListener((tabId) => {
   if (driver.tabId === tabId) driver.tabId = null;
 });
 
-api.alarms.create("cowork-link", { periodInMinutes: 1 });
+api.alarms.create("agents-link", { periodInMinutes: 1 });
 api.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === "cowork-link") link();
+  if (alarm.name === "agents-link") link();
 });
 
 link();

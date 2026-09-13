@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session, _setting  # noqa: E402
 
-from cowork_agent import (  # noqa: E402
+from chuk_agents_runtime import (  # noqa: E402
     BackendModelClient,
     LocalEnvironment,
     ToolRegistry,
@@ -30,14 +30,14 @@ from cowork_agent import (  # noqa: E402
 )
 PROMPT = (
     "Write a small Python test script named test_demo.py in the workspace. "
-    "It must print 'cowork ok'. Then run it and report the output."
+    "It must print 'agents ok'. Then run it and report the output."
 )
 
 
 def main() -> int:
     session = _session()
     models = fetch_models_info(session)
-    resolved = resolve_model(models, preferred_model_id=_setting("COWORK_LIVE_MODEL"))
+    resolved = resolve_model(models, preferred_model_id=_setting("AGENTS_LIVE_MODEL"))
     print(f"model    : {resolved.model_id}")
     print(f"provider : {resolved.provider_slug}")
     print(f"available: {len(models)} models")

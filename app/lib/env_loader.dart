@@ -4,7 +4,7 @@
 // This allows running `flutter run` directly without --dart-define flags
 // during local development. The .env file is read from the workspace root.
 
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart';
 

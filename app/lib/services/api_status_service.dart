@@ -3,7 +3,7 @@ import 'dart:async';
 
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/services/api_config_service.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 
 /// Utility helpers for checking the availability of the primary API.
 class ApiStatusService {

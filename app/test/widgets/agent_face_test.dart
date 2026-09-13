@@ -2,9 +2,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import '../support/test_app.dart';
 
 void main() {
@@ -41,7 +41,7 @@ void main() {
     (tester) async {
       final store = AgentProfileStore();
       addTearDown(store.dispose);
-      const agent = CoworkAgent(id: 'alex', name: 'Alex', threads: []);
+      const agent = AgentsAgent(id: 'alex', name: 'Alex', threads: []);
       await store.update(
         'alex',
         shape: AgentAvatarShape.square,

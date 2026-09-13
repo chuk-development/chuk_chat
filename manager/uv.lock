@@ -12,11 +12,11 @@ wheels = [
 ]
 
 [[package]]
-name = "cowork-manager"
+name = "chuk-agents-manager"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "cowork-sandbox" },
+    { name = "chuk-agents-sandbox" },
     { name = "croniter" },
 ]
 
@@ -27,7 +27,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cowork-sandbox", editable = "../sandbox" },
+    { name = "chuk-agents-sandbox", editable = "../sandbox" },
     { name = "croniter", specifier = ">=3" },
 ]
 
@@ -35,7 +35,7 @@ requires-dist = [
 dev = [{ name = "pytest", specifier = ">=8" }]
 
 [[package]]
-name = "cowork-sandbox"
+name = "chuk-agents-sandbox"
 version = "0.1.0"
 source = { editable = "../sandbox" }
 

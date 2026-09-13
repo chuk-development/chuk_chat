@@ -8,14 +8,14 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/pages/fullscreen_map_page.dart';
-import 'package:cowork/utils/input_validator.dart';
-import 'package:cowork/widgets/route_map_widget.dart';
+import 'package:chuk_chat/pages/fullscreen_map_page.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/widgets/route_map_widget.dart';
 
 /// Regex to find <map> blocks in message content.
 final RegExp mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true);

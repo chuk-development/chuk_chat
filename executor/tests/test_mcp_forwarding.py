@@ -13,11 +13,11 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor.protocol import decode_payload, encode_payload, task_payload
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor.protocol import decode_payload, encode_payload, task_payload
 
 from wiring import paired_channel
 
@@ -203,7 +203,7 @@ def test_forwarded_server_tool_is_registered_and_dispatchable(tmp_path):
     assert executor._mcp_managers == {}
 
 
-# -- what a chuk_chat connector looks like once CoWork adopted it ---------
+# -- what a chuk_chat connector looks like once Agents adopted it ---------
 #
 # Bead cowork-7zd. The app reads chuk_chat's encrypted `service_credentials`
 # rows, writes them into its own store and forwards them here like any other

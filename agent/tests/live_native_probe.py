@@ -17,7 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session, _setting  # noqa: E402
 
-from cowork_agent import (  # noqa: E402
+from chuk_agents_runtime import (  # noqa: E402
     BackendModelClient,
     LocalEnvironment,
     ToolRegistry,
@@ -90,7 +90,7 @@ def main() -> int:
     _forbid_refresh(session)
 
     models = fetch_models_info(session)
-    wanted = _setting("COWORK_LIVE_MODEL")
+    wanted = _setting("AGENTS_LIVE_MODEL")
     # resolve_model falls back to the default model, then to the first one, so a
     # typo would silently probe a DIFFERENT model and report a pass for it.
     if wanted and wanted not in {m.get("id") for m in models}:
@@ -99,11 +99,11 @@ def main() -> int:
     resolved = resolve_model(
         models,
         preferred_model_id=wanted,
-        preferred_provider=_setting("COWORK_LIVE_PROVIDER"),
+        preferred_provider=_setting("AGENTS_LIVE_PROVIDER"),
     )
     print(f"model    : {resolved.model_id}")
     print(f"provider : {resolved.provider_slug}")
-    wanted_provider = _setting("COWORK_LIVE_PROVIDER")
+    wanted_provider = _setting("AGENTS_LIVE_PROVIDER")
     if wanted_provider and resolved.provider_slug != wanted_provider:
         print(
             f"provider {wanted_provider!r} is not offered for this model — "

@@ -1,7 +1,7 @@
 [project]
-name = "cowork-agent"
+name = "chuk-agents-runtime"
 version = "0.1.0"
-description = "CoWork Python agent runtime — loop, tools, state, model client."
+description = "Agents Python agent runtime — loop, tools, state, model client."
 requires-python = ">=3.12"
 dependencies = [
     "firecrawl-anydoc>=0.1.8",
@@ -24,7 +24,7 @@ dev = [
 # a browser run is the fallback path by design (§8).
 #
 # So browser-use lives in its own environment: `sandbox/docker/Dockerfile.browser`
-# installs it, and the driver reaches a browser over `COWORK_BROWSER_CDP_URL`.
+# installs it, and the driver reaches a browser over `AGENTS_BROWSER_CDP_URL`.
 # `browser_task` gates itself on the import via `check_fn`, so the runtime is
 # complete and honest without it — the tool simply does not appear in the prompt.
 # Revisit when browser-use drops the hard `mcp` pin.
@@ -34,7 +34,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cowork_agent"]
+packages = ["src/chuk_agents_runtime"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

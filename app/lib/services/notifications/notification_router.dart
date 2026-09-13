@@ -5,7 +5,7 @@
 /// travels with it — no answer, no prompt. The shell owns navigation, so
 /// the router only records the target and tells the shell; the shell selects
 /// the coworker that owns the thread and the thread view replays it from
-/// the host (docs/PLAN_2026-09-04_COWORK_CHUK_ALIGN.md, WS-7 "Reopen flow").
+/// the host (docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md, WS-7 "Reopen flow").
 ///
 /// The target is kept until the shell takes it, so a tap that launches the
 /// app cold (the shell is not built yet) is not lost.

@@ -2,8 +2,8 @@ import json
 
 import pytest
 
-from cowork_agent.chat_documents import DocumentStore, register_document_tool, workspace_documents, read_workspace_document
-from cowork_agent.registry import ToolRegistry
+from chuk_agents_runtime.chat_documents import DocumentStore, register_document_tool, workspace_documents, read_workspace_document
+from chuk_agents_runtime.registry import ToolRegistry
 
 
 def test_table_survives_reopen_and_is_scoped_to_chat(tmp_path):
@@ -51,7 +51,7 @@ def test_workspace_inventory_and_reads_do_not_escape_root(tmp_path):
 
 
 def test_chart_preserves_percentages_colors_and_source_across_updates(tmp_path):
-    from cowork_agent.chat_documents import document_file
+    from chuk_agents_runtime.chat_documents import document_file
     store = DocumentStore(str(tmp_path / 'state.db'), 'election')
     rows = [{'label': name, 'value': value, 'color': color} for name, value, color in (
         ('Party A', 32.1, '#112233'), ('Party B', 24.5, '#ee2200'),

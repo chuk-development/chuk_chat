@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/automations/cowork_automation.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// One automation as a settings row: what it is, when it runs, what state it
 /// is in, and the actions that state allows.
@@ -32,7 +32,7 @@ class AutomationCard extends StatefulWidget {
     this.compact = false,
   });
 
-  final CoworkAutomation automation;
+  final AgentsAutomation automation;
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final VoidCallback? onCancel;

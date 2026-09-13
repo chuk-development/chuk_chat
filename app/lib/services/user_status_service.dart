@@ -18,9 +18,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/diagnostics_log_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 class UserStatusService {
   UserStatusService._();

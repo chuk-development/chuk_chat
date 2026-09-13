@@ -15,7 +15,7 @@ import zipfile
 import httpx
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     ToolRegistry,
     anydoc_available,
@@ -23,7 +23,7 @@ from cowork_agent import (
     register_read_document,
     render_tool_docs,
 )
-from cowork_agent.documents import (
+from chuk_agents_runtime.documents import (
     DEFAULT_VISION_MODEL,
     MARKDOWN_CAP,
     BackendVisionReader,
@@ -63,7 +63,7 @@ def minimal_docx() -> bytes:
 
 
 class FakeVision:
-    """A :class:`~cowork_agent.documents.VisionReader` that records its call."""
+    """A :class:`~chuk_agents_runtime.documents.VisionReader` that records its call."""
 
     def __init__(self, answer: str = "# Scanned\n\nthe text", raises=None) -> None:
         self.answer = answer
@@ -258,7 +258,7 @@ def test_registered_and_documented_when_a_converter_exists(tmp_path):
 def test_unavailable_tool_stays_out_of_the_prompt(tmp_path, monkeypatch):
     """With neither converter nor vision route, the tool must not be advertised
     — a tool the model cannot use is pure prompt cost (§7.9)."""
-    import cowork_agent.documents as documents
+    import chuk_agents_runtime.documents as documents
 
     monkeypatch.setattr(documents, "anydoc", None)
     registry = ToolRegistry()
@@ -272,7 +272,7 @@ def test_unavailable_tool_stays_out_of_the_prompt(tmp_path, monkeypatch):
 
 
 def test_without_anydoc_a_vision_route_still_carries_the_tool(tmp_path, monkeypatch):
-    import cowork_agent.documents as documents
+    import chuk_agents_runtime.documents as documents
 
     monkeypatch.setattr(documents, "anydoc", None)
     vision = FakeVision(answer="from pixels")

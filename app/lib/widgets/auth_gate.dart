@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/pages/login_page.dart';
-import 'package:cowork/pages/messenger_shell.dart';
-import 'package:cowork/services/auth_trace.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/session_recovery.dart';
-import 'package:cowork/services/settings/theme_controller.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/services/auth_trace.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
+import 'package:chuk_chat/services/settings/theme_controller.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// The auth gate: swaps between the login screen and the messenger shell on
 /// the Supabase session signal — with one exception (bead cowork-2n1).
@@ -71,7 +71,7 @@ class AuthGate extends StatefulWidget {
   final Future<void> Function(Duration)? sleep;
 
   /// Where the stored pairing is read from for a recovery.
-  final CoworkPairingStore? pairingStore;
+  final AgentsPairingStore? pairingStore;
 
   /// Builders for the two destinations, so a widget test can mount the gate
   /// without the real shell and login page.
@@ -212,8 +212,8 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
   }
 
   Future<RecoveryResult> _recoverThroughHost(SessionStash stash) async {
-    final store = widget.pairingStore ?? CoworkPairingStore();
-    CoworkStoredPairing? pairing;
+    final store = widget.pairingStore ?? AgentsPairingStore();
+    AgentsStoredPairing? pairing;
     try {
       pairing = await store.loadPairing();
     } catch (_) {
@@ -221,7 +221,7 @@ class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver {
     }
     final link = pairing == null
         ? null
-        : CoworkRelayRecoveryLink(store: store, pairing: pairing);
+        : AgentsRelayRecoveryLink(store: store, pairing: pairing);
     return SessionRecovery(stash: stash, link: link).run();
   }
 

@@ -18,24 +18,24 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import 'package:cowork/models/artifact.dart';
-import 'package:cowork/models/content_block.dart' show SandboxArtifactPayload;
-import 'package:cowork/platform_config.dart' show kFeatureArtifacts;
-import 'package:cowork/services/artifact_storage_service.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/file_save_service.dart';
-import 'package:cowork/services/pdf_attachment_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/ui/expressive/bubble_kind.dart';
-import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/widgets/image_viewer.dart';
-import 'package:cowork/widgets/nice_snackbar.dart';
-import 'package:cowork/widgets/chat_document_inline.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/models/content_block.dart' show SandboxArtifactPayload;
+import 'package:chuk_chat/platform_config.dart' show kFeatureArtifacts;
+import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
+import 'package:chuk_chat/services/pdf_attachment_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/ui/expressive/bubble_kind.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/widgets/chat_document_inline.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
 
 class SandboxArtifactBlock extends StatefulWidget {
   const SandboxArtifactBlock({

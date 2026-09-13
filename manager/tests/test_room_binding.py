@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import threading
 
-from cowork_manager import (
+from chuk_agents_manager import (
     OFFLINE_REPLY,
     GroupRoom,
     RoomBinding,

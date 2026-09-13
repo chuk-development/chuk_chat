@@ -12,7 +12,7 @@ import ipaddress
 import httpx
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     ToolRegistry,
     html_to_markdown,
@@ -22,7 +22,7 @@ from cowork_agent import (
     render_tool_docs,
     validate_url,
 )
-from cowork_agent.web_fetch import FETCH_CAP, UrlRejected
+from chuk_agents_runtime.web_fetch import FETCH_CAP, UrlRejected
 
 PUBLIC = "93.184.216.34"
 

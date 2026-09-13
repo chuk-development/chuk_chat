@@ -2,29 +2,29 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/automations/cowork_automation.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 
 /// The app's copy of the host's automations, kept current from the relay.
 ///
 /// One instance for the app (like the replay loader): it listens to
-/// [CoworkRelayLink.inbound], folds every `automation` event (live or
+/// [AgentsRelayLink.inbound], folds every `automation` event (live or
 /// replayed) and every `automation_list` reply into one map by id, and
 /// notifies. The thread view reads [forSession] for its strip; the
 /// Automations page reads [all]. Both send through [control] and [refresh],
-/// which need the bound controller to be a [CoworkAutomationControl] (the
+/// which need the bound controller to be a [AgentsAutomationControl] (the
 /// real relay client is; a test double may not be).
 class AutomationsSource extends ChangeNotifier {
   AutomationsSource._();
 
   static final AutomationsSource instance = AutomationsSource._();
 
-  final Map<String, CoworkAutomation> _byId = <String, CoworkAutomation>{};
+  final Map<String, AgentsAutomation> _byId = <String, AgentsAutomation>{};
 
   /// The host's coworker names, by session key (`agent_list`).
   final Map<String, String> _names = <String, String>{};
-  StreamSubscription<CoworkRelayInbound>? _sub;
+  StreamSubscription<AgentsRelayInbound>? _sub;
 
   /// Sessions whose list the host has answered at least once.
   final Set<String> _listed = <String>{};
@@ -32,11 +32,11 @@ class AutomationsSource extends ChangeNotifier {
 
   /// Starts listening. Idempotent.
   void attach() {
-    _sub ??= CoworkRelayLink.instance.inbound.listen(_onInbound);
+    _sub ??= AgentsRelayLink.instance.inbound.listen(_onInbound);
   }
 
   /// Every automation known to this app, newest first.
-  List<CoworkAutomation> get all {
+  List<AgentsAutomation> get all {
     final list = _byId.values.toList();
     list.sort(_newestFirst);
     return list;
@@ -48,8 +48,8 @@ class AutomationsSource extends ChangeNotifier {
   /// behind: the same name, the same script, one `done` and one `active`. Two
   /// rows for one thing is not two automations — it is one automation and its
   /// history. The live row wins; among rows of one state the newest wins.
-  List<CoworkAutomation> get distinct {
-    final best = <String, CoworkAutomation>{};
+  List<AgentsAutomation> get distinct {
+    final best = <String, AgentsAutomation>{};
     for (final a in all) {
       final key = identityOf(a);
       final held = best[key];
@@ -63,16 +63,16 @@ class AutomationsSource extends ChangeNotifier {
   /// What makes two rows the same automation: the same thread, the same kind,
   /// the same name and the same spec. The host's id is NOT part of it — a new
   /// id is exactly what a restart produces.
-  static String identityOf(CoworkAutomation a) =>
+  static String identityOf(AgentsAutomation a) =>
       '${a.sessionKey}|${a.kind}|${a.name}|${a.specLabel}';
 
-  static bool _better(CoworkAutomation a, CoworkAutomation b) {
+  static bool _better(AgentsAutomation a, AgentsAutomation b) {
     if (a.isOver != b.isOver) return b.isOver;
     return _newestFirst(a, b) < 0;
   }
 
   /// The automations of one conversation, newest first.
-  List<CoworkAutomation> forSession(String sessionKey) =>
+  List<AgentsAutomation> forSession(String sessionKey) =>
       all.where((a) => a.sessionKey == sessionKey).toList();
 
   /// The name to put over a group of rows: what the rest of the app calls that
@@ -100,10 +100,10 @@ class AutomationsSource extends ChangeNotifier {
   /// The active and paused ones of one conversation: what a thread's strip
   /// shows. A done or failed automation is history (its card is in the
   /// transcript).
-  List<CoworkAutomation> liveForSession(String sessionKey) =>
+  List<AgentsAutomation> liveForSession(String sessionKey) =>
       forSession(sessionKey).where((a) => !a.isOver).toList();
 
-  CoworkAutomation? byId(String id) => _byId[id];
+  AgentsAutomation? byId(String id) => _byId[id];
 
   /// True once the host answered a list request for [sessionKey] (or for the
   /// whole host). Before that an empty list means "not asked yet".
@@ -113,8 +113,8 @@ class AutomationsSource extends ChangeNotifier {
   /// Ask the host for the current list. Returns false when nothing is
   /// connected or the transport cannot send it.
   Future<bool> refresh({String? sessionKey}) async {
-    final Object? controller = CoworkRelayLink.instance.controller.value;
-    if (controller is! CoworkAutomationControl) return false;
+    final Object? controller = AgentsRelayLink.instance.controller.value;
+    if (controller is! AgentsAutomationControl) return false;
     try {
       await controller.requestAutomationList(sessionKey: sessionKey);
       return true;
@@ -126,8 +126,8 @@ class AutomationsSource extends ChangeNotifier {
   /// Pause / resume / cancel one automation. The host answers with the
   /// `automation` event; nothing changes locally until it does.
   Future<bool> control(String id, String action) async {
-    final Object? controller = CoworkRelayLink.instance.controller.value;
-    if (controller is! CoworkAutomationControl) return false;
+    final Object? controller = AgentsRelayLink.instance.controller.value;
+    if (controller is! AgentsAutomationControl) return false;
     try {
       await controller.sendAutomationControl(id: id, action: action);
       return true;
@@ -136,19 +136,19 @@ class AutomationsSource extends ChangeNotifier {
     }
   }
 
-  void _onInbound(CoworkRelayInbound event) {
+  void _onInbound(AgentsRelayInbound event) {
     switch (event) {
-      case CoworkRelayAutomation():
+      case AgentsRelayAutomation():
         _byId[event.automation.id] = event.automation;
         notifyListeners();
-      case CoworkRelayAgentList():
+      case AgentsRelayAgentList():
         // The same frame the roster reads. Held here so a group header can
         // name its coworker without the page having to reach the roster.
         for (final agent in event.agents) {
           _names[agent.agentId] = agent.name;
         }
         notifyListeners();
-      case CoworkRelayAutomationList():
+      case AgentsRelayAutomationList():
         // The reply is the truth for its scope: a row the host no longer
         // lists (it never deletes rows, but a future host may) is dropped.
         final scope = event.sessionKey;
@@ -168,7 +168,7 @@ class AutomationsSource extends ChangeNotifier {
     }
   }
 
-  static int _newestFirst(CoworkAutomation a, CoworkAutomation b) {
+  static int _newestFirst(AgentsAutomation a, AgentsAutomation b) {
     final at = a.createdAt, bt = b.createdAt;
     if (at == null && bt == null) return a.id.compareTo(b.id);
     if (at == null) return 1;

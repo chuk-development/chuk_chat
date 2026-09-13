@@ -17,30 +17,30 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/app_shell_config.dart';
-import 'package:cowork/platform_config.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
-import 'package:cowork/pages/about_page.dart';
-import 'package:cowork/pages/account_settings_page.dart';
-import 'package:cowork/pages/customization_page.dart';
-import 'package:cowork/pages/settings/mcp_connectors_page.dart';
-import 'package:cowork/pages/settings/developer_settings_page.dart';
-import 'package:cowork/pages/settings/embedding_settings_page.dart';
-import 'package:cowork/pages/settings/herenow_settings_page.dart';
-import 'package:cowork/pages/secrets_settings_page.dart';
-import 'package:cowork/pages/automations_page.dart';
-import 'package:cowork/pages/skills_settings_page.dart';
-import 'package:cowork/pages/theme_page.dart';
-import 'package:cowork/model_selector_page.dart';
+import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/customization_page.dart';
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
+import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
+import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
+import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/pages/theme_page.dart';
+import 'package:chuk_chat/model_selector_page.dart';
 
-import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/developer_options_service.dart';
+import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
 
 /// Opens the desktop settings modal over the current chat UI.
 Future<void> showDesktopSettingsModal(
@@ -101,7 +101,7 @@ class _SettingsDest {
 
   /// Runs on tap instead of showing a page. Receives the modal context.
   /// Upstream lets a destination run an action instead of opening a page
-  /// (export chats, replay onboarding). CoWork's section map hides both, so
+  /// (export chats, replay onboarding). Agents's section map hides both, so
   /// nothing constructs one today and the constructor no longer takes it —
   /// the reading side stays, so restoring an action is a one-line change.
   final Future<void> Function(BuildContext modalContext)? onAction = null;
@@ -209,9 +209,9 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           builder: (_) => const SkillsSettingsPage(),
         ),
       ]),
-      // CoWork's own destinations: about the machine the agent runs on, which
+      // Agents's own destinations: about the machine the agent runs on, which
       // is what chuk_chat has no equivalent for.
-      _SettingsGroup('CoWork', [
+      _SettingsGroup('Agents', [
         _SettingsDest(
           id: 'herenow',
           icon: Icons.place_outlined,

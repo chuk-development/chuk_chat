@@ -9,10 +9,10 @@ import threading
 import time
 from types import SimpleNamespace
 
-from cowork_agent import MockModelClient, StateStore
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, StateStore
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
 
 from wiring import paired_channel
 
@@ -181,7 +181,7 @@ def test_a_sent_file_is_persisted_before_it_streams(tmp_path):
 def test_a_timed_out_approval_is_recorded_as_denied_timeout(tmp_path, monkeypatch):
     # Bead cowork-b12: the wait length and the reason string must not share a
     # name, or the stamp raises and the row stays open.
-    import cowork_executor.executor as executor_module
+    import chuk_agents_executor.executor as executor_module
 
     monkeypatch.setattr(executor_module, "APPROVAL_WAIT_SECONDS", 0.05)
     db_path = str(tmp_path / "state.db")

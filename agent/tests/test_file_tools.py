@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pytest
 
-from cowork_agent import LocalEnvironment, ToolRegistry, register_builtin_tools
+from chuk_agents_runtime import LocalEnvironment, ToolRegistry, register_builtin_tools
 
 TRICKY = (
     "print('it\\'s $HOME')\n"
@@ -84,7 +84,7 @@ def test_a_write_file_call_from_the_model_lands_on_disk(tmp_path, monkeypatch):
     """The whole point: a model turn that calls write_file creates the file.
     This is the path that silently did nothing before — the model printed the
     script and the loop had no file tool to call."""
-    from cowork_agent import (
+    from chuk_agents_runtime import (
         LocalEnvironment,
         MockModelClient,
         build_runtime,

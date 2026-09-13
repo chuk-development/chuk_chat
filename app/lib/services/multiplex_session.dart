@@ -18,10 +18,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/multiplex_connection.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Default grace period before tearing down the WS after the last chat
 /// closes. Lets the user navigate between chats without thrashing the

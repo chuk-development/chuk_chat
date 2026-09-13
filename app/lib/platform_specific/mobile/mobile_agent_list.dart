@@ -2,7 +2,7 @@
 /// design language.
 ///
 /// The shape is the one the reference messenger uses for its chat list, and the
-/// content is CoWork's own roster ([AgentRosterSource]):
+/// content is Agents's own roster ([AgentRosterSource]):
 ///
 ///  * one header row — the search target on the left, the connected filter
 ///    group All / Unread in the middle with the unread count on its second
@@ -23,22 +23,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_container_transform.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_read_marks.dart';
-import 'package:cowork/services/cowork/thread_preview_store.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/ui/expressive/staggered.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 
 /// The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
 String accountMonogram(String? label) {
@@ -90,14 +90,14 @@ class MobileAgentList extends StatefulWidget {
   final VoidCallback? onOpenAccount;
 
   /// Opens a coworker's profile page (long-press → Profile).
-  final void Function(CoworkAgent agent)? onOpenProfile;
+  final void Function(AgentsAgent agent)? onOpenProfile;
 
   /// Renames a coworker (long-press → Rename). This is the one profile field
   /// that reaches the host.
-  final void Function(CoworkAgent agent)? onRenameAgent;
+  final void Function(AgentsAgent agent)? onRenameAgent;
 
   /// Deletes a coworker (long-press → Delete).
-  final void Function(CoworkAgent agent)? onDeleteAgent;
+  final void Function(AgentsAgent agent)? onDeleteAgent;
 
   /// Text the account monogram is taken from (the user's name or e-mail).
   final String? accountLabel;
@@ -170,13 +170,13 @@ class _MobileAgentListState extends State<MobileAgentList> {
     });
   }
 
-  List<CoworkAgent> _visible() {
-    Iterable<CoworkAgent> list = widget.source.visibleAgents;
+  List<AgentsAgent> _visible() {
+    Iterable<AgentsAgent> list = widget.source.visibleAgents;
     if (_filter == 1) list = list.where(_marks.isUnread);
     final String q = _query.text.trim().toLowerCase();
     if (q.isNotEmpty) {
       list = list.where(
-        (CoworkAgent agent) =>
+        (AgentsAgent agent) =>
             agent.name.toLowerCase().contains(q) ||
             (_roleOf(agent)?.toLowerCase().contains(q) ?? false) ||
             MobileAgentRow.previewOf(
@@ -190,14 +190,14 @@ class _MobileAgentListState extends State<MobileAgentList> {
 
   /// The role line: the one the user set in the profile wins over the one the
   /// agent was created with.
-  String? _roleOf(CoworkAgent agent) {
+  String? _roleOf(AgentsAgent agent) {
     final String? stored = _profiles.profileOf(agent.id).role?.trim();
     if (stored != null && stored.isNotEmpty) return stored;
     final String? own = agent.role?.trim();
     return (own == null || own.isEmpty) ? null : own;
   }
 
-  Future<void> _openRowMenu(BuildContext rowContext, CoworkAgent agent) async {
+  Future<void> _openRowMenu(BuildContext rowContext, AgentsAgent agent) async {
     final ThemeData theme = Theme.of(rowContext);
     final ColorScheme scheme = theme.colorScheme;
     final bool unread = _marks.isUnread(agent);
@@ -250,7 +250,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
       case 'rename':
         widget.onRenameAgent?.call(agent);
       case 'read':
-        for (final CoworkThreadInfo thread in agent.threads) {
+        for (final AgentsThreadInfo thread in agent.threads) {
           await _marks.markRead(thread.key);
         }
       case 'hide':
@@ -276,13 +276,13 @@ class _MobileAgentListState extends State<MobileAgentList> {
 
   Widget _buildList(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
-    final List<CoworkAgent> agents = _visible();
+    final List<AgentsAgent> agents = _visible();
     // Threads this device already holds but has not previewed yet (a restart,
     // a fresh install that synced). Reads once per thread, then never again.
     unawaited(
       ThreadPreviewStore.instance.ensureFor(<String>[
-        for (final CoworkAgent agent in agents)
-          for (final CoworkThreadInfo thread in agent.threads) thread.key,
+        for (final AgentsAgent agent in agents)
+          for (final AgentsThreadInfo thread in agent.threads) thread.key,
       ]),
     );
     final int unread = _marks.unreadCount(widget.source.visibleAgents);
@@ -426,7 +426,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                       ),
                       itemCount: agents.length,
                       itemBuilder: (BuildContext context, int index) {
-                        final CoworkAgent agent = agents[index];
+                        final AgentsAgent agent = agents[index];
                         // One description, built twice: the row in the list,
                         // and — when the chat grows out of it — the copy that
                         // rides inside the container while this one is hidden.
@@ -610,7 +610,7 @@ class MobileAgentRow extends StatelessWidget {
     this.padded = true,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final DateTime now;
   final bool selected;
   final bool unread;
@@ -643,17 +643,17 @@ class MobileAgentRow extends StatelessWidget {
   /// The preview line under the name. What the coworker is doing now beats a
   /// stale thread title; a thread title beats the brief; the brief beats
   /// silence.
-  static String previewOf(CoworkAgent agent, {AgentProfileStore? profiles}) {
+  static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles}) {
     if (agent.running) return 'Working…';
     // What was actually said last, whoever said it. This is the line a roster
     // is read for; a thread title is what it falls back to.
     final ThreadPreview? preview = ThreadPreviewStore.instance.newestOf(
-      agent.threads.map((CoworkThreadInfo thread) => thread.key),
+      agent.threads.map((AgentsThreadInfo thread) => thread.key),
     );
     if (preview != null && preview.text.isNotEmpty) {
       return preview.fromUser ? 'You: ${preview.text}' : preview.text;
     }
-    for (final CoworkThreadInfo thread in agent.threads) {
+    for (final AgentsThreadInfo thread in agent.threads) {
       final String title = thread.title.trim();
       if (title.isNotEmpty && title != 'default' && title != 'General') {
         return title;

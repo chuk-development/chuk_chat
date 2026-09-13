@@ -17,7 +17,7 @@ import httpx
 import pytest
 from websockets.sync.server import serve
 
-from cowork_agent.backend import (
+from chuk_agents_runtime.backend import (
     clamp_reasoning_effort,
     BackendModelClient,
     BackendModelError,
@@ -567,26 +567,26 @@ def test_cheap_clone_honours_a_custom_max_tokens():
 
 @pytest.mark.skipif(
     not (
-        os.getenv("COWORK_LIVE_ACCESS_TOKEN")
-        or (os.getenv("COWORK_LIVE_EMAIL") and os.getenv("COWORK_LIVE_PASSWORD"))
+        os.getenv("AGENTS_LIVE_ACCESS_TOKEN")
+        or (os.getenv("AGENTS_LIVE_EMAIL") and os.getenv("AGENTS_LIVE_PASSWORD"))
     ),
-    reason="live smoke test needs COWORK_LIVE_ACCESS_TOKEN or COWORK_LIVE_EMAIL/PASSWORD",
+    reason="live smoke test needs AGENTS_LIVE_ACCESS_TOKEN or AGENTS_LIVE_EMAIL/PASSWORD",
 )
 def test_live_smoke_real_backend():  # pragma: no cover - opt-in, spends real credits
-    supabase_url = os.environ["COWORK_LIVE_SUPABASE_URL"]
-    anon_key = os.environ["COWORK_LIVE_SUPABASE_ANON_KEY"]
-    token = os.getenv("COWORK_LIVE_ACCESS_TOKEN")
+    supabase_url = os.environ["AGENTS_LIVE_SUPABASE_URL"]
+    anon_key = os.environ["AGENTS_LIVE_SUPABASE_ANON_KEY"]
+    token = os.getenv("AGENTS_LIVE_ACCESS_TOKEN")
     if token:
         session = SupabaseSession(
             access_token=token,
-            refresh_token=os.getenv("COWORK_LIVE_REFRESH_TOKEN", ""),
+            refresh_token=os.getenv("AGENTS_LIVE_REFRESH_TOKEN", ""),
             supabase_url=supabase_url,
             anon_key=anon_key,
         )
     else:
         session = login(
-            os.environ["COWORK_LIVE_EMAIL"],
-            os.environ["COWORK_LIVE_PASSWORD"],
+            os.environ["AGENTS_LIVE_EMAIL"],
+            os.environ["AGENTS_LIVE_PASSWORD"],
             supabase_url=supabase_url,
             anon_key=anon_key,
         )
@@ -607,7 +607,7 @@ def test_live_smoke_real_backend():  # pragma: no cover - opt-in, spends real cr
 
 def _attached_session(monkeypatch, *, timeout=2.0):
     """A session with a controller attached: the host must never touch GoTrue."""
-    from cowork_agent import backend as backend_mod
+    from chuk_agents_runtime import backend as backend_mod
 
     def forbidden(*args, **kwargs):
         raise AssertionError("GoTrue must not be called while the app is attached")
@@ -647,7 +647,7 @@ def test_attached_refresh_asks_the_app_and_waits_for_the_new_pair(monkeypatch):
 
 
 def test_attached_refresh_gives_up_after_the_deadline(monkeypatch):
-    from cowork_agent.backend import SupabaseAuthError
+    from chuk_agents_runtime.backend import SupabaseAuthError
 
     session = _attached_session(monkeypatch, timeout=0.05)
     session.request_reprovision = lambda reason: None  # the app never answers
@@ -708,8 +708,8 @@ def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatc
     SAME request is retried and succeeds — the task loop never sees an error."""
     import threading
 
-    from cowork_agent.backend import BackendModelClient, _AuthRejected
-    from cowork_agent.model import ModelResponse
+    from chuk_agents_runtime.backend import BackendModelClient, _AuthRejected
+    from chuk_agents_runtime.model import ModelResponse
 
     session = _attached_session(monkeypatch)
 

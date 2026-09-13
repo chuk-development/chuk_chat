@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/ui/expressive/agent_status.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/ui/expressive/agent_status.dart';
 
-CoworkAgent agentWith({bool running = false}) => CoworkAgent(
+AgentsAgent agentWith({bool running = false}) => AgentsAgent(
   id: 'a1',
   name: 'Chief of Staff',
   running: running,
-  threads: const <CoworkThreadInfo>[
-    CoworkThreadInfo(key: 'a1-main', title: 'General'),
+  threads: const <AgentsThreadInfo>[
+    AgentsThreadInfo(key: 'a1-main', title: 'General'),
   ],
 );
 
@@ -33,12 +33,12 @@ void main() {
     });
 
     test('a run with no open tool still says it is working', () {
-      final CoworkRun run = CoworkRun('a1-main')..running = true;
+      final AgentsRun run = AgentsRun('a1-main')..running = true;
       expect(workInProgressLabel(agentWith(running: true), run), 'working');
     });
 
     test('the open tool is what it is doing', () {
-      final CoworkRun run = CoworkRun('a1-main')..running = true;
+      final AgentsRun run = AgentsRun('a1-main')..running = true;
       run.toolCalls.add(
         ToolCall(name: 'read_file', status: ToolCallStatus.completed),
       );
@@ -49,7 +49,7 @@ void main() {
     });
 
     test('a run adopted from the host names the task it picked up', () {
-      final CoworkRun run = CoworkRun('a1-main')
+      final AgentsRun run = AgentsRun('a1-main')
         ..running = true
         ..detachedPrompt = 'check the seat projection';
       expect(
@@ -59,7 +59,7 @@ void main() {
     });
 
     test('a long adopted task is cut, never wrapped into the header', () {
-      final CoworkRun run = CoworkRun('a1-main')
+      final AgentsRun run = AgentsRun('a1-main')
         ..running = true
         ..detachedPrompt = 'a' * 80;
       final String? label = workInProgressLabel(agentWith(), run);

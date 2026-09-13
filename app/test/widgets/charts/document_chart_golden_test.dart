@@ -16,8 +16,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/chat_document_inline.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:chuk_chat/widgets/chat_document_inline.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
 
 import 'chart_test_support.dart';
 

@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Personal, device-local reactions. They are never sent as model feedback.
 class ChatReactionService extends ChangeNotifier {

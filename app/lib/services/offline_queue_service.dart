@@ -1,4 +1,4 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/offline_queue_service.dart
+// AGENTS STUB. Upstream: chuk_chat/lib/services/offline_queue_service.dart
 // (conditional export of offline_queue_service_native.dart / _web.dart)
 // @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay — the run belongs to the host, which keeps working
@@ -7,7 +7,7 @@
 // landing place instead of pulling in the sqflite-backed original.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
-import 'package:cowork/models/queued_message.dart';
+import 'package:chuk_chat/models/queued_message.dart';
 
 class OfflineQueueService {
   OfflineQueueService._();

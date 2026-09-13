@@ -5,7 +5,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/chat_cache_search_text.dart';
+import 'package:chuk_chat/services/chat_cache_search_text.dart';
 
 class LocalChatCacheService {
   static const String _storageKeyPrefix = 'cached_chats_v2-';

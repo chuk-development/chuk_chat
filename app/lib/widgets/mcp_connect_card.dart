@@ -5,7 +5,7 @@
 // lives at the bottom of the message bubble, connects the server on tap, and
 // calls back so the same conversation resumes once its tools are live.
 //
-// Ported verbatim from chuk_chat. The wiring points at CoWork's McpService, so
+// Ported verbatim from chuk_chat. The wiring points at Agents's McpService, so
 // "connect" records the server for the paired local backend; the host signs in
 // and discovers the tools when the task resumes. Not yet mounted into the
 // thread view (that lives in a file this port does not own) — kept so the
@@ -14,11 +14,11 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:cowork/pages/settings/mcp_connectors_page.dart'
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
     show McpConnectorIcon, showMcpCredentialDialog;
-import 'package:cowork/services/mcp/mcp_catalogue.dart';
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 
 /// A single Connect button for one catalogue server, shown inline under an
 /// assistant message that asked for it. Manages its own busy spinner and

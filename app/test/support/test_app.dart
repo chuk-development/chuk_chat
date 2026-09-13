@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 // Re-exported so a test only has to import this file to build a localised app.
-export 'package:cowork/l10n/app_localizations.dart' show AppLocalizations;
+export 'package:chuk_chat/l10n/app_localizations.dart' show AppLocalizations;
 
 /// The localisation delegates the app installs in `main.dart`.
 ///

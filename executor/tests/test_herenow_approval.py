@@ -22,18 +22,18 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_manager import decode_frames
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_manager import decode_frames
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import (
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     approval_decision_payload,
     loopback_pair,
     task_payload,
 )
-from cowork_executor.protocol import METHOD_EVENT
+from chuk_agents_executor.protocol import METHOD_EVENT
 
 from wiring import paired_channel
 

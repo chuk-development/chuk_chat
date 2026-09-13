@@ -13,18 +13,18 @@ from pathlib import Path
 
 import pytest
 
-from cowork_agent.context import LadderConfig
-from cowork_agent.model import MockModelClient
-from cowork_agent.prompt import render_tool_docs
-from cowork_agent.runtime import build_runtime
-from cowork_agent.tool_search import tool_doc_tokens
+from chuk_agents_runtime.context import LadderConfig
+from chuk_agents_runtime.model import MockModelClient
+from chuk_agents_runtime.prompt import render_tool_docs
+from chuk_agents_runtime.runtime import build_runtime
+from chuk_agents_runtime.tool_search import tool_doc_tokens
 
 FAKE_SERVER = str(Path(__file__).parent / "fake_mcp_server.py")
 
 
 def write_config(workspace: Path, *, extra_tools: int) -> None:
-    (workspace / ".cowork").mkdir(parents=True, exist_ok=True)
-    (workspace / ".cowork" / "mcp.json").write_text(
+    (workspace / ".agents").mkdir(parents=True, exist_ok=True)
+    (workspace / ".agents" / "mcp.json").write_text(
         json.dumps(
             {
                 "mcpServers": {
@@ -126,8 +126,8 @@ def test_big_server_is_deferred_and_the_saving_is_measured(workspace):
 
 
 def test_a_dead_server_in_the_config_does_not_stop_the_runtime(workspace):
-    (workspace / ".cowork").mkdir(parents=True)
-    (workspace / ".cowork" / "mcp.json").write_text(
+    (workspace / ".agents").mkdir(parents=True)
+    (workspace / ".agents" / "mcp.json").write_text(
         json.dumps(
             {
                 "mcpServers": {
@@ -152,7 +152,7 @@ def test_oauth_tool_is_registered_only_with_a_session_and_an_exchange_server(wor
     A plain server, or a device-forwarded oauth block (``token_endpoint`` +
     ``refresh_token`` — the host refreshes those itself), gets no tool: offering
     it there only led the model into "no token exchange configured"."""
-    from cowork_agent.mcp_client import STDIO, MCPManager, MCPServerConfig
+    from chuk_agents_runtime.mcp_client import STDIO, MCPManager, MCPServerConfig
 
     class Session:
         access_token = "token"

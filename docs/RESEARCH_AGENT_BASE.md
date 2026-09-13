@@ -1,9 +1,9 @@
-# CoWork — Recherche: Basis der Agent-Runtime
+# Agents — Recherche: Basis der Agent-Runtime
 
 Vier parallele Recherchen (2026-08-28) zu Loop/MCP, Memory, Compaction und
 Scheduling. Ziel: fertige Implementierungen von Leuten finden, die das schon
 gelöst haben, und entscheiden was wir nutzen. Der bestehende Plan
-(`COWORK_AGENT_PLATFORM_PLAN.md`) portiert für vieles Hermes Agent (Nous, MIT);
+(`AGENTS_AGENT_PLATFORM_PLAN.md`) portiert für vieles Hermes Agent (Nous, MIT);
 hier steht, was die Recherche bestätigt und was sie daran ändert.
 
 Leitentscheidung über alle vier: **kein Framework adoptieren.** Unser

@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session, _setting  # noqa: E402
 
-from cowork_agent import (  # noqa: E402
+from chuk_agents_runtime import (  # noqa: E402
     BackendModelClient,
     fetch_models_info,
     resolve_model,
@@ -27,7 +27,7 @@ PROMPT = "Count slowly from 1 to 15 in words, one number per line. No preamble."
 def main() -> int:
     session = _session()
     models = fetch_models_info(session)
-    resolved = resolve_model(models, preferred_model_id=_setting("COWORK_LIVE_MODEL"))
+    resolved = resolve_model(models, preferred_model_id=_setting("AGENTS_LIVE_MODEL"))
     print(f"model: {resolved.model_id} / {resolved.provider_slug}")
 
     client = BackendModelClient(

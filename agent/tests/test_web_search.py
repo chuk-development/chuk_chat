@@ -13,7 +13,7 @@ import json
 import httpx
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     ToolRegistry,
     make_web_search_handler,
@@ -21,13 +21,13 @@ from cowork_agent import (
     register_web_search,
     render_tool_docs,
 )
-from cowork_agent.web_search import DESCRIPTION_CAP, MAX_RESULTS, SEARCH_PATH
+from chuk_agents_runtime.web_search import DESCRIPTION_CAP, MAX_RESULTS, SEARCH_PATH
 
 BASE = "https://api.example.test"
 
 
 class FakeSession:
-    """A :class:`~cowork_agent.web_search.TokenSession` stand-in that counts
+    """A :class:`~chuk_agents_runtime.web_search.TokenSession` stand-in that counts
     refreshes and hands out a new token each time."""
 
     def __init__(self, token: str = "tok-1") -> None:

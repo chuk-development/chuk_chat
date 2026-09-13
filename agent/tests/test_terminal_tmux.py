@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from cowork_agent import LocalEnvironment, ToolRegistry
-from cowork_agent.terminal import TerminalManager, register_terminal_tools
+from chuk_agents_runtime import LocalEnvironment, ToolRegistry
+from chuk_agents_runtime.terminal import TerminalManager, register_terminal_tools
 
 pytestmark = pytest.mark.skipif(
     shutil.which("tmux") is None, reason="tmux is not installed"

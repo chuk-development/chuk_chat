@@ -1,4 +1,4 @@
-// The command vocabulary between the CoWork host and this add-on.
+// The command vocabulary between the Agents host and this add-on.
 //
 // The names are deliberately the ones the agent's browser tools already carry
 // (`browser_navigate`, `browser_click`, …) so the host, the wire contract and

@@ -1,4 +1,4 @@
-/// Phone layout rules for the CoWork mobile layer.
+/// Phone layout rules for the Agents mobile layer.
 ///
 /// The mobile layer sits ABOVE the verbatim chuk_chat screens
 /// (`platform_specific/chat/**`) and never edits them. It decides when the
@@ -14,8 +14,8 @@ library;
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:cowork/constants.dart' show kTabletBreakpoint;
-import 'package:cowork/platform_config.dart';
+import 'package:chuk_chat/constants.dart' show kTabletBreakpoint;
+import 'package:chuk_chat/platform_config.dart';
 
 class MobileLayout {
   MobileLayout._();

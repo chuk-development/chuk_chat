@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from cowork_sandbox import (
+from chuk_agents_sandbox import (
     DEFAULT_TASK_ID,
     LABEL_AGENT,
     LABEL_IMAGE,
@@ -28,7 +28,7 @@ from cowork_sandbox import (
     reap_orphans,
     resolve_image,
 )
-from cowork_sandbox.docker import BASE_IMAGE, IMAGE_ENV_VAR
+from chuk_agents_sandbox.docker import BASE_IMAGE, IMAGE_ENV_VAR
 
 
 def test_cached_container_is_resolved_again_after_external_replacement():
@@ -91,7 +91,7 @@ class FakeCli:
                     c["state"] = "exited"
             return CliResult("", "", 0)
         if verb == "exec":
-            # The user probe: pretend the image has no `cowork` user unless asked.
+            # The user probe: pretend the image has no `agents` user unless asked.
             return CliResult("1000\n", "", 0 if "id" in args else 0)
         return CliResult("", "", 0)
 
@@ -155,7 +155,7 @@ def container(
         labels[LABEL_WORKSPACE] = workspace
     if image:
         labels[LABEL_IMAGE] = image
-    return {"id": cid, "name": f"cowork-{agent}", "state": state, "labels": labels}
+    return {"id": cid, "name": f"agents-{agent}", "state": state, "labels": labels}
 
 
 # ---------------------------------------------------------------- labels
@@ -266,8 +266,8 @@ def test_workspace_is_bind_mounted_with_owner_env():
     argv = cli.created[0]
     assert "-v" in argv
     assert f"/tmp:{'/workspace'}" in argv
-    assert any(a.startswith("COWORK_UID=") for a in argv)
-    assert any(a.startswith("COWORK_GID=") for a in argv)
+    assert any(a.startswith("AGENTS_UID=") for a in argv)
+    assert any(a.startswith("AGENTS_GID=") for a in argv)
 
 
 def test_no_workspace_means_no_mount():
@@ -279,7 +279,7 @@ def test_no_workspace_means_no_mount():
 
 def test_snapshot_lives_outside_the_mounted_workspace():
     env = DockerEnvironment(agent_id="a1", workdir="/tmp", cli=FakeCli())
-    assert env._snapshot_path.startswith("/tmp/.cowork-session-")
+    assert env._snapshot_path.startswith("/tmp/.agents-session-")
     assert not env._snapshot_path.startswith("/workspace")
 
 
@@ -325,7 +325,7 @@ def test_container_names_are_stable_for_default_and_unique_for_tasks():
     default = DockerEnvironment(agent_id="agent-1", cli=FakeCli())
     # Readable slug + a digest of the whole agent id, so two agents can never
     # land on one name (see test_agent_isolation.py).
-    assert default.container_name.startswith("cowork-agent-1-")
+    assert default.container_name.startswith("agents-agent-1-")
     again = DockerEnvironment(agent_id="agent-1", cli=FakeCli())
     assert again.container_name == default.container_name
     task = DockerEnvironment(agent_id="agent-1", task_id="sub", cli=FakeCli())
@@ -345,7 +345,7 @@ def test_reaper_removes_containers_of_dead_sessions():
         ]
     )
     reaped = reap_orphans(active_session_ids={"alive"}, cli=cli)
-    assert reaped == ["cowork-a2"]
+    assert reaped == ["agents-a2"]
     assert [c["id"] for c in cli.containers] == ["c1"]
 
 
@@ -371,7 +371,7 @@ def test_reaper_never_touches_containers_it_does_not_manage():
     }
     cli = FakeCli([foreign, container(cid="c1", agent="a1", session="dead")])
     reaped = reap_orphans(active_session_ids=set(), cli=cli)
-    assert reaped == ["cowork-a1"]
+    assert reaped == ["agents-a1"]
     assert [c["id"] for c in cli.containers] == ["user-1"]
 
 
@@ -380,13 +380,13 @@ def test_find_agent_container_prefers_a_running_one():
         [
             {
                 "id": "stopped",
-                "name": "cowork-a1-old",
+                "name": "agents-a1-old",
                 "state": "exited",
                 "labels": {LABEL_MANAGED: "true", LABEL_AGENT: "a1", LABEL_TASK: "default"},
             },
             {
                 "id": "live",
-                "name": "cowork-a1",
+                "name": "agents-a1",
                 "state": "running",
                 "labels": {LABEL_MANAGED: "true", LABEL_AGENT: "a1", LABEL_TASK: "default"},
             },
@@ -397,7 +397,7 @@ def test_find_agent_container_prefers_a_running_one():
 
 
 def test_unavailable_runtime_raises_a_clear_error():
-    from cowork_sandbox import DockerUnavailableError
+    from chuk_agents_sandbox import DockerUnavailableError
 
     env = DockerEnvironment(agent_id="a1", cli=FakeCli(up=False))
     with pytest.raises(DockerUnavailableError):

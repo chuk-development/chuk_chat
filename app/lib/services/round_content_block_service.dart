@@ -1,6 +1,6 @@
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/tool_call_handler.dart' show RoundSegment;
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart' show RoundSegment;
 
 class RoundContentBlockResult {
   const RoundContentBlockResult({

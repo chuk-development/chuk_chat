@@ -10,10 +10,10 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// Corner radius at the outer edges of a group.
 const double kExpressiveOuterRadius = 26;

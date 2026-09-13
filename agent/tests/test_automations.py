@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from cowork_agent import cowork_hooks
-from cowork_agent.automations import (
+from chuk_agents_runtime import agents_hooks
+from chuk_agents_runtime.automations import (
     AUTOMATION_TOOL_NAMES,
     MIN_INTERVAL_SECONDS,
     PAYLOAD_MARKER,
@@ -25,7 +25,7 @@ from cowork_agent.automations import (
     register_automation_tools,
     spec_label,
 )
-from cowork_agent.registry import ToolRegistry
+from chuk_agents_runtime.registry import ToolRegistry
 
 # -- spec grammar --------------------------------------------------------------
 
@@ -249,23 +249,23 @@ def test_control_tools_go_through_the_bound_backend_only():
     assert listed["ok"] is True and [r["id"] for r in listed["automations"]] == [row["id"]]
 
 
-# -- cowork_hooks (the module a watcher script imports) --------------------------
+# -- agents_hooks (the module a watcher script imports) --------------------------
 
 
 def test_trigger_outside_a_watcher_writes_nothing(tmp_path, monkeypatch, capsys):
-    monkeypatch.delenv(cowork_hooks.ENV_AUTOMATION_ID, raising=False)
-    monkeypatch.setenv(cowork_hooks.ENV_TRIGGERS_PATH, str(tmp_path / "t.jsonl"))
-    assert cowork_hooks.trigger("x") is False
+    monkeypatch.delenv(agents_hooks.ENV_AUTOMATION_ID, raising=False)
+    monkeypatch.setenv(agents_hooks.ENV_TRIGGERS_PATH, str(tmp_path / "t.jsonl"))
+    assert agents_hooks.trigger("x") is False
     assert not (tmp_path / "t.jsonl").exists()
     assert "not running as a watcher" in capsys.readouterr().err
 
 
 def test_trigger_appends_one_json_line_per_call(tmp_path, monkeypatch):
     path = tmp_path / "sub" / "triggers.jsonl"
-    monkeypatch.setenv(cowork_hooks.ENV_AUTOMATION_ID, "w1")
-    monkeypatch.setenv(cowork_hooks.ENV_TRIGGERS_PATH, str(path))
-    assert cowork_hooks.trigger("new video", payload={"url": "https://x", "n": 1})
-    assert cowork_hooks.trigger("again")
+    monkeypatch.setenv(agents_hooks.ENV_AUTOMATION_ID, "w1")
+    monkeypatch.setenv(agents_hooks.ENV_TRIGGERS_PATH, str(path))
+    assert agents_hooks.trigger("new video", payload={"url": "https://x", "n": 1})
+    assert agents_hooks.trigger("again")
     lines = path.read_text().splitlines()
     assert len(lines) == 2
     first = json.loads(lines[0])
@@ -278,9 +278,9 @@ def test_trigger_appends_one_json_line_per_call(tmp_path, monkeypatch):
 
 def test_trigger_caps_its_own_payload(tmp_path, monkeypatch):
     path = tmp_path / "triggers.jsonl"
-    monkeypatch.setenv(cowork_hooks.ENV_AUTOMATION_ID, "w1")
-    monkeypatch.setenv(cowork_hooks.ENV_TRIGGERS_PATH, str(path))
-    assert cowork_hooks.trigger("big", payload="y" * 40_000)
+    monkeypatch.setenv(agents_hooks.ENV_AUTOMATION_ID, "w1")
+    monkeypatch.setenv(agents_hooks.ENV_TRIGGERS_PATH, str(path))
+    assert agents_hooks.trigger("big", payload="y" * 40_000)
     record = json.loads(path.read_text())
     assert record["payload"]["truncated"] is True
     assert len(path.read_bytes()) < 17 * 1024
@@ -288,7 +288,7 @@ def test_trigger_caps_its_own_payload(tmp_path, monkeypatch):
 
 def test_hook_module_has_no_agent_imports():
     # It is copied into the sandbox alone; it must not import the package.
-    source = open(cowork_hooks.__file__, encoding="utf-8").read()
-    assert "cowork_agent" not in source.replace("cowork_agent/cowork_hooks", "")
+    source = open(agents_hooks.__file__, encoding="utf-8").read()
+    assert "chuk_agents_runtime" not in source.replace("chuk_agents_runtime/agents_hooks", "")
     assert "from ." not in source
-    assert os.path.basename(cowork_hooks.__file__) == "cowork_hooks.py"
+    assert os.path.basename(agents_hooks.__file__) == "agents_hooks.py"

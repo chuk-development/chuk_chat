@@ -1,7 +1,7 @@
 """Browser presence on the wire (Bead cowork-vzm, phase d).
 
 The host knows whether the agent has a browser open — from the Playwright tool
-calls it forwards and from what ``cowork-vnc-up`` counts on the display — and
+calls it forwards and from what ``agents-vnc-up`` counts on the display — and
 tells the app: ``browser_view`` ``opened`` / ``closed`` once per change, and
 ``browser_open`` in every ``run_state``. The app shows its browser button only
 while that says yes. No container, no real MCP server here: the tool-event
@@ -12,12 +12,12 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from cowork_agent import MockModelClient, StateStore
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, StateStore
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor import protocol
-from cowork_executor.protocol import browser_state_from_tool, run_state_payload
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor import protocol
+from chuk_agents_executor.protocol import browser_state_from_tool, run_state_payload
 
 from wiring import paired_channel
 
@@ -210,12 +210,12 @@ def test_an_unknown_target_still_runs_on_the_sandbox(monkeypatch):
 
 def test_the_extension_entry_is_named_playwright():
     entry = protocol.extension_mcp_entry()
-    assert entry is not None, "tools/cowork-extension-mcp ships with the repository"
+    assert entry is not None, "tools/agents-extension-mcp ships with the repository"
     # The name is the whole compatibility seam: the agent builds tool names as
     # mcp__<server>__<tool>, and everything downstream matches on
     # mcp__playwright__browser_*.
     assert entry["name"] == "playwright"
-    assert entry["args"][0].endswith("cowork_extension_mcp.py")
+    assert entry["args"][0].endswith("agents_extension_mcp.py")
     assert browser_state_from_tool("mcp__playwright__browser_navigate", {}, "completed") is True
 
 
@@ -247,7 +247,7 @@ def _probe(monkeypatch, *, code=0, out=""):
         calls.append(argv)
         return SimpleNamespace(returncode=code, stdout=out, stderr="")
 
-    monkeypatch.setattr("cowork_executor.executor.subprocess.run", run)
+    monkeypatch.setattr("chuk_agents_executor.executor.subprocess.run", run)
     return calls
 
 
@@ -275,7 +275,7 @@ def test_a_probe_that_cannot_run_does_not_take_the_screen_away(tmp_path, monkeyp
     def boom(argv, **kwargs):
         raise OSError("docker gone")
 
-    monkeypatch.setattr("cowork_executor.executor.subprocess.run", boom)
+    monkeypatch.setattr("chuk_agents_executor.executor.subprocess.run", boom)
     assert executor._vnc_available("t") is True
 
 

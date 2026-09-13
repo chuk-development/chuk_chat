@@ -5,7 +5,7 @@
 // `flutter: fonts:`), so the family name is handed straight to
 // [TextStyle.fontFamily] with no runtime download.
 
-import 'package:cowork/constants.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// Family name of the bundled Arimo font (see `pubspec.yaml`).
 const String kFontFamilyArimo = 'Arimo';

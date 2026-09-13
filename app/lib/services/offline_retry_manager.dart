@@ -1,6 +1,6 @@
-// COWORK ADAPTER. Upstream: chuk_chat/lib/services/offline_retry_manager.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS ADAPTER. Upstream: chuk_chat/lib/services/offline_retry_manager.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay. Upstream drives a `SendExecutor` that re-runs the
-// whole send against the hosted API and PRODUCES THE ANSWER. CoWork must not:
+// whole send against the hosted API and PRODUCES THE ANSWER. Agents must not:
 // the run belongs to the host, which is still working while no client is
 // attached, so a second producer would double the turn. `registerExecutor`
 // therefore stays a no-op on purpose.
@@ -8,16 +8,16 @@
 // What is real here is the other half. `retryNow()` used to be an empty
 // `async {}`, so the Retry button in the imported bubble
 // (`chat_ui_mobile.dart`, `chat_ui_desktop.dart`) did nothing at all. It now
-// does the one thing CoWork's Retry means:
+// does the one thing Agents's Retry means:
 //
 //   * paired  -> flush the thread's outbox (the same work the `paired`
-//                transition does), through the closure `CoworkThreadView`
+//                transition does), through the closure `AgentsThreadView`
 //                registers;
 //   * not paired -> ask the transport to reconnect. "Retry" while the host is
 //                asleep means "go get the host", not "try the same dead
 //                socket again".
 //
-// The question CoWork asks is "is my host reachable", never "is there
+// The question Agents asks is "is my host reachable", never "is there
 // internet": there is no `NetworkStatusService` probe in here.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
@@ -25,7 +25,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/queued_message.dart';
+import 'package:chuk_chat/models/queued_message.dart';
 
 class SendExecutorResult {
   const SendExecutorResult.success() : success = true, error = null;
@@ -81,7 +81,7 @@ class OfflineRetryManager {
 
   void init() {}
 
-  /// Upstream replays the send itself here. CoWork does not: the host owns the
+  /// Upstream replays the send itself here. Agents does not: the host owns the
   /// run. Kept so the imported call sites compile.
   void registerExecutor(SendExecutor executor) {}
 
@@ -117,7 +117,7 @@ class OfflineRetryManager {
       if (flush != null) {
         final int sent = await flush();
         if (kDebugMode) {
-          debugPrint('[cowork-retry] flushed $sent queued prompt(s)');
+          debugPrint('[agents-retry] flushed $sent queued prompt(s)');
         }
         _emit(OfflineRetryEventType.succeeded, chatId: chatId);
         return;

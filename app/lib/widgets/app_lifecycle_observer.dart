@@ -1,10 +1,10 @@
-/// The app-level [WidgetsBindingObserver] CoWork was missing.
+/// The app-level [WidgetsBindingObserver] Agents was missing.
 ///
 /// [AppLifecycleService] is imported from chuk_chat and is what the imported
 /// chat UI registers its resume and pause callbacks on
 /// (`platform_specific/chat/chat_ui_mobile.dart`,
 /// `platform_specific/chat/handlers/streaming_message_handler.dart`). Upstream
-/// drives it from its own `main.dart`. CoWork never did: nothing in `app/lib`
+/// drives it from its own `main.dart`. Agents never did: nothing in `app/lib`
 /// called `handleLifecycleState`, so every one of those callbacks was dead
 /// code — a stream cut when the phone went to sleep was never resumed, and the
 /// queued-prompt flush never got its "the app is back" signal.
@@ -15,7 +15,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/services/app_lifecycle_service.dart';
+import 'package:chuk_chat/services/app_lifecycle_service.dart';
 
 class AppLifecycleObserver extends StatefulWidget {
   const AppLifecycleObserver({super.key, required this.child, this.onState});

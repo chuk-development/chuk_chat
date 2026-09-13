@@ -14,13 +14,13 @@ import time
 
 import pytest
 
-from cowork_crypto import Pairing
-from cowork_host import LocalHost
-from cowork_host.account_store import AccountStore
-from cowork_host.cloud_relay import CloudRelayError, CloudRelayTransport, RelayAuthRejected
-from cowork_host.identity import HOST_DEVICE_ID, load_or_create_identity
-from cowork_host.party import HostParty
-from cowork_host.protocol import STEP_COMMIT, TYPE_JOIN
+from chuk_agents_crypto import Pairing
+from chuk_agents_host import LocalHost
+from chuk_agents_host.account_store import AccountStore
+from chuk_agents_host.cloud_relay import CloudRelayError, CloudRelayTransport, RelayAuthRejected
+from chuk_agents_host.identity import HOST_DEVICE_ID, load_or_create_identity
+from chuk_agents_host.party import HostParty
+from chuk_agents_host.protocol import STEP_COMMIT, TYPE_JOIN
 
 from test_local_run import ControllerDouble, _scripted_model
 

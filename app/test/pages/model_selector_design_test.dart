@@ -1,4 +1,4 @@
-import 'package:cowork/model_selector_page.dart';
+import 'package:chuk_chat/model_selector_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 

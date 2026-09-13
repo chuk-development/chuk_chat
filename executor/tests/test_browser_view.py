@@ -13,18 +13,18 @@ import threading
 import time
 
 import pytest
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_agent import MockModelClient
-from cowork_executor import (
+from chuk_agents_runtime import MockModelClient
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     browser_data_payload,
     browser_view_payload,
     loopback_pair,
 )
-from cowork_executor.executor import _VncBridge
-from cowork_executor.protocol import MAX_BROWSER_CHUNK, PayloadTooLarge
+from chuk_agents_executor.executor import _VncBridge
+from chuk_agents_executor.protocol import MAX_BROWSER_CHUNK, PayloadTooLarge
 
 from wiring import paired_channel
 
@@ -180,7 +180,7 @@ class _FakeDockerEnv:
 
     def __init__(self) -> None:
         self._cli = _FakeCli()
-        self._user = "cowork"
+        self._user = "agents"
         self.container_id = "cid-abc123"
         self.realized = 0
 
@@ -229,20 +229,20 @@ def test_browser_mcp_entry_execs_the_launcher_in_the_container(tmp_path):
     assert entry is not None
     assert entry["name"] == "playwright"
     assert entry["command"] == "docker"
-    # docker exec -i -u cowork <cid> cowork-browser-mcp
+    # docker exec -i -u agents <cid> agents-browser-mcp
     assert entry["args"] == [
         "exec",
         "-i",
         "-u",
-        "cowork",
+        "agents",
         "cid-abc123",
-        "cowork-browser-mcp",
+        "agents-browser-mcp",
     ]
     assert env.realized >= 1  # the container was forced live first
 
 
 def test_browser_mcp_entry_rejects_failed_container_probe(tmp_path):
-    from cowork_sandbox import ProcessResult
+    from chuk_agents_sandbox import ProcessResult
 
     env = _FakeDockerEnv()
     env.run_bash = lambda *a, **kw: ProcessResult("", "No such container", 1)
@@ -257,13 +257,13 @@ def test_browser_mcp_entry_passes_verified_retirement_to_container(tmp_path, mon
     def attest(binary, cid, workspace):
         seen.append((binary, cid, workspace))
         return "retired-container"
-    monkeypatch.setattr("cowork_executor.browser_profile.retired_browser_hostname", attest)
+    monkeypatch.setattr("chuk_agents_executor.browser_profile.retired_browser_hostname", attest)
     ex = _executor_with(tmp_path, env, browser_mcp=True)
     entry = ex._browser_mcp_entry()
     assert seen == [("docker", "cid-abc123", str(tmp_path))]
     assert entry["args"][-4:] == [
-        "-e", "COWORK_BROWSER_RETIRED_HOSTNAME=retired-container",
-        "cid-abc123", "cowork-browser-mcp",
+        "-e", "AGENTS_BROWSER_RETIRED_HOSTNAME=retired-container",
+        "cid-abc123", "agents-browser-mcp",
     ]
 
 
@@ -295,7 +295,7 @@ def _framer_handshake() -> bytes:
 
 
 def test_rfb_framer_passes_protocol_and_drops_cut_text():
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     f = _RfbClientFramer()
     assert f.feed(_framer_handshake()) == _framer_handshake()
@@ -311,7 +311,7 @@ def test_rfb_framer_passes_protocol_and_drops_cut_text():
 
 
 def test_rfb_framer_reassembles_messages_split_across_chunks():
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     f = _RfbClientFramer()
     f.feed(_framer_handshake())
@@ -325,7 +325,7 @@ def test_rfb_framer_reassembles_messages_split_across_chunks():
 def test_rfb_framer_passes_vnc_auth_response():
     """With a per-view secret x11vnc offers security type 2: the client sends
     the type byte then a 16-byte DES response. Both must pass the framer."""
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     f = _RfbClientFramer()
     handshake = b"RFB 003.008\n" + b"\x02" + bytes(range(16)) + b"\x01"
@@ -335,11 +335,11 @@ def test_rfb_framer_passes_vnc_auth_response():
 
 
 def test_vnc_start_arms_a_per_view_secret_as_root(tmp_path, monkeypatch):
-    """cowork-vnc-up runs as ROOT with the secret in its env (root-only
+    """agents-vnc-up runs as ROOT with the secret in its env (root-only
     password file inside the sandbox), and the secret rides in `started`."""
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     env = _FakeDockerEnv()
     executor = _executor_with(tmp_path, env, browser_mcp=True)
@@ -358,10 +358,10 @@ def test_vnc_start_arms_a_per_view_secret_as_root(tmp_path, monkeypatch):
     )
     try:
         executor._vnc_start("req-secret", {})
-        assert calls, "cowork-vnc-up was not invoked"
+        assert calls, "agents-vnc-up was not invoked"
         argv = calls[0]
         assert argv[:4] == ["docker", "exec", "-i", "-u"] and argv[4] == "root"
-        env_arg = next(a for a in argv if a.startswith("COWORK_VNC_PASSWD="))
+        env_arg = next(a for a in argv if a.startswith("AGENTS_VNC_PASSWD="))
         secret = env_arg.split("=", 1)[1]
         assert len(secret) == 8
         started = next(e for e in events if e.get("status") == "started")
@@ -373,12 +373,12 @@ def test_vnc_start_arms_a_per_view_secret_as_root(tmp_path, monkeypatch):
 
 
 def test_browser_start_runs_off_the_serve_thread_and_a_stop_wins(tmp_path, monkeypatch):
-    """cowork-vnc-up may take seconds. The start must not block the serve
+    """agents-vnc-up may take seconds. The start must not block the serve
     thread, and a `browser_stop` that lands while x11vnc is still coming up
     must win: the late bridge is closed, never registered, no 'started'."""
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     env = _FakeDockerEnv()
     executor = _executor_with(tmp_path, env, browser_mcp=True)
@@ -387,7 +387,7 @@ def test_browser_start_runs_off_the_serve_thread_and_a_stop_wins(tmp_path, monke
     in_vnc_up = threading.Event()
     release = threading.Event()
 
-    def slow_run(argv, **_kw):  # cowork-vnc-up "hangs" until released
+    def slow_run(argv, **_kw):  # agents-vnc-up "hangs" until released
         in_vnc_up.set()
         release.wait(5.0)
         return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
@@ -426,7 +426,7 @@ def test_rfb_framer_refuses_rfb_3_3():
     """RFB 3.3 cannot be framed from the client side (the server picks the
     security type silently, so a 16-byte auth response may or may not
     follow). Our client speaks 3.8; 3.3 fails closed instead of guessing."""
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     assert _RfbClientFramer().feed(b"RFB 003.003\n") is None
     assert _RfbClientFramer().feed(b"RFB 003.007\n") == b"RFB 003.007\n"
@@ -451,7 +451,7 @@ def test_vnc_teardown_ignores_a_stale_bridge(tmp_path):
 
 
 def test_rfb_framer_fails_closed_on_non_rfb():
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     assert _RfbClientFramer().feed(b"GET / HTTP/1.1\r\n") is None  # not "RFB "
     f = _RfbClientFramer()
@@ -464,7 +464,7 @@ def test_vnc_feed_drops_cut_text_and_tears_down_on_garbage(tmp_path):
     message never does, and non-RFB input kills the view (fail closed)."""
     import base64
 
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     (tmp_path / "ws").mkdir()
     channel = paired_channel()
@@ -500,7 +500,7 @@ def test_vnc_feed_forwards_normal_input_but_drops_oversize(tmp_path):
     channel = paired_channel()
     _controller_ep, executor_ep = loopback_pair()
     executor = _executor(tmp_path, channel, executor_ep)
-    from cowork_executor.executor import _RfbClientFramer
+    from chuk_agents_executor.executor import _RfbClientFramer
 
     bridge = _RecordingBridge()
     executor._vnc = bridge
@@ -533,14 +533,14 @@ def test_vnc_start_with_an_instantly_dead_pipe_does_not_register_a_dead_view(
     cleared, and the app gets a 'stopped' — not a bridge that looks live."""
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     env = _FakeDockerEnv()
     executor = _executor_with(tmp_path, env, browser_mcp=True)
     events: list[dict] = []
     executor._event = lambda _rid, payload: events.append(payload)  # type: ignore[method-assign]
 
-    # cowork-vnc-up "succeeds" with one window; the bridge is `sh -c 'exit 0'`
+    # agents-vnc-up "succeeds" with one window; the bridge is `sh -c 'exit 0'`
     # (exits at once) instead of the real docker exec socat.
     monkeypatch.setattr(
         ex_mod.subprocess,
@@ -599,7 +599,7 @@ class _FakeBrowserConnection:
     def __init__(self, name: str, tools: list[str] | None = None, *, alive: bool = True):
         import types
 
-        from cowork_agent import MCPToolInfo
+        from chuk_agents_runtime import MCPToolInfo
 
         names = tools if tools is not None else ["browser_tabs", "browser_navigate"]
         self.config = types.SimpleNamespace(name=name)
@@ -617,12 +617,12 @@ class _FakeBrowserConnection:
 
 def _browser_manager(container: str = "cid-abc123", **kwargs):
     """A started manager holding one sandbox browser server for `container`."""
-    from cowork_agent import MCPManager, MCPServerConfig
+    from chuk_agents_runtime import MCPManager, MCPServerConfig
 
     config = MCPServerConfig(
         name="playwright",
         command="docker",
-        args=["exec", "-i", "-u", "cowork", container, "cowork-browser-mcp"],
+        args=["exec", "-i", "-u", "agents", container, "agents-browser-mcp"],
     )
     manager = MCPManager([config])
     connection = _FakeBrowserConnection("playwright", **kwargs)
@@ -631,7 +631,7 @@ def _browser_manager(container: str = "cid-abc123", **kwargs):
 
 
 def _vnc_start_with(tmp_path, monkeypatch, windows: int, *, pages: int | None = None):
-    """An executor whose fake sandbox reports `windows` from `cowork-vnc-up`
+    """An executor whose fake sandbox reports `windows` from `agents-vnc-up`
     and `pages` from the executor's own class-filtered window probe.
 
     `pages=None` is a probe that cannot run (an image without xwininfo), which
@@ -639,7 +639,7 @@ def _vnc_start_with(tmp_path, monkeypatch, windows: int, *, pages: int | None = 
     """
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
     events: list[dict] = []
@@ -649,7 +649,7 @@ def _vnc_start_with(tmp_path, monkeypatch, windows: int, *, pages: int | None = 
     def fake_run(argv, **kwargs):
         argv = list(argv)
         runs.append(argv)
-        if "cowork-vnc-up" in argv:
+        if "agents-vnc-up" in argv:
             return sp.CompletedProcess(
                 args=argv, returncode=0, stdout=f"WINDOWS={windows}\n".encode()
             )
@@ -675,9 +675,9 @@ def _wait_for(predicate, timeout: float = 5.0) -> bool:
 
 
 def _vnc_up_boxes(runs) -> list[str]:
-    """The container each `cowork-vnc-up` ran against, in order."""
+    """The container each `agents-vnc-up` ran against, in order."""
     return [
-        argv[argv.index("cowork-vnc-up") - 1] for argv in runs if "cowork-vnc-up" in argv
+        argv[argv.index("agents-vnc-up") - 1] for argv in runs if "agents-vnc-up" in argv
     ]
 
 
@@ -796,12 +796,12 @@ def test_the_view_follows_the_box_where_the_browser_runs(tmp_path, monkeypatch):
 def test_a_box_with_no_display_is_skipped_for_one_that_has_a_browser(
     tmp_path, monkeypatch
 ):
-    """`cowork-vnc-up` exits 3 when a box has no browser display. That is not
+    """`agents-vnc-up` exits 3 when a box has no browser display. That is not
     an error any more: the next box is tried, and only if none answers does the
     app get an error — with a reason on it."""
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
     events: list[dict] = []
@@ -811,8 +811,8 @@ def test_a_box_with_no_display_is_skipped_for_one_that_has_a_browser(
     def fake_run(argv, **_kw):
         argv = list(argv)
         runs.append(argv)
-        if "cowork-vnc-up" in argv:
-            box = argv[argv.index("cowork-vnc-up") - 1]
+        if "agents-vnc-up" in argv:
+            box = argv[argv.index("agents-vnc-up") - 1]
             if box == "cid-abc123":  # this executor's own box: no Xvfb on it
                 return sp.CompletedProcess(args=argv, returncode=3, stdout=b"")
             return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
@@ -840,7 +840,7 @@ def test_no_box_at_all_is_an_error_that_names_the_cause(tmp_path, monkeypatch):
     the agent."""
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
     events: list[dict] = []
@@ -859,10 +859,10 @@ def test_no_box_at_all_is_an_error_that_names_the_cause(tmp_path, monkeypatch):
 
 
 def test_the_auto_open_switch_turns_the_nudge_off(tmp_path, monkeypatch):
-    """COWORK_BROWSER_AUTO_OPEN=0 is the documented way to keep the browser
+    """AGENTS_BROWSER_AUTO_OPEN=0 is the documented way to keep the browser
     lazy; the view then reports the empty display instead of filling it."""
     executor, events, _runs = _vnc_start_with(tmp_path, monkeypatch, windows=0, pages=0)
-    monkeypatch.setenv("COWORK_BROWSER_AUTO_OPEN", "0")
+    monkeypatch.setenv("AGENTS_BROWSER_AUTO_OPEN", "0")
     manager, connection = _browser_manager()
     executor._mcp_managers["t1"] = manager
     try:
@@ -894,7 +894,7 @@ def _reconnect_rig(tmp_path, monkeypatch, *, vnc_up_rc=0):
     """
     import subprocess as sp
 
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
 
     executor = _executor_with(tmp_path, _FakeDockerEnv(), browser_mcp=True)
     events: list[dict] = []
@@ -924,7 +924,7 @@ def _reconnect_rig(tmp_path, monkeypatch, *, vnc_up_rc=0):
 
     def fake_run(argv, **_kwargs):
         argv = list(argv)
-        if "cowork-vnc-up" in argv:
+        if "agents-vnc-up" in argv:
             return sp.CompletedProcess(
                 args=argv, returncode=vnc_up_rc, stdout=b"WINDOWS=1\n"
             )
@@ -997,11 +997,11 @@ def test_a_pipe_that_never_carried_a_picture_is_not_retried(tmp_path, monkeypatc
 def test_a_display_that_went_away_ends_the_view_instead_of_retrying(
     tmp_path, monkeypatch
 ):
-    """Exit 3 from `cowork-vnc-up` is "there is no browser display any more".
+    """Exit 3 from `agents-vnc-up` is "there is no browser display any more".
     No number of retries brings a closed browser back, so the view ends."""
     executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
     executor._vnc_start("req-gone", {})
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
     import subprocess as sp
 
     monkeypatch.setattr(
@@ -1024,12 +1024,12 @@ def test_a_stop_during_a_reconnect_wins(tmp_path, monkeypatch):
     executor, events, bridges = _reconnect_rig(tmp_path, monkeypatch)
     executor._vnc_start("req-stop", {})
     gate = threading.Event()
-    from cowork_executor import executor as ex_mod
+    from chuk_agents_executor import executor as ex_mod
     import subprocess as sp
 
     def slow_run(argv, **_k):
         argv = list(argv)
-        if "cowork-vnc-up" in argv:
+        if "agents-vnc-up" in argv:
             gate.wait(5.0)
         return sp.CompletedProcess(args=argv, returncode=0, stdout=b"WINDOWS=1\n")
 
@@ -1051,7 +1051,7 @@ def test_the_start_path_is_timed(tmp_path, monkeypatch, caplog):
     import logging
 
     executor, _events, _bridges = _reconnect_rig(tmp_path, monkeypatch)
-    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+    with caplog.at_level(logging.INFO, logger="chuk_agents_executor.executor"):
         executor._vnc_start("req-timed", {})
 
     lines = [r.getMessage() for r in caplog.records if "start path" in r.getMessage()]

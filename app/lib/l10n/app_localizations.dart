@@ -2,11 +2,11 @@
 // Simple manual localization — no code generation needed.
 
 import 'package:flutter/material.dart';
-import 'package:cowork/l10n/strings_en.dart';
-import 'package:cowork/l10n/strings_de.dart';
-import 'package:cowork/l10n/strings_es.dart';
-import 'package:cowork/l10n/strings_fr.dart';
-import 'package:cowork/l10n/strings_pt.dart';
+import 'package:chuk_chat/l10n/strings_en.dart';
+import 'package:chuk_chat/l10n/strings_de.dart';
+import 'package:chuk_chat/l10n/strings_es.dart';
+import 'package:chuk_chat/l10n/strings_fr.dart';
+import 'package:chuk_chat/l10n/strings_pt.dart';
 
 /// Holds all translated UI strings for the current locale.
 ///

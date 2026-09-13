@@ -5,11 +5,11 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
-import 'package:cowork/ui/expressive/waveform.dart';
-import 'package:cowork/utils/shift_key_tracker.dart';
+import 'package:chuk_chat/ui/expressive/waveform.dart';
+import 'package:chuk_chat/utils/shift_key_tracker.dart';
 
 /// Build a tiny icon button widget
 Widget buildTinyIconButton({

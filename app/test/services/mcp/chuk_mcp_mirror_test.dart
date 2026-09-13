@@ -1,16 +1,16 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/mcp/chuk_mcp_mirror.dart';
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/mcp_connector_sync.dart';
-import 'package:cowork/services/mcp/mcp_oauth.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
-import 'package:cowork/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
+import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
 /// Keychain stand-in.
-class _MemorySecrets implements CoworkSecureKeyValueStore {
+class _MemorySecrets implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override
@@ -23,7 +23,7 @@ class _MemorySecrets implements CoworkSecureKeyValueStore {
   Future<void> delete(String key) async => map.remove(key);
 }
 
-/// CoWork's own mirror, in memory.
+/// Agents's own mirror, in memory.
 class _OwnMirror implements McpConnectorSync {
   Map<String, dynamic>? blob;
 
@@ -248,7 +248,7 @@ void main() {
     expect(payload['url'], contains('key=k-chuk'));
   });
 
-  test('CoWork\'s own mirror wins; chuk only fills the gaps', () async {
+  test('Agents\'s own mirror wins; chuk only fills the gaps', () async {
     own.blob = <String, dynamic>{
       'connections': [_connectionJson('notion', url: 'https://own.example/mcp')],
       'secrets': {

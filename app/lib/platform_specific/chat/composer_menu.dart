@@ -1,9 +1,9 @@
 // lib/platform_specific/chat/composer_menu.dart
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 
 /// One row of a composer menu — same metrics as the mode menu.
 PopupMenuItem<T> composerMenuRow<T>({

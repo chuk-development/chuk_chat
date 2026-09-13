@@ -3,7 +3,7 @@ events and timestamps"; beads cowork-b45 / cowork-al2)."""
 
 from __future__ import annotations
 
-from cowork_agent import result_text, tool_event_fields, tool_status
+from chuk_agents_runtime import result_text, tool_event_fields, tool_status
 
 
 def test_run_command_projects_shell_fields_and_a_plain_command_line():

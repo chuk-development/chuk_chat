@@ -15,23 +15,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 
 import 'layout_harness.dart';
 
-class _Relay implements CoworkRelayController, CoworkDocumentsControl {
+class _Relay implements AgentsRelayController, AgentsDocumentsControl {
   @override
-  final ValueNotifier<CoworkRelayState> state = ValueNotifier<CoworkRelayState>(
-    const CoworkRelayState(phase: CoworkRelayPhase.paired),
+  final ValueNotifier<AgentsRelayState> state = ValueNotifier<AgentsRelayState>(
+    const AgentsRelayState(phase: AgentsRelayPhase.paired),
   );
-  final StreamController<CoworkRelayInbound> events =
-      StreamController<CoworkRelayInbound>.broadcast(sync: true);
+  final StreamController<AgentsRelayInbound> events =
+      StreamController<AgentsRelayInbound>.broadcast(sync: true);
   @override
-  Stream<CoworkRelayInbound> get inbound => events.stream;
+  Stream<AgentsRelayInbound> get inbound => events.stream;
   @override
   Future<void> requestDocuments(String sessionKey, {String? id}) async {}
   @override
@@ -40,7 +40,7 @@ class _Relay implements CoworkRelayController, CoworkDocumentsControl {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 
   void send(List<Map<String, dynamic>> documents) => events.add(
-    CoworkRelayDocuments(<String, dynamic>{
+    AgentsRelayDocuments(<String, dynamic>{
       'session_key': 'layout-test',
       'documents': documents,
     }),
@@ -84,7 +84,7 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await SharedPreferences.getInstance();
     await ChatStorageService.reset();
-    await CoworkChatStore.reset();
+    await AgentsChatStore.reset();
   });
 
   const List<LayoutSize> windows = <LayoutSize>[
