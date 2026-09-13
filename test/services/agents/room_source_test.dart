@@ -11,10 +11,12 @@ AgentsRoomMember _m(String id, String handle) =>
 AgentsRoomDraft _draft(
   String name, {
   List<AgentsRoomMember>? members,
+  bool agentToAgent = true,
 }) =>
     AgentsRoomDraft(
       name: name,
       members: members ?? [_m('a', 'amber'), _m('b', 'cobalt')],
+      agentToAgent: agentToAgent,
     );
 
 void main() {
@@ -46,13 +48,56 @@ void main() {
     );
   });
 
-  test('the six-member cap is enforced defensively', () {
+  test('there is no member ceiling: a twelve-member room is created and listed',
+      () {
     final source = LocalRoomSource(random: Random(4));
-    final seven = [for (var i = 0; i < 7; i++) _m('id$i', 'h$i')];
+    final twelve = [for (var i = 0; i < 12; i++) _m('id$i', 'h$i')];
+    final room = source.addRoom(_draft('all hands', members: twelve));
+    expect(room.members, hasLength(12));
+    expect(source.rooms.single.members, hasLength(12));
+    expect(source.byId(room.id)!.handles.last, 'h11');
+  });
+
+  test('a draft carries its agent_to_agent policy onto the created room', () {
+    final source = LocalRoomSource(random: Random(40));
+    expect(source.addRoom(_draft('on')).agentToAgent, isTrue);
     expect(
-      () => source.addRoom(_draft('big', members: seven)),
-      throwsArgumentError,
+      source.addRoom(_draft('off', agentToAgent: false)).agentToAgent,
+      isFalse,
     );
+  });
+
+  test('setAgentToAgent flips the policy, notifies once, ignores an unknown id',
+      () {
+    final source = LocalRoomSource(random: Random(41));
+    final room = source.addRoom(_draft('launch'));
+    var notified = 0;
+    source.addListener(() => notified++);
+
+    source.setAgentToAgent(room.id, false);
+    expect(source.byId(room.id)!.agentToAgent, isFalse);
+    expect(notified, 1);
+
+    source.setAgentToAgent(room.id, false); // same -> no notify
+    expect(notified, 1);
+
+    source.setAgentToAgent(room.id, true);
+    expect(source.byId(room.id)!.agentToAgent, isTrue);
+    expect(notified, 2);
+
+    source.setAgentToAgent('nope', false); // unknown -> no-op
+    expect(notified, 2);
+  });
+
+  test('the policy survives a rename and a member change', () {
+    final source = LocalRoomSource(random: Random(42));
+    final room = source.addRoom(_draft('launch', agentToAgent: false));
+    source.renameRoom(room.id, 'ops');
+    expect(source.byId(room.id)!.agentToAgent, isFalse);
+    source.addMemberToRoom(room.id, _m('c', 'jade'));
+    expect(source.byId(room.id)!.agentToAgent, isFalse);
+    source.removeMemberFromRoom(room.id, 'c');
+    expect(source.byId(room.id)!.agentToAgent, isFalse);
   });
 
   test('duplicate handle or agent is refused', () {
@@ -139,7 +184,7 @@ void main() {
     expect(notified, 0);
   });
 
-  test('addMemberToRoom adds, and refuses full/duplicate', () {
+  test('addMemberToRoom adds, refuses a duplicate, and has no ceiling', () {
     final source = LocalRoomSource(random: Random(30));
     final room = source.addRoom(_draft('r')); // amber, cobalt
     source.addMemberToRoom(room.id, _m('c', 'jade'));
@@ -149,14 +194,15 @@ void main() {
     // Duplicate agent -> ignored.
     source.addMemberToRoom(room.id, _m('c', 'other'));
     expect(source.byId(room.id)!.members.length, 3);
+    // Duplicate handle -> ignored.
+    source.addMemberToRoom(room.id, _m('zz', 'jade'));
+    expect(source.byId(room.id)!.members.length, 3);
 
-    // Fill to six, then a seventh is refused.
-    source.addMemberToRoom(room.id, _m('d', 'onyx'));
-    source.addMemberToRoom(room.id, _m('e', 'slate'));
-    source.addMemberToRoom(room.id, _m('f', 'teal'));
-    expect(source.byId(room.id)!.members.length, 6);
-    source.addMemberToRoom(room.id, _m('g', 'rust'));
-    expect(source.byId(room.id)!.members.length, 6);
+    // Past the old six-member wall and on to twenty: nothing is refused.
+    for (var i = 0; i < 17; i++) {
+      source.addMemberToRoom(room.id, _m('extra$i', 'extra$i'));
+    }
+    expect(source.byId(room.id)!.members.length, 20);
   });
 
   test('removeMemberFromRoom shrinks, and deletes a sub-2 room', () {

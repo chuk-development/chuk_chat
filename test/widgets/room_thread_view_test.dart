@@ -85,6 +85,26 @@ void main() {
     expect(find.text('Reached the round limit'), findsOneWidget);
   });
 
+  testWidgets('the agent-to-agent policy gets its own footer line', (
+    tester,
+  ) async {
+    // The room ended because a coworker's @mention was not followed: the policy
+    // is off. The footer is the only place the user learns that.
+    await pump(
+      tester,
+      turns: const [
+        AgentsRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
+      ],
+      stop: AgentsRoomStop.agentToAgentOff,
+    );
+    expect(
+      find.text('Coworkers do not reply to each other here'),
+      findsOneWidget,
+    );
+    // It is not an error, so it is drawn like the other calm reasons.
+    expect(find.byType(Divider), findsWidgets);
+  });
+
   testWidgets('a running room shows the talking indicator, no footer',
       (tester) async {
     await pump(
