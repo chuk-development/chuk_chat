@@ -17,6 +17,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
@@ -41,6 +42,23 @@ class MultiplexSession {
   static MultiplexConnection? _current;
   static String? _currentChatId;
   static Timer? _idleCloseTimer;
+
+  /// Subscription that forwards every newly obtained Supabase access token
+  /// to the open socket. The server authenticates `/v2/ws` once, at the
+  /// handshake, so without this the socket keeps using the token it was
+  /// opened with until it ages out and per-user reads start failing with
+  /// `PGRST303 JWT expired`.
+  static StreamSubscription<AuthState>? _authSubscription;
+
+  /// Raised *before* `listen()` is called, not after it returns.
+  ///
+  /// `Supabase.auth.onAuthStateChange` emits its initial event
+  /// synchronously on subscribe, so the handler can run while `listen()` is
+  /// still on the stack and `_authSubscription` is still null. Guarding on
+  /// the subscription alone would let anything reached from that handler —
+  /// or a second `prewarm` / `openForChat` in the same turn — arm a second
+  /// subscription, which would then deliver every token twice.
+  static bool _authBridgeArmed = false;
 
   /// Per-chatId tracker for the in-flight chat stream. Lets
   /// [chatForChat] cancel a previous stream before opening a new one so
@@ -67,6 +85,7 @@ class MultiplexSession {
   /// reuses the existing socket; the per-request `chat_id` lives in the
   /// chat payload, not in the transport.
   static Future<void> openForChat(String chatId) async {
+    _ensureAuthBridge();
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = chatId;
@@ -93,6 +112,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
+      freshTokenProvider: _freshTokenProvider,
     );
 
     try {
@@ -121,6 +141,7 @@ class MultiplexSession {
   /// scheduled to idle-close so a prewarm that's never used doesn't leak a
   /// permanently-open connection.
   static Future<void> prewarm() async {
+    _ensureAuthBridge();
     final existing = _current;
     if (existing != null) {
       // A socket that hasn't heard from the server in a while was probably
@@ -156,6 +177,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
+      freshTokenProvider: _freshTokenProvider,
     );
     try {
       await connection.ensureReady();
@@ -229,6 +251,9 @@ class MultiplexSession {
 
   /// Tear down the connection immediately. Used on logout.
   static Future<void> shutdown() async {
+    unawaited(_authSubscription?.cancel());
+    _authSubscription = null;
+    _authBridgeArmed = false;
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = null;
@@ -403,8 +428,79 @@ class MultiplexSession {
   }
 
   static Future<String?> _tokenProvider() async {
-    final session = SupabaseService.auth.currentSession;
-    return session?.accessToken;
+    try {
+      final session = SupabaseService.auth.currentSession;
+      return session?.accessToken;
+    } catch (_) {
+      // Supabase not initialised (early startup / tests).
+      return null;
+    }
+  }
+
+  /// Token source for a mid-connection handover. Forces a Supabase refresh
+  /// so the socket gets a genuinely newer token, not the expiring one that
+  /// made the server ask in the first place.
+  ///
+  /// Returns null when no token can be obtained. That is not an auth
+  /// failure — the caller keeps the session and retries later. This method
+  /// never signs anyone out.
+  static Future<String?> _freshTokenProvider() async {
+    try {
+      final session = await SupabaseService.refreshSession();
+      if (session != null) return session.accessToken;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] fresh token refresh failed: $e');
+      }
+    }
+    try {
+      return SupabaseService.auth.currentSession?.accessToken;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Subscribe once to Supabase auth events so every new access token is
+  /// pushed onto the open socket. Idempotent and best-effort: if Supabase
+  /// is not initialised yet the bridge simply is not armed, and the next
+  /// handshake still picks up a current token.
+  static void _ensureAuthBridge() {
+    if (_authBridgeArmed) return;
+    _authBridgeArmed = true;
+    try {
+      _authSubscription = SupabaseService.auth.onAuthStateChange.listen(
+        (AuthState state) {
+          final token = state.session?.accessToken;
+          // No session here means a sign-out, which this bridge does not
+          // handle and must never cause.
+          if (token == null || token.isEmpty) return;
+          pushAuthToken(token);
+        },
+        onError: (Object error) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [MultiplexSession] auth bridge error: $error');
+          }
+        },
+      );
+    } catch (e) {
+      // Supabase is not up yet. Lower the flag so a later call retries;
+      // the next handshake reads a current token regardless.
+      _authBridgeArmed = false;
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] auth bridge not armed: $e');
+      }
+    }
+  }
+
+  /// Hand [token] to every open multiplex connection. There is exactly one
+  /// (`_current`) by design — one socket carries everything.
+  ///
+  /// Fire-and-forget and failure-tolerant: a socket that refuses the token,
+  /// or is not there at all, keeps the user signed in.
+  static void pushAuthToken(String? token) {
+    final connection = _current;
+    if (connection == null) return;
+    unawaited(connection.updateAuthToken(token));
   }
 }
 
