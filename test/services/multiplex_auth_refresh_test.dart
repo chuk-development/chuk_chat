@@ -61,14 +61,23 @@ class _FakeMultiplexServer {
   String get baseUrl => 'http://127.0.0.1:${_server.port}';
 
   Future<void> _accept() async {
-    await for (final HttpRequest request in _server) {
-      final WebSocket socket = await WebSocketTransformer.upgrade(request);
-      _socket = socket;
-      socket.listen(
-        (dynamic raw) => _onFrame(socket, raw),
-        onError: (Object _) {},
-        cancelOnError: false,
-      );
+    // This loop is deliberately fire-and-forget, so it must swallow its own
+    // errors. `stop()` closes the server under it (force: true), which makes
+    // the request iteration or the upgrade throw; an unhandled async error
+    // there would fail whichever test happened to be running with a
+    // confusing, unrelated message.
+    try {
+      await for (final HttpRequest request in _server) {
+        final WebSocket socket = await WebSocketTransformer.upgrade(request);
+        _socket = socket;
+        socket.listen(
+          (dynamic raw) => _onFrame(socket, raw),
+          onError: (Object _) {},
+          cancelOnError: false,
+        );
+      }
+    } catch (_) {
+      // Teardown only — the server is going away.
     }
   }
 
@@ -102,6 +111,12 @@ class _FakeMultiplexServer {
 
   /// Push an unsolicited server frame, e.g. `auth_refresh_needed`.
   void push(Map<String, dynamic> frame) => _socket?.add(jsonEncode(frame));
+
+  /// Answer a handover that [onAuthRefresh] deliberately left unanswered.
+  void acceptPendingRefresh() => push(<String, dynamic>{
+        'type': 'auth_refreshed',
+        'expires_at': 4102444800,
+      });
 
   Future<void> stop() async {
     try {
@@ -137,6 +152,7 @@ void main() {
 
   MultiplexConnection connect({
     Future<String?> Function()? freshTokenProvider,
+    Duration fetchTimeout = const Duration(seconds: 5),
     Duration replyTimeout = const Duration(seconds: 5),
     Duration retryDelay = const Duration(seconds: 30),
   }) {
@@ -144,6 +160,7 @@ void main() {
       baseUrl: server.baseUrl,
       accessTokenProvider: () async => 'token-1',
       freshTokenProvider: freshTokenProvider,
+      authRefreshFetchTimeout: fetchTimeout,
       authRefreshReplyTimeout: replyTimeout,
       authRefreshRetryDelay: retryDelay,
     );
@@ -156,7 +173,7 @@ void main() {
       addTearDown(connection.dispose);
       await connection.ensureReady();
       expect(server.handshakeToken, 'token-1');
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
 
       final bool sent = await connection.updateAuthToken('token-2');
       expect(sent, isTrue);
@@ -164,7 +181,7 @@ void main() {
 
       expect(server.refreshTokens, <String>['token-2']);
       expect(connection.hasPendingAuthRefresh, isFalse);
-      expect(connection.activeAuthToken, 'token-2');
+      expect(connection.holdsAuthToken('token-2'), isTrue);
       expect(connection.authRefreshFailures, 0);
       expect(connection.hasAuthRefreshRetryScheduled, isFalse);
       await expectStillUsable(connection);
@@ -179,7 +196,7 @@ void main() {
       await _settle();
 
       expect(server.refreshTokens, isEmpty);
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       await expectStillUsable(connection);
     });
 
@@ -201,9 +218,58 @@ void main() {
 
       expect(fetches, 1);
       expect(server.refreshTokens, <String>['token-fresh']);
-      expect(connection.activeAuthToken, 'token-fresh');
+      expect(connection.holdsAuthToken('token-fresh'), isTrue);
       expect(connection.hasPendingAuthRefresh, isFalse);
       await expectStillUsable(connection);
+    });
+
+    test('a token handed in mid-handover is queued, then sent', () async {
+      server.onAuthRefresh = (WebSocket socket, String token) {
+        // Withhold the reply so the next token has to queue behind it.
+      };
+      final connection = connect();
+      addTearDown(connection.dispose);
+      await connection.ensureReady();
+
+      expect(await connection.updateAuthToken('token-2'), isTrue);
+      await _settle();
+      expect(server.refreshTokens, <String>['token-2']);
+
+      // Second token arrives while the first is still unanswered.
+      expect(await connection.updateAuthToken('token-3'), isTrue);
+      await _settle();
+      expect(connection.hasQueuedAuthRefresh, isTrue);
+      // Still only one frame on the wire.
+      expect(server.refreshTokens, <String>['token-2']);
+
+      // The reply settles the first handover and releases the queued one.
+      server.acceptPendingRefresh();
+      await _settle(200);
+
+      expect(server.refreshTokens, <String>['token-2', 'token-3']);
+      expect(connection.hasQueuedAuthRefresh, isFalse);
+    });
+
+    test('a queued token is dropped, not stranded, when the socket goes',
+        () async {
+      server.onAuthRefresh = (WebSocket socket, String token) {
+        // Withhold the reply.
+      };
+      final connection = connect();
+      await connection.ensureReady();
+
+      expect(await connection.updateAuthToken('token-2'), isTrue);
+      await _settle();
+      expect(await connection.updateAuthToken('token-3'), isTrue);
+      expect(connection.hasQueuedAuthRefresh, isTrue);
+
+      await connection.dispose();
+
+      // No marker survives the teardown; the next handshake would read a
+      // current token from accessTokenProvider anyway.
+      expect(connection.hasQueuedAuthRefresh, isFalse);
+      expect(connection.hasPendingAuthRefresh, isFalse);
+      expect(connection.hasActiveAuthToken, isFalse);
     });
 
     test('auth_refresh frames do not disturb an in-flight request', () async {
@@ -243,7 +309,7 @@ void main() {
 
       expect(connection.authRefreshFailures, 1);
       // Previous token kept, exactly as the server does.
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       expect(connection.hasPendingAuthRefresh, isFalse);
       // "Try again later", not "sign out".
       expect(connection.hasAuthRefreshRetryScheduled, isTrue);
@@ -264,7 +330,7 @@ void main() {
       await _settle(350);
 
       expect(connection.hasPendingAuthRefresh, isFalse);
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       expect(connection.hasAuthRefreshRetryScheduled, isTrue);
       await expectStillUsable(connection);
     });
@@ -281,7 +347,7 @@ void main() {
       await _settle(250);
 
       expect(server.refreshTokens, isEmpty);
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       expect(connection.hasAuthRefreshRetryScheduled, isTrue);
       await expectStillUsable(connection);
     });
@@ -301,7 +367,7 @@ void main() {
       await _settle(250);
 
       expect(server.refreshTokens, isEmpty);
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       expect(connection.hasAuthRefreshRetryScheduled, isTrue);
       await expectStillUsable(connection);
     });
@@ -314,11 +380,11 @@ void main() {
       // Never opened — nothing to hand the token to. The next handshake
       // reads a current token anyway, so this is a no-op, not a logout.
       expect(await connection.updateAuthToken('token-2'), isFalse);
-      expect(connection.activeAuthToken, isNull);
+      expect(connection.hasActiveAuthToken, isFalse);
 
       // The connection is still perfectly openable afterwards.
       await connection.ensureReady();
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       await expectStillUsable(connection);
     });
 
@@ -332,9 +398,44 @@ void main() {
       await _settle();
 
       expect(server.refreshTokens, isEmpty);
-      expect(connection.activeAuthToken, 'token-1');
+      expect(connection.holdsAuthToken('token-1'), isTrue);
       expect(connection.hasAuthRefreshRetryScheduled, isTrue);
       await expectStillUsable(connection);
+    });
+
+    test('a token source that never answers cannot silence the socket',
+        () async {
+      // The regression this guards: an unbounded Supabase refresh would
+      // leave the fetch guard raised forever, so every later attempt would
+      // return at the guard, no retry would be armed, and the socket would
+      // keep the expired token for its whole life.
+      final Completer<String?> never = Completer<String?>();
+      addTearDown(() {
+        if (!never.isCompleted) never.complete(null);
+      });
+      final connection = connect(
+        freshTokenProvider: () => never.future,
+        fetchTimeout: const Duration(milliseconds: 150),
+      );
+      addTearDown(connection.dispose);
+      await connection.ensureReady();
+
+      server.push(<String, dynamic>{
+        'type': 'auth_refresh_needed',
+        'expires_at': 4102444800,
+      });
+      await _settle(400);
+
+      // Timed out, treated as "no token this time", retry armed.
+      expect(server.refreshTokens, isEmpty);
+      expect(connection.holdsAuthToken('token-1'), isTrue);
+      expect(connection.hasAuthRefreshRetryScheduled, isTrue);
+      await expectStillUsable(connection);
+
+      // And the guard is down again: the very next handover works.
+      expect(await connection.updateAuthToken('token-2'), isTrue);
+      await _settle();
+      expect(connection.holdsAuthToken('token-2'), isTrue);
     });
 
     test('a disposed connection refuses a handover instead of throwing',
