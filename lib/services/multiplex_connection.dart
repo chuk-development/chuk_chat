@@ -47,12 +47,32 @@ class MultiplexConnection {
   MultiplexConnection({
     required this.accessTokenProvider,
     required this.baseUrl,
-  });
+    Future<String?> Function()? freshTokenProvider,
+    this.authRefreshReplyTimeout = const Duration(seconds: 15),
+    this.authRefreshRetryDelay = const Duration(seconds: 30),
+  }) : freshTokenProvider = freshTokenProvider ?? accessTokenProvider;
 
   /// Called to fetch a fresh Supabase access token at handshake time. May
   /// return null when the user is signed out — in which case [ensureReady]
   /// rejects with a [MultiplexException].
   final Future<String?> Function() accessTokenProvider;
+
+  /// Called when the socket needs a *newly minted* token mid-connection —
+  /// i.e. after the server sent `auth_refresh_needed`, or when an earlier
+  /// `auth_refresh` did not land. Unlike [accessTokenProvider] this should
+  /// force a token refresh rather than return the cached (possibly expiring)
+  /// one. Defaults to [accessTokenProvider].
+  ///
+  /// It must never sign the user out: returning null simply means "no token
+  /// right now", and the connection retries later with the session intact.
+  final Future<String?> Function() freshTokenProvider;
+
+  /// How long to wait for `auth_refreshed` / `auth_refresh_failed` before
+  /// treating the server as silent and arming a retry.
+  final Duration authRefreshReplyTimeout;
+
+  /// Delay before a failed/silent/impossible token handover is retried.
+  final Duration authRefreshRetryDelay;
 
   /// HTTP base URL (`https://api.chuk.chat` etc). Will be transparently
   /// rewritten to `wss://api.chuk.chat/v2/ws`.
@@ -90,6 +110,45 @@ class MultiplexConnection {
       <String, Completer<Map<String, dynamic>>>{};
 
   bool _disposed = false;
+
+  /// The access token the server is believed to hold for this socket. Set
+  /// at handshake time and updated only once the server confirms a handover
+  /// with `auth_refreshed` — a refused handover leaves the previous token in
+  /// place, exactly as the server does.
+  String? _activeAuthToken;
+
+  /// Token written to the wire in an `auth_refresh` frame whose reply has
+  /// not arrived yet. `auth_refresh` carries no `req_id`, so at most one
+  /// handover is in flight at a time.
+  String? _inFlightAuthToken;
+
+  Timer? _authRefreshReplyTimer;
+  Timer? _authRefreshRetryTimer;
+  bool _authRefreshFetchInFlight = false;
+
+  /// Consecutive retries armed without a confirmed handover. Bounds the
+  /// retry loop so a permanently refusing server cannot turn into a frame
+  /// storm. Reset by a confirmed handover or by a token the app hands in.
+  int _authRefreshRetries = 0;
+  static const int _maxAuthRefreshRetries = 5;
+
+  /// Number of `auth_refresh_failed` replies seen since the last confirmed
+  /// handover. Diagnostics only — a refusal never signs anyone out.
+  int _authRefreshFailures = 0;
+
+  /// Token the server currently holds, or null before the handshake.
+  String? get activeAuthToken => _activeAuthToken;
+
+  /// True while an `auth_refresh` frame is awaiting its reply.
+  bool get hasPendingAuthRefresh => _inFlightAuthToken != null;
+
+  /// True while a later retry of the token handover is armed.
+  bool get hasAuthRefreshRetryScheduled =>
+      _authRefreshRetryTimer?.isActive ?? false;
+
+  /// How many times the server refused a token handover since the last
+  /// confirmed one.
+  int get authRefreshFailures => _authRefreshFailures;
 
   /// Establish (or reuse) the connection and perform the auth handshake.
   /// Idempotent — concurrent callers share one in-flight handshake.
@@ -227,11 +286,204 @@ class MultiplexConnection {
       rethrow;
     }
 
+    // The handshake identity the server now holds. A later `auth_refresh`
+    // only replaces it once the server confirms with `auth_refreshed`.
+    _activeAuthToken = token;
+    _inFlightAuthToken = null;
+    _authRefreshReplyTimer?.cancel();
+    _authRefreshReplyTimer = null;
+    _authRefreshRetryTimer?.cancel();
+    _authRefreshRetryTimer = null;
+    _authRefreshRetries = 0;
+    _authRefreshFailures = 0;
+
     _startHeartbeat();
 
     if (kDebugMode) {
       debugPrint('🔌 [Multiplex] /v2/ws ready');
     }
+  }
+
+  // ---------------------------------------------------------------------
+  // Mid-connection token handover (`auth_refresh`).
+  //
+  // The server authenticates a `/v2/ws` socket once, at the handshake, and
+  // reuses that identity for every request on it. When the Supabase access
+  // token behind that identity ages out the server starts failing per-user
+  // reads (`PGRST303 JWT expired`) even though the socket is fine. These
+  // frames hand it a fresh token without reconnecting:
+  //
+  //   -> {"type":"auth_refresh","token":"<fresh access token>"}
+  //   <- {"type":"auth_refreshed","expires_at":<unix>}
+  //   <- {"type":"auth_refresh_failed","detail":"<reason>"}
+  //   <- {"type":"auth_refresh_needed","expires_at":<unix>}
+  //
+  // None of them carry a `req_id`. `auth_refresh_needed` is a hint, never a
+  // refusal — the request that triggered it is still served.
+  //
+  // NOTHING in this section may sign the user out, clear the local session
+  // or surface an auth error to the UI. Every failure mode — no token, dead
+  // socket, silent server, explicit refusal — ends in "keep the session,
+  // try again later".
+  // ---------------------------------------------------------------------
+
+  /// Hand a freshly obtained access token to the already-open socket.
+  ///
+  /// Returns true when the frame reached the wire (or when the server
+  /// already holds this exact token). Never throws, and a false result is
+  /// not an auth failure: the session stays, and a retry is armed where a
+  /// retry can help.
+  Future<bool> updateAuthToken(String? token) async {
+    if (_disposed) return false;
+
+    if (token == null || token.isEmpty) {
+      // No token to hand over right now. Keep the session and try later.
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] no token for auth_refresh — retrying later');
+      }
+      _scheduleAuthRefreshRetry();
+      return false;
+    }
+
+    // A token the app hands in is a fresh chance — give the retry loop a
+    // new budget.
+    _authRefreshRetries = 0;
+
+    if (token == _activeAuthToken && _inFlightAuthToken == null) {
+      // The server already authenticates this socket with this token.
+      return true;
+    }
+    if (token == _inFlightAuthToken) {
+      // Same token already on the wire, reply outstanding.
+      return true;
+    }
+
+    final ch = _channel;
+    if (ch == null) {
+      // No live socket. The next handshake reads the token from
+      // [accessTokenProvider], so there is nothing to repair here.
+      return false;
+    }
+
+    try {
+      ch.sink.add(jsonEncode({'type': 'auth_refresh', 'token': token}));
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] auth_refresh send failed: $e');
+      }
+      _scheduleAuthRefreshRetry();
+      return false;
+    }
+
+    _inFlightAuthToken = token;
+    _authRefreshReplyTimer?.cancel();
+    _authRefreshReplyTimer = Timer(authRefreshReplyTimeout, () {
+      _authRefreshReplyTimer = null;
+      if (_inFlightAuthToken == null) return;
+      // Server never answered. Keep the session and the previous token,
+      // and try the handover again later.
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] auth_refresh got no reply — retrying later');
+      }
+      _inFlightAuthToken = null;
+      _scheduleAuthRefreshRetry();
+    });
+    return true;
+  }
+
+  void _onAuthRefreshed(Map<String, dynamic> data) {
+    _authRefreshReplyTimer?.cancel();
+    _authRefreshReplyTimer = null;
+    _authRefreshRetryTimer?.cancel();
+    _authRefreshRetryTimer = null;
+    _authRefreshRetries = 0;
+    _authRefreshFailures = 0;
+    final accepted = _inFlightAuthToken;
+    if (accepted != null) _activeAuthToken = accepted;
+    _inFlightAuthToken = null;
+    if (kDebugMode) {
+      debugPrint(
+        '🔑 [Multiplex] auth_refreshed (expires_at=${data['expires_at']})',
+      );
+    }
+  }
+
+  void _onAuthRefreshFailed(Map<String, dynamic> data) {
+    _authRefreshReplyTimer?.cancel();
+    _authRefreshReplyTimer = null;
+    // The server keeps the socket open and keeps the previous token, so we
+    // mirror that: the pending handover is dropped, nothing else changes.
+    _inFlightAuthToken = null;
+    _authRefreshFailures++;
+    if (kDebugMode) {
+      debugPrint(
+        '🔑 [Multiplex] auth_refresh_failed: ${data['detail']} — '
+        'keeping session, retrying later',
+      );
+    }
+    _scheduleAuthRefreshRetry();
+  }
+
+  void _onAuthRefreshNeeded(Map<String, dynamic> data) {
+    if (kDebugMode) {
+      debugPrint(
+        '🔑 [Multiplex] auth_refresh_needed '
+        '(expires_at=${data['expires_at']}) — fetching a fresh token',
+      );
+    }
+    unawaited(_refreshAuthNow());
+  }
+
+  /// Obtain a fresh token and hand it over now. Best-effort and silent:
+  /// no path here can fail the user's session.
+  Future<void> _refreshAuthNow() async {
+    if (_disposed) return;
+    if (_authRefreshFetchInFlight) return;
+    if (_inFlightAuthToken != null) return;
+
+    _authRefreshFetchInFlight = true;
+    try {
+      String? token;
+      try {
+        token = await freshTokenProvider();
+      } catch (e) {
+        if (kDebugMode) {
+          debugPrint('🔑 [Multiplex] fresh token lookup failed: $e');
+        }
+        token = null;
+      }
+      if (_disposed) return;
+      if (token == null || token.isEmpty || token == _activeAuthToken) {
+        // Nothing newer to offer yet — keep the session, try again later.
+        _scheduleAuthRefreshRetry();
+        return;
+      }
+      await updateAuthToken(token);
+    } finally {
+      _authRefreshFetchInFlight = false;
+    }
+  }
+
+  void _scheduleAuthRefreshRetry() {
+    if (_disposed) return;
+    if (_authRefreshRetryTimer?.isActive ?? false) return;
+    if (_authRefreshRetries >= _maxAuthRefreshRetries) {
+      // Stop the loop, but never the session. A later `auth_refresh_needed`
+      // or a token handed in by the app re-arms it.
+      return;
+    }
+    _authRefreshRetries++;
+    _authRefreshRetryTimer = Timer(authRefreshRetryDelay, () {
+      _authRefreshRetryTimer = null;
+      unawaited(_refreshAuthNow());
+    });
+  }
+
+  void _cancelAuthRefreshTimers() {
+    _authRefreshReplyTimer?.cancel();
+    _authRefreshReplyTimer = null;
+    _authRefreshRetryTimer?.cancel();
+    _authRefreshRetryTimer = null;
   }
 
   /// Time since the last server frame arrived, or null if the socket has
@@ -288,6 +540,20 @@ class MultiplexConnection {
 
     final type = data['type'];
     if (type == 'pong') return;
+
+    // Connection-scoped frames. These carry no `req_id`, so they must be
+    // handled before the per-request routing below drops them.
+    switch (type) {
+      case 'auth_refreshed':
+        _onAuthRefreshed(data);
+        return;
+      case 'auth_refresh_failed':
+        _onAuthRefreshFailed(data);
+        return;
+      case 'auth_refresh_needed':
+        _onAuthRefreshNeeded(data);
+        return;
+    }
 
     final reqId = data['req_id'];
     if (reqId is! String || reqId.isEmpty) return;
@@ -610,6 +876,13 @@ class MultiplexConnection {
 
     _pingTimer?.cancel();
     _pingTimer = null;
+    _cancelAuthRefreshTimers();
+    // The next handshake carries a token from [accessTokenProvider], so the
+    // socket-scoped identity starts over. This is bookkeeping only — the
+    // user's session is untouched.
+    _activeAuthToken = null;
+    _inFlightAuthToken = null;
+    _authRefreshRetries = 0;
     unawaited(_channelSubscription?.cancel());
     _channelSubscription = null;
     try {
@@ -622,6 +895,7 @@ class MultiplexConnection {
   Future<void> _teardown() async {
     _pingTimer?.cancel();
     _pingTimer = null;
+    _cancelAuthRefreshTimers();
     await _channelSubscription?.cancel();
     _channelSubscription = null;
     try {
