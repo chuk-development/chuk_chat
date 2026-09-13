@@ -201,12 +201,22 @@ def test_handle_room_create_is_idempotent():
     assert len(store.get("room:1").members) == 1
 
 
-def test_handle_room_create_skips_members_over_the_cap():
+def test_handle_room_create_takes_every_member_the_app_sends():
     store = RoomStore()
+    service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
+    members = [{"agent_id": f"id-{i}", "handle": f"h{i}"} for i in range(30)]
+    service.handle_room_create("room:1", "big", members)
+    assert len(store.get("room:1").members) == 30
+
+
+def test_handle_room_create_still_honours_a_capped_room():
+    """A room whose stored caps carry a ceiling keeps it: the extra members are
+    skipped and the room stays usable."""
+    store = RoomStore()
+    store.create_room(name="big", room_id="room:1", caps=RoomCaps(max_members=6))
     service = RoomService(room_store=store, binding=RoomBinding(), emit=lambda f: None)
     members = [{"agent_id": f"id-{i}", "handle": f"h{i}"} for i in range(8)]
     service.handle_room_create("room:1", "big", members)
-    # Six taken, the rest skipped; the room is still valid.
     assert len(store.get("room:1").members) == 6
 
 
@@ -328,13 +338,23 @@ def test_add_and_remove_member_via_dispatch():
     assert [m.handle for m in store.get("r1").members] == ["amber", "jade"]
 
 
-def test_add_member_over_the_cap_is_ignored():
+def test_add_member_over_a_configured_cap_is_ignored():
     service, store, _ = _service_capturing()
+    store.create_room(name="x", room_id="r1", caps=RoomCaps(max_members=6))
     service.handle_room_create("r1", "x", [
         {"agent_id": f"id{i}", "handle": f"h{i}"} for i in range(6)
     ])
     service.handle_room_add_member("r1", "id6", "h6")  # 7th -> ignored
     assert len(store.get("r1").members) == 6
+
+
+def test_add_member_past_six_is_fine_in_an_uncapped_room():
+    service, store, _ = _service_capturing()
+    service.handle_room_create("r1", "x", [
+        {"agent_id": f"id{i}", "handle": f"h{i}"} for i in range(6)
+    ])
+    service.handle_room_add_member("r1", "id6", "h6")
+    assert len(store.get("r1").members) == 7
 
 
 def test_handle_room_create_reconciles_membership_on_re_send():
@@ -367,3 +387,132 @@ def test_handle_room_create_re_send_with_same_members_is_a_no_op():
     service.handle_room_create("r1", "launch", members)  # re-open
     room = store.get("r1")
     assert [m.handle for m in room.members] == ["amber", "cobalt"]
+
+
+# -- the agent-to-agent policy (cowork-zurf) -------------------------------
+
+
+def test_room_create_defaults_the_policy_to_on():
+    from chuk_agents_host import dispatch_room_frame
+
+    service, store, _ = _service_capturing()
+    # An app that predates the policy sends no key at all.
+    dispatch_room_frame(service, {
+        "type": "room_create",
+        "room_id": "r1",
+        "name": "launch",
+        "members": [{"agent_id": "id-amber", "handle": "amber"}],
+    })
+    assert store.get("r1").agent_to_agent is True
+
+
+def test_room_create_stores_the_policy_when_it_is_off():
+    from chuk_agents_host import dispatch_room_frame
+
+    service, store, _ = _service_capturing()
+    dispatch_room_frame(service, {
+        "type": "room_create",
+        "room_id": "r1",
+        "name": "launch",
+        "agent_to_agent": False,
+        "members": [{"agent_id": "id-amber", "handle": "amber"}],
+    })
+    assert store.get("r1").agent_to_agent is False
+
+
+def test_room_create_reconciles_the_policy_on_reopen():
+    from chuk_agents_host import dispatch_room_frame
+
+    service, store, _ = _service_capturing()
+    dispatch_room_frame(service, {
+        "type": "room_create", "room_id": "r1", "name": "launch", "members": [],
+    })
+    dispatch_room_frame(service, {
+        "type": "room_create",
+        "room_id": "r1",
+        "name": "launch",
+        "agent_to_agent": False,
+        "members": [{"agent_id": "id-amber", "handle": "amber"}],
+    })
+    room = store.get("r1")
+    assert room.agent_to_agent is False
+    assert room.handles == ("amber",)  # the rest of the reconcile still happened
+
+
+def test_room_set_agent_to_agent_reaches_the_store():
+    from chuk_agents_host import dispatch_room_frame
+
+    service, store, _ = _service_capturing()
+    dispatch_room_frame(service, {
+        "type": "room_create", "room_id": "r1", "name": "launch", "members": [],
+    })
+    dispatch_room_frame(
+        service,
+        {"type": "room_set_agent_to_agent", "room_id": "r1", "enabled": False},
+    )
+    assert store.get("r1").agent_to_agent is False
+    dispatch_room_frame(
+        service,
+        {"type": "room_set_agent_to_agent", "room_id": "r1", "enabled": True},
+    )
+    assert store.get("r1").agent_to_agent is True
+
+
+def test_room_set_agent_to_agent_ignores_an_unknown_room_or_a_bad_flag():
+    from chuk_agents_host import dispatch_room_frame
+
+    service, store, frames = _service_capturing()
+    dispatch_room_frame(
+        service,
+        {"type": "room_set_agent_to_agent", "room_id": "ghost", "enabled": False},
+    )
+    dispatch_room_frame(service, {
+        "type": "room_create", "room_id": "r1", "name": "launch", "members": [],
+    })
+    # A non-bool 'enabled' is a client bug: dropped, the room left alone.
+    dispatch_room_frame(
+        service,
+        {"type": "room_set_agent_to_agent", "room_id": "r1", "enabled": "nope"},
+    )
+    assert store.get("r1").agent_to_agent is True
+    assert frames == []
+
+
+def test_a_user_driven_room_runs_exactly_one_round():
+    store = RoomStore()
+    room = store.create_room(name="launch", agent_to_agent=False)
+    for h in ("amber", "cobalt"):
+        store.add_member(room.room_id, f"id-{h}", h)
+    binding = RoomBinding()
+    binding.register("id-amber", lambda p: "over to you @cobalt")
+    binding.register("id-cobalt", lambda p: "and back @amber")
+
+    frames = []
+    service = RoomService(room_store=store, binding=binding, emit=frames.append)
+    service.handle_room_task(room.room_id, "everyone weigh in")
+
+    turns = [f for f in frames if f["type"] == "room_turn"]
+    assert [t["handle"] for t in turns] == ["amber", "cobalt"]
+    assert all(t["round"] == 1 for t in turns)
+    done = frames[-1]
+    assert done["reason"] == "agent_to_agent_off"
+    assert done["messages_sent"] == 2
+
+
+def test_a_wide_room_gives_every_member_a_turn():
+    handles = [f"a{i}" for i in range(25)]
+    store = RoomStore()
+    room = store.create_room(name="all-hands")
+    for h in handles:
+        store.add_member(room.room_id, f"id-{h}", h)
+    binding = RoomBinding()
+    for h in handles:
+        binding.register(f"id-{h}", lambda p, h=h: f"{h} here")
+
+    frames = []
+    service = RoomService(room_store=store, binding=binding, emit=frames.append)
+    service.handle_room_task(room.room_id, "everyone weigh in")
+
+    turns = [f for f in frames if f["type"] == "room_turn"]
+    assert [t["handle"] for t in turns] == handles
+    assert frames[-1]["reason"] == "no_more_mentions"

@@ -79,7 +79,11 @@ class RoomService:
         self._members_ready = members_ready
 
     def handle_room_create(
-        self, room_id: str, name: str, members: list[dict]
+        self,
+        room_id: str,
+        name: str,
+        members: list[dict],
+        agent_to_agent: bool = True,
     ) -> None:
         """Create or reconcile an app-built room on the host so ``room_task`` can
         find it (§16.1). The app owns room identity and membership, and re-sends
@@ -90,7 +94,12 @@ class RoomService:
         what repairs a membership edit (or a rename) the app made while the host
         was offline: the next open brings the host back in step. A member the
         room cannot take (over the cap, a bad row) is skipped; the rest of the
-        room stays usable."""
+        room stays usable.
+
+        ``agent_to_agent`` is the room's policy — may a coworker's reply pull
+        another coworker in. It defaults to ``True``, so an app that predates the
+        policy keeps creating the rooms it always did, and it is reconciled like
+        the name, because the app owns room state."""
         wanted = [
             (m["agent_id"], m["handle"])
             for m in members
@@ -101,10 +110,14 @@ class RoomService:
 
         existing = self._rooms.get(room_id)
         if existing is None:
-            self._rooms.create_room(name=name, room_id=room_id)
+            self._rooms.create_room(
+                name=name, room_id=room_id, agent_to_agent=agent_to_agent
+            )
         else:
             if existing.name != name:
                 self._rooms.rename_room(room_id, name)
+            if existing.agent_to_agent != agent_to_agent:
+                self._rooms.set_agent_to_agent(room_id, agent_to_agent)
             wanted_ids = {agent_id for agent_id, _ in wanted}
             # Remove members the app no longer has.
             for member in existing.members:
@@ -153,6 +166,17 @@ class RoomService:
         the host simply does not have it yet (it syncs on the next create)."""
         if self._rooms.get(room_id) is not None:
             self._rooms.rename_room(room_id, name)
+
+    def handle_room_set_agent_to_agent(self, room_id: str, enabled: bool) -> None:
+        """Switch a room between coworkers-may-summon-each-other and
+        user-driven (§16.1). A no-op on an unknown room — the host does not have
+        it yet and the next ``room_create`` carries the policy with it."""
+        if self._rooms.get(room_id) is None:
+            return
+        try:
+            self._rooms.set_agent_to_agent(room_id, enabled)
+        except RoomError:
+            return
 
     def handle_room_delete(self, room_id: str) -> None:
         """Forget a room: drop it from the store and clear its transcript, so a
@@ -253,10 +277,14 @@ def dispatch_room_frame(service: RoomService, payload: dict) -> None:
     if kind == "room_create":
         name = payload.get("name")
         members = payload.get("members")
+        # A missing (or null, or non-bool) key means the permissive default, so
+        # an app that predates the policy keeps creating the rooms it always did.
+        a2a = payload.get("agent_to_agent")
         service.handle_room_create(
             room_id,
             name if isinstance(name, str) else "",
             members if isinstance(members, list) else [],
+            a2a if isinstance(a2a, bool) else True,
         )
     elif kind == "room_task":
         message = payload.get("message")
@@ -274,6 +302,10 @@ def dispatch_room_frame(service: RoomService, payload: dict) -> None:
         name = payload.get("name")
         if isinstance(name, str) and name.strip():
             service.handle_room_rename(room_id, name)
+    elif kind == "room_set_agent_to_agent":
+        enabled = payload.get("enabled")
+        if isinstance(enabled, bool):
+            service.handle_room_set_agent_to_agent(room_id, enabled)
     elif kind == "room_delete":
         service.handle_room_delete(room_id)
     elif kind == "room_history_request":

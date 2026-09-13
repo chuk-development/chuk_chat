@@ -5,8 +5,10 @@
 /// host is what actually runs a room — so this in-memory source is deliberately
 /// not persisted. It exists so the create-room flow has somewhere to put a new
 /// room and the UI has something to list, until the host serves rooms of its
-/// own. It never invents a room, and it enforces the six-member cap defensively
-/// so a bad draft cannot smuggle in a seventh member.
+/// own. It never invents a room. There is no member ceiling — a room takes as
+/// many coworkers as the roster holds — but the floor still holds: a room needs
+/// a name and at least two distinct members, and one that drops below two is
+/// deleted.
 library;
 
 import 'dart:math';
@@ -24,8 +26,13 @@ abstract class RoomSource extends ChangeNotifier {
   /// Renames a room. A no-op for an unknown id or an empty/blank name.
   void renameRoom(String id, String name);
 
-  /// Adds a member to a room. A no-op for an unknown room, a full room
-  /// ([kRoomMaxMembers]), or a duplicate agent/handle.
+  /// Sets the room's "coworkers may reply to each other" policy
+  /// (`agent_to_agent`). A no-op for an unknown id; notifies on a real change.
+  /// The host is told separately — this only moves the app's own copy.
+  void setAgentToAgent(String roomId, bool enabled);
+
+  /// Adds a member to a room. A no-op for an unknown room or a duplicate
+  /// agent/handle. There is no member ceiling.
   void addMemberToRoom(String roomId, AgentsRoomMember member);
 
   /// Removes a member from a room. A room that drops below two members is
@@ -39,9 +46,9 @@ abstract class RoomSource extends ChangeNotifier {
   List<String> removeAgentFromRooms(String agentId);
 
   /// Creates a room from a draft, assigning an id. Throws [ArgumentError] if the
-  /// draft breaks a rule (fewer than two members, more than [kRoomMaxMembers],
-  /// a duplicate handle or agent) — the same rules the host enforces, checked
-  /// here so a broken room never reaches it.
+  /// draft breaks a rule (no name, fewer than two members, a duplicate handle or
+  /// agent) — the same rules the host enforces, checked here so a broken room
+  /// never reaches it. There is no upper bound on the member count.
   AgentsRoom addRoom(AgentsRoomDraft draft);
 
   void removeRoom(String id);
@@ -83,13 +90,6 @@ class LocalRoomSource extends RoomSource {
         'a room needs at least two members',
       );
     }
-    if (members.length > kRoomMaxMembers) {
-      throw ArgumentError.value(
-        members.length,
-        'members',
-        'a room holds at most $kRoomMaxMembers members',
-      );
-    }
     final handles = members.map((m) => m.handle).toSet();
     if (handles.length != members.length) {
       throw ArgumentError('two members share a handle');
@@ -102,6 +102,7 @@ class LocalRoomSource extends RoomSource {
       id: 'room:${_random.nextInt(1 << 32)}',
       name: name,
       members: List<AgentsRoomMember>.unmodifiable(members),
+      agentToAgent: draft.agentToAgent,
     );
     _rooms.add(room);
     notifyListeners();
@@ -119,6 +120,17 @@ class LocalRoomSource extends RoomSource {
         notifyListeners();
         return;
       }
+    }
+  }
+
+  @override
+  void setAgentToAgent(String roomId, bool enabled) {
+    for (var i = 0; i < _rooms.length; i++) {
+      if (_rooms[i].id != roomId) continue;
+      if (_rooms[i].agentToAgent == enabled) return;
+      _rooms[i] = _rooms[i].copyWith(agentToAgent: enabled);
+      notifyListeners();
+      return;
     }
   }
 
@@ -152,7 +164,6 @@ class LocalRoomSource extends RoomSource {
     for (var i = 0; i < _rooms.length; i++) {
       final room = _rooms[i];
       if (room.id != roomId) continue;
-      if (room.members.length >= kRoomMaxMembers) return;
       if (room.members.any(
         (m) => m.agentId == member.agentId || m.handle == member.handle,
       )) {

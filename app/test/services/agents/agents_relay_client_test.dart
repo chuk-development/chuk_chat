@@ -1877,4 +1877,81 @@ void main() {
 
     await client.dispose();
   });
+
+  // --- room policy: agent_to_agent (bead cowork-h46g) ------------------------
+
+  test('createRoom leaves agent_to_agent off the frame when it is on',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.createRoom('room-1', 'launch', const <Map<String, String>>[
+      <String, String>{'agent_id': 'a', 'handle': 'amber'},
+      <String, String>{'agent_id': 'b', 'handle': 'cobalt'},
+    ]);
+    await settle();
+
+    final frame = host.received.singleWhere((m) => m['type'] == 'room_create');
+    expect(frame['room_id'], 'room-1');
+    expect(frame['name'], 'launch');
+    // The key rides only when the policy is OFF, so a host that never heard of
+    // it sees exactly the frame it has always seen.
+    expect(frame.containsKey('agent_to_agent'), isFalse);
+
+    await client.dispose();
+  });
+
+  test('createRoom carries agent_to_agent:false when the room turned it off',
+      () async {
+    final (client, host, _) = await paired();
+
+    await client.createRoom(
+      'room-2',
+      'quiet',
+      const <Map<String, String>>[
+        <String, String>{'agent_id': 'a', 'handle': 'amber'},
+        <String, String>{'agent_id': 'b', 'handle': 'cobalt'},
+      ],
+      agentToAgent: false,
+    );
+    await settle();
+
+    final frame = host.received.singleWhere((m) => m['type'] == 'room_create');
+    expect(frame['agent_to_agent'], false);
+
+    await client.dispose();
+  });
+
+  test('setRoomAgentToAgent seals the room_set_agent_to_agent frame', () async {
+    final (client, host, _) = await paired();
+
+    await client.setRoomAgentToAgent('room-3', false);
+    await client.setRoomAgentToAgent('room-3', true);
+    await settle();
+
+    final frames = host.received
+        .where((m) => m['type'] == 'room_set_agent_to_agent')
+        .toList();
+    expect(frames, hasLength(2));
+    expect(frames.first['room_id'], 'room-3');
+    expect(frames.first['enabled'], false);
+    expect(frames.last['enabled'], true);
+
+    await client.dispose();
+  });
+
+  test('a room frame carries as many members as the room has', () async {
+    // There is no member ceiling any more; the frame must not quietly cut one.
+    final (client, host, _) = await paired();
+
+    await client.createRoom('room-4', 'all hands', <Map<String, String>>[
+      for (var i = 0; i < 12; i++)
+        <String, String>{'agent_id': 'id$i', 'handle': 'h$i'},
+    ]);
+    await settle();
+
+    final frame = host.received.singleWhere((m) => m['type'] == 'room_create');
+    expect((frame['members'] as List<dynamic>), hasLength(12));
+
+    await client.dispose();
+  });
 }

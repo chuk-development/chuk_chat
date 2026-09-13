@@ -567,6 +567,7 @@ mixin AgentsShellHost on State<MessengerShell> {
               for (final m in room.members)
                 <String, String>{'agent_id': m.agentId, 'handle': m.handle},
             ],
+            agentToAgent: room.agentToAgent,
           );
           Navigator.of(sheetContext).pop();
         },
@@ -598,6 +599,10 @@ mixin AgentsShellHost on State<MessengerShell> {
                   roomId: room.id,
                   roomName: room.name,
                   members: room.members,
+                  // The roster only supplies the display name and role the
+                  // mention picker shows. A member with no matching agent still
+                  // gets a row, labelled by its handle.
+                  agents: _roster.agents,
                   userMessage: 'Message the room to start.',
                   inbound: controller.inbound,
                   // Re-bind to the new socket on a reconnect: the page follows
@@ -623,10 +628,15 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// while the host was offline, so the host has it before any task or history
   /// request lands. Then ask for its stored history.
   void _onRoomOpened(AgentsRelayController controller, AgentsRoom room) {
-    controller.createRoom(room.id, room.name, <Map<String, String>>[
-      for (final m in room.members)
-        <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-    ]);
+    controller.createRoom(
+      room.id,
+      room.name,
+      <Map<String, String>>[
+        for (final m in room.members)
+          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+      ],
+      agentToAgent: room.agentToAgent,
+    );
     controller.requestRoomHistory(room.id);
   }
 
@@ -655,6 +665,12 @@ mixin AgentsShellHost on State<MessengerShell> {
               member.agentId,
               member.handle,
             );
+            Navigator.of(sheetContext).pop();
+            showSheet(ctx); // reopen with the updated room
+          },
+          onAgentToAgentChanged: (enabled) {
+            _rooms.setAgentToAgent(roomId, enabled);
+            _controller.value?.setRoomAgentToAgent(roomId, enabled);
             Navigator.of(sheetContext).pop();
             showSheet(ctx); // reopen with the updated room
           },

@@ -111,8 +111,12 @@ class FakeRelayController implements AgentsRelayController {
   Future<void> createRoom(
     String roomId,
     String name,
-    List<Map<String, String>> members,
-  ) async {}
+    List<Map<String, String>> members, {
+    bool agentToAgent = true,
+  }) async {}
+
+  @override
+  Future<void> setRoomAgentToAgent(String roomId, bool enabled) async {}
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async {}

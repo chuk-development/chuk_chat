@@ -105,13 +105,23 @@ class _FakeRelayController implements AgentsRelayController {
 
   final List<(String, String)> roomTasks = <(String, String)>[];
   final List<String> createdRooms = <String>[];
+  final List<bool> createdRoomPolicies = <bool>[];
+  final List<(String, bool)> agentToAgentSets = <(String, bool)>[];
 
   @override
   Future<void> createRoom(
     String roomId,
     String name,
-    List<Map<String, String>> members,
-  ) async => createdRooms.add(roomId);
+    List<Map<String, String>> members, {
+    bool agentToAgent = true,
+  }) async {
+    createdRooms.add(roomId);
+    createdRoomPolicies.add(agentToAgent);
+  }
+
+  @override
+  Future<void> setRoomAgentToAgent(String roomId, bool enabled) async =>
+      agentToAgentSets.add((roomId, enabled));
 
   @override
   Future<void> sendRoomTask(String roomId, String message) async =>

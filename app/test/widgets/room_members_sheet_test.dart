@@ -13,14 +13,20 @@ AgentsRoomMember _m(String id, String h) =>
 AgentsAgent _agent(String id, String name) =>
     AgentsAgent(id: id, name: name, threads: const <AgentsThreadInfo>[]);
 
-AgentsRoom _room(List<AgentsRoomMember> members) =>
-    AgentsRoom(id: 'r1', name: 'launch', members: members);
+AgentsRoom _room(List<AgentsRoomMember> members, {bool agentToAgent = true}) =>
+    AgentsRoom(
+      id: 'r1',
+      name: 'launch',
+      members: members,
+      agentToAgent: agentToAgent,
+    );
 
 void main() {
   Future<(List<AgentsRoomMember>, List<String>)> pump(
     WidgetTester tester, {
     required AgentsRoom room,
     required List<AgentsAgent> candidates,
+    List<bool>? policyFlips,
   }) async {
     final added = <AgentsRoomMember>[];
     final removed = <String>[];
@@ -32,6 +38,7 @@ void main() {
             candidates: candidates,
             onAdd: added.add,
             onRemove: removed.add,
+            onAgentToAgentChanged: policyFlips?.add,
           ),
         ),
       ),
@@ -49,7 +56,7 @@ void main() {
     expect(find.text('@amber'), findsOneWidget);
     expect(find.text('@cobalt'), findsOneWidget);
     expect(find.text('onyx'), findsOneWidget);
-    expect(find.text('3/6'), findsOneWidget);
+    expect(find.text('3 members'), findsOneWidget);
   });
 
   testWidgets('adding a candidate fires onAdd with the member', (tester) async {
@@ -89,17 +96,79 @@ void main() {
     expect(buttons.every((b) => b.onPressed == null), isTrue);
   });
 
-  testWidgets('add is disabled when the room is full', (tester) async {
-    await pump(
+  testWidgets('a twelve-member room still offers Add: there is no ceiling', (
+    tester,
+  ) async {
+    // A tall window so the Add row is on screen without scrolling.
+    tester.view.physicalSize = const Size(400, 2000);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final (added, _) = await pump(
       tester,
-      room: _room([for (var i = 0; i < 6; i++) _m('id$i', 'h$i')]),
+      room: _room([for (var i = 0; i < 12; i++) _m('id$i', 'h$i')]),
       candidates: [_agent('x', 'extra')],
     );
-    expect(find.text('6/6'), findsOneWidget);
+    expect(find.text('12 members'), findsOneWidget);
     final add = tester.widget<IconButton>(
       find.widgetWithIcon(IconButton, Icons.add_circle_outline),
     );
-    expect(add.onPressed, isNull);
+    expect(add.onPressed, isNotNull);
+
+    await tester.tap(findIcon(Icons.add_circle_outline));
+    expect(added.single.agentId, 'x');
+  });
+
+  testWidgets('the switch reflects the room and reports a flip', (
+    tester,
+  ) async {
+    final flips = <bool>[];
+    await pump(
+      tester,
+      room: _room([_m('a', 'amber'), _m('b', 'cobalt')]),
+      candidates: const [],
+      policyFlips: flips,
+    );
+    expect(find.text('Coworkers can reply to each other'), findsOneWidget);
+    expect(find.text('With this off, they only answer you.'), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+
+    await tester.tap(find.text('Coworkers can reply to each other'));
+    await tester.pumpAndSettle();
+    // The sheet is a pure view: it reports the flip and waits to be rebuilt
+    // with the new room rather than flipping its own copy.
+    expect(flips, [false]);
+  });
+
+  testWidgets('a room with the policy off shows the switch off', (
+    tester,
+  ) async {
+    final flips = <bool>[];
+    await pump(
+      tester,
+      room: _room(
+        [_m('a', 'amber'), _m('b', 'cobalt')],
+        agentToAgent: false,
+      ),
+      candidates: const [],
+      policyFlips: flips,
+    );
+    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    await tester.tap(find.text('Coworkers can reply to each other'));
+    await tester.pumpAndSettle();
+    expect(flips, [true]);
+  });
+
+  testWidgets('with no callback the switch is inert, not hidden', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      room: _room([_m('a', 'amber'), _m('b', 'cobalt')]),
+      candidates: const [],
+    );
+    expect(find.byType(Switch), findsOneWidget);
+    expect(tester.widget<Switch>(find.byType(Switch)).onChanged, isNull);
   });
 
   testWidgets('a long member list scrolls under an open keyboard', (
