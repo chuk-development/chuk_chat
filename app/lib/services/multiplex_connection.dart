@@ -35,6 +35,10 @@ class MultiplexException implements Exception {
 /// 64-char protocol limit.
 String _newReqId() => _uuid.v4().replaceAll('-', '');
 
+/// Opens the underlying socket for a [MultiplexConnection]. Production uses
+/// the pinned connector; tests inject a fake.
+typedef MultiplexConnector = Future<WebSocketChannel> Function(Uri url);
+
 /// Multiplexed WebSocket client.
 ///
 /// One [MultiplexConnection] owns one WS. Open it lazily via
@@ -47,7 +51,11 @@ class MultiplexConnection {
   MultiplexConnection({
     required this.accessTokenProvider,
     required this.baseUrl,
-  });
+    this.onAuthRefreshNeeded,
+    Duration authRefreshTimeout = _defaultAuthRefreshTimeout,
+    MultiplexConnector? connect,
+  }) : _authRefreshTimeout = authRefreshTimeout,
+       _connect = connect ?? ws_connector.connectWebSocket;
 
   /// Called to fetch a fresh Supabase access token at handshake time. May
   /// return null when the user is signed out — in which case [ensureReady]
@@ -58,12 +66,32 @@ class MultiplexConnection {
   /// rewritten to `wss://api.chuk.chat/v2/ws`.
   final String baseUrl;
 
+  /// Called when the server sends `auth_refresh_needed`: the token this
+  /// socket authenticated with is inside the server's expiry window (300 s,
+  /// or already past). The frame is a hint, never a refusal — the request it
+  /// rode in on was served — so this is an invitation to mint a fresh token
+  /// and push it with [sendAuthRefresh], and never a reason to close the
+  /// socket, clear the session or show an auth error.
+  final Future<void> Function()? onAuthRefreshNeeded;
+
+  /// How the underlying socket is opened. Injectable so a test drives the
+  /// whole frame protocol without a network.
+  final MultiplexConnector _connect;
+
   /// Tunable timeouts. The handshake must complete inside
   /// [_authTimeout] or [ensureReady] gives up; idle [_pingInterval]
   /// keepalives keep NATs / LBs happy while the connection sits between
   /// chats.
   static const Duration _authTimeout = Duration(seconds: 15);
   static const Duration _pingInterval = Duration(seconds: 25);
+
+  /// How long an `auth_refresh` waits for its answer before the attempt is
+  /// forgotten. Nothing is torn down when it lapses — the socket keeps the
+  /// token it already has; the marker is dropped so the same token may be
+  /// offered again later.
+  static const Duration _defaultAuthRefreshTimeout = Duration(seconds: 15);
+
+  final Duration _authRefreshTimeout;
 
   WebSocketChannel? _channel;
   StreamSubscription<dynamic>? _channelSubscription;
@@ -90,6 +118,157 @@ class MultiplexConnection {
       <String, Completer<Map<String, dynamic>>>{};
 
   bool _disposed = false;
+
+  // --- connection-level auth (token handed to an already-open socket) -------
+  //
+  // `/v2/ws` authenticates once, at the handshake, and that identity used to
+  // serve the whole connection. A socket the user left open outlived its
+  // access token, and the next read came back `JWT expired` — the user was
+  // told he had spent credits he still had. The server now takes a fresh
+  // token on an open socket; these four frames are that conversation:
+  //
+  //   out: {"type":"auth_refresh","token":"<fresh access token>"}
+  //   in:  {"type":"auth_refreshed","expires_at":<unix>}
+  //   in:  {"type":"auth_refresh_failed","detail":"<reason>"}
+  //   in:  {"type":"auth_refresh_needed","expires_at":<unix>}
+  //
+  // None of them carries a `req_id`, none of them is ordered against
+  // in-flight requests, and NONE of them is an error the user ever sees. A
+  // refusal leaves the socket open on its existing token: the server never
+  // answers `auth_error` and never closes for this, so the client must never
+  // read a refusal as "signed out".
+
+  /// The access token this socket is believed to hold: the one the handshake
+  /// used, later the one the server confirmed with `auth_refreshed`.
+  String? _authToken;
+
+  /// True once `auth_ok` has arrived. An `auth_refresh` before that would
+  /// reach the server ahead of the `auth` frame it amends, so a token minted
+  /// while the handshake is still in flight waits: the handshake itself is
+  /// already carrying the newest token the app had when it started.
+  bool _authenticated = false;
+
+  /// The token of an `auth_refresh` that is still unanswered.
+  String? _pendingAuthToken;
+  Timer? _pendingAuthTimer;
+
+  /// True while [onAuthRefreshNeeded] is running, so a burst of hints (one
+  /// per token, but several sockets and several requests can race) asks the
+  /// app to refresh once, not once per frame.
+  bool _authRefreshInFlight = false;
+
+  /// When the token the socket holds expires, per the server's last
+  /// `auth_refreshed` or `auth_refresh_needed`. Null until the server says.
+  int? authExpiresAt;
+
+  /// Why the server refused the last `auth_refresh`. Diagnostic only: a
+  /// refusal means "try again later" and nothing else.
+  String? lastAuthRefreshFailure;
+
+  /// Frame counters, for tests and logs.
+  int authRefreshSent = 0;
+  int authRefreshAccepted = 0;
+  int authRefreshRefused = 0;
+  int authRefreshNeeded = 0;
+
+  /// The token this socket currently authenticates with. Test/diagnostic seam.
+  String? get authToken => _authToken;
+
+  /// Hand a freshly minted access token to this already-open socket.
+  ///
+  /// Best-effort by design, and it never throws: no socket, a dead sink, a
+  /// server that refuses, a server that never answers — every one of them
+  /// leaves the connection on the token it already has and the local session
+  /// untouched. Returns true only when the frame actually went out.
+  ///
+  /// A token the socket already carries (or is already asking about) is not
+  /// re-sent; the call is then a cheap no-op, which is what lets callers push
+  /// on every opportunity without counting.
+  bool sendAuthRefresh(String token) {
+    if (_disposed || token.isEmpty || !_authenticated) return false;
+    if (token == _authToken || token == _pendingAuthToken) return false;
+    final ch = _channel;
+    if (ch == null) return false;
+    try {
+      ch.sink.add(jsonEncode({'type': 'auth_refresh', 'token': token}));
+    } catch (_) {
+      // Sink already dead. The next ensureReady() opens a fresh socket and
+      // authenticates with the current token anyway.
+      return false;
+    }
+    authRefreshSent++;
+    _pendingAuthToken = token;
+    _pendingAuthTimer?.cancel();
+    _pendingAuthTimer = Timer(_authRefreshTimeout, () {
+      _pendingAuthTimer = null;
+      // No answer came. Forget the attempt — the socket keeps the token it
+      // has, and the same token may be offered again later.
+      _pendingAuthToken = null;
+    });
+    return true;
+  }
+
+  /// Route one of the three connection-level auth frames.
+  void _onAuthFrame(String type, Map<String, dynamic> data) {
+    final expires = data['expires_at'];
+    if (type == 'auth_refreshed') {
+      if (expires is num) authExpiresAt = expires.toInt();
+      final accepted = _pendingAuthToken;
+      _clearPendingAuth();
+      if (accepted != null) _authToken = accepted;
+      lastAuthRefreshFailure = null;
+      authRefreshAccepted++;
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] token refreshed on the open socket');
+      }
+      return;
+    }
+    if (type == 'auth_refresh_failed') {
+      // "Try again later", and nothing more. The connection keeps serving on
+      // its existing token, so there is nothing to tear down and nothing to
+      // tell the user — least of all that they are signed out.
+      lastAuthRefreshFailure = data['detail']?.toString() ?? 'unknown';
+      _clearPendingAuth();
+      authRefreshRefused++;
+      if (kDebugMode) {
+        debugPrint(
+          '🔑 [Multiplex] auth_refresh refused ($lastAuthRefreshFailure) — '
+          'keeping the socket and the session',
+        );
+      }
+      return;
+    }
+    // auth_refresh_needed: the server asked first.
+    if (expires is num) authExpiresAt = expires.toInt();
+    authRefreshNeeded++;
+    _requestAuthRefresh();
+  }
+
+  void _clearPendingAuth() {
+    _pendingAuthTimer?.cancel();
+    _pendingAuthTimer = null;
+    _pendingAuthToken = null;
+  }
+
+  /// Ask the app for a fresh token now, rather than waiting for the refresh
+  /// scheduler's next tick. Failures are swallowed: the server served the
+  /// request that carried the hint, so there is nothing to recover from.
+  void _requestAuthRefresh() {
+    final ask = onAuthRefreshNeeded;
+    if (ask == null || _disposed || _authRefreshInFlight) return;
+    _authRefreshInFlight = true;
+    unawaited(
+      Future<void>(() async {
+        try {
+          await ask();
+        } catch (_) {
+          // Never a reason to touch the session.
+        } finally {
+          _authRefreshInFlight = false;
+        }
+      }),
+    );
+  }
 
   /// Establish (or reuse) the connection and perform the auth handshake.
   /// Idempotent — concurrent callers share one in-flight handshake.
@@ -119,9 +298,7 @@ class MultiplexConnection {
 
     WebSocketChannel channel;
     try {
-      channel = await ws_connector
-          .connectWebSocket(wsUrl)
-          .timeout(_authTimeout);
+      channel = await _connect(wsUrl).timeout(_authTimeout);
       await channel.ready.timeout(_authTimeout);
     } on TimeoutException {
       throw MultiplexException(
@@ -204,7 +381,10 @@ class MultiplexConnection {
       cancelOnError: true,
     );
 
-    // Push the auth frame.
+    // Push the auth frame. This is the identity the socket carries until an
+    // accepted `auth_refresh` replaces it.
+    _authToken = token;
+    _clearPendingAuth();
     channel.sink.add(jsonEncode({'type': 'auth', 'token': token}));
 
     authTimer = Timer(_authTimeout, () {
@@ -227,6 +407,7 @@ class MultiplexConnection {
       rethrow;
     }
 
+    _authenticated = true;
     _startHeartbeat();
 
     if (kDebugMode) {
@@ -288,6 +469,15 @@ class MultiplexConnection {
 
     final type = data['type'];
     if (type == 'pong') return;
+
+    // Connection-level auth frames carry no `req_id` and belong to nobody's
+    // request. They must be read before the `req_id` gate below drops them.
+    if (type == 'auth_refreshed' ||
+        type == 'auth_refresh_failed' ||
+        type == 'auth_refresh_needed') {
+      _onAuthFrame(type as String, data);
+      return;
+    }
 
     final reqId = data['req_id'];
     if (reqId is! String || reqId.isEmpty) return;
@@ -611,6 +801,9 @@ class MultiplexConnection {
 
     _pingTimer?.cancel();
     _pingTimer = null;
+    _clearPendingAuth();
+    _authToken = null;
+    _authenticated = false;
     unawaited(_channelSubscription?.cancel());
     _channelSubscription = null;
     try {
@@ -623,6 +816,11 @@ class MultiplexConnection {
   Future<void> _teardown() async {
     _pingTimer?.cancel();
     _pingTimer = null;
+    // The socket is going: an unanswered `auth_refresh` belongs to it, and
+    // the next handshake authenticates with the current token from scratch.
+    _clearPendingAuth();
+    _authToken = null;
+    _authenticated = false;
     await _channelSubscription?.cancel();
     _channelSubscription = null;
     try {
