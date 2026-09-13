@@ -25,7 +25,11 @@ import 'package:chuk_chat/services/account_session.dart';
 ///  4. a successful refresh goes through gotrue, so `tokenRefreshed` fires
 ///     and the relay client re-provisions the host as before (cowork-c91);
 ///  5. a rejected refresh never costs the local session while the access
-///     token is valid ([SupabaseAccountSession.refresh] restores it).
+///     token is valid ([SupabaseAccountSession.refresh] restores it);
+///  6. every minted token is announced to the registered [addTokenSink]s, so
+///     a connection that authenticated once at its handshake — the `/v2/ws`
+///     socket — is handed the new token instead of serving the rest of its
+///     life with a dead one.
 class SessionRefreshScheduler with WidgetsBindingObserver {
   SessionRefreshScheduler({
     AccountSessionSource source = const SupabaseAccountSession(),
@@ -33,11 +37,13 @@ class SessionRefreshScheduler with WidgetsBindingObserver {
     Duration tick = defaultTick,
     Duration headroom = SupabaseAccountSession.refreshHeadroom,
     Duration reconnectGrace = defaultReconnectGrace,
+    Duration sinkGrace = defaultSinkGrace,
   }) : _source = source,
        _now = now ?? DateTime.now,
        _tick = tick,
        _headroom = headroom,
-       _reconnectGrace = reconnectGrace;
+       _reconnectGrace = reconnectGrace,
+       _sinkGrace = sinkGrace;
 
   /// The app-wide scheduler, started by `SupabaseService.initialize`.
   static final SessionRefreshScheduler instance = SessionRefreshScheduler();
@@ -45,11 +51,17 @@ class SessionRefreshScheduler with WidgetsBindingObserver {
   static const Duration defaultTick = Duration(seconds: 30);
   static const Duration defaultReconnectGrace = Duration(seconds: 10);
 
+  /// How long one token sink may take before the announcement moves on. A
+  /// sink writes one frame to a socket, so this is only a guard against a
+  /// hung transport holding up the next tick.
+  static const Duration defaultSinkGrace = Duration(seconds: 5);
+
   final AccountSessionSource _source;
   final DateTime Function() _now;
   final Duration _tick;
   final Duration _headroom;
   final Duration _reconnectGrace;
+  final Duration _sinkGrace;
 
   /// Whether the paired host is attached right now. Set by the relay client:
   /// true while paired, false while a pairing exists but the socket is down,
@@ -67,6 +79,47 @@ class SessionRefreshScheduler with WidgetsBindingObserver {
 
   /// Number of network refreshes this scheduler triggered (for tests/logs).
   int refreshes = 0;
+
+  /// Who has to learn about a freshly minted access token.
+  ///
+  /// A long-lived socket authenticates ONCE, at its handshake, and then keeps
+  /// that identity: refreshing here reaches every new HTTP call but nothing
+  /// that is already open. That is how an app left open all day ended up
+  /// asking a live socket a billing question with a dead token and being told
+  /// the credits were gone. So every mint is announced, and each holder of an
+  /// open connection hands the new token to its peer.
+  ///
+  /// Announcing is best-effort in the strongest sense: a sink that throws,
+  /// hangs or refuses changes nothing about the session. The user stays
+  /// signed in either way.
+  final List<Future<void> Function(String token)> _tokenSinks =
+      <Future<void> Function(String token)>[];
+
+  /// Registers [sink] for every future mint. Registering twice is a no-op.
+  void addTokenSink(Future<void> Function(String token) sink) {
+    if (_tokenSinks.contains(sink)) return;
+    _tokenSinks.add(sink);
+  }
+
+  /// Takes [sink] off the list.
+  void removeTokenSink(Future<void> Function(String token) sink) {
+    _tokenSinks.remove(sink);
+  }
+
+  /// Number of registered sinks (tests/logs).
+  int get tokenSinkCount => _tokenSinks.length;
+
+  Future<void> _announce(String token) async {
+    if (token.isEmpty || _tokenSinks.isEmpty) return;
+    for (final sink in List.of(_tokenSinks)) {
+      try {
+        await sink(token).timeout(_sinkGrace);
+      } catch (_) {
+        // A transport that will not take the token keeps its old one. That
+        // is a "try again later", never a reason to disturb the session.
+      }
+    }
+  }
 
   bool get isRunning => _timer != null;
 
@@ -125,14 +178,21 @@ class SessionRefreshScheduler with WidgetsBindingObserver {
           }
           final after = _source.current();
           if (after != null && after.accessToken != current.accessToken) {
-            return true; // adopted the host's pair; nothing to spend
+            // Adopted the host's pair; nothing to spend. The open sockets
+            // still carry the old token, so they hear about this one too.
+            await _announce(after.accessToken);
+            return true;
           }
         }
       }
 
       refreshes++;
       final refreshed = await _source.refresh();
-      return refreshed != null && refreshed.accessToken != current.accessToken;
+      if (refreshed == null || refreshed.accessToken == current.accessToken) {
+        return false;
+      }
+      await _announce(refreshed.accessToken);
+      return true;
     } finally {
       _busy = false;
     }

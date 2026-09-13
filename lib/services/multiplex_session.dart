@@ -21,6 +21,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/session_refresh_scheduler.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Default grace period before tearing down the WS after the last chat
@@ -67,6 +68,7 @@ class MultiplexSession {
   /// reuses the existing socket; the per-request `chat_id` lives in the
   /// chat payload, not in the transport.
   static Future<void> openForChat(String chatId) async {
+    _registerTokenSink();
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = chatId;
@@ -93,6 +95,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
+      onAuthRefreshNeeded: refreshTokenForServer,
     );
 
     try {
@@ -121,6 +124,7 @@ class MultiplexSession {
   /// scheduled to idle-close so a prewarm that's never used doesn't leak a
   /// permanently-open connection.
   static Future<void> prewarm() async {
+    _registerTokenSink();
     final existing = _current;
     if (existing != null) {
       // A socket that hasn't heard from the server in a while was probably
@@ -156,6 +160,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
+      onAuthRefreshNeeded: refreshTokenForServer,
     );
     try {
       await connection.ensureReady();
@@ -405,6 +410,71 @@ class MultiplexSession {
   static Future<String?> _tokenProvider() async {
     final session = SupabaseService.auth.currentSession;
     return session?.accessToken;
+  }
+
+  // --- keeping the open socket's token alive --------------------------------
+
+  static bool _tokenSinkRegistered = false;
+
+  /// Subscribe to the app's token mints, once, from the two places that open
+  /// a connection. Done from this side so the scheduler keeps knowing nothing
+  /// about transports.
+  static void _registerTokenSink() {
+    if (_tokenSinkRegistered) return;
+    _tokenSinkRegistered = true;
+    SessionRefreshScheduler.instance.addTokenSink(pushAccessToken);
+  }
+
+  /// Hand a freshly minted access token to the live `/v2/ws` socket.
+  ///
+  /// The socket authenticated once, at its handshake, and keeps that identity
+  /// for the whole connection — which is how an app left open long enough
+  /// asked a live socket a billing question with an expired token and was
+  /// told the credits were spent. This replaces the identity in place.
+  ///
+  /// Never throws and never reports: no socket, a dead sink, a server that
+  /// refuses or stays silent all leave the connection on the token it has and
+  /// the local session exactly as it was.
+  static Future<void> pushAccessToken(String token) async {
+    if (token.isEmpty) return;
+    final connection = _current;
+    if (connection == null) return;
+    try {
+      connection.sendAuthRefresh(token);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] auth_refresh not sent: $e');
+      }
+    }
+  }
+
+  /// The server said the socket's token is nearly dead
+  /// (`auth_refresh_needed`). Ask for a refresh right now instead of waiting
+  /// for the scheduler's next tick, then push whatever token the app holds —
+  /// the push is a no-op when the socket already carries it.
+  ///
+  /// Whether a NEW token is actually minted stays the scheduler's decision:
+  /// the Supabase refresh token is single-use and shared with the paired host
+  /// (see [SessionRefreshScheduler]), so this asks, it does not force. The
+  /// server's frame is a hint and the request that carried it was served, so
+  /// there is nothing here to recover from and nothing to surface.
+  static Future<void> refreshTokenForServer() async {
+    try {
+      await SessionRefreshScheduler.instance.refreshIfDue();
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] refresh on server hint failed: $e');
+      }
+    }
+    String? token;
+    try {
+      token = SupabaseService.auth.currentSession?.accessToken;
+    } catch (_) {
+      token = null; // Supabase not initialised (tests, early startup).
+    }
+    if (token != null && token.isNotEmpty) {
+      await pushAccessToken(token);
+    }
   }
 }
 
