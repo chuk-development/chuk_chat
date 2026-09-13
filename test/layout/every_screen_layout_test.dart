@@ -301,9 +301,31 @@ List<_Screen> _screens() => <_Screen>[
       seed: _roster(),
     );
     bag.keep(source, source.dispose);
+    // Rooms are rows in this same list, so the sweep measures them here: one
+    // small room and one crowded one, whose stacked faces still have to hold a
+    // single coworker face's footprint.
+    final LocalRoomSource rooms = LocalRoomSource();
+    bag.keep(rooms, rooms.dispose);
+    rooms.addRoom(AgentsRoomDraft(
+      name: 'Launch week war room',
+      members: <AgentsRoomMember>[
+        _member('a', 'amber'),
+        _member('b', 'cobalt'),
+        _member('c', 'jade'),
+        _member('d', 'onyx'),
+        _member('e', 'saffron'),
+      ],
+    ));
+    rooms.addRoom(AgentsRoomDraft(
+      name: 'ops',
+      members: <AgentsRoomMember>[_member('a', 'amber'), _member('b', 'cobalt')],
+    ));
     return _hosted(
       MobileAgentList(
         source: source,
+        rooms: rooms,
+        onOpenRoom: (_) {},
+        onCreateRoom: () {},
         onSelect: (_, _) {},
         selectedAgentId: 'amber',
         accountLabel: 'chuk@example.com',
