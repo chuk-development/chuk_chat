@@ -50,6 +50,16 @@ class MultiplexSession {
   /// `PGRST303 JWT expired`.
   static StreamSubscription<AuthState>? _authSubscription;
 
+  /// Raised *before* `listen()` is called, not after it returns.
+  ///
+  /// `Supabase.auth.onAuthStateChange` emits its initial event
+  /// synchronously on subscribe, so the handler can run while `listen()` is
+  /// still on the stack and `_authSubscription` is still null. Guarding on
+  /// the subscription alone would let anything reached from that handler —
+  /// or a second `prewarm` / `openForChat` in the same turn — arm a second
+  /// subscription, which would then deliver every token twice.
+  static bool _authBridgeArmed = false;
+
   /// Per-chatId tracker for the in-flight chat stream. Lets
   /// [chatForChat] cancel a previous stream before opening a new one so
   /// only one chat completion is ever writing into a given chat's UI
@@ -243,6 +253,7 @@ class MultiplexSession {
   static Future<void> shutdown() async {
     unawaited(_authSubscription?.cancel());
     _authSubscription = null;
+    _authBridgeArmed = false;
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = null;
@@ -454,7 +465,8 @@ class MultiplexSession {
   /// is not initialised yet the bridge simply is not armed, and the next
   /// handshake still picks up a current token.
   static void _ensureAuthBridge() {
-    if (_authSubscription != null) return;
+    if (_authBridgeArmed) return;
+    _authBridgeArmed = true;
     try {
       _authSubscription = SupabaseService.auth.onAuthStateChange.listen(
         (AuthState state) {
@@ -471,6 +483,9 @@ class MultiplexSession {
         },
       );
     } catch (e) {
+      // Supabase is not up yet. Lower the flag so a later call retries;
+      // the next handshake reads a current token regardless.
+      _authBridgeArmed = false;
       if (kDebugMode) {
         debugPrint('⚠️ [MultiplexSession] auth bridge not armed: $e');
       }

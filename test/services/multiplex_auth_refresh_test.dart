@@ -45,11 +45,23 @@ class _FakeMultiplexServer {
   /// How to answer an `auth_refresh`. Default: accept it.
   void Function(WebSocket socket, String token) onAuthRefresh =
       (WebSocket socket, String token) {
-    socket.add(jsonEncode(<String, dynamic>{
+    _send(socket, <String, dynamic>{
       'type': 'auth_refreshed',
       'expires_at': 4102444800,
-    }));
+    });
   };
+
+  /// Write a frame, tolerating a socket the test has already torn down.
+  /// A frame can still be in flight when `stop()` closes the socket; the
+  /// resulting "StreamSink is closed" would otherwise fail the test with an
+  /// error that has nothing to do with what it was checking.
+  static void _send(WebSocket socket, Map<String, dynamic> frame) {
+    try {
+      socket.add(jsonEncode(frame));
+    } catch (_) {
+      // Teardown only.
+    }
+  }
 
   static Future<_FakeMultiplexServer> start() async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -88,21 +100,21 @@ class _FakeMultiplexServer {
     switch (decoded['type']) {
       case 'auth':
         handshakeToken = decoded['token'] as String?;
-        socket.add(jsonEncode(<String, dynamic>{'type': 'auth_ok'}));
+        _send(socket, <String, dynamic>{'type': 'auth_ok'});
         break;
       case 'ping':
-        socket.add(jsonEncode(<String, dynamic>{'type': 'pong'}));
+        _send(socket, <String, dynamic>{'type': 'pong'});
         break;
       case 'auth_refresh':
         refreshTokens.add(decoded['token'] as String? ?? '');
         onAuthRefresh(socket, decoded['token'] as String? ?? '');
         break;
       case 'tool':
-        socket.add(jsonEncode(<String, dynamic>{
+        _send(socket, <String, dynamic>{
           'req_id': decoded['req_id'],
           'kind': 'result',
           'data': <String, dynamic>{'ok': true},
-        }));
+        });
         break;
       default:
         break;
@@ -110,7 +122,10 @@ class _FakeMultiplexServer {
   }
 
   /// Push an unsolicited server frame, e.g. `auth_refresh_needed`.
-  void push(Map<String, dynamic> frame) => _socket?.add(jsonEncode(frame));
+  void push(Map<String, dynamic> frame) {
+    final socket = _socket;
+    if (socket != null) _send(socket, frame);
+  }
 
   /// Answer a handover that [onAuthRefresh] deliberately left unanswered.
   void acceptPendingRefresh() => push(<String, dynamic>{
@@ -270,6 +285,107 @@ void main() {
       expect(connection.hasQueuedAuthRefresh, isFalse);
       expect(connection.hasPendingAuthRefresh, isFalse);
       expect(connection.hasActiveAuthToken, isFalse);
+    });
+
+    test('a second trigger during a slow fetch reuses the one provider call',
+        () async {
+      // Regression: Future.timeout stops waiting, it does not stop the
+      // provider. With a guard that fell when the waiter gave up, the retry
+      // below started a SECOND Supabase refresh while the first was still
+      // running — and the refresh token is single-use and shared with the
+      // paired host, so overlapping refreshes are what sign people out.
+      int providerCalls = 0;
+      final Completer<String?> slow = Completer<String?>();
+      addTearDown(() {
+        if (!slow.isCompleted) slow.complete(null);
+      });
+
+      final connection = connect(
+        freshTokenProvider: () {
+          providerCalls++;
+          return slow.future;
+        },
+        fetchTimeout: const Duration(milliseconds: 200),
+        retryDelay: const Duration(milliseconds: 150),
+      );
+      addTearDown(connection.dispose);
+      await connection.ensureReady();
+
+      server.push(<String, dynamic>{
+        'type': 'auth_refresh_needed',
+        'expires_at': 4102444800,
+      });
+
+      // First attempt gives up at 200ms and arms a retry, which fires at
+      // 350ms and must attach to the run still in progress.
+      await _settle(400);
+      expect(providerCalls, 1);
+
+      // The shared run settles while the second attempt is still waiting,
+      // so that attempt uses the result.
+      slow.complete('token-2');
+      await _settle(300);
+
+      expect(providerCalls, 1);
+      expect(server.refreshTokens, <String>['token-2']);
+      expect(connection.holdsAuthToken('token-2'), isTrue);
+      await expectStillUsable(connection);
+    });
+
+    test('a late event for the active token cannot displace a queued token',
+        () async {
+      // Regression: the fast path used to be skipped while a handover was
+      // in flight, so a replayed event for the token already in force fell
+      // through, overwrote the newer queued token, and the socket reverted.
+      server.onAuthRefresh = (WebSocket socket, String token) {
+        // Withhold the reply so a queue can build behind it.
+      };
+      final connection = connect();
+      addTearDown(connection.dispose);
+      await connection.ensureReady();
+
+      expect(await connection.updateAuthToken('token-2'), isTrue);
+      await _settle();
+      expect(await connection.updateAuthToken('token-3'), isTrue);
+      expect(connection.hasQueuedAuthRefresh, isTrue);
+
+      // onAuthStateChange replays the session it had when the event was
+      // queued — here, the token the socket is already authenticated with.
+      expect(await connection.updateAuthToken('token-1'), isTrue);
+      await _settle();
+
+      // token-1 neither went on the wire nor evicted token-3.
+      expect(server.refreshTokens, <String>['token-2']);
+      expect(connection.hasQueuedAuthRefresh, isTrue);
+
+      // Settle the handover: the queue must release token-3, not token-1.
+      server.acceptPendingRefresh();
+      await _settle(200);
+      expect(server.refreshTokens, <String>['token-2', 'token-3']);
+
+      server.acceptPendingRefresh();
+      await _settle(200);
+      expect(connection.holdsAuthToken('token-3'), isTrue);
+      expect(connection.holdsAuthToken('token-1'), isFalse);
+    });
+
+    test('a token the socket has already moved past is never re-sent',
+        () async {
+      final connection = connect();
+      addTearDown(connection.dispose);
+      await connection.ensureReady();
+
+      expect(await connection.updateAuthToken('token-2'), isTrue);
+      await _settle();
+      expect(connection.holdsAuthToken('token-2'), isTrue);
+
+      // A duplicate event for the previous session arrives late.
+      expect(await connection.updateAuthToken('token-1'), isTrue);
+      await _settle();
+
+      expect(server.refreshTokens, <String>['token-2']);
+      expect(connection.holdsAuthToken('token-2'), isTrue);
+      await expectStillUsable(connection);
     });
 
     test('auth_refresh frames do not disturb an in-flight request', () async {
