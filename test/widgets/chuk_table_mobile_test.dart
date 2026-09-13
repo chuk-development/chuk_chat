@@ -1,15 +1,24 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 
-/// Bead cowork-8vqt: a table wider than a phone column used to become a
-/// sideways-scrolling grid with 160-pixel columns. The right-hand columns sat
-/// off screen and nothing said they were there, so the answer read as broken.
-/// Narrow now means stacked: one card per row, every field labelled.
+import 'charts/chart_test_support.dart';
+
+/// Bead cowork-8vqt, then the redesign that followed it.
+///
+/// A table wider than a phone column used to become a sideways-scrolling grid
+/// with the right-hand columns off screen. The first answer was one card per
+/// row, every field labelled — which fit, and read as a stack of forms: no two
+/// rows lined up, so the one thing a table is for was impossible, and two rows
+/// filled a phone.
+///
+/// It is a table again now: the header once, a row on one line, every column
+/// on the same x in every row.
 ParsedTable _prices() => ParsedTable(
   header: const ['Modell', 'Offizieller Shop', 'Amazon.de'],
   rows: const [
@@ -21,7 +30,25 @@ ParsedTable _prices() => ParsedTable(
     ],
     ['Active 3 Premium (Nachfolger)', '–', '~128,60–144,18 €'],
   ],
-  alignments: const [TextAlign.left, TextAlign.left, TextAlign.left],
+  alignments: const [TextAlign.left, TextAlign.right, TextAlign.left],
+);
+
+/// Seven columns: more than a phone can honestly hold.
+ParsedTable _wide() => ParsedTable(
+  header: const ['Land', 'Gold', 'Silber', 'Bronze', 'Gesamt', 'Sportler', 'Quote'],
+  rows: const [
+    ['Deutschland', '12', '9', '14', '35', '412', '8,5 %'],
+    ['Frankreich', '16', '26', '22', '64', '573', '11,2 %'],
+  ],
+  alignments: const [
+    TextAlign.left,
+    TextAlign.right,
+    TextAlign.right,
+    TextAlign.right,
+    TextAlign.right,
+    TextAlign.right,
+    TextAlign.right,
+  ],
 );
 
 Widget _wrap(Widget child, double width) => MaterialApp(
@@ -32,101 +59,157 @@ Widget _wrap(Widget child, double width) => MaterialApp(
   ),
 );
 
+ChukTable _table(ParsedTable table, {ValueChanged<String>? onTapLink}) =>
+    ChukTable(
+      table: table,
+      textColor: Colors.black,
+      accentColor: Colors.green,
+      onTapLink: onTapLink,
+    );
+
+/// The left edge of the first Text painting [text].
+double _leftOf(WidgetTester tester, String text) =>
+    tester.getTopLeft(find.text(text).first).dx;
+
 void main() {
+  // Real glyphs, not the square test font: a layout assertion about what fits
+  // in a column is meaningless against a font where every letter is a box.
+  setUpAll(loadChartFonts);
+
   _linkTests();
   _copyControlTests();
 
-  testWidgets('a wide table stacks on a phone instead of scrolling sideways', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _wrap(
-        ChukTable(
-          table: _prices(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
-        ),
-        360,
-      ),
-    );
+  testWidgets('the header is printed once, not on every row', (tester) async {
+    await tester.pumpWidget(_wrap(_table(_prices()), 360));
     await tester.pump();
 
-    // No grid, and nothing to pan: every value is in the column.
-    expect(find.byType(Table), findsNothing);
-    expect(
-      find.byType(SingleChildScrollView),
-      findsOneWidget,
-    ); // the test's own
-    // Each header past the first labels its field, once per row.
-    expect(find.text('Offizieller Shop'), findsNWidgets(3));
-    expect(find.text('Amazon.de'), findsNWidgets(3));
-    // The value that used to be off the right edge is on screen.
-    expect(find.textContaining('nur noch über Drittanbieter'), findsOneWidget);
+    for (final String label in <String>[
+      'Modell',
+      'Offizieller Shop',
+      'Amazon.de',
+    ]) {
+      // Once. A label under every value is the noise a header removes.
+      expect(find.text(label), findsOneWidget, reason: label);
+    }
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('an empty cell contributes no field', (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        ChukTable(
-          table: ParsedTable(
-            header: const ['Modell', 'Shop', 'Amazon'],
-            rows: const [
-              [
-                'Active 3 Premium (Nachfolger)',
-                '',
-                'nur noch über Drittanbieter, kein reguläres Angebot',
-              ],
-            ],
-            alignments: const [TextAlign.left, TextAlign.left, TextAlign.left],
-          ),
-          textColor: Colors.black,
-          accentColor: Colors.green,
-        ),
-        360,
-      ),
-    );
-    await tester.pump();
-    expect(find.text('Shop'), findsNothing);
-    expect(find.text('Amazon'), findsOneWidget);
-  });
-
-  testWidgets('a narrow table that fits still renders as a grid', (
+  testWidgets('the same column lands on the same x in every row', (
     tester,
   ) async {
+    await tester.pumpWidget(_wrap(_table(_prices()), 360));
+    await tester.pump();
+
+    // The whole point of the format: run the eye down a column.
+    expect(
+      _leftOf(tester, 'Active 2 (Standard)'),
+      moreOrLessEquals(_leftOf(tester, 'Active 3 Premium (Nachfolger)'),
+          epsilon: 0.5),
+    );
+    expect(
+      _leftOf(tester, 'ab ~74,77 €'),
+      moreOrLessEquals(_leftOf(tester, '~128,60–144,18 €'), epsilon: 0.5),
+    );
+  });
+
+  testWidgets('a row is one line, so three rows are not a screenful', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_table(_prices()), 360));
+    await tester.pump();
+
+    // Header, three rows, rules and the copy button, at a chat font size.
+    expect(tester.getSize(find.byType(ChukTable)).height, lessThan(220));
+  });
+
+  testWidgets('a number never ellipsises, whatever else has to', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_table(_prices()), 360));
+    await tester.pump();
+
+    // A right-aligned column is a number column, and "129,9…" reads as a
+    // price and is not one.
+    expect(find.text('99,90 €'), findsOneWidget);
+    final RenderParagraph price = tester.renderObject<RenderParagraph>(
+      find.text('99,90 €'),
+    );
+    expect(price.didExceedMaxLines, isFalse);
+  });
+
+  testWidgets('a table that fits does not pan', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        ChukTable(
-          table: ParsedTable(
+        _table(
+          ParsedTable(
             header: const ['A', 'B'],
             rows: const [
               ['1', '2'],
             ],
             alignments: const [TextAlign.left, TextAlign.right],
           ),
-          textColor: Colors.black,
-          accentColor: Colors.green,
         ),
         360,
       ),
     );
     await tester.pump();
-    expect(find.byType(Table), findsOneWidget);
+    expect(find.byType(Scrollbar), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a wide layout keeps the scrolling grid', (tester) async {
+  testWidgets('a wide window fits the columns instead of panning', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_table(_prices()), 900));
+    await tester.pump();
+    expect(find.byType(Scrollbar), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('too many columns pan, with the first one pinned', (
+    tester,
+  ) async {
+    await tester.pumpWidget(_wrap(_table(_wide()), 360));
+    await tester.pump();
+
+    // It says it pans: a scrollbar that stays on screen.
+    expect(find.byType(Scrollbar), findsOneWidget);
+    // And the subject stands still — it is outside the scroller.
+    expect(
+      find.descendant(
+        of: find.byType(Scrollbar),
+        matching: find.text('Deutschland'),
+      ),
+      findsNothing,
+    );
+    expect(find.text('Deutschland'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('an empty cell draws nothing and takes no room', (tester) async {
     await tester.pumpWidget(
       _wrap(
-        ChukTable(
-          table: _prices(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
+        _table(
+          ParsedTable(
+            header: const ['Modell', 'Shop', 'Amazon'],
+            rows: const [
+              ['Active 3', '', 'nur über Drittanbieter'],
+              ['Active 2', '99,90 €', 'ab 74,77 €'],
+            ],
+            alignments: const [
+              TextAlign.left,
+              TextAlign.left,
+              TextAlign.left,
+            ],
+          ),
         ),
-        900,
+        360,
       ),
     );
     await tester.pump();
-    expect(find.byType(Table), findsOneWidget);
+    // The column name still shows — once, in the header.
+    expect(find.text('Shop'), findsOneWidget);
+    expect(find.text('99,90 €'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }
@@ -182,27 +265,105 @@ void _linkTests() {
     expect(opened, 'https://de.amazfit.com/products/active-2');
   });
 
-  testWidgets('with no handler a link still reads as one', (tester) async {
+  testWidgets('with no handler a link is not drawn as one', (tester) async {
+    await tester.pumpWidget(_wrap(_table(withLink()), 360));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.textContaining('Amazfit-Shop'), findsOneWidget);
+
+    // A link nothing can open is not a link. It reads as the plain text it
+    // behaves like, rather than promising a tap that does nothing.
+    TextSpan? span;
+    void walk(InlineSpan s) {
+      if (s is TextSpan) {
+        if (s.text == 'Amazfit-Shop') span = s;
+        for (final InlineSpan child in s.children ?? const <InlineSpan>[]) {
+          walk(child);
+        }
+      }
+    }
+
+    for (final Element element in find.byType(Text).evaluate()) {
+      final InlineSpan? text = (element.widget as Text).textSpan;
+      if (text != null) walk(text);
+    }
+    expect(span, isNotNull);
+    expect(span!.recognizer, isNull);
+    expect(span!.style?.decoration, isNot(TextDecoration.underline));
+  });
+
+  // The coworker writes the reel URL and the Spotify search URL into every
+  // row. Labelled with their host, the whole column reads "open.spotify.com"
+  // three times over: the same string in every row, which is no information
+  // at all, taking a quarter of a phone's width. It becomes the action it is.
+  ParsedTable sameHost() => ParsedTable(
+    header: const ['Song', 'Spotify'],
+    rows: const [
+      ["I'm God", '[open.spotify.com](https://open.spotify.com/search/god)'],
+      ['Пыяла', '[open.spotify.com](https://open.spotify.com/search/pyyala)'],
+    ],
+    alignments: const [TextAlign.left, TextAlign.left],
+  );
+
+  testWidgets('a column of one repeated host becomes one arrow', (
+    tester,
+  ) async {
+    String? opened;
+    await tester.pumpWidget(
+      _wrap(_table(sameHost(), onTapLink: (String h) => opened = h), 360),
+    );
+    await tester.pump();
+
+    expect(find.text('open.spotify.com'), findsNothing);
+    // The header, printed once, is what says where the arrow goes.
+    expect(find.text('Spotify'), findsOneWidget);
+    final Finder arrows = find.byWidgetPredicate(
+      (Widget w) => w is HugeIcon && w.icon.name == 'arrow-up-right01',
+    );
+    expect(arrows, findsNWidgets(2));
+
+    // And it opens the URL of ITS row.
+    await tester.tap(arrows.last);
+    expect(opened, 'https://open.spotify.com/search/pyyala');
+  });
+
+  testWidgets('a label the document wrote survives, repeated or not', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       _wrap(
-        ChukTable(
-          table: withLink(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
+        _table(
+          ParsedTable(
+            header: const ['Song', 'Spotify'],
+            rows: const [
+              [
+                "I'm God",
+                '[Suche öffnen](https://open.spotify.com/search/god)',
+              ],
+              [
+                'Пыяла',
+                '[Suche öffnen](https://open.spotify.com/search/pyyala)',
+              ],
+            ],
+            alignments: const [TextAlign.left, TextAlign.left],
+          ),
+          onTapLink: (String h) {},
         ),
         360,
       ),
     );
     await tester.pump();
-    expect(tester.takeException(), isNull);
-    expect(find.textContaining('Amazfit-Shop'), findsOneWidget);
+
+    // The app collapses what the APP wrote (a bare host). What the coworker
+    // wrote is the coworker talking, and it is kept.
+    expect(find.textContaining('Suche'), findsNWidgets(2));
   });
 }
 
 // The copy control used to be a bare 15 px glyph with no container and no
 // label: under the card's bottom-right corner it read as a stray icon rather
 // than a button. It is now the app's own button family — a MorphTap at the
-// smallest labelled target height — flush with the card's right edge.
+// smallest labelled target height — flush with the table's right edge.
 void _copyControlTests() {
   ParsedTable small() => ParsedTable(
     header: const ['A', 'B'],
@@ -217,11 +378,7 @@ void _copyControlTests() {
   ) async {
     await tester.pumpWidget(
       _wrap(
-        ChukTable(
-          table: small(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
-        ),
+        _table(small()),
         360,
       ),
     );
@@ -254,26 +411,17 @@ void _copyControlTests() {
     // And it hangs below the table, never over it.
     expect(
       tester.getTopLeft(button).dy,
-      greaterThan(tester.getBottomLeft(find.byType(Table)).dy),
+      greaterThan(tester.getBottomLeft(find.text('2')).dy),
     );
   });
 
-  testWidgets('in the scrolling grid it clears the table and the scrollbar', (
+  testWidgets('in a panning table it clears the table and the scrollbar', (
     tester,
   ) async {
-    await tester.pumpWidget(
-      _wrap(
-        ChukTable(
-          table: _prices(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
-        ),
-        900,
-      ),
-    );
+    await tester.pumpWidget(_wrap(_table(_wide()), 360));
     await tester.pump();
 
-    // Wide enough to scroll sideways rather than stack.
+    // Too many columns for the lane, so the table pans.
     expect(find.byType(Scrollbar), findsOneWidget);
     final Finder button = find.ancestor(
       of: find.text('Copy'),
@@ -314,11 +462,7 @@ void _copyControlTests() {
 
     await tester.pumpWidget(
       _wrap(
-        ChukTable(
-          table: small(),
-          textColor: Colors.black,
-          accentColor: Colors.green,
-        ),
+        _table(small()),
         360,
       ),
     );

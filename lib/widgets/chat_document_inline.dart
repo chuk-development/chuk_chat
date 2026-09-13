@@ -37,15 +37,12 @@ import 'package:chuk_chat/widgets/chuk_table.dart';
 
 /// How much of a document the thread shows before it defers to the reader.
 ///
-/// Rows, not pixels, for a table and a chart: below 560 pixels [ChukTable]
-/// stacks a row into a card, so a pixel cut would slice a card in half. Pixels
-/// for prose, because a paragraph has no rows to count.
+/// Rows, not pixels, for a table and a chart: a table row is one line at every
+/// width now, so six of them are six lines and the count means the same thing
+/// on a phone as on a desktop. Pixels for prose, because a paragraph has no
+/// rows to count.
 const int kInlineDocumentRows = 6;
 
-/// The same cut for a table that had to stack into one card per row: a card
-/// carries every field of the row, so three of them say as much as six grid
-/// rows do and take a third of the thread.
-const int kInlineDocumentStackedRows = 3;
 const double kInlineDocumentProseHeight = 260;
 
 /// Whether [document] carries content the thread can draw.
@@ -387,51 +384,35 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
     switch (kind) {
       case 'table':
         final int total = documentRows(widget.document).length;
-        // How many rows fit depends on how the table is drawn. In a phone
-        // column [ChukTable] stacks each row into a labelled card — a card is
-        // a paragraph, so three of them are already a screenful, where three
-        // grid rows would be three lines.
-        body = LayoutBuilder(
-          builder: (BuildContext context, BoxConstraints constraints) {
-            final ParsedTable wide = documentParsedTable(
-              widget.document,
-              maxRows: kInlineDocumentRows,
-            );
-            final bool stacks = chukTableStacks(
-              wide,
-              maxWidth: constraints.maxWidth,
+        // A row is one line at every width, so the count is the count: six
+        // rows of the table, then the pill that opens the rest.
+        final bool cut = total > kInlineDocumentRows;
+        body = Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            ChukTable(
+              table: documentParsedTable(
+                widget.document,
+                maxRows: kInlineDocumentRows,
+              ),
+              textColor: scheme.onSurface,
+              accentColor: scheme.primary,
               fontSize: 13.5,
-            );
-            final int limit = stacks
-                ? kInlineDocumentStackedRows
-                : kInlineDocumentRows;
-            final bool cut = total > limit;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                ChukTable(
-                  table: cut
-                      ? documentParsedTable(widget.document, maxRows: limit)
-                      : wide,
-                  textColor: scheme.onSurface,
-                  accentColor: scheme.primary,
-                  fontSize: 13.5,
-                  onTapLink: (String href) => openDocumentLink(context, href),
+              surfaceColor: bubble.fill,
+              onTapLink: (String href) => openDocumentLink(context, href),
+            ),
+            if (cut) ...<Widget>[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _OpenAction(
+                  label: 'Open all $total rows',
+                  onTap: _open,
                 ),
-                if (cut) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: _OpenAction(
-                      label: 'Open all $total rows',
-                      onTap: _open,
-                    ),
-                  ),
-                ],
-              ],
-            );
-          },
+              ),
+            ],
+          ],
         );
         more = null;
       case 'bar_chart':

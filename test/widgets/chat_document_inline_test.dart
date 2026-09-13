@@ -129,7 +129,9 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a table that has to stack shows fewer rows', (tester) async {
+  testWidgets('a wide table still shows six rows, because a row is a line', (
+    tester,
+  ) async {
     await tester.binding.setSurfaceSize(const Size(400, 2400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -155,9 +157,10 @@ void main() {
     );
     await tester.pump();
 
-    // One card per row is a paragraph each, so the cut is tighter.
+    // Four columns in a phone lane no longer turn a row into a paragraph, so
+    // the cut is the same count it is everywhere else.
     final ChukTable table = tester.widget<ChukTable>(find.byType(ChukTable));
-    expect(table.table.rows.length, kInlineDocumentStackedRows);
+    expect(table.table.rows.length, kInlineDocumentRows);
     expect(find.text('Open all 12 rows'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

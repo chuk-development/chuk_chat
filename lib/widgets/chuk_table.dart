@@ -1,10 +1,32 @@
 // lib/widgets/chuk_table.dart
 //
-// Native, on-brand rendering for GFM markdown tables. Replaces the flat
-// `markdown_widget` table with a rounded card: a shaded, bold header row, thin
-// horizontal row separators, first-column emphasis, per-cell highlighting for
-// fully-bold cells, a copy-the-table button, and horizontal scrolling so a wide
-// table scrolls inside itself instead of overflowing the message column.
+// A table that reads as a table, at 360 pixels and at 1300.
+//
+// The rule the format exists for: THE EYE MUST BE ABLE TO RUN DOWN A COLUMN.
+// The same field of two different rows lands on the same x, or the thing on
+// screen is a list of forms and not a table. Everything below follows from
+// that one sentence.
+//
+//  * The header is printed ONCE, quietly, above a rule. A label repeated on
+//    every row is the noise a header exists to remove.
+//  * A row is ONE LINE. Three short cells are one line of text, so they take
+//    one line of room: a uniform row height, computed from the resolved text
+//    style and the reader's text scale, and every cell ellipsised at its
+//    column edge. Two rows must never fill a phone.
+//  * The FIRST column is the subject of the row and reads strongest; the rest
+//    are the quieter colour. The source of a row is the least important thing
+//    in it and is drawn as such.
+//  * A value too long for its column is CUT, not wrapped. A cut cell carries
+//    its whole text in a tooltip (hover on a desktop, a long press on a
+//    phone), so nothing is lost silently.
+//  * When even the narrowest honest columns do not fit, the table scrolls
+//    sideways with the FIRST COLUMN PINNED and a visible scrollbar — never a
+//    grid whose right half is off screen with nothing saying it is there.
+//
+// This replaced one card per row (bead cowork-8vqt). The card stacked a row
+// into a labelled block, which fit, but no two rows lined up, so the one thing
+// a table is for — comparing a field across rows — was impossible. Density was
+// the other half: two rows were a screenful.
 //
 // The model emphasises a cell by making its whole content bold (`**value**`);
 // that cell renders as an accent-tinted chip. This is the "highlight what
@@ -118,50 +140,37 @@ ParsedTable? parseTable(List<String> lines) {
   return ParsedTable(header: header, rows: rows, alignments: alignments);
 }
 
-/// Under this much room a table that does not fit is stacked instead of
-/// scrolled. A phone message column is around 340-400 logical pixels.
-const double kChukTableStackBelowWidth = 560;
+/// A whole cell that is nothing but one markdown link: `[label](url)`.
+final RegExp _wholeCellLink = RegExp(r'^\[([^\]]+)\]\(([^)\s]+)\)$');
 
-/// Rough on-screen length of a cell: drop the inline markdown markers so
-/// `**bold**` / `` `code` `` don't inflate a column's weight.
-int chukVisibleLength(String raw) =>
-    raw.replaceAll(RegExp(r'[*_`]'), '').trim().length;
-
-/// Rough natural pixel width of [t] if every cell sat on one line.
-double chukTableNaturalWidth(ParsedTable t, {double fontSize = 13.5}) {
-  const double cellPadding = 26; // 12 + 12 from _cell, plus a little slack.
-  final double charWidth = fontSize * 0.58; // avg glyph advance.
-  double total = 0;
-  for (int c = 0; c < t.columnCount; c++) {
-    int maxLen = chukVisibleLength(c < t.header.length ? t.header[c] : '');
-    for (final List<String> row in t.rows) {
-      if (c < row.length) {
-        final int l = chukVisibleLength(row[c]);
-        if (l > maxLen) maxLen = l;
-      }
-    }
-    total += maxLen * charWidth + cellPadding;
-  }
-  return total;
+/// The label and target of a cell that is exactly one link, else null.
+({String label, String href})? chukCellLink(String raw) {
+  final RegExpMatch? m = _wholeCellLink.firstMatch(raw.trim());
+  if (m == null) return null;
+  final String label = (m.group(1) ?? '').trim();
+  final String href = (m.group(2) ?? '').trim();
+  if (label.isEmpty || href.isEmpty) return null;
+  return (label: label, href: href);
 }
 
-/// Whether [t] would be drawn as one card per row in [maxWidth] of room.
+/// The text a cell actually PAINTS, with the inline markdown taken off.
 ///
-/// A stacked card is a paragraph of its own; a grid row is one line. Anything
-/// that shows a PART of a table — the inline preview in a thread — has to know
-/// which of the two it is about to draw before it decides how many rows it can
-/// afford.
-bool chukTableStacks(
-  ParsedTable t, {
-  required double maxWidth,
-  double fontSize = 13.5,
-}) {
-  if (!maxWidth.isFinite || t.columnCount < 2) return false;
-  if (maxWidth >= kChukTableStackBelowWidth) return false;
-  return chukTableNaturalWidth(t, fontSize: fontSize) > maxWidth;
-}
+/// A link counts as its label, never as its target: `[instagram.com](https://
+/// www.instagram.com/reel/DKx…/)` is thirteen characters on screen and was
+/// being measured as sixty. That one mistake was enough to push every other
+/// column off the right edge of a phone.
+int chukVisibleLength(String raw) => chukVisibleText(raw).length;
 
-/// A rounded, scrollable, copyable rendering of a markdown table.
+/// The same thing as a string: markers dropped, a link reduced to its label.
+String chukVisibleText(String raw) => raw
+    .replaceAllMapped(
+      RegExp(r'\[([^\]]+)\]\(([^)\s]+)\)'),
+      (Match m) => m.group(1) ?? '',
+    )
+    .replaceAll(RegExp(r'[*_`]'), '')
+    .trim();
+
+/// A rounded, dense, copyable rendering of a markdown table.
 class ChukTable extends StatefulWidget {
   const ChukTable({
     super.key,
@@ -171,6 +180,7 @@ class ChukTable extends StatefulWidget {
     this.fontFamily,
     this.fontSize = 13.5,
     this.onTapLink,
+    this.surfaceColor,
   });
 
   final ParsedTable table;
@@ -179,13 +189,84 @@ class ChukTable extends StatefulWidget {
   final String? fontFamily;
   final double fontSize;
 
-  /// Opens a link from a cell. Null leaves links unopenable — they still read
-  /// as links, they just do nothing, which is what a table with no host to ask
-  /// gets. The chat passes its own confirm-then-open handler.
+  /// What the table sits on. Used for one thing only: the fade at the right
+  /// edge of a table that scrolls sideways, which has to fade into whatever is
+  /// behind it. Null leaves the fade out; the pinned rule and the scrollbar
+  /// still say the table pans.
+  final Color? surfaceColor;
+
+  /// Opens a link from a cell. Null leaves links unopenable — and a cell that
+  /// cannot be opened is NOT drawn as a link: it reads as the plain text it
+  /// behaves like. A link either works or it does not claim to.
   final ValueChanged<String>? onTapLink;
 
   @override
   State<ChukTable> createState() => _ChukTableState();
+}
+
+/// Room a cell keeps on the outer edges of the table.
+const double _kEdgePad = 12;
+
+/// Half the gap between two neighbouring columns.
+const double _kGutter = 7;
+
+/// A column never narrows past this much room for its text. Below it a cell is
+/// an ellipsis with a letter in front of it, which says nothing. It travels
+/// with the reader's text scale: 46 pixels of 18-point text is two letters.
+const double _kMinTextWidth = 46;
+
+/// Room for the arrow of a collapsed action column: the glyph plus enough
+/// around it to be worth aiming at.
+const double _kActionGlyph = 30;
+
+/// How many rows are read to decide column widths and column kinds. A table
+/// may hold two thousand rows; the widest cell is almost always in the first
+/// screenful, and measuring every one of them on every layout pass would cost
+/// more than the pixel it buys. A row past this still draws, and still
+/// ellipsises at its column edge.
+const int _kRowsSampled = 200;
+
+/// How much of its own header an action column will carry. Past this the
+/// header ellipsises rather than the table giving up a readable column.
+const double _kActionHeader = 54;
+
+/// A single column never claims more than this much text room, so one long
+/// title cannot starve the four columns next to it.
+const double _kMaxTextWidth = 260;
+
+/// Air above and below the text of a row.
+const double _kRowPadY = 8;
+
+/// How much of the width the pinned first column may take when a table has to
+/// scroll. Past this the pinned column IS the table.
+const double _kPinnedShare = 0.46;
+
+/// The geometry of one drawn table: what each column gets, how tall a row is,
+/// and whether the whole thing had to start panning.
+class _Plan {
+  const _Plan({
+    required this.widths,
+    required this.collapsed,
+    required this.natural,
+    required this.scrolls,
+    required this.rowHeight,
+    required this.headerHeight,
+  });
+
+  /// Per column, including that column's own left and right padding.
+  final List<double> widths;
+
+  /// Per column: drawn as one arrow instead of a repeated hostname.
+  final List<bool> collapsed;
+
+  /// What each column asked for before the squeeze, so a second pass can see
+  /// which columns did not get it.
+  final List<double> natural;
+  final bool scrolls;
+  final double rowHeight;
+  final double headerHeight;
+
+  double get total => widths.fold<double>(0, (double a, double b) => a + b);
 }
 
 class _ChukTableState extends State<ChukTable> {
@@ -206,6 +287,104 @@ class _ChukTableState extends State<ChukTable> {
   /// Shared by the horizontal Scrollbar and its SingleChildScrollView so the
   /// scrollbar thumb is draggable and the two stay in sync.
   final ScrollController _hCtrl = ScrollController();
+
+  /// Per column: true when every filled cell is a link, they all paint the
+  /// SAME label, and that label is only the host of the link.
+  ///
+  /// Such a column carries no information at all — "open.spotify.com" three
+  /// times over — so its cells drop the repeated string and become the action
+  /// they are. The header, printed once, already says which service it is.
+  ///
+  /// The host test is what keeps this honest: a host is what the app prints
+  /// when the DOCUMENT gave it nothing better. A label the document wrote
+  /// ("Suche öffnen") is the author talking, and it is kept, repeated or not.
+  late List<bool> _collapsedLinkColumns;
+
+  /// Per column: true when every filled cell is a link, whatever it is
+  /// labelled with.
+  late List<bool> _linkColumns;
+
+  /// Per column: true when every filled cell is a link the APP labelled — the
+  /// bare host, because the document gave nothing better. Those labels may be
+  /// traded for an arrow when the width runs out. A label the document wrote
+  /// never may be.
+  late List<bool> _hostLinkColumns;
+
+  /// The column that reads as the subject of the row: the first one that is
+  /// not a column of links. A coworker that writes the reel URL first — and
+  /// it does — must not end up with a table whose strongest column is a row
+  /// of hostnames. The subject of that row is the song.
+  late int _subjectColumn;
+
+  @override
+  void initState() {
+    super.initState();
+    _readColumns();
+  }
+
+  @override
+  void didUpdateWidget(ChukTable old) {
+    super.didUpdateWidget(old);
+    if (!identical(old.table, widget.table)) _readColumns();
+  }
+
+  void _readColumns() {
+    _linkColumns = _findLinkColumns(widget.table);
+    _hostLinkColumns = _findHostLinkColumns(widget.table);
+    _collapsedLinkColumns = _findCollapsedLinkColumns(widget.table);
+    _subjectColumn = _linkColumns.indexOf(false);
+    if (_subjectColumn < 0) _subjectColumn = 0;
+  }
+
+  static List<bool> _findLinkColumns(ParsedTable t) =>
+      List<bool>.generate(t.columnCount, (int c) {
+        int filled = 0;
+        for (final List<String> row in t.rows.take(_kRowsSampled)) {
+          final String raw = c < row.length ? row[c].trim() : '';
+          if (raw.isEmpty) continue;
+          if (chukCellLink(raw) == null) return false;
+          filled++;
+        }
+        return filled > 0;
+      });
+
+  /// The host of [href] the way a cell would print it, or null.
+  static String? _hostLabel(String href) {
+    final Uri? uri = Uri.tryParse(href);
+    if (uri == null || uri.host.isEmpty) return null;
+    return uri.host.replaceFirst('www.', '');
+  }
+
+  static List<bool> _findHostLinkColumns(ParsedTable t) =>
+      List<bool>.generate(t.columnCount, (int c) {
+        int filled = 0;
+        for (final List<String> row in t.rows.take(_kRowsSampled)) {
+          final String raw = c < row.length ? row[c].trim() : '';
+          if (raw.isEmpty) continue;
+          final ({String label, String href})? link = chukCellLink(raw);
+          if (link == null || link.label != _hostLabel(link.href)) return false;
+          filled++;
+        }
+        return filled > 0;
+      });
+
+  static List<bool> _findCollapsedLinkColumns(ParsedTable t) {
+    return List<bool>.generate(t.columnCount, (int c) {
+      if (t.rows.length < 2) return false;
+      final Set<String> labels = <String>{};
+      int filled = 0;
+      for (final List<String> row in t.rows.take(_kRowsSampled)) {
+        final String raw = c < row.length ? row[c].trim() : '';
+        if (raw.isEmpty) continue;
+        filled++;
+        final ({String label, String href})? link = chukCellLink(raw);
+        if (link == null) return false;
+        if (link.label != _hostLabel(link.href)) return false;
+        labels.add(link.label);
+      }
+      return filled >= 2 && labels.length == 1;
+    });
+  }
 
   @override
   void dispose() {
@@ -235,49 +414,237 @@ class _ChukTableState extends State<ChukTable> {
     });
   }
 
+  // ---------------------------------------------------------------- styles
+
+  TextStyle _bodyStyle({required bool emphasis}) => TextStyle(
+    color: emphasis
+        ? widget.textColor
+        : widget.textColor.withValues(alpha: 0.82),
+    fontSize: widget.fontSize,
+    height: 1.25,
+    fontFamily: widget.fontFamily,
+    fontWeight: emphasis ? FontWeight.w600 : FontWeight.w400,
+  );
+
+  /// The header is a label, not a row: smaller, quieter, spaced. It is the one
+  /// place a column name is printed, so it never ellipsises into nothing —
+  /// [_kMinTextWidth] keeps a few letters of it alive at every width.
+  TextStyle get _headerStyle => TextStyle(
+    color: widget.textColor.withValues(alpha: 0.55),
+    fontSize: (widget.fontSize - 2.5).clamp(11.0, 13.0),
+    height: 1.2,
+    fontFamily: widget.fontFamily,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.5,
+  );
+
+  double _padLeft(int c) => c == 0 ? _kEdgePad : _kGutter;
+
+  double _padRight(int c, int columns) =>
+      c == columns - 1 ? _kEdgePad : _kGutter;
+
+  /// What a cell paints, given the collapse decision for its column.
+  /// Measured and drawn from the same function, so the plan and the pixels
+  /// cannot disagree. A collapsed cell paints no text at all — it is an
+  /// arrow, and the arrow is measured separately.
+  String _paintedText(List<bool> collapsed, int column, String raw) =>
+      collapsed[column] && chukCellLink(raw) != null
+      ? ''
+      : chukVisibleText(raw);
+
+  // ------------------------------------------------------------------ plan
+
+  /// The plan, in at most two passes.
+  ///
+  /// The first pass collapses only the columns that are certainly worthless —
+  /// every row the same hostname. The second pass collapses a hostname column
+  /// that did not get the room to print a hostname: "instagr…" repeated down
+  /// a column is worse than the arrow it stands for, and it costs four times
+  /// the width. A label the DOCUMENT wrote is never collapsed, at any width;
+  /// that is the author talking.
+  _Plan _plan(BuildContext context, double maxWidth) {
+    final List<bool> collapsed = List<bool>.of(_collapsedLinkColumns);
+    final _Plan plan = _measurePlan(context, maxWidth, collapsed);
+    bool changed = false;
+    for (int c = 0; c < widget.table.columnCount; c++) {
+      if (collapsed[c] || !_hostLinkColumns[c] || c == _subjectColumn) continue;
+      // Either the column did not get the room to print a hostname, or the
+      // table is about to start panning — and a hostname column is the first
+      // thing to trade away for a table that fits.
+      if (plan.scrolls || plan.widths[c] < plan.natural[c] - 0.5) {
+        collapsed[c] = true;
+        changed = true;
+      }
+    }
+    return changed ? _measurePlan(context, maxWidth, collapsed) : plan;
+  }
+
+  _Plan _measurePlan(
+    BuildContext context,
+    double maxWidth,
+    List<bool> collapsed,
+  ) {
+    final ParsedTable t = widget.table;
+    final int n = t.columnCount;
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    final double scale = scaler.scale(widget.fontSize) / widget.fontSize;
+
+    final double rowHeight =
+        _measuredLine(context, _bodyStyle(emphasis: true)) + _kRowPadY * 2;
+    final double headerHeight = _measuredLine(context, _headerStyle) + 13;
+    final double headerEm = _headerStyle.fontSize! * 0.62 * scale;
+
+    // An estimate, not a measurement: it decides proportions and the
+    // fits/pans boundary, and the ellipsis catches every error either way.
+    // Measuring two thousand cells with a TextPainter on every layout pass
+    // would cost more than it is worth.
+    final double floorText = _kMinTextWidth * scale;
+    final List<double> natural = <double>[];
+    final List<double> floors = <double>[];
+    // The floor a column would have with no favours done for it. When the
+    // favours do not fit, they are dropped rather than pushing the whole
+    // table into panning sideways.
+    final List<double> plainFloors = <double>[];
+    for (int c = 0; c < n; c++) {
+      final double pad = _padLeft(c) + _padRight(c, n);
+      final double headerWidth =
+          (c < t.header.length ? chukVisibleLength(t.header[c]) : 0) * headerEm;
+      if (collapsed[c]) {
+        // An action column is one arrow wide and it does not negotiate: it
+        // has no text to cut and nothing to gain from being squeezed. It is
+        // still never narrower than its own header — the header is the only
+        // thing on screen that says where the arrow goes.
+        final double w = headerWidth.clamp(_kActionGlyph, _kActionHeader * scale);
+        natural.add(w + pad);
+        floors.add(w + pad);
+        plainFloors.add(w + pad);
+        continue;
+      }
+      final double em =
+          widget.fontSize * (c == _subjectColumn ? 0.585 : 0.545) * scale;
+      double data = 0;
+      for (final List<String> row in t.rows.take(_kRowsSampled)) {
+        final String raw = c < row.length ? row[c] : '';
+        final double w = _paintedText(collapsed, c, raw).length * em;
+        if (w > data) data = w;
+      }
+      // A long column NAME does not buy width away from the values. The
+      // header is a label and a label may ellipsise; a value may not, or the
+      // table is lying about its own numbers.
+      double text = data;
+      final double headerShare = headerWidth.clamp(0, floorText * 1.6);
+      if (headerShare > text) text = headerShare;
+      text = text.clamp(floorText, _kMaxTextWidth * scale);
+      natural.add(text + pad);
+
+      // Two kinds of column keep their width outright rather than negotiate,
+      // as long as they are short enough to be no trouble:
+      //
+      //  * a right-aligned column is a number column, and a number that
+      //    ellipsises is worse than no number — "129,9…" reads as a price and
+      //    is not one;
+      //  * a column of links the DOCUMENT labelled. "Suche öffnen" is the one
+      //    thing in that cell worth reading, and it is short; cutting it to
+      //    "Suche ö…" throws away the reference and saves twenty pixels.
+      final bool keepsItsWidth =
+          t.alignments[c] == TextAlign.right ||
+          (_linkColumns[c] && !_hostLinkColumns[c]);
+      // The subject column keeps more of itself than the rest: it is the one
+      // a reader scans, and a cut song title is a cut row.
+      final double plain =
+          text.clamp(0, c == _subjectColumn ? floorText * 1.35 : floorText) +
+          pad;
+      plainFloors.add(plain);
+      floors.add(
+        keepsItsWidth && text <= floorText * 2.8 ? text + pad : plain,
+      );
+    }
+
+    double sum(List<double> v) =>
+        v.fold<double>(0, (double a, double b) => a + b);
+    final double naturalTotal = sum(natural);
+
+    if (!maxWidth.isFinite || naturalTotal <= maxWidth) {
+      // Room to spare: hand the slack out in proportion, so the table fills
+      // its lane instead of hugging the left edge.
+      final double slack = !maxWidth.isFinite ? 0 : maxWidth - naturalTotal;
+      return _Plan(
+        widths: <double>[
+          for (final double w in natural)
+            w + (naturalTotal == 0 ? 0 : slack * w / naturalTotal),
+        ],
+        natural: natural,
+        collapsed: collapsed,
+        scrolls: false,
+        rowHeight: rowHeight,
+        headerHeight: headerHeight,
+      );
+    }
+
+    double floorTotal = sum(floors);
+    if (floorTotal > maxWidth) {
+      // The favours do not fit. Drop them: a cut label is better than a table
+      // that has to be panned to be read.
+      floors
+        ..clear()
+        ..addAll(plainFloors);
+      floorTotal = sum(floors);
+    }
+    if (floorTotal <= maxWidth) {
+      // It fits once the wide columns give something back. What is left over
+      // the floors is handed out in proportion to what each column asked for,
+      // and the subject column counts double — the eye spends its time there.
+      final List<double> want = <double>[
+        for (int c = 0; c < n; c++)
+          (natural[c] - floors[c]) * (c == _subjectColumn ? 1.5 : 1.0),
+      ];
+      final double wantTotal = sum(want);
+      final double spare = maxWidth - floorTotal;
+      return _Plan(
+        widths: <double>[
+          for (int c = 0; c < n; c++)
+            floors[c] + (wantTotal == 0 ? 0 : spare * want[c] / wantTotal),
+        ],
+        natural: natural,
+        collapsed: collapsed,
+        scrolls: false,
+        rowHeight: rowHeight,
+        headerHeight: headerHeight,
+      );
+    }
+
+    // Genuinely wider than the lane: pan, with the first column pinned.
+    final List<double> widths = List<double>.of(natural);
+    final double cap = maxWidth * _kPinnedShare;
+    if (widths[0] > cap) widths[0] = cap;
+    return _Plan(
+      widths: widths,
+      natural: natural,
+      collapsed: collapsed,
+      scrolls: true,
+      rowHeight: rowHeight,
+      headerHeight: headerHeight,
+    );
+  }
+
+  /// The painted height of one line in [style], under the reader's text scale.
+  double _measuredLine(BuildContext context, TextStyle style) {
+    final TextPainter painter = TextPainter(
+      text: TextSpan(text: 'Hgjy', style: style),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+      maxLines: 1,
+    )..layout();
+    return painter.height;
+  }
+
+  // ---------------------------------------------------------------- render
+
   @override
   Widget build(BuildContext context) {
     // The spans about to be built own the recognizers; the previous build's
     // are now unreachable.
     _releaseLinkTaps();
-    final ParsedTable t = widget.table;
-    final Color border = widget.textColor.withValues(alpha: 0.12);
-    final Color headerBg = widget.accentColor.withValues(alpha: 0.10);
-    final Color rowAlt = widget.textColor.withValues(alpha: 0.03);
-
-    final List<TableRow> rows = <TableRow>[
-      TableRow(
-        decoration: BoxDecoration(color: headerBg),
-        children: List<Widget>.generate(
-          t.columnCount,
-          (c) => _cell(
-            t.header[c],
-            align: t.alignments[c],
-            header: true,
-            firstCol: c == 0,
-          ),
-        ),
-      ),
-    ];
-    for (int r = 0; r < t.rows.length; r++) {
-      final List<String> row = t.rows[r];
-      rows.add(
-        TableRow(
-          decoration: BoxDecoration(
-            color: r.isOdd ? rowAlt : Colors.transparent,
-          ),
-          children: List<Widget>.generate(
-            t.columnCount,
-            (c) => _cell(
-              row[c],
-              align: t.alignments[c],
-              header: false,
-              firstCol: c == 0,
-            ),
-          ),
-        ),
-      );
-    }
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
@@ -285,88 +652,14 @@ class _ChukTableState extends State<ChukTable> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // Fill the full message width when the table fits, but fall back to
-          // horizontal scrolling when it is genuinely wider than the column —
-          // so a wide table scrolls left/right inside its card instead of
-          // cramming every cell.
           LayoutBuilder(
-            builder: (context, constraints) {
-              final double maxW = constraints.maxWidth;
-              final bool fits =
-                  !maxW.isFinite || _estimatedNaturalWidth(t) <= maxW;
-
-              // A phone column cannot hold a grid this wide. Sideways scrolling
-              // there is not a reading experience: the right-hand columns are
-              // off screen, and nothing on the card says they exist (bead
-              // cowork-8vqt). Below the threshold the table becomes one card
-              // per row, each field labelled by its header, so every value is
-              // readable without panning.
-              if (!fits && maxW < _stackBelowWidth && t.columnCount >= 2) {
-                return _stacked(t, border: border, headerBg: headerBg);
-              }
-
-              final Widget table = Table(
-                columnWidths: fits
-                    ? _flexColumnWidths(t)
-                    : {
-                        for (var c = 0; c < t.columnCount; c++)
-                          c: FixedColumnWidth(maxW < 500 ? 160 : 240),
-                      },
-                defaultColumnWidth: fits
-                    ? const FlexColumnWidth()
-                    : const FixedColumnWidth(160),
-                defaultVerticalAlignment: TableCellVerticalAlignment.middle,
-                border: TableBorder(
-                  horizontalInside: BorderSide(color: border, width: 1),
-                ),
-                children: rows,
-              );
-
-              final Widget card = Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: border, width: 1),
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: table,
-              );
-
-              if (fits) return card;
-              // Too wide: the card sizes to the table's intrinsic width
-              // (wider than maxW) inside the horizontal scroller. Enable mouse
-              // drag as a scroll device and a draggable, always-visible
-              // scrollbar — otherwise on desktop there is no way to pan a wide
-              // table left/right (the wheel scrolls the page vertically).
-              return ScrollConfiguration(
-                behavior: ScrollConfiguration.of(context).copyWith(
-                  dragDevices: <PointerDeviceKind>{
-                    PointerDeviceKind.touch,
-                    PointerDeviceKind.mouse,
-                    PointerDeviceKind.trackpad,
-                    PointerDeviceKind.stylus,
-                  },
-                  scrollbars: false,
-                ),
-                child: Scrollbar(
-                  controller: _hCtrl,
-                  thickness: 3,
-                  radius: const Radius.circular(6),
-                  thumbVisibility: true,
-                  interactive: true,
-                  child: SingleChildScrollView(
-                    controller: _hCtrl,
-                    padding: const EdgeInsets.only(bottom: 10),
-                    scrollDirection: Axis.horizontal,
-                    child: card,
-                  ),
-                ),
-              );
+            builder: (BuildContext context, BoxConstraints constraints) {
+              final _Plan plan = _plan(context, constraints.maxWidth);
+              return plan.scrolls ? _panning(plan) : _fitting(plan);
             },
           ),
-          // Copy control sits below the table, flush with the card's right
-          // edge, instead of floating over the top-right corner where it
-          // covered header text. The gap clears the horizontal scrollbar the
-          // wide layout draws under the card.
+          // The copy control hangs under the table, flush right, clear of the
+          // scrollbar a panning table draws.
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Align(
@@ -384,210 +677,297 @@ class _ChukTableState extends State<ChukTable> {
     );
   }
 
-  /// Column widths proportional to the longest visible cell in each column,
-  /// clamped so one very long cell can't starve the rest and a tiny column
-  /// still gets a sane share. Using flex widths makes the table fill the full
-  /// available width rather than sitting at its intrinsic content width.
-  Map<int, TableColumnWidth> _flexColumnWidths(ParsedTable t) {
-    final Map<int, TableColumnWidth> widths = <int, TableColumnWidth>{};
-    for (int c = 0; c < t.columnCount; c++) {
-      int maxLen = _visibleLen(c < t.header.length ? t.header[c] : '');
-      for (final List<String> row in t.rows) {
-        if (c < row.length) {
-          final int l = _visibleLen(row[c]);
-          if (l > maxLen) maxLen = l;
-        }
-      }
-      widths[c] = FlexColumnWidth(maxLen.clamp(3, 40).toDouble());
-    }
-    return widths;
-  }
+  Color get _rule => widget.textColor.withValues(alpha: 0.09);
+  Color get _headerRule => widget.textColor.withValues(alpha: 0.22);
 
-  int _visibleLen(String raw) => chukVisibleLength(raw);
+  Widget _fitting(_Plan plan) => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    mainAxisSize: MainAxisSize.min,
+    children: _pane(plan, first: 0, last: plan.widths.length),
+  );
 
-  static const double _stackBelowWidth = kChukTableStackBelowWidth;
-
-  /// One card per data row: the first column is the card's title, every other
-  /// column becomes a labelled field under it. No horizontal scrolling, so
-  /// nothing is hidden off the right edge.
-  Widget _stacked(
-    ParsedTable t, {
-    required Color border,
-    required Color headerBg,
-  }) {
-    final TextStyle labelStyle = TextStyle(
-      color: widget.textColor.withValues(alpha: 0.62),
-      fontSize: widget.fontSize - 1.5,
-      height: 1.3,
-      fontFamily: widget.fontFamily,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.2,
-    );
-
-    final List<Widget> cards = <Widget>[];
-    for (int r = 0; r < t.rows.length; r++) {
-      final List<String> row = t.rows[r];
-      final List<Widget> fields = <Widget>[];
-      for (int c = 1; c < t.columnCount; c++) {
-        final String value = c < row.length ? row[c] : '';
-        if (value.trim().isEmpty) continue;
-        fields.add(
-          Padding(
-            padding: EdgeInsets.only(top: fields.isEmpty ? 0 : 8),
+  /// Wider than the lane: the first column stands still, the rest pans under
+  /// a scrollbar that is always on screen. Both halves are built from the same
+  /// plan, and every row is the same height, so the two sides cannot drift out
+  /// of line.
+  Widget _panning(_Plan plan) {
+    final double rest = plan.total - plan.widths[0];
+    final Color? surface = widget.surfaceColor;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(right: BorderSide(color: _headerRule, width: 1)),
+          ),
+          child: SizedBox(
+            width: plan.widths[0],
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: _pane(plan, first: 0, last: 1),
+            ),
+          ),
+        ),
+        Expanded(
+          child: ClipRect(
+            child: Stack(
               children: <Widget>[
-                Text(
-                  c < t.header.length ? _plain(t.header[c]) : '',
-                  style: labelStyle,
-                ),
-                const SizedBox(height: 2),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: _cellContent(
-                    value,
-                    align: TextAlign.left,
-                    header: false,
-                    emphasis: false,
+                ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: <PointerDeviceKind>{
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.stylus,
+                    },
+                    scrollbars: false,
+                  ),
+                  child: Scrollbar(
+                    controller: _hCtrl,
+                    thickness: 3,
+                    radius: const Radius.circular(6),
+                    thumbVisibility: true,
+                    interactive: true,
+                    child: SingleChildScrollView(
+                      controller: _hCtrl,
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: SizedBox(
+                        width: rest,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: _pane(
+                            plan,
+                            first: 1,
+                            last: plan.widths.length,
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
                 ),
+                if (surface != null)
+                  Positioned(
+                    top: 0,
+                    bottom: 0,
+                    right: 0,
+                    width: 20,
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.centerLeft,
+                            end: Alignment.centerRight,
+                            colors: <Color>[
+                              surface.withValues(alpha: 0),
+                              surface,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
               ],
             ),
           ),
-        );
-      }
-      cards.add(
-        Padding(
-          padding: EdgeInsets.only(top: r == 0 ? 0 : 8),
-          child: Container(
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: border, width: 1),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                Container(
-                  color: headerBg,
-                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        ),
+      ],
+    );
+  }
+
+  /// The header, its rule, and every row, for the columns `[first, last)`.
+  List<Widget> _pane(_Plan plan, {required int first, required int last}) {
+    final ParsedTable t = widget.table;
+    final List<Widget> out = <Widget>[
+      SizedBox(
+        height: plan.headerHeight,
+        child: Row(
+          children: <Widget>[
+            for (int c = first; c < last; c++)
+              SizedBox(
+                width: plan.widths[c],
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    left: _padLeft(c),
+                    right: _padRight(c, t.columnCount),
+                  ),
                   child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _cellContent(
-                      row.isEmpty ? '' : row[0],
-                      align: TextAlign.left,
-                      header: false,
-                      emphasis: true,
+                    alignment: _boxAlign(_alignOf(plan, c)),
+                    child: Text(
+                      chukVisibleText(
+                        c < t.header.length ? t.header[c] : '',
+                      ),
+                      style: _headerStyle,
+                      textAlign: _alignOf(plan, c),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ),
-                if (fields.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: fields,
+              ),
+          ],
+        ),
+      ),
+      Container(height: 1, color: _headerRule),
+    ];
+
+    for (int r = 0; r < t.rows.length; r++) {
+      if (r > 0) out.add(Container(height: 1, color: _rule));
+      final List<String> row = t.rows[r];
+      out.add(
+        SizedBox(
+          height: plan.rowHeight,
+          child: Row(
+            children: <Widget>[
+              for (int c = first; c < last; c++)
+                SizedBox(
+                  width: plan.widths[c],
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      left: _padLeft(c),
+                      right: _padRight(c, t.columnCount),
+                    ),
+                    child: Align(
+                      alignment: _boxAlign(_alignOf(plan, c)),
+                      child: _cell(
+                        c < row.length ? row[c] : '',
+                        column: c,
+                        collapsed: plan.collapsed,
+                        align: _alignOf(plan, c),
+                        rowHeight: plan.rowHeight,
+                        textWidth:
+                            plan.widths[c] -
+                            _padLeft(c) -
+                            _padRight(c, t.columnCount),
+                      ),
                     ),
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
         ),
       );
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: cards,
-    );
+    return out;
   }
 
-  /// A header label with its inline markdown markers removed — a field label
-  /// is drawn as plain text, never as a chip.
-  String _plain(String raw) => raw.replaceAll(RegExp(r'[*_`]'), '').trim();
+  /// An action column centres under its header; every other column keeps the
+  /// side the delimiter row asked for, so numbers still line up on the right.
+  TextAlign _alignOf(_Plan plan, int c) =>
+      plan.collapsed[c] ? TextAlign.center : widget.table.alignments[c];
 
-  /// Rough natural pixel width of the table if every cell sat on one line.
-  /// Used only to decide between filling the width (flex columns) and
-  /// horizontal scrolling (intrinsic columns) — a slight misestimate near the
-  /// boundary is harmless since either layout reads fine there.
-  double _estimatedNaturalWidth(ParsedTable t) =>
-      chukTableNaturalWidth(t, fontSize: widget.fontSize);
+  Alignment _boxAlign(TextAlign align) {
+    if (align == TextAlign.center) return Alignment.center;
+    if (align == TextAlign.right) return Alignment.centerRight;
+    return Alignment.centerLeft;
+  }
 
+  /// One drawn cell. One line, always: the row height is fixed, so a cell that
+  /// wrapped would paint over its neighbours below.
   Widget _cell(
     String raw, {
+    required int column,
+    required List<bool> collapsed,
     required TextAlign align,
-    required bool header,
-    required bool firstCol,
-  }) {
-    Alignment boxAlign = Alignment.centerLeft;
-    if (align == TextAlign.center) boxAlign = Alignment.center;
-    if (align == TextAlign.right) boxAlign = Alignment.centerRight;
-
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 9, 12, 9),
-      child: Align(
-        alignment: boxAlign,
-        child: _cellContent(
-          raw,
-          align: align,
-          header: header,
-          emphasis: header || firstCol,
-        ),
-      ),
-    );
-  }
-
-  /// The drawn content of one cell, with no cell padding of its own — the
-  /// grid wraps it in [_cell], the stacked layout places it in a field.
-  Widget _cellContent(
-    String raw, {
-    required TextAlign align,
-    required bool header,
-    required bool emphasis,
+    required double textWidth,
+    required double rowHeight,
   }) {
     final String trimmed = raw.trim();
+    if (trimmed.isEmpty) return const SizedBox.shrink();
+    final bool emphasis = column == _subjectColumn;
+
+    if (collapsed[column]) {
+      final ({String label, String href})? link = chukCellLink(trimmed);
+      if (link != null) return _openAction(link.href, height: rowHeight);
+    }
+
     // A fully-bold cell is a highlight: strip the ** and draw an accent chip.
     final bool highlight =
-        !header &&
         trimmed.length >= 4 &&
         trimmed.startsWith('**') &&
         trimmed.endsWith('**') &&
         trimmed.substring(2, trimmed.length - 2).trim().isNotEmpty;
 
-    final TextStyle base = TextStyle(
-      color: widget.textColor,
-      fontSize: widget.fontSize,
-      height: 1.35,
-      fontFamily: widget.fontFamily,
-      fontWeight: emphasis ? FontWeight.w600 : FontWeight.w400,
-    );
+    final TextStyle base = _bodyStyle(emphasis: emphasis);
 
-    if (highlight) {
-      return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(
-          color: widget.accentColor.withValues(alpha: 0.14),
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Text.rich(
-          _inlineSpans(
-            trimmed.substring(2, trimmed.length - 2),
-            base.copyWith(
-              color: widget.accentColor,
-              fontWeight: FontWeight.w700,
+    final Widget text = highlight
+        ? Container(
+            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+            decoration: BoxDecoration(
+              color: widget.accentColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(7),
             ),
-          ),
-          textAlign: align,
+            child: Text.rich(
+              _inlineSpans(
+                trimmed.substring(2, trimmed.length - 2),
+                base.copyWith(
+                  color: widget.accentColor,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              textAlign: align,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          )
+        : Text.rich(
+            _inlineSpans(trimmed, base),
+            textAlign: align,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          );
+
+    // Honest truncation: what was cut is one hover or one long press away,
+    // never silently gone. Only the cells that actually run out of room carry
+    // the tooltip, so a table of short values holds no extra machinery.
+    final String painted = _paintedText(collapsed, column, trimmed);
+    final double estimate =
+        painted.length * widget.fontSize * (emphasis ? 0.585 : 0.545);
+    if (estimate <= textWidth) return text;
+    return Tooltip(message: painted, child: text);
+  }
+
+  /// A link column where every row said the same thing — three rows of
+  /// "open.spotify.com" under a header that already says Spotify.
+  ///
+  /// The repeated string carried no information, so it is gone and what is
+  /// left is the affordance: one arrow, on the same x in every row, with the
+  /// whole cell as its target and the URL in its tooltip. The column above it
+  /// is what says where the arrow goes.
+  Widget _openAction(String href, {required double height}) {
+    final ValueChanged<String>? onTap = widget.onTapLink;
+    final Color color = onTap == null
+        ? widget.textColor.withValues(alpha: 0.45)
+        : widget.accentColor;
+    final Widget glyph = SizedBox(
+      height: height,
+      width: _kActionGlyph,
+      child: Center(
+        child: HugeIcon(HugeIcons.arrowUpRight01, size: 16, color: color),
+      ),
+    );
+    if (onTap == null) return glyph;
+    return Semantics(
+      link: true,
+      label: 'Open link',
+      child: Tooltip(
+        message: href,
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: () => onTap(href),
+          child: glyph,
         ),
-      );
-    }
-    return Text.rich(_inlineSpans(trimmed, base), textAlign: align);
+      ),
+    );
   }
 
   /// Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
+  ///
   /// A link reads as a link — accent colour AND an underline — and opens on a
-  /// tap through [ChukTable.onTapLink]. It used to be accent-coloured text
-  /// with no underline and no recognizer, so the source links the coworker
-  /// puts in its comparison tables were dead (bead cowork-94s9).
+  /// tap (bead cowork-94s9). With no handler to open it, it is drawn as plain
+  /// text instead: a dead underlined link is a promise the table cannot keep.
   TextSpan _inlineSpans(String text, TextStyle base) {
     final List<InlineSpan> spans = <InlineSpan>[];
     final RegExp pattern = RegExp(
@@ -639,12 +1019,14 @@ class _ChukTableState extends State<ChukTable> {
           TextSpan(
             text: link,
             recognizer: tap,
-            style: base.copyWith(
-              color: widget.accentColor,
-              decoration: TextDecoration.underline,
-              decorationColor: widget.accentColor,
-              decorationThickness: 1.2,
-            ),
+            style: tap == null
+                ? base
+                : base.copyWith(
+                    color: widget.accentColor,
+                    decoration: TextDecoration.underline,
+                    decorationColor: widget.accentColor,
+                    decorationThickness: 1.2,
+                  ),
           ),
         );
       } else if (italic != null) {
@@ -672,11 +1054,10 @@ class _ChukTableState extends State<ChukTable> {
 /// button. It is now a member of the one button family — [MorphTap], the same
 /// surface every expressive button wraps — at the smallest of the app's target
 /// heights (38; the 48 of the chrome is too heavy for a secondary action that
-/// hangs under a card, and 38 still clears the touch minimum). Corners follow
+/// hangs under a table, and 38 still clears the touch minimum). Corners follow
 /// [ExpressiveIconButton]'s formula, size × 0.34 at rest morphing to size ×
-/// 0.20 while held, so it sits in the same shape family as the 12-radius card
-/// above it. The press is the expressive spring; there is no glow and no
-/// gradient.
+/// 0.20 while held. The press is the expressive spring; there is no glow and
+/// no gradient.
 ///
 /// The confirmation says the word: the glyph becomes a tick, the label becomes
 /// "Copied" and the fill takes the accent for a moment, then it all goes back.
