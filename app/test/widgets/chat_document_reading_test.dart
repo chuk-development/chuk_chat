@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/widgets/chat_document_view.dart';
 import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
@@ -248,16 +249,13 @@ void main() {
     _phone(tester);
     await _open(tester, _markdownDocument());
 
-    // The document renderer hands its tables to the chat's table widget, so a
-    // table too wide for the column becomes one card per row.
+    // The document renderer hands its tables to the chat's table widget, and
+    // that widget draws a table: the column name once, in the header.
     expect(find.byType(ChukTable), findsOneWidget);
-    expect(find.byType(Table), findsNothing);
-    // Two data rows, so each non-leading header labels a field twice.
-    expect(find.text('Anteil (%)'), findsNWidgets(2));
-    expect(find.text('Stand'), findsNWidgets(2));
-    // The value that used to sit off the right edge is on screen.
-    // A cell is a Text.rich, so match it by its plain text.
-    expect(find.textContaining('07.09.2026 02:56 Uhr'), findsNWidgets(2));
+    expect(find.text('Anteil (%)'), findsOneWidget);
+    expect(find.text('Stand'), findsOneWidget);
+    // Both data rows are on screen, each on one line.
+    expect(find.textContaining('07.09.2026'), findsNWidgets(2));
   });
 
   testWidgets('a fenced code block scrolls sideways instead of bleeding out', (
@@ -313,12 +311,19 @@ void main() {
       '[wahlergebnisse.sachsen-anhalt.de]'
       '(https://wahlergebnisse.sachsen-anhalt.de/wahlen/lt26/erg_land.html)',
     );
+    // On a phone the whole Quelle column is the same hostname three times
+    // over — no information, a quarter of the width — so it is drawn as the
+    // action it is: one arrow per row, under a header that names the column.
+    expect(find.textContaining('wahlergebnisse.sachsen-anhalt.de'), findsNothing);
+    expect(find.text('Quelle'), findsOneWidget);
     expect(
-      find.textContaining('wahlergebnisse.sachsen-anhalt.de'),
+      find.byWidgetPredicate(
+        (Widget w) => w is HugeIcon && w.icon.name == 'arrow-up-right01',
+      ),
       findsNWidgets(3),
     );
     // The 78-character URL itself never reaches the column; it lives on the
-    // tap recognizer behind the host label.
+    // tap target behind the arrow.
     expect(find.textContaining('erg_land.html'), findsNothing);
   });
 

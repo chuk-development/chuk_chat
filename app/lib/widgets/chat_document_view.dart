@@ -357,9 +357,10 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
   ///
   /// The old [DataTable] was 875 pixels wide inside a 348-pixel phone column
   /// (963 at a 1.3 text scale): four of five columns sat off the right edge,
-  /// pannable but with nothing to say they were there. [ChukTable] stacks a
-  /// table that cannot fit below 560 pixels into one card per row, every field
-  /// labelled, which is the answer the chat already shipped for this.
+  /// pannable but with nothing to say they were there. [ChukTable] fits the
+  /// columns to the lane instead — one line per row, the header printed once,
+  /// and only a table that cannot honestly fit pans, with its first column
+  /// pinned and a scrollbar that stays on screen.
   Widget _table(BuildContext context) {
     final theme = Theme.of(context);
     return Align(
@@ -372,6 +373,7 @@ class _ChatDocumentViewState extends State<ChatDocumentView> {
           textColor: theme.colorScheme.onSurface,
           accentColor: theme.colorScheme.primary,
           fontSize: 14,
+          surfaceColor: theme.colorScheme.surface,
           onTapLink: (href) => openDocumentLink(context, href),
         ),
       ),
