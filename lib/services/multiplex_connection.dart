@@ -142,14 +142,30 @@ class MultiplexConnection {
   /// the wire at once and a reply can never be credited to the wrong one.
   String? _queuedAuthToken;
 
+  /// The token the server held before the last confirmed handover.
+  ///
+  /// `onAuthStateChange` replays the session it had when the event was
+  /// queued, so a late or duplicate event can offer a token the socket has
+  /// already moved past. Re-sending it would walk the identity backwards,
+  /// which is worse than doing nothing at all.
+  String? _supersededAuthToken;
+
   Timer? _authRefreshReplyTimer;
   Timer? _authRefreshRetryTimer;
-  /// Raised while [freshTokenProvider] is being awaited, so two fetches
-  /// never overlap. It is only ever cleared in a `finally`, and the await it
-  /// guards is bounded by [authRefreshFetchTimeout] — so it always comes
-  /// back down, even if the token source hangs or the transport dies under
-  /// it.
-  bool _authRefreshFetchInFlight = false;
+  /// The one [freshTokenProvider] call that is currently running, or null
+  /// when none is.
+  ///
+  /// This is the single-flight cell, and it is deliberately NOT a boolean
+  /// tied to a waiter. `Future.timeout` stops *waiting*; it does not stop
+  /// the provider. A guard that fell with the waiter would therefore let
+  /// the next attempt start a second provider call while the first was
+  /// still running — and a Supabase refresh token is single-use and shared
+  /// with the paired host, so two overlapping refreshes are exactly the
+  /// shape that signs people out. The cell instead lives as long as the
+  /// provider future itself, so a later attempt attaches to the run already
+  /// in progress. For the same reason teardown does not clear it: a dead
+  /// socket must not license a second refresh.
+  Future<String?>? _authTokenFetch;
 
   /// Consecutive retries armed without a confirmed handover. Bounds the
   /// retry loop so a permanently refusing server cannot turn into a frame
@@ -328,6 +344,7 @@ class MultiplexConnection {
     _activeAuthToken = token;
     _inFlightAuthToken = null;
     _queuedAuthToken = null;
+    _supersededAuthToken = null;
     _authRefreshReplyTimer?.cancel();
     _authRefreshReplyTimer = null;
     _authRefreshRetryTimer?.cancel();
@@ -387,8 +404,19 @@ class MultiplexConnection {
     // new budget.
     _authRefreshRetries = 0;
 
-    if (token == _activeAuthToken && _inFlightAuthToken == null) {
-      // The server already authenticates this socket with this token.
+    if (token == _activeAuthToken) {
+      // The server already authenticates this socket with this token, so it
+      // is worth neither sending nor queueing. This must NOT be narrowed to
+      // "…and nothing is in flight": during a handover that would let a
+      // late event for the token already in force fall through and displace
+      // a newer token waiting in the queue.
+      return true;
+    }
+    if (token == _supersededAuthToken) {
+      // Older than what the socket already holds. Never walk backwards.
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] ignoring a superseded token');
+      }
       return true;
     }
     if (token == _inFlightAuthToken) {
@@ -442,6 +470,11 @@ class MultiplexConnection {
     final queued = _queuedAuthToken;
     if (queued == null) return false;
     _queuedAuthToken = null;
+    if (queued == _activeAuthToken || queued == _supersededAuthToken) {
+      // It stopped being news while it waited. Report "nothing sent" so the
+      // caller arms its retry instead of assuming the socket is current.
+      return false;
+    }
     unawaited(updateAuthToken(queued));
     return true;
   }
@@ -454,7 +487,10 @@ class MultiplexConnection {
     _authRefreshRetries = 0;
     _authRefreshFailures = 0;
     final accepted = _inFlightAuthToken;
-    if (accepted != null) _activeAuthToken = accepted;
+    if (accepted != null && accepted != _activeAuthToken) {
+      _supersededAuthToken = _activeAuthToken;
+      _activeAuthToken = accepted;
+    }
     _inFlightAuthToken = null;
     if (kDebugMode) {
       debugPrint(
@@ -496,41 +532,65 @@ class MultiplexConnection {
   /// no path here can fail the user's session.
   Future<void> _refreshAuthNow() async {
     if (_disposed) return;
-    if (_authRefreshFetchInFlight) return;
     if (_inFlightAuthToken != null) return;
 
-    _authRefreshFetchInFlight = true;
+    String? token;
     try {
-      String? token;
-      try {
-        // Time-boxed on purpose. [freshTokenProvider] reaches Supabase,
-        // which has no deadline of its own; a future that never completes
-        // would strand the guard below and silence every later attempt.
-        token = await freshTokenProvider().timeout(authRefreshFetchTimeout);
-      } on TimeoutException {
-        if (kDebugMode) {
-          debugPrint(
-            '🔑 [Multiplex] fresh token lookup timed out after '
-            '${authRefreshFetchTimeout.inSeconds}s — retrying later',
-          );
-        }
-        token = null;
-      } catch (e) {
-        if (kDebugMode) {
-          debugPrint('🔑 [Multiplex] fresh token lookup failed: $e');
-        }
-        token = null;
+      // The timeout bounds how long *this* attempt waits. The fetch it waits
+      // on stays one shared run, so a timed-out attempt never licenses a
+      // second Supabase refresh.
+      token = await _sharedTokenFetch().timeout(authRefreshFetchTimeout);
+    } on TimeoutException {
+      if (kDebugMode) {
+        debugPrint(
+          '🔑 [Multiplex] fresh token lookup timed out after '
+          '${authRefreshFetchTimeout.inSeconds}s — retrying later',
+        );
       }
-      if (_disposed) return;
-      if (token == null || token.isEmpty || token == _activeAuthToken) {
-        // Nothing newer to offer yet — keep the session, try again later.
-        _scheduleAuthRefreshRetry();
-        return;
+      token = null;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('🔑 [Multiplex] fresh token lookup failed: $e');
       }
-      await updateAuthToken(token);
-    } finally {
-      _authRefreshFetchInFlight = false;
+      token = null;
     }
+    if (_disposed) return;
+    if (token == null || token.isEmpty || token == _activeAuthToken) {
+      // Nothing newer to offer yet — keep the session, try again later.
+      _scheduleAuthRefreshRetry();
+      return;
+    }
+    await updateAuthToken(token);
+  }
+
+  /// Start a [freshTokenProvider] run, or hand back the one already in
+  /// flight. Exactly one provider call is ever outstanding.
+  ///
+  /// Attaching is the whole point: an attempt that gave up waiting leaves
+  /// the run going, and the next attempt joins it rather than asking
+  /// Supabase to burn the single-use refresh token a second time. If every
+  /// waiter has walked away by the time it settles, the result is simply
+  /// discarded.
+  Future<String?> _sharedTokenFetch() {
+    final existing = _authTokenFetch;
+    if (existing != null) return existing;
+
+    // Future(...) rather than a bare call, so a provider that throws
+    // synchronously still lands as a future error.
+    final fetch = Future<String?>(() => freshTokenProvider());
+    _authTokenFetch = fetch;
+    // One terminal chain that both frees the cell and swallows the outcome.
+    // The `then` has to absorb the error before `whenComplete`, or the
+    // future `whenComplete` returns carries it on with nobody listening and
+    // it surfaces as an unhandled async error — a provider that throws is
+    // an ordinary, expected case here.
+    unawaited(
+      fetch.then<void>((_) {}, onError: (Object error, StackTrace stack) {}).
+          whenComplete(() {
+        if (identical(_authTokenFetch, fetch)) _authTokenFetch = null;
+      }),
+    );
+    return fetch;
   }
 
   void _scheduleAuthRefreshRetry() {
@@ -555,6 +615,7 @@ class MultiplexConnection {
     _authRefreshRetryTimer = null;
     _inFlightAuthToken = null;
     _queuedAuthToken = null;
+    _supersededAuthToken = null;
   }
 
   /// Time since the last server frame arrived, or null if the socket has
@@ -956,6 +1017,7 @@ class MultiplexConnection {
     // Nothing is stranded by dropping the queue: the next handshake reads a
     // current token from [accessTokenProvider].
     _queuedAuthToken = null;
+    _supersededAuthToken = null;
     _authRefreshRetries = 0;
     unawaited(_channelSubscription?.cancel());
     _channelSubscription = null;
