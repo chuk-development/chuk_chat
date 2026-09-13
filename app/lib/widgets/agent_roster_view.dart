@@ -49,9 +49,11 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -60,6 +62,7 @@ import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/room_faces.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 // The name dialog moved to its own file when it was rebuilt in the app's
@@ -90,6 +93,9 @@ class AgentRosterView extends StatefulWidget {
     this.onDeleteAgent,
     this.onRenameAgent,
     this.onOpenRooms,
+    this.rooms,
+    this.onOpenRoom,
+    this.onCreateRoom,
     this.onOpenSettings,
     this.onOpenProfile,
     this.accountLabel,
@@ -126,6 +132,16 @@ class AgentRosterView extends StatefulWidget {
 
   /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
   final VoidCallback? onOpenRooms;
+
+  /// The group rooms, listed in this same list under a quiet "Rooms" label.
+  /// Null (or an empty source) leaves the rail exactly as it was.
+  final RoomSource? rooms;
+
+  /// Opens a room. Rooms are not listed without it.
+  final void Function(String roomId)? onOpenRoom;
+
+  /// Starts a new room. Adds a "New room" rail row beside "New agent".
+  final VoidCallback? onCreateRoom;
 
   /// Settings — the gear in chuk's footer pill. The whole footer is hidden
   /// when null (a shell without a shell config has no settings to open).
@@ -201,8 +217,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     // display profiles — a new face or a cleared unread dot must land without a
     // reselect.
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
+      animation: Listenable.merge(<Listenable?>[
         widget.source,
+        widget.rooms,
         widget.readMarks ?? AgentReadMarks.instance,
         widget.profiles ?? AgentProfileStore.instance,
       ]),
@@ -210,6 +227,14 @@ class _AgentRosterViewState extends State<AgentRosterView> {
         final t = SidebarTokens.of(context);
         final agents = widget.source.visibleAgents;
         final hidden = widget.source.hiddenAgents;
+        // A room is a conversation, so it belongs in this list and not only
+        // behind Control Rooms. This rail is already sectioned by state
+        // (Working / Scheduled / Ready), so rooms get the same quiet label
+        // rather than a card of their own — and they sit first, because a room
+        // carries no activity of its own to sort it by.
+        final List<AgentsRoom> rooms = widget.onOpenRoom == null
+            ? const <AgentsRoom>[]
+            : (widget.rooms?.rooms ?? const <AgentsRoom>[]);
 
         // Three buckets, in the order a glance wants them: what is running now,
         // what will run on its own, what is idle. An empty bucket draws no
@@ -259,6 +284,12 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                           primary: true,
                           onTap: widget.onAddAgent!,
                         ),
+                      if (widget.onCreateRoom != null)
+                        SbRailRow(
+                          icon: Icons.group_add_outlined,
+                          label: 'New room',
+                          onTap: widget.onCreateRoom!,
+                        ),
                       if (widget.onOpenRooms != null)
                         SbRailRow(
                           icon: Icons.groups_outlined,
@@ -274,7 +305,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                 child: Stack(
                   children: [
                     Positioned.fill(
-                      child: agents.isEmpty && hidden.isEmpty
+                      child: agents.isEmpty && hidden.isEmpty && rooms.isEmpty
                           ? _emptyState(context, t)
                           : ListView(
                               // The list runs under the footer; the padding
@@ -284,6 +315,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                                 bottom: hasFooter ? 96 : 12,
                               ),
                               children: [
+                                ..._roomSection(context, rooms),
                                 ..._section(context, 'Working', working),
                                 ..._section(context, 'Scheduled', scheduled),
                                 ..._section(context, 'Ready', waiting),
@@ -448,6 +480,22 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     return <Widget>[
       SbSectionLabel(label: label, count: agents.length),
       for (final agent in agents) _tile(context, agent),
+    ];
+  }
+
+  /// The rooms, under the rail's own quiet section label. Empty means no label
+  /// and no rows, exactly like every other bucket here.
+  List<Widget> _roomSection(BuildContext context, List<AgentsRoom> rooms) {
+    if (rooms.isEmpty) return const <Widget>[];
+    return <Widget>[
+      SbSectionLabel(label: 'Rooms', count: rooms.length),
+      for (final AgentsRoom room in rooms)
+        _RoomTile(
+          key: ValueKey<String>('room-tile-${room.id}'),
+          room: room,
+          profiles: widget.profiles ?? AgentProfileStore.instance,
+          onTap: () => widget.onOpenRoom!(room.id),
+        ),
     ];
   }
 
@@ -812,6 +860,112 @@ class _AgentTileState extends State<_AgentTile> {
                       ),
                       onPressed: () => _openRowMenu(anchor),
                     ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One ROOM, in the same tile grammar as [_AgentTile].
+///
+/// Every visual value is copied from [_AgentTile] — 6/1 outer padding,
+/// 10/7/6/7 inner padding, the always-reserved 1.5 px transparent border, the
+/// 12 px radius, iconFg @0.05 on hover, the same 110 ms cross-fade — so a room
+/// row and a coworker row are the same row. The single difference is the slot
+/// on the left: [RoomFaces] at [kRoomFacesRail], which is wider than this
+/// rail's 34 px [AgentFace] because two faces in 34 px put the monogram under
+/// the app's 10 px floor. The gap after it shrinks by the same 6 px, so both
+/// rows start their name on the same x — which is the alignment the eye reads.
+class _RoomTile extends StatefulWidget {
+  const _RoomTile({
+    super.key,
+    required this.room,
+    required this.profiles,
+    required this.onTap,
+  });
+
+  final AgentsRoom room;
+  final AgentProfileStore profiles;
+  final VoidCallback onTap;
+
+  @override
+  State<_RoomTile> createState() => _RoomTileState();
+}
+
+class _RoomTileState extends State<_RoomTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    final TextTheme text = Theme.of(context).textTheme;
+    final AgentsRoom room = widget.room;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: InkWell(
+          onTap: widget.onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: AnimatedContainer(
+            duration: kExpressiveShort,
+            curve: kExpressiveDecelerate,
+            padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
+            decoration: BoxDecoration(
+              color: _hovered ? t.iconFg.withValues(alpha: 0.05) : null,
+              border: Border.all(color: Colors.transparent, width: 1.5),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                RoomFaces(
+                  members: room.members,
+                  size: kRoomFacesRail,
+                  store: widget.profiles,
+                  // The rail paints its own background, not the theme surface.
+                  ringColor: t.bg,
+                ),
+                // 40 + 4 is the coworker row's 34 + 10: the NAME starts on the
+                // same x, which is what makes the two rows read as one list.
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        room.name,
+                        overflow: TextOverflow.ellipsis,
+                        // The row's title: the room's name.
+                        style: text.titleMedium?.copyWith(
+                          height: 1.2,
+                          fontWeight: FontWeight.w600,
+                          color: t.iconFg,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          roomMembersLabel(room),
+                          overflow: TextOverflow.ellipsis,
+                          // Who is in the room — the row's supporting label,
+                          // the same size and weight the coworker row gives
+                          // its status line.
+                          style: text.labelSmall?.copyWith(
+                            height: 1.25,
+                            color: t.iconFg.withValues(alpha: 0.55),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

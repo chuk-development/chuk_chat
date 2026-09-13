@@ -703,6 +703,12 @@ class _MessengerShellState extends State<MessengerShell>
                   onAddAgent: _openOnboarding,
                   onDeleteAgent: _deleteAgent,
                   onRenameAgent: _renameAgent,
+                  // Rooms are rows in this same list now. Control Rooms stays
+                  // where it was — this is a second, primary way in, not a
+                  // replacement for the page that manages them.
+                  rooms: _rooms,
+                  onOpenRoom: _openRoom,
+                  onCreateRoom: _openRoomCreate,
                   onOpenRooms: _openRooms,
                   // No browser row in the sidebar (cowork-vzm): the top-right
                   // button is the one way in, and only while a browser is open.
@@ -1006,6 +1012,11 @@ class _MessengerShellState extends State<MessengerShell>
           hiddenAgentId: _openFromAgentId,
           selectedThreadKey: _selectedThreadKey,
           onAddAgent: _openOnboarding,
+          // A room is a conversation, so it sits in the inbox with the
+          // coworkers. The "+" target asks which of the two to create.
+          rooms: _rooms,
+          onOpenRoom: _openRoom,
+          onCreateRoom: _openRoomCreate,
           onOpenAccount: _openSettings,
           onOpenProfile: _openAgentProfile,
           onRenameAgent: _openAgentRename,
