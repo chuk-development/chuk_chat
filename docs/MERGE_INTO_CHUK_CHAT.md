@@ -584,3 +584,410 @@ of those 78 (`chat_ui_mobile.dart`) holds 61 hunks, a fifth of the whole job. Th
 Python half — 317 files across six directories — moves across with zero
 collisions. The path rewrite itself takes under two seconds and preserves all 306
 commits.
+
+## 9. Execution log — 2026-09-13, clone at `/home/user/git/agents-merge`
+
+Everything below was run in a throwaway clone. `/home/user/git/cowork` and
+`/home/user/git/chuk_chat` were only read. Nothing was pushed. The clone is left
+mid-merge (`MERGE_HEAD` set, index fully resolved) so a human can inspect it.
+
+```bash
+rm -rf /home/user/git/agents-merge
+git clone --no-hardlinks --single-branch -b agents \
+    /home/user/git/cowork /home/user/git/agents-merge
+```
+
+### 9.1 What the rename to Agents already did — the no-ops
+
+Commit `b57c5ce` ("the product is Agents") did part of stage 1 ahead of time.
+After it, these runbook steps do nothing and were dropped:
+
+| Runbook step | Status now |
+|---|---|
+| `--replace-text` rule `package:cowork/==>package:chuk_chat/` | **no-op** — 0 files carry `package:cowork`; 416 already carry `package:chuk_chat/` |
+| `--replace-text` rule `^name: cowork$==>name: chuk_chat` | **no-op** — `app/pubspec.yaml` line 1 already reads `name: chuk_chat` |
+| The gate `git grep -l 'package:cowork'` | passes trivially |
+| The gate `git show HEAD:pubspec.yaml \| head -1` | already `name: chuk_chat` before the rewrite |
+
+The whole `/tmp/cowork-replace.txt` file can be deleted from stage 1. The two
+`--path-rename` rules for the root `.gitignore` / `README.md` are still needed:
+without them `app/.gitignore` and `app/README.md` cannot land at the root.
+
+Also renamed by `b57c5ce` and worth knowing: the Dart service folder is
+`lib/services/agents/`, the Python distributions are `chuk_agents_*`, and
+`docs/COWORK_AGENT_PLATFORM_PLAN.md` became `docs/AGENTS_AGENT_PLATFORM_PLAN.md`.
+That last rename is the reason one bucket number moved (see 9.4).
+
+### 9.2 Numbers that no longer match the runbook
+
+| Measure | Runbook (2026-09-13, pre-rename) | Now | Why |
+|---|---:|---:|---|
+| Agents commits | 306 | **312** | six rename commits |
+| Agents tracked files | 1330 | **1337** | |
+| Files under `app/` | 875 | **876** | |
+| chuk_chat `master` commits / files | 1373 / 1580 | 1373 / 1580 | unchanged |
+| Baseline `d31526a` files | 1338 | 1338 | unchanged |
+| Unmerged paths after stage 2 | 208 | **207** | one collision fewer |
+| Colliding paths | 410 | **409** | `docs/COWORK_AGENT_PLATFORM_PLAN.md` no longer collides |
+| Byte-identical on both sides | 204 | 204 | unchanged |
+| Pure upstream drift → take upstream | 16 | 16 | same 16 files, list verified |
+| Pure Agents divergence → take Agents | 83 | **82** | the platform-plan doc left this bucket |
+| Both edited, three-way merge clean | 29 | 29 | |
+| **Both edited, conflicts by hand** | **78** | **78** | **exactly the same 78 files** |
+| Conflict hunks in those 78 | 301 | **266** | |
+| `chat_ui_mobile.dart` hunks | 61 | **45** | still the worst file by far |
+| Agents-only additions | 920 (317 Python) | **928** (324 under `agents/`) | |
+| Upstream-only files | 1170 | **1171** | |
+| Union after the merge | 2500 | **2508** | |
+| Upstream files deleted by the merge | 0 | **0** | the runbook's central claim holds |
+| `filter-repo` wall time | 1.8 s | **1.1 s** | |
+
+The list of 78 conflicting files is **identical** to section 3's list, file for
+file. Only the hunk counts fell.
+
+### 9.3 One thing in the runbook is wrong
+
+`git ls-remote` says the published `chuk-development/chuk_chat` `master` is
+**`fe7195d`**, not `a249a54`. `a249a54` is a local, unpushed commit sitting on
+`master` in `/home/user/git/chuk_chat`. The runbook measured against the local
+tip. This execution kept that choice — `upstream/master` here was fetched from
+`/home/user/git/chuk_chat` and is `a249a54` — so stage 7 publishes that commit
+too. Decide deliberately before pushing.
+
+Second, smaller: the stage-3 and stage-6 gates
+`grep -rl '<<<<<<<' --exclude-dir=.git . | wc -l` can never print 0, because
+**this file** contains the literal marker inside those very commands, and this
+file is part of the merged tree. Use
+
+```bash
+grep -rl '<<<<<<<' --exclude-dir=.git --exclude=MERGE_INTO_CHUK_CHAT.md . | wc -l
+```
+
+### 9.4 Stage 1 — one filter-repo pass, including the Python move
+
+The user asked for the Python side under one directory. That went into the
+**same** `filter-repo` invocation as the `app/` → root move, not a later
+`git mv`. Reason: one rewrite, no orphan rename commit, and every one of the 312
+commits ends up with the final layout — a `git mv` would leave the old paths in
+all 312 commits next to a root that had already moved.
+
+```bash
+git-filter-repo --force \
+  --path-rename .gitignore:.gitignore.agents-root \
+  --path-rename README.md:README.agents.md \
+  --path-rename agent/:agents/runtime/ \
+  --path-rename executor/:agents/executor/ \
+  --path-rename host/:agents/host/ \
+  --path-rename manager/:agents/manager/ \
+  --path-rename sandbox/:agents/sandbox/ \
+  --path-rename common/:agents/common/ \
+  --path-rename skills/:agents/skills/ \
+  --path-rename app/:
+```
+
+Result: 312 → 312 commits, none pruned, 1337 files, 0 `app/` paths left in any
+commit, `HEAD:pubspec.yaml` still `name: chuk_chat`. Rule order matters — the two
+root renames must come before `app/:`, or the Flutter `.gitignore` and
+`README.md` collide on the way to the root.
+
+The layout after the pass:
+
+```
+/                      the Flutter app (lib/ android/ linux/ test/ assets/ …)
+/agents/runtime/       was agent/
+/agents/executor/      was executor/
+/agents/host/          was host/
+/agents/manager/       was manager/
+/agents/sandbox/       was sandbox/
+/agents/common/        was common/   (chuk_agents_config, chuk_agents_crypto)
+/agents/skills/        was skills/
+/scripts /docs /tools /extension /supabase /third_party   unchanged
+```
+
+### 9.5 What the move broke, and the fix
+
+Everything below is an edit in the working tree of the clone, already applied.
+
+| File | Change |
+|---|---|
+| `agents/executor/pyproject.toml`, `agents/host/pyproject.toml` | `{ path = "../agent" }` → `{ path = "../runtime" }`. The other five path deps keep working — the move preserved the depth, so `../sandbox`, `../manager`, `../executor`, `../common/chuk_agents_*` are all still correct. |
+| `agents/*/uv.lock` | same rename for `editable = "../agent"` |
+| `agents/runtime/tests/test_live_model.py` | `parents[2]` → `parents[3]`; dropped the now-duplicate `REPO_ROOT / "app" / ".env"` candidate |
+| `agents/runtime/tests/test_mcp_client.py` | `parents[2] / "app" / "test" / …` → `parents[3] / "test" / …` |
+| `agents/host/tests/test_install_script.py` | `parents[2]` → `parents[3]`, and `REPO_ROOT / "host" / ".venv"` → `REPO_ROOT / "agents" / "host" / ".venv"` (this one only showed up when the suite ran) |
+| `agents/executor/src/chuk_agents_executor/protocol.py` | `parents[3]` → `parents[4]` for `tools/agents-extension-mcp/` |
+| `agents/common/chuk_agents_config/tests/test_env_coverage.py` | `parents[3]` → `parents[4]`; `SEARCH_DIRS` now `agents/runtime/src`, `agents/executor/src`, `agents/manager/src`, `agents/sandbox`, `agents/host`, `scripts`; the checkout probe is `agents/runtime/src` |
+| `agents/executor/tests/test_mcp_adopt_credentials.py`, `test_mcp_credentials_frame.py`, `test_mcp_signature.py` | `parents[2] / "app/test/fixtures/…"` → `parents[3] / "test/fixtures/…"` (the runbook's stage-6 item, plus one level for the move) |
+| `scripts/install.sh` | `${REPO_ROOT}/host` → `${REPO_ROOT}/agents/host`; `sandbox/docker` → `agents/sandbox/docker` everywhere |
+| `scripts/build_apk.sh` | `APP_DIR="$REPO/app"` → `APP_DIR="$REPO"`, and the `app/.env` prose |
+| `scripts/capture_app_window.sh` | `$project_root/app/build/linux/x64/debug/bundle/agents` → `$project_root/build/linux/x64/debug/bundle/chuk_chat` |
+| `scripts/import_chat_ui.sh` | deleted — the import is over |
+| `.github/workflows/images.yml` | build context and `file:` → `agents/sandbox/docker/…` |
+| `README.agents.md` | the layout table now names `agents/*` and says the Flutter app is the root |
+| `agents/host/src/chuk_agents_host/doctor.py`, `agents/runtime/src/chuk_agents_runtime/browser.py`, `agents/runtime/pyproject.toml`, `agents/sandbox/docker/Dockerfile.browser`, `agents/sandbox/docker/vnc-up.sh`, `agents/executor/tests/live_reasoning_probe.py`, `lib/utils/automation_message.dart`, four Dart tests | cross-reference paths in comments and user-facing messages (`sandbox/docker/…`, `agent/tests/…`, `executor/tests/…`) |
+
+Two things did **not** need a change, against expectation:
+
+* `scripts/agents-manager.service` carries no repository-relative path at all —
+  it is written from `@EXEC@` / `@AGENTS_HOME@` placeholders that `install.sh`
+  substitutes with absolute paths.
+* `agents/host/src/chuk_agents_host/seed_skills.py` walks up its own parents
+  looking for a `skills/` sibling. After the move it finds `agents/skills/` one
+  level earlier and needs no edit. Proven by `test_seed_skills.py`, not assumed.
+
+`test/fixtures/mcp_forward_payload.json` was deliberately left byte-identical:
+it is signed material for `agents/executor/tests/test_mcp_signature.py`, so its
+stale `agent/tests/…` comment stays.
+
+The historical `docs/HANDOVER_*`, `docs/PLAN_*` and `docs/PROMPT_*` files still
+name the old directories. They are dated records; rewriting them would falsify
+history. `docs/FILE_MAP.md`, `docs/ARCHITECTURE.md` and `docs/COMMON_TASKS.md`
+never named the Python directories, so they needed nothing.
+
+### 9.6 Stage 2 and 3 — the merge and the buckets
+
+```bash
+git remote add upstream git@github.com:chuk-development/chuk_chat.git
+git fetch /home/user/git/chuk_chat master:refs/remotes/upstream/master
+git checkout -b agents-integration upstream/master
+git merge --allow-unrelated-histories --no-commit agents
+```
+
+207 unmerged paths, **0 upstream files staged for deletion**. The bucket loop
+from section 3 then ran unchanged (with its temporary files inside the clone
+instead of `/tmp`), and the `~HEAD` leftovers were removed:
+
+```
+take upstream (pure drift)      16
+take Agents (pure divergence)   82
+three-way merge succeeded       29
+conflict markers left           78
+byte-identical, git resolved   204
+                              ----
+colliding paths                409
+```
+
+Afterwards: `git ls-files -u` is empty, `MERGE_HEAD` is still set, 2505 tracked
+files.
+
+One wrinkle the runbook does not mention: after resolving `.codex`, git leaves
+the *directory* unmaterialized in the working tree even though the index holds
+`.codex/config.toml` and `.codex/hooks.json`. Run `git checkout -- .codex` after
+deleting `.codex~HEAD`.
+
+### 9.7 Stage 4 — identity, and three silent takeovers
+
+The eight prescribed files were forced to upstream and
+`android/app/src/main/kotlin/dev/chuk/cowork/MainActivity.kt` was deleted.
+
+**The marker grep does not catch everything.** Three identity lines came through
+the merge without a conflict, each taking the Agents value, each one a shipped-app
+regression:
+
+| File | Line as merged | Must become |
+|---|---|---|
+| `android/app/build.gradle.kts` | `applicationId = "dev.chuk.cowork"` (line 46, no markers) | `dev.chuk.chat` — otherwise every installed copy loses update continuity |
+| `android/app/src/main/AndroidManifest.xml` | `android:label="Temporär-Agents"` (line 24, no markers) | upstream's label |
+| `pubspec.yaml` | `version: 1.0.0+1` (no markers) | upstream's `version: 1.0.109` — a lower versionCode is rejected by Play |
+
+`android/app/build.gradle.kts` *also* has a 1-hunk conflict on `namespace` /
+`compileSdk`; resolving that one does not fix the three lines above.
+
+Two more leftovers for stage 6:
+
+* `docs/COWORK_AGENT_PLATFORM_PLAN.md` (upstream's, 43 KB) and
+  `docs/AGENTS_AGENT_PLATFORM_PLAN.md` (Agents's, 77 KB) now both exist. They no
+  longer collide because of the rename. Delete the upstream one.
+* Upstream's `.gitignore` ignores `/tools/` at the root. Agents has a real
+  `tools/` directory (`agents-browser-bridge`, `agents-extension-mcp`,
+  `chat_ui_manifest.txt`). Whoever resolves the `.gitignore` conflict must not
+  keep that line as it stands.
+* `linux/flutter/generated_plugin_registrant.cc`, `linux/flutter/generated_plugins.cmake`
+  and `linux/runner/my_application.h` fell in the "take Agents" bucket. They are
+  generated from the merged dependency list and will be rewritten by the first
+  `flutter pub get` / build after `pubspec.yaml` is resolved.
+
+### 9.8 What actually runs right now
+
+| Suite | Result |
+|---|---|
+| `agents/common/chuk_agents_crypto` — `uv run pytest -q` | **65 passed** |
+| `agents/common/chuk_agents_config` — `uv run pytest -q` | **63 passed** (including the env-coverage test that reads the new `SEARCH_DIRS`) |
+| `agents/sandbox` — `uv run pytest -q` | **107 passed** |
+| `agents/manager` — `uv run pytest -q` | **183 passed** |
+| `agents/runtime` — `uv run pytest -q` | **964 collected, exit 0** (4 skipped; the package's own `addopts = "-q"` plus a second `-q` suppresses the summary line) |
+| `agents/host` — `uv run pytest -q` | **281 passed** |
+| `agents/executor` — `uv run pytest -q` | **234 passed, 1 failed** |
+| `bash scripts/tests/test_rename_to_agents.sh` | **53 passed, 0 failed** |
+| `flutter pub get` → `flutter analyze` | **cannot run** |
+
+The one executor failure is
+`tests/test_regenerate.py::test_four_retries_replay_the_question_once`:
+the replayed user frame now carries a `created_at` field the test does not
+expect. It is **not** caused by the merge or the move — it reproduces
+deterministically on the untouched `agents` branch in a separate worktree, with
+nothing from upstream present. It came in with the Agents branch and needs its
+own fix.
+
+`flutter analyze` is blocked at the first step: `pubspec.yaml` carries conflict
+markers, so the YAML parse fails at line 23 and `flutter pub get` aborts before
+it resolves anything. This is expected at this point in the runbook — analyze
+cannot say anything useful until the 78 files are resolved. Resolve
+`pubspec.yaml` first (stage 5 item 2) and analyze becomes available again even
+while other files still carry markers.
+
+### 9.9 The 78 files still carrying conflict markers
+
+266 hunks over 78 files. `kinds` counts each hunk: `body` = both sides changed
+the same lines, `upstream-add` / `agents-add` = only that side put something
+there, `import` = the hunk is nothing but import lines, `format` = the two sides
+are identical once whitespace is removed (only 4 hunks in the whole set — there
+is no formatting-only shortcut here).
+
+Three themes cover most of it. First, Agents replaced upstream's chrome widgets
+with its own Material 3 Expressive kit, so the import block of almost every page
+and widget diverges: upstream's `widgets/floating_app_bar.dart`,
+`widgets/settings_list_view.dart`, `widgets/app_notification.dart` and
+`l10n/app_localizations.dart` against Agents's `ui/expressive/expressive_screen.dart`,
+`ui/expressive/icon_map.dart` and `ui/expressive/staggered.dart`. Second, both
+sides edited the same `AppIcon(...)` call sites, with different icon logic on
+each side. Third, Agents added connector strings to the `l10n/strings_*.dart`
+tables while upstream reworked the same files — take both sets.
+
+| hunks | kinds | file | first divergence (upstream \|\| agents) |
+|---:|---|---|---|
+| 45 | 34xbody, 5xupstream-add, 3ximport, 3xagents-add | `lib/platform_specific/chat/chat_ui_mobile.dart` | upstream: import 'package:flutter/rendering.dart' show ScrollCacheExtent; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 16 | 15xbody, 1ximport | `lib/widgets/sidebar/sidebar_chrome.dart` | upstream: import 'package:chuk_chat/l10n/app_localizations.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 14 | 12xbody, 1ximport, 1xagents-add | `lib/platform_specific/chat/chat_ui_desktop.dart` | upstream: import 'package:flutter/rendering.dart' show ScrollCacheExtent; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 11 | 7xagents-add, 4xbody | `lib/l10n/strings_fr.dart` | upstream: (nothing) \|\| agents: 'catEmailImapSmtpDesc': 'Envoyer et recevoir des e-mails via IMAP et SMT… |
+| 10 | 8xbody, 1ximport, 1xagents-add | `lib/pages/account_settings_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/expressive_screen.dart'; |
+| 9 | 8xbody, 1ximport | `lib/model_selector_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 7 | 3xupstream-add, 3xbody, 1ximport | `lib/pages/settings_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 7 | 7xbody | `lib/pages/about_page.dart` | upstream: import 'dart:async'; \|\| agents: // AGENTS ADAPTATION (chuk_chat/lib/pages/about_page.dart), line by line… |
+| 6 | 4xbody, 2ximport | `lib/pages/skills_settings_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/huge_icon.dart'; |
+| 6 | 5xbody, 1ximport | `lib/pages/login_page.dart` | upstream: import 'package:chuk_chat/supabase_config.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/motion.dart'; |
+| 5 | 5xbody | `pubspec.yaml` | upstream: sdk: ^3.9.2 \|\| agents: sdk: ^3.11.5 |
+| 5 | 4xbody, 1xupstream-add | `lib/widgets/sandbox_artifact_block.dart` | upstream: import 'package:chuk_chat/utils/format_bytes.dart'; \|\| agents: import 'package:chuk_chat/widgets/chat_document_inline.dart'; |
+| 5 | 4xbody, 1xagents-add | `lib/widgets/menu_tile_group.dart` | upstream: import 'package:flutter/material.dart'; \|\| agents: // lib/widgets/menu_tile_group.dart |
+| 5 | 5xbody | `lib/services/mcp/mcp_service.dart` | upstream: import 'package:chuk_chat/services/mcp/mcp_sync_service.dart'; \|\| agents: import 'package:chuk_chat/services/agents/agents_relay_link.dart'; |
+| 5 | 3xbody, 1ximport, 1xformat | `lib/pages/recover_chats_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/expressive_screen.dart'; |
+| 5 | 3xbody, 2xupstream-add | `lib/pages/desktop_settings_modal.dart` | upstream: import 'package:chuk_chat/widgets/app_notification.dart'; \|\| agents: (nothing) |
+| 5 | 2xupstream-add, 2xbody, 1ximport | `lib/pages/customization_page.dart` | upstream: import 'package:chuk_chat/widgets/icons/icon_map.dart'; \|\| agents: import 'package:chuk_chat/widgets/menu_tile_group.dart'; |
+| 4 | 3xbody, 1ximport | `lib/widgets/attachment_preview_bar.dart` | upstream: import 'package:chuk_chat/constants.dart'; \|\| agents: import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart'; |
+| 4 | 4xbody | `lib/platform_specific/chat/desktop_send_logic.dart` | upstream: ? captureRegenSeed(index) \|\| agents: ? _captureRegenSeed(index) |
+| 4 | 2ximport, 1xbody, 1xupstream-add | `lib/pages/theme_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/expressive_screen.dart'; |
+| 3 | 2xbody, 1ximport | `lib/widgets/model_selection_dropdown.dart` | upstream: import 'package:chuk_chat/widgets/app_notification.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 3 | 2xbody, 1xformat | `lib/platform_specific/chat/widgets/mobile_chat_widgets.dart` | upstream: (nothing) \|\| agents: (nothing) |
+| 3 | 2xbody, 1ximport | `lib/pages/fullscreen_map_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/motion.dart'; |
+| 3 | 3xagents-add | `lib/l10n/strings_pt.dart` | upstream: (nothing) \|\| agents: 'profileSubtitle': 'Atualize como seu nome e email aparecem no Chuk Chat… |
+| 3 | 3xagents-add | `lib/l10n/strings_es.dart` | upstream: (nothing) \|\| agents: 'catEmailImapSmtpDesc': 'Enviar y recibir correo electrónico por IMAP y … |
+| 2 | 2xbody | `test/pages/skills_settings_page_test.dart` | upstream: import 'package:chuk_chat/services/skills/builtin_skills.g.dart'; \|\| agents: import 'package:chuk_chat/services/agents/agents_relay_client.dart'; |
+| 2 | 1xupstream-add, 1xbody | `lib/widgets/workspace_selection_dropdown.dart` | upstream: import 'package:chuk_chat/models/workspace_model.dart'; \|\| agents: (nothing) |
+| 2 | 1ximport, 1xbody | `lib/widgets/workspace_panel.dart` | upstream: import 'package:flutter/foundation.dart'; \|\| agents: import 'package:flutter/material.dart'; |
+| 2 | 1ximport, 1xbody | `lib/widgets/workspace_file_viewer.dart` | upstream: import 'package:flutter/foundation.dart'; \|\| agents: import 'package:chuk_chat/models/workspace_model.dart'; |
+| 2 | 2xbody | `lib/widgets/route_map_widget.dart` | upstream: child: const AppIcon(Icons.trip_origin, color: Colors.green, size: 28), \|\| agents: child: const AppIcon( |
+| 2 | 2xbody | `lib/widgets/nice_snackbar.dart` | upstream: return AppNotifications.show( \|\| agents: final messenger = ScaffoldMessenger.of(context); |
+| 2 | 2xbody | `lib/widgets/image_viewer.dart` | upstream: appBar: AppBar( \|\| agents: titleWidget: _hasMultipleImages |
+| 2 | 1ximport, 1xbody | `lib/widgets/document_viewer.dart` | upstream: import 'package:chuk_chat/widgets/app_notification.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/motion.dart'; |
+| 2 | 1xupstream-add, 1xbody | `lib/widgets/anchored_menu.dart` | upstream: // No box around the menu: every row is its own filled tile, and a \|\| agents: (nothing) |
+| 2 | 1xbody, 1xagents-add | `lib/services/workspace_storage_service.dart` | upstream: final workspace = _projectsById[workspaceId]; \|\| agents: static Future<void> removeChatFromProject( |
+| 2 | 2xbody | `lib/services/title_generation_service.dart` | upstream: // lib/services/title_generation_service.dart \|\| agents: // AGENTS STUB. Upstream: chuk_chat/lib/services/title_generation_servic… |
+| 2 | 2xagents-add | `lib/services/image_storage_service.dart` | upstream: (nothing) \|\| agents: static Future<int> getImageSize(String storagePath) async { |
+| 2 | 1ximport, 1xbody | `lib/services/artifact_storage_service.dart` | upstream: import 'package:chuk_chat/services/artifact_diff_engine.dart'; \|\| agents: import 'package:flutter/foundation.dart'; |
+| 2 | 1xagents-add, 1xbody | `lib/platform_specific/chat/widgets/fullscreen_composer.dart` | upstream: (nothing) \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 2 | 1ximport, 1xbody | `lib/pages/workspace_management_page.dart` | upstream: import 'package:flutter/material.dart'; \|\| agents: import 'package:chuk_chat/pages/coming_soon_page.dart'; |
+| 2 | 2xbody | `lib/pages/usage_details_page.dart` | upstream: import 'package:flutter/material.dart'; \|\| agents: // AGENTS STUB. Upstream: chuk_chat/lib/pages/usage_details_page.dart @ … |
+| 2 | 2xbody | `lib/pages/pricing_page.dart` | upstream: import 'dart:convert'; \|\| agents: // AGENTS STUB. Upstream: chuk_chat/lib/pages/pricing_page.dart @ d31526… |
+| 2 | 1ximport, 1xbody | `lib/pages/coming_soon_page.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/expressive_screen.dart'; |
+| 2 | 2xbody | `lib/main.dart` | upstream: import 'package:flutter_riverpod/flutter_riverpod.dart'; \|\| agents: import 'package:shared_preferences/shared_preferences.dart'; |
+| 2 | 1xbody, 1xupstream-add | `android/app/src/main/AndroidManifest.xml` | upstream: <uses-permission android:name="android.permission.WAKE_LOCK" /> \|\| agents: <uses-permission android:name="android.permission.VIBRATE" /> |
+| 1 | 1ximport | `test/widgets/composer_recording_row_test.dart` | upstream: import 'package:chuk_chat/widgets/waveform.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/waveform.dart'; |
+| 1 | 1xagents-add | `test/support/kv_cache_test_env.dart` | upstream: (nothing) \|\| agents: // |
+| 1 | 1xbody | `README.md` | upstream: --- \|\| agents: For help getting started with Flutter development, view the |
+| 1 | 1xbody | `lib/widgets/weather_widget.dart` | upstream: AppIcon( \|\| agents: AppIcon(_iconForCode(code), size: 64, color: Colors.white), |
+| 1 | 1ximport | `lib/widgets/settings_list_view.dart` | upstream: import 'package:chuk_chat/widgets/floating_app_bar.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/staggered.dart'; |
+| 1 | 1ximport | `lib/widgets/per_model_system_prompt_sheet.dart` | upstream: import 'package:chuk_chat/widgets/app_notification.dart'; \|\| agents: import 'package:chuk_chat/ui/expressive/icon_map.dart'; |
+| 1 | 1xbody | `lib/widgets/message_bubble/web_search_sources.dart` | upstream: final Widget fallback = AppIcon(Icons.public_rounded, size: 14, color: m… \|\| agents: final Widget fallback = AppIcon( |
+| 1 | 1xbody | `lib/widgets/message_bubble/tools.dart` | upstream: AppIcon( \|\| agents: AppIcon(Icons.smart_toy_outlined, size: 13, color: muted), |
+| 1 | 1xagents-add | `lib/widgets/message_bubble/rich_blocks.dart` | upstream: (nothing) \|\| agents: dynamic _tryParseJson(String raw) { |
+| 1 | 1xbody | `lib/widgets/message_bubble/layout.dart` | upstream: hasWorkedFor \|\| \|\| agents: (isWaitingForFirstTokens && !widget.messengerMode)) && |
+| 1 | 1xbody | `lib/widgets/message_bubble/chrome.dart` | upstream: showModalBottomSheet<void>( \|\| agents: final String label = |
+| 1 | 1xformat | `lib/widgets/message_bubble/cards.dart` | upstream: _notFound ? Icons.image_not_supported_outlined : Icons.broken_image, \|\| agents: _notFound |
+| 1 | 1xbody | `lib/widgets/credit_display.dart` | upstream: Builder(builder: (context) { \|\| agents: Builder( |
+| 1 | 1xbody | `lib/widgets/chuk_table.dart` | upstream: return Material( \|\| agents: // The confirmation travels: fill and glyph move to the accent and back … |
+| 1 | 1xbody | `lib/widgets/accent_icon_button.dart` | upstream: final ThemeData theme = Theme.of(context); \|\| agents: final Color fill = accent ?? Theme.of(context).colorScheme.primary; |
+| 1 | 1xbody | `lib/tool_handlers/notes_tools.dart` | upstream: import 'dart:convert'; \|\| agents: // AGENTS STUB. Upstream: chuk_chat/lib/tool_handlers/notes_tools.dart. |
+| 1 | 1xbody | `lib/services/workspace_message_service.dart` | upstream: return buffer.toString(); \|\| agents: static Future<List<Map<String, dynamic>>> injectProjectContext( |
+| 1 | 1xbody | `lib/services/supabase_service.dart` | upstream: initializedListenable.value = true; \|\| agents: SessionRefreshScheduler.instance.start(); |
+| 1 | 1xbody | `lib/services/streaming_transcription_service.dart` | upstream: /// Timeout for establishing the WebSocket connection. \|\| agents: bool get isConnected => false; |
+| 1 | 1xagents-add | `lib/services/streaming_manager_stub.dart` | upstream: (nothing) \|\| agents: // Map of chatId -> ActiveStream |
+| 1 | 1xagents-add | `lib/services/streaming_manager_io.dart` | upstream: (nothing) \|\| agents: if (event is FinalContentEvent) { |
+| 1 | 1xbody | `lib/services/offline_retry_manager.dart` | upstream: _events.add(event); \|\| agents: _events.add( |
+| 1 | 1xbody | `lib/services/file_conversion_service.dart` | upstream: }) async { \|\| agents: }) async => Map<String, dynamic>.from(_unavailable); |
+| 1 | 1xformat | `lib/services/chat_storage_sidebar.dart` | upstream: final prefs = sharedPrefsInstance ?? await SharedPreferences.getInstance… \|\| agents: final prefs = |
+| 1 | 1xbody | `lib/services/chat_preload_service.dart` | upstream: final title = \|\| agents: final title = existing?.title ?? _extractTitle(chatPayload.messages); |
+| 1 | 1xagents-add | `lib/platform_specific/chat/handlers/file_attachment_handler.dart` | upstream: (nothing) \|\| agents: /// Replace a scanned PDF with its rendered pages. |
+| 1 | 1xupstream-add | `lib/platform_specific/chat/chat_ui_helpers.dart` | upstream: /// Owns decoded message payloads for one visible chat and builds render… \|\| agents: (nothing) |
+| 1 | 1xupstream-add | `lib/platform_specific/chat/chat_scroll_mixin.dart` | upstream: // And the reader has read past the pinned message, so the room held \|\| agents: (nothing) |
+| 1 | 1xbody | `.gitignore` | upstream: # Build artifacts and packages \|\| agents: # Golden-diff output from a failing image comparison (flutter_test write… |
+| 1 | 1xbody | `CLAUDE.md` | upstream: **`docs/COWORK_EXECUTION_PLAN.md`** is the live, ordered build plan for … \|\| agents: <!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:6cd5cc61 --> |
+| 1 | 1xbody | `.beads/interactions.jsonl` | upstream: {"id":"int-dd1cd72807422abc96f42df9aa233b4d","kind":"field_change","crea… \|\| agents: {"id":"int-41d0ced4da1f06db0c8ce2220289dc7e","kind":"field_change","crea… |
+| 1 | 1xbody | `android/app/build.gradle.kts` | upstream: namespace = "dev.chuk.chat" \|\| agents: namespace = "dev.chuk.cowork" |
+| 1 | 1xbody | `AGENTS.md` | upstream: # AGENTS.md \|\| agents: CLAUDE.md |
+
+### 9.10 Stage 5 onwards — what the next agents get
+
+Unchanged from section 5, with these corrections: `chat_ui_mobile.dart` is 45
+hunks, not 61; `chat_ui_desktop.dart` is 14, not 11; `sidebar_chrome.dart` is 16,
+not 19. `lib/widgets/menu_tile_group.dart` is no longer a one-hunk add/add — it
+is 5 hunks. Deleting
+`lib/platform_specific/chat/widgets/desktop_chat_widgets.dart` after resolving
+the two chat screens is still the right move; upstream's replacement
+`lib/platform_specific/chat/widgets/chat_message_list_item.dart` is present in
+the merged tree.
+
+Still open from stage 6, deliberately left for the next pass because each one
+needs a conflicted file resolved first:
+
+* fold `.gitignore.agents-root` into the root `.gitignore` (drop upstream's
+  `/tools/` line) and delete it
+* fold `README.agents.md` into `README.md` and delete it
+* retire `tools/chat_ui_manifest.txt` and `docs/CHAT_UI_IMPORT.md`
+* delete `docs/COWORK_AGENT_PLATFORM_PLAN.md`
+* the three silent identity lines in 9.7
+* file a bead for the pre-existing `test_four_retries_replay_the_question_once`
+  failure
+
+### 9.11 Stage 7 — the exact commands, for the user only
+
+Nothing here was run. Run it only after `flutter analyze`, `flutter test`, the
+seven pytest suites and one real `scripts/build_apk.sh --emulator` all pass on
+the merge commit.
+
+```bash
+cd /home/user/git/agents-merge
+
+# 0. the gates
+grep -rl '<<<<<<<' --exclude-dir=.git --exclude=MERGE_INTO_CHUK_CHAT.md . | wc -l   # 0
+flutter pub get && flutter analyze && flutter test
+for p in runtime executor host manager sandbox common/chuk_agents_config common/chuk_agents_crypto; do
+  ( cd "agents/$p" && uv run pytest -q ) || echo "FAILED: $p"
+done
+scripts/build_apk.sh --emulator
+
+# 1. the merge commit
+git commit -m "merge(agents): one app — Agents rides on chuk_chat master"
+git rev-list --count HEAD          # expect 1686 = 1373 + 312 + 1
+
+# 2. keep the pre-rewrite SHAs reachable, from a clone that still has them
+git -C /home/user/git/cowork push origin \
+    refs/remotes/origin/agents:refs/tags/agents-pre-merge
+
+# 3. the point of no return
+git push upstream agents-integration:master
+```
+
+Note that step 3 also publishes `a249a54`, which is currently unpushed (9.3).
+Leave the remote `agents` branch alone afterwards — it is the only copy of the
+pre-rewrite SHAs — and re-clone `/home/user/git/cowork`; it cannot be rebased
+onto the new history, because all 312 commits changed SHA.
