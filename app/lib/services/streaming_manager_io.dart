@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/streaming_chat_service.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
@@ -31,10 +32,31 @@ class StreamingManager {
   /// no visible difference; the final buffer is always flushed on completion.
   static const _uiUpdateInterval = Duration(milliseconds: 33);
 
-  /// Idle timeout: if no event arrives for this duration, the stream
-  /// is considered dead. This prevents the "Thinking..." state from
-  /// hanging forever when the server silently drops the connection.
-  static const _idleTimeout = Duration(seconds: 60);
+  /// Silence is not a failure, and this class no longer treats it as one.
+  ///
+  /// There used to be a flat 60-second idle timeout here: no event of any kind
+  /// for a minute and the stream was torn down with "No response received —
+  /// the server may be overloaded". That sentence was a guess the app had no
+  /// evidence for, and on this user's own host it was simply wrong. Turns
+  /// carrying 170k–290k prompt tokens run 405 s, 490 s, 631 s, 818 s and
+  /// 1851 s end to end (`~/.cowork/executor-state.db`, table `runs`), and a
+  /// provider sends nothing at all until the prefill is done — so the very
+  /// first gap can pass a minute on its own, and so can any single shell
+  /// command or browser step. The app was killing working runs.
+  ///
+  /// A slow answer is not an error. An error is an error: the socket drops,
+  /// the host sends an `error` frame, the run comes back failed, or the user
+  /// stops it. Every one of those paths still ends the stream at once — they
+  /// are events, not silence. What is gone is the timer that invented a
+  /// failure out of nothing having happened yet.
+  ///
+  /// What remains is a [Timer.periodic] that only ever writes a line to the
+  /// log, so a genuinely stuck run can still be diagnosed afterwards. It ends
+  /// nothing, shows nothing and throws no buffered content away.
+  ///
+  /// Not `const`: a test drives the clock through it instead of waiting.
+  @visibleForTesting
+  static Duration silenceReportInterval = const Duration(seconds: 60);
 
   // Track if app is in background - only show notification when backgrounded
   bool _isAppInBackground = false;
@@ -126,35 +148,9 @@ class StreamingManager {
       chatTitle: chatTitle,
     );
 
-    // Start idle timer — if no events arrive within _idleTimeout,
-    // treat the stream as dead and clean up.
-    activeStream.idleTimer = Timer(_idleTimeout, () {
-      // Guard against firing after the stream already completed —
-      // see the matching guard in _handleStreamEvent / onError.
-      if (!activeStream.isActive) return;
-      activeStream.isActive = false;
-      if (kDebugMode) {
-        debugPrint(
-          '[StreamingManager] Idle timeout for chat $chatId — no data received for ${_idleTimeout.inSeconds}s',
-        );
-      }
-      final content = activeStream.contentBuffer.toString();
-      if (content.isEmpty) {
-        onError(
-          'No response received — the server may be overloaded. '
-          'Please try again.',
-          code: StreamErrorCodes.idleTimeout,
-        );
-      } else {
-        // We already have partial content — complete with what we have
-        onComplete(
-          content,
-          activeStream.reasoningBuffer.toString(),
-          activeStream.tps,
-        );
-      }
-      _cleanupStream(chatId);
-    });
+    // The silence watch. It reports; it never acts. See
+    // [silenceReportInterval] for why there is no timeout here any more.
+    _armSilenceWatch(activeStream);
 
     _activeStreams[chatId] = activeStream;
   }
@@ -163,7 +159,7 @@ class StreamingManager {
   Future<void> cancelStream(String chatId) async {
     final activeStream = _activeStreams[chatId];
     if (activeStream != null) {
-      activeStream.cancelIdleTimer();
+      activeStream.cancelSilenceWatch();
       await activeStream.subscription.cancel();
       _activeStreams.remove(chatId);
       if (kDebugMode) {
@@ -186,7 +182,7 @@ class StreamingManager {
 
   void _cleanupStream(String chatId) {
     final stream = _activeStreams.remove(chatId);
-    stream?.cancelIdleTimer();
+    stream?.cancelSilenceWatch();
     stream?.cancelUiThrottle();
     // Stop foreground service if no more active streams
     if (Platform.isAndroid && !hasActiveStreams) {
@@ -205,7 +201,7 @@ class StreamingManager {
       final reasoningLen = stream.reasoningBuffer.length;
       stream.isActive = false;
       stream.completedAt = DateTime.now();
-      stream.cancelIdleTimer();
+      stream.cancelSilenceWatch();
       stream.cancelUiThrottle();
       // Cancel the subscription but keep the entry in the map
       unawaited(stream.subscription.cancel());
@@ -291,32 +287,10 @@ class StreamingManager {
             : activeStream.phase,
     };
 
-    // Reset idle timer on every event — connection is still alive
-    activeStream.cancelIdleTimer();
-    activeStream.idleTimer = Timer(_idleTimeout, () {
-      // Guard against firing after the stream already completed.
-      if (!activeStream.isActive) return;
-      activeStream.isActive = false;
-      if (kDebugMode) {
-        debugPrint(
-          '[StreamingManager] Idle timeout for chat $chatId — no data for ${_idleTimeout.inSeconds}s',
-        );
-      }
-      final content = activeStream.contentBuffer.toString();
-      if (content.isEmpty) {
-        onError(
-          'Response timed out — the server stopped responding. '
-          'Please try again.',
-        );
-      } else {
-        onComplete(
-          content,
-          activeStream.reasoningBuffer.toString(),
-          activeStream.tps,
-        );
-      }
-      _cleanupStream(chatId);
-    });
+    // Every event restarts the measured gap. Nothing is armed to fire on it:
+    // this is what the log reports, not what decides the stream's fate.
+    activeStream.lastEventAt = DateTime.now();
+    activeStream.eventCount++;
 
     // Record time-to-first-token on the first real delta (content or reasoning).
     if ((event is ContentEvent || event is ReasoningEvent) &&
@@ -358,6 +332,13 @@ class StreamingManager {
       activeStream.nativeToolCalls.addAll(event.calls);
     } else if (event is MetaEvent) {
       activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
+    } else if (event is HeartbeatEvent) {
+      // Proof of life and nothing else. It has already restarted the measured
+      // gap above, and the phase switch has already moved `connecting` to
+      // `processing` — the host answered, it is reading the prompt. There is
+      // no content to buffer and nothing to finish.
+      activeStream.heartbeatCount++;
+      activeStream.lastHeartbeatSeq = event.seq;
     } else if (event is ErrorEvent) {
       // Handle error events from the stream (e.g., API errors)
       if (kDebugMode) {
@@ -389,7 +370,7 @@ class StreamingManager {
       // exposed by the /v2/ws multiplex landing (DoneEvent + onDone
       // arrive synchronously in the multiplex demuxer).
       activeStream.isActive = false;
-      activeStream.cancelIdleTimer();
+      activeStream.cancelSilenceWatch();
 
       // Show completion notification if app is in background
       // IMPORTANT: Await this before cleanup so foreground service stops AFTER
@@ -429,7 +410,7 @@ class StreamingManager {
     // DoneEvent handler into firing onComplete twice (see the
     // matching note in _handleStreamEvent above).
     activeStream.isActive = false;
-    activeStream.cancelIdleTimer();
+    activeStream.cancelSilenceWatch();
 
     // Show completion notification if app is in background
     // IMPORTANT: Await this before cleanup so foreground service stops AFTER
@@ -447,6 +428,74 @@ class StreamingManager {
 
     // Keep completed stream data available for chat reload
     _completeStream(chatId);
+  }
+
+  /// Arms the log-only silence watch for [stream].
+  ///
+  /// Fires every [silenceReportInterval] for as long as the stream is active
+  /// and writes one line when nothing has arrived for at least that long. It
+  /// never touches the stream: no teardown, no error, no completion, and the
+  /// buffered content is not read for anything but its length.
+  ///
+  /// This is the whole of what used to be the idle timeout. The user asked for
+  /// the logging explicitly — a run that really is stuck has to stay
+  /// diagnosable after the fact — and for nothing to be killed on a guess.
+  void _armSilenceWatch(_ActiveStream stream) {
+    stream.cancelSilenceWatch();
+    stream.silenceTimer = Timer.periodic(silenceReportInterval, (timer) {
+      if (!stream.isActive) {
+        timer.cancel();
+        return;
+      }
+      final now = DateTime.now();
+      final since = stream.lastEventAt ?? stream.startedAt;
+      final gap = now.difference(since);
+      if (gap < silenceReportInterval) return;
+      _reportSilence(stream, gap);
+    });
+  }
+
+  /// One log line about an observed gap: which phase it happened in, how long
+  /// it actually was, how many events had arrived (and how many of those were
+  /// heartbeats), and whether any content was already buffered.
+  ///
+  /// "waiting for the first event" and "mid-stream" are different failures —
+  /// the first is a request that never got picked up, the second a run that
+  /// went quiet after it started — so the line names which one it is.
+  void _reportSilence(_ActiveStream stream, Duration gap) {
+    final waiting = stream.eventCount == 0;
+    final phase = waiting ? 'waiting for the first event' : 'mid-stream';
+    final buffered = stream.contentBuffer.length;
+    final beats = stream.heartbeatCount;
+    if (kDebugMode) {
+      debugPrint(
+        '[StreamingManager] chat ${stream.chatId} quiet for ${gap.inSeconds}s '
+        '($phase, phase=${stream.phase.name}, events=${stream.eventCount}, '
+        'heartbeats=$beats${beats > 0 ? ' (last seq ${stream.lastHeartbeatSeq})' : ''}, '
+        'buffered=$buffered chars). Not an error: the run may still be working '
+        'on the host.',
+      );
+    }
+    // Also to the app's own opt-in logger, because that one survives a release
+    // build — a debug-only line cannot diagnose a stuck run on the phone. Only
+    // metadata goes in: how long, how many, how big. Never the text itself.
+    unawaited(
+      DiagnosticsLogService.info(
+        'streaming',
+        'stream quiet',
+        data: <String, Object?>{
+          'chat_id': stream.chatId,
+          'gap_seconds': gap.inSeconds,
+          'waiting_for_first_event': waiting,
+          'phase': stream.phase.name,
+          'events': stream.eventCount,
+          'heartbeats': beats,
+          'last_heartbeat_seq': stream.lastHeartbeatSeq,
+          'buffered_chars': buffered,
+          'reasoning_chars': stream.reasoningBuffer.length,
+        },
+      ).catchError((Object _) {}),
+    );
   }
 
   /// Schedule a coalesced UI flush: at most one [onUpdate] per
@@ -723,10 +772,22 @@ class _ActiveStream {
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;
 
-  // Idle timer: fires when no events arrive for too long.
-  // Reset on every incoming event. If it fires, the stream is
-  // considered dead and will be cleaned up with an error.
-  Timer? idleTimer;
+  /// The log-only silence watch (see [StreamingManager.silenceReportInterval]).
+  /// It reports gaps; it has no power to end the stream.
+  Timer? silenceTimer;
+
+  /// When the last event of any kind arrived, null while none has. The gap the
+  /// log reports is measured from here, falling back to [startedAt].
+  DateTime? lastEventAt;
+
+  /// How many events of any kind this stream has seen, and how many of those
+  /// were heartbeats. Diagnostics only — nothing branches on them.
+  int eventCount = 0;
+  int heartbeatCount = 0;
+
+  /// The `seq` of the last heartbeat, so a gap in the host's sequence shows up
+  /// in the log.
+  int lastHeartbeatSeq = 0;
 
   // UI-update coalescing: holds the timer that flushes the latest buffer to
   // the UI at most once per [_uiUpdateInterval], plus whether a token has
@@ -752,8 +813,8 @@ class _ActiveStream {
     this.chatTitle,
   });
 
-  void cancelIdleTimer() {
-    idleTimer?.cancel();
-    idleTimer = null;
+  void cancelSilenceWatch() {
+    silenceTimer?.cancel();
+    silenceTimer = null;
   }
 }

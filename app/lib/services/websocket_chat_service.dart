@@ -40,6 +40,7 @@ import 'package:chuk_chat/services/chat_model_selection_service.dart';
 ///
 /// | inbound (live only) | out | ledger |
 /// |---|---|---|
+/// | `heartbeat` | `HeartbeatEvent` | ceiling restarted, no output claimed |
 /// | `delta` | `ContentEvent` | — |
 /// | `reasoning` | `ReasoningEvent` | model reasoning |
 /// | `tool` | verbose-only narration on the reasoning channel | open + close |
@@ -212,6 +213,17 @@ class WebSocketChatService {
       if (_isReplay(event)) return;
 
       switch (event) {
+        case AgentsRelayHeartbeat():
+          // The host says the run is alive. It is not output: the ceiling
+          // starts again, but a run whose only frames were heartbeats still
+          // counts as having produced nothing. Passed on so the streaming
+          // manager can log the gap it is closing and the header can stop
+          // saying "Connecting".
+          ledger.heartbeat(sessionKey);
+          emit(
+            HeartbeatEvent(seq: event.seq, elapsedSeconds: event.elapsedSeconds),
+          );
+
         case AgentsRelayDelta(:final text):
           // A token is proof the run is alive: it restarts the ceiling that
           // would otherwise declare it lost.
