@@ -585,6 +585,17 @@ class AppLocalizations {
   // ── Model selector ─────────────────────────────────────────
   String get models => _get('models');
   String get searchModels => _get('searchModels');
+  String get modelProvider => _get('modelProvider');
+  String get chooseProvider => _get('chooseProvider');
+  String get modelPromptCustom => _get('modelPromptCustom');
+  String get fastMode => _get('fastMode');
+  String get thinkingMode => _get('thinkingMode');
+  String availableModels(int count) =>
+      (count == 1 ? _get('availableModelsOne') : _get('availableModelsMany'))
+          .replaceAll('{count}', count.toString());
+  String modelsFound(int count) =>
+      (count == 1 ? _get('modelsFoundOne') : _get('modelsFoundMany'))
+          .replaceAll('{count}', count.toString());
   String modelError(String error) =>
       _get('modelError').replaceAll('{error}', error);
 
@@ -765,13 +776,8 @@ class _AppLocalizationsDelegate
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => [
-    'en',
-    'de',
-    'es',
-    'fr',
-    'pt',
-  ].contains(locale.languageCode);
+  bool isSupported(Locale locale) =>
+      ['en', 'de', 'es', 'fr', 'pt'].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>

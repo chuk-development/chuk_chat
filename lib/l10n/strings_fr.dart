@@ -531,6 +531,15 @@ const Map<String, String> stringsFr = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modèles',
   'searchModels': 'Rechercher des modèles...',
+  'modelProvider': 'Fournisseur',
+  'chooseProvider': 'Choisir',
+  'modelPromptCustom': 'Personnalisé',
+  'fastMode': 'Mode rapide',
+  'thinkingMode': 'Mode réflexion',
+  'availableModelsOne': 'Disponibles · {count} modèle',
+  'availableModelsMany': 'Disponibles · {count} modèles',
+  'modelsFoundOne': '{count} modèle trouvé',
+  'modelsFoundMany': '{count} modèles trouvés',
   'modelError': 'Erreur : {error}',
 
   // ── Message bubble extras ──────────────────────────────────

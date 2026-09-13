@@ -466,6 +466,15 @@ const Map<String, String> stringsPt = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modelos',
   'searchModels': 'Pesquisar modelos...',
+  'modelProvider': 'Provedor',
+  'chooseProvider': 'Escolher',
+  'modelPromptCustom': 'Personalizado',
+  'fastMode': 'Modo rápido',
+  'thinkingMode': 'Modo de raciocínio',
+  'availableModelsOne': 'Disponíveis · {count} modelo',
+  'availableModelsMany': 'Disponíveis · {count} modelos',
+  'modelsFoundOne': '{count} modelo encontrado',
+  'modelsFoundMany': '{count} modelos encontrados',
   'modelError': 'Erro: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
