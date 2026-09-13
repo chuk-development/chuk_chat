@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/models/content_block.dart';
@@ -1055,7 +1056,21 @@ class StreamingMessageHandler {
                 normalizedError.contains('server may be overloaded') ||
                 normalizedError.contains('no response received');
           }
+          // A retry of this pass re-sends the whole task. That is right when
+          // the host never got it, and ruinous when it did: on 2026-09-13 one
+          // question ran three times at once on the host (05:12:00, 05:13:01,
+          // 05:14:04) because a stream error kept re-sending a task the host
+          // had never stopped working on, and every copy was a full run with a
+          // 44-62k-token prompt. The ledger knows whether a run for this thread
+          // is still in flight — a `heartbeat` or a `run_state` from the host
+          // is what keeps that true — so ask it before paying twice. The host
+          // refuses the duplicate as well, but the answer belongs on the run
+          // that is already going, and not re-sending is how it stays there.
+          final bool hostStillWorking = AgentsRunLedger.instance.isRunning(
+            chatId,
+          );
           if (isReconnectable &&
+              !hostStillWorking &&
               reconnectRetries < kMaxPassReconnectRetries &&
               !_isDisposed) {
             unawaited(() async {
@@ -1136,7 +1151,18 @@ class StreamingMessageHandler {
           // never appeared — the one affordance that could have rescued the
           // turn was hidden exactly when it was needed. This runs AFTER
           // onMessageFinalize, which clears the status.
-          onStreamInterrupted?.call(chatId, placeholderIndex);
+          //
+          // Except for a transport drop. The run lives in the host process,
+          // not in this socket: a reconnect re-attaches to it and the replay
+          // brings the content back by itself. Marking it `interrupted` puts
+          // a "Continue generation" button on a turn that is still being
+          // written, and one host restart left three of them stacked in a
+          // single thread. A run the host itself reported as dead keeps the
+          // button — that one really is over and really can be continued.
+          final bool transportDrop = code == StreamErrorCodes.connectionLost;
+          if (!transportDrop) {
+            onStreamInterrupted?.call(chatId, placeholderIndex);
+          }
 
           _markStreamFinalized();
           _isStreaming = false;

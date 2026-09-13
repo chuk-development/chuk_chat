@@ -129,6 +129,18 @@ class WebSocketChatService {
         ? chatId
         : link.sessionKey.value;
     final verbose = VerboseService.instance.enabled;
+    // The name of THIS SEND on the wire, minted once here rather than where
+    // the frame is sealed: the re-send after a reconnect has to carry the
+    // byte-identical string, which is what lets the host answer `duplicate`
+    // instead of running the same question twice.
+    //
+    // Fresh per call, deliberately. A tool-loop pass, a regenerate and a
+    // continue each come through here again and each is a real send the host
+    // must run. The host dedupes strictly — a repeated id is answered
+    // `duplicate` and never runs — so sharing one id across passes would leave
+    // pass two silently undone, which is the failure this whole mechanism
+    // exists to remove.
+    final String wireTaskId = mintTaskId();
     final selectedRoute = modelSelectionCaptured
         ? Future.value(
             ChatModelSelection(modelId: modelId, providerSlug: providerSlug),
@@ -187,6 +199,14 @@ class WebSocketChatService {
     }) {
       if (terminated) return;
       terminated = true;
+      // A terminal is the strongest possible proof the task arrived: the host
+      // ran it. Nothing is left to re-send, whether or not an ack ever came.
+      unawaited(
+        AgentsPendingTasks.clear(
+          sessionKey,
+          wireTaskId,
+        ).catchError((Object _) {}),
+      );
       ledger.finish(
         sessionKey,
         finalAnswer: finalAnswer,
@@ -219,15 +239,105 @@ class WebSocketChatService {
           // counts as having produced nothing. Passed on so the streaming
           // manager can log the gap it is closing and the header can stop
           // saying "Connecting".
+          //
+          // It also proves the task ARRIVED, which matters for a host that
+          // sends heartbeats but is too old to send a `task_ack`: without this
+          // the record would sit there and the task would go out again on the
+          // next pairing, on top of a run that is working perfectly.
           ledger.heartbeat(sessionKey);
-          emit(
-            HeartbeatEvent(seq: event.seq, elapsedSeconds: event.elapsedSeconds),
+          unawaited(
+            AgentsPendingTasks.clear(
+              sessionKey,
+              wireTaskId,
+            ).catchError((Object _) {}),
           );
+          emit(
+            HeartbeatEvent(
+              seq: event.seq,
+              elapsedSeconds: event.elapsedSeconds,
+            ),
+          );
+
+        case AgentsRelayTaskAck():
+          // The host said what it did with the task frame. Only `rejected`
+          // produces anything for the reader.
+          if (event.taskId != wireTaskId) {
+            // Another send's ack rode this thread's stream — an earlier pass,
+            // or a task the thread view re-sent after a reconnect. Clear its
+            // record so it is not sent again, and leave this turn alone.
+            if (event.isHeld) {
+              unawaited(
+                AgentsPendingTasks.clear(
+                  sessionKey,
+                  event.taskId,
+                ).catchError((Object _) {}),
+              );
+            }
+            return;
+          }
+          if (event.isHeld) {
+            // `accepted` and `duplicate` are the same thing to the app: the
+            // host has it. `duplicate` deliberately paints NOTHING — the
+            // answer is coming from the first attempt, and a second bubble
+            // would be this fix creating the duplicate it exists to prevent.
+            ledger.taskAcknowledged(
+              sessionKey,
+              taskId: event.taskId,
+              runId: event.runId,
+            );
+            unawaited(
+              AgentsPendingTasks.clear(
+                sessionKey,
+                event.taskId,
+              ).catchError((Object _) {}),
+            );
+            return;
+          }
+          // Rejected: there is no run and there never will be one for this
+          // attempt. The spinner goes now, and the bubble says the send
+          // failed with the host's own reason.
+          terminated = true;
+          ledger.taskRejected(sessionKey, reason: event.reason);
+          unawaited(
+            AgentsPendingTasks.clear(
+              sessionKey,
+              event.taskId,
+            ).catchError((Object _) {}),
+          );
+          if (event.isRetryable) {
+            // `not_provisioned` is the one rejection the app can act on: the
+            // host is up and simply does not have this session's token yet.
+            // The prompt goes to the outbox, which the next pairing flushes
+            // once the `account_authentication` is through.
+            unawaited(
+              _queueAndMark(
+                message,
+                sessionKey,
+                selectedRoute,
+                reasoningEffort: reasoningEffort,
+              ),
+            );
+          }
+          emit(
+            ErrorEvent(
+              _taskRejectionText(event.reason),
+              code: StreamErrorCodes.connectionLost,
+            ),
+          );
+          emit(const DoneEvent());
+          closeOut();
 
         case AgentsRelayDelta(:final text):
           // A token is proof the run is alive: it restarts the ceiling that
-          // would otherwise declare it lost.
+          // would otherwise declare it lost. It is also proof the task
+          // arrived, so nothing is left to re-send for this thread.
           ledger.touch(sessionKey);
+          unawaited(
+            AgentsPendingTasks.clear(
+              sessionKey,
+              wireTaskId,
+            ).catchError((Object _) {}),
+          );
           if (text.isNotEmpty) emit(ContentEvent(text));
 
         case AgentsRelayReasoning(:final text):
@@ -302,6 +412,39 @@ class WebSocketChatService {
 
         case AgentsRelayDone():
           final runId = event.runId;
+          if (event.reason == 'duplicate') {
+            // The host already had this exact question in flight and refused to
+            // ask it a second time (its own `(session_key, prompt)` guard). This
+            // `done` therefore ends THIS attempt, not the turn: the answer is
+            // still coming, on the run the host named, and the `run_state` that
+            // arrived just before this adopted it in the ledger. Finalising an
+            // empty bubble here would hide a working run behind a blank answer.
+            //
+            // Why it happens at all: the streaming handler retries a whole pass
+            // on a reconnectable stream error, which re-sends the task. Before
+            // the host refused them, three copies of one question ran at once
+            // and were billed three times (2026-09-13, 05:12 / 05:13 / 05:14).
+            terminated = true;
+            // Nothing is left to re-send: the host has the question.
+            unawaited(
+              AgentsPendingTasks.clear(
+                sessionKey,
+                wireTaskId,
+              ).catchError((Object _) {}),
+            );
+            ledger.adoptRunning(
+              sessionKey,
+              runId: runId,
+              prompt: message,
+              startedAt: event.startedAt,
+            );
+            // No `FinalContentEvent`: there is no answer yet. The stream just
+            // closes, and the thread keeps its typing indicator on the run the
+            // ledger now owns.
+            emit(DoneEvent());
+            closeOut();
+            return;
+          }
           // A live turn is written to the local transcript by the UI, not by a
           // replay, so the replay cursor still points BELOW it. Left alone, the
           // next reconnect asks from there, the host honours the cursor, and
@@ -388,7 +531,13 @@ class WebSocketChatService {
             if (terminated) return;
             terminated = true;
             ledger.finish(sessionKey, reason: 'error');
-            emit(ErrorEvent('$error', code: StreamErrorCodes.streamFailure));
+            // `connectionLost`, not `streamFailure`: what raised here is the
+            // SOCKET under the stream, not the run. The run belongs to the
+            // host process and survives the drop, so the turn must not be
+            // offered as something to "continue" — the reconnect's replay is
+            // what brings its content back. `streamFailure` stays for a run
+            // the host itself reported as dead (`AgentsRelayRunError`).
+            emit(ErrorEvent('$error', code: StreamErrorCodes.connectionLost));
             emit(DoneEvent());
             closeOut();
           });
@@ -426,12 +575,40 @@ class WebSocketChatService {
       chain = chain.then((_) async {
         try {
           final route = await selectedRoute;
+          // Recorded BEFORE the frame goes out, never after. A fire-and-forget
+          // `send()` on a half-open socket reports success for a frame nobody
+          // will read, so "the send returned" is not evidence of anything: the
+          // record has to exist by the time the frame could be lost. It is
+          // cleared by the host's `task_ack`, or by the run's first real
+          // output; anything still recorded on the next pairing is re-sent.
+          //
+          // Started, not awaited. Every read and write of the store goes
+          // through one serialiser, so this write is already ahead of the
+          // clear that any later ack will queue — the ordering that matters
+          // is guaranteed without holding the send behind a disk round trip.
+          // Awaiting it would also put two more turns of the event loop
+          // between the listen and the frame, and the handler chain that
+          // folds the host's events runs behind the same future.
+          unawaited(
+            AgentsPendingTasks.record(
+              sessionKey: sessionKey,
+              taskId: wireTaskId,
+              prompt: message,
+              modelId: route.modelId,
+              providerSlug: route.providerSlug,
+              reasoningEffort: reasoningEffort,
+            ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
+          );
+          ledger.taskSent(sessionKey, wireTaskId);
           await controller.sendTask(
             message,
             sessionKey: sessionKey,
             modelId: route.modelId,
             providerSlug: route.providerSlug,
             reasoningEffort: reasoningEffort,
+            // Names this send, so a re-send after a reconnect is the same
+            // task to the host and the host's answer says which one it means.
+            taskId: wireTaskId,
             // Ask the executor to echo the raw model context only in the full
             // log view; the quiet default leaves the frame unchanged.
             debug: verbose,
@@ -447,6 +624,15 @@ class WebSocketChatService {
           if (terminated) return;
           terminated = true;
           ledger.finish(sessionKey, reason: 'error');
+          // The socket said no, so nothing is in flight and there is nothing to
+          // wait for an ack on. The prompt moves to the outbox instead, which
+          // is the queue for what never went out at all.
+          unawaited(
+            AgentsPendingTasks.clear(
+              sessionKey,
+              wireTaskId,
+            ).catchError((Object _) {}),
+          );
           // Same as the no-controller case: a socket that refused the frame
           // has not lost the prompt, it has only delayed it.
           unawaited(
@@ -525,6 +711,51 @@ class WebSocketChatService {
     return exit != null ? ' ✓ exit $exit\n' : ' ✓ done\n';
   }
 }
+
+/// The value a failed [AgentsPendingTasks.record] falls back to.
+///
+/// A store that cannot be written is not a reason to lose the send: the frame
+/// still goes out, the host still answers, and only the reconnect re-send is
+/// unavailable for this one message. The record itself is never read, so its
+/// contents do not matter — it exists because `catchError` on a
+/// `Future<PendingTask>` has to produce one.
+PendingTask _unrecorded(String sessionKey, String taskId) => PendingTask(
+  taskId: taskId,
+  sessionKey: sessionKey,
+  prompt: '',
+  sentAt: DateTime.now().toUtc(),
+);
+
+/// Mints the id that names ONE send on the wire.
+///
+/// Unique per install without any coordination, and short: the wire contract
+/// caps `task_id` at 64 characters. The counter is there because two sends in
+/// the same microsecond are possible on a fast machine, and two sends sharing
+/// an id would make the host call the second one a duplicate of the first and
+/// never run it.
+String mintTaskId() {
+  _taskSeq = (_taskSeq + 1) & 0xffffff;
+  return 't${DateTime.now().microsecondsSinceEpoch.toRadixString(36)}'
+      '-${_taskSeq.toRadixString(36)}';
+}
+
+int _taskSeq = 0;
+
+/// One plain sentence for a `task_ack` rejection.
+///
+/// The reasons are fixed slugs from the host, never user content, so they can
+/// be mapped without escaping. An unknown slug falls back to a sentence that
+/// still tells the reader the true thing: it did not arrive.
+String _taskRejectionText(String? reason) => switch (reason) {
+  'not_provisioned' =>
+    'Your host is not signed in for this conversation yet. The message is '
+        'queued and goes out as soon as it is.',
+  'queue_full' =>
+    'Your host is too busy to take the message right now. Send it again in a '
+        'moment.',
+  'malformed' => 'Your host could not read the message. Nothing ran.',
+  _ => 'Your host did not take the message. Nothing ran.',
+};
 
 /// Puts a prompt the socket would not take into the per-thread outbox.
 ///

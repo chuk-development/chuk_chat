@@ -72,6 +72,14 @@ from websockets.sync.client import connect as ws_connect
 
 from .protocol import ROLE_CONTROLLER, ROLE_EXECUTOR, TYPE_JOIN, join_message
 from .relay import EVENT_JOIN, EVENT_LEAVE
+from .relay_ledger import (
+    DECISION_DELIVERED,
+    DECISION_HANDSHAKE,
+    InboundFrameLog,
+    REASON_MALFORMED,
+    REASON_REJECTED,
+    REASON_UNKNOWN_TYPE,
+)
 from .transport import ControllerEvent, PartyLink, decode_message
 
 #: Where the relay lives when nothing says otherwise. A self-hosted backend is
@@ -373,6 +381,11 @@ class CloudRelayLink:
         self._pending: list[dict[str, Any]] = []
         self._expired = False
         self._warning: threading.Timer | None = None
+        # Every frame off this socket reports what became of it. The pipe is the
+        # first place a lost message can disappear, and until this existed a
+        # frame that arrived and was ignored looked exactly like a frame that
+        # never arrived (see :mod:`chuk_agents_host.relay_ledger`).
+        self._frames = InboundFrameLog(self._log)
         if not claimed and expires_in and expires_in > EXPIRY_WARNING_LEAD_SECONDS:
             self._warning = threading.Timer(
                 expires_in - EXPIRY_WARNING_LEAD_SECONDS, self._warn_expiring
@@ -497,10 +510,12 @@ class CloudRelayLink:
         endpoint.
         """
         kind = frame.get("type")
+        req_id = frame.get("req_id")
         if kind == TYPE_AGENTS_RELAY:
             message = unwrap_payload(frame)
             if message is None:
                 self._log("cloud relay: dropped a frame with an unreadable payload")
+                self._frames.dropped(kind, REASON_MALFORMED, req_id=req_id)
                 return []
             if self._is_controller_join(message):
                 # Belt and braces with ``cowork_pair_bound``: whichever arrives
@@ -508,9 +523,21 @@ class CloudRelayLink:
                 # mean two commits from two fresh ceremonies, and the app would be
                 # answering the one we already threw away.
                 self._controller_joined_if_absent()
+                self._frames.acted(
+                    message.get("type"), DECISION_HANDSHAKE, req_id=req_id
+                )
                 return []
             # Traffic from a peer we never saw join still means one is there.
             self._controller_joined_if_absent()
+            # Handed up to the party, which reports what it routed the payload
+            # to. This line only says the pipe delivered it, so the two layers
+            # can be told apart when a frame stops between them.
+            self._frames.acted(
+                message.get("type"),
+                DECISION_DELIVERED,
+                req_id=req_id,
+                session_key=message.get("session_key"),
+            )
             return [message]
         if kind == TYPE_PAIR_BOUND:
             self._on_bound()
@@ -530,6 +557,7 @@ class CloudRelayLink:
             self._log(f"cloud relay ended the session: {frame.get('detail')}")
             return []
         self._log(f"cloud relay: ignoring frame type {kind!r}")
+        self._frames.dropped(kind, REASON_UNKNOWN_TYPE, req_id=req_id)
         return []
 
     def send_control(self, frame: dict[str, Any]) -> None:
@@ -598,3 +626,6 @@ class CloudRelayLink:
             return
         # Never silently dropped: the sender must be able to act on a refusal.
         self._log(f"cloud relay refused a frame: {code}")
+        self._frames.dropped(
+            frame.get("type"), REASON_REJECTED, code=code, req_id=frame.get("req_id")
+        )

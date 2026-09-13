@@ -1069,18 +1069,55 @@ class Executor:
 
     # -- serve loop ------------------------------------------------------
     def _serve(self) -> None:
+        """Read the host's envelopes for as long as this executor lives.
+
+        Every iteration is guarded. This thread is the only way a task reaches
+        the executor, and it is never restarted: before the guard, one
+        unparseable line or one unexpected exception ended it for good and every
+        later frame the user sent was ignored in perfect silence — a whole
+        session of messages that arrive and become nothing. A bad line is worth
+        a log line, never the pipe.
+        """
         while not self._stop.is_set():
-            data = self._endpoint.recv(timeout=self._poll)
-            if data is None:
-                continue
-            self._rx += data
+            try:
+                self._serve_once()
+            except Exception as exc:  # noqa: BLE001 - the reader must not die
+                logger.warning(
+                    "executor serve loop recovered from %s: %s",
+                    type(exc).__name__,
+                    exc,
+                )
+
+    def _serve_once(self) -> None:
+        data = self._endpoint.recv(timeout=self._poll)
+        if data is None:
+            return
+        self._rx += data
+        try:
             frames, self._rx = decode_frames(self._rx)
-            for frame in frames:
-                if (
-                    frame.get("type") == "request"
-                    and frame.get("method") in INBOUND_METHODS
-                ):
-                    self._handle_frame(frame)
+        except Exception as exc:  # noqa: BLE001 - one bad line, not the pipe
+            # The buffer is poisoned: the same bytes would fail on every later
+            # read, so the reader would go deaf for the rest of the session.
+            logger.warning("dropping an unparseable read buffer: %s", exc)
+            self._rx = b""
+            return
+        for frame in frames:
+            if (
+                frame.get("type") == "request"
+                and frame.get("method") in INBOUND_METHODS
+            ):
+                self._handle_frame(frame)
+            else:
+                # Nothing reaches this loop by accident: the host wraps every
+                # app frame in a ``run_task`` request. An envelope that lands
+                # here and is skipped is a frame the user sent and will never
+                # get an answer to, so it says so.
+                logger.warning(
+                    "envelope ignored request=%s type=%r method=%r",
+                    frame.get("requestId"),
+                    frame.get("type"),
+                    frame.get("method"),
+                )
 
     def _work(self) -> None:
         """Run accepted tasks, one at a time, off the queue.
@@ -1196,6 +1233,7 @@ class Executor:
         try:
             sealed = b64_to_frame(raw_b64)
         except (ValueError, TypeError):
+            logger.warning("frame rejected request=%s: malformed envelope", request_id)
             self._terminal(request_id, error_payload("malformed envelope frame"))
             return
 
@@ -1207,6 +1245,14 @@ class Executor:
         try:
             plaintext = opener.open(sealed)
         except AgentsFrameRejected as exc:
+            # A rejected frame is a lost message. It used to log nothing at all,
+            # so a task that died on the replay guard, on a stale one-use ticket
+            # or on a key-version mismatch looked exactly like a task that never
+            # arrived. The rejection name is structure, not content, and it is
+            # the difference between a five-minute diagnosis and a blind one.
+            logger.warning(
+                "frame rejected request=%s: %s", request_id, exc.rejection.value
+            )
             self._terminal(request_id, error_payload(f"rejected: {exc.rejection.value}"))
             return
 
@@ -1214,6 +1260,7 @@ class Executor:
             payload = decode_payload(plaintext)
             kind = payload.get("type")
         except (json.JSONDecodeError, TypeError, AttributeError):
+            logger.warning("frame rejected request=%s: bad payload", request_id)
             self._terminal(request_id, error_payload("bad payload"))
             return
 
@@ -1320,6 +1367,9 @@ class Executor:
             else:
                 self._terminal(request_id, error_payload("rooms not enabled"))
             return
+        logger.warning(
+            "frame rejected request=%s: unknown payload type %r", request_id, kind
+        )
         self._terminal(request_id, error_payload(f"unknown payload type: {kind!r}"))
 
     def _accept_task(self, request_id: str, payload: dict) -> None:
@@ -1369,6 +1419,63 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
         )
+        # A run of the same question is already in flight for this session:
+        # refuse the copy rather than pay for the same answer twice.
+        #
+        # Found on 2026-09-13 from this user's own ``runs`` table: three rows,
+        # identical prompt, 05:12:00 / 05:13:01 / 05:14:04, all in flight at
+        # once. He typed it once. The app had declared the first stream dead at
+        # its 60-second idle timeout and re-sent, while the host had never
+        # stopped working on it — so every slow answer was billed two or three
+        # times at the provider and the copies competed with the original,
+        # which is part of why a slow turn felt even slower.
+        #
+        # The identity used is the pair (session key, prompt). A ``task_id``
+        # from a newer app is caught earlier, in the host party, but this rule
+        # has to hold for an app build that predates it — his phone's does.
+        # Nobody deliberately asks the identical question twice while the first
+        # is still running, so the rule cannot refuse a legitimate send; a
+        # different follow-up still queues normally.
+        #
+        # Concurrency, decided explicitly: runs of one session stay serialised.
+        # One executor owns one sandbox and one session db, and ``_work`` pops
+        # one run at a time, so a second run of a session waits rather than
+        # interleaving its history writes with the first. This rule refuses the
+        # duplicate outright; it does not change that ordering for anything else.
+        live = self._run_in_flight(str(session_key), prompt)
+        if live is not None:
+            logger.warning(
+                "duplicate task refused request=%s session=%s: the same prompt "
+                "is already in flight as run=%s",
+                request_id,
+                session_key,
+                live.run_id,
+            )
+            self._event(
+                request_id,
+                run_state_payload(
+                    str(session_key),
+                    "running",
+                    run_id=live.run_id,
+                    started_at=live.started_at,
+                    prompt=live.prompt,
+                    browser_open=self._browser_open,
+                    vnc_available=self._vnc_available(str(session_key)),
+                ),
+            )
+            # Close this request so the sender is not left waiting on a stream
+            # that will never open. The answer arrives on the original run.
+            self._terminal(
+                request_id,
+                done_payload(
+                    final_answer=None,
+                    reason="duplicate",
+                    iterations=0,
+                    run_id=live.run_id,
+                    session_key=str(session_key),
+                ),
+            )
+            return
         # One line per accepted task naming the model it will run on — never the
         # prompt. This is what makes a live run provable from the host log.
         logger.info(
@@ -1382,6 +1489,18 @@ class Executor:
             run.reasoning_effort or HOST_DEFAULT,
         )
         self._enqueue_run(run)
+
+    def _run_in_flight(self, session_key: str, prompt: str) -> "_Run | None":
+        """The run of ``session_key`` that is already asking ``prompt``, if any.
+
+        Queued counts as in flight: the copy would be answered twice either way,
+        and the second copy is exactly what must not be paid for.
+        """
+        with self._runs_lock:
+            for run in self._runs.values():
+                if run.session_key == session_key and run.prompt == prompt:
+                    return run
+        return None
 
     def _enqueue_run(self, run: _Run) -> None:
         """Record the run, then queue it. Shared by a task frame and a fired

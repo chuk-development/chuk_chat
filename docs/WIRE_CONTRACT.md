@@ -62,11 +62,87 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 
 | type | fields | notes |
 |---|---|---|
-| `task` | `prompt`, `session_key`, `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. |
+| `task` | `prompt`, `session_key`, `task_id`? (NEW), `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. `task_id` is NEW and optional — see "Task acknowledgement". |
 | `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
 | `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
+
+### Task acknowledgement (NEW, additive)
+
+A `task` frame may carry `task_id`: an opaque string of at most 64 characters,
+**stable per user message and not per send attempt**. Every retry of the same
+message carries the byte-identical id. An app that omits it gets exactly the old
+behaviour, so an older build keeps working against a newer host.
+
+For every `task` that names a `task_id` the host answers with one sealed frame,
+routed to the sending device alone:
+
+```json
+{"type": "task_ack", "task_id": "<the id the app sent>",
+ "session_key": "<key>"?, "status": "accepted" | "duplicate" | "rejected",
+ "request_id": "<executor request id>"?, "reason": "<slug>"?}
+```
+
+- `accepted` — the host holds the task and has handed it to the executor.
+- `duplicate` — the host already took this `task_id`. It is running or finished.
+  The app must not send it again and must not paint a second bubble.
+- `rejected` — the host could not take it. `reason` is one of
+  `not_provisioned`, `queue_full`, `malformed`. `not_provisioned` is retryable:
+  the app sends its `account_authentication` and then the same task again.
+
+Why it exists. `socket.send` on a websocket whose other end has been replaced
+succeeds, so until this frame existed a send was fire-and-forget: nothing could
+tell an accepted task from a lost one, and therefore nothing could retry one.
+On 2026-09-13 a message left the phone at 04:49 and produced no run, no log and
+no trace line on a host that had restarted a minute earlier; the app showed a
+typing indicator until the user gave up. The ack is what turns that into a
+fact the app can act on, and the `task_id` is what lets it re-send without the
+risk of running — and billing — the same question twice.
+
+The host also answers `rejected` for the cases that used to be silent. So after
+this change, **no ack at all means one thing only: the frame never reached the
+host**, and the app re-sends it on the next reconnect.
+
+### One question, one run (NEW, host-side rule)
+
+The executor refuses a task whose `(session_key, prompt)` pair is already in
+flight — queued or running. It answers that request with a `run_state` naming
+the live run, then a terminal `done` with `reason: "duplicate"` and that run's
+`run_id`, and starts nothing. The app treats such a `done` as the end of the
+*attempt*, not of the turn: it adopts the named run and keeps waiting for it.
+
+Why. On 2026-09-13 the identical prompt started three concurrent runs at
+05:12:00, 05:13:01 and 05:14:04; the user typed it once. Each was a full run
+with a 44-62k-token prompt, so one question was paid for three times and the
+copies worked the same session's history at once. The trigger was the app's
+`startStreamingPass` retrying a whole pass on a stream error it classed as
+reconnectable — on that build the 60-second idle timeout raised exactly such an
+error, which is why the copies are 61 and 63 seconds apart — while the host had
+never stopped working on the first one.
+
+The app now also refuses to re-send while its ledger says a run for the thread
+is in flight, and a `task_id` catches a retry earlier still. Neither replaces
+this rule: an older app build knows none of it, and no client can know whether a
+copy already arrived. The identity is the prompt because nobody asks the
+identical question twice while the first is still running; a different follow-up
+queues normally.
+
+**Concurrency, decided:** runs of one session stay serialised. One executor owns
+one sandbox and one session db, and the worker pops one run at a time, so a
+second run of a session waits rather than interleaving its history writes. This
+rule refuses a duplicate outright; it does not change that ordering.
+
+### Every inbound frame is accounted for (NEW, host-side rule)
+
+The host logs what became of every frame it receives: the type, the device or
+request id that names it, and the decision — dispatched to the executor,
+dispatched to a room, part of a handshake, acked as a duplicate, ignored as
+unknown, or dropped with a reason. Frames the host acted on go to the run trace
+(`relay_frame_in`); frames it dropped or ignored go to the ordinary log as well
+(`relay_frame_dropped`), because a swallowed message is the failure the user
+sees and must be visible on a host nobody started with `--trace`. No frame may
+leave the dispatch silently. See `host/src/chuk_agents_host/relay_ledger.py`.
 
 ### Token freshness (bead cowork-c91)
 

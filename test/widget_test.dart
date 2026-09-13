@@ -110,6 +110,7 @@ class _IdleRelayController implements AgentsRelayController {
     String? reasoningEffort,
     bool debug = false,
     bool regenerate = false,
+    String? taskId,
   }) async {}
 
   @override

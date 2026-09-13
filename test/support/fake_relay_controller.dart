@@ -38,6 +38,9 @@ class FakeRelayController implements AgentsRelayController {
   /// send leaves it false.
   final List<bool> taskRegenerateFlags = <bool>[];
 
+  /// The `task_id` of every send, in order. Null for a caller that sent none.
+  final List<String?> taskIds = <String?>[];
+
   int stopCalls = 0;
   final List<String> stopSessionKeys = <String>[];
 
@@ -158,6 +161,7 @@ class FakeRelayController implements AgentsRelayController {
     String? reasoningEffort,
     bool debug = false,
     bool regenerate = false,
+    String? taskId,
   }) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);
@@ -166,6 +170,7 @@ class FakeRelayController implements AgentsRelayController {
     taskReasoning.add(reasoningEffort);
     taskDebugFlags.add(debug);
     taskRegenerateFlags.add(regenerate);
+    taskIds.add(taskId);
     final error = taskError;
     if (error != null) throw error;
   }
