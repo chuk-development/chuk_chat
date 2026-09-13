@@ -587,6 +587,15 @@ const Map<String, String> stringsDe = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modelle',
   'searchModels': 'Modelle suchen...',
+  'modelProvider': 'Anbieter',
+  'chooseProvider': 'Wählen',
+  'modelPromptCustom': 'Individuell',
+  'fastMode': 'Schneller Modus',
+  'thinkingMode': 'Denkmodus',
+  'availableModelsOne': 'Verfügbar · {count} Modell',
+  'availableModelsMany': 'Verfügbar · {count} Modelle',
+  'modelsFoundOne': '{count} Modell gefunden',
+  'modelsFoundMany': '{count} Modelle gefunden',
   'modelError': 'Fehler: {error}',
 
   // ── Message bubble extras ──────────────────────────────────
