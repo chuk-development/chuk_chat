@@ -121,15 +121,11 @@ mixin SidebarStateCommon<T extends StatefulWidget> on State<T> {
     scrollController.addListener(onScrollForAutoLoad);
     isOfflineMode = !NetworkStatusService.isOnline;
     unawaited(loadSidebarProfile());
-    _chatUpdatesSubscription = ChatStorageService.changes.listen((
-      changedChatId,
-    ) {
+    _chatUpdatesSubscription = ChatStorageService.changes.listen((_) {
       if (!mounted) return;
-      if (changedChatId == null) {
-        unawaited(applyChatFilter());
-      } else {
-        setState(() {});
-      }
+      // The filtered list holds immutable StoredChat snapshots. A rebuild
+      // alone keeps rendering the old title after a single-chat rename.
+      unawaited(applyChatFilter());
     });
     NetworkStatusService.isOnlineListenable.addListener(
       onSidebarNetworkStatusChanged,

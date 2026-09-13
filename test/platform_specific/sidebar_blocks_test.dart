@@ -90,6 +90,41 @@ void main() {
   tearDown(ChatStorageState.chatsById.clear);
 
   group('SidebarDesktop', () {
+    testWidgets('replaces a chat title after a single-chat update', (
+      tester,
+    ) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: 'a',
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      ChatStorageState.chatsById['a'] = ChatStorageState.chatsById['a']!
+          .copyWith(
+            customName: 'Generated summary',
+            title: 'Generated summary',
+          );
+      ChatStorageState.notifyChanges('a');
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+
+      expect(find.text('Generated summary'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsNothing);
+      await _settleStartupWork(tester);
+    });
+
     testWidgets('navigation block holds one card per destination', (
       tester,
     ) async {
@@ -317,6 +352,40 @@ void main() {
   });
 
   group('SidebarMobile', () {
+    testWidgets('replaces a chat title after a single-chat update', (
+      tester,
+    ) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarMobile(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: 'a',
+            isCompactMode: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      ChatStorageState.chatsById['a'] = ChatStorageState.chatsById['a']!
+          .copyWith(
+            customName: 'Generated summary',
+            title: 'Generated summary',
+          );
+      ChatStorageState.notifyChanges('a');
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+
+      expect(find.text('Generated summary'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsNothing);
+      await _settleStartupWork(tester);
+    });
+
     testWidgets('shows the same blocks as the desktop sidebar', (tester) async {
       _tallWindow(tester);
       var settings = 0;
