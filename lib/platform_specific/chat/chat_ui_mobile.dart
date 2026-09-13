@@ -1275,11 +1275,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     if (!mounted || result == null) return;
 
-    if (result.requiresLogout) {
-      await SupabaseService.signOut();
-      if (!mounted) return;
-    }
-
     if (!result.success) {
       if (!sessionLookupFailed) {
         showSnackBar(result.error ?? l.transcriptionFailed);

@@ -12,6 +12,7 @@ import 'package:chuk_chat/utils/permission_handler_stub.dart'
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
 import 'package:chuk_chat/services/streaming_transcription_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 enum AudioRecordingChange { started, stopped, failed, busy }
 
@@ -370,14 +371,25 @@ class AudioRecordingHandler {
       }
       return TranscriptionResult(success: true, text: text);
     } on TranscriptionException catch (error) {
+      if (error.statusCode == 401) {
+        // The access token aged out while the app sat open. That is a stale
+        // token, not a revoked account: refresh it and retry once. Signing
+        // the user out here (as this used to do) throws away a perfectly
+        // good session over a routine token rotation.
+        final TranscriptionResult? retried = await _retryTranscribeAfterRefresh(
+          apiService: apiService,
+          wav: wav,
+          staleToken: accessToken,
+        );
+        _isTranscribingAudio = false;
+        return retried ??
+            TranscriptionResult(
+              success: false,
+              error: 'Session expired. Please try again.',
+            );
+      }
       _isTranscribingAudio = false;
       switch (error.statusCode) {
-        case 401:
-          return TranscriptionResult(
-            success: false,
-            error: 'Session expired',
-            requiresLogout: true,
-          );
         case 502:
           return TranscriptionResult(
             success: false,
@@ -395,6 +407,50 @@ class AudioRecordingHandler {
     } catch (error) {
       _isTranscribingAudio = false;
       return TranscriptionResult(success: false, error: 'Error: $error');
+    }
+  }
+
+  /// Refresh the Supabase access token and replay the upload once.
+  ///
+  /// Returns the successful result, or null when the retry is impossible or
+  /// fails again. Either way the user stays signed in — a stale token is a
+  /// retryable condition, never a logout.
+  Future<TranscriptionResult?> _retryTranscribeAfterRefresh({
+    required ChatApiService apiService,
+    required Uint8List wav,
+    required String staleToken,
+  }) async {
+    String? freshToken;
+    try {
+      final session = await SupabaseService.refreshSession();
+      freshToken = session?.accessToken;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Transcription token refresh failed: $error');
+      }
+      return null;
+    }
+    if (freshToken == null ||
+        freshToken.isEmpty ||
+        freshToken == staleToken) {
+      return null;
+    }
+    try {
+      final transcription = await apiService.transcribeAudioBytes(
+        bytes: wav,
+        filename: 'recording.wav',
+        accessToken: freshToken,
+      );
+      final String text = transcription.text.trim();
+      if (text.isEmpty) {
+        return TranscriptionResult(success: false, error: 'No text found');
+      }
+      return TranscriptionResult(success: true, text: text);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Transcription retry after refresh failed: $error');
+      }
+      return null;
     }
   }
 
@@ -505,12 +561,6 @@ class TranscriptionResult {
   final bool success;
   final String? text;
   final String? error;
-  final bool requiresLogout;
 
-  TranscriptionResult({
-    required this.success,
-    this.text,
-    this.error,
-    this.requiresLogout = false,
-  });
+  TranscriptionResult({required this.success, this.text, this.error});
 }
