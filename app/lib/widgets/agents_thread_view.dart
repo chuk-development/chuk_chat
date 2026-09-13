@@ -287,6 +287,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   Timer? _autoReconnectTimer;
   int _reconnectAttempts = 0;
 
+  /// The transport phase this view last saw. It is how "we just became paired"
+  /// is told from "we were already paired and the notifier fired again", which
+  /// is what keeps an unacknowledged task to exactly one re-send per reconnect.
+  AgentsRelayPhase? _lastPhase;
+
   /// How many reconnects have been tried since the link was last up.
   ///
   /// Not [_reconnectAttempts]: that one is the backoff dial, and the watchdog
@@ -324,6 +329,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _ledger.addListener(_onLedgerChanged);
     // A run that goes quiet is asked about rather than animated for ever.
     _ledger.onRunSilent = _onRunSilent;
+    // A task the host has not acknowledged at all is SENT AGAIN rather than
+    // waited on: nothing about it says it ever arrived.
+    _ledger.onTaskUnacknowledged = _onTaskUnacknowledged;
     _reconcileOnOpen();
     _loader.addListener(_onLoaderChanged);
     _automations.attach();
@@ -389,6 +397,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // Tear-offs of the same method on the same state object compare equal,
     // so this only clears the hook when it is still ours.
     if (_ledger.onRunSilent == _onRunSilent) _ledger.onRunSilent = null;
+    if (_ledger.onTaskUnacknowledged == _onTaskUnacknowledged) {
+      _ledger.onTaskUnacknowledged = null;
+    }
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     _controller?.state.removeListener(_onStateChanged);
@@ -553,6 +564,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (controller == null) return;
     final state = controller.state.value;
     final phase = state.phase;
+    final bool wasPaired = _lastPhase == AgentsRelayPhase.paired;
+    _lastPhase = phase;
     if (phase == AgentsRelayPhase.paired) {
       _reconnectAttempts = 0;
       // The link is up, so the failures behind us are history: a single drop
@@ -579,6 +592,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         () => _flushOutbox(controller),
       );
       unawaited(_flushOutbox(controller));
+      // Last, the tasks that DID go to a socket and were never acknowledged.
+      // Only on the transition into `paired`: the notifier fires for other
+      // reasons while the link stays up, and each of those would be another
+      // copy of the same frame on the wire. The host dedupes by `task_id`, so
+      // a copy costs an extra `duplicate` ack rather than a second run — but
+      // the app must not lean on that to be correct.
+      if (!wasPaired) unawaited(_resendUnacknowledged(controller));
       return;
     }
     // Not paired any more: Retry falls back to fetching the host.
@@ -630,6 +650,60 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       }
       return 0;
     }
+  }
+
+  /// Sends every task of this thread the host has not acknowledged again.
+  ///
+  /// This is the half of the fix the outbox could never do. The outbox holds
+  /// what the socket REFUSED; these went out and vanished — a half-open socket
+  /// whose `send()` reported success, or a host that dropped the frame because
+  /// it was not provisioned for the controller session yet. Nothing told the
+  /// app, so nothing could retry, and the message was simply gone.
+  ///
+  /// The re-send carries the ORIGINAL `task_id`. The host dedupes on it and
+  /// answers `duplicate` for a task it already took, so a task that did arrive
+  /// is never run twice — and the app paints nothing for a `duplicate`, so the
+  /// thread never grows a second bubble either.
+  ///
+  /// Nothing is retried for ever: a task that has used up its attempts is
+  /// dropped from the record, and the ledger's own pre-run rule is what tells
+  /// the reader the message did not arrive.
+  Future<void> _resendUnacknowledged(AgentsRelayController controller) async {
+    final String sessionKey = widget.threadKey;
+    if (sessionKey.isEmpty) return;
+    try {
+      await AgentsPendingTasks.resend(sessionKey, (PendingTask task) async {
+        if (!mounted || !controller.state.value.isPaired) {
+          // The link went away again mid-flush. Throwing stops the loop and
+          // leaves everything that is left recorded for the next pairing.
+          throw StateError('the link went down during the re-send');
+        }
+        _ledger.taskSent(sessionKey, task.taskId);
+        await controller.sendTask(
+          task.prompt,
+          sessionKey: sessionKey,
+          modelId: task.modelId,
+          providerSlug: task.providerSlug,
+          reasoningEffort: task.reasoningEffort,
+          taskId: task.taskId,
+        );
+      });
+    } catch (error) {
+      // A failed re-send leaves the record where it is; the next pairing tries
+      // again. It must never take the reconnect down with it.
+      if (kDebugMode) {
+        debugPrint('[agents-pending] resend failed for $sessionKey: $error');
+      }
+    }
+  }
+
+  /// The ledger's pre-run window expired: this task has no `task_ack`, no
+  /// heartbeat and no run, and the socket says we are paired. Send it again.
+  void _onTaskUnacknowledged(String sessionKey) {
+    if (!mounted || sessionKey != widget.threadKey) return;
+    final controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) return;
+    unawaited(_resendUnacknowledged(controller));
   }
 
   /// Asks the host to re-stream this thread from the replay cursor.
@@ -987,6 +1061,40 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             runId: runId,
           ),
         );
+      case AgentsRelayTaskAck():
+        // The reader's half of this lives in the adapter, which turns a
+        // rejection into a failed bubble. What is done HERE is the bookkeeping
+        // that has to happen even when no chat stream is listening any more —
+        // a task re-sent by [_resendUnacknowledged] after a reconnect, an app
+        // that was restarted between the send and the answer. Without it the
+        // record would stay and the same task would go out again on the next
+        // pairing, for ever.
+        if (event.sessionKey != null && event.sessionKey != widget.threadKey) {
+          return;
+        }
+        if (event.isHeld) {
+          _ledger.taskAcknowledged(
+            widget.threadKey,
+            taskId: event.taskId,
+            runId: event.runId,
+          );
+          unawaited(
+            AgentsPendingTasks.clear(
+              widget.threadKey,
+              event.taskId,
+            ).catchError((Object _) {}),
+          );
+        } else {
+          // Refused. The record goes either way: re-sending a frame the host
+          // has already refused for a reason it will refuse it for again is
+          // not a retry, it is a loop.
+          unawaited(
+            AgentsPendingTasks.clear(
+              widget.threadKey,
+              event.taskId,
+            ).catchError((Object _) {}),
+          );
+        }
       case AgentsRelayHeartbeat():
       case AgentsRelayDelta():
       case AgentsRelayUser():

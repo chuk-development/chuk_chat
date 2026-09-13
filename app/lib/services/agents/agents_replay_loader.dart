@@ -466,7 +466,15 @@ class AgentsReplayLoader extends ChangeNotifier {
             finalAnswer: event.finalAnswer,
           ),
         );
-        if (notice != null && draft.aiText.toString().trim().isEmpty) {
+        // A turn the host reports as STILL RUNNING is not a dead turn. The
+        // `run_state` header that opened this replay says so, and its word
+        // beats the absence of a terminal: marking it `interrupted` puts a
+        // "Continue generation" button on a run that is still writing its
+        // answer, and the answer then arrives underneath the button.
+        final stillRunning = _hostRunning.contains(draft.sessionKey);
+        if (notice != null &&
+            !stillRunning &&
+            draft.aiText.toString().trim().isEmpty) {
           _openAiRow(draft);
           draft.aiText.write(notice);
           draft.aiRow!['status'] = 'interrupted';
@@ -478,6 +486,7 @@ class AgentsReplayLoader extends ChangeNotifier {
           notifyListeners();
         }
 
+      case AgentsRelayTaskAck():
       case AgentsRelayHeartbeat():
       case AgentsRelayRunError():
       case AgentsRelaySecretRequest():
@@ -778,8 +787,9 @@ class AgentsReplayLoader extends ChangeNotifier {
       saved.then(
         (_) {},
         onError: (Object error) {
-          if (kDebugMode)
+          if (kDebugMode) {
             debugPrint('[agents-replay] cache write failed: $error');
+          }
         },
       ),
     );
@@ -828,6 +838,11 @@ class AgentsReplayLoader extends ChangeNotifier {
   /// a reconnect that reconciles the same dead run again adds nothing.
   Future<void> appendNotice(String session, String notice) async {
     if (session.isEmpty || notice.isEmpty) return;
+    // The host says this thread has a run in flight. Whatever made the local
+    // ledger close its own run — a dropped socket, a view that was rebuilt —
+    // the turn is not dead, so it gets neither the line nor the `interrupted`
+    // status that turns it into a "Continue generation" button.
+    if (_hostRunning.contains(session)) return;
     final existing = await _cachedRows(session);
     if (existing.isNotEmpty &&
         (existing.last['text'] ?? '').trim() == notice.trim()) {

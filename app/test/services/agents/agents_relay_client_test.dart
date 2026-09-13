@@ -621,6 +621,85 @@ void main() {
     await client.dispose();
   });
 
+  test('sendTask waits for the account provision, so a task never overtakes '
+      'its own auth', () async {
+    // This is how a message disappeared. Right after a reconnect the task
+    // frame could reach the host BEFORE the `account_authentication` that says
+    // whose task it is, and a host with no provisioned controller session
+    // dropped it where it stood: no run, no log, no error frame. The app saw
+    // the same nothing it sees for a frame that never left the phone.
+    final (client, host, _) = await paired();
+
+    final task = client.sendTask(
+      'list the files',
+      sessionKey: 'thread-1',
+      taskId: 'task-abc',
+    );
+    await settle();
+    // Held: the provision has not happened.
+    expect(host.received.where((m) => m['type'] == 'task'), isEmpty);
+
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    await task;
+    await settle();
+
+    final order = host.received
+        .map((m) => m['type'])
+        .where((t) => t == 'account_authentication' || t == 'task')
+        .toList();
+    expect(order, ['account_authentication', 'task']);
+    final sent = host.received.singleWhere((m) => m['type'] == 'task');
+    expect(sent['task_id'], 'task-abc');
+
+    await client.dispose();
+  });
+
+  test('a task with no id leaves the key off the frame, and an ack comes back '
+      'as a typed event', () async {
+    // The id is optional on the wire, so a caller that has none and a host too
+    // old to know the key both keep working exactly as before.
+    final (client, host, _) = await paired();
+    await client.provisionAccount(
+      const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    final acks = <AgentsRelayTaskAck>[];
+    client.inbound.listen((event) {
+      if (event is AgentsRelayTaskAck) acks.add(event);
+    });
+
+    await client.sendTask('list the files', sessionKey: 'thread-1');
+    await settle();
+    expect(
+      host.received.singleWhere((m) => m['type'] == 'task'),
+      isNot(contains('task_id')),
+    );
+
+    // `request_id` is what the contract calls the executor's id for the work.
+    await host.emit(<String, dynamic>{
+      'type': 'task_ack',
+      'task_id': 'task-abc',
+      'session_key': 'thread-1',
+      'status': 'rejected',
+      'reason': 'not_provisioned',
+    });
+    await settle();
+    expect(acks.single.taskId, 'task-abc');
+    expect(acks.single.isRejected, isTrue);
+    expect(acks.single.isRetryable, isTrue);
+
+    await client.dispose();
+  });
+
   test('a replay waits for the account provision, so auth goes out first',
       () async {
     // The host logs "expected account_authentication, got 'replay'" when the

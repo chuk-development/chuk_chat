@@ -189,6 +189,85 @@ class AgentsRelayHeartbeat extends AgentsRelayInbound {
   final double? elapsedSeconds;
 }
 
+/// The host says what it did with one `task` frame (wire `task_ack`).
+///
+/// The frame that turns a silent drop into an answer. A `task` used to be
+/// fire-and-forget: the app sealed it, the socket said "sent", and if the host
+/// was not provisioned for the current controller session it fell off the end
+/// of its handler — no run, no log, no error. The app could not tell that apart
+/// from a frame that never left the phone, so the thread kept the typing dots
+/// for ever (the 04:49 message that was simply gone).
+///
+/// One ack per `task` that carried a [taskId]. [status] is the whole contract:
+///  * `accepted` — the host holds the task and handed it to the executor;
+///  * `duplicate` — the host already took this [taskId]. It is running or
+///    finished. Do not send it again and do not paint a second bubble;
+///  * `rejected` — the host could not take it, and [reason] says why
+///    (`not_provisioned`, `queue_full`, `malformed`).
+///
+/// No ack at all now means one thing only: the frame never reached the host.
+class AgentsRelayTaskAck extends AgentsRelayInbound {
+  const AgentsRelayTaskAck({
+    required this.taskId,
+    required this.status,
+    this.sessionKey,
+    this.runId,
+    this.reason,
+  });
+
+  /// The app's own id for the send, echoed back byte for byte.
+  final String taskId;
+
+  /// `accepted`, `duplicate` or `rejected`.
+  final String status;
+
+  /// The thread the task belongs to; null on a host that leaves the key off.
+  final String? sessionKey;
+
+  /// The executor's id for the work, when the host knows one (accepted, and
+  /// duplicate once the first attempt started running). The wire calls it
+  /// `request_id`; an older host that sent `run_id` is read the same way.
+  final String? runId;
+
+  /// Short slug, only on a rejection: `not_provisioned`, `queue_full` or
+  /// `malformed` (docs/WIRE_CONTRACT.md, "Task acknowledgement").
+  final String? reason;
+
+  /// True while the host holds the task: nothing to re-send, nothing to draw.
+  bool get isHeld => status == 'accepted' || status == 'duplicate';
+
+  /// True when the host already had this task. The app must stay quiet: the
+  /// answer is coming from the first attempt.
+  bool get isDuplicate => status == 'duplicate';
+
+  /// True when the host refused the task. This is a real failure, and the
+  /// thread has to say so instead of spinning.
+  bool get isRejected => status == 'rejected';
+
+  /// The one rejection the app can do something about: re-provision, then send
+  /// the same task id again.
+  bool get isRetryable => isRejected && reason == 'not_provisioned';
+
+  /// Null for a frame that names no task — there would be nothing to clear.
+  static AgentsRelayTaskAck? fromPayload(Map<String, dynamic> payload) {
+    final id = payload['task_id'];
+    if (id is! String || id.isEmpty) return null;
+    final status = payload['status'];
+    final session = payload['session_key'];
+    final runId = payload['request_id'] ?? payload['run_id'];
+    final reason = payload['reason'];
+    return AgentsRelayTaskAck(
+      taskId: id,
+      // An unknown status is treated as a rejection: the app must never keep
+      // waiting on a word it does not understand.
+      status: status is String && status.isNotEmpty ? status : 'rejected',
+      sessionKey: session is String && session.isNotEmpty ? session : null,
+      runId: runId is String && runId.isNotEmpty ? runId : null,
+      reason: reason is String && reason.isNotEmpty ? reason : null,
+    );
+  }
+}
+
 /// An assistant text delta.
 class AgentsRelayDelta extends AgentsRelayInbound {
   const AgentsRelayDelta(
@@ -1196,6 +1275,19 @@ abstract interface class AgentsRelayController {
   /// new question — the Retry button. The host then drops the turn being
   /// retried before it stores this prompt, so the conversation holds the
   /// question once and the newest answer rather than one copy per attempt.
+  ///
+  /// [taskId] names THIS SEND. Every distinct send mints a fresh one — each
+  /// tool-loop pass, each regenerate, each continue — because the host dedupes
+  /// strictly: a second frame carrying an id it has already taken is answered
+  /// `duplicate` and is NOT run, so two passes sharing an id would leave the
+  /// second one silently undone, which is the very failure this exists to fix.
+  /// The id is reused for ONE reason only: re-sending a send that was never
+  /// acknowledged. That is what makes a blind re-send after a reconnect safe.
+  ///
+  /// The host answers every task that carries one with a `task_ack`
+  /// ([AgentsRelayTaskAck]), so "no ack" means "the frame never arrived" and
+  /// nothing else. Left off the frame when null, so a host too old to know the
+  /// key behaves exactly as before.
   Future<void> sendTask(
     String prompt, {
     String sessionKey,
@@ -1204,6 +1296,7 @@ abstract interface class AgentsRelayController {
     String? reasoningEffort,
     bool debug,
     bool regenerate,
+    String? taskId,
   });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
@@ -2051,7 +2144,15 @@ class AgentsRelayClient
     String? reasoningEffort,
     bool debug = false,
     bool regenerate = false,
+    String? taskId,
   }) async {
+    // Auth first, then the work — the same gate as a replay and an agent list,
+    // and for a worse reason. Right after a reconnect this frame could overtake
+    // its own `account_authentication`, and a host that is not provisioned for
+    // the current controller session used to drop a `task` on the floor: no
+    // run, no log, no error frame. The prompt was simply gone.
+    await _awaitProvisionGate();
+    if (_disposed) return;
     // The user's UI-configured MCP servers, resolved with their live bearers at
     // launch. Empty (or no store) leaves the key off the frame, so an old host
     // and a user with no connectors both keep working unchanged.
@@ -2067,6 +2168,9 @@ class AgentsRelayClient
       'type': 'task',
       'prompt': prompt,
       'session_key': sessionKey,
+      // The app's id for this send. It rides only when the caller has one, so
+      // an old host sees the frame it has always seen.
+      if (taskId != null && taskId.isNotEmpty) 'task_id': taskId,
       // Each model field rides along only when the composer set it, so an
       // old host and an unconfigured send both keep the host's own default.
       if (modelId != null && modelId.isNotEmpty) 'model': modelId,
@@ -2614,6 +2718,12 @@ class AgentsRelayClient
             sentAt: epochSecondsToDateTime(payload['created_at']),
           ),
         );
+      case 'task_ack':
+        // The host's answer to one `task` frame. Nothing is rendered from it
+        // directly: it either clears the app's record of an unacknowledged
+        // send, or it tells the thread the send failed and why.
+        final ack = AgentsRelayTaskAck.fromPayload(payload);
+        if (ack != null) _inbound.add(ack);
       case 'heartbeat':
         // Proof of life. Nothing is rendered from it: it only stops the app
         // from reading a long prefill or a long command as a dead host.

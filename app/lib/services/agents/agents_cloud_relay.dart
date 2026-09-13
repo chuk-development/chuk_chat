@@ -567,6 +567,15 @@ class AgentsCloudRelaySocket implements RelaySocket {
         // Routing failed (the host went offline mid-run, a bad target). There
         // is nothing to render and nothing the ceremony can do with it; the
         // client's own timeout and the reconnect watchdog are what recover.
+        //
+        // [close] is deliberately the whole response, and it must stay a
+        // CLOSE and never a failure: it ends the upward stream, the relay
+        // client turns that into `AgentsRelayPhase.closed` ("Disconnected"),
+        // and the thread view's watchdog dials again and re-provisions the
+        // account token on its own. A host restart therefore costs the user
+        // nothing — no error to read, no button to press. Raising an error
+        // here instead would park the view in a terminal state that only a
+        // tap could leave.
         if (kDebugMode) {
           debugPrint('[agents-cloud] relay error: ${frame['code']}');
         }
@@ -581,6 +590,8 @@ class AgentsCloudRelaySocket implements RelaySocket {
         // The API socket may still be healthy while the host restarted. The
         // old traffic keys are no longer usable: tell the reconnect supervisor
         // this connection is down instead of leaving a green but dead client.
+        // Same contract as `cowork_error` above — a close, which the watchdog
+        // answers with a fresh dial and a fresh `account_authentication`.
         if (_ready &&
             frame['device_id'] == _targetDeviceId &&
             frame['online'] == false) {

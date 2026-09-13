@@ -56,6 +56,17 @@ from .protocol import (
     frame_envelope,
     pairing_envelope,
 )
+from .relay_ledger import (
+    DECISION_DISPATCHED_EXECUTOR,
+    DECISION_HANDSHAKE,
+    DECISION_PROVISIONED,
+    InboundFrameLog,
+    REASON_NOT_PAIRED,
+    REASON_NOT_PROVISIONED,
+    REASON_REJECTED,
+    REASON_SESSION_REPLACED,
+    REASON_UNKNOWN_TYPE,
+)
 from .serve import TaskServer
 from .transport import PartyLink, PartyTransport
 
@@ -145,6 +156,10 @@ class HostParty:
         self._key_version = key_version
         self._build_task_server = build_task_server
         self._log = logger or (lambda _msg: None)
+        # What became of each inbound party message. A frame that arrives and
+        # produces nothing must still leave a line naming the reason; without
+        # one it is indistinguishable from a frame that never arrived.
+        self._frames = InboundFrameLog(self._log)
         self._controller_token = controller_token
 
         self._link: PartyLink | None = None
@@ -417,6 +432,10 @@ class HostParty:
             frame_b64 = msg.get("frame")
             if isinstance(frame_b64, str):
                 self._handle_frame(frame_b64)
+            else:
+                self._frames.dropped(kind, REASON_NOT_PAIRED, detail="no frame field")
+        else:
+            self._frames.dropped(kind, REASON_UNKNOWN_TYPE)
 
     # -- pairing (initiator) --------------------------------------------
 
@@ -429,7 +448,12 @@ class HostParty:
             return
         if pairing is None:
             # A pairing message arrived with no live session (e.g. the controller
-            # dropped between frames). Nothing to drive; ignore it.
+            # dropped between frames). Nothing to drive; ignore it — but say so,
+            # because from the app's side this looks like a ceremony that simply
+            # stopped answering.
+            self._frames.dropped(
+                TYPE_PAIRING, REASON_SESSION_REPLACED, step=data.get("type")
+            )
             return
         step = data.get("type")
         self._log(f"pairing step in: {step!r} (state={pairing.state.value})")
@@ -450,6 +474,9 @@ class HostParty:
                     self._on_paired(pairing)
             else:
                 self._log(f"pairing: ignoring unexpected step {step!r}")
+                self._frames.dropped(TYPE_PAIRING, REASON_UNKNOWN_TYPE, step=step)
+                return
+            self._frames.acted(TYPE_PAIRING, DECISION_HANDSHAKE, step=step)
         except PairingError as exc:
             self._log(f"pairing aborted: {exc.rejection.value}")
         except Exception as exc:  # noqa: BLE001 - diagnostic logging
@@ -543,12 +570,20 @@ class HostParty:
             task_server = self._task_server
         if opener is None or sealer is None:
             self._log("frame received before pairing completed; dropping")
+            self._frames.dropped(TYPE_FRAME, REASON_NOT_PAIRED)
             return
         if not provisioned:
             self._provision(frame_b64, opener, sealer)
             return
-        if task_server is not None:
-            task_server.submit(frame_b64)
+        if task_server is None:
+            # Provisioned, but no task server to hand it to. Rare — it means a
+            # build failed earlier — and it used to be a frame that vanished.
+            self._frames.dropped(TYPE_FRAME, REASON_NOT_PROVISIONED)
+            return
+        request_id = task_server.submit(frame_b64)
+        self._frames.acted(
+            TYPE_FRAME, DECISION_DISPATCHED_EXECUTOR, request_id=request_id
+        )
 
     def _provision(
         self,
@@ -561,15 +596,24 @@ class HostParty:
             plaintext = opener.open(base64.b64decode(frame_b64))
         except (AgentsFrameRejected, ValueError) as exc:
             self._log(f"token frame rejected: {exc}")
+            self._frames.dropped(TYPE_FRAME, REASON_REJECTED, detail=type(exc).__name__)
             return
         try:
             token = json.loads(plaintext)
         except (ValueError, TypeError):
             self._log("token frame was not valid JSON")
+            self._frames.dropped(TYPE_FRAME, REASON_REJECTED, detail="not json")
             return
         if not isinstance(token, dict) or token.get("type") != "account_authentication":
+            # The app sent something else first. It is thrown away here, and
+            # that used to be the end of it: the user's message was gone and
+            # only this one line said anything at all.
             self._log(
                 f"expected account_authentication, got {token.get('type')!r}"
+            )
+            self._frames.dropped(
+                token.get("type") if isinstance(token, dict) else None,
+                REASON_NOT_PROVISIONED,
             )
             return
 
@@ -594,6 +638,7 @@ class HostParty:
                 if self._opener is opener:
                     self._provisioned = True
             self._log("token re-provisioned; task server rebound to the new session")
+            self._frames.acted("account_authentication", DECISION_PROVISIONED)
             return
 
         try:
@@ -614,6 +659,7 @@ class HostParty:
             task_server.stop()
             return
         self._log("token provisioned; ready to serve tasks")
+        self._frames.acted("account_authentication", DECISION_PROVISIONED)
 
     # -- outbound (used by the TaskServer result pump) -------------------
 

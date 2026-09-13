@@ -101,6 +101,7 @@ class _FakeRelayController implements AgentsRelayController {
     String? reasoningEffort,
     bool debug = false,
     bool regenerate = false,
+    String? taskId,
   }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
