@@ -1175,7 +1175,9 @@ void main() {
 
     // The composer routes to sendRoomTask with the room id.
     await tester.enterText(find.byType(TextField).last, 'kick off');
-    await tester.tap(findIcon(Icons.send));
+    // The room composer is the chat's composer now, so its send glyph is the
+    // chat's own (fefe530), not the old Icons.send.
+    await tester.tap(findIcon(Icons.north_rounded));
     await tester.pump();
     expect(controller.roomTasks, [(room.id, 'kick off')]);
   });
@@ -1236,6 +1238,66 @@ void main() {
     expect(controller.createdRooms, [rooms.rooms.single.id]);
     // Back on the rooms list, the new room shows.
     expect(find.text('planning'), findsOneWidget);
+  });
+
+  testWidgets('the front page lists rooms beside the coworkers', (
+    tester,
+  ) async {
+    // A room is a conversation, so it is a row on the home screen and not only
+    // behind Control Rooms. Checked on both front pages the shell has.
+    final rooms = LocalRoomSource();
+    final room = rooms.addRoom(
+      const AgentsRoomDraft(
+        name: 'launch',
+        members: [
+          AgentsRoomMember(agentId: 'a', handle: 'amber'),
+          AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+        ],
+      ),
+    );
+    final roster = LocalAgentRosterSource()..addAgent(name: 'amber');
+    final controller = _FakeRelayController();
+
+    Future<void> pumpAt(Size size) async {
+      tester.view.physicalSize = size;
+      tester.view.devicePixelRatio = 1;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: kTestLocalizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: MessengerShell(
+            relayControllerBuilder: () async => controller,
+            sessionSource: const _FakeSessionSource(),
+            pairingStore: AgentsPairingStore(backend: _MemoryStore()),
+            rosterSource: roster,
+            roomSource: rooms,
+            onSignOut: () {},
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    // The phone inbox: the room is a row in the same list as the coworkers.
+    await pumpAt(const Size(360, 900));
+    expect(find.byType(MobileAgentList), findsOneWidget);
+    expect(
+      find.byKey(ValueKey<String>('mobile-room-${room.id}')),
+      findsOneWidget,
+    );
+    expect(find.text('launch'), findsOneWidget);
+
+    // The desktop roster: same room, under its own quiet label, and Control
+    // Rooms is still in the rail — this is a second way in, not a move.
+    await pumpAt(const Size(1200, 800));
+    await tester.tap(findIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+    expect(find.byType(AgentRosterView), findsOneWidget);
+    expect(find.byKey(ValueKey<String>('room-tile-${room.id}')), findsOneWidget);
+    expect(find.text('Control Rooms'), findsWidgets);
   });
 
   testWidgets('deleting an agent syncs its rooms to the host', (tester) async {

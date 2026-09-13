@@ -13,6 +13,15 @@
 ///    role tag, the time of the last activity, one line of preview, and an
 ///    unread dot. The row springs and morphs on press, and the list cascades in.
 ///
+/// A group ROOM is a conversation too, so it is a row in this same list — same
+/// height, same name line, same preview line, no badge and no second card
+/// style. The one difference is the slot on the left: [RoomFaces] puts the
+/// members' faces in it, overlapping, in exactly the box one coworker face
+/// takes. Rooms come FIRST, above the coworkers: this list has never been
+/// sorted by activity (it is roster order), and a room carries no timestamp of
+/// its own, so an activity sort would either fabricate one or bury every room
+/// at the bottom of the list the feature exists to put them in.
+///
 /// What the messenger has and this does NOT: no pinned/archived/starred buckets,
 /// no groups filter, no message-body search. The roster has no such data, and a
 /// filter that can never match is worse than no filter.
@@ -28,10 +37,12 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
@@ -39,6 +50,7 @@ import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/ui/expressive/staggered.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/room_faces.dart';
 
 /// The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
 String accountMonogram(String? label) {
@@ -73,9 +85,23 @@ class MobileAgentList extends StatefulWidget {
     this.profiles,
     this.onOpenFrom,
     this.hiddenAgentId,
+    this.rooms,
+    this.onOpenRoom,
+    this.onCreateRoom,
   });
 
   final AgentRosterSource source;
+
+  /// The group rooms, listed above the coworkers in the same list. Null (or an
+  /// empty source) leaves the list exactly as it was.
+  final RoomSource? rooms;
+
+  /// Opens a room. Rooms are not tappable without it.
+  final void Function(String roomId)? onOpenRoom;
+
+  /// Starts a new room. With both this and [onAddAgent] set, the "+" target
+  /// asks which of the two the user meant instead of silently picking one.
+  final VoidCallback? onCreateRoom;
 
   /// Opens a coworker's thread — the same callback the desktop sidebar uses.
   final void Function(String agentId, String threadKey) onSelect;
@@ -168,6 +194,52 @@ class _MobileAgentListState extends State<MobileAgentList> {
       _searching = false;
       _animate = false;
     });
+  }
+
+  /// The rooms this list shows. A room has no read marks, so the Unread filter
+  /// hides every room rather than claiming one is unread; search matches the
+  /// room's name or any member handle.
+  List<AgentsRoom> _visibleRooms() {
+    final RoomSource? source = widget.rooms;
+    if (source == null || widget.onOpenRoom == null) {
+      return const <AgentsRoom>[];
+    }
+    if (_filter == 1) return const <AgentsRoom>[];
+    final String q = _query.text.trim().toLowerCase();
+    if (q.isEmpty) return source.rooms;
+    return <AgentsRoom>[
+      for (final AgentsRoom room in source.rooms)
+        if (room.name.toLowerCase().contains(q) ||
+            room.members.any(
+              (AgentsRoomMember m) => m.handle.toLowerCase().contains(q),
+            ))
+          room,
+    ];
+  }
+
+  /// What the "+" target does. One action goes straight there; two ask, on the
+  /// app's own menu surface, so the target keeps doing what it always did for
+  /// coworkers and rooms simply gain a way in.
+  Future<void> _openAddMenu(BuildContext anchor) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final String? choice = await showAnchoredMenu<String>(
+      anchor,
+      color: scheme.surfaceContainerHigh,
+      borderColor: scheme.outlineVariant,
+      items: const <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'agent',
+          child: _MenuRow(icon: Icons.person_add_alt_1, label: 'New coworker'),
+        ),
+        PopupMenuItem<String>(
+          value: 'room',
+          child: _MenuRow(icon: Icons.group_add_outlined, label: 'New room'),
+        ),
+      ],
+    );
+    if (!mounted || choice == null) return;
+    if (choice == 'agent') widget.onAddAgent?.call();
+    if (choice == 'room') widget.onCreateRoom?.call();
   }
 
   List<AgentsAgent> _visible() {
@@ -263,8 +335,9 @@ class _MobileAgentListState extends State<MobileAgentList> {
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable>[
+      animation: Listenable.merge(<Listenable?>[
         widget.source,
+        widget.rooms,
         _query,
         _marks,
         _profiles,
@@ -277,6 +350,9 @@ class _MobileAgentListState extends State<MobileAgentList> {
   Widget _buildList(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final List<AgentsAgent> agents = _visible();
+    // Rooms first, then the coworkers — one list, one row grammar. See the
+    // library doc for why this list does not sort them by activity.
+    final List<AgentsRoom> rooms = _visibleRooms();
     // Threads this device already holds but has not previewed yet (a restart,
     // a fresh install that synced). Reads once per thread, then never again.
     unawaited(
@@ -327,15 +403,25 @@ class _MobileAgentListState extends State<MobileAgentList> {
           ),
         ),
         const SizedBox(width: 10),
-        if (widget.onAddAgent != null)
-          ExpressiveIconButton(
-            hugeIcon: HugeIcons.plusSign,
-            onTap: widget.onAddAgent,
-            size: MobileLayout.controlHeight,
-            color: scheme.primary,
-            onColor: scheme.onPrimary,
-            tooltip: 'Add a coworker',
-            semanticsId: 'mobile_home_add',
+        if (widget.onAddAgent != null || widget.onCreateRoom != null)
+          Builder(
+            builder: (BuildContext anchor) => ExpressiveIconButton(
+              hugeIcon: HugeIcons.plusSign,
+              // One action goes straight there. Both offered: the target asks.
+              // It is not hijacked — "New coworker" is still the first item.
+              onTap: widget.onAddAgent != null && widget.onCreateRoom != null
+                  ? () => _openAddMenu(anchor)
+                  : (widget.onAddAgent ?? widget.onCreateRoom),
+              size: MobileLayout.controlHeight,
+              color: scheme.primary,
+              onColor: scheme.onPrimary,
+              tooltip: widget.onAddAgent != null && widget.onCreateRoom != null
+                  ? 'Add a coworker or a room'
+                  : (widget.onAddAgent != null
+                        ? 'Add a coworker'
+                        : 'Add a room'),
+              semanticsId: 'mobile_home_add',
+            ),
           ),
       ],
     );
@@ -413,7 +499,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
                 ),
             child: KeyedSubtree(
               key: ValueKey<int>(_filter),
-              child: agents.isEmpty
+              child: agents.isEmpty && rooms.isEmpty
                   ? _EmptyState(
                       filter: _filters[_filter],
                       query: _query.text.trim(),
@@ -424,9 +510,24 @@ class _MobileAgentListState extends State<MobileAgentList> {
                         top: headerSpace,
                         bottom: MediaQuery.paddingOf(context).bottom + 24,
                       ),
-                      itemCount: agents.length,
+                      itemCount: rooms.length + agents.length,
                       itemBuilder: (BuildContext context, int index) {
-                        final AgentsAgent agent = agents[index];
+                        if (index < rooms.length) {
+                          final AgentsRoom room = rooms[index];
+                          final Widget roomRow = MobileRoomRow(
+                            key: ValueKey<String>('mobile-room-${room.id}'),
+                            room: room,
+                            profiles: _profiles,
+                            onTap: () => widget.onOpenRoom?.call(room.id),
+                          );
+                          if (_searching || !_animate) return roomRow;
+                          return StaggeredItem(
+                            key: ValueKey<String>('stagger-${room.id}'),
+                            index: index,
+                            child: roomRow,
+                          );
+                        }
+                        final AgentsAgent agent = agents[index - rooms.length];
                         // One description, built twice: the row in the list,
                         // and — when the chat grows out of it — the copy that
                         // rides inside the container while this one is hidden.
@@ -792,6 +893,114 @@ class MobileAgentRow extends StatelessWidget {
                                 ),
                               ),
                           ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One ROOM, in the inbox's own row grammar.
+///
+/// Deliberately the same shape as [MobileAgentRow]: the same outer padding, the
+/// same [MorphTap] with the same corners, the same [MobileAgentRow.height]
+/// floor, the same title and preview styles. Nothing marks it as a room except
+/// the slot on the left, which holds [RoomFaces] instead of one [AgentFace] —
+/// and that slot is [MobileAgentRow]'s 48 px, so a room row and a coworker row
+/// line up to the pixel.
+///
+/// There is no time on the row and no unread badge: a room carries neither on
+/// this device, and the app does not invent either. The preview line is the
+/// members' handles, which is what a fresh group row says in every messenger.
+class MobileRoomRow extends StatelessWidget {
+  const MobileRoomRow({
+    super.key,
+    required this.room,
+    this.onTap,
+    this.onLongPress,
+    this.profiles,
+    this.padded = true,
+  });
+
+  final AgentsRoom room;
+
+  /// Opens the room. Null makes the row inert.
+  final VoidCallback? onTap;
+
+  /// Long press, with the row's own context so a menu can anchor to it.
+  final void Function(BuildContext rowContext)? onLongPress;
+
+  final AgentProfileStore? profiles;
+
+  /// False drops the list's outer padding, matching [MobileAgentRow.padded].
+  final bool padded;
+
+  /// The line under the name: who is in the room, by the handle they are
+  /// mentioned with.
+  static String previewOf(AgentsRoom room) => roomMembersLabel(room);
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final TextTheme text = Theme.of(context).textTheme;
+
+    return Semantics(
+      identifier: 'mobile-room-row-${room.id}',
+      button: onTap != null,
+      child: Padding(
+        padding: padded
+            ? const EdgeInsets.symmetric(horizontal: 12, vertical: 1)
+            : EdgeInsets.zero,
+        child: Builder(
+          builder: (BuildContext rowContext) => MorphTap(
+            onTap: onTap,
+            onLongPress: onLongPress == null
+                ? null
+                : () => onLongPress!(rowContext),
+            color: Colors.transparent,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30),
+            ),
+            pressedShape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: MobileAgentRow.height - 4,
+              ),
+              child: Row(
+                children: <Widget>[
+                  RoomFaces(members: room.members, size: 48, store: profiles),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Text(
+                          room.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          previewOf(room),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: text.bodyMedium?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ],
                     ),
