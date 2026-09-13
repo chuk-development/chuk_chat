@@ -624,8 +624,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           ? const ValueKey('messenger-answer-bubble')
           : null,
       width: widget.messengerMode ? double.infinity : null,
+      // The run gap is the bubble's own, unless a sender label opens the run:
+      // then the label carries it, so a named run in a room keeps exactly the
+      // rhythm an unnamed run has (see [MessageBubble.senderLabel]).
       margin: EdgeInsets.only(
-        top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+        top: widget.senderLabel != null
+            ? 0
+            : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
       ),
       padding: EdgeInsets.symmetric(
         horizontal: widget.messengerMode ? 15 : 14,
@@ -673,6 +678,15 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (widget.senderLabel case final Widget label?)
+              Padding(
+                padding: EdgeInsets.only(
+                  top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+                  left: 4,
+                  bottom: 3,
+                ),
+                child: label,
+              ),
             if (bubbleCarriesContent)
               widget.messengerMode
                   ? _withMessengerMenu(bubbleContent)
