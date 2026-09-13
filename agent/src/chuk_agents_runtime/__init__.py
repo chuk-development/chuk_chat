@@ -92,6 +92,7 @@ from .loop import (
     IterationBudget,
     KillSwitch,
     LoopResult,
+    RunTimings,
     StopReason,
 )
 from .memory import (
@@ -221,6 +222,15 @@ from .skills import (
     skills_inventory,
 )
 from .state import Message, StateStore, run_stamp_fields
+from .trace import (
+    PHASES,
+    JsonlTracer,
+    NullTracer,
+    TraceSettings,
+    configure_tracing,
+    get_tracer,
+    set_tracer,
+)
 from .tool_events import result_text, tool_event_fields, tool_status
 from .transcript_export import TranscriptExporter
 from .think_scrubber import ThinkScrubber, scrub_history, scrub_text
@@ -422,6 +432,14 @@ __all__ = [
     "SkillSettingsStore",
     "StateStore",
     "run_stamp_fields",
+    "RunTimings",
+    "PHASES",
+    "JsonlTracer",
+    "NullTracer",
+    "TraceSettings",
+    "configure_tracing",
+    "get_tracer",
+    "set_tracer",
     "result_text",
     "tool_event_fields",
     "TranscriptExporter",

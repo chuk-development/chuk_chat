@@ -100,7 +100,21 @@ CREATE TABLE IF NOT EXISTS runs (
     -- Added additively; RUNS_MIGRATIONS backfills an existing database.
     model            TEXT,
     provider         TEXT,
-    reasoning_effort TEXT
+    reasoning_effort TEXT,
+    -- Where the run's wall clock went (chuk_agents_runtime.loop.RunTimings).
+    -- ``iterations`` and ``tokens_spent`` say how much work a run did; these say
+    -- how long each part of it waited, so a four-minute turn can be attributed
+    -- after the fact instead of reconstructed from message timestamps by hand.
+    -- ``retries``/``retry_ms`` are the model attempts that were thrown away —
+    -- paid for twice at the provider and previously invisible.
+    -- Added additively; RUNS_MIGRATIONS backfills an existing database.
+    model_calls   INTEGER NOT NULL DEFAULT 0,
+    model_wait_ms INTEGER NOT NULL DEFAULT 0,
+    prepare_ms    INTEGER NOT NULL DEFAULT 0,
+    tool_ms       INTEGER NOT NULL DEFAULT 0,
+    recall_ms     INTEGER NOT NULL DEFAULT 0,
+    retries       INTEGER NOT NULL DEFAULT 0,
+    retry_ms      INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
@@ -113,6 +127,28 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("model", "TEXT"),
     ("provider", "TEXT"),
     ("reasoning_effort", "TEXT"),
+    # Timing attribution. ``NOT NULL DEFAULT 0`` is legal in an ALTER TABLE ADD
+    # COLUMN because the default is a constant, so an existing 8 MB database
+    # migrates in place on open and its old rows read as zero — "not measured",
+    # which is exactly what they are.
+    ("model_calls", "INTEGER NOT NULL DEFAULT 0"),
+    ("model_wait_ms", "INTEGER NOT NULL DEFAULT 0"),
+    ("prepare_ms", "INTEGER NOT NULL DEFAULT 0"),
+    ("tool_ms", "INTEGER NOT NULL DEFAULT 0"),
+    ("recall_ms", "INTEGER NOT NULL DEFAULT 0"),
+    ("retries", "INTEGER NOT NULL DEFAULT 0"),
+    ("retry_ms", "INTEGER NOT NULL DEFAULT 0"),
+)
+
+#: The timing columns, in the order :meth:`StateStore.finish_run` writes them.
+RUN_TIMING_COLUMNS: tuple[str, ...] = (
+    "model_calls",
+    "model_wait_ms",
+    "prepare_ms",
+    "tool_ms",
+    "recall_ms",
+    "retries",
+    "retry_ms",
 )
 
 #: Run states (the ``runs.state`` column).
@@ -726,9 +762,18 @@ class StateStore:
         final_answer: str | None,
         iterations: int,
         tokens_spent: int,
+        timings: dict[str, int] | None = None,
     ) -> None:
         """Close a run as ``finished``. ``last_mid`` is the message cursor at the
-        end, so a replay can place the run's terminal after its last turn."""
+        end, so a replay can place the run's terminal after its last turn.
+
+        ``timings`` is :meth:`chuk_agents_runtime.loop.RunTimings.as_row` — where the
+        run's wall clock went. Unknown keys are ignored and missing ones stay
+        zero, so an older caller that passes nothing still closes a valid row.
+        """
+        stamps = {k: int(v) for k, v in (timings or {}).items() if k in RUN_TIMING_COLUMNS}
+        timing_sql = "".join(f", {column}=?" for column in RUN_TIMING_COLUMNS)
+        timing_values = tuple(stamps.get(column, 0) for column in RUN_TIMING_COLUMNS)
 
         def op(cur: sqlite3.Cursor) -> None:
             row = cur.execute(
@@ -742,7 +787,8 @@ class StateStore:
             ).fetchone()
             cur.execute(
                 "UPDATE runs SET state=?, reason=?, final_answer=?, iterations=?, "
-                "tokens_spent=?, last_mid=?, finished_at=? WHERE run_id=?",
+                "tokens_spent=?, last_mid=?, finished_at=?" + timing_sql
+                + " WHERE run_id=?",
                 (
                     RUN_FINISHED,
                     reason,
@@ -751,6 +797,7 @@ class StateStore:
                     int(tokens_spent),
                     int(last["m"]) if last else 0,
                     time.time(),
+                    *timing_values,
                     run_id,
                 ),
             )

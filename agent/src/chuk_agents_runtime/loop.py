@@ -27,19 +27,26 @@
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 
-from .context import ContextLadder, total_tokens_from_usage
+from .context import (
+    ContextLadder,
+    estimate_message_tokens,
+    estimate_tokens,
+    total_tokens_from_usage,
+)
 from .model import ModelClient, ModelResponse, ToolCall
 from .registry import ToolRegistry
 from .state import StateStore
 from .tool_events import tool_event_fields
 from .tools import FINISH_TOOL
+from .trace import get_tracer, set_round
 
 
 #: Stands in for a tool result the run was stopped before reaching. The row has
@@ -201,6 +208,49 @@ class TurnRecord:
 
 
 @dataclass
+class RunTimings:
+    """Where a run's wall clock went, in milliseconds.
+
+    This is the answer to "the turn took four minutes, which part?" and it is
+    recorded on the ``runs`` row, so a slow run can be diagnosed afterwards
+    without reconstructing timestamps from ``messages.created_at`` by hand.
+
+    The buckets do not have to add up to the run's wall time — a run also waits
+    on things nobody times — but every bucket that IS timed is here.
+    """
+
+    #: Number of model calls (``ModelClient.complete``) the run made.
+    model_calls: int = 0
+    #: Total time inside those calls, retries included.
+    model_wait_ms: float = 0.0
+    #: Total time building the outbound payload: history read + context ladder,
+    #: including a tier-2/3 aux-model summarisation, which is itself a model
+    #: call and is one of the two things that can hide inside a long turn.
+    prepare_ms: float = 0.0
+    #: Total time inside tool dispatch.
+    tool_ms: float = 0.0
+    #: Total time the memory recall spent before the first round.
+    recall_ms: float = 0.0
+    #: Model attempts that were thrown away and asked again. Each one was paid
+    #: for at the provider, so this is a cost figure, not only a latency one.
+    retries: int = 0
+    #: Time burned by those dead attempts.
+    retry_ms: float = 0.0
+
+    def as_row(self) -> dict[str, int]:
+        """Integer milliseconds for the ``runs`` row."""
+        return {
+            "model_calls": int(self.model_calls),
+            "model_wait_ms": int(self.model_wait_ms),
+            "prepare_ms": int(self.prepare_ms),
+            "tool_ms": int(self.tool_ms),
+            "recall_ms": int(self.recall_ms),
+            "retries": int(self.retries),
+            "retry_ms": int(self.retry_ms),
+        }
+
+
+@dataclass
 class LoopResult:
     reason: StopReason
     final_answer: str | None
@@ -210,6 +260,21 @@ class LoopResult:
     #: backend usage frames. Zero when the backend sent no usage. Lets a parent
     #: and the app see what a child cost (§7.6).
     tokens_spent: int = 0
+    #: Where the wall clock went (§ run record). Always present; all zeros for a
+    #: run that made no model call.
+    timings: RunTimings = field(default_factory=RunTimings)
+
+
+def _tool_schema_tokens(tools: object) -> int:
+    """Roughly what the ``tools`` array costs on every single request. It rides
+    on each call, so a bloated tool set is a per-round tax and belongs in the
+    trace next to the prompt estimate."""
+    if not tools:
+        return 0
+    try:
+        return estimate_tokens(json.dumps(tools, default=str))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _to_model_messages(store: StateStore, session_id: int) -> list[dict]:
@@ -325,7 +390,15 @@ class AgentLoop:
     def _outbound_messages(self, session_id: int) -> list[dict]:
         """The payload for one model call: the full stored history, run through
         the context ladder. Without a ladder this is the history verbatim."""
+        tracer = get_tracer()
+        read_started = time.monotonic()
         messages = _to_model_messages(self._store, session_id)
+        if tracer.enabled:
+            tracer.emit(
+                "history_loaded",
+                messages=len(messages),
+                ms=round((time.monotonic() - read_started) * 1000, 3),
+            )
         if self._system_prompt_upgrade is not None:
             messages = [
                 {**message, "content": self._system_prompt_upgrade(message["content"])}
@@ -350,6 +423,18 @@ class AgentLoop:
         the question four times on replay (docs/WIRE_CONTRACT.md, ``task``).
         """
         store = self._store
+        tracer = get_tracer()
+        run_started = time.monotonic()
+        timings = RunTimings()
+        if tracer.enabled:
+            set_round(0)
+            tracer.emit(
+                "task_received",
+                prompt_chars=len(user_message or ""),
+                regenerate=bool(regenerate),
+                max_iterations=self._max_iterations,
+                text=tracer.text(user_message),
+            )
         session_id = store.route(session_key)
         if regenerate:
             # Drop the turn being retried — the old user row and the answer it
@@ -371,7 +456,7 @@ class AgentLoop:
                 )
 
         self._append(session_id, "user", {"role": "user", "content": user_message})
-        self._inject_recall(session_id, user_message)
+        timings.recall_ms = self._inject_recall(session_id, user_message)
 
         iterations = 0
         tools_used: list[str] = []
@@ -406,15 +491,23 @@ class AgentLoop:
 
             iterations += 1
             self._budget.consume()
+            if tracer.enabled:
+                set_round(iterations)
+                tracer.emit("round_start", iteration=iterations)
 
             # Built once here so the debug tap can report the EXACT list sent, and
             # so the ladder's ``last_stats`` (set inside ``prepare``) matches it.
             prepare_started = time.monotonic()
             outbound = self._outbound_messages(session_id)
             model_started = time.monotonic()
+            timings.prepare_ms += (model_started - prepare_started) * 1000
+            if tracer.enabled:
+                self._trace_prepare(tracer, outbound, model_started - prepare_started)
             try:
                 response: ModelResponse = self._model.complete(outbound)
             except Exception:
+                timings.model_calls += 1
+                timings.model_wait_ms += (time.monotonic() - model_started) * 1000
                 # A model call that dies *while we are interrupting* died because
                 # of the interrupt: a cancelled socket, a closed stream. Report
                 # the stop, not a crash. Any other failure is a real error and
@@ -423,6 +516,14 @@ class AgentLoop:
                     reason = StopReason.INTERRUPTED
                     break
                 raise
+            timings.model_calls += 1
+            timings.model_wait_ms += (time.monotonic() - model_started) * 1000
+            model_timing = response.raw.get("timing")
+            if isinstance(model_timing, dict):
+                attempts = int(model_timing.get("attempts") or 1)
+                if attempts > 1:
+                    timings.retries += attempts - 1
+                    timings.retry_ms += float(model_timing.get("wasted_ms") or 0.0)
 
             # Debug tap (§ "copy raw context"): the outbound payload and the
             # ladder's stats for this round. Guarded so a broken sink cannot abort
@@ -471,6 +572,17 @@ class AgentLoop:
                     # a resumed session has no assistant turn with a dangling
                     # tool call in it.
                     started_at = time.time()
+                    tool_started = time.monotonic()
+                    if tracer.enabled:
+                        tracer.emit(
+                            "tool_start",
+                            tool=call.name,
+                            call_id=call.id,
+                            args_chars=len(str(call.arguments)),
+                            text=tracer.text(
+                                str(call.arguments) if call.arguments else None
+                            ),
+                        )
                     if self._kill.interrupted():
                         result: object = INTERRUPTED_TOOL_RESULT
                         raised = True
@@ -501,6 +613,18 @@ class AgentLoop:
                             "content": result,
                         },
                     )
+                    tool_ms = (time.monotonic() - tool_started) * 1000
+                    timings.tool_ms += tool_ms
+                    if tracer.enabled:
+                        tracer.emit(
+                            "tool_end",
+                            tool=call.name,
+                            call_id=call.id,
+                            ms=round(tool_ms, 3),
+                            ok=not raised,
+                            result_chars=len(str(result)),
+                            text=tracer.text(str(result) if result is not None else None),
+                        )
                     self._emit_tool(
                         call, result, started_at=started_at, raised=raised
                     )
@@ -528,27 +652,96 @@ class AgentLoop:
             iterations=iterations,
             session_id=session_id,
             tokens_spent=self._tokens_spent,
+            timings=timings,
         )
+        if tracer.enabled:
+            tracer.emit(
+                "run_finished",
+                reason=reason.value,
+                iterations=iterations,
+                tokens_spent=self._tokens_spent,
+                total_ms=round((time.monotonic() - run_started) * 1000, 3),
+                tools=len(tools_used),
+                **{k: v for k, v in timings.as_row().items()},
+            )
         self._observe_turn(session_key, user_message, outcome, tools_used)
         return outcome
 
-    def _inject_recall(self, session_id: int, user_message: str) -> None:
+    def _trace_prepare(self, tracer, outbound: list[dict], elapsed: float) -> None:
+        """The two phases that hide inside "preparing the payload": the ladder's
+        pass over the history, and the payload that came out of it.
+
+        The ladder is the other thing that can burn minutes in a turn — a
+        tier-2/3 pass calls the aux model — so its tier, pressure and
+        before/after token counts are on their own line, not folded into one
+        opaque ``prepare_ms``.
+        """
+        ladder = self._ladder
+        if ladder is not None:
+            stats = ladder.last_stats
+            tracer.emit(
+                "ladder_pass",
+                ms=round(elapsed * 1000, 3),
+                tier=stats.tier,
+                pressure=round(float(stats.pressure), 4),
+                tokens_before=stats.tokens_before,
+                tokens_after=stats.tokens_after,
+                dropped=max(0, int(stats.tokens_before) - int(stats.tokens_after)),
+            )
+        else:
+            tracer.emit("ladder_pass", ms=round(elapsed * 1000, 3), tier=0)
+        estimated = sum(estimate_message_tokens(m) for m in outbound)
+        tools = getattr(self._model, "traced_tools", None)
+        tracer.emit(
+            "payload_prepared",
+            messages=len(outbound),
+            prompt_tokens_est=estimated,
+            tool_schema_tokens=_tool_schema_tokens(tools),
+            tools=len(tools or ()),
+        )
+
+    def _inject_recall(self, session_id: int, user_message: str) -> float:
         """Append the memory recall for this task (a context row, never a
-        system message). A failing provider costs the recall, not the run."""
+        system message). A failing provider costs the recall, not the run.
+
+        Returns the milliseconds it took. The recall is a whole retrieval stack
+        behind one call — in the run that started this work it cost 74.6 s on
+        its own and nobody knew — so it is timed and traced like a model call.
+        """
         if self._recall_provider is None:
-            return
+            return 0.0
+        tracer = get_tracer()
+        started = time.monotonic()
+        if tracer.enabled:
+            tracer.emit("memory_recall_start", prompt_chars=len(user_message or ""))
+        failed: str | None = None
+        messages: list[dict] = []
         try:
             messages = self._recall_provider(user_message) or []
-        except Exception:  # noqa: BLE001 — recall must never break a run
-            return
+        except Exception as exc:  # noqa: BLE001 — recall must never break a run
+            failed = type(exc).__name__
+        written = 0
+        chars = 0
         for message in messages:
             if not isinstance(message, dict) or not message.get("content"):
                 continue
+            written += 1
+            chars += len(str(message.get("content")))
             self._append(
                 session_id,
                 str(message.get("role_tag") or "memory"),
                 {k: v for k, v in message.items() if k != "role_tag"},
             )
+        elapsed_ms = (time.monotonic() - started) * 1000
+        if tracer.enabled:
+            tracer.emit(
+                "memory_recall_end",
+                ms=round(elapsed_ms, 3),
+                messages=written,
+                chars=chars,
+                failed=failed,
+            )
+        return elapsed_ms
 
     def _observe_turn(
         self,
