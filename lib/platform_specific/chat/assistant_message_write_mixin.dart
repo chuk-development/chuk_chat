@@ -189,10 +189,13 @@ mixin AssistantMessageWriteMixin<T extends StatefulWidget>
         messages[index] = message;
       });
       persistChat();
-      return;
-    }
-
-    if (!isActiveChat) {
+    } else {
+      // `else`, not `if (!isActiveChat)`: the live branch above also declines
+      // when the widget is gone or the index is out of range, and for an ACTIVE
+      // chat that used to fall between the two branches — the update was
+      // written nowhere at all, neither to the list nor to storage. That is the
+      // teardown during a running answer (bead cowork-8n33). Storage is the
+      // right home whenever the list cannot take it.
       final bool hasInFlightCalls = toolCalls.any(
         (call) =>
             call.status == ToolCallStatus.running ||
@@ -244,7 +247,9 @@ mixin AssistantMessageWriteMixin<T extends StatefulWidget>
         messages[index] = message;
       });
       persistChat();
-    } else if (!isActiveChat) {
+    } else {
+      // Plain `else`, not `else if (!isActiveChat)`: see cowork-8n33. An active
+      // chat whose widget is gone reached neither branch and lost the images.
       unawaited(
         persistenceHandler
             .updateBackgroundChatMessage(
@@ -280,10 +285,9 @@ mixin AssistantMessageWriteMixin<T extends StatefulWidget>
         message['contentBlocks'] = contentBlocksJson;
         messages[index] = message;
       });
-      return;
-    }
-
-    if (!isActiveChat) {
+    } else {
+      // `else`, not `if (!isActiveChat)`: see cowork-8n33. An active chat whose
+      // widget is gone reached neither branch and lost the blocks.
       unawaited(
         persistenceHandler
             .updateBackgroundChatMessage(
@@ -377,10 +381,12 @@ mixin AssistantMessageWriteMixin<T extends StatefulWidget>
     // Check if this is the active chat (for UI updates)
     final bool isActiveChat = activeChatId == chatId;
 
-    if (mounted && isActiveChat) {
-      // Only check bounds for active chat (where messages belongs to this chat)
-      if (index < 0 || index >= messages.length) return;
-
+    // The bounds are part of the condition, not a return inside it (bead
+    // cowork-9u1b): an index past the end of the list — a trimmed transcript, a
+    // deleted message, a reload racing the answer — used to return from here
+    // and write the finished answer nowhere at all. It belongs in the else
+    // below, which never reads `messages` and is addressed by chatId.
+    if (mounted && isActiveChat && index >= 0 && index < messages.length) {
       // Update UI only for active chat
       setState(() {
         final Map<String, String> message = Map<String, String>.from(
@@ -427,9 +433,15 @@ mixin AssistantMessageWriteMixin<T extends StatefulWidget>
 
       // Drain the outbox — one message per finished run, in order.
       drainPendingMessages();
-    } else if (!isActiveChat) {
-      // User switched to a different chat - messages belongs to the OTHER chat!
-      // DO NOT check messages.length - it's the wrong chat's message list.
+    } else {
+      // Plain `else`, not `else if (!isActiveChat)` (bead cowork-8n33): the
+      // branch above also declines when the widget is gone, and an ACTIVE chat
+      // in that state used to reach neither — the finished answer was dropped.
+      //
+      // Usually the user switched to a different chat, and then `messages`
+      // belongs to the OTHER chat. DO NOT check messages.length here - it is
+      // the wrong chat's message list. The snapshot below is keyed by chatId,
+      // so it is right either way.
       //
       // Persist the FULL message list from the streaming snapshot (captured at
       // send start, with the live buffer overlaid) and inject the final answer.
