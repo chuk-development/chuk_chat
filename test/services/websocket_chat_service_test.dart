@@ -49,6 +49,12 @@ List<AgentsRelayInbound> _everyVariant() => <AgentsRelayInbound>[
     baseUrl: 'https://here.now',
     public: true,
   ),
+  const AgentsRelayHeartbeat(
+    runId: 'run-1',
+    sessionKey: 'thread-1',
+    seq: 1,
+    elapsedSeconds: 10.0,
+  ),
   const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
   const AgentsRelayDebugContext(
     sessionKey: 'thread-1',
@@ -261,6 +267,45 @@ void main() {
       );
     },
   );
+
+  test('a heartbeat is proof of life and nothing else', () async {
+    // It carries no text, so it must add no text; it is not output, so it must
+    // not let a run that produced nothing claim it produced something.
+    final seen = await run(const <AgentsRelayInbound>[
+      AgentsRelayHeartbeat(
+        runId: 'run-1',
+        sessionKey: sessionKey,
+        seq: 3,
+        elapsedSeconds: 30.0,
+      ),
+    ]);
+
+    expect(seen.whereType<ContentEvent>(), isEmpty);
+    expect(seen.whereType<ReasoningEvent>(), isEmpty);
+    final beat = seen.whereType<HeartbeatEvent>().single;
+    expect(beat.seq, 3);
+    expect(beat.elapsedSeconds, 30.0);
+    final ledgerRun = AgentsRunLedger.instance.runFor(sessionKey)!;
+    expect(
+      ledgerRun.producedOutput,
+      isFalse,
+      reason: 'a heartbeat is liveness, not a visible trace in the thread',
+    );
+  });
+
+  test('a heartbeat restarts the ceiling that declares a run lost', () async {
+    // The ceiling exists for a run that really went away. A long prefill is not
+    // that, and the heartbeat is what tells them apart.
+    await run(const <AgentsRelayInbound>[
+      AgentsRelayHeartbeat(sessionKey: sessionKey, seq: 1),
+    ], cancelEarly: true);
+    final ledgerRun = AgentsRunLedger.instance.runFor(sessionKey)!;
+    expect(ledgerRun.probedAt, isNull);
+    expect(
+      DateTime.now().difference(ledgerRun.lastActivity),
+      lessThan(const Duration(seconds: 5)),
+    );
+  });
 
   test('reasoning becomes a reasoning event and lands on the ledger', () async {
     final seen = await run(const <AgentsRelayInbound>[

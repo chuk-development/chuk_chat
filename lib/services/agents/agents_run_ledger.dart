@@ -430,6 +430,20 @@ class AgentsRunLedger extends ChangeNotifier {
       ..probedAt = null;
   }
 
+  /// The host says the run is still running, and nothing else.
+  ///
+  /// Separate from [touch] on purpose: a heartbeat restarts the ceiling, but it
+  /// is NOT output. [AgentsRun.producedOutput] decides whether a run that ended
+  /// badly needs a line of its own in the thread, and a run whose only frames
+  /// were heartbeats left the reader nothing — so it still needs that line.
+  void heartbeat(String sessionKey) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    run
+      ..lastActivity = DateTime.now()
+      ..probedAt = null;
+  }
+
   /// The user pressed Stop and the frame went out. The terminal that follows
   /// is what really ends the run; this only makes sure the thread stops
   /// animating even when that terminal never arrives.

@@ -5,7 +5,7 @@
 //
 // The two platform builds (streaming_manager_io.dart, streaming_manager_stub.dart)
 // extend this class. Everything that needs `dart:io` — notifications, the
-// Android foreground service, the idle timer and the UI-update throttle — sits
+// Android foreground service, the silence log and the UI-update throttle — sits
 // behind the overridable hooks below, whose defaults are no-ops. The defaults
 // therefore *are* the web behaviour; the io subclass overrides them.
 //
@@ -35,30 +35,23 @@ abstract class StreamingManagerBase {
 
   // ---------------------------------------------------------------------------
   // Platform hooks. The default implementations are the web behaviour (no
-  // notifications, no foreground service, no idle timer, no UI throttle).
+  // notifications, no foreground service, no silence log, no UI throttle).
   // ---------------------------------------------------------------------------
 
-  /// Arm the idle timer for a stream that has just been created, before it is
-  /// registered in [activeStreams]. No-op where there is no idle handling.
+  /// Arm the silence watch for a stream that has just been created, before it
+  /// is registered in [activeStreams]. The watch only ever logs a gap; silence
+  /// never ends a stream (a slow answer is not an error — see
+  /// `StreamingManager.silenceReportInterval`). No-op where nothing is logged.
   @protected
-  void armIdleTimer({
-    required String chatId,
-    required ActiveStream stream,
-    required void Function(String content, String reasoning, double? tps)
-    onComplete,
-    required StreamErrorCallback onError,
-  }) {}
+  void armSilenceWatch(ActiveStream stream) {}
 
-  /// Per-event bookkeeping that only some platforms do: first-event stamp,
-  /// idle-timer reset, time-to-first-token measurement.
+  /// Per-event bookkeeping that only some platforms do: first-event stamp and
+  /// time-to-first-token measurement.
   @protected
   void onEventBookkeeping({
     required String chatId,
     required ActiveStream stream,
     required ChatStreamEvent event,
-    required void Function(String content, String reasoning, double? tps)
-    onComplete,
-    required StreamErrorCallback onError,
   }) {}
 
   /// Deliver the current buffers to the UI. The default delivers immediately;
@@ -202,12 +195,8 @@ abstract class StreamingManagerBase {
       chatTitle: chatTitle,
     );
 
-    armIdleTimer(
-      chatId: chatId,
-      stream: activeStream,
-      onComplete: onComplete,
-      onError: onError,
-    );
+    // The silence watch. It reports; it never acts.
+    armSilenceWatch(activeStream);
 
     activeStreams[chatId] = activeStream;
   }
@@ -216,7 +205,7 @@ abstract class StreamingManagerBase {
   Future<void> cancelStream(String chatId) async {
     final activeStream = activeStreams[chatId];
     if (activeStream != null) {
-      activeStream.cancelIdleTimer();
+      activeStream.cancelSilenceWatch();
       await activeStream.subscription.cancel();
       activeStreams.remove(chatId);
       if (kDebugMode) {
@@ -239,7 +228,7 @@ abstract class StreamingManagerBase {
   @protected
   void cleanupStream(String chatId) {
     final stream = activeStreams.remove(chatId);
-    stream?.cancelIdleTimer();
+    stream?.cancelSilenceWatch();
     stream?.cancelUiThrottle();
     stopBackgroundServiceIfIdle();
   }
@@ -256,7 +245,7 @@ abstract class StreamingManagerBase {
       final reasoningLen = stream.reasoningBuffer.length;
       stream.isActive = false;
       stream.completedAt = DateTime.now();
-      stream.cancelIdleTimer();
+      stream.cancelSilenceWatch();
       stream.cancelUiThrottle();
       // Cancel the subscription but keep the entry in the map
       unawaited(stream.subscription.cancel());
@@ -334,14 +323,13 @@ abstract class StreamingManagerBase {
             : activeStream.phase,
     };
 
-    // First-event stamp, idle-timer reset and TTFT measurement (io only).
-    onEventBookkeeping(
-      chatId: chatId,
-      stream: activeStream,
-      event: event,
-      onComplete: onComplete,
-      onError: onError,
-    );
+    // Every event restarts the measured gap. Nothing is armed to fire on it:
+    // this is what the silence log reports, not what decides the stream's fate.
+    activeStream.lastEventAt = DateTime.now();
+    activeStream.eventCount++;
+
+    // First-event stamp and TTFT measurement (io only).
+    onEventBookkeeping(chatId: chatId, stream: activeStream, event: event);
 
     if (event is ContentEvent) {
       activeStream.contentBuffer.write(event.text);
@@ -358,6 +346,13 @@ abstract class StreamingManagerBase {
       activeStream.nativeToolCalls.addAll(event.calls);
     } else if (event is MetaEvent) {
       activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
+    } else if (event is HeartbeatEvent) {
+      // Proof of life and nothing else. It has already restarted the measured
+      // gap above, and the phase switch has already moved `connecting` to
+      // `processing` — the host answered, it is reading the prompt. There is
+      // no content to buffer and nothing to finish.
+      activeStream.heartbeatCount++;
+      activeStream.lastHeartbeatSeq = event.seq;
     } else if (event is ErrorEvent) {
       // Handle error events from the stream (e.g., API errors)
       if (kDebugMode) {
@@ -631,10 +626,22 @@ class ActiveStream {
   // Timestamp when stream completed (for TTL eviction)
   DateTime? completedAt;
 
-  // Idle timer: fires when no events arrive for too long.
-  // Reset on every incoming event. If it fires, the stream is
-  // considered dead and will be cleaned up with an error.
-  Timer? idleTimer;
+  /// The log-only silence watch (see `StreamingManager.silenceReportInterval`).
+  /// It reports gaps; it has no power to end the stream.
+  Timer? silenceTimer;
+
+  /// When the last event of any kind arrived, null while none has. The gap the
+  /// log reports is measured from here, falling back to [startedAt].
+  DateTime? lastEventAt;
+
+  /// How many events of any kind this stream has seen, and how many of those
+  /// were heartbeats. Diagnostics only — nothing branches on them.
+  int eventCount = 0;
+  int heartbeatCount = 0;
+
+  /// The `seq` of the last heartbeat, so a gap in the host's sequence shows up
+  /// in the log.
+  int lastHeartbeatSeq = 0;
 
   // UI-update coalescing: holds the timer that flushes the latest buffer to
   // the UI at most once per the platform's UI-update interval, plus whether a
@@ -654,9 +661,9 @@ class ActiveStream {
     this.chatTitle,
   });
 
-  void cancelIdleTimer() {
-    idleTimer?.cancel();
-    idleTimer = null;
+  void cancelSilenceWatch() {
+    silenceTimer?.cancel();
+    silenceTimer = null;
   }
 
   void cancelUiThrottle() {

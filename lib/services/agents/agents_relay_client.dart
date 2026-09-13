@@ -164,6 +164,31 @@ sealed class AgentsRelayInbound {
   const AgentsRelayInbound();
 }
 
+/// The host says the run for [sessionKey] is still running (wire `heartbeat`).
+///
+/// The one frame that carries no content on purpose. A model reading a long
+/// prompt sends no token until the prefill is done, and a shell command or a
+/// browser step sends none while it works, so a healthy run can be silent for
+/// minutes. Without this, the app cannot tell that silence from a host that is
+/// gone — and it used to guess, which is how a working run was reported to the
+/// user as an overloaded server.
+///
+/// [seq] counts up from 1 per run and [elapsedSeconds] is the host's own clock
+/// on the run; both are diagnostics. A host too old to send heartbeats simply
+/// never produces one, and nothing may require them.
+class AgentsRelayHeartbeat extends AgentsRelayInbound {
+  const AgentsRelayHeartbeat({
+    this.runId,
+    this.sessionKey,
+    this.seq = 0,
+    this.elapsedSeconds,
+  });
+  final String? runId;
+  final String? sessionKey;
+  final int seq;
+  final double? elapsedSeconds;
+}
+
 /// An assistant text delta.
 class AgentsRelayDelta extends AgentsRelayInbound {
   const AgentsRelayDelta(
@@ -2587,6 +2612,22 @@ class AgentsRelayClient
             replay: replay,
             mid: mid,
             sentAt: epochSecondsToDateTime(payload['created_at']),
+          ),
+        );
+      case 'heartbeat':
+        // Proof of life. Nothing is rendered from it: it only stops the app
+        // from reading a long prefill or a long command as a dead host.
+        final elapsed = payload['elapsed'];
+        _inbound.add(
+          AgentsRelayHeartbeat(
+            runId: payload['run_id'] is String
+                ? payload['run_id'] as String
+                : null,
+            sessionKey: payload['session_key'] is String
+                ? payload['session_key'] as String
+                : null,
+            seq: AgentsRelayTool._asInt(payload['seq']) ?? 0,
+            elapsedSeconds: elapsed is num ? elapsed.toDouble() : null,
           ),
         );
       case 'tool':
