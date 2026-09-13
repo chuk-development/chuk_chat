@@ -991,3 +991,74 @@ Note that step 3 also publishes `a249a54`, which is currently unpushed (9.3).
 Leave the remote `agents` branch alone afterwards — it is the only copy of the
 pre-rewrite SHAs — and re-clone `/home/user/git/cowork`; it cannot be rebased
 onto the new history, because all 312 commits changed SHA.
+
+## 10. Close-out — measured gate (2026-09-13, coordinator)
+
+All 78 marker files are resolved and the tree carries no conflict marker. The
+duplicated `AppIcon` / `LiveWaveform` copies under `ui/expressive/` are now
+re-export shims onto `widgets/`, so each class exists once again — two classes of
+the same name make `widget is AppIcon` false across the boundary, which breaks
+every test that finds an icon by widget type. The orphaned Agents mixin family
+(~2.5k lines) is deleted.
+
+### Analyze
+
+`flutter analyze`: **24 issues, 1 error**, down from 3991. The one error is
+`ToolLoopSession.enforcer` in `test/services/tool_call_handler_safety_limit_test.dart`
+and it is deliberate — it belongs to the open product decision on the client-side
+tool loop.
+
+### Python, all seven packages under `agents/`
+
+crypto 65 · config 63 · sandbox 107 · manager 183 · host 281 · runtime 964 ·
+executor 234 = **1897 passed, 1 failed**. The failure is
+`test_regenerate.py::test_four_retries_replay_the_question_once`, pre-existing on
+the branch and reproducible with no upstream code present.
+
+### Flutter, with both baselines measured
+
+| tree | result |
+| --- | --- |
+| upstream `master` alone | 1553 passed, 272 skipped, **0 failed** |
+| `agents` branch alone | 1441 passed, 3 skipped, 8 failed |
+| **merged** | 2885 passed, 275 skipped, **64 failed** |
+
+Upstream's suite is green on its own, so every merged failure is either ours from
+before or caused by a merge decision. The 64 sort into four groups:
+
+**a. The tool-loop decision — 21 failures, 5 files.** `tool_call_handler_deferred_action`
+(11), `tool_call_reasoning_lift` (4), `tool_call_handler_fact_check` (4),
+`tool_call_handler_safety_limit` (1, does not compile), `tool_call_handler_stub` (1).
+These describe upstream's client-side tool loop, which the Agents stub replaced
+because tools run on the host. They stay red until the product question is
+answered: does a chuk_chat user with no host paired get no client-side tool loop?
+
+**b. Features the mobile rebuild dropped — 3 failures.**
+`agents_thread_view_test` fails on the key `host-run-typing`: the host typing
+bubble is one of the behaviours named in the MERGE NOTE at the top of
+`chat_ui_mobile.dart`. The test is right and the code is missing, not the reverse.
+
+**c. Test expectations that now describe the other side — roughly 15 failures.**
+`messenger_shell_test` looks for the text "Chuk Chat" and finds none, because
+`brand_wordmark.dart` was restored to upstream's SVG wordmark. `settings_page_test`
+asserts the hub lists only "the areas Agents keeps" and now finds upstream's
+"Sandboxes" row as well. These are tests written against the Agents-only tree
+meeting the merged tree; the merged behaviour is intended, so the tests move.
+
+**d. Layout and golden comparisons — 25 failures.** `every_screen_layout_test`
+(15), `document_chart_golden_test` (4), `mobile_preview_test` (4),
+`model_selector_design_test` (2). Two UI histories met in one tree, so pixel
+baselines have to be re-taken and read once by a human.
+
+### What must be decided before stage 7
+
+1. The tool loop (group a) — see the bead. Either the fold comes back behind a
+   flag, or the four upstream test files go.
+2. The mobile features in the MERGE NOTE (group b), the host typing bubble first.
+3. Chats: the facade reads chuk_chat chats from `encrypted_chats` and writes them
+   through the Agents store into `cowork_chats`. Cloud copies of edited chats land
+   in the wrong table.
+4. The offline queue: messages enqueue into `AgentsTaskOutbox` and drain from
+   `OfflineQueueService`.
+5. Beads: the `cowork` Dolt database has to be imported into `chuk_chat`, or 241
+   issue ids go dark in the merged checkout.
