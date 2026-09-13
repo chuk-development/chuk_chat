@@ -349,10 +349,14 @@ credits.
        only remaining gate is pointing the members' controllers at live executors
        over the prod relay — the user-gated transport deploy.
    4c. **App UI** — create-room flow DONE. `app/lib/models/agents_room.dart`
-       (`AgentsRoom`/`AgentsRoomMember`/`AgentsRoomDraft`, `kRoomMaxMembers` 6)
+       (`AgentsRoom`/`AgentsRoomMember`/`AgentsRoomDraft`)
        + `app/lib/widgets/room_create_sheet.dart`: name + a checklist of
-       coworkers, the six-member cap enforced in the form (the rest disable at
-       6, re-enable on uncheck), Create gated on a name + ≥2 members. 6 tests.
+       coworkers, Create gated on a name + ≥2 members. **The six-member cap is
+       gone** (user, 2026-09-13): a room takes any number of members, the list
+       scrolls and a search field appears above `kRoomSearchThreshold` (8). The
+       per-send message ceiling is derived from `members × max_rounds` when it
+       is not set explicitly, so a big room cannot silently drop the members it
+       runs out of budget for.
        4c-thread: room thread view DONE. `agents_room.dart` gains `AgentsRoomTurn`
        + `AgentsRoomStop` (wire-string parser + human label, matching the
        manager's stop reasons), and `room_thread_view.dart` renders the user

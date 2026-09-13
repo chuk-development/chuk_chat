@@ -1,7 +1,9 @@
-/// Manage a room's members (§16.1): remove one, or add a coworker from the
-/// roster. Enforces the same bounds the rest of the app does — at most
-/// [kRoomMaxMembers], never fewer than two (a room of one is not a room), so
-/// Remove is disabled at two and Add is disabled at six.
+/// Manage a room's members (§16.1): remove one, add a coworker from the
+/// roster, and set whether the coworkers may answer each other.
+///
+/// There is no member ceiling — a room takes as many coworkers as the roster
+/// holds — so Add is never disabled by a count. The one bound left is the floor:
+/// a room of one is not a room, so Remove is disabled at two members.
 ///
 /// The sheet is a pure view over what it is given: the room and the candidates
 /// (roster agents not already in it). Add/remove go out through callbacks; the
@@ -9,9 +11,10 @@
 ///
 /// Everything below the title scrolls. The sheet carries two lists — the
 /// members and the candidates to add — and a bare `Column` of rows ran off the
-/// bottom of a short phone as soon as a room had about six members. One
+/// bottom of a short phone as soon as a room had a handful of members. One
 /// `Flexible` `ListView` holds both sections, and its bottom padding carries
 /// the keyboard inset so the last row stays reachable while a keyboard is up.
+/// That matters more now that a room has no member ceiling at all.
 library;
 
 import 'package:flutter/material.dart';
@@ -30,6 +33,7 @@ class RoomMembersSheet extends StatelessWidget {
     required this.candidates,
     required this.onAdd,
     required this.onRemove,
+    this.onAgentToAgentChanged,
   });
 
   final AgentsRoom room;
@@ -40,7 +44,11 @@ class RoomMembersSheet extends StatelessWidget {
   final void Function(AgentsRoomMember member) onAdd;
   final void Function(String agentId) onRemove;
 
-  bool get _full => room.members.length >= kRoomMaxMembers;
+  /// Reports a flip of the room's "coworkers can reply to each other" policy
+  /// (`agent_to_agent`). The caller updates the room source and tells the host;
+  /// a null callback leaves the switch visible but inert.
+  final ValueChanged<bool>? onAgentToAgentChanged;
+
   bool get _atMinimum => room.members.length <= 2;
 
   @override
@@ -62,9 +70,9 @@ class RoomMembersSheet extends StatelessWidget {
                   child: Text(room.name, style: theme.textTheme.titleMedium),
                 ),
                 Text(
-                  '${room.members.length}/$kRoomMaxMembers',
+                  '${room.members.length} members',
                   style: theme.textTheme.bodySmall?.copyWith(
-                    color: _full ? cs.primary : cs.onSurfaceVariant,
+                    color: cs.onSurfaceVariant,
                   ),
                 ),
               ],
@@ -76,6 +84,18 @@ class RoomMembersSheet extends StatelessWidget {
                 // the candidate list can sit under an open keyboard.
                 padding: EdgeInsets.only(bottom: keyboard),
                 children: [
+                  ExpressiveGroup(
+                    children: [
+                      ExpressiveSwitchRow(
+                        key: const ValueKey<String>('room-agent-to-agent'),
+                        title: 'Coworkers can reply to each other',
+                        subtitle: 'With this off, they only answer you.',
+                        value: room.agentToAgent,
+                        onChanged: onAgentToAgentChanged,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
                   Text('Members', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 6),
                   ExpressiveGroup(
@@ -130,19 +150,17 @@ class RoomMembersSheet extends StatelessWidget {
                               size: 28,
                             ),
                             trailing: IconButton(
-                              tooltip: _full ? 'The room is full' : 'Add',
+                              tooltip: 'Add',
                               icon: const AppIcon(
                                 Icons.add_circle_outline,
                                 size: 20,
                               ),
-                              onPressed: _full
-                                  ? null
-                                  : () => onAdd(
-                                      AgentsRoomMember(
-                                        agentId: agent.id,
-                                        handle: agent.name,
-                                      ),
-                                    ),
+                              onPressed: () => onAdd(
+                                AgentsRoomMember(
+                                  agentId: agent.id,
+                                  handle: agent.name,
+                                ),
+                              ),
                             ),
                           ),
                       ],

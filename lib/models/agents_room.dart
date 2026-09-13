@@ -1,17 +1,14 @@
 /// A group room, app-side (§16.1). Several coworkers in one conversation.
 ///
-/// This mirrors the manager's `GroupRoom`: an ordered set of members, capped at
-/// six. The app holds only what it needs to show and to build one — an id, a
+/// This mirrors the manager's `GroupRoom`: an ordered set of members, with no
+/// ceiling on how many. The app holds only what it needs to show and to build
+/// one — an id, a
 /// name, and the members as (agent id, handle) pairs. The orchestration (turn
 /// order, the round and message caps) lives on the host; the app never runs a
 /// room itself, so nothing here duplicates that logic.
 library;
 
 import 'package:flutter/foundation.dart';
-
-/// The member cap, matching the manager's `DEFAULT_MAX_MEMBERS`. Kept here so
-/// the picker can enforce it without a round-trip to the host.
-const int kRoomMaxMembers = 6;
 
 /// One coworker in a room: the agent id the app tracks and the handle it is
 /// mentioned by.
@@ -41,31 +38,51 @@ class AgentsRoom {
     required this.id,
     required this.name,
     required this.members,
+    this.agentToAgent = true,
   });
 
   final String id;
   final String name;
   final List<AgentsRoomMember> members;
 
+  /// Whether the coworkers may pull each other in by writing `@handle`
+  /// (`agent_to_agent`, WIRE_CONTRACT). True is what a room has always done, so
+  /// an old room and an old host both keep behaving exactly as before; false
+  /// means every member answers the user and nobody answers a coworker.
+  final bool agentToAgent;
+
   /// The members' handles, in room order — the "everyone speaks" sequence.
   List<String> get handles => <String>[for (final m in members) m.handle];
 
-  AgentsRoom copyWith({String? name, List<AgentsRoomMember>? members}) =>
-      AgentsRoom(
-        id: id,
-        name: name ?? this.name,
-        members: members ?? this.members,
-      );
+  AgentsRoom copyWith({
+    String? name,
+    List<AgentsRoomMember>? members,
+    bool? agentToAgent,
+  }) => AgentsRoom(
+    id: id,
+    name: name ?? this.name,
+    members: members ?? this.members,
+    agentToAgent: agentToAgent ?? this.agentToAgent,
+  );
 }
 
 /// What the create-room form produces: a name and the chosen members. It is not
 /// a live room yet — the host makes it real — so it carries no id.
 @immutable
 class AgentsRoomDraft {
-  const AgentsRoomDraft({required this.name, required this.members});
+  const AgentsRoomDraft({
+    required this.name,
+    required this.members,
+    this.agentToAgent = true,
+  });
 
   final String name;
   final List<AgentsRoomMember> members;
+
+  /// The policy the form chose; see [AgentsRoom.agentToAgent]. Defaults to the
+  /// behaviour a room has always had, so a caller that knows nothing about the
+  /// switch still builds the room the user expects.
+  final bool agentToAgent;
 }
 
 /// One agent turn in a room exchange, as the app shows it. Mirrors the manager's
@@ -106,7 +123,12 @@ enum AgentsRoomStop {
 
   /// The host does not have this room (it was never synced, or was deleted on
   /// the host). The app can re-create it and try again.
-  noSuchRoom;
+  noSuchRoom,
+
+  /// The room's `agent_to_agent` policy is off, so a coworker's @mention of
+  /// another coworker was not followed — the exchange ends after everyone has
+  /// answered the user.
+  agentToAgentOff;
 
   /// Parse the wire string, or null for one this build does not know.
   static AgentsRoomStop? fromWire(String? reason) => switch (reason) {
@@ -116,6 +138,7 @@ enum AgentsRoomStop {
     'stopped' => AgentsRoomStop.stopped,
     'turn_failed' => AgentsRoomStop.turnFailed,
     'no_such_room' => AgentsRoomStop.noSuchRoom,
+    'agent_to_agent_off' => AgentsRoomStop.agentToAgentOff,
     _ => null,
   };
 
@@ -127,5 +150,7 @@ enum AgentsRoomStop {
     AgentsRoomStop.stopped => 'Stopped',
     AgentsRoomStop.turnFailed => 'A coworker\'s turn failed',
     AgentsRoomStop.noSuchRoom => 'This room is not on your host yet',
+    AgentsRoomStop.agentToAgentOff =>
+      'Coworkers do not reply to each other here',
   };
 }

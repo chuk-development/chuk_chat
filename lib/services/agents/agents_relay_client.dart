@@ -1183,11 +1183,20 @@ abstract interface class AgentsRelayController {
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
   /// [members] is `[{agent_id, handle}]` in room order.
+  ///
+  /// [agentToAgent] is the room's "coworkers may reply to each other" policy.
+  /// True is what a room has always done, so the key rides ONLY when it is
+  /// false: an old host that does not know the key keeps behaving exactly as
+  /// before.
   Future<void> createRoom(
     String roomId,
     String name,
-    List<Map<String, String>> members,
-  );
+    List<Map<String, String>> members, {
+    bool agentToAgent,
+  });
+
+  /// Flips [roomId]'s `agent_to_agent` policy on the host (§16.1).
+  Future<void> setRoomAgentToAgent(String roomId, bool enabled);
 
   /// Seals and sends a group-room task (§16.1): the host looks [roomId]'s
   /// members up and drives them, streaming `room_turn` / `room_done` back.
@@ -2055,13 +2064,25 @@ class AgentsRelayClient
   Future<void> createRoom(
     String roomId,
     String name,
-    List<Map<String, String>> members,
-  ) => _sendFramePayload(<String, dynamic>{
+    List<Map<String, String>> members, {
+    bool agentToAgent = true,
+  }) => _sendFramePayload(<String, dynamic>{
     'type': 'room_create',
     'room_id': roomId,
     'name': name,
     'members': members,
+    // Only a room that turned the policy OFF says so, so an old host sees the
+    // frame it has always seen.
+    if (!agentToAgent) 'agent_to_agent': false,
   });
+
+  @override
+  Future<void> setRoomAgentToAgent(String roomId, bool enabled) =>
+      _sendFramePayload(<String, dynamic>{
+        'type': 'room_set_agent_to_agent',
+        'room_id': roomId,
+        'enabled': enabled,
+      });
 
   @override
   Future<void> sendRoomTask(String roomId, String message) =>

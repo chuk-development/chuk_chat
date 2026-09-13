@@ -2,11 +2,17 @@
 
 A room is a small, capped, turn-based conversation between the user and up to a
 handful of coworkers. The shape and the numbers are taken from Hermes Bot Mode,
-which has already load-tested them in the wild: **at most six members, at most
-three serial rounds per user message, and at most ten agent messages per send.**
-The caps are a cost control as much as a UX one — a room with no ceiling is a
-credit fire — so they are enforced here, in one pure module, rather than hoped
-for at each call site.
+which has already load-tested them in the wild: **at most three serial rounds
+per user message**, and a message ceiling per send. The caps are a cost control
+as much as a UX one — a room with no ceiling is a credit fire — so they are
+enforced here, in one pure module, rather than hoped for at each call site.
+
+Membership itself is **not** capped: a room takes as many coworkers as the user
+puts in it (a ceiling is still available — ``RoomCaps(max_members=6)`` — but it
+is opt-in). The round cap is the real brake, so the message ceiling follows the
+room: left unset it is derived as ``members x max_rounds``, which is exactly
+enough for every member to get its turn in every round. Setting it explicitly
+still truncates the exchange, and says so (``messages_exhausted``).
 
 This module is deliberately transport-free and model-free. It answers one
 question: *given a room and a user message, in what order do members speak, and
@@ -27,6 +33,16 @@ what makes the caps testable without a sandbox.
   (``no_more_mentions``), the round cap reached (``rounds_exhausted``), or the
   per-send message cap reached (``messages_exhausted``). The stop reason is
   reported, never silent — a truncated room must be legible as truncated.
+
+## The agent-to-agent policy
+
+A room can be switched to *user-driven* with ``GroupRoom.agent_to_agent =
+False``. Round 1 is untouched — the user keeps full addressing power, including
+``@all`` — but an agent's own reply no longer seeds a round: its `@mentions`
+(and a broadcast in its reply) are read and dropped. When something was actually
+dropped the exchange stops with ``agent_to_agent_off``; when no agent named
+anybody anyway it stops with the ordinary ``no_more_mentions``, because the stop
+reason must describe what really happened.
 """
 
 from __future__ import annotations
@@ -64,15 +80,27 @@ def has_broadcast_mention(text: str) -> bool:
 
 @dataclass(frozen=True, slots=True)
 class RoomCaps:
-    """The three ceilings, each defaulting to the Hermes number."""
+    """The ceilings. ``None`` means "no ceiling here".
 
-    max_members: int = DEFAULT_MAX_MEMBERS
+    ``max_members`` is unlimited by default — a room is as big as the user wants
+    it. ``max_messages_per_send`` is unset by default too, and then
+    :class:`RoomSession` derives it from the room's own size (see
+    :meth:`RoomSession.max_messages_per_send`), so a wide room always gets a
+    whole round. A number given here is honoured exactly as given.
+    """
+
+    max_members: int | None = None
     max_rounds: int = DEFAULT_MAX_ROUNDS
-    max_messages_per_send: int = DEFAULT_MAX_MESSAGES_PER_SEND
+    max_messages_per_send: int | None = None
 
     def __post_init__(self) -> None:
         for name in ("max_members", "max_rounds", "max_messages_per_send"):
-            if getattr(self, name) < 1:
+            value = getattr(self, name)
+            if value is None:
+                if name == "max_rounds":
+                    raise ValueError("max_rounds must be >= 1")
+                continue
+            if value < 1:
                 raise ValueError(f"{name} must be >= 1")
 
 
@@ -97,9 +125,17 @@ class GroupRoom:
     name: str
     members: tuple[RoomMember, ...] = ()
     caps: RoomCaps = field(default_factory=RoomCaps)
+    #: Room policy (not a cap): may a coworker's own reply pull another coworker
+    #: in? ``True`` is today's behaviour — an agent's `@mention` seeds the next
+    #: round. ``False`` makes a room strictly user-driven: the user still
+    #: addresses whom they like, agents only answer, never summon.
+    agent_to_agent: bool = True
 
     def __post_init__(self) -> None:
-        if len(self.members) > self.caps.max_members:
+        if (
+            self.caps.max_members is not None
+            and len(self.members) > self.caps.max_members
+        ):
             raise RoomError(
                 f"a room holds at most {self.caps.max_members} members, "
                 f"got {len(self.members)}"
@@ -126,7 +162,10 @@ class GroupRoom:
         return None
 
     def with_member(self, member: RoomMember) -> "GroupRoom":
-        if len(self.members) >= self.caps.max_members:
+        if (
+            self.caps.max_members is not None
+            and len(self.members) >= self.caps.max_members
+        ):
             raise RoomError(
                 f"the room is full ({self.caps.max_members} members)"
             )
@@ -242,17 +281,37 @@ class RoomSession:
     """
 
     def __init__(
-        self, room: GroupRoom, user_message: str, *, caps: RoomCaps | None = None
+        self,
+        room: GroupRoom,
+        user_message: str,
+        *,
+        caps: RoomCaps | None = None,
+        agent_to_agent: bool | None = None,
     ) -> None:
         self._room = room
         self._caps = caps or room.caps
+        # The room owns the policy; the argument is an override for a caller that
+        # runs one exchange under a different rule (a test, a plan tier).
+        self._agent_to_agent = (
+            room.agent_to_agent if agent_to_agent is None else agent_to_agent
+        )
         self._handles = set(room.handles)
+        # An unset message ceiling follows the room: enough for every member to
+        # speak in every round. Without this a wide room would stop halfway
+        # through its first round and half its members would never speak.
+        self._max_messages = self._caps.max_messages_per_send
+        if self._max_messages is None:
+            self._max_messages = max(1, len(room.members) * self._caps.max_rounds)
         self._messages_sent = 0
         self._round = 1
         self._stop_reason: str | None = None
         self._current: RoomMember | None = None
         self._transcript: list[RoomTurn] = []
         self._next_round: list[str] = []
+        # True once an agent's reply named somebody and the policy dropped it —
+        # that is what makes the stop reason 'agent_to_agent_off' rather than
+        # 'no_more_mentions'.
+        self._suppressed_mentions = False
 
         # Round 1: the user's mentions, or everyone in room order.
         mentioned = parse_mentions(user_message, self._handles)
@@ -270,6 +329,12 @@ class RoomSession:
     @property
     def round(self) -> int:
         return self._round
+
+    @property
+    def max_messages_per_send(self) -> int:
+        """The message ceiling in force for this exchange: the configured one, or
+        the one derived from the room's size (``members x max_rounds``)."""
+        return self._max_messages
 
     @property
     def messages_sent(self) -> int:
@@ -305,7 +370,7 @@ class RoomSession:
             self._advance_round()
             if self._stop_reason is not None:
                 return None
-        if self._messages_sent >= self._caps.max_messages_per_send:
+        if self._messages_sent >= self._max_messages:
             self._stop_reason = "messages_exhausted"
             return None
         self._current = self._queue.popleft()
@@ -326,6 +391,18 @@ class RoomSession:
             )
         )
         self._messages_sent += 1
+        if not self._agent_to_agent:
+            # User-driven room: the reply is recorded, its mentions are not
+            # acted on. They are still parsed, because whether the agent named
+            # anybody is what the stop reason has to report.
+            others = [h for h in self._handles if h != speaker.handle]
+            named = [
+                h for h in parse_mentions(text, self._handles) if h != speaker.handle
+            ]
+            if named or (has_broadcast_mention(text) and others):
+                self._suppressed_mentions = True
+            self._current = None
+            return
         if has_broadcast_mention(text):
             # @all re-engages the whole room: every other member, in room order,
             # for the next round (still bounded by the round and message caps).
@@ -342,7 +419,7 @@ class RoomSession:
 
     def _advance_round(self) -> None:
         if not self._next_round:
-            self._stop_reason = "no_more_mentions"
+            self._stop_reason = self._exhausted_reason()
             return
         if self._round >= self._caps.max_rounds:
             self._stop_reason = "rounds_exhausted"
@@ -352,4 +429,11 @@ class RoomSession:
         self._queue = deque(m for m in order if m)
         self._next_round = []
         if not self._queue:
-            self._stop_reason = "no_more_mentions"
+            self._stop_reason = self._exhausted_reason()
+
+    def _exhausted_reason(self) -> str:
+        """Why the exchange ran out of speakers: a dropped mention under the
+        user-driven policy, or simply nobody left to answer."""
+        if not self._agent_to_agent and self._suppressed_mentions:
+            return "agent_to_agent_off"
+        return "no_more_mentions"
