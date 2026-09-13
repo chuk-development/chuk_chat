@@ -48,6 +48,7 @@ class MultiplexConnection {
     required this.accessTokenProvider,
     required this.baseUrl,
     Future<String?> Function()? freshTokenProvider,
+    this.authRefreshFetchTimeout = const Duration(seconds: 10),
     this.authRefreshReplyTimeout = const Duration(seconds: 15),
     this.authRefreshRetryDelay = const Duration(seconds: 30),
   }) : freshTokenProvider = freshTokenProvider ?? accessTokenProvider;
@@ -66,6 +67,20 @@ class MultiplexConnection {
   /// It must never sign the user out: returning null simply means "no token
   /// right now", and the connection retries later with the session intact.
   final Future<String?> Function() freshTokenProvider;
+
+  /// How long to wait for [freshTokenProvider] to hand back a token.
+  ///
+  /// Deliberately separate from [authRefreshReplyTimeout]: this bounds a
+  /// local token-mint round-trip (Supabase), that one bounds the chat
+  /// server's reply to a handover already on the wire. They are different
+  /// hops and must be tunable apart.
+  ///
+  /// Without this bound a `refreshSession()` that never completes would
+  /// leave the fetch guard raised for the life of the socket, so every
+  /// later attempt would return at the guard and no retry would ever be
+  /// armed — the socket would sit on an expired token forever, which is
+  /// the exact failure this class exists to prevent.
+  final Duration authRefreshFetchTimeout;
 
   /// How long to wait for `auth_refreshed` / `auth_refresh_failed` before
   /// treating the server as silent and arming a retry.
@@ -122,8 +137,18 @@ class MultiplexConnection {
   /// handover is in flight at a time.
   String? _inFlightAuthToken;
 
+  /// Newest token handed in while another handover was still awaiting its
+  /// reply. Sent as soon as that reply settles, so two tokens are never on
+  /// the wire at once and a reply can never be credited to the wrong one.
+  String? _queuedAuthToken;
+
   Timer? _authRefreshReplyTimer;
   Timer? _authRefreshRetryTimer;
+  /// Raised while [freshTokenProvider] is being awaited, so two fetches
+  /// never overlap. It is only ever cleared in a `finally`, and the await it
+  /// guards is bounded by [authRefreshFetchTimeout] — so it always comes
+  /// back down, even if the token source hangs or the transport dies under
+  /// it.
   bool _authRefreshFetchInFlight = false;
 
   /// Consecutive retries armed without a confirmed handover. Bounds the
@@ -136,11 +161,23 @@ class MultiplexConnection {
   /// handover. Diagnostics only — a refusal never signs anyone out.
   int _authRefreshFailures = 0;
 
-  /// Token the server currently holds, or null before the handshake.
-  String? get activeAuthToken => _activeAuthToken;
+  /// Whether the socket has an authenticated identity at all.
+  ///
+  /// The token itself stays private: handing out a raw bearer JWT invites
+  /// it into a log line or a crash report. Callers that need to know *which*
+  /// token is in force compare through [holdsAuthToken].
+  bool get hasActiveAuthToken => _activeAuthToken != null;
+
+  /// Whether the server currently authenticates this socket with exactly
+  /// [token]. A null or empty argument is never a match.
+  bool holdsAuthToken(String? token) =>
+      token != null && token.isNotEmpty && _activeAuthToken == token;
 
   /// True while an `auth_refresh` frame is awaiting its reply.
   bool get hasPendingAuthRefresh => _inFlightAuthToken != null;
+
+  /// True while a newer token waits for the in-flight handover to settle.
+  bool get hasQueuedAuthRefresh => _queuedAuthToken != null;
 
   /// True while a later retry of the token handover is armed.
   bool get hasAuthRefreshRetryScheduled =>
@@ -290,6 +327,7 @@ class MultiplexConnection {
     // only replaces it once the server confirms with `auth_refreshed`.
     _activeAuthToken = token;
     _inFlightAuthToken = null;
+    _queuedAuthToken = null;
     _authRefreshReplyTimer?.cancel();
     _authRefreshReplyTimer = null;
     _authRefreshRetryTimer?.cancel();
@@ -357,6 +395,13 @@ class MultiplexConnection {
       // Same token already on the wire, reply outstanding.
       return true;
     }
+    if (_inFlightAuthToken != null) {
+      // A handover is already on the wire. Replies carry no `req_id`, so a
+      // second frame now would let the first reply be credited to the wrong
+      // token. Hold the newer one and send it when that reply settles.
+      _queuedAuthToken = token;
+      return true;
+    }
 
     final ch = _channel;
     if (ch == null) {
@@ -386,8 +431,18 @@ class MultiplexConnection {
         debugPrint('🔑 [Multiplex] auth_refresh got no reply — retrying later');
       }
       _inFlightAuthToken = null;
-      _scheduleAuthRefreshRetry();
+      if (!_flushQueuedAuthToken()) _scheduleAuthRefreshRetry();
     });
+    return true;
+  }
+
+  /// Send the token that was parked while a handover was in flight.
+  /// Returns true when one was sent, so callers know a retry is redundant.
+  bool _flushQueuedAuthToken() {
+    final queued = _queuedAuthToken;
+    if (queued == null) return false;
+    _queuedAuthToken = null;
+    unawaited(updateAuthToken(queued));
     return true;
   }
 
@@ -406,6 +461,7 @@ class MultiplexConnection {
         '🔑 [Multiplex] auth_refreshed (expires_at=${data['expires_at']})',
       );
     }
+    _flushQueuedAuthToken();
   }
 
   void _onAuthRefreshFailed(Map<String, dynamic> data) {
@@ -421,7 +477,9 @@ class MultiplexConnection {
         'keeping session, retrying later',
       );
     }
-    _scheduleAuthRefreshRetry();
+    // A newer token parked behind this one is a better answer than waiting
+    // out the retry delay.
+    if (!_flushQueuedAuthToken()) _scheduleAuthRefreshRetry();
   }
 
   void _onAuthRefreshNeeded(Map<String, dynamic> data) {
@@ -445,7 +503,18 @@ class MultiplexConnection {
     try {
       String? token;
       try {
-        token = await freshTokenProvider();
+        // Time-boxed on purpose. [freshTokenProvider] reaches Supabase,
+        // which has no deadline of its own; a future that never completes
+        // would strand the guard below and silence every later attempt.
+        token = await freshTokenProvider().timeout(authRefreshFetchTimeout);
+      } on TimeoutException {
+        if (kDebugMode) {
+          debugPrint(
+            '🔑 [Multiplex] fresh token lookup timed out after '
+            '${authRefreshFetchTimeout.inSeconds}s — retrying later',
+          );
+        }
+        token = null;
       } catch (e) {
         if (kDebugMode) {
           debugPrint('🔑 [Multiplex] fresh token lookup failed: $e');
@@ -484,6 +553,8 @@ class MultiplexConnection {
     _authRefreshReplyTimer = null;
     _authRefreshRetryTimer?.cancel();
     _authRefreshRetryTimer = null;
+    _inFlightAuthToken = null;
+    _queuedAuthToken = null;
   }
 
   /// Time since the last server frame arrived, or null if the socket has
@@ -882,6 +953,9 @@ class MultiplexConnection {
     // user's session is untouched.
     _activeAuthToken = null;
     _inFlightAuthToken = null;
+    // Nothing is stranded by dropping the queue: the next handshake reads a
+    // current token from [accessTokenProvider].
+    _queuedAuthToken = null;
     _authRefreshRetries = 0;
     unawaited(_channelSubscription?.cancel());
     _channelSubscription = null;
