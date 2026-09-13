@@ -22,7 +22,10 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/chat_composer_box.dart';
 import 'package:chuk_chat/widgets/room_mention_picker.dart';
 import 'package:chuk_chat/widgets/room_thread_view.dart';
 
@@ -453,38 +456,42 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                     ),
                     const SizedBox(height: 8),
                   ],
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Focus(
-                          // Not a stop on the way round the screen: it only
-                          // reads the keys the field is about to get.
-                          canRequestFocus: false,
-                          skipTraversal: true,
-                          onKeyEvent: _onComposerKey,
-                          child: TextField(
-                            controller: _composer,
-                            minLines: 1,
-                            maxLines: 4,
-                            // Once the socket is gone there is nowhere to send:
-                            // disable the field so the user is not typing into
-                            // a dead room.
-                            enabled: !_disconnected,
-                            decoration: InputDecoration(
-                              hintText: _disconnected
-                                  ? 'Reopen the room to send'
-                                  : 'Message the room…',
-                              border: const OutlineInputBorder(),
-                              isDense: true,
-                            ),
-                            onSubmitted: (_) => _onSubmitted(),
-                          ),
-                        ),
+                  // The chat's composer, not a second one: the box, the
+                  // typography and the send target are the ones the one-to-one
+                  // thread uses (widgets/chat_composer_box.dart). Only the key
+                  // handling is the room's, because only a room has @mentions.
+                  ChatComposerBox(
+                    field: Focus(
+                      // Not a stop on the way round the screen: it only reads
+                      // the keys the field is about to get. It must stay
+                      // DIRECTLY around the field, or the picker loses Enter.
+                      canRequestFocus: false,
+                      skipTraversal: true,
+                      onKeyEvent: _onComposerKey,
+                      child: ChatComposerField(
+                        controller: _composer,
+                        maxLines: 4,
+                        // Once the socket is gone there is nowhere to send:
+                        // disable the field so the user is not typing into a
+                        // dead room.
+                        enabled: !_disconnected,
+                        hintText: _disconnected
+                            ? 'Reopen the room to send'
+                            : 'Message the room…',
+                        onSubmitted: _onSubmitted,
                       ),
-                      const SizedBox(width: 8),
-                      IconButton.filled(
-                        icon: const AppIcon(Icons.send),
-                        onPressed: _disconnected ? null : _send,
+                    ),
+                    actions: <Widget>[
+                      const Spacer(),
+                      buildTinyActionButton(
+                        icon: Icons.north_rounded,
+                        buttonSize: ComposerMetrics.targetSize,
+                        iconSize: 18,
+                        onTap: _disconnected ? () {} : _send,
+                        color: _disconnected
+                            ? Theme.of(context).disabledColor
+                            : Theme.of(context).colorScheme.primary,
+                        semanticsId: 'send_button',
                       ),
                     ],
                   ),

@@ -4,15 +4,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 import '../support/icon_finder.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/chat_composer_box.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/room_mention_picker.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
+
+  /// The room is still talking: the chat's own typing pill, as in a one-to-one
+  /// thread. There is no worded status line any more.
+  Finder talking() => find.byType(MessengerTypingIndicator);
+
+  /// A coworker's turn goes through the chat's Markdown renderer, so its words
+  /// live in a RichText.
+  Finder said(String text) => find.textContaining(text, findRichText: true);
+
+  /// The composer's send target — the chat's, so it is the north arrow.
+  Finder sendButton() => findIcon(Icons.north_rounded);
+
   Future<StreamController<AgentsRelayInbound>> pump(
     WidgetTester tester, {
     void Function(String)? onSend,
@@ -44,7 +61,7 @@ void main() {
     final ctrl = await pump(tester);
 
     // Running from the start: no stop footer, a talking indicator.
-    expect(find.text('the room is talking…'), findsOneWidget);
+    expect(talking(), findsOneWidget);
     expect(find.text('@amber'), findsNothing);
 
     ctrl.add(
@@ -58,7 +75,7 @@ void main() {
     );
     await tester.pump();
     expect(find.text('@amber'), findsOneWidget);
-    expect(find.text('ship it'), findsOneWidget);
+    expect(said('ship it'), findsOneWidget);
 
     ctrl.add(
       const AgentsRelayRoomTurn(
@@ -70,9 +87,10 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('Round 1'), findsOneWidget);
-    expect(find.text('Round 2'), findsOneWidget);
+    expect(said('agreed'), findsOneWidget);
     expect(find.text('@cobalt'), findsOneWidget);
+    // The round is the host's loop counter, not a line in the transcript.
+    expect(find.textContaining('Round'), findsNothing);
   });
 
   testWidgets('room_done stops the running state and names the reason', (
@@ -93,7 +111,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('the room is talking…'), findsNothing);
+    expect(talking(), findsNothing);
     expect(find.text('Reached the round limit'), findsOneWidget);
   });
 
@@ -104,8 +122,8 @@ void main() {
     await tester.pump();
 
     // Still running, no turns — the agent-thread events did not leak in.
-    expect(find.text('the room is talking…'), findsOneWidget);
-    expect(find.textContaining('agent-thread text'), findsNothing);
+    expect(talking(), findsOneWidget);
+    expect(said('agent-thread text'), findsNothing);
   });
 
   testWidgets('a turn for another room is ignored', (tester) async {
@@ -121,11 +139,11 @@ void main() {
     );
     await tester.pump();
     expect(find.text('@zed'), findsNothing);
-    expect(find.text('other room'), findsNothing);
+    expect(said('other room'), findsNothing);
     // A done for another room does not stop this one either.
     ctrl.add(const AgentsRelayRoomDone(roomId: 'r2', reason: 'stopped'));
     await tester.pump();
-    expect(find.text('the room is talking…'), findsOneWidget);
+    expect(talking(), findsOneWidget);
   });
 
   testWidgets('an unknown stop reason leaves no footer but stops running', (
@@ -135,13 +153,13 @@ void main() {
     ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'who_knows'));
     await tester.pump();
     // fromWire returns null -> no footer, and not running (no indicator).
-    expect(find.text('the room is talking…'), findsNothing);
+    expect(talking(), findsNothing);
     expect(find.textContaining('Reached'), findsNothing);
   });
 
   testWidgets('no composer when onSend is null', (tester) async {
     await pump(tester);
-    expect(findIcon(Icons.send), findsNothing);
+    expect(sendButton(), findsNothing);
   });
 
   testWidgets('the composer sends and resets the thread', (tester) async {
@@ -159,23 +177,55 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('old turn'), findsOneWidget);
+    expect(said('old turn'), findsOneWidget);
 
     await tester.enterText(find.byType(TextField), 'new question');
-    await tester.tap(findIcon(Icons.send));
+    await tester.tap(sendButton());
     await tester.pump();
 
     expect(sent, ['new question']);
     // Sending resets: the old turn is gone, the sent message is the subject.
-    expect(find.text('old turn'), findsNothing);
+    expect(said('old turn'), findsNothing);
     expect(find.text('new question'), findsOneWidget);
+  });
+
+  testWidgets('the composer is the chat composer, not a bare field', (
+    tester,
+  ) async {
+    await pump(tester, onSend: (_) {});
+    expect(find.byType(ChatComposerBox), findsOneWidget);
+    expect(find.byType(ChatComposerField), findsOneWidget);
+    // One field, inside the chat's box — no second text surface.
+    expect(find.byType(TextField), findsOneWidget);
+    expect(
+      find.descendant(of: find.byType(ChatComposerBox), matching: sendButton()),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shift+enter writes a newline and sends nothing', (tester) async {
+    final sent = <String>[];
+    await pump(tester, onSend: sent.add);
+    await tester.enterText(find.byType(TextField), 'first line');
+    await tester.pump();
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+
+    expect(sent, isEmpty, reason: 'shift+enter is a newline, not a send');
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller!.text,
+      startsWith('first line'),
+    );
   });
 
   testWidgets('an empty message does not send', (tester) async {
     final sent = <String>[];
     await pump(tester, onSend: sent.add);
     await tester.enterText(find.byType(TextField), '   ');
-    await tester.tap(findIcon(Icons.send));
+    await tester.tap(sendButton());
     await tester.pump();
     expect(sent, isEmpty);
   });
@@ -201,7 +251,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('live turn'), findsOneWidget);
+    expect(said('live turn'), findsOneWidget);
 
     ctrl.add(
       const AgentsRelayRoomHistory(
@@ -227,10 +277,10 @@ void main() {
     await tester.pump();
 
     // The live turn is replaced by the stored history; the exchange is over.
-    expect(find.text('live turn'), findsNothing);
-    expect(find.text('stored one'), findsOneWidget);
-    expect(find.text('stored two'), findsOneWidget);
-    expect(find.text('the room is talking…'), findsNothing);
+    expect(said('live turn'), findsNothing);
+    expect(said('stored one'), findsOneWidget);
+    expect(said('stored two'), findsOneWidget);
+    expect(talking(), findsNothing);
   });
 
   testWidgets('an empty room_history leaves the page running and empty', (
@@ -239,7 +289,7 @@ void main() {
     final ctrl = await pump(tester);
     ctrl.add(const AgentsRelayRoomHistory(roomId: 'r1', turns: []));
     await tester.pump();
-    expect(find.text('the room is talking…'), findsOneWidget);
+    expect(talking(), findsOneWidget);
   });
 
   testWidgets('history for another room is ignored', (tester) async {
@@ -259,7 +309,7 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.text('other'), findsNothing);
+    expect(said('other'), findsNothing);
   });
 
   testWidgets('a no_such_room done names the missing-room reason', (
@@ -297,7 +347,7 @@ void main() {
       find.text('Connection changed. Reopen the room to continue.'),
       findsOneWidget,
     );
-    expect(find.text('the room is talking…'), findsNothing);
+    expect(talking(), findsNothing);
   });
 
   testWidgets('the composer is disabled after the stream closes', (
@@ -320,24 +370,23 @@ void main() {
     );
     await tester.pump();
 
-    // Enabled before the drop.
+    // Enabled before the drop: the field takes text and send fires.
     expect(
-      tester
-          .widget<IconButton>(findWidgetWithIcon<IconButton>(Icons.send))
-          .onPressed,
-      isNotNull,
+      tester.widget<ChatComposerField>(find.byType(ChatComposerField)).enabled,
+      isTrue,
     );
 
     unawaited(ctrl.close());
     await tester.pump();
 
-    // Disabled after: the send button is dead and typing hits nothing.
+    // Disabled after: the field is dead and the send target does nothing.
     expect(
-      tester
-          .widget<IconButton>(findWidgetWithIcon<IconButton>(Icons.send))
-          .onPressed,
-      isNull,
+      tester.widget<ChatComposerField>(find.byType(ChatComposerField)).enabled,
+      isFalse,
     );
+    await tester.tap(sendButton());
+    await tester.pump();
+    expect(sent, isEmpty);
     expect(find.text('Reopen the room to send'), findsOneWidget);
   });
 
