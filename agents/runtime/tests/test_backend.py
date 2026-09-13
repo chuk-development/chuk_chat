@@ -725,7 +725,7 @@ def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatc
 
     attempts: list[str] = []
 
-    def fake_chat_once(payload):
+    def fake_chat_once(payload, **_kw):
         attempts.append(session.access_token)
         if len(attempts) == 1:
             raise _AuthRejected("token expired")
