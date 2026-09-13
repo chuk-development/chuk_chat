@@ -4,9 +4,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 /// A floating pill toast — the expressive replacement for a flat SnackBar.
 void pillToast(BuildContext context, String message, {IconData? icon}) {

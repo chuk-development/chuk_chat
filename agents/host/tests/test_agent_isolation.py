@@ -9,11 +9,11 @@ workspace it always had — under every name it answers to.
 
 from __future__ import annotations
 
-from cowork_sandbox import LABEL_AGENT, DockerCli, DockerEnvironment
+from chuk_agents_sandbox import LABEL_AGENT, DockerCli, DockerEnvironment
 
-from cowork_host import LocalHost
-from cowork_host.coworker_names import host_agent_id
-from cowork_host.identity import HOST_DEVICE_ID
+from chuk_agents_host import LocalHost
+from chuk_agents_host.coworker_names import host_agent_id
+from chuk_agents_host.identity import HOST_DEVICE_ID
 
 
 def _register(host: LocalHost, agent_id: str, name: str) -> None:
@@ -28,7 +28,7 @@ def _register(host: LocalHost, agent_id: str, name: str) -> None:
 def _host(tmp_path, **opts) -> LocalHost:
     return LocalHost(
         port=0,
-        workspace_dir=str(tmp_path / "cowork"),
+        workspace_dir=str(tmp_path / "agents"),
         channel_id="testchannel",
         agent_name="pytest-agent",
         model_factory_override=lambda: None,
@@ -49,8 +49,8 @@ def test_two_coworkers_get_two_workspaces(tmp_path):
 
     assert mine != hers
     # Both are real directories under the host's agents folder, ready to mount.
-    assert mine.startswith(str(tmp_path / "cowork" / "agents"))
-    assert hers.startswith(str(tmp_path / "cowork" / "agents"))
+    assert mine.startswith(str(tmp_path / "agents" / "agents"))
+    assert hers.startswith(str(tmp_path / "agents" / "agents"))
 
 
 def test_coworkers_whose_names_read_alike_still_get_two_workspaces(tmp_path):
@@ -128,7 +128,7 @@ class _FakeCli(DockerCli):
         return True
 
     def run(self, *args: str, timeout: int | None = None):
-        from cowork_sandbox import CliResult, parse_labels
+        from chuk_agents_sandbox import CliResult, parse_labels
 
         verb = args[0] if args else ""
         if verb == "ps":

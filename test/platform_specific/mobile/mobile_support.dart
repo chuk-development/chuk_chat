@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 
 import '../../support/test_app.dart';
 
@@ -51,17 +51,17 @@ Future<void> pumpPhone(
   await tester.pump();
 }
 
-CoworkAgent agent({
+AgentsAgent agent({
   required String id,
   required String name,
   String? role,
   String? brief,
   bool running = false,
   DateTime? lastActivity,
-  List<CoworkThreadInfo>? threads,
+  List<AgentsThreadInfo>? threads,
   bool onHost = false,
 }) =>
-    CoworkAgent(
+    AgentsAgent(
       id: id,
       name: name,
       role: role,
@@ -70,12 +70,12 @@ CoworkAgent agent({
       onHost: onHost,
       lastActivity: lastActivity,
       threads: threads ??
-          <CoworkThreadInfo>[
-            CoworkThreadInfo(key: '$id-main', title: 'default'),
+          <AgentsThreadInfo>[
+            AgentsThreadInfo(key: '$id-main', title: 'default'),
           ],
     );
 
-LocalAgentRosterSource rosterWith(List<CoworkAgent> agents) =>
+LocalAgentRosterSource rosterWith(List<AgentsAgent> agents) =>
     LocalAgentRosterSource(seed: agents);
 
 /// Loads Roboto and the Material icon font from the Flutter SDK so a golden

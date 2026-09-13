@@ -3,14 +3,14 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:flutter/foundation.dart';
 
 final SupabaseClient _supabase = Supabase.instance.client;

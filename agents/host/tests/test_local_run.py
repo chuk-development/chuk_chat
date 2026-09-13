@@ -1,6 +1,6 @@
 """The whole platform, in one process, over the real localhost relay, no prod.
 
-A Python controller test-double plays the CoWork app: it joins the channel,
+A Python controller test-double plays the Agents app: it joins the channel,
 completes pairing as the **joiner**, provisions a MOCK account token, and sends a
 task. The host pairs as the **initiator**, provisions from that token (a mock
 model factory — no credits, no network to prod), and runs the task in a real
@@ -20,22 +20,22 @@ from typing import Any
 import pytest
 from websockets.sync.client import connect
 
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_crypto import (
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_crypto import (
     ApprovedDevices,
-    CoworkFrameOpener,
-    CoworkFrameSealer,
+    AgentsFrameOpener,
+    AgentsFrameSealer,
     DeviceIdentity,
     Pairing,
     ReconnectHandshake,
 )
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from cowork_agent import StateStore
-from cowork_executor import frame_to_b64, stop_payload, task_payload
-from cowork_executor.protocol import replay_payload
-from cowork_host import KEY_VERSION, LocalHost
-from cowork_host.protocol import (
+from chuk_agents_runtime import StateStore
+from chuk_agents_executor import frame_to_b64, stop_payload, task_payload
+from chuk_agents_executor.protocol import replay_payload
+from chuk_agents_host import KEY_VERSION, LocalHost
+from chuk_agents_host.protocol import (
     STEP_CONFIRM_D,
     STEP_DEVICE_D,
     STEP_PUBKEY,
@@ -81,7 +81,7 @@ def _scripted_model() -> MockModelClient:
 
 
 class ControllerDouble:
-    """Plays the CoWork app over the relay: either a first-time joiner pairing (a
+    """Plays the Agents app over the relay: either a first-time joiner pairing (a
     code) or a code-free reconnect from a stored :class:`AppTrust`, then a token
     + a task. After a fresh pairing it can hand back its own trust so the same
     device can reconnect later."""
@@ -128,8 +128,8 @@ class ControllerDouble:
                 pairing_code=pairing_code,
             )
             self._reconnect = None
-        self._sealer: CoworkFrameSealer | None = None
-        self._opener: CoworkFrameOpener | None = None
+        self._sealer: AgentsFrameSealer | None = None
+        self._opener: AgentsFrameOpener | None = None
         self._host_device_id: str | None = None
         self._host_public_key: Ed25519PublicKey | None = None
         self._channel_key: bytes | None = None
@@ -229,13 +229,13 @@ class ControllerDouble:
         self._build_codec(trust.channel_key, approved)
 
     def _build_codec(self, channel_key: bytes, approved: ApprovedDevices) -> None:
-        self._sealer = CoworkFrameSealer(
+        self._sealer = AgentsFrameSealer(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             device_id=APP_DEVICE_ID,
             signing_identity=self._identity,
         )
-        self._opener = CoworkFrameOpener(
+        self._opener = AgentsFrameOpener(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             approved_devices=approved,
@@ -350,7 +350,7 @@ def test_a_run_survives_the_controller_disconnecting(tmp_path, monkeypatch):
     while nobody was attached are dropped, not buffered.
     """
     # No real desktop toast on the developer's screen from a test run.
-    monkeypatch.setenv("COWORK_DESKTOP_NOTIFY", "0")
+    monkeypatch.setenv("AGENTS_DESKTOP_NOTIFY", "0")
     host = LocalHost(
         port=0,
         workspace_dir=str(tmp_path),
@@ -412,7 +412,7 @@ def test_a_run_survives_the_controller_disconnecting(tmp_path, monkeypatch):
 
 
 def _docker_ready() -> bool:
-    from cowork_sandbox import docker_available
+    from chuk_agents_sandbox import docker_available
 
     return docker_available()
 
@@ -427,10 +427,10 @@ def test_full_run_inside_the_agents_container(tmp_path, monkeypatch):
     """
     import os
 
-    from cowork_sandbox import DockerEnvironment, find_agent_container
+    from chuk_agents_sandbox import DockerEnvironment, find_agent_container
 
-    image = os.environ.get("COWORK_TEST_IMAGE", "debian:stable-slim")
-    monkeypatch.setenv("COWORK_SANDBOX_IMAGE", image)
+    image = os.environ.get("AGENTS_TEST_IMAGE", "debian:stable-slim")
+    monkeypatch.setenv("AGENTS_SANDBOX_IMAGE", image)
 
     host = LocalHost(
         port=0,
@@ -469,7 +469,7 @@ def test_full_run_inside_the_agents_container(tmp_path, monkeypatch):
 def test_result_frames_are_sealed_and_authenticated(tmp_path):
     """Every result frame the app receives is opaque to a stranger: the relay is
     blind, the frames are genuinely encrypted + device-authenticated."""
-    from cowork_crypto import ApprovedDevices, CoworkFrameRejected
+    from chuk_agents_crypto import ApprovedDevices, AgentsFrameRejected
 
     host = LocalHost(
         port=0,
@@ -492,14 +492,14 @@ def test_result_frames_are_sealed_and_authenticated(tmp_path):
     # A stranger holding the right channel key but an empty trust store (default
     # deny) still cannot open a frame — device approval is required.
     channel_key = controller._pairing.channel_key
-    stranger = CoworkFrameOpener(
+    stranger = AgentsFrameOpener(
         channel_key=channel_key,
         key_version=KEY_VERSION,
         approved_devices=ApprovedDevices(),
     )
     sealed = base64.b64decode(controller.raw_result_frames[0])
     assert b"final_answer" not in sealed  # plaintext never on the wire
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         stranger.open(sealed)
 
 
@@ -826,7 +826,7 @@ def test_an_imposter_device_cannot_reconnect_and_gets_no_channel(tmp_path):
         #    stolen channel key. Without an authenticated session the host has no
         #    opener, so nothing is served and nothing comes back.
         rogue_identity = DeviceIdentity.generate()
-        sealer = CoworkFrameSealer(
+        sealer = AgentsFrameSealer(
             channel_key=trust.channel_key,
             key_version=KEY_VERSION,
             device_id=APP_DEVICE_ID,
@@ -974,7 +974,7 @@ def test_the_host_exposes_an_estop_file_for_stopping_without_the_app(tmp_path):
     )
     assert host.estop_path == str(tmp_path / "ESTOP")
 
-    from cowork_agent import KillSwitch
+    from chuk_agents_runtime import KillSwitch
 
     switch = KillSwitch(host.estop_path)
     assert switch.estop_engaged() is False

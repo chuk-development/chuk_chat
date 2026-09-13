@@ -1,21 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/pages/automations_page.dart';
-import 'package:cowork/services/automations/automations_source.dart';
-import 'package:cowork/services/automations/cowork_automation.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/widgets/automation_card.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/services/automations/automations_source.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/widgets/automation_card.dart';
 
 import '../services/automations/automations_source_test.dart'
     show FakeAutomationController;
 
-CoworkAutomation _automation(
+AgentsAutomation _automation(
   String id, {
   String session = 'thread-1',
   String state = 'active',
-}) => CoworkAutomation.fromPayload(<String, dynamic>{
+}) => AgentsAutomation.fromPayload(<String, dynamic>{
   'id': id,
   'session_key': session,
   'kind': 'schedule',
@@ -31,14 +31,14 @@ void main() {
 
   setUp(() {
     source.reset();
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
     controller = FakeAutomationController();
-    CoworkRelayLink.instance.bind(controller);
+    AgentsRelayLink.instance.bind(controller);
   });
 
   tearDown(() {
     source.reset();
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
   });
 
   Future<void> pump(WidgetTester tester) async {
@@ -59,7 +59,7 @@ void main() {
     (tester) async {
       await pump(tester);
       controller.emit(
-        CoworkRelayAutomationList(
+        AgentsRelayAutomationList(
           automations: [
             _automation('a1'),
             _automation('a2', session: 'other-agent', state: 'paused'),
@@ -90,12 +90,12 @@ void main() {
   testWidgets('a live event updates a card in place', (tester) async {
     await pump(tester);
     controller.emit(
-      CoworkRelayAutomationList(automations: [_automation('a1')]),
+      AgentsRelayAutomationList(automations: [_automation('a1')]),
     );
     await tester.pump();
     expect(find.text('active'), findsOneWidget);
     controller.emit(
-      CoworkRelayAutomation(
+      AgentsRelayAutomation(
         event: 'paused',
         automation: _automation('a1', state: 'paused'),
       ),
@@ -106,7 +106,7 @@ void main() {
   });
 
   testWidgets('says so when the host is not connected', (tester) async {
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
     await pump(tester);
     expect(find.textContaining('Not connected to the host'), findsOneWidget);
     expect(find.textContaining('No automations'), findsNothing);
@@ -114,7 +114,7 @@ void main() {
 
   testWidgets('an empty answered list says there is nothing', (tester) async {
     await pump(tester);
-    controller.emit(const CoworkRelayAutomationList(automations: []));
+    controller.emit(const AgentsRelayAutomationList(automations: []));
     await tester.pump();
     expect(find.textContaining('No automations'), findsOneWidget);
   });
@@ -124,7 +124,7 @@ void main() {
   ) async {
     await pump(tester);
     controller.emit(
-      CoworkRelayAutomationList(
+      AgentsRelayAutomationList(
         automations: [
           _automation('a1', session: 'local:brisk-heron:2:116636868'),
           _automation('a2', session: 'host:cowork-host'),
@@ -140,8 +140,8 @@ void main() {
   testWidgets('one row per automation, and the fold count matches the list', (
     tester,
   ) async {
-    CoworkAutomation watcher(String id, String state, double created) =>
-        CoworkAutomation.fromPayload(<String, dynamic>{
+    AgentsAutomation watcher(String id, String state, double created) =>
+        AgentsAutomation.fromPayload(<String, dynamic>{
           'id': id,
           'session_key': 'thread-1',
           'kind': 'watcher',
@@ -152,7 +152,7 @@ void main() {
         })!;
     await pump(tester);
     controller.emit(
-      CoworkRelayAutomationList(
+      AgentsRelayAutomationList(
         automations: [
           watcher('dead', 'done', 10),
           watcher('live', 'active', 20),
@@ -186,7 +186,7 @@ void main() {
       await tester.pump();
       expect(controller.listRequests, ['thread-1']);
       controller.emit(
-        CoworkRelayAutomationList(
+        AgentsRelayAutomationList(
           automations: [
             _automation('mine'),
             _automation('mine-done', state: 'done'),
@@ -207,7 +207,7 @@ void main() {
       await tester.pump();
       expect(controller.listRequests.last, 'thread-1');
       controller.emit(
-        CoworkRelayAutomation(
+        AgentsRelayAutomation(
           event: 'created',
           automation: _automation('other-live', session: 'thread-2'),
         ),

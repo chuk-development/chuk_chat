@@ -11,7 +11,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 
 /// The soft shadow under a chip or pill. Lighter in dark mode, where a hard
 /// shadow reads as a black halo.

@@ -25,15 +25,15 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/ui/expressive/bubble_kind.dart';
-import 'package:cowork/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/agent_markdown.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
-import 'package:cowork/widgets/charts/chuk_chart.dart';
-import 'package:cowork/widgets/chuk_table.dart';
+import 'package:chuk_chat/ui/expressive/bubble_kind.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agent_markdown.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
 
 /// How much of a document the thread shows before it defers to the reader.
 ///

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/services/password_reset_service.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/password_reset_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Page for recovering or deleting chats encrypted with old passwords.
 class RecoverChatsPage extends StatefulWidget {

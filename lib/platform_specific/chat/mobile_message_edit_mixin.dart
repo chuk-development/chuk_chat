@@ -4,20 +4,20 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/models/chat_reply.dart';
-import 'package:cowork/platform_specific/chat/chat_scroll_mixin.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
-import 'package:cowork/platform_specific/chat/handlers/message_actions_handler.dart';
-import 'package:cowork/platform_specific/chat/mobile_attach_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_model_selection_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_send_mixin.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/platform_specific/chat/regen_variant_seed.dart';
-import 'package:cowork/services/artifact_storage_service.dart';
-import 'package:cowork/services/chat_storage_service.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/chat_reply.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_attach_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_model_selection_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_send_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 
 /// Going back over what was already said: editing a message, replying to one,
 /// sending one again, and picking up an answer that was cut short.

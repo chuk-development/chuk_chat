@@ -2,20 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/pages/about_page.dart';
-import 'package:cowork/pages/account_settings_page.dart';
-import 'package:cowork/pages/settings/embedding_settings_page.dart';
-import 'package:cowork/pages/settings/herenow_settings_page.dart';
-import 'package:cowork/pages/settings_page.dart';
-import 'package:cowork/pages/theme_page.dart';
+import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
+import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
+import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/pages/theme_page.dart';
 
 import '../support/shell_config.dart';
 import '../support/test_app.dart';
 
-/// The settings hub is chuk_chat's, with CoWork's section map applied
+/// The settings hub is chuk_chat's, with Agents's section map applied
 /// (docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md). These tests hold that map in
 /// place: what must be reachable, and what must stay hidden because the host
-/// owns it or CoWork has no hosted account behind it.
+/// owns it or Agents has no hosted account behind it.
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -43,14 +43,14 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the hub lists the areas CoWork keeps', (tester) async {
+  testWidgets('the hub lists the areas Agents keeps', (tester) async {
     await pumpSettings(tester);
 
     // 'Account' is both a section header and a row title, so scroll on the
     // first match and assert on all of them.
     for (final label in <String>[
       'Account',
-      'CoWork',
+      'Agents',
       'Appearance',
       'System',
       'here.now',
@@ -86,7 +86,7 @@ void main() {
     // Reachability only: mounting ModelSelectorPage runs upstream's initState,
     // which refreshes the Supabase session and fetches /v1/models_info, and a
     // unit test has neither. The hub is chuk's verbatim, so the entry IS
-    // chuk's screen; CoWork's pass-through wrapper is gone (bead cowork-acu).
+    // chuk's screen; Agents's pass-through wrapper is gone (bead cowork-acu).
     await tester.scrollUntilVisible(find.text('Model Selection').first, 200);
     expect(find.text('Model Selection'), findsOneWidget);
     await closeSettings(tester);

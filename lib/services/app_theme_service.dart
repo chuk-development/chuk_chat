@@ -7,11 +7,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/theme_settings_service.dart';
-import 'package:cowork/services/customization_preferences_service.dart';
-import 'package:cowork/utils/color_extensions.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/theme_settings_service.dart';
+import 'package:chuk_chat/services/customization_preferences_service.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
 
 /// Callback type for theme changes
 typedef ThemeChangedCallback = void Function();

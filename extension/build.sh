@@ -25,10 +25,10 @@ case "$target" in
   chrome)
     echo "Load it: chrome://extensions -> Developer mode -> Load unpacked -> $out"
     echo "Then register the bridge with the id Chrome shows:"
-    echo "  ../tools/cowork-browser-bridge/install_host_manifest.py --chrome-id <id>"
+    echo "  ../tools/agents-browser-bridge/install_host_manifest.py --chrome-id <id>"
     ;;
   firefox)
     echo "Load it: about:debugging#/runtime/this-firefox -> Load Temporary Add-on -> $out/manifest.json"
-    echo "Then: ../tools/cowork-browser-bridge/install_host_manifest.py"
+    echo "Then: ../tools/agents-browser-bridge/install_host_manifest.py"
     ;;
 esac

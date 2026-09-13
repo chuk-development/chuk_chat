@@ -5,7 +5,7 @@
 /// opened or saved (the same row the chat draws, so Open and Download behave
 /// exactly as they do there).
 ///
-/// There is no third kind. CoWork has no "artifacts" of its own: a coworker
+/// There is no third kind. Agents has no "artifacts" of its own: a coworker
 /// writes a real file in its workspace and sends it, and that file is what
 /// arrives here.
 library;
@@ -14,13 +14,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/models/content_block.dart' show SandboxArtifactPayload;
-import 'package:cowork/services/cowork/media_index.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/widgets/encrypted_image_widget.dart';
-import 'package:cowork/widgets/image_viewer.dart';
-import 'package:cowork/widgets/sandbox_artifact_block.dart';
+import 'package:chuk_chat/models/content_block.dart' show SandboxArtifactPayload;
+import 'package:chuk_chat/services/agents/media_index.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
+import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 
 class MobileMediaPage extends StatefulWidget {
   const MobileMediaPage({super.key, this.index, this.threadKeys = const []});

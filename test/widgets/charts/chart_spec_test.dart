@@ -3,7 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/charts/chart_spec.dart';
+import 'package:chuk_chat/widgets/charts/chart_spec.dart';
 
 import 'chart_fixtures.dart';
 

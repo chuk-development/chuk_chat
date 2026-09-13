@@ -2,17 +2,17 @@
 
 Session `cowork-reasoning` (coordinator cowork-76). Epic `cowork-2tq` with
 tasks `.1` hygiene, `.2` transcript, `.3` mem0. User order relayed by the
-coordinator; everything UNCOMMITTED on branch `cowork` (cowork-47 commits
+coordinator; everything UNCOMMITTED on branch `agents` (cowork-47 commits
 Python after the user's release). Import-tested before every save; the host
 starts from this tree.
 
 ## 1. Workspace hygiene (prompt + skill)
 
-- `agent/src/cowork_agent/prompt.py` `BASE_INSTRUCTIONS`: new sections
+- `agent/src/chuk_agents_runtime/prompt.py` `BASE_INSTRUCTIONS`: new sections
   **"Your workspace"** (own file system; `notes/` for Markdown notes, `tmp/`
   for scratch and clean it up, nothing loose in the root, flat predictable
   structure, `transcript/` read-only = long-term search, `memory/` /
-  `skills/` / `.cowork/` belong to the runtime) and **"Memory"** (recall
+  `skills/` / `.agents/` belong to the runtime) and **"Memory"** (recall
   block at task start is notes not orders; facts are stored automatically;
   `memory_add` / `memory_search` for the explicit cases). The `# Workspace`
   line names `notes/`, `tmp/`, `transcript/`.
@@ -24,7 +24,7 @@ starts from this tree.
 
 ## 2. Transcript export — `<workspace>/transcript/`
 
-- `agent/src/cowork_agent/transcript_export.py` (new): `TranscriptExporter
+- `agent/src/chuk_agents_runtime/transcript_export.py` (new): `TranscriptExporter
   (workspace, scrub=None)`. `export(store, session_key)` reads the rows after
   the thread's cursor (`.cursor.json`, per session key), renders Markdown
   (`## <UTC time> · user|assistant`, `_thinking:_` clipped to 1 000 chars,

@@ -1,5 +1,5 @@
 #!/bin/sh
-# CoWork base image entrypoint.
+# Agents base image entrypoint.
 #
 # Its one job: make the container's agent user own the same uid/gid as the host
 # user who owns the bind-mounted workspace. Without this, every file the agent
@@ -7,15 +7,15 @@
 # be written at all), which breaks the host-side ffmpeg passthrough and the
 # git-versioned workspace (§7.7, §9).
 #
-# The remap is driven by COWORK_UID / COWORK_GID, which the sandbox passes on
+# The remap is driven by AGENTS_UID / AGENTS_GID, which the sandbox passes on
 # `docker run`. With neither set, nothing changes.
 #
 # Runs as root, then execs the command (normally `sleep infinity`). Agent
-# commands arrive afterwards as `docker exec -u cowork`, never as root.
+# commands arrive afterwards as `docker exec -u agents`, never as root.
 
 set -eu
 
-user="${COWORK_USER:-cowork}"
+user="${AGENTS_USER:-agents}"
 
 remap_user() {
     want_uid="$1"
@@ -48,15 +48,15 @@ remap_user() {
     fi
 }
 
-if [ "$(id -u)" = "0" ] && [ -n "${COWORK_UID:-}" ] && [ -n "${COWORK_GID:-}" ]; then
-    remap_user "$COWORK_UID" "$COWORK_GID"
+if [ "$(id -u)" = "0" ] && [ -n "${AGENTS_UID:-}" ] && [ -n "${AGENTS_GID:-}" ]; then
+    remap_user "$AGENTS_UID" "$AGENTS_GID"
 fi
 
 # The workspace mount point itself must be enterable and writable by the agent.
 # When a fresh host directory is mounted it already belongs to the host user, so
 # this only fixes the empty-image case.
-if [ "$(id -u)" = "0" ] && [ -d "${COWORK_WORKSPACE:-/workspace}" ]; then
-    ws="${COWORK_WORKSPACE:-/workspace}"
+if [ "$(id -u)" = "0" ] && [ -d "${AGENTS_WORKSPACE:-/workspace}" ]; then
+    ws="${AGENTS_WORKSPACE:-/workspace}"
     if [ -z "$(ls -A "$ws" 2>/dev/null)" ]; then
         chown "$(id -u "$user" 2>/dev/null || echo 0):$(id -g "$user" 2>/dev/null || echo 0)" "$ws" 2>/dev/null || true
     fi

@@ -1,17 +1,17 @@
 [project]
-name = "cowork-executor"
+name = "chuk-agents-executor"
 version = "0.1.0"
-description = "CoWork executor vertical: agent loop + sandbox + encrypted frames, wired over a loopback transport behind the Manager's supervisor."
+description = "Agents executor vertical: agent loop + sandbox + encrypted frames, wired over a loopback transport behind the Manager's supervisor."
 readme = "README.md"
 authors = [
     { name = "chukfinley", email = "chuk@chuk.dev" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "cowork-agent",
-    "cowork-sandbox",
-    "cowork-crypto",
-    "cowork-manager",
+    "chuk-agents-runtime",
+    "chuk-agents-sandbox",
+    "chuk-agents-crypto",
+    "chuk-agents-manager",
 ]
 
 [dependency-groups]
@@ -20,10 +20,10 @@ dev = [
 ]
 
 [tool.uv.sources]
-cowork-agent = { path = "../agent", editable = true }
-cowork-sandbox = { path = "../sandbox", editable = true }
-cowork-crypto = { path = "../common/cowork_crypto", editable = true }
-cowork-manager = { path = "../manager", editable = true }
+chuk-agents-runtime = { path = "../agent", editable = true }
+chuk-agents-sandbox = { path = "../sandbox", editable = true }
+chuk-agents-crypto = { path = "../common/chuk_agents_crypto", editable = true }
+chuk-agents-manager = { path = "../manager", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

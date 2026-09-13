@@ -1,7 +1,7 @@
-# CoWork
+# Agents
 
 A team of persistent, sandboxed AI coworkers you message tasks to. See the full
-plan in [`docs/COWORK_AGENT_PLATFORM_PLAN.md`](docs/COWORK_AGENT_PLATFORM_PLAN.md).
+plan in [`docs/AGENTS_AGENT_PLATFORM_PLAN.md`](docs/AGENTS_AGENT_PLATFORM_PLAN.md).
 
 This is a new codebase, separate from `chuk_chat` (merged later). Layout:
 
@@ -12,7 +12,7 @@ This is a new codebase, separate from `chuk_chat` (merged later). Layout:
 | `manager/` | The host control plane — roster, lifecycle, scheduler, relay bridge. |
 | `executor/` | The task server the app talks to over the relay. |
 | `host/` | `cowork-host`: the local relay + pairing + CLI (`connect`, `run`, `status`). |
-| `common/` | Shared code — the E2E CoWork frame crypto (Python twin of the Dart). |
+| `common/` | Shared code — the E2E Agents frame crypto (Python twin of the Dart). |
 | `app/` | The Flutter controller app (messenger/roster UI). |
 | `scripts/` | `install.sh` and the systemd user unit. |
 | `docs/` | The plan. |
@@ -42,7 +42,7 @@ After the install:
 | `cowork-host connect --pair` | pair a **different** device; the current one stops working |
 | `cowork-host status` | paired? where is the state? what is the service doing? |
 | `cowork-host run` | run in the foreground (this is what the systemd unit executes) |
-| `systemctl --user status cowork-manager` | the installed user service |
+| `systemctl --user status agents-manager` | the installed user service |
 
 ## The agent's container
 
@@ -53,5 +53,5 @@ across Manager restarts, and an orphan reaper clears whatever a killed run left
 behind. Build it by hand with:
 
 ```bash
-docker build -t cowork-base:latest sandbox/docker
+docker build -t agents-base:latest sandbox/docker
 ```

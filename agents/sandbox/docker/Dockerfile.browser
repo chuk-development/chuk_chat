@@ -1,4 +1,4 @@
-# CoWork agent image, browser variant (§8, §9).
+# Agents agent image, browser variant (§8, §9).
 #
 # The base image (`Dockerfile`) deliberately has no browser: Chromium plus the
 # X/GTK/font libraries it links against is several hundred MB, and most agents
@@ -15,12 +15,12 @@
 #
 # Build (base image first, then this):
 #
-#     docker build -t cowork-base:latest    -f sandbox/docker/Dockerfile    sandbox/docker
-#     docker build -t cowork-browser:latest -f sandbox/docker/Dockerfile.browser sandbox/docker
+#     docker build -t agents-base:latest    -f sandbox/docker/Dockerfile    sandbox/docker
+#     docker build -t agents-browser:latest -f sandbox/docker/Dockerfile.browser sandbox/docker
 #
 # Use it for one agent:
 #
-#     COWORK_SANDBOX_IMAGE=cowork-browser:latest
+#     AGENTS_SANDBOX_IMAGE=agents-browser:latest
 #
 # Why Playwright installs the browser when browser-use does not depend on
 # Playwright: browser-use 0.13.7 drives Chromium over the DevTools Protocol
@@ -36,10 +36,10 @@
 # `_find_installed_browser_path` searches
 # `$PLAYWRIGHT_BROWSERS_PATH/chromium-*/chrome-linux*/chrome` and
 # `/usr/local/bin/chromium`, and both point at the same binary here. The same
-# path is exported as COWORK_BROWSER_EXECUTABLE for the agent runtime's own probe
-# (`cowork_agent.browser.find_chromium`).
+# path is exported as AGENTS_BROWSER_EXECUTABLE for the agent runtime's own probe
+# (`chuk_agents_runtime.browser.find_chromium`).
 
-ARG BASE_IMAGE=cowork-base:latest
+ARG BASE_IMAGE=agents-base:latest
 FROM ${BASE_IMAGE}
 
 # Pinned like every other tool in the base image, so two builds install the same
@@ -47,7 +47,7 @@ FROM ${BASE_IMAGE}
 ARG PLAYWRIGHT_VERSION=1.62.0
 
 # Outside the user's home so the browser is shared, readable by any uid the
-# entrypoint remaps `cowork` to, and not lost when a home directory is remapped.
+# entrypoint remaps `agents` to, and not lost when a home directory is remapped.
 ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright \
     DEBIAN_FRONTEND=noninteractive
 
@@ -79,14 +79,14 @@ RUN set -eux; \
 # reads neither /etc/profile.d nor ~/.bashrc — a value set there is invisible to
 # every command the agent runs. `/usr/local/bin/chromium` is also one of the
 # paths browser-use's own search walks, so both agree without configuration.
-ENV COWORK_BROWSER_EXECUTABLE=/usr/local/bin/chromium
+ENV AGENTS_BROWSER_EXECUTABLE=/usr/local/bin/chromium
 
 # A container gives Chromium no CAP_SYS_ADMIN, so its own sandbox cannot start;
 # the container is the isolation boundary instead. The agent runtime says the
 # same thing in code (`chromium_sandbox=False`), and this marker is what
 # browser-use's own `CONFIG.IN_DOCKER` check reads.
 ENV IN_DOCKER=true \
-    COWORK_BROWSER_VARIANT=1
+    AGENTS_BROWSER_VARIANT=1
 
 # No telemetry and no cloud sync from a user's machine: browser-use defaults
 # ANONYMIZED_TELEMETRY to true and lets BROWSER_USE_CLOUD_SYNC follow it
@@ -156,17 +156,17 @@ RUN set -eux; \
 # The display the browser view uses. Not exported globally (a stray DISPLAY makes
 # unrelated GUI calls fail when no server is up); the launcher passes it to the
 # Playwright MCP process, and the VNC bringup uses the same value.
-ENV COWORK_BROWSER_DISPLAY=:99 \
+ENV AGENTS_BROWSER_DISPLAY=:99 \
     PLAYWRIGHT_MCP_VERSION=${PLAYWRIGHT_MCP_VERSION}
 
 # In-container helpers (§9.1): the launcher brings up Xvfb then supervises the
 # headed Playwright MCP server and its browser descendants; vnc-up starts x11vnc
 # on demand for the live view. Both are invoked by the host over `docker exec`.
-COPY browser-mcp.sh /usr/local/bin/cowork-browser-mcp
-COPY browser-mcp-owner.py /usr/local/lib/cowork/browser-mcp-owner.py
-COPY vnc-up.sh /usr/local/bin/cowork-vnc-up
-RUN chmod 0755 /usr/local/bin/cowork-browser-mcp /usr/local/bin/cowork-vnc-up
+COPY browser-mcp.sh /usr/local/bin/agents-browser-mcp
+COPY browser-mcp-owner.py /usr/local/lib/agents/browser-mcp-owner.py
+COPY vnc-up.sh /usr/local/bin/agents-vnc-up
+RUN chmod 0755 /usr/local/bin/agents-browser-mcp /usr/local/bin/agents-vnc-up
 
 WORKDIR /workspace
-ENTRYPOINT ["/usr/local/bin/cowork-entrypoint"]
+ENTRYPOINT ["/usr/local/bin/agents-entrypoint"]
 CMD ["sleep", "infinity"]

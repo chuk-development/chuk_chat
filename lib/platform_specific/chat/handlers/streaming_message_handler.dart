@@ -2,24 +2,24 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/services/chat_history_builder.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/app_lifecycle_service.dart';
-import 'package:cowork/services/websocket_chat_service.dart';
-import 'package:cowork/services/streaming_manager.dart';
-import 'package:cowork/services/artifact_tag_processor.dart';
-import 'package:cowork/services/message_composition_service.dart';
-import 'package:cowork/services/tool_call_handler.dart';
-import 'package:cowork/services/tool_image_result_service.dart';
-import 'package:cowork/services/tool_result_cache_registry.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/streaming_foreground_service.dart';
-import 'package:cowork/services/round_content_block_service.dart';
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/utils/tool_parser.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/chat_history_builder.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/app_lifecycle_service.dart';
+import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
+import 'package:chuk_chat/services/artifact_tag_processor.dart';
+import 'package:chuk_chat/services/message_composition_service.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/services/tool_image_result_service.dart';
+import 'package:chuk_chat/services/tool_result_cache_registry.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
+import 'package:chuk_chat/services/round_content_block_service.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Handles message streaming and sending
 class StreamingMessageHandler {

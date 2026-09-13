@@ -12,13 +12,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:cowork/ui/expressive/bubble_shape.dart';
-import 'package:cowork/ui/expressive/message_stamp.dart';
-import 'package:cowork/widgets/chat_document_inline.dart';
-import 'package:cowork/widgets/message_bubble.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
+import 'package:chuk_chat/ui/expressive/message_stamp.dart';
+import 'package:chuk_chat/widgets/chat_document_inline.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
 
 const Radius big = Radius.circular(kBubbleRadiusBig);
 const Radius small = Radius.circular(kBubbleRadiusSmall);

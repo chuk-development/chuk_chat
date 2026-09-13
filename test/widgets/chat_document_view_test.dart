@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
-import 'package:cowork/widgets/charts/chuk_chart.dart';
-import 'package:cowork/widgets/chuk_table.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
 
 void main() {
   final document = <String, dynamic>{

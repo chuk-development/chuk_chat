@@ -1,4 +1,4 @@
-// COWORK STUB. Upstream: chuk_chat/lib/widgets/workspace_selection_dropdown.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/widgets/workspace_selection_dropdown.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: hosted-only — workspaces (projects) are a chuk_chat feature. Nothing
 // to pick from, so the dropdown renders nothing.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.

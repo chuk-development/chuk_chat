@@ -20,8 +20,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/models/app_shell_config.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
 
 /// One complete look: palette + contrast + font, for a single brightness.
 @immutable

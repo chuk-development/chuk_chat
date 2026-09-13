@@ -8,8 +8,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/platform_config.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Parameters for background encryption
 class _EncryptionParams {

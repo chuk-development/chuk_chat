@@ -1,6 +1,6 @@
 # tools/chat_ui_manifest.txt
-# The chuk_chat files that CoWork imports VERBATIM (package prefix rewritten).
-# One path per line, relative to <chuk_chat>/lib and <cowork>/app/lib.
+# The chuk_chat files that Agents imports VERBATIM (package prefix rewritten).
+# One path per line, relative to <chuk_chat>/lib and <agents>/app/lib.
 # Re-sync with: scripts/import_chat_ui.sh   (then review `git diff`)
 # See docs/CHAT_UI_IMPORT.md for the stub inventory and the deliberate exclusions.
 #
@@ -9,7 +9,7 @@
 #
 # WARNING: the widget entries below are NO LONGER byte-identical to
 # upstream. Running scripts/import_chat_ui.sh would overwrite about two
-# thousand lines of CoWork rendering work. Read the 'Allowed divergences'
+# thousand lines of Agents rendering work. Read the 'Allowed divergences'
 # section of docs/CHAT_UI_IMPORT.md first (bead cowork-r6jy).
 
 # --- Chat screens, mixins and handlers (platform_specific/chat) ---
@@ -126,10 +126,10 @@ pages/fullscreen_map_page.dart
 
 # --- Chat storage (bead cowork-sha): local SQLite cache + Supabase sync -----
 # Verbatim chuk_chat storage. The import script rewrites the table name
-# 'encrypted_chats' -> 'cowork_chats' (see docs/SUPABASE_SCHEMA.md): a CoWork
+# 'encrypted_chats' -> 'cowork_chats' (see docs/SUPABASE_SCHEMA.md): a Agents
 # session key is not a UUID, and the two apps share one Supabase project.
 # NOT here: services/chat_storage_service.dart — the facade is a recorded
-# CoWork adaptation (saveChat/updateChat -> CoworkChatStore); re-sync by hand.
+# Agents adaptation (saveChat/updateChat -> AgentsChatStore); re-sync by hand.
 services/chat_storage_crud.dart
 services/chat_storage_sync.dart
 services/chat_storage_mutations.dart

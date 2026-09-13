@@ -8,7 +8,7 @@ the user complained about: "it loads forever". It walks the EXACT executor
 start path and stamps every step:
 
   1. ``docker exec <box> true``          — reach the box at all
-  2. ``cowork-vnc-up``                   — x11vnc up (warm: reused; cold: started)
+  2. ``agents-vnc-up``                   — x11vnc up (warm: reused; cold: started)
   3. window probe (``xwininfo``)         — how many pages are on the display
   4. ``docker exec -i socat``            — the byte pipe the bridge uses
   5. RFB handshake (version/auth/init)   — with the per-view VNC secret
@@ -41,7 +41,7 @@ from live_vnc_speed_probe import (  # noqa: E402
 )
 
 WINDOW_COUNT_SH = (
-    'DISPLAY=${COWORK_BROWSER_DISPLAY:-:99} xwininfo -root -children '
+    'DISPLAY=${AGENTS_BROWSER_DISPLAY:-:99} xwininfo -root -children '
     "2>/dev/null | grep -Eci '\\(\"[^\"]*[Cc]hrom'; exit 0"
 )
 
@@ -217,16 +217,16 @@ def probe(
     t_start = time.perf_counter()
     _run("docker exec true", ["docker", "exec", container, "true"], steps)
     up = _run(
-        "cowork-vnc-up",
+        "agents-vnc-up",
         [
             "docker", "exec", "-i", "-u", "root",
-            "-e", f"COWORK_VNC_PASSWD={password}",
-            container, "cowork-vnc-up",
+            "-e", f"AGENTS_VNC_PASSWD={password}",
+            container, "agents-vnc-up",
         ],
         steps,
     )
     if up.returncode != 0:
-        raise RuntimeError(f"cowork-vnc-up failed rc={up.returncode}: {up.stderr!r}")
+        raise RuntimeError(f"agents-vnc-up failed rc={up.returncode}: {up.stderr!r}")
     _run(
         "window probe (xwininfo)",
         ["docker", "exec", container, "sh", "-lc", WINDOW_COUNT_SH],

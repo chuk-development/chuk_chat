@@ -15,7 +15,7 @@ import copy
 import json
 from pathlib import Path
 
-from cowork_executor.executor import _mcp_signature
+from chuk_agents_executor.executor import _mcp_signature
 
 FIXTURE = Path(__file__).resolve().parents[2] / "app/test/fixtures/mcp_forward_payload.json"
 

@@ -5,7 +5,7 @@ import json
 import pytest
 from websockets.exceptions import ConnectionClosedError
 
-from cowork_agent.backend import BackendModelClient, BackendModelError
+from chuk_agents_runtime.backend import BackendModelClient, BackendModelError
 from test_backend import _session
 
 

@@ -6,10 +6,10 @@
 // empty state (`mobile_agent_list.dart`, `_EmptyState`).
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/staggered.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
 
 class ComingSoonPage extends StatelessWidget {
   final String title;

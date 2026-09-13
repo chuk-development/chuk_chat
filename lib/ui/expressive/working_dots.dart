@@ -3,7 +3,7 @@
 ///
 /// In the reference messenger this is the "typing" indicator. Here it says
 /// something the app can actually observe: the coworker has a run open
-/// ([CoworkAgent.running]). Nothing pretends to know that it is "typing".
+/// ([AgentsAgent.running]). Nothing pretends to know that it is "typing".
 library;
 
 import 'package:flutter/material.dart';

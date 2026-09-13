@@ -1,4 +1,4 @@
-# Handover: User wurde aus der Cowork-App ausgeloggt (Bead cowork-2n1)
+# Handover: User wurde aus der Agents-App ausgeloggt (Bead cowork-2n1)
 
 Session: cowork-9e, 2026-09-05. Status (Entscheidung Koordinator cowork-76): Code + Tests fertig (91/91, analyze clean), Live-DoD (Screenshots vorher/nachher, Neustart-nach-Ablauf-Beweis) ist Nachlauf nach 'Bildschirm frei' und dem naechsten gebuendelten App-Neubau durch 5c. Bead cowork-2n1 bleibt bis dahin offen. Nichts committet.
 
@@ -35,16 +35,16 @@ Call die ganze Session-Familie (Host + App) beenden.
 | Datei | Aenderung |
 |---|---|
 | `app/lib/services/account_session.dart` | `SupabaseAccountSession.refresh()`: Netz-Refresh nur bei <= 60 s Restlaufzeit (`refreshHeadroom`), sonst aktuelle Session ohne Netz. Nach abgelehntem Refresh: Restore per `setSession(refresh, accessToken:)` (geht ueber /user, verbraucht nichts), solange der Access-Token gueltig ist. Kollaboratoren injizierbar. |
-| `app/lib/services/session_recovery.dart` (neu) | `SessionStash.setAsideExpiredSession()`: vor `Supabase.initialize` eine ablaufende persistierte Session beiseite legen (crash-sicher unter `cowork.session_stash_v1`). `SessionRecovery.run()`: Relay reconnect ohne Code -> stale Paar provisionieren -> Host flusht `account_session_rotated` (adoptieren) oder fragt `reprovision_request` (dann eigenen Token ausgeben, aber NIE nach gemeldeter Rotation) -> Fallback eigener Token bei unerreichbarem/stummem Host -> null nur, wenn alles tot ist. |
+| `app/lib/services/session_recovery.dart` (neu) | `SessionStash.setAsideExpiredSession()`: vor `Supabase.initialize` eine ablaufende persistierte Session beiseite legen (crash-sicher unter `agents.session_stash_v1`). `SessionRecovery.run()`: Relay reconnect ohne Code -> stale Paar provisionieren -> Host flusht `account_session_rotated` (adoptieren) oder fragt `reprovision_request` (dann eigenen Token ausgeben, aber NIE nach gemeldeter Rotation) -> Fallback eigener Token bei unerreichbarem/stummem Host -> null nur, wenn alles tot ist. |
 | `app/lib/services/session_refresh_scheduler.dart` (neu) | Ersetzt gotrue's Auto-Refresh: 30-s-Tick, Refresh bei <= 60 s; bei `hostAttached == false` erst `reconnectHost` (10 s), dann eigener Refresh; laeuft durch gotrue, also feuert `tokenRefreshed` -> Relay-Client re-provisioniert (c91 bleibt). Resume-Hook fuer Laptop-Aufwachen. |
 | `app/lib/services/supabase_service.dart` | `autoRefreshToken: false` + `SessionRefreshScheduler.instance.start()` (6 Zeilen; Manifest-Kommentar in `tools/chat_ui_manifest.txt`). |
 | `app/lib/widgets/auth_gate.dart` | StatefulWidget: Startup-Stash und `signedOut(sessionExpired)` starten die Recovery (Wartescreen "Reconnecting to your host"), LoginPage erst, wenn nichts mehr zu retten ist. `userInitiated` geht direkt zur LoginPage. Test-Seams fuer Stream/Session/Recover/Shell/Login. |
 | `app/lib/main.dart` | 6 Zeilen: Import + `await SessionStash.setAsideExpiredSession();` vor `SupabaseService.initialize()`. |
-| `app/lib/services/cowork/cowork_relay_client.dart` (47, eingebaut) | `_adoptRotatedSession` nutzt `setSession(refresh, accessToken: access)` -> /user statt /token, ein abgelehntes Host-Paar loescht die eigene Session nicht mehr. |
+| `app/lib/services/agents/agents_relay_client.dart` (47, eingebaut) | `_adoptRotatedSession` nutzt `setSession(refresh, accessToken: access)` -> /user statt /token, ein abgelehntes Host-Paar loescht die eigene Session nicht mehr. |
 
-| `app/lib/services/cowork/cowork_relay_client.dart` (9e, nach 84) | Scheduler-Hooks: Ctor-Param `scheduler` (Default `SessionRefreshScheduler.instance`), `_publishAttachment` in `_set` (paired -> `hostAttached=true` + `reconnectHost=_reattach`; closed/error mit Trust -> `false`), `_reattach` = reconnect mit gespeichertem Trust + `provisionAccount(current)`, `dispose` zieht nur die eigenen Hooks zurueck. |
+| `app/lib/services/agents/agents_relay_client.dart` (9e, nach 84) | Scheduler-Hooks: Ctor-Param `scheduler` (Default `SessionRefreshScheduler.instance`), `_publishAttachment` in `_set` (paired -> `hostAttached=true` + `reconnectHost=_reattach`; closed/error mit Trust -> `false`), `_reattach` = reconnect mit gespeichertem Trust + `provisionAccount(current)`, `dispose` zieht nur die eigenen Hooks zurueck. |
 
-Tests (alle gruen, ein Lauf, 91/91): `test/services/account_session_test.dart` (12), `test/services/session_recovery_test.dart` (16), `test/services/session_refresh_scheduler_test.dart` (8), `test/widgets/auth_gate_test.dart` (7), `test/services/cowork/cowork_relay_client_test.dart` (48, davon 2 neu fuer die Hooks). `flutter analyze`: 0 Befunde in diesen Dateien.
+Tests (alle gruen, ein Lauf, 91/91): `test/services/account_session_test.dart` (12), `test/services/session_recovery_test.dart` (16), `test/services/session_refresh_scheduler_test.dart` (8), `test/widgets/auth_gate_test.dart` (7), `test/services/agents/agents_relay_client_test.dart` (48, davon 2 neu fuer die Hooks). `flutter analyze`: 0 Befunde in diesen Dateien.
 
 ## Alle Pfade, die gotrue `signedOut` ausloesen koennen, und ihr Abfang
 

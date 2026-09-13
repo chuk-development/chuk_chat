@@ -6,22 +6,22 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/model_cache_service.dart';
-import 'package:cowork/services/model_capabilities_service.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/core/model_selection_events.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/api_status_service.dart';
-import 'package:cowork/services/diagnostics_log_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/api_status_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 const double _menuHorizontalPadding = 32.0; // 16 left + 16 right
 const double _menuTrailingAllowance = 64.0; // Checkmark + internal spacing

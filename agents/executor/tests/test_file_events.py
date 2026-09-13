@@ -18,12 +18,12 @@ import base64
 import os
 
 import pytest
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_crypto import ApprovedDevices, CoworkFrameOpener
-from cowork_manager import decode_frames
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_crypto import ApprovedDevices, AgentsFrameOpener
+from chuk_agents_manager import decode_frames
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import (
+from chuk_agents_executor import (
     MAX_FILE_BYTES,
     ControllerSession,
     Executor,
@@ -100,7 +100,7 @@ def test_file_payload_refuses_an_empty_file():
 def test_the_two_ceilings_agree():
     """The agent refuses before it moves a byte; the protocol refuses before it
     builds a frame. They must be the same number or one of them is decoration."""
-    from cowork_agent.files_out import MAX_FILE_BYTES as AGENT_LIMIT
+    from chuk_agents_runtime.files_out import MAX_FILE_BYTES as AGENT_LIMIT
 
     assert MAX_FILE_BYTES == AGENT_LIMIT
 
@@ -217,14 +217,14 @@ def test_the_file_is_encrypted_on_the_wire(tmp_path):
 
     # And a stranger cannot open the frame that carries it.
     sealed = base64.b64decode(events[0]["params"]["frame"])
-    stranger = CoworkFrameOpener(
+    stranger = AgentsFrameOpener(
         channel_key=channel.channel_key,
         key_version=KEY_VERSION,
         approved_devices=ApprovedDevices(),  # default deny
     )
-    from cowork_crypto import CoworkFrameRejected
+    from chuk_agents_crypto import AgentsFrameRejected
 
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         stranger.open(sealed)
 
 
@@ -255,7 +255,7 @@ def test_an_oversized_file_is_refused_and_the_model_is_told(tmp_path):
         workspace=str(workspace),
     )
     # Shrink the protocol ceiling for this executor only.
-    import cowork_executor.executor as executor_module
+    import chuk_agents_executor.executor as executor_module
 
     original = executor_module.file_payload
     executor_module.file_payload = lambda **kw: original(**kw, max_bytes=1024)

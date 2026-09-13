@@ -11,8 +11,8 @@ notification hooks below. Both are small and additive.
 ## Imports (add)
 
 ```dart
-import 'package:cowork/services/notifications/cowork_notifications.dart';
-import 'package:cowork/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/notifications/agents_notifications.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
 ```
 
 ## initState / dispose
@@ -26,10 +26,10 @@ import 'package:cowork/services/notifications/notification_router.dart';
     // Cold start included: the router keeps the target until we take it.
     NotificationRouter.instance.pending.addListener(_onNotificationTap);
     // The toast carries the coworker's name, never the answer.
-    CoworkNotifications.instance.threadLabel = (String threadKey) =>
+    AgentsNotifications.instance.threadLabel = (String threadKey) =>
         _agentIdForThread(threadKey) == null
-            ? 'CoWork'
-            : (_roster.byId(_agentIdForThread(threadKey)!)?.name ?? 'CoWork');
+            ? 'Agents'
+            : (_roster.byId(_agentIdForThread(threadKey)!)?.name ?? 'Agents');
     WidgetsBinding.instance.addPostFrameCallback((_) => _onNotificationTap());
   }
 
@@ -54,7 +54,7 @@ import 'package:cowork/services/notifications/notification_router.dart';
     if (agentId == null) return; // unknown thread: nothing to open
     _select(agentId, target.sessionKey);
     // Close the host's row and clear the OS toast for this thread.
-    unawaited(CoworkNotifications.instance.onOpenedFromNotification(
+    unawaited(AgentsNotifications.instance.onOpenedFromNotification(
       target.sessionKey,
       runId: target.runId,
     ));

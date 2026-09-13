@@ -1,5 +1,5 @@
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/supabase_config.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/supabase_config.dart';
 
 /// Identifies one executor the app can hand its session to.
 ///
@@ -18,7 +18,7 @@ class ExecutorHandle {
 
 /// The encrypted connect channel the app uses to reach an executor.
 ///
-/// This is the transport seam. The real implementation (the CoWork multiplex /
+/// This is the transport seam. The real implementation (the Agents multiplex /
 /// relay, a later milestone) carries the payload over the end-to-end encrypted
 /// device channel. Nothing in this file opens a socket.
 abstract interface class ExecutorTransport {

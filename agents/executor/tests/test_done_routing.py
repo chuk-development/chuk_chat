@@ -1,4 +1,4 @@
-from cowork_executor.protocol import done_payload
+from chuk_agents_executor.protocol import done_payload
 
 
 def test_autonomous_completion_carries_thread_and_host_notification_owner():

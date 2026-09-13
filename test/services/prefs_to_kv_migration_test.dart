@@ -13,8 +13,8 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/local_chat_cache_service.dart';
-import 'package:cowork/services/model_cache_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 
 import '../support/kv_cache_test_env.dart';
 

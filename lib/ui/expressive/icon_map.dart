@@ -17,7 +17,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 
 /// The app's icon for [icon], or null when the set has nothing for it.
 HugeIconData? hugeIconFor(IconData icon) => _map[icon.codePoint];

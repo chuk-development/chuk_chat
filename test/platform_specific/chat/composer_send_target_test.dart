@@ -7,17 +7,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/cowork/agent_file_saver.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_replay_loader.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/widgets/cowork_thread_view.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/agents/agent_file_saver.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/widgets/agents_thread_view.dart';
 
 import '../../support/fake_relay_controller.dart';
 import '../../support/icon_finder.dart';
@@ -30,7 +30,7 @@ Finder findId(String id) => find.byWidgetPredicate(
 
 class _NoopSaver implements AgentFileSaver {
   @override
-  Future<String> save(CoworkRelayFile file) async => '/dev/null/${file.name}';
+  Future<String> save(AgentsRelayFile file) async => '/dev/null/${file.name}';
 }
 
 class _FakeSessionSource implements AccountSessionSource {
@@ -62,16 +62,16 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await VerboseService.instance.setEnabled(false);
-    CoworkRelayLink.instance.reset();
-    CoworkRunLedger.instance.reset();
-    CoworkReplayLoader.instance.reset();
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
+    AgentsReplayLoader.instance.reset();
     await ChatStorageService.reset();
   });
 
   tearDown(() async {
-    CoworkRelayLink.instance.reset();
-    CoworkRunLedger.instance.reset();
-    CoworkReplayLoader.instance.reset();
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
+    AgentsReplayLoader.instance.reset();
     await ChatStorageService.reset();
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
@@ -83,7 +83,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       _app(
-        CoworkThreadView(
+        AgentsThreadView(
           phoneLayout: true,
           controllerBuilder: () async => FakeRelayController(),
           sessionSource: const _FakeSessionSource(),

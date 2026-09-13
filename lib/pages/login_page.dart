@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/shapes.dart';
-import 'package:cowork/ui/expressive/staggered.dart';
+import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/shapes.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
 
 /// Minimal email + password login. On success the [AuthGate] stream reacts
 /// and swaps to the messenger shell, so this screen has nothing to do after

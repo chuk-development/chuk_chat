@@ -4,14 +4,14 @@ import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/pages/secrets_settings_page.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart'
-    show CoworkSecureKeyValueStore;
-import 'package:cowork/services/secrets/secrets_service.dart';
-import 'package:cowork/services/secrets/secrets_store.dart';
-import 'package:cowork/services/secrets/secrets_sync.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
+    show AgentsSecureKeyValueStore;
+import 'package:chuk_chat/services/secrets/secrets_service.dart';
+import 'package:chuk_chat/services/secrets/secrets_store.dart';
+import 'package:chuk_chat/services/secrets/secrets_sync.dart';
 
-class _Memory implements CoworkSecureKeyValueStore {
+class _Memory implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override

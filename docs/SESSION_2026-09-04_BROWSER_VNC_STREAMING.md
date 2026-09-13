@@ -1,6 +1,6 @@
 # Session handoff — Browser-in-the-loop, live VNC view, streaming fix, WebRTC transport foundation
 
-**Date:** 2026-09-04 · **Branch:** `cowork` · **Status: NOT finished** — feature built,
+**Date:** 2026-09-04 · **Branch:** `agents` · **Status: NOT finished** — feature built,
 tested, and running live locally; two workstreams remain open (see §7). Nothing is
 committed yet.
 
@@ -14,7 +14,7 @@ those.
 
 ## 1. What this session set out to do
 
-Make the CoWork agent able to drive a real browser as part of its tool loop, let the
+Make the Agents agent able to drive a real browser as part of its tool loop, let the
 user watch and control that browser live (for logins), fix response streaming, and lay
 the foundation for a peer-to-peer transport. Then actually start backend + frontend so
 the user can test end to end.
@@ -29,9 +29,9 @@ the user can test end to end.
   YouTube-only URL validation, isolated temp dir (never deletes workspace files),
   `--no-playlist`, deterministic language selection, rolling-caption dedup. Live test:
   3357-word transcript from a real video, `--no-playlist` confirmed.
-- `host/src/cowork_host/seed_skills.py` + wiring in `host.py` (`_load_or_create_agent`):
+- `host/src/chuk_agents_host/seed_skills.py` + wiring in `host.py` (`_load_or_create_agent`):
   copies the repo's `skills/` into each agent workspace on provisioning, non-destructive
-  (an agent's own skill of the same name is never overwritten). `COWORK_SEED_SKILLS`
+  (an agent's own skill of the same name is never overwritten). `AGENTS_SEED_SKILLS`
   overrides the source dir.
 - Tests: `host/tests/test_seed_skills.py` (7). **Confirmed live**: the running agent
   `ivory-lynx` was auto-seeded the skill (`seeded skills for ivory-lynx: youtube-transcript`).
@@ -40,18 +40,18 @@ the user can test end to end.
 - `sandbox/docker/Dockerfile.browser`: added Node 22 (NodeSource), Xvfb, x11vnc, socat,
   xdotool, and `@playwright/mcp@0.0.80` (installed globally). `sandbox/docker/Dockerfile`
   base image gained `ffmpeg` + `yt-dlp`.
-- `sandbox/docker/browser-mcp.sh` (`/usr/local/bin/cowork-browser-mcp`): brings up Xvfb
+- `sandbox/docker/browser-mcp.sh` (`/usr/local/bin/agents-browser-mcp`): brings up Xvfb
   on `:99`, then execs the **headed** Playwright MCP against the single installed
   Chromium (`--executable-path`), with a persistent `--user-data-dir` in the workspace so
   a login survives. Fails loudly if Xvfb never comes up.
 - Executor injection: `_browser_mcp_entry()` builds a `{command: docker, args: [exec -i
-  <container> cowork-browser-mcp]}` MCP entry (the runtime is host-side, so the server
+  <container> agents-browser-mcp]}` MCP entry (the runtime is host-side, so the server
   runs INSIDE the container over `docker exec` stdio → its Chromium renders to the
   container's Xvfb, which is the display the user watches). Merged with the UI-forwarded
   connectors in `_run_task`. Gated by a `browser_mcp` flag threaded TaskServer → Executor,
-  set in `LocalHost` when `COWORK_SANDBOX_IMAGE` names the browser image.
-- Image built: `cowork-browser:latest` (1.37 GB). Smoke-verified in a container: Node
-  22.23, Chrome-for-Testing 151, Xvfb/x11vnc/socat/xdotool present, `cowork-browser-mcp
+  set in `LocalHost` when `AGENTS_SANDBOX_IMAGE` names the browser image.
+- Image built: `agents-browser:latest` (1.37 GB). Smoke-verified in a container: Node
+  22.23, Chrome-for-Testing 151, Xvfb/x11vnc/socat/xdotool present, `agents-browser-mcp
   --version` → Xvfb up + MCP `Version 0.0.80`, exit 0.
 
 ### 2.3 Live browser view / VNC monitoring — DONE (backend + frontend), tested; live VNC bug fixed
@@ -64,7 +64,7 @@ the user can test end to end.
   byte round-trip (which caught a `read()`-blocks-until-n-bytes streaming stall, fixed
   with `read1`).
 - **Frontend (Flutter, built by a fork subagent, then fixed up):** `flutter_rfb ^0.6.2`;
-  `CoworkRelayBrowserData` / `CoworkRelayBrowserView` inbound events; `startBrowserView` /
+  `AgentsRelayBrowserData` / `AgentsRelayBrowserView` inbound events; `startBrowserView` /
   `stopBrowserView` / `sendBrowserData` outbound; `app/lib/widgets/browser_view_page.dart`
   (an in-app loopback `ServerSocket` that `RemoteFrameBufferWidget` dials, bridged both
   ways to `browser_data` frames — a transparent tunnel, the app parses no RFB, **no
@@ -73,7 +73,7 @@ the user can test end to end.
 - **Live VNC bug found and fixed:** x11vnc crashed in the container with an MIT-SHM
   `X_ShmAttach BadAccess` (the classic x11vnc-on-Xvfb-in-container failure). Fixed with
   `-noshm` in `sandbox/docker/vnc-up.sh` (which also gained an atomic `flock` around the
-  check-then-start). Confirmed live (x11vnc bound 5900), and `cowork-browser:latest` was
+  check-then-start). Confirmed live (x11vnc bound 5900), and `agents-browser:latest` was
   **rebuilt** so the fix is baked in.
 
 ### 2.4 Response streaming — DONE, tested
@@ -87,7 +87,7 @@ the user can test end to end.
   68 + agent backend/model tests green.
 
 ### 2.5 Plan documentation
-`docs/COWORK_AGENT_PLATFORM_PLAN.md` updated: §1.1 product thesis; §9/§9.1 (media/whisper
+`docs/AGENTS_AGENT_PLATFORM_PLAN.md` updated: §1.1 product thesis; §9/§9.1 (media/whisper
 via our API, browser-use-vs-Playwright-MCP decision, login hand-off over VNC, renderer =
 x11vnc + `flutter_rfb`); §10 (client-authenticates-then-pass-token as the primary
 credential path); §14.1 (WebRTC P2P data plane — server signaling-only, **zero open
@@ -105,11 +105,11 @@ pulled in by `--include-untracked`) were left alone.
 - Decision recorded in §14.1: WebRTC DataChannels, our server is a **signaling
   coordinator only**, **no port forwarding ever** (outbound-only ICE/STUN hole punching;
   a TURN relay is an outbound fallback, ideally the user's own coturn), IPv6 as an
-  accelerator, the E2E `cowork_frame` seal stays on top of DTLS. No WireGuard/Tailscale
+  accelerator, the E2E `agents_frame` seal stays on top of DTLS. No WireGuard/Tailscale
   stack. Libraries: Python `aiortc==1.15.0`, Flutter `flutter_webrtc 1.6.1` (Linux
   DataChannels confirmed OK). aiortc does not trickle → 2-message signaling (offer/answer
   SDP).
-- Built + tested: `host/src/cowork_host/webrtc_transport.py` — `WebRTCEndpoint`, a sync
+- Built + tested: `host/src/chuk_agents_host/webrtc_transport.py` — `WebRTCEndpoint`, a sync
   `send`/`recv(timeout)`/`close` facade over a private asyncio loop thread, with
   length-prefix framing + 16 KiB chunking + `bufferedAmount` backpressure + the send-lock
   fix. `host/tests/test_webrtc_transport.py` (5) — a **real in-process P2P DataChannel**
@@ -123,18 +123,18 @@ pulled in by `--include-untracked`) were left alone.
 ---
 
 ## 4. What is running right now (live, local)
-- **Host:** `cowork-host run --sandbox docker` with `COWORK_SANDBOX_IMAGE=cowork-browser:latest`,
+- **Host:** `cowork-host run --sandbox docker` with `AGENTS_SANDBOX_IMAGE=agents-browser:latest`,
   detached (`setsid nohup`), relay on `ws://127.0.0.1:8787`, log at `/tmp/cowork-host.log`.
   App reconnected **codelessly** (the "pair once, forever" path works), model token
   provisioned, ready to serve.
 - **Flutter app:** Linux desktop build running via `flutter-hot` (`flutter-hot status` =
   running). Auto-reconnected to the host.
-- **Image:** `cowork-browser:latest` present, rebuilt with the `-noshm` fix.
-- **Pairing:** stored in `~/.cowork/paired.json` (app-side pairing in the app's secure
+- **Image:** `agents-browser:latest` present, rebuilt with the `-noshm` fix.
+- **Pairing:** stored in `~/.agents/paired.json` (app-side pairing in the app's secure
   storage). First task creates a fresh container from the browser image.
 
 Restart from scratch: stop the host (kill the pid on 8787), `docker rm -f` any
-`cowork-*` containers, then relaunch the host command above; start the app with
+`agents-*` containers, then relaunch the host command above; start the app with
 `FLUTTER_HOT_EXTRA="" flutter-hot start linux` from `app/`.
 
 ---
@@ -148,12 +148,12 @@ Restart from scratch: stop the host (kill the pid on 8787), `docker rm -f` any
 ---
 
 ## 6. Files changed/added this session (mine only)
-Changed: `.gitignore`, `agent/src/cowork_agent/backend.py`, `executor/src/cowork_executor/{__init__,executor,protocol}.py`,
-`host/src/cowork_host/{host,serve}.py`, `host/pyproject.toml` (+`uv.lock`),
-`sandbox/docker/{Dockerfile,Dockerfile.browser}`, `docs/COWORK_AGENT_PLATFORM_PLAN.md`,
-`app/lib/pages/messenger_shell.dart`, `app/lib/services/cowork/cowork_relay_client.dart`,
-`app/lib/widgets/cowork_thread_view.dart`, `app/pubspec.yaml`, the three app test files.
-New: `skills/youtube-transcript/SKILL.md`, `host/src/cowork_host/{seed_skills,webrtc_transport}.py`,
+Changed: `.gitignore`, `agent/src/chuk_agents_runtime/backend.py`, `executor/src/chuk_agents_executor/{__init__,executor,protocol}.py`,
+`host/src/chuk_agents_host/{host,serve}.py`, `host/pyproject.toml` (+`uv.lock`),
+`sandbox/docker/{Dockerfile,Dockerfile.browser}`, `docs/AGENTS_AGENT_PLATFORM_PLAN.md`,
+`app/lib/pages/messenger_shell.dart`, `app/lib/services/agents/agents_relay_client.dart`,
+`app/lib/widgets/agents_thread_view.dart`, `app/pubspec.yaml`, the three app test files.
+New: `skills/youtube-transcript/SKILL.md`, `host/src/chuk_agents_host/{seed_skills,webrtc_transport}.py`,
 `host/tests/{test_seed_skills,test_webrtc_transport}.py`, `executor/tests/test_browser_view.py`,
 `sandbox/docker/{browser-mcp.sh,vnc-up.sh}`, `app/lib/widgets/browser_view_page.dart`.
 
@@ -187,11 +187,11 @@ Symptom the user reported: the VNC session was not being transmitted.
 
 What was actually wrong — two things:
 
-**8.1 The real bug: an x11vnc fd-leak deadlock in `cowork-vnc-up`.** The old script did
-`exec flock /tmp/cowork-vnc.lock "$0"` and later `exec x11vnc … -bg`. `x11vnc -bg`
+**8.1 The real bug: an x11vnc fd-leak deadlock in `agents-vnc-up`.** The old script did
+`exec flock /tmp/agents-vnc.lock "$0"` and later `exec x11vnc … -bg`. `x11vnc -bg`
 daemonizes and keeps every inherited fd open, including the flock fd, so the running
 x11vnc holds the lock forever. Proven live: after one x11vnc was up, `x11vnc` held
-`fd 3 -> /tmp/cowork-vnc.lock` with an active lock, and every following `cowork-vnc-up`
+`fd 3 -> /tmp/agents-vnc.lock` with an active lock, and every following `agents-vnc-up`
 blocked on `flock`. The executor calls it with `subprocess.run(..., timeout=15)`, so from
 the second view-open onward the call hangs, hits the 15 s timeout, and the view reports a
 failure / streams nothing. `_vnc_teardown` kills only the socat bridge, not x11vnc
@@ -211,7 +211,7 @@ lazily (first browser tool call) and is torn down at run end, while Xvfb persist
 opening the view when no page is open streams an all-black framebuffer — captured live: a
 1280×800 frame of pure `0x00`. That reads as "nothing is transmitted".
 
-Fix: `cowork-vnc-up` now prints a machine-readable `WINDOWS=<n>` line (count of visible
+Fix: `agents-vnc-up` now prints a machine-readable `WINDOWS=<n>` line (count of visible
 top-level windows via `xdotool search --onlyvisible`). `Executor._vnc_start` parses it and,
 when it is `0`, sends `browser_view("started", message="no page open yet — ask the agent
 to open a browser")`. `browser_view_page.dart`'s status banner now shows that message
@@ -226,7 +226,7 @@ TCP:127.0.0.1:5900`) — first an all-`0x00` frame (blank display), then, after 
 Chromium on `:99`, a clean render of a test page. So server + bridge + RFB were never the
 problem; §8.1 (the deadlock) was.
 
-**8.4 State after this session.** `cowork-browser:latest` was rebuilt with the fixed
+**8.4 State after this session.** `agents-browser:latest` was rebuilt with the fixed
 `vnc-up.sh` baked in (verified: the fix is in the image). The host was restarted so the
 `_vnc_start` change is live too (pid changed; new relay on `ws://127.0.0.1:8787`). The old
 task container was torn down by that restart — a fresh one spawns from the fixed image on
@@ -236,21 +236,21 @@ a host restart the app needs one manual reconnect. Lesson: the §8.1 fix lives i
 container script and needs no host restart; only the §8.2 banner message does — do not
 restart a live host just for that.
 
-Files touched: `sandbox/docker/vnc-up.sh`, `executor/src/cowork_executor/executor.py`
+Files touched: `sandbox/docker/vnc-up.sh`, `executor/src/chuk_agents_executor/executor.py`
 (`_vnc_start`), `app/lib/widgets/browser_view_page.dart`. Tracked as bead `cowork-9o6`.
 
 **8.5 Second bug, the one the app actually hit: a dropped `-u <user>` arg (bead
 `cowork-yu9`).** After the deadlock fix the app still showed "could not start the VNC
-server". Cause: `_vnc_start` built the command as `prefix[:-1] + [cid, "cowork-vnc-up"]`.
+server". Cause: `_vnc_start` built the command as `prefix[:-1] + [cid, "agents-vnc-up"]`.
 `prefix` is `[binary, "exec", "-i", "-u", user]` whenever the sandbox resolves a user —
 which the docker backend always does (`_resolve_user` sets `uid:gid` or `DEFAULT_USER`).
 `prefix[:-1]` was meant to drop the harmless `-i`, but it dropped the **username**
-instead, so the command became `docker exec -i -u <cid> cowork-vnc-up` → "docker exec
+instead, so the command became `docker exec -i -u <cid> agents-vnc-up` → "docker exec
 requires at least 2 arguments" → nonzero exit → the "could not start the VNC server"
 banner. The socat bridge already used the full `prefix`, so only the vnc-up call was
 broken. Fix: use the full `prefix` (`-i` is a no-op on a captured `subprocess.run`).
-Verified: the correct `docker exec -i -u cowork <cid> cowork-vnc-up` returns `WINDOWS=2
-rc=0` for both `cowork` and `uid:gid` users; executor browser tests 12 passed. This needs
+Verified: the correct `docker exec -i -u agents <cid> agents-vnc-up` returns `WINDOWS=2
+rc=0` for both `agents` and `uid:gid` users; executor browser tests 12 passed. This needs
 the host restarted to load (executor runs in the host process).
 
 **8.6 Known rough edge (not fixed here): the app does not auto-reconnect after a host
@@ -269,7 +269,7 @@ the reconnect edge `cowork-05v.3`).
 
 ### 9.1 Native tool-call migration (bead cowork-05v.12) — DONE, LIVE-VERIFIED
 chuk_chat migrated fully to native structured tool calls; api.chuk.chat supports them.
-cowork was still parsing `<tool_call>` from assistant CONTENT. Migrated cowork to native:
+agents was still parsing `<tool_call>` from assistant CONTENT. Migrated agents to native:
 - `ToolRegistry.openai_tools()` — OpenAI function JSON (`{type:function,function:{name,
   description,parameters}}`); deferred + unavailable tools filtered; empty schema →
   `{"type":"object","properties":{}}`.
@@ -298,9 +298,9 @@ cowork was still parsing `<tool_call>` from assistant CONTENT. Migrated cowork t
 
 ### 9.3 Verification (all green)
 - Streaming (05v.8): live, 14 incremental deltas, not one-shot.
-- VNC E2E (05v.4): stream out (framebuffer decoded) AND input in ('COWORK VNC OK' typed via
+- VNC E2E (05v.4): stream out (framebuffer decoded) AND input in ('AGENTS VNC OK' typed via
   RFB into a browser field) through the real docker-exec socat bridge.
-- Security (05v.7): cowork_crypto 65 tests (default-deny, GCM, replay, pairing, reconnect
+- Security (05v.7): chuk_agents_crypto 65 tests (default-deny, GCM, replay, pairing, reconnect
   vectors); host localhost-only; blind sealed relay; no published container ports; x11vnc
   localhost-only. here.now approval (05v.9): 13 tests. Lifecycle (05v.11): verified.
 - MCP servers: 16 PASS / 14 auth-required / 2 known-broken. Skills: 1 (youtube-transcript),
@@ -319,7 +319,7 @@ Clean experiment (host log = source of truth): after a host **process** restart 
 did NOT re-dial for 70s (0 controller-joins). Root cause: the event-driven reconnect
 (`_onStateChanged` on a `closed` transition → `_scheduleAutoReconnect`) was flaky — a
 dropped socket that never surfaced as a clean `closed` transition, or a missed rebuild,
-left the app idle on a dead link. Fix (`cowork_thread_view.dart`): a reconnect
+left the app idle on a dead link. Fix (`agents_thread_view.dart`): a reconnect
 **watchdog** (`Timer.periodic` 8s) that forces `_scheduleAutoReconnect` whenever the
 controller is down (closed/error/null) with a stored pairing and nothing in flight,
 resetting the backoff for prompt recovery — recovery no longer depends on one fragile
@@ -420,7 +420,7 @@ numbers:
     Incremental idle updates were always tiny (~2.4 KiB, so idle was never the problem).
 
 Applied live (hot-copied the patched script into the running container and restarted its
-x11vnc → 16.7 FPS on the live port) and baked into `cowork-browser:latest` (rebuilt; the
+x11vnc → 16.7 FPS on the live port) and baked into `agents-browser:latest` (rebuilt; the
 `COPY vnc-up.sh` layer is near the end so the rebuild is seconds). `-noxdamage` is kept on
 purpose (correct full-screen polling on Xvfb; dropping it roughly doubles FPS again but
 risks missed damage regions).
@@ -582,40 +582,40 @@ Threat (Opus finding 2): x11vnc ran `-nopw -localhost`; `-localhost` keeps the n
 out, not the container — the agent's own bash tool or JS in its Chromium could open
 127.0.0.1:5900 and read the framebuffer / inject input while the user logs in.
 Fix:
-- executor `_vnc_start` generates an 8-char secret per view and runs `cowork-vnc-up` as
-  ROOT (`docker exec -u root -e COWORK_VNC_PASSWD=…`); the secret rides to the app only
+- executor `_vnc_start` generates an 8-char secret per view and runs `agents-vnc-up` as
+  ROOT (`docker exec -u root -e AGENTS_VNC_PASSWD=…`); the secret rides to the app only
   inside the sealed `started` frame (`browser_view_payload(password=)`), never logged.
-- `vnc-up.sh` writes it to `/run/cowork-vnc.pass` (root, 0600 — the `cowork` user gets
+- `vnc-up.sh` writes it to `/run/agents-vnc.pass` (root, 0600 — the `agents` user gets
   "Permission denied", verified) and starts x11vnc with `-passwdfile read:FILE`, which is
   re-read on every client connect, so each view rotates the secret with no x11vnc restart
   (verified: second run rewrites the file, still one x11vnc). A passwordless x11vnc from
   an older start is replaced. Without the env var the script behaves as before.
 - verified in a throwaway container: a client is offered security type 2 only.
-- app: `CoworkRelayBrowserView.password` (additive), `browser_view_page.dart` builds the
+- app: `AgentsRelayBrowserView.password` (additive), `browser_view_page.dart` builds the
   RFB widget only after `started` (the secret is needed at handshake time) and passes it;
   dart_rfb's VNC-auth (bit-reversed DES key, 16-byte response) was checked and the
   executor framer already admits the security-type-2 response (test).
-- root x11vnc attaches to the `cowork`-owned Xvfb (no xauth on that display); the socat
-  bridge keeps running as `cowork` — it only proxies bytes and never needs the secret.
+- root x11vnc attaches to the `agents`-owned Xvfb (no xauth on that display); the socat
+  bridge keeps running as `agents` — it only proxies bytes and never needs the secret.
 - image rebuilt. Executor VNC tests 22, incl. "vnc-up runs as root with the secret in its
   env and `started` carries it".
-- `cowork-vnc-up` REFUSES to start without `COWORK_VNC_PASSWD` (exit 4): the script is on
+- `agents-vnc-up` REFUSES to start without `AGENTS_VNC_PASSWD` (exit 4): the script is on
   the agent's PATH, so otherwise the agent could start its own passwordless x11vnc (this
   session did exactly that by accident from a diagnostic). Only the explicit
-  `COWORK_VNC_ALLOW_NOPW=1`, which the executor never sets, permits `-nopw`. As `cowork`
+  `AGENTS_VNC_ALLOW_NOPW=1`, which the executor never sets, permits `-nopw`. As `agents`
   the script cannot write the root-only password file either.
 - Live proof with the REAL client (`app/test/vnc/live_auth_probe.dart`, `dart run`,
   against the real x11vnc from the rebuilt image via an in-container relay published on
   127.0.0.1:59000): with the secret → framebuffer update received; wrong secret →
   "password check failed"; no secret → "Server does not support security type none".
-- Also: `browser_start` now runs on its own thread (Opus finding 9): `cowork-vnc-up` can
+- Also: `browser_start` now runs on its own thread (Opus finding 9): `agents-vnc-up` can
   take seconds and no longer stalls `stop` and every other frame. A generation counter
   (`_vnc_generation`, bumped by start/stop/executor stop) makes a stop or newer start win
   over a start still bringing x11vnc up: the late bridge is closed, never registered, no
   `started`. Dispatcher seam `_handle_browser_kind`. Test simulates the hang.
 
 ### 10.13 Outbound frame ordering (Opus finding 7)
-`CoworkRelayClient._sendFramePayload` takes its `seq` synchronously inside `seal` but sent
+`AgentsRelayClient._sendFramePayload` takes its `seq` synchronously inside `seal` but sent
 after an await, so two in-flight sends could reach the wire out of order and the opener
 (strictly increasing seq) would reject the loser — for `browser_data` a hole in the RFB
 stream that the executor framer then reports as not-RFB. All sends are now chained

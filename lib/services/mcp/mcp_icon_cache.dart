@@ -7,7 +7,7 @@
 // squares whenever the connection is poor. They are kept on disk under the
 // app's own directory and read from memory after the first use.
 //
-// Ported from chuk_chat, adapted to CoWork's `utils/io_helper.dart` and its
+// Ported from chuk_chat, adapted to Agents's `utils/io_helper.dart` and its
 // own conditional support-directory helper so the web build stays free of
 // `dart:io` and path_provider.
 
@@ -17,8 +17,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/services/mcp/mcp_support_dir.dart';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/services/mcp/mcp_support_dir.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 class McpIconCache {
   McpIconCache._();

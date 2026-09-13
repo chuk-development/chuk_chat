@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/models/app_shell_config.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
 
 /// An [AppShellConfig] for widget tests.
 ///
 /// The imported chuk_chat settings surfaces all take one, and it carries 55
 /// required members — the live values plus their setters. In the app they come
-/// from `CoworkApp._buildShellConfig`, which is wired to `AppThemeService` and
+/// from `AgentsApp._buildShellConfig`, which is wired to `AppThemeService` and
 /// SharedPreferences; a test wants neither. This builds the same shape with the
 /// defaults the app starts on and setters that record instead of persisting.
 ///

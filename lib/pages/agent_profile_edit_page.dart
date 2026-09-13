@@ -12,16 +12,16 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/feedback.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/feedback.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 class AgentProfileEditPage extends StatefulWidget {
   const AgentProfileEditPage({
@@ -33,12 +33,12 @@ class AgentProfileEditPage extends StatefulWidget {
     this.imagePicker,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final AgentRosterSource source;
 
   /// The rename path of the shell — the only field that reaches the host. Null
   /// hides the name field.
-  final void Function(CoworkAgent agent)? onRename;
+  final void Function(AgentsAgent agent)? onRename;
 
   final AgentProfileStore? profiles;
 
@@ -47,9 +47,9 @@ class AgentProfileEditPage extends StatefulWidget {
 
   static Future<void> open(
     BuildContext context, {
-    required CoworkAgent agent,
+    required AgentsAgent agent,
     required AgentRosterSource source,
-    void Function(CoworkAgent agent)? onRename,
+    void Function(AgentsAgent agent)? onRename,
     AgentProfileStore? profiles,
   }) {
     return Navigator.of(context).push(
@@ -183,7 +183,7 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
     return AnimatedBuilder(
       animation: _store,
       builder: (BuildContext context, Widget? _) {
-        final CoworkAgent agent =
+        final AgentsAgent agent =
             widget.source.byId(widget.agent.id) ?? widget.agent;
         final int? storedColor = _store.profileOf(agent.id).colorValue;
         final int? shownColor = _clearColor ? null : (_color ?? storedColor);
@@ -407,7 +407,7 @@ class _FacePreview extends StatelessWidget {
     required this.shape,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final AgentProfileStore store;
   final int? overrideColor;
   final AgentAvatarShape? shape;

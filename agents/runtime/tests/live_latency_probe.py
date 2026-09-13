@@ -14,10 +14,10 @@ from pathlib import Path
 
 from websockets.sync.client import connect
 
-from cowork_agent import BackendModelClient, DEFAULT_BASE_URL
-from cowork_agent.connection_pool import BackendConnectionPool
-from cowork_agent.skills import load_skills
-from cowork_agent.prompt import upgrade_research_instructions
+from chuk_agents_runtime import BackendModelClient, DEFAULT_BASE_URL
+from chuk_agents_runtime.connection_pool import BackendConnectionPool
+from chuk_agents_runtime.skills import load_skills
+from chuk_agents_runtime.prompt import upgrade_research_instructions
 from live_native_probe import _forbid_refresh, _token_headroom
 from test_live_model import _session
 
@@ -72,7 +72,7 @@ TOOLS = [{"type": "function", "function": {
 
 
 def saved_context():
-    db = Path.home() / ".cowork/executor-state.db"
+    db = Path.home() / ".agents/executor-state.db"
     with sqlite3.connect(f"file:{db}?mode=ro", uri=True) as conn:
         sid = conn.execute("select session_id from session_routes where session_key=?", ("host:cowork-host",)).fetchone()
         if sid is None:
@@ -86,7 +86,7 @@ def saved_context():
                    and "/workspace/skills/song-id/scripts/identify_song.py" in str(rows[i].get("content"))), None)
     if cutoff is None:
         raise RuntimeError("No script-location result in existing chat")
-    library = load_skills(Path.home() / ".cowork/agents/ivory-lynx/skills")
+    library = load_skills(Path.home() / ".agents/agents/ivory-lynx/skills")
     return [{**r, "content": library.upgrade_catalog(upgrade_research_instructions(r["content"]))}
             if r.get("role") == "system" else r for r in rows[:cutoff]]
 

@@ -1,12 +1,12 @@
-# cowork-sandbox
+# chuk-agents-sandbox
 
-The CoWork execution sandbox. A `BaseEnvironment` ABC with snapshot-file session
+The Agents execution sandbox. A `BaseEnvironment` ABC with snapshot-file session
 persistence (design borrowed from Hermes Agent, MIT, reimplemented here), plus
 `LocalEnvironment` and `DockerEnvironment` backends and a `make_environment`
-factory. See `docs/COWORK_AGENT_PLATFORM_PLAN.md` section 6.
+factory. See `docs/AGENTS_AGENT_PLATFORM_PLAN.md` section 6.
 
 ```python
-from cowork_sandbox import make_environment
+from chuk_agents_sandbox import make_environment
 
 with make_environment("local") as env:          # or "docker"
     env.run("export FOO=bar && cd /tmp")

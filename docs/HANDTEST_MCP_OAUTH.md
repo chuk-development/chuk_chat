@@ -30,7 +30,7 @@ If no browser opens, the test stops here. Report it.
 Sign in with your account and approve the access the provider asks for.
 
 The browser then shows one line: "Connected. You can close this tab and go back
-to CoWork." On Android and iOS the tab closes by itself.
+to Agents." On Android and iOS the tab closes by itself.
 
 Back in the app the connector moves to the "Connected" section. That means the
 token exchange worked and the record is in the OS keychain — access token,

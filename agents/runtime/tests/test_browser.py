@@ -27,8 +27,8 @@ import asyncio
 
 import pytest
 
-from cowork_agent import render_tool_docs
-from cowork_agent.browser import (
+from chuk_agents_runtime import render_tool_docs
+from chuk_agents_runtime.browser import (
     DEFAULT_MAX_STEPS,
     EXECUTABLE_ENV_VAR,
     MAX_MAX_STEPS,
@@ -48,8 +48,8 @@ from cowork_agent.browser import (
     register_browser_task,
     registrable_domain,
 )
-from cowork_agent.model import ModelResponse
-from cowork_agent.registry import ToolRegistry
+from chuk_agents_runtime.model import ModelResponse
+from chuk_agents_runtime.registry import ToolRegistry
 
 # -- doubles ------------------------------------------------------------------
 
@@ -118,7 +118,7 @@ class Sink:
         self.received.append(sent)
 
 
-try:  # pydantic ships with browser-use, but cowork-agent does not depend on it
+try:  # pydantic ships with browser-use, but chuk-agents-runtime does not depend on it
     from pydantic import BaseModel as _PydanticBase
 except ImportError:  # pragma: no cover - depends on the installed extras
     _PydanticBase = None
@@ -276,7 +276,7 @@ def test_a_plain_call_lands_on_our_client_and_comes_back_as_text():
 
 def test_the_bridge_identifies_itself_as_our_backend():
     bridge = BackendChatModel(FakeClient([]), model="deepseek/deepseek-v4-flash")
-    assert bridge.provider == "cowork-backend"
+    assert bridge.provider == "agents-backend"
     assert bridge.name == "deepseek/deepseek-v4-flash"
     assert bridge.model_name == "deepseek/deepseek-v4-flash"
     # No API key to verify: browser-use must not run its own probe.
@@ -606,7 +606,7 @@ def test_an_unexpected_runner_crash_is_an_envelope_not_an_exception():
 
 
 def test_a_long_result_is_capped_because_it_lands_in_the_prompt():
-    from cowork_agent.browser import BROWSER_RESULT_CAP
+    from chuk_agents_runtime.browser import BROWSER_RESULT_CAP
 
     runner = FakeRunner(BrowserRunOutcome(done=True, result="x" * (BROWSER_RESULT_CAP + 500)))
     result = run(handler(runner)("t", "https://example.com/"))
@@ -770,7 +770,7 @@ def test_the_tool_runs_through_the_registry_with_stringy_model_arguments():
 
 
 def test_the_runtime_registers_the_tool_when_a_browser_model_is_given(tmp_path):
-    from cowork_agent import MockModelClient, build_runtime
+    from chuk_agents_runtime import MockModelClient, build_runtime
 
     loop = build_runtime(
         MockModelClient([]),
@@ -784,7 +784,7 @@ def test_the_runtime_registers_the_tool_when_a_browser_model_is_given(tmp_path):
 
 
 def test_the_runtime_leaves_the_tool_out_without_a_browser_model(tmp_path):
-    from cowork_agent import MockModelClient, build_runtime
+    from chuk_agents_runtime import MockModelClient, build_runtime
 
     loop = build_runtime(
         MockModelClient([]),

@@ -439,7 +439,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("container")
     ap.add_argument("--seconds", type=float, default=3.0)
-    ap.add_argument("--user", default="cowork")
+    ap.add_argument("--user", default="agents")
     ap.add_argument("--port", type=int, default=5900)
     ap.add_argument("--encoding", choices=sorted(ENCODINGS), default=None,
                     help="one encoding; default runs them all")

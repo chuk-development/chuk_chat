@@ -2,33 +2,33 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/api_status_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/per_model_system_prompt_service.dart';
-import 'package:cowork/services/chat_mode_service.dart';
-import 'package:cowork/services/chat_model_selection_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/widgets/chat_mode_selector.dart'
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/api_status_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/chat_mode_selector.dart'
     show ChatModeSelector, prettyModelId;
-import 'package:cowork/core/model_selection_events.dart';
-import 'package:cowork/services/tour_key_registry.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/widgets/per_model_system_prompt_sheet.dart';
-import 'package:cowork/widgets/model_selection_dropdown.dart'
+import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/widgets/per_model_system_prompt_sheet.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
     show kAutoCheapestProviderSlug;
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────

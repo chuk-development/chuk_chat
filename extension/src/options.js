@@ -10,7 +10,7 @@ api.storage.local.get("relayUrl").then(({ relayUrl }) => {
 document.getElementById("save").addEventListener("click", async () => {
   await api.storage.local.set({ relayUrl: relay.value.trim() });
   saved.textContent = "saved";
-  await api.runtime.sendMessage({ channel: "cowork", op: "reconnect" });
+  await api.runtime.sendMessage({ channel: "agents", op: "reconnect" });
   setTimeout(() => (saved.textContent = ""), 2000);
 });
 

@@ -15,18 +15,18 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_media_page.dart';
-import 'package:cowork/platform_specific/mobile/mobile_nav_bar.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_read_marks.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 
 class MobileHome extends StatefulWidget {
   const MobileHome({
@@ -50,7 +50,7 @@ class MobileHome extends StatefulWidget {
   final Widget settings;
 
   /// The live relay controller, handed to the documents panel.
-  final CoworkRelayController? controller;
+  final AgentsRelayController? controller;
 
   final AgentReadMarks? readMarks;
   final AgentProfileStore? profiles;
@@ -64,7 +64,7 @@ class _MobileHomeState extends State<MobileHome> {
 
   AgentReadMarks get _marks => widget.readMarks ?? AgentReadMarks.instance;
 
-  void _openPanel(CoworkAgent agent, String threadKey) {
+  void _openPanel(AgentsAgent agent, String threadKey) {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => ChatDocumentsPanel(
@@ -87,8 +87,8 @@ class _MobileHomeState extends State<MobileHome> {
       profiles: widget.profiles,
       accountLabel: null,
       onSelect: (String agentId, String threadKey) {
-        final CoworkAgent? agent = widget.roster.visibleAgents
-            .where((CoworkAgent candidate) => candidate.id == agentId)
+        final AgentsAgent? agent = widget.roster.visibleAgents
+            .where((AgentsAgent candidate) => candidate.id == agentId)
             .firstOrNull;
         if (agent == null) return;
         _openPanel(agent, threadKey);
@@ -124,13 +124,13 @@ class _MobileHomeState extends State<MobileHome> {
                   children: <Widget>[
                     widget.chats,
                     // Pictures and files, out of every conversation, without
-                    // opening one. CoWork has no artifacts of its own: a
+                    // opening one. Agents has no artifacts of its own: a
                     // coworker writes a real file and sends it.
                     MobileMediaPage(
                       threadKeys: <String>[
-                        for (final CoworkAgent agent
+                        for (final AgentsAgent agent
                             in widget.roster.visibleAgents)
-                          for (final CoworkThreadInfo thread in agent.threads)
+                          for (final AgentsThreadInfo thread in agent.threads)
                             thread.key,
                       ],
                     ),

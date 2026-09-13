@@ -3,7 +3,7 @@
 ``connect`` is driven with a fake host and a fake systemd service, so the
 decisions are asserted without binding a port (8787 belongs to the user) and
 without touching a real unit. The pairing persistence it reads is the real
-:class:`~cowork_host.pairing_store.HostPairingStore`.
+:class:`~chuk_agents_host.pairing_store.HostPairingStore`.
 """
 
 from __future__ import annotations
@@ -14,10 +14,10 @@ import json
 
 import pytest
 
-from cowork_host import cli as cli_module
-from cowork_host.cli import cmd_connect, cmd_status, is_paired, normalize_argv
-from cowork_host.pairing_store import TRUST_VERSION
-from cowork_host.service import CommandResult, SystemdUserService
+from chuk_agents_host import cli as cli_module
+from chuk_agents_host.cli import cmd_connect, cmd_status, is_paired, normalize_argv
+from chuk_agents_host.pairing_store import TRUST_VERSION
+from chuk_agents_host.service import CommandResult, SystemdUserService
 
 # ------------------------------------------------------------------ argv
 
@@ -55,15 +55,15 @@ def test_parser_accepts_connect_and_run_flags():
 
 
 def test_run_defaults_sandbox_from_the_environment(monkeypatch):
-    monkeypatch.setenv("COWORK_SANDBOX_KIND", "docker")
+    monkeypatch.setenv("AGENTS_SANDBOX_KIND", "docker")
     parser = cli_module._build_parser()
     assert parser.parse_args(["run"]).sandbox == "docker"
 
 
-def test_run_defaults_workspace_from_cowork_home(monkeypatch):
-    monkeypatch.setenv("COWORK_HOME", "/srv/cowork")
+def test_run_defaults_workspace_from_agents_home(monkeypatch):
+    monkeypatch.setenv("AGENTS_HOME", "/srv/agents")
     parser = cli_module._build_parser()
-    assert parser.parse_args(["run"]).workspace == "/srv/cowork"
+    assert parser.parse_args(["run"]).workspace == "/srv/agents"
 
 
 # ------------------------------------------------------------- pair state
@@ -115,7 +115,7 @@ class FakeHost:
         self.pairing_uri = "cowork://pair?c=CHAN&k=chan1-123456&r=wss%3A%2F%2Fapi.chuk.chat"
         self.agent = argparse.Namespace(name="ada", workspace_dir="/tmp/ada")
         self.estop_path = "/tmp/ada/ESTOP"
-        self.sandbox_summary = "docker cowork-browser:latest (browser ready)"
+        self.sandbox_summary = "docker agents-browser:latest (browser ready)"
 
     def start(self):
         self.started += 1
@@ -333,7 +333,7 @@ def test_service_commands_use_the_user_instance():
         return CommandResult("", "", 0)
 
     SystemdUserService(runner=runner).restart()
-    assert seen == [["systemctl", "--user", "restart", "cowork-manager.service"]]
+    assert seen == [["systemctl", "--user", "restart", "agents-manager.service"]]
 
 
 @pytest.mark.parametrize("method", ["start", "stop", "restart"])

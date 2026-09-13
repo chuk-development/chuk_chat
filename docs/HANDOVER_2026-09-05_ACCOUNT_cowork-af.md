@@ -11,7 +11,7 @@ an app rebuild and a host restart is the only thing left.
 |---|---|
 | `b21dd18` | Dart: chuk account page + services restored from the manifest, `credit_display.dart` original again, footer pill = chuk's `_buildFooterRow` (profile name + `BalanceBadge`), rename/create dialog, `agent_create` / `agent_rename` / `agent_list` on the controller, roster merge. Also carried f5's browser-presence hunks and 18's skills frames (named in the body). |
 | `39b8fcf` | Dart: `requestAgentList` waits on the provision gate like a replay (Host #6 finding: the request reached the host before the account token and was dropped, and nothing asked again). relay_client_test 52. |
-| `13f3ee4` | Python: `cowork_host/coworker_names.py` (store + frame handler), executor `on_agent_frame`, protocol helpers, host/serve wiring, 6 tests. Committed from a private index (`GIT_INDEX_FILE`) so the foreign uncommitted hunks in `executor.py` / `host.py` / `serve.py` (`account_session_provider`, `skills_seed_root`) stayed out. |
+| `13f3ee4` | Python: `chuk_agents_host/coworker_names.py` (store + frame handler), executor `on_agent_frame`, protocol helpers, host/serve wiring, 6 tests. Committed from a private index (`GIT_INDEX_FILE`) so the foreign uncommitted hunks in `executor.py` / `host.py` / `serve.py` (`account_session_provider`, `skills_seed_root`) stayed out. |
 
 ## 4ih — what the user sees
 
@@ -22,11 +22,11 @@ an app rebuild and a host restart is the only thing left.
   gated on `SupabaseService.isInitialized` (`_hosted`): a widget test has no
   session and gets chuk's pill minus the badge. The badge reads chuk's hosted
   account API through `ApiConfigService` (api.chuk.chat) and the Supabase
-  `user_billing` realtime channel — the same code as chuk, nothing CoWork-own.
+  `user_billing` realtime channel — the same code as chuk, nothing Agents-own.
 - Settings → Account opens chuk's `AccountSettingsPage` (780 lines verbatim):
   profile name/e-mail, change password, reset/recover (`recover_chats_page`),
   key version, delete account. There is deliberately no second sign-out on
-  it: chuk keeps sign-out in the settings modal footer, so does CoWork
+  it: chuk keeps sign-out in the settings modal footer, so does Agents
   (`widget_test` asserts one `Icons.logout`).
 - Manifest: the ten files are listed under "Account settings + credits" in
   `tools/chat_ui_manifest.txt`. They were tracked already (the verbatim import
@@ -47,11 +47,11 @@ an app rebuild and a host restart is the only thing left.
 - New coworker (rail row, top-right, phone list) opens the same dialog with a
   suggested adjective-noun name pre-filled; the old `AgentOnboardingSheet`
   (role/brief/schedule form) and its test are deleted. Role and brief are
-  still fields on `CoworkAgent`, just no longer asked at creation.
-- Persistence: `CoworkShellHost._renameAgent` / `_openOnboarding` update the
+  still fields on `AgentsAgent`, just no longer asked at creation.
+- Persistence: `AgentsShellHost._renameAgent` / `_openOnboarding` update the
   `LocalAgentRosterSource` first, then send `agent_rename` / `agent_create`
-  through `CoworkRelayController`. `_onPaired` sends an `agent_list` request;
-  the answer (`CoworkRelayAgentList` on `CoworkRelayLink.instance.inbound`)
+  through `AgentsRelayController`. `_onPaired` sends an `agent_list` request;
+  the answer (`AgentsRelayAgentList` on `AgentsRelayLink.instance.inbound`)
   goes through `AgentRosterSource.applyHostNames`: known id → renamed,
   unknown id → added with its one permanent thread, `host: true` entry →
   renames the `host:<peerDeviceId>` row, ids deleted in this session are
@@ -92,11 +92,11 @@ handover (relay+serve group first).
 
 ## Traps
 
-- Adding a subclass to the sealed `CoworkRelayInbound` breaks three
-  exhaustive switches (`cowork_thread_view` `_onInbound`, `cowork_replay_loader`
+- Adding a subclass to the sealed `AgentsRelayInbound` breaks three
+  exhaustive switches (`agents_thread_view` `_onInbound`, `agents_replay_loader`
   `_handle`, `websocket_chat_service`). Add the `case` in the same step or the
   tree stops compiling for everyone (it did, for ~10 minutes, together with
-  18's `CoworkRelaySkillsList`).
+  18's `AgentsRelaySkillsList`).
 - `serve.TaskServer` is a wrapper with an explicit kwargs list: a new
   `Executor` kwarg must be added there too, or the host logs "could not start
   task server: TypeError" and every local-run test sees no frames.

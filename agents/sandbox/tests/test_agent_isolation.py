@@ -17,7 +17,7 @@ of ``test_lifecycle.py``, so no daemon is needed:
 
 from __future__ import annotations
 
-from cowork_sandbox import (
+from chuk_agents_sandbox import (
     LABEL_AGENT,
     LABEL_WORKSPACE,
     DockerEnvironment,

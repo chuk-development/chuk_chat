@@ -19,7 +19,7 @@
 
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 
 mixin RegenVariantSeedMixin<W extends StatefulWidget> on State<W> {
   /// Archived previous answer(s) for the CURRENTLY VISIBLE chat's in-flight

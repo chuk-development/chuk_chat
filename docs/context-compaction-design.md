@@ -1,13 +1,13 @@
-# Context management for the cowork agent — design notes
+# Context management for the agents agent — design notes
 
 Notes to build later. This is the design as described across the 2026-09-03 and
-2026-09-04 sessions, written down so it can be implemented in the cowork agent
+2026-09-04 sessions, written down so it can be implemented in the agents agent
 (the text-only ChukChat `/v2/ws` backend + `ContextLadder`). The working
 reference implementation of the image-side pieces lives in the separate repo
 `github.com/chuk-development/computer-use-atspi`; this file is about bringing the
-same context discipline into cowork.
+same context discipline into agents.
 
-This doc drives changes in `COWORK_AGENT_PLATFORM_PLAN.md` §2 (glossary), §4
+This doc drives changes in `AGENTS_AGENT_PLATFORM_PLAN.md` §2 (glossary), §4
 (agent), §7.3 (context ladder), §12 (memory) and §16 (app). Where the two
 disagree, this doc wins — it is the newer decision.
 
@@ -177,7 +177,7 @@ snippets + docs/third-party pages).
 
 ## 7. Large content (images, big blobs): on disk, pulled on demand
 
-From the computer-use side, generalizes to cowork:
+From the computer-use side, generalizes to agents:
 
 - Keep large content (screenshots, big tool outputs) **on disk**, not permanently
   in the prompt. Keep only the last N in context as a sliding window.
@@ -218,14 +218,14 @@ skills and the same MCP servers as ChukChat (we already bundle them). So:
 
 ## 10. UI: a ChukChat clone with bots instead of chat links
 
-The cowork chat UI **looks exactly like ChukChat**. The one structural change:
+The agents chat UI **looks exactly like ChukChat**. The one structural change:
 
 - **The sidebar lists bots, not chat links.** Where ChukChat shows a list of
-  conversations, cowork shows the **roster of bots** (§16.1: sidebar tab strip,
+  conversations, agents shows the **roster of bots** (§16.1: sidebar tab strip,
   avatar + latest-message preview + status). No thread list under a bot, because
   there are no threads (§0).
 - **Same MCP servers, same skills** as ChukChat, bundled and shipped.
-- The cowork app stays **minimal for now but built at real scale** — these
+- The agents app stays **minimal for now but built at real scale** — these
   pieces (chat UI, skills, MCP servers, model routing) are **copied first** from
   ChukChat, then trimmed, rather than reinvented.
 
@@ -274,7 +274,7 @@ Built this session and proven on the real backend (`deepseek-v4-flash`):
   doing this: build → review → fix → re-verify, with real-model probes on the
   load-bearing paths.
 
-## 11. How this maps onto cowork today
+## 11. How this maps onto agents today
 
 - Backend is text-only ChukChat `/v2/ws`; the only current trimming is the
   `ContextLadder` (token-budget head+tail window). This design extends it: add

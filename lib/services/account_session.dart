@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart' show Session;
 
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Immutable snapshot of the account's authenticated session.
 ///

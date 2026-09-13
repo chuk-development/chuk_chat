@@ -4,8 +4,8 @@ import 'package:crypto/crypto.dart' show sha256;
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/image_storage_service.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 
 class ToolImageUpdateResult {
   const ToolImageUpdateResult({

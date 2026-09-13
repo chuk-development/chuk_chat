@@ -6,16 +6,16 @@ import json
 import os
 import stat
 
-from cowork_agent import StateStore, TranscriptExporter
-from cowork_agent.transcript_export import render_row, thread_filename
+from chuk_agents_runtime import StateStore, TranscriptExporter
+from chuk_agents_runtime.transcript_export import render_row, thread_filename
 
 
 def test_compaction_preserves_exact_history_after_restart(tmp_path):
     """One permanent agent session keeps raw evidence beyond its active window."""
-    from cowork_agent.context import AuxSummarizer, ContextLadder, LadderConfig
-    from cowork_agent.loop import AgentLoop
-    from cowork_agent.model import MockModelClient
-    from cowork_agent.registry import ToolRegistry
+    from chuk_agents_runtime.context import AuxSummarizer, ContextLadder, LadderConfig
+    from chuk_agents_runtime.loop import AgentLoop
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.registry import ToolRegistry
 
     db = str(tmp_path / "persistent.db")
     key = "agent:permanent-bot"

@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/chat_storage_crud.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/key_version_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_crud.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/key_version_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Exception thrown by password reset recovery operations.
 class RecoveryException implements Exception {

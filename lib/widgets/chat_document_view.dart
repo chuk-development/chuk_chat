@@ -4,20 +4,20 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:cowork/constants.dart';
-import 'package:cowork/services/file_save_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/agent_markdown.dart';
-import 'package:cowork/widgets/chat_document_inline.dart';
-import 'package:cowork/widgets/charts/chuk_chart.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/widgets/chuk_table.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agent_markdown.dart';
+import 'package:chuk_chat/widgets/chat_document_inline.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
 
 /// The agent stamps `updated_at` in epoch seconds — a float for chat documents,
 /// a file mtime for workspace files — so it is neither an ISO string nor

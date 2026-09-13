@@ -16,8 +16,8 @@ let pageContext = null;
 function paintStatus({ connected, kind }, engine) {
   dot.classList.toggle("on", Boolean(connected));
   state.textContent = connected
-    ? `CoWork · ${kind} · ${engine} input`
-    : "not connected to CoWork";
+    ? `Agents · ${kind} · ${engine} input`
+    : "not connected to Agents";
 }
 
 function paintContext(context) {
@@ -41,7 +41,7 @@ function append(text, mine) {
 
 document.getElementById("reconnect").addEventListener("click", async () => {
   state.textContent = "connecting…";
-  const reply = await api.runtime.sendMessage({ channel: "cowork", op: "reconnect" });
+  const reply = await api.runtime.sendMessage({ channel: "agents", op: "reconnect" });
   paintStatus(reply.status, reply.engine ?? "");
 });
 
@@ -52,23 +52,23 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
   input.value = "";
   append(text, true);
   const reply = await api.runtime.sendMessage({
-    channel: "cowork",
+    channel: "agents",
     op: "send",
     frame: { type: "page_message", text, context: pageContext },
   });
-  if (!reply?.sent) append("No link to CoWork right now — the message was not sent.", false);
+  if (!reply?.sent) append("No link to Agents right now — the message was not sent.", false);
 });
 
 api.runtime.onMessage.addListener((msg) => {
-  if (!msg || msg.channel !== "cowork") return;
+  if (!msg || msg.channel !== "agents") return;
   if (msg.op === "status") paintStatus(msg.status, msg.engine ?? "");
   if (msg.op === "page_context") paintContext(msg.context);
   if (msg.op === "reply") append(msg.text, false);
 });
 
 (async () => {
-  const status = await api.runtime.sendMessage({ channel: "cowork", op: "get_status" });
+  const status = await api.runtime.sendMessage({ channel: "agents", op: "get_status" });
   paintStatus(status.status, status.engine);
-  const { context } = await api.runtime.sendMessage({ channel: "cowork", op: "page_context_request" });
+  const { context } = await api.runtime.sendMessage({ channel: "agents", op: "page_context_request" });
   paintContext(context);
 })();

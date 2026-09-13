@@ -3,7 +3,7 @@
 The app's live view (§9.1) streams the pixels of the display the browser paints
 on. Two separate things used to leave that view black, and both are pinned here:
 
-* :class:`~cowork_agent.browser.BrowserUseRunner` launched **headless**, so its
+* :class:`~chuk_agents_runtime.browser.BrowserUseRunner` launched **headless**, so its
   Chromium painted on no display at all. It is headful now, it starts a display
   when the machine has none, and it refuses rather than quietly going headless.
 * The Playwright MCP server in the sandbox launches **no browser at all** until
@@ -21,7 +21,7 @@ import types
 
 import pytest
 
-from cowork_agent.browser import (
+from chuk_agents_runtime.browser import (
     DISPLAY_ENV_VAR,
     EXECUTABLE_ENV_VAR,
     HEADLESS_ENV_VAR,
@@ -32,7 +32,7 @@ from cowork_agent.browser import (
     ensure_display,
     headless_requested,
 )
-from cowork_agent.mcp_client import (
+from chuk_agents_runtime.mcp_client import (
     BROWSER_LAUNCH_TOOL,
     BROWSER_OPEN_TOOL,
     DEFAULT_BROWSER_HOME,
@@ -123,7 +123,7 @@ def test_the_browser_is_not_launched_headless(fake_browser_use, chromium, monkey
     monkeypatch.delenv(HEADLESS_ENV_VAR, raising=False)
     displays: list[str] = []
     monkeypatch.setattr(
-        "cowork_agent.browser.ensure_display", lambda: displays.append(":99") or ":99"
+        "chuk_agents_runtime.browser.ensure_display", lambda: displays.append(":99") or ":99"
     )
 
     run_once(BrowserUseRunner())
@@ -137,7 +137,7 @@ def test_headless_is_possible_but_has_to_be_asked_for(
 ):
     monkeypatch.setenv(HEADLESS_ENV_VAR, "1")
     monkeypatch.setattr(
-        "cowork_agent.browser.ensure_display",
+        "chuk_agents_runtime.browser.ensure_display",
         lambda: pytest.fail("headless must not start a display"),
     )
 
@@ -150,7 +150,7 @@ def test_an_explicit_argument_still_wins_over_the_environment(
     fake_browser_use, chromium, monkeypatch
 ):
     monkeypatch.setenv(HEADLESS_ENV_VAR, "1")
-    monkeypatch.setattr("cowork_agent.browser.ensure_display", lambda: ":99")
+    monkeypatch.setattr("chuk_agents_runtime.browser.ensure_display", lambda: ":99")
 
     run_once(BrowserUseRunner(headless=False))
 
@@ -163,7 +163,7 @@ def test_an_attached_browser_needs_no_display_of_ours(
     """With a CDP endpoint the browser is somebody else's process."""
     monkeypatch.delenv(HEADLESS_ENV_VAR, raising=False)
     monkeypatch.setattr(
-        "cowork_agent.browser.ensure_display",
+        "chuk_agents_runtime.browser.ensure_display",
         lambda: pytest.fail("a CDP browser paints on its own display"),
     )
 
@@ -174,7 +174,7 @@ def test_an_attached_browser_needs_no_display_of_ours(
 
 def test_a_finished_run_reports_its_step_count(fake_browser_use, chromium, monkeypatch):
     """``n_steps`` sat after a ``raise`` and was never read on the success path."""
-    monkeypatch.setattr("cowork_agent.browser.ensure_display", lambda: ":99")
+    monkeypatch.setattr("chuk_agents_runtime.browser.ensure_display", lambda: ":99")
 
     outcome = run_once(BrowserUseRunner())
 
@@ -194,9 +194,9 @@ def test_headless_requested_reads_the_switch(raw, expected):
 
 def test_a_live_display_is_used_as_it_is(monkeypatch):
     monkeypatch.setenv(DISPLAY_ENV_VAR, ":7")
-    monkeypatch.setattr("cowork_agent.browser.display_available", lambda name=None: True)
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_available", lambda name=None: True)
     monkeypatch.setattr(
-        "cowork_agent.browser.start_xvfb",
+        "chuk_agents_runtime.browser.start_xvfb",
         lambda **kw: pytest.fail("a working display must not be replaced"),
     )
 
@@ -205,8 +205,8 @@ def test_a_live_display_is_used_as_it_is(monkeypatch):
 
 def test_a_missing_display_is_started_not_worked_around(monkeypatch):
     monkeypatch.delenv(DISPLAY_ENV_VAR, raising=False)
-    monkeypatch.setattr("cowork_agent.browser.display_available", lambda name=None: False)
-    monkeypatch.setattr("cowork_agent.browser.start_xvfb", lambda **kw: ":99")
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_available", lambda name=None: False)
+    monkeypatch.setattr("chuk_agents_runtime.browser.start_xvfb", lambda **kw: ":99")
 
     import os
 
@@ -216,8 +216,8 @@ def test_a_missing_display_is_started_not_worked_around(monkeypatch):
 
 def test_no_display_and_no_xvfb_is_an_error_not_a_silent_headless(monkeypatch):
     monkeypatch.delenv(DISPLAY_ENV_VAR, raising=False)
-    monkeypatch.setattr("cowork_agent.browser.display_available", lambda name=None: False)
-    monkeypatch.setattr("cowork_agent.browser.start_xvfb", lambda **kw: None)
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_available", lambda name=None: False)
+    monkeypatch.setattr("chuk_agents_runtime.browser.start_xvfb", lambda **kw: None)
 
     with pytest.raises(BrowserUnavailable) as excinfo:
         ensure_display()
@@ -294,7 +294,7 @@ def test_opening_the_gui_touches_no_page_the_last_task_left_open():
 
 
 def test_a_server_without_the_tab_tool_is_opened_by_a_navigation(monkeypatch):
-    monkeypatch.delenv("COWORK_BROWSER_HOME", raising=False)
+    monkeypatch.delenv("AGENTS_BROWSER_HOME", raising=False)
     browser = _FakeConnection("playwright", [BROWSER_LAUNCH_TOOL])
 
     assert open_browser_gui(manager_with(browser)) == ["playwright"]
@@ -314,7 +314,7 @@ def test_a_browser_that_refuses_to_open_does_not_raise():
 
 
 def test_the_fallback_landing_page_can_be_configured(monkeypatch):
-    monkeypatch.setenv("COWORK_BROWSER_HOME", "https://example.com/start")
+    monkeypatch.setenv("AGENTS_BROWSER_HOME", "https://example.com/start")
     assert browser_home() == "https://example.com/start"
     browser = _FakeConnection("playwright", [BROWSER_LAUNCH_TOOL])
     open_browser_gui(manager_with(browser))
@@ -322,7 +322,7 @@ def test_the_fallback_landing_page_can_be_configured(monkeypatch):
 
 
 def test_the_open_runs_off_the_critical_path(monkeypatch):
-    monkeypatch.delenv("COWORK_BROWSER_AUTO_OPEN", raising=False)
+    monkeypatch.delenv("AGENTS_BROWSER_AUTO_OPEN", raising=False)
     browser = _FakeConnection("playwright", PLAYWRIGHT_TOOLS)
 
     thread = open_browser_gui_async(manager_with(browser))
@@ -338,7 +338,7 @@ def test_without_a_browser_server_nothing_is_started():
 
 
 def test_the_eager_open_can_be_turned_off(monkeypatch):
-    monkeypatch.setenv("COWORK_BROWSER_AUTO_OPEN", "0")
+    monkeypatch.setenv("AGENTS_BROWSER_AUTO_OPEN", "0")
     browser = _FakeConnection("playwright", PLAYWRIGHT_TOOLS)
 
     assert auto_open_enabled() is False
@@ -352,8 +352,8 @@ def test_the_eager_open_can_be_turned_off(monkeypatch):
 def test_building_a_runtime_opens_the_browser_it_was_given(tmp_path):
     """The wiring, end to end: a session with a browser MCP server has a window
     on its display before the model has said a word."""
-    from cowork_agent.model import MockModelClient
-    from cowork_agent.runtime import build_runtime
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.runtime import build_runtime
 
     browser = _FakeConnection("playwright", PLAYWRIGHT_TOOLS)
     manager = manager_with(browser)
@@ -376,8 +376,8 @@ def test_building_a_runtime_opens_the_browser_it_was_given(tmp_path):
 
 
 def test_a_runtime_without_a_browser_server_opens_nothing(tmp_path):
-    from cowork_agent.model import MockModelClient
-    from cowork_agent.runtime import build_runtime
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.runtime import build_runtime
 
     other = _FakeConnection("records", ["search"])
     loop = build_runtime(

@@ -13,17 +13,17 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/mcp/chuk_mcp_mirror.dart';
-import 'package:cowork/services/mcp/mcp_connector_sync.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
-import 'package:cowork/services/mcp/mcp_store.dart';
-import 'package:cowork/services/mcp/mcp_sync_service.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
+import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
 
 import '../../support/kv_cache_test_env.dart';
 
 /// Keychain stand-in.
-class _MemorySecrets implements CoworkSecureKeyValueStore {
+class _MemorySecrets implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override
@@ -36,7 +36,7 @@ class _MemorySecrets implements CoworkSecureKeyValueStore {
   Future<void> delete(String key) async => map.remove(key);
 }
 
-/// CoWork's own mirror, in memory. Always readable, always empty here — these
+/// Agents's own mirror, in memory. Always readable, always empty here — these
 /// tests are about chuk's rows.
 class _OwnMirror implements McpConnectorSync {
   @override
@@ -206,7 +206,7 @@ void main() {
     chuk.rows!['notion'] = _row('notion');
 
     // Straight to the launch path: no page, no tick has run yet. This is what
-    // `CoworkRelayClient.sendTask` calls to build the `mcp_servers` list.
+    // `AgentsRelayClient.sendTask` calls to build the `mcp_servers` list.
     final payloads = await McpService.store.forwardPayloads();
 
     final payload = payloads.single;

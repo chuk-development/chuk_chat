@@ -15,13 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from cowork_agent.environment import LocalEnvironment
-from cowork_agent.loop import KillSwitch, LoopResult, StopReason
-from cowork_agent.model import MockModelClient, tool_call_response
-from cowork_agent.registry import ToolRegistry
-from cowork_agent.runtime import SubagentConfig, build_runtime
-from cowork_agent.state import StateStore
-from cowork_agent.subagents import (
+from chuk_agents_runtime.environment import LocalEnvironment
+from chuk_agents_runtime.loop import KillSwitch, LoopResult, StopReason
+from chuk_agents_runtime.model import MockModelClient, tool_call_response
+from chuk_agents_runtime.registry import ToolRegistry
+from chuk_agents_runtime.runtime import SubagentConfig, build_runtime
+from chuk_agents_runtime.state import StateStore
+from chuk_agents_runtime.subagents import (
     ActivityMonitor,
     ChildContext,
     SubagentLimits,
@@ -31,7 +31,7 @@ from cowork_agent.subagents import (
     SubagentSupervisor,
     register_subagent_tools,
 )
-from cowork_agent.workspace_git import GitWorkspace
+from chuk_agents_runtime.workspace_git import GitWorkspace
 
 # -- helpers ---------------------------------------------------------------
 
@@ -845,7 +845,7 @@ def test_two_children_work_on_their_own_branches_and_merge_back(tmp_path):
     }
     for ctx in seen:
         assert ctx.workspace != str(workspace)
-        assert ctx.branch and ctx.branch.startswith("cowork/")
+        assert ctx.branch and ctx.branch.startswith("agents/")
 
     # Both results are merged into the parent's tree.
     assert all(entry["merged"] is True for entry in out["subagents"])
@@ -853,7 +853,7 @@ def test_two_children_work_on_their_own_branches_and_merge_back(tmp_path):
     assert (workspace / "beta.txt").read_text(encoding="utf-8") == "by beta\n"
     # And the bookkeeping is cleaned up: no branch, no worktree left behind.
     assert git.worktree_branches() == []
-    assert "cowork-worktrees" not in _git_out(workspace, "worktree", "list")
+    assert "agents-worktrees" not in _git_out(workspace, "worktree", "list")
 
 
 @needs_git
@@ -924,7 +924,7 @@ def test_child_worktrees_never_pollute_the_parent_journal_or_tree(tmp_path):
 
     def runner(ctx: ChildContext) -> LoopResult:
         child_git = GitWorkspace.open(
-            ctx.workspace, journal_path=f".cowork/journal-{ctx.subagent_id}.jsonl"
+            ctx.workspace, journal_path=f".agents/journal-{ctx.subagent_id}.jsonl"
         )
         child_git.record("write_file", {"path": "child.txt"}, {"ok": True})
         (Path(ctx.workspace) / "child.txt").write_text(
@@ -940,10 +940,10 @@ def test_child_worktrees_never_pollute_the_parent_journal_or_tree(tmp_path):
     # The parent's own journal is untouched by the child, which wrote its own.
     tools = [entry["tool"] for entry in git.journal_entries()]
     assert tools.count("write_file") == 1
-    assert list((workspace / ".cowork").glob("journal-*.jsonl"))
+    assert list((workspace / ".agents").glob("journal-*.jsonl"))
     # No worktree checkout was ever committed into the workspace.
     tracked = _git_out(workspace, "ls-files")
-    assert "cowork-worktrees" not in tracked
+    assert "agents-worktrees" not in tracked
 
 
 def test_without_git_the_children_share_the_workspace_and_still_run(tmp_path):
@@ -991,7 +991,7 @@ def test_a_stop_at_the_root_reaches_children_and_grandchildren(tmp_path):
     ``interrupt()`` need no waiting at all, which is the property being pinned:
     the cancel is not a poll.
     """
-    from cowork_agent.runtime import make_child_runner
+    from chuk_agents_runtime.runtime import make_child_runner
 
     root_kill = KillSwitch()
     release = threading.Event()

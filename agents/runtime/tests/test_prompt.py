@@ -9,7 +9,7 @@ and could drift. These tests pin both.
 
 from __future__ import annotations
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     MockModelClient,
     ToolRegistry,
@@ -27,8 +27,8 @@ def _registry() -> ToolRegistry:
 
 
 def test_old_session_gets_research_rules_without_replacing_memory_or_persona(tmp_path):
-    from cowork_agent import StateStore
-    from cowork_agent.prompt import BASE_INSTRUCTIONS
+    from chuk_agents_runtime import StateStore
+    from chuk_agents_runtime.prompt import BASE_INSTRUCTIONS
 
     before, rest = BASE_INSTRUCTIONS.split("# Online research\n", 1)
     old = before + "# Your workspace\n" + rest.split("# Your workspace\n", 1)[1]

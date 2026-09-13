@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
-import 'package:cowork/services/automations/automations_source.dart';
-import 'package:cowork/services/automations/cowork_automation.dart';
-import 'package:cowork/widgets/automation_card.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/services/automations/automations_source.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/widgets/automation_card.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// Every automation of the host, grouped by the coworker that owns it, with
 /// Pause / Resume / Cancel. The user manages all of them here; an agent only
@@ -73,7 +73,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
     });
   }
 
-  Future<void> _control(CoworkAutomation a, String action) async {
+  Future<void> _control(AgentsAutomation a, String action) async {
     final sent = await _source.control(a.id, action);
     if (!mounted || sent) return;
     ScaffoldMessenger.of(
@@ -93,9 +93,9 @@ class _AutomationsPageState extends State<AutomationsPage> {
         .toList();
     final finished = all.where((a) => a.isOver).toList();
     final shown = _showFinished ? all : all.where((a) => !a.isOver).toList();
-    final groups = <String, List<CoworkAutomation>>{};
+    final groups = <String, List<AgentsAutomation>>{};
     for (final a in shown) {
-      groups.putIfAbsent(a.sessionKey, () => <CoworkAutomation>[]).add(a);
+      groups.putIfAbsent(a.sessionKey, () => <AgentsAutomation>[]).add(a);
     }
     return ExpressiveScreen(
       // The bar carries the name of the page. Repeating it as a heading in

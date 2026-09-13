@@ -9,9 +9,9 @@
 /// radius 30, no elevation, a transparent closed colour and the surface colour
 /// open.
 ///
-/// CoWork cannot use `OpenContainer` itself, because `openBuilder` builds the
+/// Agents cannot use `OpenContainer` itself, because `openBuilder` builds the
 /// open child as a ROUTE. The phone thread here is not a route: it hosts
-/// `CoworkThreadView`, which owns the relay socket, so it must stay mounted
+/// `AgentsThreadView`, which owns the relay socket, so it must stay mounted
 /// whether or not a chat is open (see `messenger_shell.dart`). This widget is
 /// therefore the geometry of `_OpenContainerRoute.buildPage` — the same rect
 /// tween, the same `Curves.fastOutSlowIn` (flipped on the way back), the same

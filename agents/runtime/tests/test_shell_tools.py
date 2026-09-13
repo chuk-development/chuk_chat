@@ -16,8 +16,8 @@ import time
 
 import pytest
 
-from cowork_agent import LocalEnvironment, ProcessResult, ToolRegistry
-from cowork_agent.shell_tools import (
+from chuk_agents_runtime import LocalEnvironment, ProcessResult, ToolRegistry
+from chuk_agents_runtime.shell_tools import (
     DEFAULT_LINES,
     JOB_TOOL_NAMES,
     SHELL_OUTPUT_CAP,
@@ -29,8 +29,8 @@ from cowork_agent.shell_tools import (
     register_job_tools,
     register_shell_tools,
 )
-from cowork_agent.terminal import TerminalError, TerminalManager
-from cowork_agent.tools import make_run_command_handler, register_run_command
+from chuk_agents_runtime.terminal import TerminalError, TerminalManager
+from chuk_agents_runtime.tools import make_run_command_handler, register_run_command
 
 needs_tmux = pytest.mark.skipif(shutil.which("tmux") is None, reason="tmux is not installed")
 
@@ -83,21 +83,21 @@ class RecordingEnv:
 
 
 def test_job_start_command_detaches_and_never_chains_setsid_into_an_and_list():
-    env = RecordingEnv(stdout="4242\n/ws/.cowork/jobs\n")
+    env = RecordingEnv(stdout="4242\n/ws/.agents/jobs\n")
     jobs = JobManager(env, session_key="thread-1", workspace="/ws", new_id=lambda: "j0000abcd")
     out = jobs.start("sleep 30 && echo done", cwd="/ws/sub")
     assert out == {
         "ok": True,
         "job_id": "j0000abcd",
         "pid": 4242,
-        "log_path": ".cowork/jobs/j0000abcd.log",
-        "jobs_dir": "/ws/.cowork/jobs",
+        "log_path": ".agents/jobs/j0000abcd.log",
+        "jobs_dir": "/ws/.agents/jobs",
         "state": "running",
         "note": out["note"],
     }
     (cmd,) = env.commands
     # The workspace root: the image's variable first, the host path as fallback.
-    assert '"${COWORK_WORKSPACE:-/ws}"' in cmd
+    assert '"${AGENTS_WORKSPACE:-/ws}"' in cmd
     # The detach line stands on its own: a ``&&`` right before ``setsid`` would
     # background the whole list and hold the caller's pipe until the job ends.
     setsid_at = cmd.index("setsid bash")
@@ -122,7 +122,7 @@ def test_job_wrapper_writes_exit_and_one_trigger_line():
 
 
 def test_job_start_passes_the_secrets_env_like_run_command():
-    env = RecordingEnv(stdout="1\n/ws/.cowork/jobs\n")
+    env = RecordingEnv(stdout="1\n/ws/.agents/jobs\n")
     jobs = JobManager(env, workspace="/ws", secrets_env=lambda: {"PEXELS_API_KEY": "sk-0123456789"})
     jobs.start("echo hi")
     assert env.envs == [{"PEXELS_API_KEY": "sk-0123456789"}]
@@ -154,7 +154,7 @@ def test_job_state_words():
 
 
 def test_run_command_background_delegates_to_the_job_manager_or_refuses():
-    env = RecordingEnv(stdout="7\n/ws/.cowork/jobs\n")
+    env = RecordingEnv(stdout="7\n/ws/.agents/jobs\n")
     jobs = JobManager(env, workspace="/ws", new_id=lambda: "j00000001")
     handler = make_run_command_handler(env, None, jobs)
     out = handler("sleep 5", background=True)
@@ -192,7 +192,7 @@ def test_register_job_tools_with_none_registers_nothing():
 
 
 def test_build_runtime_offers_shell_not_terminal(tmp_path):
-    from cowork_agent import MockModelClient, build_runtime
+    from chuk_agents_runtime import MockModelClient, build_runtime
 
     loop = build_runtime(
         MockModelClient(["x"]),
@@ -299,7 +299,7 @@ def test_a_background_job_returns_at_once_and_ends_with_one_trigger_line(tmp_pat
     window = jobs.output(job_id, lines=1, offset=2)
     assert window["output"] == "two" and window["offset"] == 2
 
-    triggers = (tmp_path / ".cowork/automations/triggers.jsonl").read_text().splitlines()
+    triggers = (tmp_path / ".agents/automations/triggers.jsonl").read_text().splitlines()
     assert len(triggers) == 1
     record = json.loads(triggers[0])
     assert record == {
@@ -310,7 +310,7 @@ def test_a_background_job_returns_at_once_and_ends_with_one_trigger_line(tmp_pat
         "timed_out": False,
         "ts": record["ts"],
     }
-    assert (tmp_path / ".cowork/jobs" / f"{job_id}.exit").read_text().strip() == "2"
+    assert (tmp_path / ".agents/jobs" / f"{job_id}.exit").read_text().strip() == "2"
     everything = jobs.status()
     assert [j["job_id"] for j in everything["jobs"]] == [job_id]
 
@@ -325,9 +325,9 @@ def test_cancel_kills_the_group_and_writes_no_trigger(tmp_path):
     status = jobs.status(job_id)
     assert status["state"] == "cancelled" and status["exit_code"] == 143
     time.sleep(0.5)
-    assert not (tmp_path / ".cowork/automations/triggers.jsonl").exists()
+    assert not (tmp_path / ".agents/automations/triggers.jsonl").exists()
     # The whole process group is gone, not just the wrapper.
-    pid = int((tmp_path / ".cowork/jobs" / f"{job_id}.pid").read_text())
+    pid = int((tmp_path / ".agents/jobs" / f"{job_id}.pid").read_text())
     with pytest.raises(ProcessLookupError):
         os.killpg(pid, 0)
     assert jobs.cancel(job_id)["state"] == "already finished"

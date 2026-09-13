@@ -1,6 +1,6 @@
-# cowork-manager
+# chuk-agents-manager
 
-The CoWork **Manager** control plane (§5 of `docs/COWORK_AGENT_PLATFORM_PLAN.md`).
+The Agents **Manager** control plane (§5 of `docs/AGENTS_AGENT_PLATFORM_PLAN.md`).
 One host, many agents. This package is the control-plane skeleton; the real
 container lifecycle wires to `../sandbox` later, and the real network relay wires
 in behind the injected transport.

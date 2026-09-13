@@ -5,16 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/widgets/room_thread_page.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/room_thread_page.dart';
 
 void main() {
-  Future<StreamController<CoworkRelayInbound>> pump(
+  Future<StreamController<AgentsRelayInbound>> pump(
     WidgetTester tester, {
     void Function(String)? onSend,
     VoidCallback? onReady,
   }) async {
-    final ctrl = StreamController<CoworkRelayInbound>.broadcast();
+    final ctrl = StreamController<AgentsRelayInbound>.broadcast();
     addTearDown(ctrl.close);
     await tester.pumpWidget(
       MaterialApp(
@@ -44,7 +44,7 @@ void main() {
     expect(find.text('@amber'), findsNothing);
 
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'a',
@@ -57,7 +57,7 @@ void main() {
     expect(find.text('ship it'), findsOneWidget);
 
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 2,
         agentId: 'b',
@@ -76,7 +76,7 @@ void main() {
   ) async {
     final ctrl = await pump(tester);
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'a',
@@ -85,7 +85,7 @@ void main() {
       ),
     );
     ctrl.add(
-      const CoworkRelayRoomDone(roomId: 'r1', reason: 'rounds_exhausted'),
+      const AgentsRelayRoomDone(roomId: 'r1', reason: 'rounds_exhausted'),
     );
     await tester.pump();
 
@@ -95,8 +95,8 @@ void main() {
 
   testWidgets('non-room events on the stream are ignored', (tester) async {
     final ctrl = await pump(tester);
-    ctrl.add(const CoworkRelayDelta('agent-thread text'));
-    ctrl.add(const CoworkRelayDone());
+    ctrl.add(const AgentsRelayDelta('agent-thread text'));
+    ctrl.add(const AgentsRelayDone());
     await tester.pump();
 
     // Still running, no turns — the agent-thread events did not leak in.
@@ -107,7 +107,7 @@ void main() {
   testWidgets('a turn for another room is ignored', (tester) async {
     final ctrl = await pump(tester); // this page is room r1
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r2',
         round: 1,
         agentId: 'z',
@@ -119,7 +119,7 @@ void main() {
     expect(find.text('@zed'), findsNothing);
     expect(find.text('other room'), findsNothing);
     // A done for another room does not stop this one either.
-    ctrl.add(const CoworkRelayRoomDone(roomId: 'r2', reason: 'stopped'));
+    ctrl.add(const AgentsRelayRoomDone(roomId: 'r2', reason: 'stopped'));
     await tester.pump();
     expect(find.text('the room is talking…'), findsOneWidget);
   });
@@ -128,7 +128,7 @@ void main() {
     tester,
   ) async {
     final ctrl = await pump(tester);
-    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'who_knows'));
+    ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'who_knows'));
     await tester.pump();
     // fromWire returns null -> no footer, and not running (no indicator).
     expect(find.text('the room is talking…'), findsNothing);
@@ -146,7 +146,7 @@ void main() {
 
     // A turn from a prior exchange is on screen.
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'a',
@@ -188,7 +188,7 @@ void main() {
   ) async {
     final ctrl = await pump(tester);
     ctrl.add(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'a',
@@ -200,17 +200,17 @@ void main() {
     expect(find.text('live turn'), findsOneWidget);
 
     ctrl.add(
-      const CoworkRelayRoomHistory(
+      const AgentsRelayRoomHistory(
         roomId: 'r1',
         turns: [
-          CoworkRelayRoomTurn(
+          AgentsRelayRoomTurn(
             roomId: 'r1',
             round: 1,
             agentId: 'a',
             handle: 'amber',
             text: 'stored one',
           ),
-          CoworkRelayRoomTurn(
+          AgentsRelayRoomTurn(
             roomId: 'r1',
             round: 2,
             agentId: 'b',
@@ -233,7 +233,7 @@ void main() {
     tester,
   ) async {
     final ctrl = await pump(tester);
-    ctrl.add(const CoworkRelayRoomHistory(roomId: 'r1', turns: []));
+    ctrl.add(const AgentsRelayRoomHistory(roomId: 'r1', turns: []));
     await tester.pump();
     expect(find.text('the room is talking…'), findsOneWidget);
   });
@@ -241,10 +241,10 @@ void main() {
   testWidgets('history for another room is ignored', (tester) async {
     final ctrl = await pump(tester);
     ctrl.add(
-      const CoworkRelayRoomHistory(
+      const AgentsRelayRoomHistory(
         roomId: 'r2',
         turns: [
-          CoworkRelayRoomTurn(
+          AgentsRelayRoomTurn(
             roomId: 'r2',
             round: 1,
             agentId: 'z',
@@ -262,7 +262,7 @@ void main() {
     tester,
   ) async {
     final ctrl = await pump(tester);
-    ctrl.add(const CoworkRelayRoomDone(roomId: 'r1', reason: 'no_such_room'));
+    ctrl.add(const AgentsRelayRoomDone(roomId: 'r1', reason: 'no_such_room'));
     await tester.pump();
     expect(find.text('This room is not on your host yet'), findsOneWidget);
   });
@@ -270,7 +270,7 @@ void main() {
   testWidgets('when the inbound stream closes, a reconnect banner appears', (
     tester,
   ) async {
-    final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
+    final ctrl = StreamController<AgentsRelayInbound>.broadcast(sync: true);
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -299,7 +299,7 @@ void main() {
   testWidgets('the composer is disabled after the stream closes', (
     tester,
   ) async {
-    final ctrl = StreamController<CoworkRelayInbound>.broadcast(sync: true);
+    final ctrl = StreamController<AgentsRelayInbound>.broadcast(sync: true);
     final sent = <String>[];
     await tester.pumpWidget(
       MaterialApp(
@@ -341,7 +341,7 @@ void main() {
     tester,
   ) async {
     final first = _FakeController();
-    final notifier = ValueNotifier<CoworkRelayController?>(first);
+    final notifier = ValueNotifier<AgentsRelayController?>(first);
     addTearDown(notifier.dispose);
     addTearDown(first.close);
     var readyCalls = 0;
@@ -363,7 +363,7 @@ void main() {
     await tester.pump();
 
     first.emit(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'a',
@@ -384,7 +384,7 @@ void main() {
     expect(readyCalls, greaterThanOrEqualTo(1));
     // A turn on the NEW controller renders -> we re-subscribed.
     second.emit(
-      const CoworkRelayRoomTurn(
+      const AgentsRelayRoomTurn(
         roomId: 'r1',
         round: 1,
         agentId: 'b',
@@ -399,16 +399,16 @@ void main() {
   });
 }
 
-/// A minimal CoworkRelayController for the rebind test: only [inbound] is real;
+/// A minimal AgentsRelayController for the rebind test: only [inbound] is real;
 /// every other member is a no-op via noSuchMethod.
-class _FakeController implements CoworkRelayController {
-  final StreamController<CoworkRelayInbound> _c =
-      StreamController<CoworkRelayInbound>.broadcast(sync: true);
+class _FakeController implements AgentsRelayController {
+  final StreamController<AgentsRelayInbound> _c =
+      StreamController<AgentsRelayInbound>.broadcast(sync: true);
 
   @override
-  Stream<CoworkRelayInbound> get inbound => _c.stream;
+  Stream<AgentsRelayInbound> get inbound => _c.stream;
 
-  void emit(CoworkRelayInbound e) => _c.add(e);
+  void emit(AgentsRelayInbound e) => _c.add(e);
   Future<void> close() => _c.close();
 
   @override

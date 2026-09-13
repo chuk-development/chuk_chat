@@ -5,15 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart'
-    show CoworkHostAgentName;
-import 'package:cowork/services/cowork/schedule_spec.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
-import 'package:cowork/widgets/agent_roster_view.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart'
+    show AgentsHostAgentName;
+import 'package:chuk_chat/services/agents/schedule_spec.dart';
+import 'package:chuk_chat/widgets/agent_avatar.dart';
+import 'package:chuk_chat/widgets/agent_roster_view.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
@@ -487,13 +487,13 @@ void main() {
       source.addListener(() => notified++);
 
       source.applyHostNames([
-        const CoworkHostAgentName(
+        const AgentsHostAgentName(
           agentId: 'host:laptop-3f2a',
           name: 'Laptop Bot',
           host: true,
         ),
-        const CoworkHostAgentName(agentId: 'local:x:9:1', name: 'From Phone'),
-        CoworkHostAgentName(agentId: local.id, name: 'Amber Desk'),
+        const AgentsHostAgentName(agentId: 'local:x:9:1', name: 'From Phone'),
+        AgentsHostAgentName(agentId: local.id, name: 'Amber Desk'),
       ], peerDeviceId: 'laptop-3f2a');
 
       expect(source.byId(host.id)!.name, 'Laptop Bot');
@@ -517,16 +517,16 @@ void main() {
 
       source.applyHostNames(
         [
-          const CoworkHostAgentName(
+          const AgentsHostAgentName(
             agentId: 'host:whatever',
             name: 'Bot',
             host: true,
           ),
-          const CoworkHostAgentName(
+          const AgentsHostAgentName(
             agentId: 'local:deleted:1:1',
             name: 'Ghost',
           ),
-          CoworkHostAgentName(agentId: local.id, name: 'amber-otter'),
+          AgentsHostAgentName(agentId: local.id, name: 'amber-otter'),
         ],
         peerDeviceId: null,
         ignore: const {'local:deleted:1:1'},

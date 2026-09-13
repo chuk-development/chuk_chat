@@ -10,7 +10,7 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 /// Corner radius at the outer edges of a run.
 const double kMenuOuterRadius = 26;

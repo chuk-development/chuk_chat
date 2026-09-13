@@ -2,22 +2,22 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:pdfx/pdfx.dart';
 
-import 'package:cowork/constants/file_constants.dart';
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/widgets/encrypted_image_widget.dart';
-import 'package:cowork/widgets/image_viewer.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
+import 'package:chuk_chat/widgets/image_viewer.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);

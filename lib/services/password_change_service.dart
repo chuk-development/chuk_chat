@@ -1,12 +1,12 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/password_revision_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/utils/client_platform.dart';
-import 'package:cowork/utils/input_validator.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/password_revision_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/utils/client_platform.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 
 class PasswordChangeService {
   const PasswordChangeService();

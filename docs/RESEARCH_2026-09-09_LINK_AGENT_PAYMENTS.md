@@ -4,7 +4,7 @@ Session cowork-1b, 2026-09-09. Alle Quellen am selben Tag geprüft, Links am End
 
 ## 0. Die Frage, richtig gestellt
 
-Der Coworker fährt einen Browser (browser-use über CDP, `agent/src/cowork_agent/browser.py`).
+Der Coworker fährt einen Browser (browser-use über CDP, `agent/src/chuk_agents_runtime/browser.py`).
 Er landet auf einem Checkout. Der Nutzer soll dort **keine Kartendaten eingeben**
 und wir wollen auch keine Karte im Klartext lagern. Stattdessen: Link ist in der
 App **einmal** verknüpft, und pro Kauf gibt Link eine Zahlungsberechtigung heraus
@@ -61,7 +61,7 @@ OAuth-Verknüpfung  ────────────────────
   scope: payment_methods.agentic userinfo:read
   ◀── refresh_token (1 Jahr), access_token (1 h)
 
-                              1. CoWork-Gate: approval_request  (unser Frame)
+                              1. Agents-Gate: approval_request  (unser Frame)
                               2. spend-request create ─────────────────▶
                                  ◀── approval_url, status pending_approval
      Nutzer tippt "Freigeben" in der Link-App/Web ────────────────────▶
@@ -76,8 +76,8 @@ OAuth-Verknüpfung  ────────────────────
 
 Der Nutzer bestätigt also **zweimal**, und beides ist gewollt:
 
-1. **In CoWork**, über die vorhandene Maschinerie
-   (`approval_request` / `approval_decision`, `executor/src/cowork_executor/protocol.py`,
+1. **In Agents**, über die vorhandene Maschinerie
+   (`approval_request` / `approval_decision`, `executor/src/chuk_agents_executor/protocol.py`,
    Muster: here.now-Publish). Das ist unser Gate: „Coworker will 35,00 USD bei
    press.stripe.com ausgeben." Ohne Antwort blockiert der Worker.
 2. **In Link**, über `approval_url`. Das erzwingt Stripe, nicht wir. Ohne diese
@@ -98,7 +98,7 @@ Zwei Varianten, wir brauchen beide zu unterschiedlichen Zeitpunkten.
 
 ```bash
 npm i -g @stripe/link-cli
-link-cli auth login --client-name "CoWork" --interval 5 --timeout 300
+link-cli auth login --client-name "Agents" --interval 5 --timeout 300
 ```
 
 Link zeigt eine URL und einen kurzen Bestätigungssatz; der Nutzer loggt sich in
@@ -268,7 +268,7 @@ schon — und dann gehört sie in eine Datei, nicht auf stdout:
 
 ```bash
 link-cli spend-request retrieve lsrq_abc123 \
-  --include card --output-file /run/cowork/link-card.json --format json
+  --include card --output-file /run/agents/link-card.json --format json
 ```
 
 Die CLI legt die Datei mit `0600` an und **überschreibt nichts** ohne `--force`.
@@ -322,7 +322,7 @@ agent = Agent(
 ```
 
 Wir haben die Domain-Klammer schon: `domain_scope()` /
-`allowed_domains` in `agent/src/cowork_agent/browser.py:756` bindet den Lauf an
+`allowed_domains` in `agent/src/chuk_agents_runtime/browser.py:756` bindet den Lauf an
 den Host der Start-URL. Der Zahlvorgang muss dieselbe Klammer benutzen, und der
 `merchant-url`-Host aus der Ausgabeanfrage muss **derselbe** sein wie der Host,
 auf dem die Karte eingetippt wird. Diese Prüfung machen wir selbst; Link erzwingt
@@ -403,7 +403,7 @@ Betrag** heraus. Selbst wenn die PAN abfließt, ist der maximale Schaden der
 freigegebene Betrag, und nach 12 Stunden ist sie tot. Das ist strukturell besser,
 als die echte Karte des Nutzers in einem Passwortmanager liegen zu haben.
 
-## 11. Umsetzung in CoWork
+## 11. Umsetzung in Agents
 
 Vorgeschlagener Zuschnitt (Beads folgen, Wurzel: `cowork-w84`):
 
@@ -422,7 +422,7 @@ Vorgeschlagener Zuschnitt (Beads folgen, Wurzel: `cowork-w84`):
 5. **Browser-Übergabe** — der Checkout-Lauf bekommt die Karte über
    `sensitive_data`, Domain-Klammer aus `merchant-url`, Vision aus.
 6. **Abschluss** — `link-cli report` und Status ins Run-Ledger
-   (`app/lib/services/cowork/cowork_run_ledger.dart`).
+   (`app/lib/services/agents/agents_run_ledger.dart`).
 7. **Tests** — Muster liegt vor: `executor/tests/test_herenow_approval.py` fährt
    den Approve/Deny-Round-Trip über den echten Loopback. Dazu ein Stub für
    `link-cli` (JSON auf stdout) für die Zustandsmaschine aus §5, plus

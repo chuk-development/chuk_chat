@@ -1,4 +1,4 @@
-# CoWork — What This Product Is
+# Agents — What This Product Is
 
 One line: it is a chat box. Anyone, even the least technical user, types a problem
 into it, and the agent solves the problem. That is the whole product.

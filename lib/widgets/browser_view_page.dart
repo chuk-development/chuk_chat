@@ -5,18 +5,18 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/vnc_local_server.dart';
-import 'package:cowork/widgets/vnc_webview_controls.dart';
-import 'package:cowork/widgets/vnc_webview_screen.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/vnc_local_server.dart';
+import 'package:chuk_chat/widgets/vnc_webview_controls.dart';
+import 'package:chuk_chat/widgets/vnc_webview_screen.dart';
 
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 
 /// The live browser view (§9.1): watch and control the agent's sandbox
 /// Chromium.
@@ -56,7 +56,7 @@ class BrowserViewPage extends StatefulWidget {
     this.sessionKey,
   });
 
-  final CoworkRelayController controller;
+  final AgentsRelayController controller;
 
   /// The thread whose box holds the browser. Without it the executor has to
   /// guess, and it guesses the primary environment — with one container per
@@ -68,7 +68,7 @@ class BrowserViewPage extends StatefulWidget {
   /// affordance and the bottom-up transition of a modal surface.
   static Future<void> open(
     BuildContext context,
-    CoworkRelayController controller, {
+    AgentsRelayController controller, {
     String? sessionKey,
   }) {
     return Navigator.of(context, rootNavigator: true).push(
@@ -89,7 +89,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   static final bool _useWebView =
       !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
-  StreamSubscription<CoworkRelayInbound>? _sub;
+  StreamSubscription<AgentsRelayInbound>? _sub;
   String _status = 'connecting';
   String _message = '';
   // Per-view VNC secret from the executor's `started` event (§9.1 hardening):
@@ -136,7 +136,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
   // socket of session N latches `_bridgeClosed` again just after session N+1
   // has opened, and the view is dead for good (bead cowork-zlbn).
   int _generation = 0;
-  // CoWork: on touch platforms the built-in absolute tap mapping is switched
+  // Agents: on touch platforms the built-in absolute tap mapping is switched
   // off and a relative trackpad overlay drives this controller instead. Only
   // reachable on the desktop path now.
   final RemoteFrameBufferController _rfbController =
@@ -315,9 +315,9 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
     if (mounted) setState(() {});
   }
 
-  void _onInbound(CoworkRelayInbound event) {
+  void _onInbound(AgentsRelayInbound event) {
     switch (event) {
-      case CoworkRelayBrowserData(:final bytes):
+      case AgentsRelayBrowserData(:final bytes):
         _meterBytes += bytes.length;
         _meterChunks++;
         if (!_sawBytes) {
@@ -329,7 +329,7 @@ class _BrowserViewPageState extends State<BrowserViewPage> {
         } else {
           _safeAdd(bytes);
         }
-      case CoworkRelayBrowserView(
+      case AgentsRelayBrowserView(
         :final status,
         :final message,
         :final password,

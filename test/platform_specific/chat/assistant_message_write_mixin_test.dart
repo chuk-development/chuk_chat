@@ -17,13 +17,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/platform_specific/chat/assistant_message_write_mixin.dart';
-import 'package:cowork/platform_specific/chat/chat_scroll_mixin.dart';
-import 'package:cowork/platform_specific/chat/handlers/chat_persistence_handler.dart';
-import 'package:cowork/platform_specific/chat/handlers/streaming_message_handler.dart';
-import 'package:cowork/platform_specific/chat/regen_variant_seed.dart';
-import 'package:cowork/services/chat_storage_service.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/platform_specific/chat/assistant_message_write_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/chat_persistence_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
 
 void main() {
   const String chatOnScreen = 'chat-on-screen';

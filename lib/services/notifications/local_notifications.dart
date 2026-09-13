@@ -1,9 +1,9 @@
 /// App-local notifications: the OS toast the app itself shows.
 ///
-/// Port of chuk_chat's `notification_service_io.dart` (d31526a) to CoWork,
+/// Port of chuk_chat's `notification_service_io.dart` (d31526a) to Agents,
 /// with three changes that follow WS-7:
 ///
-///  * **Linux is on.** chuk only toasted on Android/iOS; CoWork's running
+///  * **Linux is on.** chuk only toasted on Android/iOS; Agents's running
 ///    target is the Linux desktop, and a run ends while the window is behind
 ///    another one. `flutter_local_notifications_linux` talks to the desktop
 ///    over D-Bus, no daemon of ours.
@@ -27,18 +27,18 @@ import 'dart:ui' show Color;
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
-import 'package:cowork/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
 
-/// The Android channel every CoWork toast lands in.
-const String kCoworkNotificationChannelId = 'cowork_answer_ready';
-const String kCoworkNotificationChannelName = 'Answer ready';
-const String kCoworkNotificationChannelDescription =
+/// The Android channel every Agents toast lands in.
+const String kAgentsNotificationChannelId = 'cowork_answer_ready';
+const String kAgentsNotificationChannelName = 'Answer ready';
+const String kAgentsNotificationChannelDescription =
     'A coworker finished a task or needs your input';
 
 /// The logo a Linux toast draws. The same image the Android launcher uses,
 /// copied into the Flutter assets because a Linux build ships no icon of its
 /// own and the D-Bus call takes the picture, not an app id.
-const String kCoworkNotificationIconAsset = 'assets/icons/app_icon.png';
+const String kAgentsNotificationIconAsset = 'assets/icons/app_icon.png';
 
 /// What the service needs from the platform. The real one wraps
 /// `FlutterLocalNotificationsPlugin`; tests pass a fake.
@@ -211,7 +211,7 @@ class _PluginBackend implements LocalNotificationsBackend {
       // A D-Bus notification shows a logo only when the sender hands one over:
       // the desktop entry is not consulted, and a Linux build installs no
       // themed icon, so without this the toast has an empty icon slot.
-      defaultIcon: AssetsLinuxIcon(kCoworkNotificationIconAsset),
+      defaultIcon: AssetsLinuxIcon(kAgentsNotificationIconAsset),
     );
     final bool? ok = await _plugin.initialize(
       settings: InitializationSettings(
@@ -231,9 +231,9 @@ class _PluginBackend implements LocalNotificationsBackend {
           >()
           ?.createNotificationChannel(
             const AndroidNotificationChannel(
-              kCoworkNotificationChannelId,
-              kCoworkNotificationChannelName,
-              description: kCoworkNotificationChannelDescription,
+              kAgentsNotificationChannelId,
+              kAgentsNotificationChannelName,
+              description: kAgentsNotificationChannelDescription,
               importance: Importance.high,
               enableVibration: true,
               playSound: true,
@@ -261,9 +261,9 @@ class _PluginBackend implements LocalNotificationsBackend {
       payload: payload,
       notificationDetails: NotificationDetails(
         android: AndroidNotificationDetails(
-          kCoworkNotificationChannelId,
-          kCoworkNotificationChannelName,
-          channelDescription: kCoworkNotificationChannelDescription,
+          kAgentsNotificationChannelId,
+          kAgentsNotificationChannelName,
+          channelDescription: kAgentsNotificationChannelDescription,
           importance: Importance.high,
           priority: Priority.high,
           icon: 'ic_notification',
@@ -288,7 +288,7 @@ class _PluginBackend implements LocalNotificationsBackend {
         ),
         linux: LinuxNotificationDetails(
           urgency: LinuxNotificationUrgency.normal,
-          icon: AssetsLinuxIcon(kCoworkNotificationIconAsset),
+          icon: AssetsLinuxIcon(kAgentsNotificationIconAsset),
         ),
       ),
     );

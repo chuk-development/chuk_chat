@@ -1,8 +1,8 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/streaming_foreground_service.dart
+// AGENTS STUB. Upstream: chuk_chat/lib/services/streaming_foreground_service.dart
 // (conditional export of streaming_foreground_service_io.dart / _stub.dart)
 // @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay — upstream keeps an Android foreground service alive
-// so a stream survives backgrounding. In CoWork the run lives on the host and
+// so a stream survives backgrounding. In Agents the run lives on the host and
 // keeps going with no client attached, so the client needs no foreground
 // service at all. Permanent no-op.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.

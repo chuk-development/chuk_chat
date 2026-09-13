@@ -1,21 +1,21 @@
-// Cross-language interop smoke: the real Dart CoworkRelayClient against a LIVE
+// Cross-language interop smoke: the real Dart AgentsRelayClient against a LIVE
 // Python `cowork-host`. Two env-gated halves, so one host can be driven through
 // the whole persistent-pairing story from separate Dart VMs (a real app restart,
 // not a fake one).
 //
-//   1. PAIR — needs COWORK_HOST_URL + COWORK_PAIRING_CODE + COWORK_TRUST_FILE.
+//   1. PAIR — needs AGENTS_HOST_URL + AGENTS_PAIRING_CODE + AGENTS_TRUST_FILE.
 //      Runs the §15 joiner ceremony from the code, provisions, runs a task, and
 //      writes what a real app would keep in secure storage (its device seed +
-//      the trust record) to COWORK_TRUST_FILE.
-//   2. RECONNECT — needs COWORK_HOST_URL + COWORK_TRUST_FILE (and NO code).
+//      the trust record) to AGENTS_TRUST_FILE.
+//   2. RECONNECT — needs AGENTS_HOST_URL + AGENTS_TRUST_FILE (and NO code).
 //      Rebuilds the client from that file alone — a cold app start — and
 //      reconnects with the signed handshake, no code, then runs another task.
 //
 //   cd ../host && uv run cowork-host --mock-model --port 8795 &   # prints a code
-//   COWORK_HOST_URL=ws://127.0.0.1:8795 COWORK_PAIRING_CODE=<code> \
-//     COWORK_TRUST_FILE=/path/trust.json flutter test test/interop_smoke_test.dart
+//   AGENTS_HOST_URL=ws://127.0.0.1:8795 AGENTS_PAIRING_CODE=<code> \
+//     AGENTS_TRUST_FILE=/path/trust.json flutter test test/interop_smoke_test.dart
 //   # restart the host, then:
-//   COWORK_HOST_URL=ws://127.0.0.1:8795 COWORK_TRUST_FILE=/path/trust.json \
+//   AGENTS_HOST_URL=ws://127.0.0.1:8795 AGENTS_TRUST_FILE=/path/trust.json \
 //     flutter test test/interop_smoke_test.dart
 import 'dart:async';
 import 'dart:convert';
@@ -24,10 +24,10 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/cowork/cowork_device_keys.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agents_device_keys.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 
 /// A plain web_socket_channel-backed [RelaySocket] — bypasses the cert-pinned
 /// production connector, which is irrelevant for a localhost ws:// host.
@@ -55,18 +55,18 @@ const _session = AccountSession(
 );
 
 /// Drives one run to completion and returns the tool events it saw.
-Future<List<CoworkRelayTool>> _runTask(
-  CoworkRelayClient client,
+Future<List<AgentsRelayTool>> _runTask(
+  AgentsRelayClient client,
   String prompt,
 ) async {
   final done = Completer<void>();
-  final tools = <CoworkRelayTool>[];
+  final tools = <AgentsRelayTool>[];
   final sub = client.inbound.listen((e) {
-    if (e is CoworkRelayTool) {
+    if (e is AgentsRelayTool) {
       tools.add(e);
-    } else if (e is CoworkRelayDone && !done.isCompleted) {
+    } else if (e is AgentsRelayDone && !done.isCompleted) {
       done.complete();
-    } else if (e is CoworkRelayRunError && !done.isCompleted) {
+    } else if (e is AgentsRelayRunError && !done.isCompleted) {
       done.completeError(StateError('agent error: ${e.message}'));
     }
   });
@@ -81,22 +81,22 @@ Future<List<CoworkRelayTool>> _runTask(
 }
 
 void main() {
-  final url = Platform.environment['COWORK_HOST_URL'];
-  final code = Platform.environment['COWORK_PAIRING_CODE'];
-  final trustPath = Platform.environment['COWORK_TRUST_FILE'];
+  final url = Platform.environment['AGENTS_HOST_URL'];
+  final code = Platform.environment['AGENTS_PAIRING_CODE'];
+  final trustPath = Platform.environment['AGENTS_TRUST_FILE'];
 
   test('1. pairs with the live Python host from a code and stores the trust',
       () async {
     if (url == null || code == null || trustPath == null) {
-      markTestSkipped('set COWORK_HOST_URL + COWORK_PAIRING_CODE + '
-          'COWORK_TRUST_FILE');
+      markTestSkipped('set AGENTS_HOST_URL + AGENTS_PAIRING_CODE + '
+          'AGENTS_TRUST_FILE');
       return;
     }
 
-    // A stable device identity, exactly as CoworkPairingStore would mint it.
-    final keyPair = await CoworkDeviceKeys.generate();
+    // A stable device identity, exactly as AgentsPairingStore would mint it.
+    final keyPair = await AgentsDeviceKeys.generate();
     const deviceId = 'smoke-desktop';
-    final client = CoworkRelayClient(
+    final client = AgentsRelayClient(
       deviceId: deviceId,
       signingKeyPair: keyPair,
       connector: _plainConnector,
@@ -115,7 +115,7 @@ void main() {
     await File(trustPath).writeAsString(
       jsonEncode(<String, dynamic>{
         'device_id': deviceId,
-        'seed_b64': await CoworkDeviceKeys.exportPrivateKeySeedBase64(keyPair),
+        'seed_b64': await AgentsDeviceKeys.exportPrivateKeySeedBase64(keyPair),
         'pairing': trust!.toJson(),
       }),
     );
@@ -126,8 +126,8 @@ void main() {
   test('2. a cold restart reconnects with NO code and runs another task',
       () async {
     if (url == null || trustPath == null || code != null) {
-      markTestSkipped('set COWORK_HOST_URL + COWORK_TRUST_FILE and NO '
-          'COWORK_PAIRING_CODE');
+      markTestSkipped('set AGENTS_HOST_URL + AGENTS_TRUST_FILE and NO '
+          'AGENTS_PAIRING_CODE');
       return;
     }
     final file = File(trustPath);
@@ -136,11 +136,11 @@ void main() {
     // Cold start: everything comes from storage, nothing from a human.
     final saved = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     final keyPair =
-        await CoworkDeviceKeys.fromSeedBase64(saved['seed_b64'] as String);
-    final stored = CoworkStoredPairing.tryParse(jsonEncode(saved['pairing']));
+        await AgentsDeviceKeys.fromSeedBase64(saved['seed_b64'] as String);
+    final stored = AgentsStoredPairing.tryParse(jsonEncode(saved['pairing']));
     expect(stored, isNotNull, reason: 'the stored trust must parse back');
 
-    final client = CoworkRelayClient(
+    final client = AgentsRelayClient(
       deviceId: saved['device_id'] as String,
       signingKeyPair: keyPair,
       connector: _plainConnector,
@@ -159,20 +159,20 @@ void main() {
 
   test('3. an imposter device is refused by the live host', () async {
     if (url == null || trustPath == null || code != null) {
-      markTestSkipped('set COWORK_HOST_URL + COWORK_TRUST_FILE and NO '
-          'COWORK_PAIRING_CODE');
+      markTestSkipped('set AGENTS_HOST_URL + AGENTS_TRUST_FILE and NO '
+          'AGENTS_PAIRING_CODE');
       return;
     }
     final file = File(trustPath);
     expect(file.existsSync(), isTrue, reason: 'run the pairing half first');
     final saved = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    final stored = CoworkStoredPairing.tryParse(jsonEncode(saved['pairing']))!;
+    final stored = AgentsStoredPairing.tryParse(jsonEncode(saved['pairing']))!;
 
     // Everything stolen — channel id, channel key, the host's public key, the
     // device id — except the app's long-term private key. That one gap is the
     // whole security of the reconnect, so this must fail against the LIVE host.
-    final imposterKey = await CoworkDeviceKeys.generate();
-    final client = CoworkRelayClient(
+    final imposterKey = await AgentsDeviceKeys.generate();
+    final client = AgentsRelayClient(
       deviceId: saved['device_id'] as String,
       signingKeyPair: imposterKey,
       connector: _plainConnector,

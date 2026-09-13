@@ -4,7 +4,7 @@ Decision record and implementation contract. Written 2026-09-09 on the owner's
 instruction. Read this before touching the relay, the host transport, or the
 pairing UI.
 
-## The decision (supersedes §14.1 of COWORK_AGENT_PLATFORM_PLAN.md)
+## The decision (supersedes §14.1 of AGENTS_AGENT_PLATFORM_PLAN.md)
 
 **All controller↔host traffic goes through the API server relay. There is no
 peer-to-peer data plane.** §14.1 ("P2P data plane — the server coordinates, it
@@ -27,14 +27,14 @@ Consequences, accepted:
   same-machine developer path. It is never what a phone uses.
 
 Unchanged and still load-bearing: the §15 pairing ceremony, the §15.1 persistent
-trust and reconnect, and the `cowork_frame` E2E seal. **Only the pipe changes.**
+trust and reconnect, and the `agents_frame` E2E seal. **Only the pipe changes.**
 The relay stays blind — it routes an opaque `payload` it can never read.
 
 ## What already exists (do not rebuild)
 
-- **Relay endpoint** `/v2/relay/ws` on `main:app` — `routers/cowork/cowork_ws.py`,
-  routing rules in `cowork_relay.py`, cross-replica presence in `cowork_peers.py`.
-  Tested (`test_cowork_ws.py`, `test_cowork_relay.py`). Wire contract:
+- **Relay endpoint** `/v2/relay/ws` on `main:app` — `routers/agents/agents_ws.py`,
+  routing rules in `cowork_relay.py`, cross-replica presence in `agents_peers.py`.
+  Tested (`test_agents_ws.py`, `test_cowork_relay.py`). Wire contract:
 
       client -> {"type":"auth","token":"<supabase jwt>",
                  "role":"controller"|"executor","device_id":"<uuid4>"}
@@ -50,7 +50,7 @@ The relay stays blind — it routes an opaque `payload` it can never read.
   carries `req_id`.
 - **Auth boundary** `auth/ws_auth.py` — accepts a Supabase user JWT and nothing
   else; validated by an HTTPS call to GoTrue. No JWT secret anywhere.
-- **App**: `cowork_frame*` seal, §15 joiner ceremony, `cowork_reconnect.dart`,
+- **App**: `agents_frame*` seal, §15 joiner ceremony, `agents_reconnect.dart`,
   the Supabase-mirrored trust record (`supabase_pairing_sync.dart`).
 - **Host**: §15 initiator ceremony, executor, sandbox, `paired.json` trust.
 
@@ -70,7 +70,7 @@ gives it one, and that step runs *over* the channel it cannot yet join.
 The host's own single-use pairing code is the bootstrap credential, and the
 backend confirms it against a logged-in account. Minimal server addition:
 
-1. `POST /v1/cowork/pair/announce` — **unauthenticated, strictly rate-limited.**
+1. `POST /v1/agents/pair/announce` — **unauthenticated, strictly rate-limited.**
    Host sends `{"channel_id", "commitment"}` (the §15 `H(A)`), gets back
    `{"pair_ticket", "expires_in"}`. The ticket is short-lived (~5 min),
    single-use, and authorizes **one** socket as `role=executor` **restricted to
@@ -115,7 +115,7 @@ from Supabase and the host is there. Identity, not address.
 
 | # | Where | What |
 |---|---|---|
-| 1 | `api_server` | `/v1/cowork/pair/announce`, ticket minting + single use, `ticket` accepted on the relay handshake for a pairing channel only, `cowork_pair_claim` frame binding the channel to the caller's account. Rate limits. Tests. |
+| 1 | `api_server` | `/v1/agents/pair/announce`, ticket minting + single use, `ticket` accepted on the relay handshake for a pairing channel only, `cowork_pair_claim` frame binding the channel to the caller's account. Rate limits. Tests. |
 | 2 | `host` | Cloud executor client: dial `wss://api.chuk.chat/v2/relay/ws`, ticket bootstrap then account token, wrap/unwrap `cowork_relay` payloads onto the existing party. Persist the account token. Print code **and** QR. Keep the local relay as a dev flag. |
 | 3 | `app` | Cloud transport as `controller` behind the existing `RelaySocket` seam; pairing screen takes a code **or** a scanned QR; reconnect dials the relay, not a loopback URL. |
 | 4 | both clients | Chunk any payload over the 1 MB cap (VNC/browser stream first) and reassemble after decrypt. |

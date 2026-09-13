@@ -77,7 +77,7 @@ class VncWebViewController extends ChangeNotifier {
     if (_password == value) return;
     _password = value;
     if (_started && value != null) {
-      _call('cowork.setPassword(${jsonEncode(value)})');
+      _call('agents.setPassword(${jsonEncode(value)})');
       return;
     }
     _maybeStart();
@@ -91,7 +91,7 @@ class VncWebViewController extends ChangeNotifier {
   void _maybeStart() {
     if (_started || !_pageReady || _password == null || _web == null) return;
     _started = true;
-    _call('cowork.start(${jsonEncode(_password)})');
+    _call('agents.start(${jsonEncode(_password)})');
   }
 
   void _call(String expression) {
@@ -103,7 +103,7 @@ class VncWebViewController extends ChangeNotifier {
     });
   }
 
-  /// Handles one message from the page's `CoworkVncBridge` channel.
+  /// Handles one message from the page's `AgentsVncBridge` channel.
   void handleBridgeMessage(String raw) {
     final Object? decoded;
     try {
@@ -151,7 +151,7 @@ class VncWebViewController extends ChangeNotifier {
   }
 
   /// Back to the fitted view.
-  void zoomToFit() => _call('cowork.zoomToFit()');
+  void zoomToFit() => _call('agents.zoomToFit()');
 
   /// Try the handshake again after a failed recovery.
   void reconnect() => _call('cowork.reconnect()');
@@ -160,7 +160,7 @@ class VncWebViewController extends ChangeNotifier {
   void setTrackpad(bool on) {
     if (_trackpad == on) return;
     _trackpad = on;
-    _call('cowork.setTrackpad($on)');
+    _call('agents.setTrackpad($on)');
     notifyListeners();
   }
 
@@ -171,11 +171,11 @@ class VncWebViewController extends ChangeNotifier {
   /// Printable text from the soft keyboard.
   void typeText(String text) {
     if (text.isEmpty) return;
-    _call('cowork.typeText(${jsonEncode(text)})');
+    _call('agents.typeText(${jsonEncode(text)})');
   }
 
   /// One non-printable key, as an X11 keysym.
-  void sendKeysym(int keysym) => _call('cowork.sendKeysym($keysym)');
+  void sendKeysym(int keysym) => _call('agents.sendKeysym($keysym)');
 
   /// X11 keysyms the on-screen keyboard sends by name.
   static const int keysymBackspace = 0xff08;
@@ -236,7 +236,7 @@ class _VncWebViewState extends State<VncWebView> {
       // default white: a white flash on every load reads as a broken view.
       ..setBackgroundColor(const Color(0xFF000000))
       ..addJavaScriptChannel(
-        'CoworkVncBridge',
+        'AgentsVncBridge',
         onMessageReceived: (JavaScriptMessage message) {
           widget.controller.handleBridgeMessage(message.message);
         },

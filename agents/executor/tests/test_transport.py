@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from cowork_manager import Transport, decode_frames, encode_frame, make_request
+from chuk_agents_manager import Transport, decode_frames, encode_frame, make_request
 
-from cowork_executor import LoopbackEndpoint, loopback_pair
+from chuk_agents_executor import LoopbackEndpoint, loopback_pair
 
 
 def test_endpoints_are_transports():
@@ -42,7 +42,7 @@ def test_done_payload_carries_token_spend():
     """The done frame reports the run's token spend so the app can show a cost
     (§7.6). Default 0 for a run that reported no usage; the field is always
     present so an old client's `?? 0` is never needed on a fresh host."""
-    from cowork_executor.protocol import done_payload
+    from chuk_agents_executor.protocol import done_payload
 
     p = done_payload(
         final_answer="ok", reason="finished", iterations=2, tokens_spent=1234
@@ -57,7 +57,7 @@ def test_done_payload_carries_token_spend():
 def test_room_turn_and_done_payloads():
     """The room-relay frame contract (§16.1/4b): a member's turn and the end of
     the exchange, so the app can render a room live and name why it stopped."""
-    from cowork_executor.protocol import room_done_payload, room_turn_payload
+    from chuk_agents_executor.protocol import room_done_payload, room_turn_payload
 
     turn = room_turn_payload(
         room_id="r1", round=2, agent_id="id-amber", handle="amber", text="hi"
@@ -85,14 +85,14 @@ def test_room_turn_and_done_payloads():
 
 def test_room_task_payload():
     """The app -> host frame that starts a room (§16.1)."""
-    from cowork_executor.protocol import room_task_payload
+    from chuk_agents_executor.protocol import room_task_payload
 
     p = room_task_payload(room_id="r1", message="what's the plan?")
     assert p == {"type": "room_task", "room_id": "r1", "message": "what's the plan?"}
 
 
 def test_room_history_payloads():
-    from cowork_executor.protocol import (
+    from chuk_agents_executor.protocol import (
         room_history_payload,
         room_history_request_payload,
     )
@@ -106,7 +106,7 @@ def test_room_history_payloads():
 
 
 def test_room_create_payload():
-    from cowork_executor.protocol import room_create_payload
+    from chuk_agents_executor.protocol import room_create_payload
 
     p = room_create_payload(
         room_id="r1",
@@ -122,13 +122,13 @@ def test_room_create_payload():
 
 
 def test_room_delete_payload():
-    from cowork_executor.protocol import room_delete_payload
+    from chuk_agents_executor.protocol import room_delete_payload
 
     assert room_delete_payload(room_id="r1") == {"type": "room_delete", "room_id": "r1"}
 
 
 def test_room_rename_payload():
-    from cowork_executor.protocol import room_rename_payload
+    from chuk_agents_executor.protocol import room_rename_payload
 
     assert room_rename_payload(room_id="r1", name="launch v2") == {
         "type": "room_rename",
@@ -138,7 +138,7 @@ def test_room_rename_payload():
 
 
 def test_room_member_payloads():
-    from cowork_executor.protocol import (
+    from chuk_agents_executor.protocol import (
         room_add_member_payload,
         room_remove_member_payload,
     )

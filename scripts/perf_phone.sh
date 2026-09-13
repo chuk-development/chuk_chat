@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Measure CoWork on a real Android phone. Read-only: this script NEVER installs,
+# Measure Agents on a real Android phone. Read-only: this script NEVER installs,
 # uninstalls, force-updates or writes anything on the device. It starts the app
 # that is already there, reads counters back out, and prints numbers.
 #

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/widgets/messenger_context_menu.dart';
-import 'package:cowork/widgets/chat_reply_preview.dart';
+import 'package:chuk_chat/widgets/messenger_context_menu.dart';
+import 'package:chuk_chat/widgets/chat_reply_preview.dart';
 
 void main() {
   testWidgets(

@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     SentFile,
     ToolRegistry,
@@ -23,8 +23,8 @@ from cowork_agent import (
     render_tool_docs,
     sanitize_name,
 )
-from cowork_agent.files_out import MAX_FILE_BYTES
-from cowork_agent.sandbox_io import CHUNK_BYTES
+from chuk_agents_runtime.files_out import MAX_FILE_BYTES
+from chuk_agents_runtime.sandbox_io import CHUNK_BYTES
 
 
 class Sink:

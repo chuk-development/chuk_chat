@@ -1,10 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/services/api_config_base.dart';
+import 'package:chuk_chat/services/api_config_base.dart';
 
 /// The model catalogue (`/v1/models_info`) is fetched from this base URL by
 /// [ModelSelectorPage]. Upstream chuk_chat falls back to a local dev API server
-/// in debug builds; CoWork has none, and its own host does not serve that
+/// in debug builds; Agents has none, and its own host does not serve that
 /// endpoint — so a debug build must reach the account backend like a release
 /// build does, or the model dropdown is empty (bd cowork-zrq).
 void main() {

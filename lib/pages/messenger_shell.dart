@@ -1,10 +1,10 @@
-/// The messenger shell: chuk_chat's root-wrapper layout around CoWork's content.
+/// The messenger shell: chuk_chat's root-wrapper layout around Agents's content.
 ///
 /// ## What is chuk's here, and what is not
 ///
 /// The LAYOUT is `root_wrapper_desktop.dart` from chuk_chat master, rebuilt
-/// with CoWork's content in each slot (plan WS-1, docs/PLAN_2026-09-04_
-/// COWORK_CHUK_ALIGN.md): one `Stack`; the chat area in a `Positioned.fill`
+/// with Agents's content in each slot (plan WS-1, docs/PLAN_2026-09-04_
+/// AGENTS_CHUK_ALIGN.md): one `Stack`; the chat area in a `Positioned.fill`
 /// that is inset by the sidebar and the right panel and hidden with `Offstage`
 /// rather than unmounted; a sidebar that slides in from the left and is faded
 /// out and pointer-blocked when closed; the hamburger anchored top-left at
@@ -16,7 +16,7 @@
 /// the floating top-right row at chuk's anchor. There is no `AppBar`: chuk has
 /// none.
 ///
-/// The CONTENT is CoWork's. The sidebar lists coworkers, not chats
+/// The CONTENT is Agents's. The sidebar lists coworkers, not chats
 /// (`AgentRosterView`, on chuk's sidebar chrome). The two mini-rail slots are
 /// New coworker and Control Rooms. The right panel shows the room list. The
 /// top-right row has up to FOUR buttons — Agent controls, Control Rooms,
@@ -29,9 +29,9 @@
 /// ## Deliberate divergences from chuk
 ///
 /// * **The chat area owns a socket.** chuk's root wrappers hold no state worth
-///   keeping; ours hosts `CoworkThreadView`, which builds the relay controller
+///   keeping; ours hosts `AgentsThreadView`, which builds the relay controller
 ///   and reconnects from the stored pairing. Everything the shell owns lives in
-///   [CoworkShellHost] (`cowork_shell_state.dart`), ABOVE the desktop / phone
+///   [AgentsShellHost] (`agents_shell_state.dart`), ABOVE the desktop / phone
 ///   split, and the thread view is built by one method with one [GlobalKey], so
 ///   a resize across any breakpoint moves it and never rebuilds it.
 /// * **Opening a panel folds the sidebar when they cannot share the width.**
@@ -51,67 +51,67 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/model_selector_page.dart';
-import 'package:cowork/models/app_shell_config.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/pages/about_page.dart';
-import 'package:cowork/pages/desktop_settings_modal.dart';
-import 'package:cowork/pages/settings_page.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_home.dart';
-import 'package:cowork/pages/mobile_cowork_settings_page.dart';
-import 'package:cowork/pages/agent_profile_edit_page.dart';
-import 'package:cowork/pages/automations_page.dart';
-import 'package:cowork/pages/skills_settings_page.dart';
-import 'package:cowork/pages/settings/mcp_connectors_page.dart';
-import 'package:cowork/pages/secrets_settings_page.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
-import 'package:cowork/platform_specific/mobile/mobile_container_transform.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/auth_service.dart';
-import 'package:cowork/pages/agent_profile_page.dart';
-import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_read_marks.dart';
-import 'package:cowork/services/cowork/media_index.dart';
-import 'package:cowork/services/cowork/thread_preview_store.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/services/cowork/browser_presence.dart';
-import 'package:cowork/services/cowork/chat_debug_export.dart';
-import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
-import 'package:cowork/services/cowork/cowork_pairing_restore.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/services/herenow/herenow_store.dart';
-import 'package:cowork/services/mcp/mcp_store.dart';
-import 'package:cowork/services/secrets/secrets_service.dart';
-import 'package:cowork/services/session_recovery.dart';
-import 'package:cowork/services/notifications/cowork_notifications.dart';
-import 'package:cowork/services/notifications/notification_router.dart';
-import 'package:cowork/services/settings/theme_controller.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/agent_control_panel.dart';
-import 'package:cowork/widgets/agent_roster_view.dart';
-import 'package:cowork/widgets/browser_view_page.dart';
-import 'package:cowork/widgets/cowork_thread_header.dart';
-import 'package:cowork/widgets/cowork_thread_view.dart';
-import 'package:cowork/widgets/room_create_sheet.dart';
-import 'package:cowork/widgets/room_list_view.dart';
-import 'package:cowork/widgets/room_members_sheet.dart';
-import 'package:cowork/widgets/room_thread_page.dart';
-import 'package:cowork/widgets/room_thread_view.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/model_selector_page.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/desktop_settings_modal.dart';
+import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_home.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
+import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/auth_service.dart';
+import 'package:chuk_chat/pages/agent_profile_page.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/services/agents/media_index.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/browser_presence.dart';
+import 'package:chuk_chat/services/agents/chat_debug_export.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/services/herenow/herenow_store.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/services/secrets/secrets_service.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
+import 'package:chuk_chat/services/notifications/agents_notifications.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/settings/theme_controller.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/agent_roster_view.dart';
+import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/room_list_view.dart';
+import 'package:chuk_chat/widgets/room_members_sheet.dart';
+import 'package:chuk_chat/widgets/room_thread_page.dart';
+import 'package:chuk_chat/widgets/room_thread_view.dart';
 
-part 'cowork_shell_state.dart';
+part 'agents_shell_state.dart';
 
 /// The messenger: coworkers down the left, the selected thread in the middle,
 /// Control Rooms on the right, the agent's browser as a full-screen route, the
@@ -135,16 +135,16 @@ class MessengerShell extends StatefulWidget {
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
-  /// a fake without a socket. Defaults to a real [CoworkRelayClient] with the
+  /// a fake without a socket. Defaults to a real [AgentsRelayClient] with the
   /// stable persisted identity.
-  final Future<CoworkRelayController> Function()? relayControllerBuilder;
+  final Future<AgentsRelayController> Function()? relayControllerBuilder;
 
   /// Account session provisioned to the executor once paired.
   final AccountSessionSource sessionSource;
 
   /// Persistent trust store: the stable device identity and the stored pairing
   /// that drives code-free reconnect. Built by the state when omitted.
-  final CoworkPairingStore? pairingStore;
+  final AgentsPairingStore? pairingStore;
 
   /// The roster of coworkers. Built by the state when omitted.
   final AgentRosterSource? rosterSource;
@@ -194,7 +194,7 @@ class MessengerShell extends StatefulWidget {
 }
 
 class _MessengerShellState extends State<MessengerShell>
-    with CoworkShellHost, SingleTickerProviderStateMixin {
+    with AgentsShellHost, SingleTickerProviderStateMixin {
   /// Keep the upstream desktop breakpoint; smaller windows use the phone UI.
   static const double _compactBreakpoint = 600;
 
@@ -381,7 +381,7 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   /// On a phone the inbox can cover the thread; a desktop window always shows
-  /// it. Read by the read marks in [CoworkShellHost].
+  /// it. Read by the read marks in [AgentsShellHost].
   @override
   bool get _threadIsOnScreen => !_isPhone || _showThreadOnNarrow;
 
@@ -461,7 +461,7 @@ class _MessengerShellState extends State<MessengerShell>
   /// the user can set or manage about it. Reached from the chat header pill, the
   /// inbox row menu and the desktop roster row.
   @override
-  void _openAgentProfile(CoworkAgent agent) {
+  void _openAgentProfile(AgentsAgent agent) {
     if (_isPhone) {
       final chatKey = agent.id == _selectedAgentId
           ? _selectedThreadKey
@@ -470,7 +470,7 @@ class _MessengerShellState extends State<MessengerShell>
         context,
       ).push<void>(MaterialPageRoute<void>(builder: (_) => page));
       open(
-        MobileCoworkSettingsPage(
+        MobileAgentsSettingsPage(
           agentId: agent.id,
           chatId: chatKey,
           source: _roster,
@@ -530,8 +530,8 @@ class _MessengerShellState extends State<MessengerShell>
         agentId: agent.id,
         source: _roster,
         profiles: _agentProfiles,
-        onRename: (CoworkAgent target) => _openAgentRename(target),
-        onDelete: (CoworkAgent target) => _deleteAgent(target.id),
+        onRename: (AgentsAgent target) => _openAgentRename(target),
+        onDelete: (AgentsAgent target) => _deleteAgent(target.id),
         onOpenControls: _openControlDrawer,
         onOpenBrowser: _browserOpen ? _openBrowserView : null,
       ),
@@ -619,7 +619,7 @@ class _MessengerShellState extends State<MessengerShell>
   Widget _buildDesktopBody(
     BuildContext context,
     double screenWidth,
-    CoworkAgent? agent,
+    AgentsAgent? agent,
   ) {
     final Color iconFg = Theme.of(context).resolvedIconColor;
     final bool isCompactMode = _isCompact;
@@ -746,9 +746,9 @@ class _MessengerShellState extends State<MessengerShell>
     );
   }
 
-  /// chuk's `_buildMiniRail`, with CoWork's two slots: New coworker and Control
+  /// chuk's `_buildMiniRail`, with Agents's two slots: New coworker and Control
   /// Rooms. The agent's browser lives only in the top-right row (cowork-vzm).
-  List<Widget> _buildMiniRail(Color iconFg, CoworkAgent? agent) {
+  List<Widget> _buildMiniRail(Color iconFg, AgentsAgent? agent) {
     final List<Widget> items = [];
     int rowIndex = 0;
     Widget railIcon({
@@ -806,20 +806,20 @@ class _MessengerShellState extends State<MessengerShell>
   /// Copy full chat stays last — chuk's own slot. "Agent's browser" is there
   /// only while the agent has a browser open ([_browserOpen]); the button is
   /// the only way in.
-  List<CoworkThreadAction> _threadActions(CoworkAgent? agent) {
-    return <CoworkThreadAction>[
+  List<AgentsThreadAction> _threadActions(AgentsAgent? agent) {
+    return <AgentsThreadAction>[
       if (agent != null)
-        CoworkThreadAction(
+        AgentsThreadAction(
           icon: Icons.tune,
           onPressed: _openControlDrawer,
           tooltip: 'Agent controls',
         ),
-      CoworkThreadAction(
+      AgentsThreadAction(
         icon: Icons.groups_outlined,
         onPressed: _openRooms,
         tooltip: 'Control Rooms',
       ),
-      CoworkThreadAction(
+      AgentsThreadAction(
         icon: Icons.copy_all_rounded,
         onPressed: _copyFullChat,
         tooltip: 'Copy Debug Chat',
@@ -934,7 +934,7 @@ class _MessengerShellState extends State<MessengerShell>
     });
   }
 
-  Widget _buildPhoneBody(BuildContext context, CoworkAgent? agent) {
+  Widget _buildPhoneBody(BuildContext context, AgentsAgent? agent) {
     final bool showChat = _showThreadOnNarrow && agent != null;
     _drivePush(showChat, MediaQuery.disableAnimationsOf(context));
 
@@ -972,7 +972,7 @@ class _MessengerShellState extends State<MessengerShell>
                   browserAvailable: _browserOpen,
                   onReconnect: () {
                     final view = _threadViewKey.currentState;
-                    if (view is CoworkThreadViewState) {
+                    if (view is AgentsThreadViewState) {
                       unawaited(view.reconnect());
                     }
                   },
@@ -1009,7 +1009,7 @@ class _MessengerShellState extends State<MessengerShell>
           onOpenAccount: _openSettings,
           onOpenProfile: _openAgentProfile,
           onRenameAgent: _openAgentRename,
-          onDeleteAgent: (CoworkAgent target) => _deleteAgent(target.id),
+          onDeleteAgent: (AgentsAgent target) => _deleteAgent(target.id),
           readMarks: _readMarks,
           profiles: _agentProfiles,
           accountLabel: null,

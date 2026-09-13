@@ -1,4 +1,4 @@
-from cowork_agent import StateStore
+from chuk_agents_runtime import StateStore
 
 
 def test_replayed_chat_events_carry_actual_stored_message_time(tmp_path):

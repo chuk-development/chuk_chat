@@ -20,7 +20,7 @@ import subprocess
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     MediaError,
     MediaResult,
     ToolRegistry,

@@ -1,25 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/cowork/thread_preview_store.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 
 import 'mobile_support.dart';
 
 void main() {
   final DateTime now = DateTime(2026, 9, 5, 14, 30);
 
-  List<CoworkAgent> sample() => <CoworkAgent>[
+  List<AgentsAgent> sample() => <AgentsAgent>[
         agent(
           id: 'chief',
           name: 'Chief of Staff',
           role: 'ops',
           running: true,
           lastActivity: now.subtract(const Duration(minutes: 3)),
-          threads: <CoworkThreadInfo>[
-            CoworkThreadInfo(key: 'chief-1', title: 'Morning digest'),
+          threads: <AgentsThreadInfo>[
+            AgentsThreadInfo(key: 'chief-1', title: 'Morning digest'),
           ],
         ),
         agent(
@@ -31,7 +31,7 @@ void main() {
         agent(
           id: 'inbox',
           name: 'Inbox Triage',
-          threads: const <CoworkThreadInfo>[],
+          threads: const <AgentsThreadInfo>[],
         ),
       ];
 
@@ -46,15 +46,15 @@ void main() {
     // Thread keys of this test alone: the preview store is a process-wide
     // singleton, so a key shared with another test would make the result
     // depend on the order the tests run in.
-    final List<CoworkAgent> roster = <CoworkAgent>[
+    final List<AgentsAgent> roster = <AgentsAgent>[
       agent(
         id: 'chief',
         name: 'Chief of Staff',
         role: 'ops',
         running: true,
         lastActivity: now.subtract(const Duration(minutes: 3)),
-        threads: <CoworkThreadInfo>[
-          CoworkThreadInfo(key: 'render-chief', title: 'Morning digest'),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'render-chief', title: 'Morning digest'),
         ],
       ),
       agent(
@@ -62,14 +62,14 @@ void main() {
         name: 'Design',
         brief: 'Proposes UI directions',
         lastActivity: now.subtract(const Duration(days: 1)),
-        threads: <CoworkThreadInfo>[
-          CoworkThreadInfo(key: 'render-design', title: 'default'),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'render-design', title: 'default'),
         ],
       ),
       agent(
         id: 'inbox',
         name: 'Inbox Triage',
-        threads: const <CoworkThreadInfo>[],
+        threads: const <AgentsThreadInfo>[],
       ),
     ];
     // The working coworker has a stored line too — a live run has to outrank
@@ -204,7 +204,7 @@ void main() {
     await pumpPhone(
       tester,
       MobileAgentList(
-        source: rosterWith(const <CoworkAgent>[]),
+        source: rosterWith(const <AgentsAgent>[]),
         onSelect: (_, _) {},
         onAddAgent: () => adds++,
         now: () => now,
@@ -243,10 +243,10 @@ void main() {
   });
 
   test('MobileAgentRow.previewOf', () {
-    CoworkAgent withThread(String key, String title) => agent(
+    AgentsAgent withThread(String key, String title) => agent(
           id: 'a',
           name: 'A',
-          threads: <CoworkThreadInfo>[CoworkThreadInfo(key: key, title: title)],
+          threads: <AgentsThreadInfo>[AgentsThreadInfo(key: key, title: title)],
         );
 
     // A live run outranks everything, including a stored line.
@@ -256,8 +256,8 @@ void main() {
         id: 'a',
         name: 'A',
         running: true,
-        threads: <CoworkThreadInfo>[
-          CoworkThreadInfo(key: 'preview-run', title: 'Digest'),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'preview-run', title: 'Digest'),
         ],
       )),
       'Working…',
@@ -283,8 +283,8 @@ void main() {
         id: 'a',
         name: 'A',
         brief: 'Do X',
-        threads: <CoworkThreadInfo>[
-          CoworkThreadInfo(key: 'preview-brief', title: 'default'),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'preview-brief', title: 'default'),
         ],
       )),
       'Do X',
@@ -294,8 +294,8 @@ void main() {
         id: 'a',
         name: 'A',
         brief: 'Do X',
-        threads: <CoworkThreadInfo>[
-          CoworkThreadInfo(key: 'preview-brief2', title: 'General'),
+        threads: <AgentsThreadInfo>[
+          AgentsThreadInfo(key: 'preview-brief2', title: 'General'),
         ],
       )),
       'Do X',
@@ -304,7 +304,7 @@ void main() {
     // Nothing to say: an empty line, not "No activity yet".
     expect(
       MobileAgentRow.previewOf(
-        agent(id: 'a', name: 'A', threads: const <CoworkThreadInfo>[]),
+        agent(id: 'a', name: 'A', threads: const <AgentsThreadInfo>[]),
       ),
       '',
     );

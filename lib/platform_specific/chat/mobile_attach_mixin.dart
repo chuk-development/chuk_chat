@@ -4,17 +4,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import 'package:cowork/platform_config.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/platform_specific/chat/chat_scroll_mixin.dart';
-import 'package:cowork/platform_specific/chat/composer_menu.dart';
-import 'package:cowork/platform_specific/chat/composer_menu_choices.dart';
-import 'package:cowork/platform_specific/chat/handlers/file_attachment_handler.dart';
-import 'package:cowork/platform_specific/chat/handlers/mobile_workspace_handler.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/services/workspace_storage_service.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_menu.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_menu_choices.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/file_attachment_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// What the plus button offers, and the workspace the chat works in.
 ///

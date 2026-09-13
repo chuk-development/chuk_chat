@@ -2,7 +2,7 @@
 
 import 'dart:convert';
 
-import 'package:cowork/utils/clipboard_text_sanitizer.dart';
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 
 /// Formats the full chat message list as a debug-friendly text string.
 ///
@@ -20,7 +20,7 @@ class DebugChatFormatter {
   static const int _maxToolResultChars = 250;
   static const int _maxAttachmentsChars = 420;
 
-  // The same caps, readable from outside. CoWork's structured export
+  // The same caps, readable from outside. Agents's structured export
   // ([ChatDebugExport]) copies the *same* conversation, so it has to cut the
   // same fields at the same lengths — otherwise one app's debug copy is a
   // handful of kilobytes and the other's is megabytes of the same chat.

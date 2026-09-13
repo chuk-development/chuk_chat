@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:cowork/utils/artifact_tag_parser.dart';
+import 'package:chuk_chat/utils/artifact_tag_parser.dart';
 
 const String toolCallStart = '<tool_call>';
 const String toolCallEnd = '</tool_call>';

@@ -3,17 +3,17 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cowork/models/chat_message.dart';
-import 'package:cowork/models/stored_chat.dart';
-import 'package:cowork/services/chat_storage_mutations.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/chat_storage_sync.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/image_storage_service.dart';
-import 'package:cowork/services/local_chat_cache_service.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/tool_parser.dart';
+import 'package:chuk_chat/models/chat_message.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_storage_sync.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 
@@ -393,13 +393,13 @@ class ChatStorageCrud {
       return;
     }
 
-    // COWORK: the read key, not the live session. On a cold start the app
+    // AGENTS: the read key, not the live session. On a cold start the app
     // paints long before gotrue has its session back off disk, and upstream's
     // `currentUser == null` branch CLEARED the map — it threw away the very
     // rows the thread was about to paint from. The remembered id keeps the
     // cache readable; with no id at all the map is left exactly as it is,
     // because an empty map is not the same statement as "no chats".
-    final userId = await CoworkChatStore.resolveCacheUserId();
+    final userId = await AgentsChatStore.resolveCacheUserId();
     if (userId == null) return;
 
     try {

@@ -1,6 +1,6 @@
 # Auftrag fuer Session cowork-terminal: interaktive Shell (tmux), Hintergrund-Befehle, Full-Access-Sandbox
 
-Repo /home/user/git/cowork, Branch cowork, geteilter Working-Tree, KEIN Worktree.
+Repo /home/user/git/cowork, Branch agents, geteilter Working-Tree, KEIN Worktree.
 Koordinator: Session `cowork-76`. ZUERST per SendMessage bei `cowork-76` melden mit deinem
 Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowork-76.
 
@@ -10,9 +10,9 @@ Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowor
 2. docs/WIRE_CONTRACT.md komplett, besonders die Sektionen "Tool events and timestamps", "Persisted ... events",
    "Secrets", "Automations".
 3. docs/HANDOVER_2026-09-05_PYTHON.md, docs/HANDOVER_2026-09-05_REASONING_TOOLFRAMES.md.
-4. Python: agent/src/cowork_agent/{tools.py (run_command/run_python ueber env.run_bash), environment.py,
-   registry.py, prompt.py}, executor/src/cowork_executor/{executor.py (_env_shim, tool_event_observer),
-   environment.py, sandbox/ (base/local/docker)}, host/src/cowork_host/host.py. Wie der Docker-Sandbox gebaut
+4. Python: agent/src/chuk_agents_runtime/{tools.py (run_command/run_python ueber env.run_bash), environment.py,
+   registry.py, prompt.py}, executor/src/chuk_agents_executor/{executor.py (_env_shim, tool_event_observer),
+   environment.py, sandbox/ (base/local/docker)}, host/src/chuk_agents_host/host.py. Wie der Docker-Sandbox gebaut
    wird (Image, vnc-up.sh, Dockerfile im Repo suchen).
 
 ## Was gebaut wird (User-Wunsch, sinngemaess)
@@ -32,7 +32,7 @@ Kurzfassung an cowork-76 vor dem Code)
   zusaetzlich `background: true` → startet detached (nohup/setsid oder eigene tmux-Session), gibt sofort {job_id}
   zurueck; `job_status(job_id)`, `job_output(job_id, tail=200)`, `job_cancel(job_id)`.
 - Weckruf bei Job-Ende: der Abschluss eines Hintergrund-Jobs weckt den Agenten. Mechanismus: derselbe
-  Trigger-Kanal wie cowork-94's Automations (cowork_hooks.trigger / triggers.jsonl, Host-Watchdog) — abstimmen
+  Trigger-Kanal wie cowork-94's Automations (agents_hooks.trigger / triggers.jsonl, Host-Watchdog) — abstimmen
   mit cowork-94, EIN Mechanismus; Semantik: laeuft der Run der Session noch → das Ereignis wird als Tool-Ergebnis
   nachgereicht (Loop-Seam: 'pending events' vor der naechsten Modell-Runde); ist der Run fertig → neuer Task in
   derselben Session "[job <id> finished: exit <code>]\n<letzte 50 Zeilen>" + Notification (Notifier, while_away).
@@ -62,7 +62,7 @@ beantworten; ein Hintergrund-Job `sleep 20 && echo done` weckt den Agenten (runs
 
 ## Grenzen / Regeln (hart)
 - Kein Commit, nie, ausser der User gibt es DIR direkt in dieser Session.
-- Deine Dateien: neu agent/src/cowork_agent/shell_tools.py, executor/src/cowork_executor/shell.py (tmux-Treiber,
+- Deine Dateien: neu agent/src/chuk_agents_runtime/shell_tools.py, executor/src/chuk_agents_executor/shell.py (tmux-Treiber,
   Jobs), skills/terminal/SKILL.md, Tests dazu; Dockerfile/Image nur additiv (tmux). In bestehenden Dateien
   (tools.py, registry.py, runtime.py, executor.py, protocol.py, sandbox/*, host.py, loop.py fuer die Pending-Events-
   Seam, prompt.py) nur additive Hunks mit Ansage an cowork-76 VOR dem Edit; parallel arbeiten cowork-26 (Secrets:

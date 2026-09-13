@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 class _Harness extends StatefulWidget {
   const _Harness({super.key, required this.chat});

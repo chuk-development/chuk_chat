@@ -3,22 +3,22 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/app_shell_config.dart';
-import 'package:cowork/services/app_theme_service.dart';
-import 'package:cowork/theme/theme_presets.dart';
-import 'package:cowork/utils/chat_font_resolver.dart';
-import 'package:cowork/utils/color_extensions.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/theme/theme_presets.dart';
+import 'package:chuk_chat/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class ThemePage extends StatefulWidget {
   final AppShellConfig config;

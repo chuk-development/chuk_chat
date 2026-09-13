@@ -14,20 +14,20 @@
 ///    host, saying "Active now" would send the reader looking for an answer
 ///    that cannot arrive.
 ///
-/// Every one of those comes from something the app observes: [CoworkAgent
-/// .activity], the run the [CoworkRunLedger] tracks for the thread, and the
+/// Every one of those comes from something the app observes: [AgentsAgent
+/// .activity], the run the [AgentsRunLedger] tracks for the thread, and the
 /// bound transport's own state. Nothing here invents a status.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
 
 /// What one running tool is called, in words a reader recognises. The host's
 /// tool names are ids (`read_file`, `mcp__playwright__browser_navigate`); this
@@ -50,7 +50,7 @@ String humanToolLabel(String rawName) {
 /// (the caller then writes "Active now").
 ///
 /// [run] is the ledger's record for this coworker's thread, if any.
-String? workInProgressLabel(CoworkAgent agent, CoworkRun? run) {
+String? workInProgressLabel(AgentsAgent agent, AgentsRun? run) {
   if (agent.activity == AgentActivity.scheduled) return 'Scheduled';
   final bool running = agent.running || (run?.running ?? false);
   if (!running) return null;
@@ -156,39 +156,39 @@ class AgentStatusLine extends StatelessWidget {
     this.link,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
 
   /// The thread whose run is read for the work in progress. Null falls back to
   /// the coworker's own `running` flag.
   final String? sessionKey;
 
   /// Injectable for tests; defaults to the process-wide ledger.
-  final CoworkRunLedger? ledger;
+  final AgentsRunLedger? ledger;
 
   final double fontSize;
 
   /// The bound transport, for the reachability half of the line. Injectable for
   /// tests; defaults to the process-wide link.
-  final CoworkRelayLink? link;
+  final AgentsRelayLink? link;
 
   @override
   Widget build(BuildContext context) {
-    final CoworkRunLedger source = ledger ?? CoworkRunLedger.instance;
-    final CoworkRelayLink transport = link ?? CoworkRelayLink.instance;
+    final AgentsRunLedger source = ledger ?? AgentsRunLedger.instance;
+    final AgentsRelayLink transport = link ?? AgentsRelayLink.instance;
     return AnimatedBuilder(
       animation: source,
       builder: (BuildContext context, Widget? _) =>
-          ValueListenableBuilder<CoworkRelayController?>(
+          ValueListenableBuilder<AgentsRelayController?>(
             valueListenable: transport.controller,
             builder:
-                (BuildContext context, CoworkRelayController? controller, _) {
+                (BuildContext context, AgentsRelayController? controller, _) {
                   if (controller == null) {
                     return _line(context, source, paired: false);
                   }
-                  return ValueListenableBuilder<CoworkRelayState>(
+                  return ValueListenableBuilder<AgentsRelayState>(
                     valueListenable: controller.state,
                     builder:
-                        (BuildContext context, CoworkRelayState state, _) =>
+                        (BuildContext context, AgentsRelayState state, _) =>
                             _line(context, source, paired: state.isPaired),
                   );
                 },
@@ -198,12 +198,12 @@ class AgentStatusLine extends StatelessWidget {
 
   Widget _line(
     BuildContext context,
-    CoworkRunLedger source, {
+    AgentsRunLedger source, {
     required bool paired,
   }) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final String key = sessionKey ?? _defaultSessionKey();
-    final CoworkRun? run = key.isEmpty ? null : source.runFor(key);
+    final AgentsRun? run = key.isEmpty ? null : source.runFor(key);
     final String? work = workInProgressLabel(agent, run);
     final bool working =
         agent.activity == AgentActivity.working || (run?.running ?? false);

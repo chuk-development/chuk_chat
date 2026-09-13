@@ -2,21 +2,21 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
 
-class _Relay implements CoworkRelayController, CoworkDocumentsControl {
+class _Relay implements AgentsRelayController, AgentsDocumentsControl {
   @override
-  final ValueNotifier<CoworkRelayState> state = ValueNotifier(
-    const CoworkRelayState(phase: CoworkRelayPhase.paired),
+  final ValueNotifier<AgentsRelayState> state = ValueNotifier(
+    const AgentsRelayState(phase: AgentsRelayPhase.paired),
   );
-  final events = StreamController<CoworkRelayInbound>.broadcast(sync: true);
+  final events = StreamController<AgentsRelayInbound>.broadcast(sync: true);
   @override
-  Stream<CoworkRelayInbound> get inbound => events.stream;
+  Stream<AgentsRelayInbound> get inbound => events.stream;
   final requests = <String?>[];
   int agentListRequests = 0;
   @override
@@ -27,7 +27,7 @@ class _Relay implements CoworkRelayController, CoworkDocumentsControl {
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
   void send(Map<String, dynamic> payload) => events.add(
-    CoworkRelayDocuments({'session_key': 'panel-test', ...payload}),
+    AgentsRelayDocuments({'session_key': 'panel-test', ...payload}),
   );
 }
 
@@ -70,7 +70,7 @@ void main() {
     // `setMockInitialValues` swaps the mock store but leaves the plugin's own
     // static `getInstance()` state behind, so a test that is the first to ask
     // for preferences from inside a `pumpAndSettle` — the panel does, through
-    // `CoworkChatStore.resolveCacheUserId()` — can sit on a future that never
+    // `AgentsChatStore.resolveCacheUserId()` — can sit on a future that never
     // completes while the pump loop runs. `_loading` then stays true, the
     // CircularProgressIndicator schedules a frame forever, and
     // `pumpAndSettle` times out in `mount`. That is why this file passed test
@@ -78,7 +78,7 @@ void main() {
     // set itself, not from whatever the last one left.
     await SharedPreferences.getInstance();
     await ChatStorageService.reset();
-    await CoworkChatStore.reset();
+    await AgentsChatStore.reset();
   });
   Future<_Relay> mount(
     WidgetTester tester, {
@@ -212,7 +212,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('A-2'), findsOneWidget);
       relay.events.add(
-        CoworkRelayFile(
+        AgentsRelayFile(
           name: 'A.json',
           mimeType: 'application/json',
           declaredSize: 0,
@@ -265,11 +265,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('B-1'), findsOneWidget);
       expect(find.text('A-1'), findsNothing);
-      relay.state.value = const CoworkRelayState(
-        phase: CoworkRelayPhase.closed,
+      relay.state.value = const AgentsRelayState(
+        phase: AgentsRelayPhase.closed,
       );
-      relay.state.value = const CoworkRelayState(
-        phase: CoworkRelayPhase.paired,
+      relay.state.value = const AgentsRelayState(
+        phase: AgentsRelayPhase.paired,
       );
       await tester.pump();
       expect(relay.requests.sublist(relay.requests.length - 2), [null, 'B']);
@@ -304,7 +304,7 @@ void main() {
     // What the agent's chat_document tool actually pushes on every write: a
     // file frame carrying the whole new document.
     relay.events.add(
-      CoworkRelayFile(
+      AgentsRelayFile(
         name: 'A.json',
         mimeType: 'application/vnd.cowork.document+json',
         declaredSize: 0,
@@ -414,10 +414,10 @@ void main() {
     expect(find.text('this coworker · Documents'), findsOneWidget);
 
     relay.events.add(
-      const CoworkRelayAgentList(
+      const AgentsRelayAgentList(
         agents: [
-          CoworkHostAgentName(agentId: 'panel-test', name: 'Nova'),
-          CoworkHostAgentName(agentId: 'someone-else', name: 'Rex'),
+          AgentsHostAgentName(agentId: 'panel-test', name: 'Nova'),
+          AgentsHostAgentName(agentId: 'someone-else', name: 'Rex'),
         ],
       ),
     );

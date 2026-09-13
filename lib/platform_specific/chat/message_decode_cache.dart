@@ -1,9 +1,9 @@
 // lib/platform_specific/chat/message_decode_cache.dart
 import 'dart:convert';
 
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/widgets/message_bubble.dart' show DocumentAttachment;
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart' show DocumentAttachment;
 
 /// Decodes the JSON side-cars a stored message carries — its images, its file
 /// attachments, its tool calls, its content blocks — and remembers the result.

@@ -4,17 +4,17 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter_map/flutter_map.dart' as fm;
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/utils/input_validator.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
 
 class FullscreenMapPage extends StatefulWidget {
   final LatLng center;

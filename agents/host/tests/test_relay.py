@@ -10,8 +10,8 @@ import time
 import pytest
 from websockets.sync.client import connect
 
-from cowork_host import LocalRelay
-from cowork_host.protocol import frame_envelope, join_message
+from chuk_agents_host import LocalRelay
+from chuk_agents_host.protocol import frame_envelope, join_message
 
 
 @pytest.fixture()

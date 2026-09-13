@@ -7,9 +7,9 @@ and every hit comes back as a bounded anchored window with bookends.
 
 from __future__ import annotations
 
-from cowork_agent import LocalEnvironment, MockModelClient, ToolRegistry, build_runtime
-from cowork_agent.search import sanitize_match, segment_cjk
-from cowork_agent.state import StateStore
+from chuk_agents_runtime import LocalEnvironment, MockModelClient, ToolRegistry, build_runtime
+from chuk_agents_runtime.search import sanitize_match, segment_cjk
+from chuk_agents_runtime.state import StateStore
 
 
 def _store(tmp_path, name: str = "s.db") -> StateStore:

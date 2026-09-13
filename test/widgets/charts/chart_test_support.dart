@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 
 /// Loads Roboto from the SDK so a golden shows real glyphs instead of the
 /// Ahem boxes the test font draws.

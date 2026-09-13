@@ -53,7 +53,7 @@ Wire that as each member agent's executor connects:
 
 ```python
 # on the host, when agent <agent_id>'s executor is running and reachable:
-from cowork_executor import make_room_task_sender
+from chuk_agents_executor import make_room_task_sender
 sender = make_room_task_sender(controller, session_key=f"room:{room_id}")
 room_binding.register(agent_id, sender)          # -> member is now online
 # on disconnect:
@@ -82,8 +82,8 @@ deadlock. So each room member needs **its own executor** (its own loopback +
 2. Register each with `make_room_task_sender(...) → room_binding.register(...)`.
    **Done:** `RoomAgentPool.ensure_member`, per room, with session key
    `room:<room_id>`.
-3. **Prod relay** — point CoWork at the prod `relay-crossreplica` endpoint
-   (`docs/COWORK_AGENT_PLATFORM_PLAN.md` §14; the chat-side fix already shipped as
+3. **Prod relay** — point Agents at the prod `relay-crossreplica` endpoint
+   (`docs/AGENTS_AGENT_PLATFORM_PLAN.md` §14; the chat-side fix already shipped as
    `d0732c1`). This is the "can take chat down" deploy — do it with a human.
 
 ## Verify without prod first — done

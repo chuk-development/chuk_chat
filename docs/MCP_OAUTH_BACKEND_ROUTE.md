@@ -1,6 +1,6 @@
 # MCP OAuth bridge — the backend routes we need (§10)
 
-The agent side is built and tested (`agent/src/cowork_agent/oauth_bridge.py`,
+The agent side is built and tested (`agent/src/chuk_agents_runtime/oauth_bridge.py`,
 `agent/tests/test_oauth_bridge.py`). It talks to three backend surfaces. **None
 of them exists today.** This document is the contract; implement it and the
 client needs no change.
@@ -178,7 +178,7 @@ consumed.
 The client currently exchanges the `code` for a token itself
 (`oauth_bridge.http_token_exchange`), which is the one place a third-party token
 lives in the sandbox — documented and bounded in
-`agent/src/cowork_agent/oauth_bridge.py` (memory only, redacted `repr`, never
+`agent/src/chuk_agents_runtime/oauth_bridge.py` (memory only, redacted `repr`, never
 journaled, dies with the process).
 
 If the backend does the exchange and stores the token in the vault, the sandbox

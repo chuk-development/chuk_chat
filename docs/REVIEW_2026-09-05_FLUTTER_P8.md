@@ -1,13 +1,13 @@
 # Review 2026-09-05 — Flutter side, pass P8 (bead cowork-4wd)
 
 Reviewer: Opus 5 subagent (session cowork-f7). Read-only pass over the working
-tree on branch `cowork`, with the uncommitted work of sessions a4, 9e, 47, 84,
+tree on branch `agents`, with the uncommitted work of sessions a4, 9e, 47, 84,
 b5, c6, 5c and f7 in place. No file under `app/` was changed; this document is
 the only output.
 
 ## Scope
 
-IN: everything under `app/lib` that is CoWork's own code.
+IN: everything under `app/lib` that is Agents's own code.
 
 OUT (not reviewed; a finding on one of these would be marked "upstream"):
 `app/lib/third_party/**`, `app/lib/widgets/browser_view_page.dart`, and every
@@ -37,14 +37,14 @@ Fixed and tested: F1, F2, F3, F4, F5, F6, F7, F8, F9, F13, F14, F15. Open: F10,
 F12 (services/mcp, cowork-47's files, LOW), F11 (ledger, cowork-84). Every
 fix carries a test in the file named under its **Status** line; all touched
 suites are green (loader 25, websocket_chat_service 18, relay_client 51,
-thread_view 25, thread_view_notifications 3, cowork_notifications 7,
+thread_view 25, thread_view_notifications 3, agents_notifications 7,
 tool_card_parity 5, run_ledger 17, messenger_shell 21). Files edited by the
-fixer: `services/cowork/cowork_replay_loader.dart`,
-`services/websocket_chat_service.dart`, `services/cowork/cowork_relay_client.dart`,
-`widgets/cowork_thread_view.dart`, `services/notifications/run_notifications.dart`,
-`services/notifications/cowork_notifications.dart` (additive `runId`).
+fixer: `services/agents/agents_replay_loader.dart`,
+`services/websocket_chat_service.dart`, `services/agents/agents_relay_client.dart`,
+`widgets/agents_thread_view.dart`, `services/notifications/run_notifications.dart`,
+`services/notifications/agents_notifications.dart` (additive `runId`).
 
-Side note for cowork-84: `services/cowork/cowork_run_ledger.dart` contains
+Side note for cowork-84: `services/agents/agents_run_ledger.dart` contains
 four literal NUL bytes inside a doc comment (`"<sessionKey>\0<subagentId>"`,
 around byte 8623); the analyzer accepts it, but `grep` treats the file as
 binary. Write the separator as `\u0000` in the comment.
@@ -53,21 +53,21 @@ binary. Write the separator as `\u0000` in the comment.
 
 | id | severity | file | one line | owner |
 |---|---|---|---|---|
-| F1 | HIGH | `app/lib/services/cowork/cowork_replay_loader.dart` | one global `_activeSession` + implicit drafts: a second replay folds thread A's rows into thread B and commits them as a full replace | 47 / 9e |
-| F2 | HIGH | `app/lib/services/cowork/cowork_replay_loader.dart` | a delta replay whose local cache read comes back empty truncates the thread to the delta and still advances the cursor | 47 / a4 |
+| F1 | HIGH | `app/lib/services/agents/agents_replay_loader.dart` | one global `_activeSession` + implicit drafts: a second replay folds thread A's rows into thread B and commits them as a full replace | 47 / 9e |
+| F2 | HIGH | `app/lib/services/agents/agents_replay_loader.dart` | a delta replay whose local cache read comes back empty truncates the thread to the delta and still advances the cursor | 47 / a4 |
 | F3 | HIGH | `app/lib/services/websocket_chat_service.dart` | `_isReplay` does not know `subagent` / `file` / `approval_request`, so replayed cards enter the live run and a replayed file is written to the blob store again | 47 / 9e |
-| F4 | MEDIUM | `app/lib/services/cowork/cowork_relay_client.dart` | `_onSocketDone` never clears `_socket`, so the scheduler's `reconnectHost` always throws and cowork-2n1's wake-up adoption never runs | 9e / 47 |
-| F5 | MEDIUM | `app/lib/services/cowork/cowork_relay_client.dart` | the `account_session_rotated` fallback provisions the host with `user_id: ""` | 47 / 9e |
-| F6 | MEDIUM | `app/lib/widgets/cowork_thread_view.dart` | `_reconnect()` calls `setState` after an await with no `mounted` check — the auto-reconnect timer can hit a disposed state | 47 |
+| F4 | MEDIUM | `app/lib/services/agents/agents_relay_client.dart` | `_onSocketDone` never clears `_socket`, so the scheduler's `reconnectHost` always throws and cowork-2n1's wake-up adoption never runs | 9e / 47 |
+| F5 | MEDIUM | `app/lib/services/agents/agents_relay_client.dart` | the `account_session_rotated` fallback provisions the host with `user_id: ""` | 47 / 9e |
+| F6 | MEDIUM | `app/lib/widgets/agents_thread_view.dart` | `_reconnect()` calls `setState` after an await with no `mounted` check — the auto-reconnect timer can hit a disposed state | 47 |
 | F7 | MEDIUM | `app/lib/services/notifications/run_notifications.dart` | `consumeForSession` is once-per-launch per thread, so the second "answer ready" row of a session is never closed | c6 |
-| F8 | MEDIUM | `app/lib/widgets/cowork_thread_view.dart`, `cowork_replay_loader.dart` | `clearAnswerReady` is never called, so every later loader notification cancels the thread's toast | c6 |
-| F9 | MEDIUM | `app/lib/widgets/cowork_thread_view.dart` | a live `approval_request` prompts on whatever thread is on screen; the frame carries no session key | 9e |
+| F8 | MEDIUM | `app/lib/widgets/agents_thread_view.dart`, `agents_replay_loader.dart` | `clearAnswerReady` is never called, so every later loader notification cancels the thread's toast | c6 |
+| F9 | MEDIUM | `app/lib/widgets/agents_thread_view.dart` | a live `approval_request` prompts on whatever thread is on screen; the frame carries no session key | 9e |
 | F10 | LOW | `app/lib/services/mcp/mcp_service.dart` | an `mcp_credentials` frame without `expires_at` erases the expiry the device knew | 47 |
-| F11 | LOW | `app/lib/services/cowork/cowork_run_ledger.dart` | `recordTool` fills an open line that has a *different* call id when the names match | 84 |
+| F11 | LOW | `app/lib/services/agents/agents_run_ledger.dart` | `recordTool` fills an open line that has a *different* call id when the names match | 84 |
 | F12 | LOW | `app/lib/services/mcp/mcp_redirect_io.dart` | the loopback listener completes on the first request of any path, code or no code | 47 |
-| F13 | LOW | `app/lib/services/cowork/cowork_replay_loader.dart` | the `user` case has no `replay` guard, against the file's own stated invariant | 47 |
-| F14 | LOW | `app/lib/services/websocket_chat_service.dart`, `cowork_thread_view.dart` | two `run_ack` frames are sent for every live `done` | 47 / c6 |
-| F15 | LOW | `app/lib/services/cowork/cowork_relay_client.dart` | doc drift: `CoworkRelayReasoning` still says nothing emits it on the real wire | b5 / 47 |
+| F13 | LOW | `app/lib/services/agents/agents_replay_loader.dart` | the `user` case has no `replay` guard, against the file's own stated invariant | 47 |
+| F14 | LOW | `app/lib/services/websocket_chat_service.dart`, `agents_thread_view.dart` | two `run_ack` frames are sent for every live `done` | 47 / c6 |
+| F15 | LOW | `app/lib/services/agents/agents_relay_client.dart` | doc drift: `AgentsRelayReasoning` still says nothing emits it on the real wire | b5 / 47 |
 
 ---
 
@@ -75,15 +75,15 @@ binary. Write the separator as `\u0000` in the comment.
 
 **Status: FIXED (f7).** `expect` no longer moves the active session while an answer is streaming; the `run_state` header (or, for a header-less host, the order of requests) decides which draft a frame folds into; a second request for the same thread queues behind the answer in flight. Tests: loader "two overlapping replay requests land in their own threads", "a second request for the same thread queues behind the answer in flight".
 
-`app/lib/services/cowork/cowork_replay_loader.dart:169-173`, `:352-355`,
-`:405-441`; `app/lib/widgets/cowork_thread_view.dart:329-368`;
-`app/lib/pages/cowork_shell_state.dart:188-196`.
+`app/lib/services/agents/agents_replay_loader.dart:169-173`, `:352-355`,
+`:405-441`; `app/lib/widgets/agents_thread_view.dart:329-368`;
+`app/lib/pages/agents_shell_state.dart:188-196`.
 
 The loader routes every replayed frame through one mutable pointer:
 
 ```dart
 _Draft _draftFor() {
-  final key = _activeSession ?? CoworkRelayLink.instance.sessionKey.value;
+  final key = _activeSession ?? AgentsRelayLink.instance.sessionKey.value;
   return _drafts[key] ??= _Draft(key);
 }
 ```
@@ -149,7 +149,7 @@ Fix: make the session explicit instead of ambient.
 
 **Status: FIXED (f7).** A delta whose local read comes back empty is treated as a cache miss: nothing is written, the cursor is forgotten (`invalidateCursor`) and `takeReplayWanted` tells the thread view to ask for the whole thread again (`_onLoaderChanged` → `_requestReplay`). Test: loader "a delta that finds no local rows forgets the cursor instead of truncating the thread".
 
-`app/lib/services/cowork/cowork_replay_loader.dart:416-441` and `:444-455`.
+`app/lib/services/agents/agents_replay_loader.dart:416-441` and `:444-455`.
 
 ```dart
 var rows = draft.rows;
@@ -169,8 +169,8 @@ Future<List<Map<String, String>>> _cachedRows(String session) async {
   ...
 ```
 
-`ChatStorageService.loadFullChat` → `CoworkChatStore.loadThread`
-(`app/lib/services/storage/cowork_chat_store.dart:201-211`) returns null on any
+`ChatStorageService.loadFullChat` → `AgentsChatStore.loadThread`
+(`app/lib/services/storage/agents_chat_store.dart:201-211`) returns null on any
 of: no signed-in user, a SQLite read that threw (the `catch` returns `existing`,
 which is null), a cloud row that cannot be fetched because
 `supabase/migrations/20260905000000_cowork_chats.sql` has not been run yet (the
@@ -182,7 +182,7 @@ host sends the 4 new rows, the local read fails for any of the reasons above,
 and `_commit` writes **4 rows** over the thread and moves the cursor to the
 newest `mid`. The 200 rows are gone from the cache, and the host will never
 re-send them because the cursor is past them. The only recovery is the removal
-watcher in `cowork_chat_store.dart:591-601`, which fires only when the sync
+watcher in `agents_chat_store.dart:591-601`, which fires only when the sync
 removes the chat from `chatsById` — not for a transient read failure.
 
 Fix: an empty local read is a cache miss, not an empty thread. In `_commit`:
@@ -207,40 +207,40 @@ call `_requestReplay` from the loader's own listener).
 
 ### F3 — HIGH — replayed `subagent` / `file` / `approval_request` frames enter the live run
 
-**Status: FIXED (f7).** `_isReplay` covers `CoworkRelaySubagent`, `CoworkRelayFile`, `CoworkRelayApprovalRequest`. Test: websocket_chat_service "replayed frames and user turns never enter a live run" extended with the three types (tool calls AND blocks stay empty).
+**Status: FIXED (f7).** `_isReplay` covers `AgentsRelaySubagent`, `AgentsRelayFile`, `AgentsRelayApprovalRequest`. Test: websocket_chat_service "replayed frames and user turns never enter a live run" extended with the three types (tool calls AND blocks stay empty).
 
 `app/lib/services/websocket_chat_service.dart:375-382`, and the handlers at
 `:182-196`.
 
 ```dart
-static bool _isReplay(CoworkRelayInbound event) => switch (event) {
-      CoworkRelayUser() => true,
-      CoworkRelayDelta(:final replay) => replay,
-      CoworkRelayReasoning(:final replay) => replay,
-      CoworkRelayTool(:final replay) => replay,
-      CoworkRelayDone(:final isReplay) => isReplay,
+static bool _isReplay(AgentsRelayInbound event) => switch (event) {
+      AgentsRelayUser() => true,
+      AgentsRelayDelta(:final replay) => replay,
+      AgentsRelayReasoning(:final replay) => replay,
+      AgentsRelayTool(:final replay) => replay,
+      AgentsRelayDone(:final isReplay) => isReplay,
       _ => false,
     };
 ```
 
-Bead cowork-266 gave `CoworkRelaySubagent`, `CoworkRelayFile` and
-`CoworkRelayApprovalRequest` a `replay` flag
-(`cowork_relay_client.dart:369-380`, `:544-556`, `:686-696`), and the replay
+Bead cowork-266 gave `AgentsRelaySubagent`, `AgentsRelayFile` and
+`AgentsRelayApprovalRequest` a `replay` flag
+(`agents_relay_client.dart:369-380`, `:544-556`, `:686-696`), and the replay
 loader honours it. The adapter does not: `_ => false` sends all three straight
 into `handle()`, which does
 
 ```dart
-case CoworkRelaySubagent(): ledger.subagent(...);
-case CoworkRelayFile():     await ledger.file(sessionKey, event);
-case CoworkRelayApprovalRequest(): ledger.approval(sessionKey, event);
+case AgentsRelaySubagent(): ledger.subagent(...);
+case AgentsRelayFile():     await ledger.file(sessionKey, event);
+case AgentsRelayApprovalRequest(): ledger.approval(sessionKey, event);
 ```
 
 `ledger.file` re-encrypts the bytes and writes them into the blob store again
-(`cowork_run_ledger.dart:399-414`) and appends a `sandboxArtifact` block to the
+(`agents_run_ledger.dart:399-414`) and appends a `sandboxArtifact` block to the
 run that is open right now. The adapter's stream is open exactly while a run is
 in flight, and a replay does reach it in that window: the relay client asks for
 a replay on every (re)connect and the thread view calls `_requestReplay()` on
-every `paired` transition (`cowork_thread_view.dart:334-345`), so a socket that
+every `paired` transition (`agents_thread_view.dart:334-345`), so a socket that
 flaps during a run — a host restart, a laptop wake — replays the whole thread
 into the live turn. Result: yesterday's child-agent cards and yesterday's file
 attached to today's answer, a duplicate copy of every replayed file in the blob
@@ -252,9 +252,9 @@ delta / reasoning / tool / user / done.
 Fix, one line each:
 
 ```dart
-CoworkRelaySubagent(:final replay) => replay,
-CoworkRelayFile(:final replay) => replay,
-CoworkRelayApprovalRequest(:final replay) => replay,
+AgentsRelaySubagent(:final replay) => replay,
+AgentsRelayFile(:final replay) => replay,
+AgentsRelayApprovalRequest(:final replay) => replay,
 ```
 
 and extend the "replayed frames and user turns never enter a live run" test
@@ -266,14 +266,14 @@ and extend the "replayed frames and user turns never enter a live run" test
 
 **Status: FIXED (f7).** `_onSocketDone` cancels the subscription and nulls `_socket`; `_reattach` also returns while a dial is in progress. Test: relay_client "after a host drop the scheduler's reconnectHost dials again instead of refusing with Already connected".
 
-`app/lib/services/cowork/cowork_relay_client.dart:2167-2184`, `:1086-1096`,
+`app/lib/services/agents/agents_relay_client.dart:2167-2184`, `:1086-1096`,
 `:1293`; `app/lib/services/session_refresh_scheduler.dart:116-131`.
 
 `_onSocketDone` moves the phase to `closed` but never clears the socket:
 
 ```dart
 if (_state.value.isPaired) {
-  _set(const CoworkRelayState(phase: CoworkRelayPhase.closed, detail: 'Disconnected'));
+  _set(const AgentsRelayState(phase: AgentsRelayPhase.closed, detail: 'Disconnected'));
 }
 ```
 
@@ -321,7 +321,7 @@ already, otherwise two dials can race.
 
 **Status: FIXED (f7).** `_adoptRotatedSession` stays silent when the adopted session has no `userId` (no current session and no adopter). Test: relay_client "account_session_rotated with no session to name the user is not acked with an empty user_id". `ExecutorProvisioning.provision` was not changed (services/**, not in scope of this pass).
 
-`app/lib/services/cowork/cowork_relay_client.dart:1479-1494`;
+`app/lib/services/agents/agents_relay_client.dart:1479-1494`;
 `app/lib/services/executor_provisioning.dart:66-80`.
 
 ```dart
@@ -362,7 +362,7 @@ and in `ExecutorProvisioning.provision`, `if (session.userId.isNotEmpty) 'user_i
 
 **Status: FIXED (f7).** `_reconnect` bails when `!mounted`. Test: thread_view "a view disposed while its reconnect rebuilds the transport stays quiet".
 
-`app/lib/widgets/cowork_thread_view.dart:395-401` and `:406-426`.
+`app/lib/widgets/agents_thread_view.dart:395-401` and `:406-426`.
 
 ```dart
 _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
@@ -394,7 +394,7 @@ Fix: `if (!mounted || controller == null || stored == null || _busy) return;`.
 
 ### F7 — MEDIUM — a thread's second "answer ready" row is never consumed
 
-**Status: FIXED (f7, with F8).** The loader remembers the `run_id` of the `while_away` done (`answerReadyRunFor`); the thread view passes it to `CoworkNotifications.onAnswerReplayed(sessionKey, runId:)` (additive parameter); `RunNotifications.consumeForSession` dedups per `session/run_id` when the run is known, per session otherwise (old host). Tests: cowork_notifications "a second run for the same coworker is consumed too; the same run only once"; loader asserts `answerReadyRunFor`.
+**Status: FIXED (f7, with F8).** The loader remembers the `run_id` of the `while_away` done (`answerReadyRunFor`); the thread view passes it to `AgentsNotifications.onAnswerReplayed(sessionKey, runId:)` (additive parameter); `RunNotifications.consumeForSession` dedups per `session/run_id` when the run is known, per session otherwise (old host). Tests: agents_notifications "a second run for the same coworker is consumed too; the same run only once"; loader asserts `answerReadyRunFor`.
 
 `app/lib/services/notifications/run_notifications.dart:36`, `:48-51`.
 
@@ -429,28 +429,28 @@ Future<void> consumeForSession(String sessionKey) => _consume(sessionKey: sessio
 
 ### F8 — MEDIUM — `answerReadyFor` is never cleared, so later toasts for the thread are cancelled on sight
 
-**Status: FIXED (f7).** `_onLoaderChanged` clears the flag before acting (`clearAnswerReady` notifies; re-entry sees it down). Test: cowork_thread_view_notifications third case extended — a later `run_state` neither consumes nor cancels again.
+**Status: FIXED (f7).** `_onLoaderChanged` clears the flag before acting (`clearAnswerReady` notifies; re-entry sees it down). Test: agents_thread_view_notifications third case extended — a later `run_state` neither consumes nor cancels again.
 
-`app/lib/services/cowork/cowork_replay_loader.dart:185-189`;
-`app/lib/widgets/cowork_thread_view.dart:612-621`.
+`app/lib/services/agents/agents_replay_loader.dart:185-189`;
+`app/lib/widgets/agents_thread_view.dart:612-621`.
 
 ```dart
 void _onLoaderChanged() {
   if (!mounted) return;
   if (_loader.answerReadyFor(widget.threadKey)) {
-    unawaited(CoworkNotifications.instance.onAnswerReplayed(widget.threadKey));
+    unawaited(AgentsNotifications.instance.onAnswerReplayed(widget.threadKey));
   }
   _syncRevision();
 }
 ```
 
 `clearAnswerReady` exists on the loader and is called by nothing outside
-`test/services/cowork/cowork_replay_loader_test.dart:467`. So once a
+`test/services/agents/agents_replay_loader_test.dart:467`. So once a
 `while_away` terminal has landed for a thread, the flag is true for the rest of
 the process and `_onLoaderChanged` — which fires on every `run_state`, every
 commit, every `notifyListeners` — calls `onAnswerReplayed` again and again.
 `onAnswerReplayed` cancels the OS toast for that thread
-(`cowork_notifications.dart:76-84`). Realistic consequence: the app is in the
+(`agents_notifications.dart:76-84`). Realistic consequence: the app is in the
 background, a later run finishes, `onLiveDone` shows the toast, then any replay
 or reconnect notification fires and the toast is cancelled before the user ever
 looks at the screen. It also makes the flag useless as an "answer waiting"
@@ -461,7 +461,7 @@ Fix: clear it when it has been acted on.
 ```dart
 if (_loader.answerReadyFor(widget.threadKey)) {
   _loader.clearAnswerReady(widget.threadKey);
-  unawaited(CoworkNotifications.instance.onAnswerReplayed(widget.threadKey));
+  unawaited(AgentsNotifications.instance.onAnswerReplayed(widget.threadKey));
 }
 ```
 
@@ -472,24 +472,24 @@ re-entry — clear first, then act, as above.)
 
 ### F9 — MEDIUM — an approval prompt is shown on whatever thread is on screen
 
-**Status: FIXED (f7 + 9e).** Host: 9e added `session_key` to the `approval_request` frame (protocol, executor, contract). App: `CoworkRelayApprovalRequest.sessionKey` (optional); the thread view prompts only when it is null (older host) or equals its own thread. Test: thread_view "an approval that names another thread is left to that thread's view".
+**Status: FIXED (f7 + 9e).** Host: 9e added `session_key` to the `approval_request` frame (protocol, executor, contract). App: `AgentsRelayApprovalRequest.sessionKey` (optional); the thread view prompts only when it is null (older host) or equals its own thread. Test: thread_view "an approval that names another thread is left to that thread's view".
 
-`app/lib/widgets/cowork_thread_view.dart:505-524`;
-`app/lib/services/cowork/cowork_relay_client.dart:717-740`
-(`CoworkRelayApprovalRequest.fromPayload`).
+`app/lib/widgets/agents_thread_view.dart:505-524`;
+`app/lib/services/agents/agents_relay_client.dart:717-740`
+(`AgentsRelayApprovalRequest.fromPayload`).
 
 The frame carries `approval_id`, `action`, `path`, `name`, `file_count`,
 `total_bytes`, `base_url`, `public`, and — for a replay — `mid` / `decision`.
 It carries no session key, and `_onInbound` does not check one either:
 
 ```dart
-case CoworkRelayApprovalRequest():
+case AgentsRelayApprovalRequest():
   if (event.replay && (event.isDecided || !_ledger.isRunning(widget.threadKey))) return;
   setState(() { _approval = event; _approvalDecision = null; });
 ```
 
 With two coworkers running at once (the ledger explicitly supports that:
-`CoworkRunLedger.runningSessions`), a publish approval raised by coworker B
+`AgentsRunLedger.runningSessions`), a publish approval raised by coworker B
 pops up as a standing bar over coworker A's thread. The decision itself is
 correlated by `approval_id`, so the answer is not wrong — but the user is asked
 about a publish in a conversation that has nothing to do with it, and the guard
@@ -498,7 +498,7 @@ wrong thread too.
 
 Fix needs one contract line — `session_key` on `approval_request`, the same way
 `run_state` and `debug_context` carry it — plus, on the app side, parse it into
-`CoworkRelayApprovalRequest` and prompt only when it equals
+`AgentsRelayApprovalRequest` and prompt only when it equals
 `widget.threadKey`. Until the host sends it, an app-side half-measure is to
 prompt only while `_ledger.isRunning(widget.threadKey)`, which at least keeps
 the bar off an idle thread.
@@ -534,7 +534,7 @@ on the host's first 401, so it is only LOW. Fix: `?? record.tokens.expiresAt`.
 
 **Status: OPEN → 84/9e.** Assigned to cowork-84 (ledger), 9e carries the two-line change in the ledger pass.
 
-`app/lib/services/cowork/cowork_run_ledger.dart:304-325`.
+`app/lib/services/agents/agents_run_ledger.dart:304-325`.
 
 ```dart
 final sameId = event.callId != null && candidate.id == event.callId;
@@ -577,12 +577,12 @@ path is not `/mcp/callback` (answer 404 and keep listening).
 
 **Status: FIXED (f7).** The loader's `user` case checks `replay`. Test: loader "a LIVE user frame is ignored like every other live frame".
 
-`app/lib/services/cowork/cowork_replay_loader.dart:236-244`.
+`app/lib/services/agents/agents_replay_loader.dart:236-244`.
 
-Every other case starts with `if (!replay) return;`. `CoworkRelayUser` does
+Every other case starts with `if (!replay) return;`. `AgentsRelayUser` does
 not, and the class defaults `replay` to true, so today it cannot misbehave —
 but the loader's own header states "this file handles nothing live", and the
-adapter enforces the same rule by type (`CoworkRelayUser() => true`) rather
+adapter enforces the same rule by type (`AgentsRelayUser() => true`) rather
 than by flag. Add the guard so the invariant is checked, not assumed.
 
 ---
@@ -592,7 +592,7 @@ than by flag. Add the guard so the invariant is checked, not assumed.
 **Status: FIXED (f7).** One owner: the thread view (`_onInbound`, dedups by run id, sees adopted runs too). The adapter no longer acks; its header table says so. Test: websocket_chat_service done test now expects no ack from the adapter; thread_view "a live done is acknowledged to the host, exactly once" unchanged.
 
 `app/lib/services/websocket_chat_service.dart:235-242` and
-`app/lib/widgets/cowork_thread_view.dart:530-534`.
+`app/lib/widgets/agents_thread_view.dart:530-534`.
 
 Both the adapter and the thread view send `sendRunAck(runId)` for the same live
 terminal. The thread view dedups with `_ackedRuns`; the adapter does not, so
@@ -603,11 +603,11 @@ one the WS-7 handover documents.
 
 ---
 
-### F15 — LOW — doc drift on `CoworkRelayReasoning`
+### F15 — LOW — doc drift on `AgentsRelayReasoning`
 
-**Status: FIXED (f7).** Comment on `CoworkRelayReasoning` rewritten: emitted live and in replay (b5).
+**Status: FIXED (f7).** Comment on `AgentsRelayReasoning` rewritten: emitted live and in replay (b5).
 
-`app/lib/services/cowork/cowork_relay_client.dart:188-193`.
+`app/lib/services/agents/agents_relay_client.dart:188-193`.
 
 > "The executor strips `<think>` blocks today and does not forward them, so
 > nothing emits this yet on the real wire."
@@ -620,19 +620,19 @@ frames) and `WIRE_CONTRACT.md` documents it as emitted. Update the comment.
 
 ## Areas reviewed with no finding
 
-- `cowork_relay_link.dart` — the long-lived fan-out and `bind`/`unbind` are
+- `agents_relay_link.dart` — the long-lived fan-out and `bind`/`unbind` are
   correct; an open subscription survives a controller swap, which is what keeps
   a run alive across a reconnect.
-- `cowork_replay_guard.dart` — the `check`/`commit` split and the re-validation
+- `agents_replay_guard.dart` — the `check`/`commit` split and the re-validation
   across the decrypt await are right, and the reasoning is written down.
-- `cowork_frame.dart` / `cowork_frame_codec.dart` / `cowork_pairing.dart` /
-  `cowork_reconnect.dart` — read for the frame path the loader depends on; no
+- `agents_frame.dart` / `agents_frame_codec.dart` / `agents_pairing.dart` /
+  `agents_reconnect.dart` — read for the frame path the loader depends on; no
   issue in scope for this pass.
-- `services/storage/cowork_chat_store.dart` — the memory-first replace, the
+- `services/storage/agents_chat_store.dart` — the memory-first replace, the
   per-session write chain, the outbox marking *before* the cloud attempt and the
   `savingChats` shield against the sync are all sound; `replaceThread` refusing
   an empty row list is what keeps an empty replay from wiping a thread.
-- `services/storage/cowork_chat_storage_bootstrap.dart` — sign-in / sign-out
+- `services/storage/agents_chat_storage_bootstrap.dart` — sign-in / sign-out
   symmetry, the flush timer and the migration call are correct.
 - `services/chat_storage_service.dart` (the facade divergences) — the dirty-thread
   guards in `mergeSyncedChat`, `mergeSyncedChatsBatch` and `removeChatLocally`
@@ -657,7 +657,7 @@ frames) and `WIRE_CONTRACT.md` documents it as emitted. Update the comment.
   expiry on the wire and the legacy bare-token upgrade are right.
 - `services/mcp/mcp_service.dart` mirror adoption — "adopt only when the local
   record is unusable" is implemented as described and is the correct rule.
-- `pages/messenger_shell.dart` / `pages/cowork_shell_state.dart` — one
+- `pages/messenger_shell.dart` / `pages/agents_shell_state.dart` — one
   `_buildThread` with one `GlobalKey`, the thread view kept `Offstage` on both
   the compact desktop and the phone inbox, `_hostDispose` releasing exactly what
   it owns. Single-socket ownership holds.
@@ -666,7 +666,7 @@ frames) and `WIRE_CONTRACT.md` documents it as emitted. Update the comment.
   checked after every await, no timers left running.
 - `services/tool_call_handler.dart` — the fold never returns `shouldContinue`,
   so the client-side tool loop stays structurally dead.
-- Secret hygiene: no `debugPrint` in CoWork's own code prints a token, a refresh
+- Secret hygiene: no `debugPrint` in Agents's own code prints a token, a refresh
   token, a client secret or a VNC password. The relay client logs only phases
   and step names; the MCP files log the exception, never the material.
 
@@ -675,26 +675,26 @@ finding to hand back to chuk_chat master.
 
 ## Summary for the fixer
 
-- **F1 (HIGH, `cowork_replay_loader.dart`)** — one global `_activeSession`: a
+- **F1 (HIGH, `agents_replay_loader.dart`)** — one global `_activeSession`: a
   second replay (first pairing, or switching coworker mid-stream) folds one
   thread's rows into another's cache and poisons its cursor.
-- **F2 (HIGH, `cowork_replay_loader.dart`)** — a delta replay whose local read
+- **F2 (HIGH, `agents_replay_loader.dart`)** — a delta replay whose local read
   returns nothing writes only the delta over the thread and still advances the
   cursor; the older history is unrecoverable.
 - **F3 (HIGH, `websocket_chat_service.dart`)** — `_isReplay` misses
   `subagent` / `file` / `approval_request`, so a replay during a live run
   attaches yesterday's cards and re-writes a replayed file into the blob store.
-- **F4 (MEDIUM, `cowork_relay_client.dart`)** — `_onSocketDone` keeps `_socket`,
+- **F4 (MEDIUM, `agents_relay_client.dart`)** — `_onSocketDone` keeps `_socket`,
   so `reconnectHost` always throws and the app spends its own refresh token
   instead of adopting the host's rotated pair.
-- **F5 (MEDIUM, `cowork_relay_client.dart`)** — the rotated-session fallback can
+- **F5 (MEDIUM, `agents_relay_client.dart`)** — the rotated-session fallback can
   provision the host with `user_id: ""`.
-- **F6 (MEDIUM, `cowork_thread_view.dart`)** — `_reconnect()` calls `setState`
+- **F6 (MEDIUM, `agents_thread_view.dart`)** — `_reconnect()` calls `setState`
   without a `mounted` check after an await.
 - **F7 (MEDIUM, `run_notifications.dart`)** — the per-session guard closes only
   the first notification row per launch; later ones stay open forever.
-- **F8 (MEDIUM, `cowork_thread_view.dart` / loader)** — `clearAnswerReady` is
+- **F8 (MEDIUM, `agents_thread_view.dart` / loader)** — `clearAnswerReady` is
   never called, so later toasts for that thread get cancelled on any loader
   notification.
-- **F9 (MEDIUM, `cowork_thread_view.dart`)** — a publish approval prompts on
+- **F9 (MEDIUM, `agents_thread_view.dart`)** — a publish approval prompts on
   whichever thread is on screen; the frame needs a `session_key`.

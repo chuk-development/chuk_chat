@@ -9,8 +9,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/chat/widgets/mobile_chat_widgets.dart';
-import 'package:cowork/ui/expressive/waveform.dart';
+import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
+import 'package:chuk_chat/ui/expressive/waveform.dart';
 
 void main() {
   Widget host({required bool isRecording, List<double>? levels}) {

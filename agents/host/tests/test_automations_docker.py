@@ -13,20 +13,20 @@ import time
 
 import pytest
 
-from cowork_host.automations import AutomationManager
-from cowork_sandbox import make_environment
+from chuk_agents_host.automations import AutomationManager
+from chuk_agents_sandbox import make_environment
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("COWORK_SANDBOX_KIND", "docker") != "docker"
+    os.environ.get("AGENTS_SANDBOX_KIND", "docker") != "docker"
     or subprocess.run(["docker", "info"], capture_output=True, timeout=20).returncode != 0,
     reason="docker not available",
 )
 
 WATCHER = """
 import os, socket, time
-from cowork_hooks import trigger
+from agents_hooks import trigger
 trigger("inside", payload={"host": socket.gethostname(), "cwd": os.getcwd(),
-        "secret_seen": os.environ.get("MY_KEY"), "aid": os.environ.get("COWORK_AUTOMATION_ID")})
+        "secret_seen": os.environ.get("MY_KEY"), "aid": os.environ.get("AGENTS_AUTOMATION_ID")})
 time.sleep(120)
 """
 

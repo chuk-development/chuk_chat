@@ -1,4 +1,4 @@
-// dart_rfb's socket read loop (CoWork fork): drains buffered bytes at once,
+// dart_rfb's socket read loop (Agents fork): drains buffered bytes at once,
 // does NOT busy-spin while waiting for the next chunk, and gives up after a
 // deadline instead of hanging forever.
 import 'dart:async';

@@ -10,7 +10,7 @@ This file provides instructions and context for AI coding agents working on this
 - Use the existing `flutter-hot` / Flutter Hot Reload workflow. Window-only capture already exists in `/home/user/.claude/tools/flutter-hotd`; prefer reusing that capability with verified project-window ownership.
 - On Wayland, run the project app with `GDK_BACKEND=x11` when needed for window-specific capture. Record only a short note containing the project, PID/window ID and capture command; never assume IDs survive a restart.
 - Keep this as a short operational note, not a screenshot tutorial.
-- Local workflow: from `app/`, `GDK_BACKEND=x11 FLUTTER_HOT_EXTRA='' flutter-hot start linux`, then `flutter-hot reload`; capture with `bash scripts/capture_app_window.sh /tmp/cowork-window.png` from the repository root. The helper validates executable/PID/window ownership and prints the selected IDs; no desktop fallback.
+- Local workflow: from `app/`, `GDK_BACKEND=x11 FLUTTER_HOT_EXTRA='' flutter-hot start linux`, then `flutter-hot reload`; capture with `bash scripts/capture_app_window.sh /tmp/agents-window.png` from the repository root. The helper validates executable/PID/window ownership and prints the selected IDs; no desktop fallback.
 - If GNOME reports `org.gnome.ScreenSaver.GetActive = true`, window pixels may be stale: defer visual acceptance until the user unlocks; never unlock the session automatically.
 
 ## Shell and task tracking
@@ -79,7 +79,7 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 - **Commit ist immer freigegeben.** Jede Session committet **automatisch nach jedem abgeschlossenen Arbeitsschritt** (Feature, Fix, Test grün), ohne nachzufragen.
 - Grund (wörtlich vom User): ohne Commits gibt es Kollisionen über immer mehr Dateien, weniger Commits, und am Ende kann man schlechter zurückgehen.
-- Regeln bleiben: nur eigene Dateien bzw. abgestimmte Hunks, Tests vorher grün, keine Session-Links und keine Co-Authored-By-Trailer, als `chukfinley <77645077+chukfinley@users.noreply.github.com>` über die globale git config (keine `-c`-Overrides), Branch `cowork`, kein Worktree.
+- Regeln bleiben: nur eigene Dateien bzw. abgestimmte Hunks, Tests vorher grün, keine Session-Links und keine Co-Authored-By-Trailer, als `chukfinley <77645077+chukfinley@users.noreply.github.com>` über die globale git config (keine `-c`-Overrides), Branch `agents`, kein Worktree.
 - **Der git-Index ist geteilt (ein Working-Tree, viele Sessions).** Deshalb IMMER in EINEM Befehl und nur mit expliziten Pfaden committen: `git commit -o -m "<msg>" -- <pfad1> <pfad2> ...` (`-o`/`--only` ignoriert den geteilten Index und nimmt genau diese Pfade). Nie `git commit -a`, nie `git add -A`/`git add .`, nie `git reset` (löscht fremdes Staging), nie getrenntes `git add` + `git commit`. Vorher `git log --oneline -1 -- <pfad>` prüfen, ob eine fremde Session die Datei schon mitcommittet hat. Commit-Fenster: der Koordinator vergibt sie nacheinander ("Commit-Fenster?").
 - Vor jedem Commit `git diff --stat -- <pfade>` lesen: passt die Zeilenzahl nicht zur eigenen Arbeit, enthält die Datei fremde Working-Tree-Änderungen → nicht committen oder per `git add -p` (im selben Befehl mit dem Commit) aufteilen. `-o` schützt nur vor dem geteilten Index, nicht vor fremden Hunks in derselben Datei.
 - Dieses Repo überschreibt damit das "Conservative"-Profil oben: Commits brauchen KEINE erneute Freigabe. Push weiterhin nur auf Anweisung.
@@ -90,8 +90,8 @@ This protocol applies when ending a Beads implementation workflow. It is subordi
 
 - **Always build the phone app with `scripts/build_apk.sh`.** Never hand-roll
   `flutter build apk`. A plain build has no compile-time environment: Supabase
-  URL/key come from `app/.env` via `--dart-define-from-file`, and CoWork mode
-  needs `--dart-define=FEATURE_COWORK=true`. Without them the APK installs and
+  URL/key come from `app/.env` via `--dart-define-from-file`, and Agents mode
+  needs `--dart-define=FEATURE_AGENTS=true`. Without them the APK installs and
   then shows a dead app.
 - **arm64 only** (`--target-platform android-arm64`, ~47 MB). The phone is a
   Pixel 7 Pro. Never build the fat APK or `--split-per-abi`.

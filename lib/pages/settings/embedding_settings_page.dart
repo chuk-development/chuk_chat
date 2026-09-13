@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/services/settings/embedding_model_service.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/services/settings/embedding_model_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Picks the embedding model the host uses for semantic memory.
 ///

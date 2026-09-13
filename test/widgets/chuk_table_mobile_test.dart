@@ -1,10 +1,10 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:flutter/services.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 /// Bead cowork-8vqt: a table wider than a phone column used to become a
 /// sideways-scrolling grid with 160-pixel columns. The right-hand columns sat

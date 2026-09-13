@@ -1,6 +1,6 @@
 # Handoff — native tool calls, live view fixes, and the open auth design
 
-**Date:** 2026-09-04 · **Branch:** `cowork` · **Repo:** `/home/user/git/cowork`
+**Date:** 2026-09-04 · **Branch:** `agents` · **Repo:** `/home/user/git/cowork`
 **Status:** the browser/VNC + native-tool-call workstream is DONE and verified; ONE real
 design task remains — the client↔server auth/refresh-token flow (bead `cowork-c91`).
 Nothing is committed (user has not asked to commit).
@@ -12,17 +12,17 @@ This document is written so a fresh agent with a small context can continue fast
 
 ## 1. What is running right now (live, local)
 
-- **Host:** `cowork-host run --sandbox docker` with `COWORK_SANDBOX_IMAGE=cowork-browser:latest`,
+- **Host:** `cowork-host run --sandbox docker` with `AGENTS_SANDBOX_IMAGE=agents-browser:latest`,
   detached, relay on `ws://127.0.0.1:8787`, log at `/tmp/cowork-host.log`. It runs the
   **native tool-call** agent code. The executor runs IN this host process.
 - **Flutter app:** Linux desktop debug build via `flutter-hot`, connected to the host,
   with all the app fixes below (crash, overflow, reconnect watchdog, chat-UI restyle).
-- **Sandbox image:** `cowork-browser:latest` — carries the fixed `vnc-up.sh`.
+- **Sandbox image:** `agents-browser:latest` — carries the fixed `vnc-up.sh`.
 
 **Check state:**
 ```bash
 ss -ltnp | grep 8787                 # host listening?
-pgrep -af build/linux/x64/debug/bundle/cowork   # app alive?
+pgrep -af build/linux/x64/debug/bundle/agents   # app alive?
 tail -20 /tmp/cowork-host.log        # host log
 cd app && flutter-hot logs           # app log (rolling buffer, NO timestamps — beware)
 ```
@@ -32,7 +32,7 @@ watchdog in ~5–10s and re-provisions a fresh token):
 ```bash
 cd /home/user/git/cowork/host
 kill $(ss -ltnp | grep 8787 | grep -oP 'pid=\K[0-9]+' | head -1); sleep 2
-COWORK_SANDBOX_IMAGE=cowork-browser:latest COWORK_SANDBOX_KIND=docker \
+AGENTS_SANDBOX_IMAGE=agents-browser:latest AGENTS_SANDBOX_KIND=docker \
   setsid nohup /home/user/git/cowork/host/.venv/bin/cowork-host run --sandbox docker \
   >> /tmp/cowork-host.log 2>&1 < /dev/null &
 ```
@@ -69,12 +69,12 @@ Run `bd ready` / `bd show cowork-c91` for details.
 ## 3. What this session did (all verified)
 
 ### 3.1 Native OpenAI tool calls — DONE, LIVE-VERIFIED (bead cowork-05v.12)
-chuk_chat migrated to native structured tool calls; `api.chuk.chat` supports them. cowork
+chuk_chat migrated to native structured tool calls; `api.chuk.chat` supports them. agents
 was still parsing `<tool_call>` out of assistant CONTENT. Migrated:
-- `agent/src/cowork_agent/registry.py` → `ToolRegistry.openai_tools()`: OpenAI function
+- `agent/src/chuk_agents_runtime/registry.py` → `ToolRegistry.openai_tools()`: OpenAI function
   JSON (`{type:function,function:{name,description,parameters}}`); deferred + unavailable
   tools filtered; empty schema → `{"type":"object","properties":{}}`.
-- `agent/src/cowork_agent/backend.py`: `BackendModelClient.set_tools()` + `payload["tools"]`;
+- `agent/src/chuk_agents_runtime/backend.py`: `BackendModelClient.set_tools()` + `payload["tools"]`;
   native history pass-through — assistant `tool_calls` with **arguments as a JSON string**,
   `role:"tool"` with `tool_call_id`, empty `message` after a tool pass — replacing the old
   `<tool_call>`/`<tool_result>` text flattening (`_assistant_turn`, `_wire_tool_call`);
@@ -123,38 +123,38 @@ frame; assistant content is prose and is never scanned.
   RenderFlex overflow (single-line ellipsis status banner, height 28).
 - `app/lib/services/websocket_connector_io.dart` — added WebSocket `pingInterval` (20s) so
   a dead host is detected (was a silent half-open socket).
-- `app/lib/widgets/cowork_thread_view.dart` — (a) a **reconnect watchdog** (`Timer.periodic`
+- `app/lib/widgets/agents_thread_view.dart` — (a) a **reconnect watchdog** (`Timer.periodic`
   8s) that forces `_scheduleAutoReconnect` whenever the controller is down (closed/error/
   null) with a stored pairing and nothing in flight — the event-driven path alone was
   flaky after a host restart; (b) the chat-UI restyle (see below).
 - **Chat UI restyled to chuk_chat's look** (bead cowork-05v.10): user-bubble tail + accent
   fill + 0.8 width, message grouping, assistant copy button, rounded borderless composer;
   new `app/lib/utils/color_extensions.dart`; color alignment in `agent_run_views.dart`.
-  `flutter analyze` clean, `cowork_thread_view_test` 26/26, hot-reloaded live with no errors.
+  `flutter analyze` clean, `agents_thread_view_test` 26/26, hot-reloaded live with no errors.
 - Verified live: two consecutive host restarts → app auto-reconnected in ~10s each.
 
 ### 3.3 VNC live view fixes (from the earlier part of the session)
 - `sandbox/docker/vnc-up.sh` — REWRITTEN. The old `exec flock … exec x11vnc -bg` leaked the
   flock fd into the daemonized x11vnc, which held the lock forever → every later
-  `cowork-vnc-up` deadlocked → the executor's `subprocess.run(timeout=15)` timed out →
+  `agents-vnc-up` deadlocked → the executor's `subprocess.run(timeout=15)` timed out →
   "could not start the VNC server". Fix: dropped flock entirely (x11vnc self-serialises via
   the RFB port bind), launch x11vnc fully detached (`setsid … </dev/null >>LOG 2>&1`); print
   a `WINDOWS=<n>` line (visible-window count) so a blank display reports "no page open yet".
-- `executor/src/cowork_executor/executor.py` `_vnc_start` — was slicing the docker exec
+- `executor/src/chuk_agents_executor/executor.py` `_vnc_start` — was slicing the docker exec
   prefix as `prefix[:-1]`, which dropped the `-u <user>` username → `docker exec -i -u <cid>
-  cowork-vnc-up` → malformed. Fixed to use the full `prefix`. Also parses `WINDOWS=` and
+  agents-vnc-up` → malformed. Fixed to use the full `prefix`. Also parses `WINDOWS=` and
   sends a "no page open yet" banner message when 0.
 - Image rebuilt with the fix. VNC E2E verified by hand: framebuffer streamed out AND
-  'COWORK VNC OK' typed into a browser input via RFB (see `_scratch/vnc_input_test.png`).
+  'AGENTS VNC OK' typed into a browser input via RFB (see `_scratch/vnc_input_test.png`).
 
 ### 3.4 Skills
 `skills/` has one skill, `youtube-transcript`, correctly implemented + hardened, seeded into
-each agent workspace by `host/src/cowork_host/seed_skills.py`. Improved this session:
+each agent workspace by `host/src/chuk_agents_host/seed_skills.py`. Improved this session:
 `LANGS` is now env-driven (`YT_LANGS`), retry guidance rewritten, JS-runtime (deno/node)
 note added. `host/tests/test_seed_skills.py` 7 pass.
 
 ### 3.5 Verification sweep (all green)
-`host` 98 · `executor` 71 · `common/cowork_crypto` 65 · `agent` full · `app` 267.
+`host` 98 · `executor` 71 · `common/chuk_agents_crypto` 65 · `agent` full · `app` 267.
 The ONLY app failures are the 3 pre-existing `settings_page_test` (bead cowork-73z, another
 session's WIP). `ruff` clean on all changed Python. MCP sweep: 16 PASS / 14 auth-required /
 2 known-broken (Cloudflare Dev Platform 410, figma-linux-next refused). Security: crypto
@@ -173,7 +173,7 @@ incremental deltas live. here.now approval: 13 tests. All documented in
 | VNC malformed exec | `prefix[:-1]` dropped `-u <user>` | use full prefix | `executor/.../executor.py` `_vnc_start` |
 | Black VNC screen looked broken | no browser window on the display | `WINDOWS=` probe → "no page open yet" banner | vnc-up.sh + executor + browser_view_page.dart |
 | App crash on browser view | unhandled broken-pipe SocketException | guard socket writes + `done.catchError` | `browser_view_page.dart` |
-| App never auto-reconnected after host restart | dead socket undetected + flaky event path | WS `pingInterval` + reconnect watchdog | `websocket_connector_io.dart`, `cowork_thread_view.dart` |
+| App never auto-reconnected after host restart | dead socket undetected + flaky event path | WS `pingInterval` + reconnect watchdog | `websocket_connector_io.dart`, `agents_thread_view.dart` |
 | Models fumbled tool calls | `<tool_call>` text protocol | native OpenAI tool calls | `backend.py`, `registry.py`, `runtime.py`, `executor.py` |
 | **`loop failed: SupabaseAuthError`** (OPEN) | host + client SHARE a rotating refresh token; app rotates it → host's copy dies | UNRESOLVED — see §5 | `host.py` `_make_model_factory`, `backend.py` |
 
@@ -184,8 +184,8 @@ incremental deltas live. here.now approval: 13 tests. All documented in
 ### The bug
 An app-driven task fails with `loop failed: SupabaseAuthError`. Not a code bug — a design
 flaw. The host builds a `SupabaseSession` from the token the app provisions
-(`host/src/cowork_host/host.py:445-450`) and refreshes it independently via GoTrue
-(`agent/src/cowork_agent/backend.py:128`). But the app's OWN Supabase client keeps
+(`host/src/chuk_agents_host/host.py:445-450`) and refreshes it independently via GoTrue
+(`agent/src/chuk_agents_runtime/backend.py:128`). But the app's OWN Supabase client keeps
 refreshing its session, and **Supabase rotates the refresh token on each use**, so the app
 invalidates the token it gave the host. When the host's access token expires and it
 refreshes with the now-rotated token, GoTrue rejects it → `SupabaseAuthError` → the task
@@ -224,8 +224,8 @@ host-scoped credential. Ask the user for its exact shape before wiring the clien
 ### What to build in THIS repo once the credential shape is known
 - **Client (Flutter):** after login, at pairing, call the backend endpoint once and
   `provisionAccount(...)` the HOST credential (not the client's own session).
-  See `app/lib/widgets/cowork_thread_view.dart:424,624` (`provisionAccount`) and
-  `app/lib/services/cowork/cowork_relay_client.dart:930` (`provisionAccount` impl).
+  See `app/lib/widgets/agents_thread_view.dart:424,624` (`provisionAccount`) and
+  `app/lib/services/agents/agents_relay_client.dart:930` (`provisionAccount` impl).
 - **Host (Python):** already holds + refreshes its own session
   (`host.py:_make_model_factory`, `backend.py`). For an API key: skip refresh, send the key.
   For a second session: unchanged — it just needs its OWN token.
@@ -242,7 +242,7 @@ independent-credential design so mid-session re-provision is rarely needed at al
 
 ## 6. Prompt for the next agent
 
-> Continue the cowork project at `/home/user/git/cowork` (branch `cowork`). Read
+> Continue the agents project at `/home/user/git/cowork` (branch `agents`). Read
 > `docs/HANDOFF_2026-09-04_NATIVE_TOOLCALLS_AND_AUTH.md` first, then `bd ready`.
 > The host + Flutter app are running live (see §1 of that handoff; restart commands there).
 > Native OpenAI tool calls are done and live-verified; the chat UI, VNC live view, and the
@@ -262,9 +262,9 @@ independent-credential design so mid-session re-provision is rarely needed at al
 ---
 
 ## 7. Files changed this session (not committed)
-Python: `agent/src/cowork_agent/{backend,registry,runtime}.py`,
-`executor/src/cowork_executor/executor.py`, `sandbox/docker/vnc-up.sh`.
-Dart: `app/lib/widgets/{browser_view_page,cowork_thread_view,agent_run_views}.dart`,
+Python: `agent/src/chuk_agents_runtime/{backend,registry,runtime}.py`,
+`executor/src/chuk_agents_executor/executor.py`, `sandbox/docker/vnc-up.sh`.
+Dart: `app/lib/widgets/{browser_view_page,agents_thread_view,agent_run_views}.dart`,
 `app/lib/services/websocket_connector_io.dart`, `app/lib/utils/color_extensions.dart` (new).
 Skill: `skills/youtube-transcript/SKILL.md`.
 Tests added: `agent/tests/test_backend.py` (+3), `agent/tests/test_registry.py` (+2),

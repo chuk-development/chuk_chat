@@ -6,17 +6,17 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cowork/models/chat_message.dart';
-import 'package:cowork/services/chat_storage_mutations.dart'
+import 'package:chuk_chat/models/chat_message.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart'
     show kChatPayloadVersion;
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/chat_storage_sync.dart';
-import 'package:cowork/services/chat_sync_service.dart';
-import 'package:cowork/services/diagnostics_log_service.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/local_chat_cache_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/chat_storage_sync.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Service for background preloading all chat messages.

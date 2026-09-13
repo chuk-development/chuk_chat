@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/settings/debug_settings.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/settings/debug_settings.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// Developer options: the endpoints the app talks to, and a couple of local
 /// debug toggles. Read-mostly — nothing here changes how a task runs, it just

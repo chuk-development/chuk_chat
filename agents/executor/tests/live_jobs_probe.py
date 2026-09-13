@@ -15,8 +15,8 @@ uses, found by its labels) and proves:
    ``[jobs] job <id> exit 0 -> task``, and the run is notified.
 
 Costs cents: the wake is a real model run on the host. Env:
-``COWORK_LIVE_SESSION_KEY`` (default ``host:cowork-host``),
-``COWORK_LIVE_HOSTLOG`` (default ``../.hostlive``).
+``AGENTS_LIVE_SESSION_KEY`` (default ``host:cowork-host``),
+``AGENTS_LIVE_HOSTLOG`` (default ``../.hostlive``).
 """
 
 from __future__ import annotations
@@ -29,15 +29,15 @@ import sys
 import time
 from pathlib import Path
 
-from cowork_agent import ToolRegistry
-from cowork_agent.shell_tools import JobManager, register_job_tools, register_shell_tools
-from cowork_agent.terminal import TerminalManager
-from cowork_agent.tools import register_run_command
-from cowork_sandbox import make_environment
+from chuk_agents_runtime import ToolRegistry
+from chuk_agents_runtime.shell_tools import JobManager, register_job_tools, register_shell_tools
+from chuk_agents_runtime.terminal import TerminalManager
+from chuk_agents_runtime.tools import register_run_command
+from chuk_agents_sandbox import make_environment
 
-SESSION_KEY = os.environ.get("COWORK_LIVE_SESSION_KEY", "host:cowork-host")
-HOSTLOG = Path(os.environ.get("COWORK_LIVE_HOSTLOG", "../.hostlive"))
-DB = Path(os.environ.get("COWORK_LIVE_DB", "~/.cowork/executor-state.db")).expanduser()
+SESSION_KEY = os.environ.get("AGENTS_LIVE_SESSION_KEY", "host:cowork-host")
+HOSTLOG = Path(os.environ.get("AGENTS_LIVE_HOSTLOG", "../.hostlive"))
+DB = Path(os.environ.get("AGENTS_LIVE_DB", "~/.agents/executor-state.db")).expanduser()
 
 
 def say(*parts: object) -> None:
@@ -51,7 +51,7 @@ def find_agent_container() -> dict:
         capture_output=True, text=True, check=True,
     ).stdout.split()
     if not out:
-        raise SystemExit("no running cowork agent container (label cowork.task=default)")
+        raise SystemExit("no running agents agent container (label cowork.task=default)")
     labels = json.loads(
         subprocess.run(["docker", "inspect", "-f", "{{json .Config.Labels}}", out[0]], capture_output=True, text=True, check=True).stdout
     )
@@ -72,7 +72,7 @@ def main() -> int:
     box = find_agent_container()
     say("agent container", box)
     env = make_environment("docker", agent_id=box["agent_id"], workdir=box["workspace"], image=box["image"])
-    who = env.run_bash("id -un; id -u; sudo -n true && echo SUDO_OK; tmux -V; echo $COWORK_WORKSPACE", timeout=60)
+    who = env.run_bash("id -un; id -u; sudo -n true && echo SUDO_OK; tmux -V; echo $AGENTS_WORKSPACE", timeout=60)
     say("in the sandbox:", who.stdout.strip().replace("\n", " | "))
     assert "SUDO_OK" in who.stdout and "tmux" in who.stdout, who
 

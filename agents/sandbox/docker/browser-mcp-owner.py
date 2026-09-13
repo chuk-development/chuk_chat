@@ -3,7 +3,7 @@
 
 Foreign-host Chromium singleton files require a host-side retirement attestation.
 The host must verify that the named old container no longer exists before setting
-COWORK_BROWSER_RETIRED_HOSTNAME. A hostname mismatch alone is not proof of death.
+AGENTS_BROWSER_RETIRED_HOSTNAME. A hostname mismatch alone is not proof of death.
 """
 
 from __future__ import annotations
@@ -133,16 +133,16 @@ def stop_children() -> None:
 
 
 def main() -> int:
-    profile = Path(os.environ.get("COWORK_BROWSER_PROFILE", "/workspace/.cowork/chrome-profile")).resolve()
+    profile = Path(os.environ.get("AGENTS_BROWSER_PROFILE", "/workspace/.agents/chrome-profile")).resolve()
     profile.mkdir(parents=True, exist_ok=True)
-    with (profile / ".cowork-launcher.lock").open("a") as lease:
+    with (profile / ".agents-launcher.lock").open("a") as lease:
         try:
             fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError as exc:
             if exc.errno not in {errno.EACCES, errno.EAGAIN}:
                 raise
             raise RuntimeError("another MCP launcher owns this browser profile; reuse its connection") from exc
-        prepare_profile(profile, os.environ.get("COWORK_BROWSER_RETIRED_HOSTNAME", ""))
+        prepare_profile(profile, os.environ.get("AGENTS_BROWSER_RETIRED_HOSTNAME", ""))
         # Linux PR_SET_CHILD_SUBREAPER: adopt Chromium when MCP exits, including
         # descendants in separate process groups, without touching other agents.
         if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
@@ -164,5 +164,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (OSError, RuntimeError) as error:
-        print(f"cowork-browser-mcp: {error}", file=sys.stderr)
+        print(f"agents-browser-mcp: {error}", file=sys.stderr)
         sys.exit(1)

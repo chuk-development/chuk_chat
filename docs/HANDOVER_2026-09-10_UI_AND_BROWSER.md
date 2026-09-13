@@ -6,7 +6,7 @@ Pixel 7 Pro, or filed as a bead with the evidence that made it a bead.
 ## 1. Why the agent had no browser (bead cowork-3i5c, closed)
 
 `LocalHost` decided a sandbox could browse by looking for the word `browser`
-inside `COWORK_SANDBOX_IMAGE`, and `--sandbox` defaulted to `local`. With the
+inside `AGENTS_SANDBOX_IMAGE`, and `--sandbox` defaulted to `local`. With the
 variable unset — the normal case — the gate was always false, so the Playwright
 MCP server never started. Every `mcp__playwright__browser_*` call came back
 `unknown tool` (see `executor-state.db` messages 736, 791, 797), which the app
@@ -15,10 +15,10 @@ stayed dead because `BrowserPresence` waits for the host's `vnc_available`.
 
 Now:
 
-* `cowork_sandbox.docker.image_has_browser()` probes the image for
-  `/usr/local/bin/cowork-browser-mcp` — the file, not the tag — once per image.
-* `default_image()` takes `cowork-browser:latest` when it is built on the
-  machine; `COWORK_SANDBOX_IMAGE` still wins.
+* `chuk_agents_sandbox.docker.image_has_browser()` probes the image for
+  `/usr/local/bin/agents-browser-mcp` — the file, not the tag — once per image.
+* `default_image()` takes `agents-browser:latest` when it is built on the
+  machine; `AGENTS_SANDBOX_IMAGE` still wins.
 * `--sandbox auto` (the new default) takes docker whenever the daemon answers.
 * The ready banner carries one `Sandbox:` line naming the backend, the image and
   the browser state. The failure it describes used to be completely silent.
@@ -68,7 +68,7 @@ skips the container probe.
 * **The same turn twice** (bead cowork-4rpt). The app paints an outgoing
   message when it is sent and the answer as it streams; neither row can carry
   the host's `mid`. The host stores the same turn and replays it above the
-  cursor, and `_commit` appended it. `CoworkReplayLoader.appendWithoutRepeats`
+  cursor, and `_commit` appended it. `AgentsReplayLoader.appendWithoutRepeats`
   now removes the overlap, host copy wins, with two guards: a 60-row window and
   "a delta may never be shorter than the tail it replaces". A one-time cursor
   drop (`kReplayRepeatRepairKey`) rebuilds caches that already hold duplicates.
@@ -107,7 +107,7 @@ replay loader's `_cachedRows` share — they must agree, or the replay splices a
 delta onto the wrong base and `saveChat` REPLACES.
 
 A prompt typed while the host is unreachable now waits in
-`CoworkTaskOutbox` (SQLite `kv_cache`, one row per thread, verbatim prompt) and
+`AgentsTaskOutbox` (SQLite `kv_cache`, one row per thread, verbatim prompt) and
 goes out on the next pairing, AFTER the replay. It is deliberately not stored as
 a chat-cache row: a full replay replaces that cache, which would delete the
 queued message at the exact moment the socket returns.
@@ -176,7 +176,7 @@ Found by comparing against the original (`/home/user/git/chuk_chat`, NOT
 send-failure paths and only one of them worked:
 
 * host unreachable, internet up -> `websocket_chat_service.dart` ->
-  `CoworkTaskOutbox` -> sent on the next pairing. Fine.
+  `AgentsTaskOutbox` -> sent on the next pairing. Fine.
 * **device actually offline** -> the imported short-circuit in
   `chat_ui_mobile.dart:2613` fires FIRST and returns before the relay is asked.
   It called `OfflineSendCoordinator.enqueue`, a stub returning `''`. The row was
@@ -190,16 +190,16 @@ than skipping it, so the thread keeps its order. The app-level
 `WidgetsBindingObserver` that routes to `AppLifecycleService` was missing
 entirely — that is also why the imported chat UI's resume callbacks never fired.
 
-Note the design rule that came out of it: CoWork's question is "is my host
+Note the design rule that came out of it: Agents's question is "is my host
 reachable", not "is there internet". chuk_chat probes Cloudflare over HTTP; for
-CoWork the answer is the relay's phase. The imported `isOnline` short-circuits
+Agents the answer is the relay's phase. The imported `isOnline` short-circuits
 are not a feature to repair, they are one to re-hang on host presence.
 
 Two more things the comparison turned up:
 
 * `docs/CHAT_UI_IMPORT.md` claimed the widget layer was byte-identical to
   upstream. 41 files had diverged, eight of them rendering widgets holding about
-  two thousand lines of CoWork work. A re-import would have deleted all of it in
+  two thousand lines of Agents work. A re-import would have deleted all of it in
   silence. The doc, the manifest and `scripts/import_chat_ui.sh` all say so now.
 * The artifact card (`message_bubble/cards.dart:309`) is a dead end: it renders,
   the tap reaches `artifact_storage_service.dart:54` which returns null, and the

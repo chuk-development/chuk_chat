@@ -4,7 +4,7 @@
 // native one, so on web a raw exception went straight into the chat bubble —
 // including the base64 fragments this exists to strip.
 
-import 'package:cowork/services/streaming_chat_service.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 
 /// Turns a transport exception into something safe and readable to show.
 ///

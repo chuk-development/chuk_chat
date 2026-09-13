@@ -2,7 +2,7 @@
 // Native platform implementation — uses dart:io for platform detection.
 import 'dart:io';
 
-import 'package:cowork/services/api_config_base.dart' as base;
+import 'package:chuk_chat/services/api_config_base.dart' as base;
 
 /// Service for managing API configuration across different environments and platforms.
 class ApiConfigService {

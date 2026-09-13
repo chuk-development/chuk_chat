@@ -11,9 +11,9 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:flutter/physics.dart';
 
 /// The bouncy spatial spring used for press and selection feedback.

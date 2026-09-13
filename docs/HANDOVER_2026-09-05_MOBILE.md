@@ -7,7 +7,7 @@ at the same moment and that commit swallowed the staged files. The content is
 complete there; `git show --stat 6d7f75e -- app/lib/platform_specific/mobile`
 lists it. The notifications work is commit `2790c89` (its own message).
 
-Task from the user: make the CoWork app feel like a messenger on a phone,
+Task from the user: make the Agents app feel like a messenger on a phone,
 modelled on the **Grok Bot** app (xAI). Design source: Mobbin only (user's
 instruction); website images only for desktop inspiration.
 
@@ -15,7 +15,7 @@ instruction); website images only for desktop inspiration.
 
 - `docs/MOBILE_GROKBOT_STRUCTURE.md` — the observed Grok Bot structure
   (home = inbox of bots, chat with floating chrome, composer, profile,
-  onboarding), the mapping to CoWork, the rules (touch targets, safe areas,
+  onboarding), the mapping to Agents, the rules (touch targets, safe areas,
   keyboard, back, breakpoint), the file plan and the diff proposals.
 - `app/lib/platform_specific/mobile/` — the mobile layer, all new files, no
   verbatim chuk file edited:
@@ -37,7 +37,7 @@ instruction); website images only for desktop inspiration.
 - `app/test/platform_specific/mobile/` — `mobile_support.dart` (phone-sized
   localised harness, `findId`, real-font loader), chrome 5, screen 4, list 9,
   sheet 1 tests, and `mobile_preview_test.dart` (goldens → PNGs).
-- `app/lib/widgets/cowork_thread_view.dart` — two new optional parameters,
+- `app/lib/widgets/agents_thread_view.dart` — two new optional parameters,
   `topInset` (→ `ChukChatUIMobile.topInset`) and `phoneLayout` (forces
   chuk's phone screen). Defaults keep every existing caller unchanged.
 - `docs/diffs_c6_messenger_shell.md` — the exact diff for cowork-5c's
@@ -72,7 +72,7 @@ upstream; the mobile chrome uses it exactly like chuk's own
 
 **The thread view stays in the tree on every phone screen.** My first shell
 diff mounted only `MobileAgentList` on the inbox screen. Wrong: the
-`CoworkThreadView` owns the relay controller — reconnect from the stored
+`AgentsThreadView` owns the relay controller — reconnect from the stored
 pairing, `onPaired` (host agent into the roster), adoption of a run in
 flight. Without it the phone gets its socket only when a chat is opened. 5c
 fixed it: inbox = `Stack[Positioned.fill(Offstage(thread)),
@@ -96,7 +96,7 @@ inbox → chat → back, tablet 660 px. Shell diff is applied; bead
 
 # Part 2 — P7 app-side notifications (bead cowork-o3j, same session)
 
-Spec: `docs/PLAN_2026-09-04_COWORK_CHUK_ALIGN.md` WS-7 ("App:", reopen flow,
+Spec: `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` WS-7 ("App:", reopen flow,
 anti-duplicate rule). Host side was already done (`host/notify.py`,
 `host/desktop_notify.py`, `supabase/functions/notify-run`, schema in
 `docs/SUPABASE_SCHEMA.md`).
@@ -111,7 +111,7 @@ anti-duplicate rule). Host side was already done (`host/notify.py`,
   the same tag the FCM push uses so one cancel clears both). Plugin behind
   `LocalNotificationsBackend` (tests use a fake).
 - `app/lib/services/notifications/push_service.dart` — FCM token ↔
-  `cowork_device_tokens` keyed by the CoWork device id; sign-in upsert,
+  `cowork_device_tokens` keyed by the Agents device id; sign-in upsert,
   `onTokenRefresh`, sign-out delete, tapped/cold-start push → router.
   `FirebasePushTransport.initialize()` is guarded: no keys / Linux → push
   off, nothing else changes. Background handler is a registered no-op (the
@@ -119,19 +119,19 @@ anti-duplicate rule). Host side was already done (`host/notify.py`,
 - `app/lib/services/notifications/run_notifications.dart` — PATCH
   `consumed_at` on `cowork_run_notifications` (by session key, by run id);
   idempotent per launch; Supabase-less in tests via `configure()`.
-- `app/lib/services/notifications/cowork_notifications.dart` — the facade:
+- `app/lib/services/notifications/agents_notifications.dart` — the facade:
   `initialize()`, `onLiveDone(sessionKey)` (toast only when
   `WidgetsBinding.lifecycleState != resumed`; null = foreground),
   `onAnswerReplayed(sessionKey)` (consume + cancel), `onOpenedFromNotification`,
   `threadLabel` resolver the shell sets to the coworker's name.
 - `app/lib/services/notification_service.dart` — the chuk-compatible static
   API the verbatim `streaming_manager_io.dart` calls; delegates, drops the
-  content preview. (chuk's `_isAppInBackground` flag is never set in CoWork,
+  content preview. (chuk's `_isAppInBackground` flag is never set in Agents,
   so that path is dormant; the live path is the thread view hook.)
 - `app/lib/main.dart` — one additive line:
-  `unawaited(CoworkNotifications.instance.initialize())`.
-- `app/lib/widgets/cowork_thread_view.dart` — two hooks: `onLiveDone` after
-  the `run_ack` in `case CoworkRelayDone`, `onAnswerReplayed` in
+  `unawaited(AgentsNotifications.instance.initialize())`.
+- `app/lib/widgets/agents_thread_view.dart` — two hooks: `onLiveDone` after
+  the `run_ack` in `case AgentsRelayDone`, `onAnswerReplayed` in
   `_onLoaderChanged` when `answerReadyFor(threadKey)`. No
   `WidgetsBindingObserver` needed — the facade reads the binding's
   `lifecycleState` (deviation from the coordinator's wording, same effect,
@@ -148,13 +148,13 @@ anti-duplicate rule). Host side was already done (`host/notify.py`,
   `removeListener` in `dispose`, `_threadLabel`, `_onNotificationTap`
   (take → `_select` → `onOpenedFromNotification`). Record:
   `docs/diffs_c6_notifications_shell.md`.
-- Tests: `test/services/notifications/{local_notifications,push_service,cowork_notifications}_test.dart`,
-  `test/widgets/cowork_thread_view_notifications_test.dart`.
+- Tests: `test/services/notifications/{local_notifications,push_service,agents_notifications}_test.dart`,
+  `test/widgets/agents_thread_view_notifications_test.dart`.
 
 ## Test results (2026-09-05)
 
-local_notifications 8/8, push_service 6/6, cowork_notifications 6/6,
-cowork_thread_view_notifications 3/3, messenger_shell 16/16; `dart analyze`
+local_notifications 8/8, push_service 6/6, agents_notifications 6/6,
+agents_thread_view_notifications 3/3, messenger_shell 16/16; `dart analyze`
 0 on every touched file.
 
 ## Still open
@@ -173,10 +173,10 @@ cowork_thread_view_notifications 3/3, messenger_shell 16/16; `dart analyze`
   false and nothing double-fires.
 - F7: the loader remembers the `run_id` of the `while_away` done
   (`answerReadyRunFor`); the thread view passes it to
-  `CoworkNotifications.onAnswerReplayed(sessionKey, {runId})` (additive
+  `AgentsNotifications.onAnswerReplayed(sessionKey, {runId})` (additive
   signature); `RunNotifications.consumeForSession` dedups per
   (session, run_id), and per session when no run id is known — the
   per-launch set is no longer the only guard.
-- Tests after the fix: cowork_notifications 7/7, thread_view_notifications
+- Tests after the fix: agents_notifications 7/7, thread_view_notifications
   3/3 (third case extended: a `run_state` afterwards → no second
   consume/cancel).

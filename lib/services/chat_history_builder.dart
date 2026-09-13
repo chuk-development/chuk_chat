@@ -21,10 +21,10 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:cowork/services/image_storage_service.dart';
-import 'package:cowork/utils/input_validator.dart';
-import 'package:cowork/utils/tool_history_formatter.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/tool_history_formatter.dart';
 
 class ChatHistoryBuilder {
   ChatHistoryBuilder._();

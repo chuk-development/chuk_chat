@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cowork_agent.think_scrubber import ThinkScrubber, scrub_history, scrub_text
+from chuk_agents_runtime.think_scrubber import ThinkScrubber, scrub_history, scrub_text
 
 # The scrubber removes think/reasoning tags and NOTHING else. Any other markup
 # in the stream is ordinary text and must survive byte-identical, even when the
