@@ -46,7 +46,7 @@ from .service import UNIT_NAME, SystemdUserService, user_unit_path
 #: How long ``connect`` waits for the app before giving up, in seconds.
 DEFAULT_CONNECT_TIMEOUT = 600.0
 
-SUBCOMMANDS = ("run", "connect", "status", "doctor")
+SUBCOMMANDS = ("run", "connect", "status", "doctor", "trace")
 
 
 def _mock_model_factory():
@@ -161,6 +161,34 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         help="offline/dev: no account needed; a canned agent runs one demo "
         "command — for testing the transport + pairing without credits",
     )
+    parser.add_argument(
+        "--trace",
+        action="store_true",
+        help="DEVELOPER SWITCH, off by default: write a JSONL run trace that "
+        "says which segment of a slow turn was slow (us, the transport or the "
+        "provider). Read it back with  cowork-host trace --last. Same as "
+        "AGENTS_TRACE=1",
+    )
+    parser.add_argument(
+        "--trace-content",
+        action="store_true",
+        help="DEVELOPER SWITCH, off by default: implies --trace and ALSO traces "
+        "message content, scrubbed. Structure is always safe; text is not, so "
+        "this is a second, deliberate switch. Same as AGENTS_TRACE_CONTENT=1",
+    )
+    parser.add_argument(
+        "--trace-dir",
+        default=None,
+        help="where the trace JSONL goes (default <workspace>/trace, or "
+        "$AGENTS_TRACE_DIR). Developer switch; ignored while tracing is off",
+    )
+    parser.add_argument(
+        "--trace-max-bytes",
+        type=int,
+        default=None,
+        help="rolling-file cap for the trace in bytes, 3 backups beside it (or "
+        "$AGENTS_TRACE_MAX_BYTES). Developer switch; ignored while tracing is off",
+    )
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -224,6 +252,43 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="skip starting the browser server (no container, no minute of wait)",
     )
+
+    trace_parser = sub.add_parser(
+        "trace",
+        help="read a run trace back: where did the four minutes go",
+        description="Print the attribution of a traced run — prepare, connect, "
+        "provider wait, provider stream, tools, retries — and then the phase "
+        "timeline. Starts nothing and opens no port. Turn tracing on first with "
+        "cowork-host run --trace (or AGENTS_TRACE=1).",
+    )
+    trace_parser.add_argument(
+        "run_id",
+        nargs="?",
+        default=None,
+        help="the run to print; a prefix of the id is enough. Omit it for the list",
+    )
+    trace_parser.add_argument(
+        "--list",
+        dest="list_runs",
+        action="store_true",
+        help="list the runs in the trace, newest first (the default with no run id)",
+    )
+    trace_parser.add_argument(
+        "--last",
+        action="store_true",
+        help="print the most recent run",
+    )
+    trace_parser.add_argument(
+        "--workspace",
+        default=os.environ.get("AGENTS_HOME", DEFAULT_WORKSPACE),
+        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $AGENTS_HOME)",
+    )
+    trace_parser.add_argument(
+        "--trace-dir",
+        default=None,
+        help="read the trace from this directory or file instead of "
+        "<workspace>/trace (or $AGENTS_TRACE_DIR)",
+    )
     return parser
 
 
@@ -280,6 +345,35 @@ def resolve_sandbox_kind(choice: str) -> str:
         return "docker" if docker_available() else "local"
     except Exception:  # noqa: BLE001 — a broken daemon is just "local"
         return "local"
+
+
+def _start_tracing(args: argparse.Namespace) -> None:
+    """Turn the run trace on when a flag or the environment asked for it.
+
+    Off is the default and off is silent: no file is created and nothing is
+    printed, so a normal host start looks exactly as it always did. The
+    ``store_true`` flags are passed as ``None`` when unset on purpose —
+    :meth:`TraceSettings.from_env` drops ``None``/``False`` overrides, so
+    ``AGENTS_TRACE=1`` still decides for a systemd unit that passes no flags.
+    """
+    from chuk_agents_runtime.trace import TraceSettings, configure_tracing
+
+    settings = TraceSettings.from_env(
+        enabled=getattr(args, "trace", False) or getattr(args, "trace_content", False) or None,
+        content=getattr(args, "trace_content", False) or None,
+        directory=getattr(args, "trace_dir", None),
+        max_bytes=getattr(args, "trace_max_bytes", None),
+    )
+    tracer = configure_tracing(settings, workspace=args.workspace)
+    if not getattr(tracer, "enabled", False):
+        return
+    path = getattr(tracer, "path", "?")
+    _log(f"run trace ON -> {path}")
+    _log(
+        "  content tracing "
+        + ("ON (messages are written, scrubbed)" if settings.content else "off (structure only)")
+        + f"; read it back with  cowork-host trace --last --trace-dir {Path(path).parent}"
+    )
 
 
 def _build_host(args: argparse.Namespace) -> LocalHost:
@@ -410,6 +504,7 @@ def cmd_run(
     *,
     host_factory: Callable[[argparse.Namespace], LocalHost] = _build_host,
 ) -> int:
+    _start_tracing(args)
     host = host_factory(args)
     if args.pair:
         _log("--pair: the stored pairing was dropped; a fresh single-use code follows.")
@@ -475,6 +570,7 @@ def cmd_connect(
         else:
             resume_service = True
 
+    _start_tracing(args)
     host = host_factory(args)
     if args.pair:
         _log("--pair: the stored pairing was dropped; a fresh single-use code follows.")
@@ -557,6 +653,87 @@ def cmd_status(
 
 
 # --------------------------------------------------------------------------
+# trace
+# --------------------------------------------------------------------------
+
+
+TRACE_HOW_TO = (
+    "  No trace file yet. Tracing is a developer switch and it is off by default.\n"
+    "  Turn it on and run the host again:\n"
+    "      cowork-host run --trace          (or: AGENTS_TRACE=1 cowork-host run)\n"
+    "  Then:  cowork-host trace --last"
+)
+
+
+def _trace_source(args: argparse.Namespace):
+    from chuk_agents_runtime.trace import trace_dir_for
+
+    explicit = getattr(args, "trace_dir", None) or os.environ.get("AGENTS_TRACE_DIR")
+    if explicit:
+        return Path(explicit).expanduser()
+    return trace_dir_for(getattr(args, "workspace", None))
+
+
+def _print_run_table(rows: list[dict], out: Callable[..., Any]) -> None:
+    out("")
+    out(
+        f"  {'RUN':<26} {'SESSION':<16} {'STARTED':<20} {'SPAN':>9} "
+        f"{'RND':>4} {'LINES':>6}  REASON"
+    )
+    for row in rows:
+        started = (
+            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row["started_wall"]))
+            if row["started_wall"]
+            else "?"
+        )
+        out(
+            f"  {row['run_id'][:26]:<26} {row['session_key'][:16]:<16} {started:<20} "
+            f"{row['total_ms'] / 1000:>8.1f}s {row['rounds']:>4} {row['lines']:>6}  "
+            f"{row['reason']}"
+        )
+    out("")
+    out("  Print one:  cowork-host trace <run id prefix>      (or --last)")
+    out("")
+
+
+def cmd_trace(args: argparse.Namespace, *, out: Callable[..., Any] = print) -> int:
+    """Read a trace back. Starts no host, opens no port, needs no pairing —
+    the moment you need this is the moment the host is the thing misbehaving."""
+    from chuk_agents_runtime.trace_report import list_runs, read_lines, trace_files, waterfall
+
+    source = _trace_source(args)
+    if not any(candidate.is_file() for candidate in trace_files(source)):
+        out(f"  No trace at {source}.")
+        out(TRACE_HOW_TO)
+        return 1
+
+    run_id = getattr(args, "run_id", None)
+    if not run_id and getattr(args, "last", False):
+        runs = list_runs(source)
+        if not runs:
+            out(f"  The trace at {source} holds no complete run yet.")
+            return 1
+        run_id = runs[0]["run_id"]
+
+    if not run_id:
+        runs = list_runs(source)
+        if not runs:
+            out(f"  The trace at {source} holds no run yet.")
+            out(TRACE_HOW_TO)
+            return 1
+        _print_run_table(runs, out)
+        return 0
+
+    lines = read_lines(source, run_id=run_id)
+    if not lines:
+        out(f"  No run in {source} starts with '{run_id}'.")
+        out("  List what is there:  cowork-host trace --list")
+        return 1
+    out(waterfall(lines))
+    return 0
+
+
+# --------------------------------------------------------------------------
 # entry point
 # --------------------------------------------------------------------------
 
@@ -573,6 +750,8 @@ def main(argv: list[str] | None = None) -> int:
         from .doctor import cmd_doctor
 
         return cmd_doctor(args)
+    if command == "trace":
+        return cmd_trace(args)
     return cmd_run(args)
 
 

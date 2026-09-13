@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import threading
 import time
 import uuid
@@ -60,6 +61,9 @@ from websockets.exceptions import ConnectionClosed
 from websockets.sync.client import connect as _ws_connect
 
 from .model import ModelClient, ModelResponse, ToolCall
+from .trace import DEFAULT_TOKEN_GAP_MS, get_tracer
+
+logger = logging.getLogger(__name__)
 
 # The single default backend. Callers may override.
 DEFAULT_BASE_URL = "https://api.chuk.chat"
@@ -103,6 +107,40 @@ class BackendModelError(Exception):
 
 class _AuthRejected(Exception):
     """Internal: the ``/v2/ws`` handshake was rejected — retryable after a refresh."""
+
+
+class _FirstFrameStalled(Exception):
+    """Internal: the request was sent and the socket then said *nothing at all*
+    for :attr:`BackendModelClient._first_frame_timeout` seconds.
+
+    Never escapes :meth:`BackendModelClient.complete` — the retry it triggers
+    runs with the first-frame budget disarmed, so a provider that is genuinely
+    slow to produce its first byte is never cut off twice."""
+
+    def __init__(self, waited_ms: float) -> None:
+        super().__init__(f"no frame within {waited_ms:.0f} ms of the request")
+        self.waited_ms = waited_ms
+
+
+#: How long a sent request may produce *no frame of any kind* before the socket
+#: is treated as dead. Armed at the instant ``ws.send`` of the chat frame
+#: returns — the connection and the auth handshake are already done by then, so
+#: this window contains only the backend's own dispatch plus the provider's
+#: queue and prefill.
+#:
+#: 45 s is chosen from the live record: the median whole model call on this
+#: account is under 7 s and a healthy 46k-token call streams its first byte in
+#: a small number of seconds, so 45 s is ~6x the normal whole-call time and
+#: cannot be tripped by prefill on a large prompt. It also sits below every
+#: common load-balancer idle timeout (ALB 60 s, Cloudflare 100 s), so we notice
+#: a dead socket on our own terms and log it, instead of being dropped silently
+#: and late. Tunable per client — raise it for a provider that really does
+#: queue longer.
+DEFAULT_FIRST_FRAME_TIMEOUT = 45.0
+
+#: The overall backstop: the whole stream must finish within this many seconds
+#: of the request. Unchanged; the first-frame budget sits inside it.
+DEFAULT_RECV_TIMEOUT = 180.0
 
 
 # -- session / token holding --------------------------------------------------
@@ -636,7 +674,10 @@ class BackendModelClient:
         reasoning_effort: str | None = None,
         connect: Callable[..., Any] | None = None,
         auth_timeout: float = 15.0,
-        recv_timeout: float = 180.0,
+        recv_timeout: float = DEFAULT_RECV_TIMEOUT,
+        first_frame_timeout: float | None = DEFAULT_FIRST_FRAME_TIMEOUT,
+        token_gap_ms: float = DEFAULT_TOKEN_GAP_MS,
+        clock: Callable[[], float] = time.monotonic,
         connection_pool: BackendConnectionPool | None = None,
     ) -> None:
         self._session = session
@@ -649,6 +690,16 @@ class BackendModelClient:
         self._connect = connect or _ws_connect
         self._auth_timeout = auth_timeout
         self._recv_timeout = recv_timeout
+        # Two deadlines, not one (see DEFAULT_FIRST_FRAME_TIMEOUT): a short
+        # budget for "the socket said nothing at all", and the long backstop for
+        # the whole stream. ``None`` disables the short one.
+        self._first_frame_timeout = first_frame_timeout
+        self._token_gap_ms = token_gap_ms
+        self._clock = clock
+        # The live timing dict of the attempt in flight. Kept on the instance so
+        # a call that DIES still has its first-frame / first-token numbers to
+        # log — an error line without them is the line that tells you nothing.
+        self._last_timing: dict[str, Any] = {}
         self._ws: Any | None = None
         self._connection_pool = connection_pool
         self._connection_key: tuple[str, str] | None = None
@@ -687,19 +738,33 @@ class BackendModelClient:
     # -- ModelClient -----------------------------------------------------
 
     def complete(self, messages: list[dict]) -> ModelResponse:
-        started = time.monotonic()
+        clock = self._clock
+        tracer = get_tracer()
+        started = clock()
         payload = self._messages_to_payload(messages)
-        prepared = time.monotonic()
+        prepared = clock()
+        prompt_tokens_est = _estimate_payload_tokens(payload)
         # A cancel only applies to the call it interrupted. Clearing it here is
         # what lets one client serve the next task after a stopped one.
         self._cancelled = False
         self._received_output = False
         seen_token = self._session.access_token
+        # Attempt bookkeeping (§ retry accounting). A thrown-away attempt is
+        # paid for twice at the provider, so it is counted, timed and named —
+        # never swallowed.
+        attempts = 1
+        retry_reason: str | None = None
+        wasted_ms = 0.0
+        attempt_started = clock()
         try:
-            response = self._chat_once(payload)
+            response = self._chat_once(payload, first_frame_timeout=self._first_frame_timeout)
         except _AuthRejected:
             if self._received_output:
                 self._close()
+                self._fail_record(
+                    tracer, started, prepared, prompt_tokens_est, attempts,
+                    retry_reason, wasted_ms, "stream_interrupted",
+                )
                 raise BackendModelError(
                     "Model stream interrupted after output; retry the turn explicitly",
                     code="stream_interrupted",
@@ -709,8 +774,13 @@ class BackendModelClient:
             # SupabaseSession.refresh), reconnect, retry once. ``seen_token``
             # folds the case where the pair was already replaced meanwhile.
             self._close()
+            attempts += 1
+            retry_reason = "auth_rejected"
+            wasted_ms = (clock() - attempt_started) * 1000
+            self._note_retry(tracer, retry_reason, wasted_ms, attempts, prompt_tokens_est)
             self._session.refresh(seen_token=seen_token)
-            response = self._chat_once(payload)
+            attempt_started = clock()
+            response = self._chat_once(payload, first_frame_timeout=self._first_frame_timeout)
         except ConnectionClosed:
             if self._cancelled:
                 # We closed this socket on purpose (§7.1 Stop). Retrying would
@@ -718,17 +788,157 @@ class BackendModelClient:
                 raise BackendModelError("cancelled", code="cancelled") from None
             if self._received_output:
                 self._close()
+                self._fail_record(
+                    tracer, started, prepared, prompt_tokens_est, attempts,
+                    retry_reason, wasted_ms, "stream_interrupted",
+                )
                 raise BackendModelError(
                     "Model stream interrupted after output; retry the turn explicitly",
                     code="stream_interrupted",
                 ) from None
             # Idle socket dropped by an LB: reconnect and retry once.
             self._close()
-            response = self._chat_once(payload)
+            attempts += 1
+            retry_reason = "connection_closed"
+            wasted_ms = (clock() - attempt_started) * 1000
+            self._note_retry(tracer, retry_reason, wasted_ms, attempts, prompt_tokens_est)
+            attempt_started = clock()
+            response = self._chat_once(payload, first_frame_timeout=self._first_frame_timeout)
+        except _FirstFrameStalled as stalled:
+            # Nothing at all came back inside the short budget. The socket looks
+            # dead: reconnect and ask again — but with the first-frame budget
+            # DISARMED, so a provider that really does need minutes for its
+            # first byte still gets the full backstop on the second attempt and
+            # this can never become a new way to fail a working run.
+            self._close()
+            attempts += 1
+            retry_reason = "first_frame_stalled"
+            wasted_ms = stalled.waited_ms
+            self._note_retry(tracer, retry_reason, wasted_ms, attempts, prompt_tokens_est)
+            attempt_started = clock()
+            response = self._chat_once(payload, first_frame_timeout=None)
         timing = response.raw.setdefault("timing", {})
         timing["prepare_ms"] = (prepared - started) * 1000
-        timing["total_ms"] = (time.monotonic() - started) * 1000
+        timing["total_ms"] = (clock() - started) * 1000
+        # Part 2: the attempt count and why one was thrown away travel WITH the
+        # response, so a caller (the loop, the run record) can bill it.
+        timing["attempts"] = attempts
+        timing["retry_reason"] = retry_reason
+        timing["wasted_ms"] = wasted_ms
+        record = self._call_record(
+            timing, prompt_tokens_est, response.raw.get("usage"), ok=True, error_code=None
+        )
+        _log_model_call(record)
+        if tracer.enabled:
+            tracer.emit("model_call", **record)
         return response
+
+    # -- observability ---------------------------------------------------
+
+    def _note_retry(
+        self,
+        tracer: Any,
+        reason: str,
+        wasted_ms: float,
+        attempt: int,
+        prompt_tokens_est: int,
+    ) -> None:
+        """A thrown-away attempt is a cost signal, not only a latency one: the
+        prompt is sent — and paid for — a second time."""
+        logger.warning(
+            "model call retried: reason=%s dead_attempt_ms=%.0f attempt=%d "
+            "prompt_tokens_est=%d model=%s",
+            reason, wasted_ms, attempt, prompt_tokens_est, self._model_id,
+        )
+        if tracer.enabled:
+            tracer.emit(
+                "retry",
+                reason=reason,
+                dead_ms=round(wasted_ms, 3),
+                attempt=attempt,
+                prompt_tokens_est=prompt_tokens_est,
+                model=self._model_id,
+            )
+
+    def _fail_record(
+        self,
+        tracer: Any,
+        started: float,
+        prepared: float,
+        prompt_tokens_est: int,
+        attempts: int,
+        retry_reason: str | None,
+        wasted_ms: float,
+        error_code: str,
+    ) -> None:
+        """The same line a successful call writes, for a call that died.
+
+        The first-token time is exactly what separates "the model is slow" from
+        "the socket stalled", so it must be on the error line too — that is the
+        line someone reads when a turn failed after four minutes.
+        """
+        timing = dict(self._last_timing)
+        timing["prepare_ms"] = (prepared - started) * 1000
+        timing["total_ms"] = (self._clock() - started) * 1000
+        timing["attempts"] = attempts
+        timing["retry_reason"] = retry_reason
+        timing["wasted_ms"] = wasted_ms
+        record = self._call_record(
+            timing, prompt_tokens_est, None, ok=False, error_code=error_code
+        )
+        _log_model_call(record)
+        if tracer.enabled:
+            tracer.emit("model_call", **record)
+
+    def _call_record(
+        self,
+        timing: dict[str, Any],
+        prompt_tokens_est: int,
+        usage: dict | None,
+        *,
+        ok: bool,
+        error_code: str | None,
+    ) -> dict[str, Any]:
+        """The ONE description of a finished model call. Built once and used
+        twice — the info log line and the trace line — so the two can never
+        drift apart."""
+        usage = usage if isinstance(usage, dict) else {}
+        first_frame = timing.get("first_frame_ms")
+        first_content = timing.get("first_content_ms")
+        first_reasoning = timing.get("first_reasoning_ms")
+        # The earliest generated token of either kind. Reasoning tokens are
+        # tokens: when they arrive first, they are the proof the provider has
+        # started, so taking content alone would overstate the wait.
+        first_token = _earliest(first_content, first_reasoning)
+        record: dict[str, Any] = {
+            "model": self._model_id,
+            "provider": self._provider_slug,
+            "ok": ok,
+            "prepare_ms": _ms(timing.get("prepare_ms")),
+            "connect_ms": _ms(timing.get("connection_ms")),
+            "auth_ms": _ms(timing.get("auth_ms")),
+            "first_frame_ms": _ms(first_frame),
+            "first_reasoning_ms": _ms(first_reasoning),
+            "first_content_ms": _ms(first_content),
+            "first_token_ms": _ms(first_token),
+            "stream_ms": _ms(timing.get("stream_ms")),
+            "total_ms": _ms(timing.get("total_ms")),
+            "attempts": int(timing.get("attempts") or 1),
+            "retry_reason": timing.get("retry_reason"),
+            "wasted_ms": _ms(timing.get("wasted_ms")),
+            "prompt_tokens_est": prompt_tokens_est,
+            "prompt_tokens": usage.get("prompt_tokens"),
+            "completion_tokens": usage.get("completion_tokens"),
+            "total_tokens": usage.get("total_tokens"),
+        }
+        if error_code:
+            record["error_code"] = error_code
+        # The backend reports its own timing block; keep it and fold it in
+        # rather than shadowing it with our guess at the same number.
+        server = timing.get("server")
+        if isinstance(server, dict) and server:
+            record["server"] = server
+        return record
 
     def cheap_clone(self, *, max_tokens: int = 512) -> "BackendModelClient":
         """A "hero"/aux twin of this client: the SAME model, on the SAME account
@@ -758,6 +968,9 @@ class BackendModelClient:
             connect=self._connect,
             auth_timeout=self._auth_timeout,
             recv_timeout=self._recv_timeout,
+            first_frame_timeout=self._first_frame_timeout,
+            token_gap_ms=self._token_gap_ms,
+            clock=self._clock,
             connection_pool=self._connection_pool,
         )
         # The base_url is not stored, only the derived ws url; copy it so a clone
@@ -798,6 +1011,12 @@ class BackendModelClient:
         type.
         """
         self._tools = tools or None
+
+    @property
+    def traced_tools(self) -> list[dict] | None:
+        """The ``tools`` array as it goes on the wire, for the trace's
+        tool-schema token count. Read-only; the setter is :meth:`set_tools`."""
+        return self._tools
 
     # -- payload mapping -------------------------------------------------
 
@@ -859,7 +1078,9 @@ class BackendModelClient:
 
     # -- transport -------------------------------------------------------
 
-    def _ensure_connected(self) -> None:
+    def _ensure_connected(self, timing: dict[str, Any] | None = None) -> None:
+        tracer = get_tracer()
+        clock = self._clock
         if self._ws is not None:
             return
         if self._session.is_expired():
@@ -868,11 +1089,21 @@ class BackendModelClient:
         if self._connection_pool is not None:
             self._ws = self._connection_pool.take(self._connection_key)
             if self._ws is not None:
+                if tracer.enabled:
+                    tracer.emit("connect_open", ms=0.0, pooled=True)
                 return
+        if tracer.enabled:
+            tracer.emit("connect_start", url=_redact_ws_url(self._ws_url))
+        dial_started = clock()
         # Protocol pings maintain liveness during long-running tools without
         # spending model tokens. Make the library defaults explicit.
         ws = self._connect(self._ws_url, open_timeout=self._auth_timeout,
                            ping_interval=20, ping_timeout=20)
+        opened = clock()
+        if timing is not None:
+            timing["connection_ms"] = (opened - dial_started) * 1000
+        if tracer.enabled:
+            tracer.emit("connect_open", ms=round((opened - dial_started) * 1000, 3), pooled=False)
         try:
             ws.send(json.dumps({"type": "auth", "token": self._session.access_token}))
             raw = ws.recv(timeout=self._auth_timeout)
@@ -883,22 +1114,40 @@ class BackendModelClient:
         kind = frame.get("type")
         if kind == "auth_ok":
             self._ws = ws
+            auth_ms = (clock() - opened) * 1000
+            if timing is not None:
+                timing["auth_ms"] = auth_ms
+            if tracer.enabled:
+                tracer.emit("auth_ok", ms=round(auth_ms, 3))
             return
         _safe_close(ws)
         if kind == "auth_error":
             raise _AuthRejected(frame.get("detail", "auth_error"))
         raise BackendModelError(f"unexpected handshake frame: {kind!r}")
 
-    def _chat_once(self, payload: dict[str, Any]) -> ModelResponse:
-        started = time.monotonic()
-        self._ensure_connected()
+    def _chat_once(
+        self, payload: dict[str, Any], *, first_frame_timeout: float | None = None
+    ) -> ModelResponse:
+        clock = self._clock
+        tracer = get_tracer()
+        started = clock()
+        timing: dict[str, Any] = {}
+        self._last_timing = timing
+        self._ensure_connected(timing)
         ws = self._ws
         assert ws is not None
         req_id = uuid.uuid4().hex
-        sent = time.monotonic()
-        timing: dict[str, Any] = {"connection_ms": (sent - started) * 1000}
+        blob = json.dumps({"req_id": req_id, "type": "chat", "payload": payload})
+        timing.setdefault("connection_ms", (clock() - started) * 1000)
         self._reusable = False
-        ws.send(json.dumps({"req_id": req_id, "type": "chat", "payload": payload}))
+        ws.send(blob)
+        # The first-frame window starts HERE — the instant the request is fully
+        # written to an already-open, already-authenticated socket. Everything
+        # before it (dial, TLS, handshake) is timed separately above, and
+        # everything after it is the backend plus the provider.
+        sent = clock()
+        if tracer.enabled:
+            tracer.emit("request_sent", bytes=len(blob), tools=len(self._tools or ()))
 
         content_parts: list[str] = []
         reasoning_parts: list[str] = []
@@ -906,17 +1155,53 @@ class BackendModelClient:
         usage: dict | None = None
         meta: dict | None = None
         tps: float | None = None
-        deadline = time.monotonic() + self._recv_timeout
+        frames = 0
+        first_frame_at: float | None = None
+        last_frame_at = sent
+        deadline = sent + self._recv_timeout
+        first_deadline = (
+            sent + first_frame_timeout if first_frame_timeout is not None else None
+        )
         while True:
-            remaining = deadline - time.monotonic()
+            now = clock()
+            remaining = deadline - now
             if remaining <= 0:
                 raise BackendModelError("timed out waiting for done", code="timeout")
-            raw = ws.recv(timeout=remaining)
+            # Two budgets. Until the first frame of THIS request has landed the
+            # short one applies; afterwards only the backstop does. A stream
+            # that keeps sending frames — however slowly — is never cut off by
+            # the short budget, because the budget is already disarmed.
+            if first_deadline is not None:
+                remaining = min(remaining, max(0.0, first_deadline - now))
+                if remaining <= 0:
+                    raise _FirstFrameStalled((now - sent) * 1000)
+            try:
+                raw = ws.recv(timeout=remaining)
+            except TimeoutError:
+                if first_deadline is not None and clock() >= first_deadline:
+                    raise _FirstFrameStalled((clock() - sent) * 1000) from None
+                raise BackendModelError(
+                    "timed out waiting for done", code="timeout"
+                ) from None
             frame = _load_frame(raw)
             if frame.get("type") == "pong":
                 continue
             if frame.get("req_id") != req_id:
                 continue
+            frames += 1
+            now = clock()
+            if first_frame_at is None:
+                first_frame_at = now
+                # Disarm: the socket has spoken, so this request is being
+                # served. Only the overall deadline governs from here.
+                first_deadline = None
+                timing["first_frame_ms"] = (now - sent) * 1000
+                if tracer.enabled:
+                    tracer.emit(
+                        "first_frame",
+                        kind=str(frame.get("kind") or ""),
+                        ms=round(timing["first_frame_ms"], 3),
+                    )
             kind = frame.get("kind")
             # Once generation has reached us it is no longer safe to replay
             # the prompt transparently: UI deltas cannot be rolled back and
@@ -924,7 +1209,16 @@ class BackendModelClient:
             # socket recovery only for a connection with no model output.
             if kind in ("content", "reasoning", "tool_calls") and frame.get("data"):
                 self._received_output = True
-            timing.setdefault(f"first_{kind}_ms", (time.monotonic() - sent) * 1000)
+            if f"first_{kind}_ms" not in timing:
+                timing[f"first_{kind}_ms"] = (now - sent) * 1000
+                if tracer.enabled and kind in ("content", "reasoning"):
+                    tracer.emit(
+                        f"first_{kind}", ms=round(timing[f"first_{kind}_ms"], 3)
+                    )
+            gap_ms = (now - last_frame_at) * 1000
+            last_frame_at = now
+            if tracer.enabled and gap_ms >= self._token_gap_ms and frames > 1:
+                tracer.emit("token_gap", kind=str(kind or ""), ms=round(gap_ms, 3))
             if kind == "content":
                 data = frame.get("data")
                 if isinstance(data, str):
@@ -949,6 +1243,13 @@ class BackendModelClient:
                 data = frame.get("data")
                 if isinstance(data, dict):
                     usage = data
+                    if tracer.enabled:
+                        tracer.emit(
+                            "usage",
+                            prompt_tokens=data.get("prompt_tokens"),
+                            completion_tokens=data.get("completion_tokens"),
+                            total_tokens=data.get("total_tokens"),
+                        )
             elif kind == "tool_calls":
                 # Native function calling: the server accumulates the provider's
                 # streamed tool-call fragments and relays complete OpenAI calls
@@ -975,7 +1276,20 @@ class BackendModelClient:
                 self._reusable = True
                 break
 
+        closed = clock()
+        timing["stream_ms"] = (closed - (first_frame_at or sent)) * 1000
+        timing["recv_ms"] = (closed - sent) * 1000
         content = "".join(content_parts)
+        if tracer.enabled:
+            tracer.emit(
+                "stream_closed",
+                ms=round(timing["stream_ms"], 3),
+                frames=frames,
+                content_chars=len(content),
+                reasoning_chars=sum(len(p) for p in reasoning_parts),
+                tool_calls=len(native_calls),
+                tps=tps,
+            )
         # Native tool calls are the ONE protocol, exactly like chuk_chat: a turn
         # is a tool-call turn only when the server sent a `tool_calls` frame, and
         # the content is then the assistant's (optional) interim text. With no
@@ -1000,6 +1314,74 @@ class BackendModelClient:
         if self._ws is not None:
             _safe_close(self._ws)
             self._ws = None
+
+
+def _ms(value: Any) -> float | None:
+    """Round a millisecond figure for a log/trace field; ``None`` stays ``None``
+    so a missing measurement is visibly missing instead of a fake zero."""
+    if value is None:
+        return None
+    try:
+        return round(float(value), 3)
+    except (TypeError, ValueError):
+        return None
+
+
+def _earliest(*values: Any) -> Any:
+    present = [v for v in values if v is not None]
+    return min(present) if present else None
+
+
+def _estimate_payload_tokens(payload: dict[str, Any]) -> int:
+    """A cheap prompt-size estimate for the log line: the serialised payload at
+    ~4 characters per token. Deliberately not the ladder's estimator — this must
+    cost nothing and must also cover the tool schemas, which are on the wire."""
+    try:
+        return len(json.dumps(payload, default=str)) // 4
+    except (TypeError, ValueError):
+        return 0
+
+
+def _redact_ws_url(url: str) -> str:
+    """Host + path only. A URL is not supposed to carry the token here, but a
+    trace file must not be the place that proves otherwise."""
+    head, _, _ = url.partition("?")
+    return head
+
+
+def _log_model_call(record: dict[str, Any]) -> None:
+    """One info line per model call.
+
+    ``first_token_ms`` is the field that separates "the model is slow" from
+    "the socket stalled", so it is always present — including on a call that
+    ended in an error, where it is the only thing that says how far the call
+    got.
+    """
+    logger.info(
+        "model call %s model=%s provider=%s attempts=%d retry=%s "
+        "prepare_ms=%s connect_ms=%s first_frame_ms=%s first_token_ms=%s "
+        "stream_ms=%s total_ms=%s wasted_ms=%s prompt_tokens=%s "
+        "prompt_tokens_est=%d completion_tokens=%s",
+        "ok" if record.get("ok") else f"failed[{record.get('error_code')}]",
+        record.get("model"),
+        record.get("provider"),
+        record.get("attempts", 1),
+        record.get("retry_reason") or "-",
+        _fmt(record.get("prepare_ms")),
+        _fmt(record.get("connect_ms")),
+        _fmt(record.get("first_frame_ms")),
+        _fmt(record.get("first_token_ms")),
+        _fmt(record.get("stream_ms")),
+        _fmt(record.get("total_ms")),
+        _fmt(record.get("wasted_ms")),
+        record.get("prompt_tokens") if record.get("prompt_tokens") is not None else "-",
+        record.get("prompt_tokens_est", 0),
+        record.get("completion_tokens") if record.get("completion_tokens") is not None else "-",
+    )
+
+
+def _fmt(value: Any) -> str:
+    return "-" if value is None else f"{float(value):.0f}"
 
 
 def _safe_close(ws: Any) -> None:
