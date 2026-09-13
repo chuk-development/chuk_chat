@@ -1,11 +1,15 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/room_mention_picker.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
 
 void main() {
@@ -396,6 +400,264 @@ void main() {
     expect(find.text('on second'), findsOneWidget);
     // No dead-room banner: the rebind recovered it.
     expect(find.textContaining('Connection changed'), findsNothing);
+  });
+
+  group('the @mention picker', () {
+    const List<AgentsRoomMember> trio = <AgentsRoomMember>[
+      AgentsRoomMember(agentId: 'a', handle: 'amber'),
+      AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+      AgentsRoomMember(agentId: 'c', handle: 'ash'),
+    ];
+
+    /// The page with a room behind it. Returns what the composer sent, so a
+    /// test can say "and nothing was sent" without a second fixture.
+    Future<List<String>> pumpRoom(
+      WidgetTester tester, {
+      List<AgentsRoomMember> members = trio,
+      List<AgentsAgent> agents = const <AgentsAgent>[],
+    }) async {
+      final ctrl = StreamController<AgentsRelayInbound>.broadcast();
+      addTearDown(ctrl.close);
+      final sent = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoomThreadPage(
+              roomId: 'r1',
+              roomName: 'launch',
+              userMessage: 'what is the plan?',
+              inbound: ctrl.stream,
+              members: members,
+              agents: agents,
+              onSend: sent.add,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return sent;
+    }
+
+    /// Only what the picker draws — the header strip prints `@handle` too.
+    Finder inPicker(String text) => find.descendant(
+      of: find.byType(RoomMentionPicker),
+      matching: find.text(text),
+    );
+
+    String composerText(WidgetTester tester) =>
+        tester.widget<TextField>(find.byType(TextField)).controller!.text;
+
+    testWidgets('an @ opens it on the whole room; a letter filters it', (
+      tester,
+    ) async {
+      await pumpRoom(tester);
+      expect(find.byType(RoomMentionPicker), findsNothing);
+
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsOneWidget);
+      expect(inPicker('@all'), findsOneWidget);
+      expect(inPicker('@amber'), findsOneWidget);
+      expect(inPicker('@cobalt'), findsOneWidget);
+      expect(inPicker('@ash'), findsOneWidget);
+
+      await tester.enterText(find.byType(TextField), '@am');
+      await tester.pump();
+      expect(inPicker('@amber'), findsOneWidget);
+      expect(inPicker('@cobalt'), findsNothing);
+      expect(inPicker('@ash'), findsNothing);
+      expect(inPicker('@all'), findsNothing);
+
+      // Nothing matches any more -> the picker closes rather than showing air.
+      await tester.enterText(find.byType(TextField), '@amz');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+    });
+
+    testWidgets('a name matches too, and the row shows name, handle, role', (
+      tester,
+    ) async {
+      await pumpRoom(
+        tester,
+        agents: <AgentsAgent>[
+          const AgentsAgent(
+            id: 'b',
+            name: 'Cobalt',
+            role: 'release manager',
+            threads: [],
+          ),
+        ],
+      );
+      await tester.enterText(find.byType(TextField), '@Cob');
+      await tester.pump();
+      expect(inPicker('Cobalt'), findsOneWidget);
+      expect(inPicker('@cobalt'), findsOneWidget);
+      expect(inPicker('release manager'), findsOneWidget);
+    });
+
+    testWidgets('an @ inside a word never opens it', (tester) async {
+      await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), 'write to amber@ex');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+    });
+
+    testWidgets('a room with no members never opens it', (tester) async {
+      await pumpRoom(tester, members: const <AgentsRoomMember>[]);
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+    });
+
+    testWidgets('escape closes it, and it stays closed inside that token', (
+      tester,
+    ) async {
+      await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), '@am');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+
+      // Still the same token: it does not spring back on the next letter.
+      await tester.enterText(find.byType(TextField), '@amb');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+
+      // A new token opens it again.
+      await tester.enterText(find.byType(TextField), '@amb @co');
+      await tester.pump();
+      expect(inPicker('@cobalt'), findsOneWidget);
+    });
+
+    testWidgets('a tap outside closes it', (tester) async {
+      await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), '@am');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsOneWidget);
+
+      await tester.tapAt(const Offset(200, 60)); // up in the thread
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+    });
+
+    testWidgets('enter accepts the highlighted row and sends nothing', (
+      tester,
+    ) async {
+      final sent = await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), 'hey @am');
+      await tester.pump();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+
+      expect(composerText(tester), 'hey @amber ');
+      expect(sent, isEmpty, reason: 'enter must not send while it is open');
+      expect(find.byType(RoomMentionPicker), findsNothing);
+    });
+
+    testWidgets('enter with the picker closed sends', (tester) async {
+      final sent = await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), 'hey @amber what now');
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsNothing);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(sent, <String>['hey @amber what now']);
+      expect(composerText(tester), isEmpty);
+    });
+
+    testWidgets('the arrows walk the list and tab accepts', (tester) async {
+      final sent = await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pump();
+
+      // all -> amber -> cobalt, then back up to amber.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+
+      expect(composerText(tester), '@amber ');
+      expect(sent, isEmpty);
+    });
+
+    testWidgets('@all is offered and inserted', (tester) async {
+      await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), 'so @al');
+      await tester.pump();
+      expect(inPicker('Everyone'), findsOneWidget);
+      expect(inPicker('3 coworkers'), findsOneWidget);
+
+      await tester.tap(inPicker('Everyone'));
+      await tester.pump();
+      expect(composerText(tester), 'so @all ');
+    });
+
+    testWidgets('a tap on a row writes the handle mid-sentence', (
+      tester,
+    ) async {
+      await pumpRoom(tester);
+      await tester.enterText(find.byType(TextField), 'hey @co can you look');
+      // The caret lands at the end after enterText, so put it back in the token.
+      final TextEditingController c = tester
+          .widget<TextField>(find.byType(TextField))
+          .controller!;
+      c.selection = const TextSelection.collapsed(offset: 7);
+      await tester.pump();
+      expect(find.byType(RoomMentionPicker), findsOneWidget);
+
+      await tester.tap(inPicker('@cobalt'));
+      await tester.pump();
+      expect(c.text, 'hey @cobalt can you look');
+      expect(c.selection.baseOffset, 12);
+    });
+
+    testWidgets('a long room stays bounded, filters, and follows the arrows', (
+      tester,
+    ) async {
+      final List<AgentsRoomMember> many = <AgentsRoomMember>[
+        for (int i = 0; i < 15; i++)
+          AgentsRoomMember(agentId: 'a$i', handle: 'agent-$i'),
+      ];
+      await pumpRoom(tester, members: many);
+
+      await tester.enterText(find.byType(TextField), '@');
+      await tester.pump();
+      final Rect box = tester.getRect(find.byType(RoomMentionPicker));
+      expect(box.height, lessThanOrEqualTo(248));
+      // It does not eat the thread above it.
+      expect(
+        box.height,
+        lessThan(tester.getSize(find.byType(Scaffold)).height),
+      );
+
+      // Arrow past the visible rows: the highlighted one is scrolled into view.
+      for (int i = 0; i < 9; i++) {
+        await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      }
+      // One frame for the keys, one for the post-frame reveal.
+      await tester.pump();
+      await tester.pump();
+      final Rect row = tester.getRect(inPicker('@agent-8'));
+      expect(row.top, greaterThanOrEqualTo(box.top - 0.5));
+      expect(row.bottom, lessThanOrEqualTo(box.bottom + 0.5));
+      // …and that is the row enter takes.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pump();
+      expect(composerText(tester), '@agent-8 ');
+
+      // Typing narrows the long list to one row.
+      await tester.enterText(find.byType(TextField), '@agent-12');
+      await tester.pump();
+      expect(inPicker('@agent-12'), findsOneWidget);
+      expect(inPicker('@agent-1'), findsNothing);
+    });
   });
 }
 
