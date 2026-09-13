@@ -227,8 +227,22 @@ Never a picture the agent drew, never a second bar widget.
 ## 11. Layout
 
 - Reading measure for prose: 720 px. A wide window keeps a column.
-- A table that cannot fit stacks into one card per row (`ChukTable`); it never
-  scrolls off the right edge unannounced.
+- A table is a table at every width (`ChukTable`). The header is printed once,
+  a row is ONE LINE, and the same field lands on the same x in every row —
+  running the eye down a column is the only thing the format is for. A value
+  too long for its column is cut with an ellipsis and carries its full text in
+  a tooltip; a right-aligned column is a number column and never ellipsises,
+  because a cut price reads as a price and is not one. A column that cannot
+  fit gives room to the subject column first. Only a table that cannot honestly
+  fit pans sideways, and then the first column is PINNED and the scrollbar
+  stays on screen — it never scrolls off the right edge unannounced. The one
+  card per row this replaced fit, and read as a stack of forms: no two rows
+  lined up and two rows filled a phone.
+- A link cell carries the label the DOCUMENT gave it. When the document gave
+  only a bare URL, the app labels the cell with the host — and when a whole
+  column is then the same host in every row, the repeated string is no
+  information at all, so the column is drawn as what it is: one arrow per row
+  under a header that names it.
 - Every screen works at 360 px width and 1.3 text scale — the layout suite checks
   it, and it is not optional.
 
