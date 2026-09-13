@@ -2,7 +2,7 @@
 name: youtube-transcript
 description: Pull the full transcript of a YouTube video with yt-dlp and summarize it. Use whenever the user gives a YouTube URL or video id and asks to summarize, transcribe, get the transcript, extract key points, quote, or answer questions about the video.
 metadata:
-  version: "1.0"
+  version: "1.1"
 ---
 
 # YouTube transcript and summary
@@ -155,15 +155,56 @@ print(text[:1500])
   SAME script with a wider language set via the env var — no code edit needed:
   `YT_LANGS="all" python <script>` accepts any language, or
   `YT_LANGS="orig,en,de"` to prefer the original. If still none, tell the user
-  the video has no captions. A heavier fallback is to download the audio
-  (`yt-dlp -f bestaudio -x`) and run speech-to-text, but that is slow — only do
-  it if the user wants it.
+  the video has no captions, and offer the audio fallback below.
+
+## The audio fallback: audio only, and the smallest one that is still the real track
+
+When there are no captions and the user wants the content anyway, download the
+**audio track only** and take the **smallest** one on offer. Speech-to-text does
+not get better from a bigger file, so paying for the big one costs time,
+bandwidth and disk for nothing.
+
+```bash
+yt-dlp --no-playlist \
+       -f 'ba[format_note*=original][protocol^=https]/ba[protocol^=https]/ba/worst' \
+       -S '+size,+abr' \
+       -x --audio-format opus --audio-quality 9 \
+       -o 'audio.%(ext)s' "$URL"
+```
+
+Measured on a real video: this picks a 49 kbps m4a of 10.3 MiB where `bestaudio`
+takes a 121 kbps opus of 25.6 MiB. On a long stream it was 135 MB against
+399 MB. Same words either way.
+
+**Do not just write `-f worstaudio`.** On a video with AI dub tracks — which is
+most big channels now — `worstaudio` silently selects a dubbed track: on the
+video this was tested against it picked `233-0`, the automatic Arabic dub. The
+transcript then comes back in a language the video was never in, and nothing
+warns you. That is what the `format_note*=original` filter in the first branch
+is for.
+
+The rest of the selector, in order: prefer the original-language audio over a
+dub; prefer a plain https format over an m3u8 one, because the HLS variants
+report no size up front and arrive as fragments; fall back to any audio-only
+format; and only then to `worst`, for a video that offers no audio-only format
+at all. `-S '+size,+abr'` is what makes "best audio" mean the smallest rather
+than the fattest — without it, `ba` still means best.
+
+`-x` drops the container and keeps the audio, so nothing video-sized survives
+even when the last fallback had to take a muxed stream. `--audio-quality 9` is
+the lowest VBR setting and applies only when yt-dlp re-encodes; with a stream it
+can copy, it changes nothing.
+
+Check the size before feeding it to anything. Tens of MB for a normal video is
+right; hundreds mean the format selection did not do what it should, and the fix
+is the selector, not a bigger machine.
 
 ## Notes
 
 - Never download the full video. `--skip-download` keeps it to the subtitle
   file only, and `--no-playlist` keeps a `watch?v=...&list=...` url to the one
-  video.
+  video. If a download is unavoidable, it is audio only and it is the worst
+  audio available — see the audio fallback above.
 - The input is validated to a YouTube host or an 11-char id before it reaches
   yt-dlp, so a stray non-YouTube url is rejected rather than fetched.
 - Subtitles are downloaded into a private temp dir, so nothing in the workspace
