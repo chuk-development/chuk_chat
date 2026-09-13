@@ -61,6 +61,13 @@ from typing import Any, Protocol, runtime_checkable
 #: them. Kept as data so the reader can order a waterfall without guessing and
 #: a test can assert the set is covered.
 PHASES: tuple[str, ...] = (
+    # Before the loop: the relay frame that carries the task. A task that
+    # never becomes a run leaves no ``task_received`` at all, and these two
+    # phases are what tell "the frame arrived and the host threw it away"
+    # apart from "the frame never arrived" (see
+    # :mod:`chuk_agents_host.relay_ledger`).
+    "relay_frame_in",
+    "relay_frame_dropped",
     "task_received",
     "memory_recall_start",
     "memory_recall_end",

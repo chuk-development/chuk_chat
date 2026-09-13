@@ -78,6 +78,13 @@ enum AgentsRunOutcome {
 
   /// No terminal ever came and the run went quiet: the app lost it.
   lost,
+
+  /// The task frame never reached the host. There is no run to lose: the app
+  /// sent it, got no `task_ack`, no heartbeat and no run, and re-sent it until
+  /// it ran out of attempts. This is the only outcome that means "nothing at
+  /// all happened", and the user has to be told so instead of watching the
+  /// typing dots for ever.
+  notDelivered,
 }
 
 /// What a run terminal means for the thread, from the two fields that say it.
@@ -111,6 +118,8 @@ String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
   AgentsRunOutcome.stopped => 'Stopped. No answer was written.',
   AgentsRunOutcome.failed => 'This run failed. No answer was written.',
   AgentsRunOutcome.lost => 'Lost this run. No answer came back.',
+  AgentsRunOutcome.notDelivered =>
+    'This message did not reach your host. Nothing ran — send it again.',
 };
 
 /// Everything one run produced, in renderer shapes.
@@ -204,6 +213,43 @@ class AgentsRun {
   /// agent. A run that produced something left a visible trace in the thread,
   /// so it needs no line of its own even when it ended badly.
   bool producedOutput = false;
+
+  /// The app's `task_id` for the send this run was started by, once that send
+  /// recorded it ([AgentsRunLedger.taskSent]). Null for a run this client
+  /// did not start — one adopted from a `run_state` header — and for a send
+  /// that carried no id, and the pre-run rule below leaves both alone.
+  String? taskId;
+
+  /// When the newest attempt of [taskId] went to the socket. The pre-run
+  /// window is measured from here, NOT from [startedAt]: a re-send restarts
+  /// the wait for the ack it is asking for.
+  DateTime? taskSentAt;
+
+  /// How many re-sends the pre-run window has asked for. Counted HERE and
+  /// nowhere else: [AgentsRunLedger.taskSent] only restarts the window, or the
+  /// sweep and the re-send it triggers would each count the same attempt and
+  /// the run would be given up on after one try instead of three.
+  int taskWaits = 0;
+
+  /// The host answered `task_ack` with `accepted` or `duplicate`: it holds the
+  /// task. From here on the run is the host's problem and the ordinary
+  /// [AgentsRunLedger.ceiling] is what watches it.
+  bool taskAcknowledged = false;
+
+  /// A `heartbeat` arrived for this run. Proof the host is working on it even
+  /// though it has produced no output yet, so the pre-run rule stands down.
+  bool sawHeartbeat = false;
+
+  /// True while nothing has positively shown that the host has this task: no
+  /// ack, no heartbeat, no host header, no output. This is the state the
+  /// pre-run rule acts on — never a bare timer on the spinner, because a
+  /// spinner is also what a perfectly healthy prefill looks like.
+  bool get taskUnproven =>
+      taskId != null &&
+      !taskAcknowledged &&
+      !sawHeartbeat &&
+      !hostObserved &&
+      !producedOutput;
 
   /// True once the run is over and it left the thread with nothing: the reader
   /// has to be told what happened instead of watching the dots for ever.
@@ -352,6 +398,30 @@ class AgentsRunLedger extends ChangeNotifier {
   /// been computed before the task reached the host (see [reconcileIdle]).
   static Duration idleHeaderGrace = const Duration(seconds: 10);
 
+  /// The pre-run window: how long a task may sit with NO `task_ack`, NO
+  /// heartbeat and NO run before the app sends it again.
+  ///
+  /// Much shorter and much sharper than [ceiling], because it watches a
+  /// different thing. [ceiling] watches a run the host has confirmed, where
+  /// silence is ordinary — a model reading a long prompt or a shell command
+  /// that takes minutes sends nothing while it works. This watches the gap
+  /// BEFORE any of that, where the host owes an answer within one round trip:
+  /// an ack, or a heartbeat, or the run's first frame. Eight seconds is a slow
+  /// mobile round trip several times over, and it is still short enough that
+  /// the user has not yet given up on the typing dots.
+  static Duration taskAckCeiling = const Duration(seconds: 8);
+
+  /// How often one task may go to a socket before the thread reports it as a
+  /// failed send. Kept the same as `AgentsPendingTasks.maxAttempts`, which is
+  /// what actually stops the re-sends; this is the ledger's own guard for a
+  /// run whose record is already gone.
+  static const int maxTaskAttempts = 3;
+
+  /// Called when a task has gone unproven for [taskAckCeiling]. The thread
+  /// view hangs the re-send here, the same way it hangs the silence probe on
+  /// [onRunSilent]: the ledger owns no socket and no timer of its own.
+  void Function(String sessionKey)? onTaskUnacknowledged;
+
   /// Called when a run has produced nothing for [ceiling]. The thread view
   /// hangs the probe here: it asks the host for a fresh `run_state`, which
   /// either revives the run or reconciles it away.
@@ -377,6 +447,9 @@ class AgentsRunLedger extends ChangeNotifier {
         _endWithoutAnswer(run.sessionKey, AgentsRunOutcome.stopped);
         continue;
       }
+      // Before the run ceiling: a task the host has not acknowledged at all is
+      // not a silent run, it is a frame that may never have arrived.
+      if (_sweepUnproven(run, clock)) continue;
       final silent = clock.difference(run.lastActivity);
       if (run.probedAt != null) {
         if (clock.difference(run.probedAt!) >= ceilingGrace) {
@@ -389,6 +462,78 @@ class AgentsRunLedger extends ChangeNotifier {
         onRunSilent?.call(run.sessionKey);
       }
     }
+  }
+
+  /// The pre-run window, applied to one run. Returns true when this run has
+  /// been dealt with and the ordinary ceiling must not also look at it.
+  ///
+  /// A re-send is asked for, not done here: the ledger has no socket. When the
+  /// attempts are used up the run ends as [AgentsRunOutcome.notDelivered], so
+  /// the thread says the message did not arrive instead of animating for ever.
+  bool _sweepUnproven(AgentsRun run, DateTime clock) {
+    if (!run.taskUnproven) return false;
+    final sentAt = run.taskSentAt;
+    if (sentAt == null) return false;
+    if (clock.difference(sentAt) < taskAckCeiling) return false;
+    // The first send is the first of [maxTaskAttempts], so the window may ask
+    // for one fewer re-send than that before it gives up.
+    if (run.taskWaits >= maxTaskAttempts - 1) {
+      _endWithoutAnswer(run.sessionKey, AgentsRunOutcome.notDelivered);
+      return true;
+    }
+    // Count the wait here and restart the window, so a watchdog that ticks
+    // every second asks for ONE re-send and then waits for its answer.
+    run.taskWaits += 1;
+    run.taskSentAt = clock;
+    onTaskUnacknowledged?.call(run.sessionKey);
+    return true;
+  }
+
+  /// A task frame for [sessionKey] has been handed to the socket.
+  ///
+  /// Called for the first send and for every re-send of the same [taskId], so
+  /// the pre-run window is measured from the newest attempt. It does NOT count
+  /// the attempt: the window counts its own waits, and counting in both places
+  /// would use the budget up in a third of the time.
+  void taskSent(String sessionKey, String taskId, {DateTime? at}) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    if (run.taskId != taskId) {
+      // A different send: this is a fresh wait, not another attempt.
+      run
+        ..taskId = taskId
+        ..taskWaits = 0
+        ..taskAcknowledged = false;
+    }
+    run.taskSentAt = at ?? DateTime.now();
+  }
+
+  /// The host holds the task (`task_ack` with `accepted` or `duplicate`).
+  ///
+  /// The wait is over whatever happens next: from here the run is watched by
+  /// [ceiling] like any other. A `duplicate` lands here too and deliberately
+  /// changes nothing else — the answer is coming from the first attempt, and
+  /// painting anything for it would give the thread a second bubble.
+  void taskAcknowledged(String sessionKey, {String? taskId, String? runId}) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    if (taskId != null && run.taskId != null && run.taskId != taskId) return;
+    run
+      ..taskAcknowledged = true
+      ..lastActivity = DateTime.now()
+      ..probedAt = null;
+    if (runId != null && runId.isNotEmpty) run.runId = runId;
+    notifyListeners();
+  }
+
+  /// The host refused the task (`task_ack` with `rejected`). There is no run
+  /// and there never will be one for this attempt, so the thread stops
+  /// pretending: the spinner goes, and the turn says the send failed.
+  void taskRejected(String sessionKey, {String? reason}) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running) return;
+    run.reason = reason;
+    _endWithoutAnswer(sessionKey, AgentsRunOutcome.notDelivered);
   }
 
   /// The run for [sessionKey], if one is on record.
@@ -440,6 +585,10 @@ class AgentsRunLedger extends ChangeNotifier {
     final run = _runs[sessionKey];
     if (run == null || !run.running) return;
     run
+      // A heartbeat also proves the task ARRIVED, which is what the pre-run
+      // window is waiting to learn. An old host that sends heartbeats but no
+      // `task_ack` is therefore never re-sent to.
+      ..sawHeartbeat = true
       ..lastActivity = DateTime.now()
       ..probedAt = null;
   }
@@ -735,10 +884,7 @@ class AgentsRunLedger extends ChangeNotifier {
     run.running = false;
     run.finalAnswer = finalAnswer;
     run.reason = reason;
-    run.outcome = agentsRunOutcomeFor(
-      reason: reason,
-      finalAnswer: finalAnswer,
-    );
+    run.outcome = agentsRunOutcomeFor(reason: reason, finalAnswer: finalAnswer);
     run.iterations = iterations;
     run.tokensSpent = tokensSpent;
     if (runId != null) run.runId = runId;
@@ -775,6 +921,7 @@ class AgentsRunLedger extends ChangeNotifier {
   @visibleForTesting
   void reset() {
     onRunSilent = null;
+    onTaskUnacknowledged = null;
     _runs.clear();
     _subagentCalls.clear();
     _automationCalls.clear();
