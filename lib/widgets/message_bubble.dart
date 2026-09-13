@@ -207,6 +207,7 @@ class MessageBubble extends StatefulWidget {
     this.onEditRequested,
     this.reaction,
     this.onReaction,
+    this.senderLabel,
   });
 
   final String message;
@@ -214,6 +215,15 @@ class MessageBubble extends StatefulWidget {
   final VoidCallback? onEditRequested;
   final String? reaction;
   final ValueChanged<String>? onReaction;
+
+  /// Who is talking, drawn above the first bubble of the run.
+  ///
+  /// A one-to-one thread leaves this null — there is exactly one other sender,
+  /// so naming it over every run is noise. A group room passes it, because a
+  /// run there could be any of several coworkers. The label rides INSIDE the
+  /// run gap (the bubble gives its own top margin up to it), so a named run
+  /// and an unnamed one keep the same rhythm.
+  final Widget? senderLabel;
 
   /// Opt-in quiet mobile chrome. Data, model settings and desktop stay intact.
   final bool messengerMode;
