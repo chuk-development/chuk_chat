@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/agent_markdown.dart';
+import 'package:chuk_chat/widgets/agent_markdown.dart';
 
 Widget _host(Widget child, {Brightness brightness = Brightness.light}) {
   return MaterialApp(

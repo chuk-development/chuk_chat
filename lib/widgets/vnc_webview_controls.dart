@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/vnc_webview_screen.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/vnc_webview_screen.dart';
 
 /// What the view is still waiting for, as named steps rather than a spinner.
 ///

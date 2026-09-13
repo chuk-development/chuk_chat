@@ -18,7 +18,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     HereNowConfig,
     LocalEnvironment,
     PublishRequest,
@@ -26,7 +26,7 @@ from cowork_agent import (
     make_publish_handler,
     register_herenow_tools,
 )
-from cowork_agent.environment import ProcessResult
+from chuk_agents_runtime.environment import ProcessResult
 
 
 # -- policy layer: a fake environment scripting the publisher --------------

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from cowork_manager import (
+from chuk_agents_manager import (
     GroupRoom,
     RoomCaps,
     RoomError,
@@ -227,7 +227,7 @@ def test_bad_caps_are_refused():
 
 
 def test_has_broadcast_mention_detects_the_keywords():
-    from cowork_manager import has_broadcast_mention
+    from chuk_agents_manager import has_broadcast_mention
 
     assert has_broadcast_mention("hey @all thoughts?")
     assert has_broadcast_mention("@everyone")

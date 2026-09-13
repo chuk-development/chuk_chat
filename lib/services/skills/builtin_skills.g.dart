@@ -8,7 +8,7 @@
 
 // ignore_for_file: lines_longer_than_80_chars
 
-import 'package:cowork/models/skill.dart';
+import 'package:chuk_chat/models/skill.dart';
 
 /// Skills authored in this repo and compiled into the binary.
 ///

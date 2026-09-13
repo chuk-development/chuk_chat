@@ -52,10 +52,10 @@ Read today's new e-mails and give the user a three-line summary.
 ## Watchers
 
 A watcher is for "tell me when X changes": a script that polls every few
-seconds or minutes and calls `cowork_hooks.trigger()` ONLY when something is
+seconds or minutes and calls `agents_hooks.trigger()` ONLY when something is
 new. The host restarts it if it crashes (backoff 1 s to 60 s; more than 10
 crashes in 10 minutes stops it as `failed`). Its stdout and stderr go to
-`.cowork/automations/<id>.log` in the workspace; read that file with
+`.agents/automations/<id>.log` in the workspace; read that file with
 `read_file` when something looks wrong.
 
 Rules the host applies:
@@ -105,7 +105,7 @@ Ask the user for the channel (a handle, a channel URL or a channel id). Then:
    `yt-dlp --flat-playlist --print channel_id "https://www.youtube.com/@handle/videos" | head -1`
    works, and so does reading the `channelId` from the channel page's HTML.
 2. Write the watcher below with `write_file`, run it once with `python`
-   (it prints the newest video and exits when `COWORK_AUTOMATION_ID` is not
+   (it prints the newest video and exits when `AGENTS_AUTOMATION_ID` is not
    set), then `start_watcher("watch_youtube.py", name="youtube channel")`.
 3. When it fires, the payload names the new video. Then use the
    `youtube-transcript` skill: pull the transcript, write the summary, and
@@ -114,12 +114,12 @@ Ask the user for the channel (a handle, a channel URL or a channel id). Then:
 ```python
 # watch_youtube.py — poll the channel's public RSS feed, no key needed.
 import json, os, time, urllib.request, xml.etree.ElementTree as ET
-from cowork_hooks import trigger
+from agents_hooks import trigger
 
 CHANNEL_ID = "PASTE_THE_UC_CHANNEL_ID_HERE"
 FEED = os.environ.get("YT_FEED_URL") or f"https://www.youtube.com/feeds/videos.xml?channel_id={CHANNEL_ID}"
 POLL_SECONDS = 300          # 5 minutes is plenty for a feed
-STATE = ".cowork/automations/watch_youtube.state.json"
+STATE = ".agents/automations/watch_youtube.state.json"
 NS = {"a": "http://www.w3.org/2005/Atom", "yt": "http://www.youtube.com/xml/schemas/2015"}
 
 def latest():
@@ -148,7 +148,7 @@ def save_seen(video_id):
         json.dump({"video_id": video_id, "at": time.time()}, fh)
 
 seen = load_seen()
-if not os.environ.get("COWORK_AUTOMATION_ID"):
+if not os.environ.get("AGENTS_AUTOMATION_ID"):
     # A test run by hand: show the newest video and stop.
     print("newest:", latest())
     raise SystemExit(0)
@@ -181,7 +181,7 @@ Why it is shaped like this:
 
 ```python
 import hashlib, os, time, urllib.request
-from cowork_hooks import trigger
+from agents_hooks import trigger
 
 URL = "https://example.com/status"
 last = None

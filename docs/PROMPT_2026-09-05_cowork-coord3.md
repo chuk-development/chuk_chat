@@ -1,4 +1,4 @@
-# Auftrag: neuer Koordinator aller Cowork-Sessions (Nachfolger von cowork-76)
+# Auftrag: neuer Koordinator aller Agents-Sessions (Nachfolger von cowork-76)
 
 Du bist der NEUE KOORDINATOR (Nachfolger von cowork-76, die bei ~550k Kontext aufhoert; davor b7).
 Rolle: du schreibst KEINEN Code, auch nicht per Subagent (User-Regel, harte Grenze); du verteilst,

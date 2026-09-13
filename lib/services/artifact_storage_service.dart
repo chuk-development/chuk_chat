@@ -1,13 +1,13 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/artifact_storage_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/services/artifact_storage_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: hosted-only — upstream persists encrypted artifact documents and their
-// version history in Supabase. CoWork's host produces files, which the relay
+// version history in Supabase. Agents's host produces files, which the relay
 // delivers as sandbox artifacts into the local blob store; there is no
 // client-side artifact database. Reads return empty, writes throw.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
 import 'dart:async';
 
-import 'package:cowork/models/artifact.dart';
+import 'package:chuk_chat/models/artifact.dart';
 import 'package:flutter/foundation.dart';
 
 class ArtifactStorageService {
@@ -65,7 +65,7 @@ class ArtifactStorageService {
     String? messageId,
     String? attachmentPath,
   }) async {
-    throw UnsupportedError('CoWork does not store artifacts on the client.');
+    throw UnsupportedError('Agents does not store artifacts on the client.');
   }
 
   static Future<ArtifactDocument> rewriteArtifact({
@@ -78,7 +78,7 @@ class ArtifactStorageService {
     bool preserveMetadata = false,
     bool clearAttachment = false,
   }) async {
-    throw UnsupportedError('CoWork does not store artifacts on the client.');
+    throw UnsupportedError('Agents does not store artifacts on the client.');
   }
 
   static Future<void> rollbackArtifactsForMessages(

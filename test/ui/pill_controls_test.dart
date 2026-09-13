@@ -12,12 +12,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/platform_specific/mobile/mobile_nav_bar.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/pill_geometry.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
 
 const List<MobileNavDestination> _destinations = <MobileNavDestination>[
   MobileNavDestination(icon: HugeIcons.message01, label: 'Chats', badge: 7),

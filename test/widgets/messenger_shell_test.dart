@@ -9,39 +9,39 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/pages/messenger_shell.dart';
-import 'package:cowork/pages/mobile_cowork_settings_page.dart';
-import 'package:cowork/pages/agent_profile_edit_page.dart';
-import 'package:cowork/pages/automations_page.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
-import 'package:cowork/models/stored_chat.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/widgets/room_create_sheet.dart';
-import 'package:cowork/widgets/room_list_view.dart';
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/browser_presence.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/widgets/agent_roster_view.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/browser_view_page.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/services/notifications/notification_router.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
-import 'package:cowork/widgets/cowork_thread_view.dart';
+import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
+import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/room_list_view.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/browser_presence.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/agent_roster_view.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/widgets/agents_thread_view.dart';
 
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 
 import '../support/test_app.dart';
 import '../platform_specific/mobile/mobile_support.dart' show findId;
 
-class _MemoryStore implements CoworkSecureKeyValueStore {
+class _MemoryStore implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override
@@ -56,21 +56,21 @@ class _MemoryStore implements CoworkSecureKeyValueStore {
 
 /// A controller the test drives: it can report itself paired, and it records
 /// which session key each task went to.
-class _FakeRelayController implements CoworkRelayController {
-  final ValueNotifier<CoworkRelayState> _state =
-      ValueNotifier<CoworkRelayState>(
-        const CoworkRelayState(phase: CoworkRelayPhase.idle),
+class _FakeRelayController implements AgentsRelayController {
+  final ValueNotifier<AgentsRelayState> _state =
+      ValueNotifier<AgentsRelayState>(
+        const AgentsRelayState(phase: AgentsRelayPhase.idle),
       );
-  final StreamController<CoworkRelayInbound> _inbound =
-      StreamController<CoworkRelayInbound>.broadcast();
+  final StreamController<AgentsRelayInbound> _inbound =
+      StreamController<AgentsRelayInbound>.broadcast();
 
   final List<String> sessionKeys = <String>[];
 
   @override
-  ValueListenable<CoworkRelayState> get state => _state;
+  ValueListenable<AgentsRelayState> get state => _state;
 
   @override
-  Stream<CoworkRelayInbound> get inbound => _inbound.stream;
+  Stream<AgentsRelayInbound> get inbound => _inbound.stream;
 
   @override
   Future<void> connect({
@@ -81,13 +81,13 @@ class _FakeRelayController implements CoworkRelayController {
   @override
   Future<void> reconnect({
     required Uri hostUrl,
-    required CoworkStoredPairing pairing,
+    required AgentsStoredPairing pairing,
   }) async {
     pair();
   }
 
   @override
-  CoworkStoredPairing? get establishedTrust => null;
+  AgentsStoredPairing? get establishedTrust => null;
 
   @override
   Future<void> provisionAccount(AccountSession session) async {}
@@ -204,12 +204,12 @@ class _FakeRelayController implements CoworkRelayController {
     _state.dispose();
   }
 
-  void pair() => _state.value = const CoworkRelayState(
-    phase: CoworkRelayPhase.paired,
+  void pair() => _state.value = const AgentsRelayState(
+    phase: AgentsRelayPhase.paired,
     peerDeviceId: 'cowork-host',
   );
 
-  void emit(CoworkRelayInbound event) => _inbound.add(event);
+  void emit(AgentsRelayInbound event) => _inbound.add(event);
 }
 
 class _FakeSessionSource implements AccountSessionSource {
@@ -248,12 +248,12 @@ void main() {
   // the cold start the cache is for — and exactly what a test must not inherit.
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    CoworkRelayLink.instance.reset();
-    CoworkRunLedger.instance.reset();
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
   });
   tearDown(() {
-    CoworkRelayLink.instance.reset();
-    CoworkRunLedger.instance.reset();
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
     NotificationRouter.instance.reset();
   });
 
@@ -265,7 +265,7 @@ void main() {
   Future<(_FakeRelayController, LocalAgentRosterSource)> pumpShell(
     WidgetTester tester, {
     Size size = const Size(1200, 800),
-    CoworkPairingStore? store,
+    AgentsPairingStore? store,
     AgentControlSource? controlSource,
     bool openSidebar = true,
   }) async {
@@ -286,7 +286,7 @@ void main() {
             return controller;
           },
           sessionSource: const _FakeSessionSource(),
-          pairingStore: store ?? CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: store ?? AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           controlSource: controlSource,
           onSignOut: () {},
@@ -304,7 +304,7 @@ void main() {
   /// The one thread view, wherever the layout put it. `skipOffstage: false`
   /// because chuk's compact mode and the phone inbox keep it mounted but off
   /// stage, and that is exactly what these tests assert.
-  final Finder threadView = find.byType(CoworkThreadView, skipOffstage: false);
+  final Finder threadView = find.byType(AgentsThreadView, skipOffstage: false);
 
   /// Whether the one thread view is currently off stage (chuk's compact mode
   /// hides the chat under the open sidebar; it is never unmounted).
@@ -328,12 +328,12 @@ void main() {
       await pumpShell(tester, openSidebar: false);
       expect(find.byType(AgentRosterView), findsNothing);
       expect(find.byTooltip('New agent'), findsOneWidget);
-      expect(find.byType(CoworkThreadView), findsOneWidget);
+      expect(find.byType(AgentsThreadView), findsOneWidget);
       await tester.tap(findIcon(Icons.menu_rounded));
       await tester.pumpAndSettle();
 
       expect(find.byType(AgentRosterView), findsOneWidget);
-      expect(find.byType(CoworkThreadView), findsOneWidget);
+      expect(find.byType(AgentsThreadView), findsOneWidget);
       expect(threadOffstage(tester), isFalse);
       expect(find.text('Chuk Chat'), findsOneWidget);
       expect(find.text('No agents yet.'), findsOneWidget);
@@ -372,7 +372,7 @@ void main() {
     expect(find.byTooltip('Voice call is not available yet'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
-    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
     expect(view.onOpenModelScreen, isNotNull);
     expect(roster.agents.single.onHost, isTrue);
   });
@@ -416,7 +416,7 @@ void main() {
 
       // History must not expose a stale browser. Explicit VNC capability does.
       controller.emit(
-        const CoworkRelayTool(
+        const AgentsRelayTool(
           'mcp__playwright__browser_navigate',
           status: 'completed',
           replay: true,
@@ -425,7 +425,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsNothing);
       controller.emit(
-        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+        const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsOneWidget);
@@ -455,13 +455,13 @@ void main() {
       // Finishing the run leaves the screen there: the coworker ends its turn
       // with "the browser is open, you can take it over", and that is the
       // moment the user reaches for it (bead cowork-tf1u).
-      controller.emit(const CoworkRelayDone());
+      controller.emit(const AgentsRelayDone());
       await tester.pumpAndSettle();
       expect(find.byTooltip("Agent's screen"), findsOneWidget);
 
       // The host closing the browser is what takes it away.
       controller.emit(
-        const CoworkRelayRunState(
+        const AgentsRelayRunState(
           sessionKey: 'default',
           state: 'idle',
           browserOpen: false,
@@ -504,7 +504,7 @@ void main() {
     final other = roster.addAgent(name: 'jade-heron');
     await tester.pumpAndSettle();
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       roster.agents.first.threads.single.key,
     );
 
@@ -514,7 +514,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       other.threads.single.key,
     );
     // Taken, not left pending: a second shell would not re-open it.
@@ -524,7 +524,7 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       other.threads.single.key,
     );
     expect(roster.byId(other.id)!.threads, hasLength(1));
@@ -541,7 +541,7 @@ void main() {
     expect(find.byType(RoomListView), findsOneWidget);
     expect(find.byTooltip('Close'), findsOneWidget);
     // The chat stays mounted next to the panel.
-    expect(find.byType(CoworkThreadView), findsOneWidget);
+    expect(find.byType(AgentsThreadView), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
 
     await tester.tap(find.byTooltip('Close'));
@@ -565,7 +565,7 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       'host:cowork-host',
     );
     expect(ChatStorageState.chatsById.containsKey('default'), isTrue);
@@ -585,14 +585,14 @@ void main() {
       const NotificationTarget(sessionKey: 'unowned-legacy-session'),
     );
     await tester.pumpAndSettle();
-    expect(tester.widget<CoworkThreadView>(threadView).threadKey, permanentKey);
+    expect(tester.widget<AgentsThreadView>(threadView).threadKey, permanentKey);
 
     // Even a stale callback with a valid agent but different session is refused.
     tester
         .widget<AgentRosterView>(find.byType(AgentRosterView))
         .onSelect(roster.agents.single.id, 'unowned-legacy-session');
     await tester.pumpAndSettle();
-    expect(tester.widget<CoworkThreadView>(threadView).threadKey, permanentKey);
+    expect(tester.widget<AgentsThreadView>(threadView).threadKey, permanentKey);
   });
 
   testWidgets('pairing lists the agent that really runs on the host', (
@@ -642,7 +642,7 @@ void main() {
     ]);
     // Its thread is selected: the one thread view points at it, and the
     // roster lists it by name.
-    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
     expect(view.threadKey, roster.agents.single.threads.single.key);
     expect(find.text('Crypto Desk'), findsWidgets);
     expect(controller.sessionKeys, isEmpty);
@@ -709,7 +709,7 @@ void main() {
     expect(find.byTooltip('More'), findsNothing);
     await tester.tap(findId('mobile_chat_bot_pill'));
     await tester.pumpAndSettle();
-    expect(find.byType(MobileCoworkSettingsPage), findsOneWidget);
+    expect(find.byType(MobileAgentsSettingsPage), findsOneWidget);
     await tester.tap(find.byTooltip('Edit coworker'));
     await tester.pumpAndSettle();
     final field = find
@@ -751,18 +751,18 @@ void main() {
     expect(roster.byId(gone.id), isNull);
 
     controller.emit(
-      CoworkRelayAgentList(
+      AgentsRelayAgentList(
         agents: [
-          const CoworkHostAgentName(
+          const AgentsHostAgentName(
             agentId: 'host:ignored',
             name: 'Laptop Bot',
             host: true,
           ),
-          const CoworkHostAgentName(
+          const AgentsHostAgentName(
             agentId: 'local:phone:2:7',
             name: 'From Phone',
           ),
-          CoworkHostAgentName(agentId: gone.id, name: 'gone-soon'),
+          AgentsHostAgentName(agentId: gone.id, name: 'gone-soon'),
         ],
       ),
     );
@@ -793,7 +793,7 @@ void main() {
       );
       await tester.pumpAndSettle();
       controller.emit(
-        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+        const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
       expect(
@@ -820,11 +820,11 @@ void main() {
       // And when the host is the one that says no, the tap repeats ITS reason
       // (bead cowork-qp5i) instead of telling the user to ask for a page.
       controller.emit(
-        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+        const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
       controller.emit(
-        const CoworkRelayBrowserView(
+        const AgentsRelayBrowserView(
           status: 'error',
           message: 'could not start the VNC server',
           reason: 'vnc_start_failed',
@@ -876,7 +876,7 @@ void main() {
       expect(find.textContaining('No screen yet'), findsOneWidget);
 
       controller.emit(
-        const CoworkRelayBrowserView(status: 'opened', vncAvailable: true),
+        const AgentsRelayBrowserView(status: 'opened', vncAvailable: true),
       );
       await tester.pumpAndSettle();
       final activeChat = tester.widget<MobileChatScreen>(
@@ -887,7 +887,7 @@ void main() {
       expect(activeChat.onOpenBrowser, isNotNull);
       expect(find.textContaining('You can take over'), findsNothing);
 
-      controller.emit(const CoworkRelayBrowserView(status: 'closed'));
+      controller.emit(const AgentsRelayBrowserView(status: 'closed'));
       await tester.pumpAndSettle();
       expect(
         tester
@@ -927,8 +927,8 @@ void main() {
       await tester.pumpAndSettle();
       await tester.tap(findId('mobile_chat_bot_pill'));
       await tester.pumpAndSettle();
-      final profile = tester.widget<MobileCoworkSettingsPage>(
-        find.byType(MobileCoworkSettingsPage),
+      final profile = tester.widget<MobileAgentsSettingsPage>(
+        find.byType(MobileAgentsSettingsPage),
       );
       expect(profile.chatId, agent.threads.single.key);
       profile.onAutomations();
@@ -955,11 +955,11 @@ void main() {
     // The shell's whole job here is to point one thread view at that one key.
     // Everything downstream of it — the imported composer, the transport
     // adapter, the executor session — reads the key from these two places, and
-    // both are asserted end to end in cowork_thread_view_test /
+    // both are asserted end to end in agents_thread_view_test /
     // websocket_chat_service_test.
-    final view = tester.widget<CoworkThreadView>(find.byType(CoworkThreadView));
+    final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
     expect(view.threadKey, stableKey);
-    expect(CoworkRelayLink.instance.sessionKey.value, stableKey);
+    expect(AgentsRelayLink.instance.sessionKey.value, stableKey);
     // Still exactly one thread: there is no way to open a second.
     expect(roster.agents.single.threads, hasLength(1));
   });
@@ -971,18 +971,18 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    // Run state is read off CoworkRunLedger now — the one place that knows a
+    // Run state is read off AgentsRunLedger now — the one place that knows a
     // run is in flight whether this client started it or adopted it from the
     // host's `run_state` header after a reconnect.
     final threadKey = roster.agents.single.threads.single.key;
-    CoworkRunLedger.instance.begin(threadKey);
+    AgentsRunLedger.instance.begin(threadKey);
     await tester.pump();
 
     // Twice: the roster row's bucket label, and the header's status line under
     // the coworker's name.
     expect(find.textContaining('working'), findsNWidgets(2));
 
-    CoworkRunLedger.instance.finish(threadKey, reason: 'finished');
+    AgentsRunLedger.instance.finish(threadKey, reason: 'finished');
     await tester.pump();
 
     expect(find.textContaining('working'), findsNothing);
@@ -1098,11 +1098,11 @@ void main() {
   ) async {
     final rooms = LocalRoomSource();
     final room = rooms.addRoom(
-      const CoworkRoomDraft(
+      const AgentsRoomDraft(
         name: 'launch',
         members: [
-          CoworkRoomMember(agentId: 'a', handle: 'amber'),
-          CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+          AgentsRoomMember(agentId: 'a', handle: 'amber'),
+          AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
         ],
       ),
     );
@@ -1114,7 +1114,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: LocalAgentRosterSource(),
           roomSource: rooms,
           onSignOut: () {},
@@ -1149,7 +1149,7 @@ void main() {
 
     // A room_turn for this room streams into the open page.
     controller.emit(
-      CoworkRelayRoomTurn(
+      AgentsRelayRoomTurn(
         roomId: room.id,
         round: 1,
         agentId: 'a',
@@ -1185,7 +1185,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           roomSource: rooms,
           onSignOut: () {},
@@ -1234,21 +1234,21 @@ void main() {
     final rooms = LocalRoomSource();
     // Room A survives amber's removal (3 -> 2); room B is deleted (2 -> 1).
     final a = rooms.addRoom(
-      CoworkRoomDraft(
+      AgentsRoomDraft(
         name: 'A',
         members: [
-          CoworkRoomMember(agentId: amberId, handle: 'amber'),
-          const CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
-          const CoworkRoomMember(agentId: 'c', handle: 'jade'),
+          AgentsRoomMember(agentId: amberId, handle: 'amber'),
+          const AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+          const AgentsRoomMember(agentId: 'c', handle: 'jade'),
         ],
       ),
     );
     final b = rooms.addRoom(
-      CoworkRoomDraft(
+      AgentsRoomDraft(
         name: 'B',
         members: [
-          CoworkRoomMember(agentId: amberId, handle: 'amber'),
-          const CoworkRoomMember(agentId: 'd', handle: 'onyx'),
+          AgentsRoomMember(agentId: amberId, handle: 'amber'),
+          const AgentsRoomMember(agentId: 'd', handle: 'onyx'),
         ],
       ),
     );
@@ -1260,7 +1260,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           roomSource: rooms,
           onSignOut: () {},
@@ -1300,12 +1300,12 @@ void main() {
     final rooms = LocalRoomSource();
     // Three members, so Remove is enabled (it disables at two).
     final room = rooms.addRoom(
-      const CoworkRoomDraft(
+      const AgentsRoomDraft(
         name: 'trio',
         members: [
-          CoworkRoomMember(agentId: 'a', handle: 'amber'),
-          CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
-          CoworkRoomMember(agentId: 'c', handle: 'jade'),
+          AgentsRoomMember(agentId: 'a', handle: 'amber'),
+          AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
+          AgentsRoomMember(agentId: 'c', handle: 'jade'),
         ],
       ),
     );
@@ -1317,7 +1317,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           roomSource: rooms,
           onSignOut: () {},
@@ -1347,18 +1347,18 @@ void main() {
     (tester) async {
       final rooms = LocalRoomSource();
       final room = rooms.addRoom(
-        const CoworkRoomDraft(
+        const AgentsRoomDraft(
           name: 'gone',
           members: [
-            CoworkRoomMember(agentId: 'a', handle: 'amber'),
-            CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+            AgentsRoomMember(agentId: 'a', handle: 'amber'),
+            AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
           ],
         ),
       );
       final controller = _FakeRelayController();
       // The transport is not ready yet: its builder waits on this completer, so
       // _controller.value stays null and a delete must be queued.
-      final gate = Completer<CoworkRelayController>();
+      final gate = Completer<AgentsRelayController>();
       await tester.pumpWidget(
         MaterialApp(
           localizationsDelegates: kTestLocalizationsDelegates,
@@ -1366,7 +1366,7 @@ void main() {
           home: MessengerShell(
             relayControllerBuilder: () => gate.future,
             sessionSource: const _FakeSessionSource(),
-            pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+            pairingStore: AgentsPairingStore(backend: _MemoryStore()),
             rosterSource: LocalAgentRosterSource(),
             roomSource: rooms,
             onSignOut: () {},
@@ -1407,7 +1407,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: LocalAgentRosterSource(),
           roomSource: LocalRoomSource(),
           onSignOut: () {},
@@ -1458,7 +1458,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: LocalAgentRosterSource(),
           roomSource: LocalRoomSource(),
           onSignOut: () {},
@@ -1488,7 +1488,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => _FakeRelayController(),
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: LocalAgentRosterSource(),
           roomSource: LocalRoomSource(),
           onSignOut: () {},
@@ -1524,7 +1524,7 @@ void main() {
         home: MessengerShell(
           relayControllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
-          pairingStore: CoworkPairingStore(backend: _MemoryStore()),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           roomSource: LocalRoomSource(),
           onSignOut: () {},
@@ -1550,7 +1550,7 @@ void main() {
     await pumpShellOver(tester, roster);
 
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       remembered.threads.single.key,
     );
   });
@@ -1568,7 +1568,7 @@ void main() {
     // Never the empty 'default' thread: the reader lands in a real
     // conversation, the way every other messenger opens.
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       roster.visibleAgents.first.threads.single.key,
     );
   });
@@ -1585,15 +1585,15 @@ void main() {
     final roster = LocalAgentRosterSource()..addAgent(name: 'amber');
     await pumpShellOver(tester, roster);
     final String fallback = roster.visibleAgents.first.threads.single.key;
-    expect(tester.widget<CoworkThreadView>(threadView).threadKey, fallback);
+    expect(tester.widget<AgentsThreadView>(threadView).threadKey, fallback);
 
-    roster.applyHostNames(const <CoworkHostAgentName>[
-      CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+    roster.applyHostNames(const <AgentsHostAgentName>[
+      AgentsHostAgentName(agentId: 'remote:jade', name: 'jade'),
     ], peerDeviceId: null);
     await tester.pumpAndSettle();
 
     expect(
-      tester.widget<CoworkThreadView>(threadView).threadKey,
+      tester.widget<AgentsThreadView>(threadView).threadKey,
       'remote:jade',
     );
   });
@@ -1614,15 +1614,15 @@ void main() {
     await tester.tap(find.text('cobalt'));
     await tester.pumpAndSettle();
     final picked = roster.agents.last.threads.single.key;
-    expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
+    expect(tester.widget<AgentsThreadView>(threadView).threadKey, picked);
 
-    roster.applyHostNames(const <CoworkHostAgentName>[
-      CoworkHostAgentName(agentId: 'remote:jade', name: 'jade'),
+    roster.applyHostNames(const <AgentsHostAgentName>[
+      AgentsHostAgentName(agentId: 'remote:jade', name: 'jade'),
     ], peerDeviceId: null);
     await tester.pumpAndSettle();
 
     // The user's own pick is never moved out from under them.
-    expect(tester.widget<CoworkThreadView>(threadView).threadKey, picked);
+    expect(tester.widget<AgentsThreadView>(threadView).threadKey, picked);
   });
 
   testWidgets('nothing in the chat layer takes the focus while it is behind '

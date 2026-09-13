@@ -4,19 +4,19 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/model_selector_page.dart';
-import 'package:cowork/platform_specific/chat/composer_metrics.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/services/chat_mode_service.dart';
-import 'package:cowork/services/chat_model_selection_service.dart';
-import 'package:cowork/services/model_cache_service.dart';
-import 'package:cowork/services/model_capabilities_service.dart';
-import 'package:cowork/services/model_prefetch_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/tour_key_registry.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/widgets/chat_mode_selector.dart';
-import 'package:cowork/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/model_selector_page.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/model_prefetch_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/widgets/chat_mode_selector.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 
 /// Which model, which mode and which reasoning level the mobile chat sends
 /// with — and the composer control that shows and changes all three.

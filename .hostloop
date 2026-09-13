@@ -1,11 +1,11 @@
 [cowork-host] MOCK MODEL mode: no account, canned agent — transport test only.
 
-  CoWork host is ready.
+  Agents host is ready.
     Relay:     ws://127.0.0.1:8798
-    Agent:     cobalt-wombat  (workspace: /home/user/.cowork/loop/agents/cobalt-wombat)
+    Agent:     cobalt-wombat  (workspace: /home/user/.agents/loop/agents/cobalt-wombat)
     Device:    cowork-host
 
-  Open the CoWork app, Connect to  ws://127.0.0.1:8798  and enter code:  5e4a97ca8b510775-272374
+  Open the Agents app, Connect to  ws://127.0.0.1:8798  and enter code:  5e4a97ca8b510775-272374
 
 [cowork-host] waiting for the app to pair...
 [cowork-host] relay: executor joined channel 5e4a97ca8b510775

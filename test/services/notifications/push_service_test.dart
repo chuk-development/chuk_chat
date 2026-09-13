@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent, AuthState;
 
-import 'package:cowork/services/notifications/notification_router.dart';
-import 'package:cowork/services/notifications/push_service.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/notifications/push_service.dart';
 
 /// Firebase, faked: the tests drive tokens and taps by hand.
 class FakeTransport implements PushTransport {
@@ -94,7 +94,7 @@ void main() {
         platform: 'android',
       );
 
-  test('signed in at start: token row upserted with the CoWork device id',
+  test('signed in at start: token row upserted with the Agents device id',
       () async {
     userId = 'user-1';
     await start();

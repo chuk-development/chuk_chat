@@ -40,7 +40,7 @@ expired token from a revoked one, from a validator that is down. Add a `code`:
 | `auth_unavailable` | the validator could not answer | backoff; the token is not the problem, do not spend a refresh |
 | `device_invalid` | the `device_id` is not a uuid4 | log and stop; a redial cannot fix it |
 
-Server: `routers/cowork/cowork_ws.py`, `_reject()` grows a `code` argument.
+Server: `routers/agents/agents_ws.py`, `_reject()` grows a `code` argument.
 Client: `cloud_relay.py` reads `reply["code"]` and `RelayAuthRejected` carries
 it. Old clients keep reading `detail`, so the change is additive.
 
@@ -62,7 +62,7 @@ relay-> {"type":"auth_ok"}
 ```
 
 * The relay looks up `(user_id, device_id) -> public_key` in a new Supabase
-  table `cowork_devices` (owner-only RLS: `user_id`, `device_id`,
+  table `agents_devices` (owner-only RLS: `user_id`, `device_id`,
   `public_key`, `created_at`, `last_seen_at`, `revoked_at`).
 * `ts` inside ±60 s and a nonce cache of the same width stop replay.
 * Nothing here expires. Revocation is a row update — which is exactly the

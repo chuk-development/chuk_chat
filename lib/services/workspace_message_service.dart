@@ -1,9 +1,9 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/workspace_message_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/services/workspace_message_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: hosted-only — workspaces (projects) are a chuk_chat feature backed by
-// Supabase. CoWork has agents, not workspaces; the host owns the system prompt.
+// Supabase. Agents has agents, not workspaces; the host owns the system prompt.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
-import 'package:cowork/models/workspace_model.dart';
+import 'package:chuk_chat/models/workspace_model.dart';
 
 class WorkspaceMessageService {
   static const int maxTotalContentLength = 500000;

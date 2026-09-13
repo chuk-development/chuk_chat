@@ -2,24 +2,24 @@ import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/widgets/agent_control_panel.dart';
 
-CoworkAgent _agent({bool onHost = true}) => CoworkAgent(
+AgentsAgent _agent({bool onHost = true}) => AgentsAgent(
       id: 'host:cowork-host',
       name: 'cowork-host',
       onHost: onHost,
       brief: onHost ? null : 'weekly crypto news',
-      threads: const <CoworkThreadInfo>[
-        CoworkThreadInfo(key: 'host:cowork-host', title: 'General'),
+      threads: const <AgentsThreadInfo>[
+        AgentsThreadInfo(key: 'host:cowork-host', title: 'General'),
       ],
     );
 
 Future<void> _pump(
   WidgetTester tester,
   AgentControlSource source, {
-  CoworkAgent? agent,
+  AgentsAgent? agent,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -52,9 +52,9 @@ const _fullSnapshot = AgentControlSnapshot(
   sandbox: ControlAvailable<AgentSandbox>(
     AgentSandbox(
       kind: 'docker',
-      container: 'cowork-amber-0a1b2c3d',
+      container: 'agents-amber-0a1b2c3d',
       containerId: 'deadbeef0011',
-      workspace: '/home/u/.cowork/agents/amber',
+      workspace: '/home/u/.agents/agents/amber',
     ),
   ),
   skills: ControlAvailable<List<AgentSkill>>(<AgentSkill>[
@@ -113,8 +113,8 @@ void main() {
     await _pump(tester, source);
 
     expect(find.text('Its own container'), findsOneWidget);
-    expect(find.text('cowork-amber-0a1b2c3d · deadbeef0011'), findsOneWidget);
-    expect(find.text('/home/u/.cowork/agents/amber'), findsOneWidget);
+    expect(find.text('agents-amber-0a1b2c3d · deadbeef0011'), findsOneWidget);
+    expect(find.text('/home/u/.agents/agents/amber'), findsOneWidget);
   });
 
   testWidgets('a live run is called out while it runs', (tester) async {
@@ -173,12 +173,12 @@ void main() {
   testWidgets('the panel shows the agent role', (tester) async {
     final source = FakeAgentControlSource();
     addTearDown(source.dispose);
-    final agent = CoworkAgent(
+    final agent = AgentsAgent(
       id: 'local:amber',
       name: 'amber-otter',
       role: 'researcher',
-      threads: const <CoworkThreadInfo>[
-        CoworkThreadInfo(key: 'local:amber', title: 'General'),
+      threads: const <AgentsThreadInfo>[
+        AgentsThreadInfo(key: 'local:amber', title: 'General'),
       ],
     );
     await _pump(tester, source, agent: agent);

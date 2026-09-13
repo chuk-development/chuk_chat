@@ -6,18 +6,18 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:highlight/highlight.dart' as hi;
-import 'package:cowork/utils/highlight_registry.dart' as highlight_registry;
+import 'package:chuk_chat/utils/highlight_registry.dart' as highlight_registry;
 import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/utils/input_validator.dart';
-import 'package:cowork/utils/phone_linkify.dart';
-import 'package:cowork/widgets/chuk_table.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/phone_linkify.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
 
 /// Lays [overlay] on top of [base] field by field.
 ///

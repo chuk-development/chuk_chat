@@ -6,20 +6,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/app_shell_config.dart';
-import 'package:cowork/pages/messenger_shell.dart';
-import 'package:cowork/services/app_theme_service.dart';
-import 'package:cowork/services/chat_storage_service.dart'
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/services/app_theme_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart'
     show initChatStorageCache;
-import 'package:cowork/services/settings/theme_controller.dart';
-import 'package:cowork/services/notifications/cowork_notifications.dart';
-import 'package:cowork/services/session_recovery.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/services/storage/cowork_chat_storage_bootstrap.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/widgets/app_lifecycle_observer.dart';
-import 'package:cowork/widgets/auth_gate.dart';
+import 'package:chuk_chat/services/settings/theme_controller.dart';
+import 'package:chuk_chat/services/notifications/agents_notifications.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
+import 'package:chuk_chat/widgets/auth_gate.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,7 +33,7 @@ Future<void> main() async {
   // the sidebar-title cache reads, then follow the auth session to load the
   // local chat cache and start the cloud sync.
   await initChatStorageCache();
-  CoworkChatStorageBootstrap.start();
+  AgentsChatStorageBootstrap.start();
   // Load the verbose-view flag once at startup, so the first frame shows the
   // right view. The service is safe to read before this, but an early load
   // avoids a flip on the first paint.
@@ -41,23 +41,23 @@ Future<void> main() async {
   // WS-7: "answer ready" toasts (local plugin, Linux included) and the push
   // token row. Best-effort: without Firebase keys push stays off, the app is
   // unchanged.
-  unawaited(CoworkNotifications.instance.initialize());
-  runApp(const CoworkApp());
+  unawaited(AgentsNotifications.instance.initialize());
+  runApp(const AgentsApp());
 }
 
-class CoworkApp extends StatefulWidget {
-  const CoworkApp({super.key});
+class AgentsApp extends StatefulWidget {
+  const AgentsApp({super.key});
 
   @override
-  State<CoworkApp> createState() => _CoworkAppState();
+  State<AgentsApp> createState() => _AgentsAppState();
 }
 
-class _CoworkAppState extends State<CoworkApp> {
+class _AgentsAppState extends State<AgentsApp> {
   /// The single source of truth for theme, accent, fonts, UI scale and the
   /// customization switches — chuk_chat's service, imported verbatim.
   final AppThemeService _themeService = AppThemeService.instance;
 
-  /// Kept alive only as a bridge: the settings pages that are still CoWork's
+  /// Kept alive only as a bridge: the settings pages that are still Agents's
   /// own (`settings_page`, `theme_settings_page`) read and write the theme
   /// through this notifier. It is fed from [_themeService] in both directions,
   /// so either surface can drive the theme.
@@ -94,7 +94,7 @@ class _CoworkAppState extends State<CoworkApp> {
     if (mounted) setState(() {});
   }
 
-  /// One-shot migration off CoWork's own `theme_mode_v1` preference.
+  /// One-shot migration off Agents's own `theme_mode_v1` preference.
   ///
   /// The old key holds a [ThemeMode] name (`system` / `light` / `dark`).
   /// [AppThemeService] stores a [Brightness], so `system` is resolved once
@@ -156,15 +156,15 @@ class _CoworkAppState extends State<CoworkApp> {
     // so the app follows wallpaper/accent changes live when the user has
     // enabled dynamic colour.
     // The app-level lifecycle wire. The imported chat UI registers resume and
-    // pause callbacks on `AppLifecycleService`, and nothing in CoWork ever
+    // pause callbacks on `AppLifecycleService`, and nothing in Agents ever
     // called `handleLifecycleState` — no widget observed the binding at app
     // level, so those callbacks never fired. chuk_chat does this from its own
-    // `main.dart`; CoWork does it here.
+    // `main.dart`; Agents does it here.
     return AppLifecycleObserver(
       child: DynamicColorBuilder(
         builder: (ColorScheme? lightDynamic, ColorScheme? darkDynamic) {
           // chuk_chat hands its shell config straight to the shell
-          // (`RootWrapper(config: …)`); so does CoWork, through AuthGate's shell
+          // (`RootWrapper(config: …)`); so does Agents, through AuthGate's shell
           // builder (bead cowork-8y2). Rebuilt with the app, so a theme change
           // reaches the shell like any other rebuild.
           final AppShellConfig shellConfig = _buildShellConfig();

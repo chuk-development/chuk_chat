@@ -4,7 +4,7 @@
 The user says "monitor this channel". The (scripted) model writes nothing —
 the watcher script is already in the workspace — and calls ``start_watcher``.
 The watcher polls a fake channel (a file that shows a "new video" after a
-moment) and calls ``cowork_hooks.trigger``. The host turns the trigger into a
+moment) and calls ``agents_hooks.trigger``. The host turns the trigger into a
 task of the same session; the model "writes the summary"; the run closes as
 a normal ``done`` marked ``host_notified``; the ``runs`` row is finished and
 notified; the ``automations`` row counts one fire. Then the host restarts and
@@ -20,16 +20,16 @@ from typing import Any
 
 from websockets.sync.client import connect
 
-from cowork_agent import MockModelClient, StateStore, tool_call_response
-from cowork_host import LocalHost
-from cowork_host.automations import AutomationStore
-from cowork_host.protocol import join_message
+from chuk_agents_runtime import MockModelClient, StateStore, tool_call_response
+from chuk_agents_host import LocalHost
+from chuk_agents_host.automations import AutomationStore
+from chuk_agents_host.protocol import join_message
 
 from test_local_run import ControllerDouble
 
 WATCHER = '''
 import json, os, time
-from cowork_hooks import trigger
+from agents_hooks import trigger
 
 CHANNEL = "fake_channel.json"      # the "channel": a file the test flips
 seen = None
@@ -116,7 +116,7 @@ class _WatchingDouble(ControllerDouble):
 
 
 def test_a_watcher_wakes_the_agent_on_the_real_host_and_survives_a_restart(tmp_path, monkeypatch):
-    monkeypatch.setenv("COWORK_DESKTOP_NOTIFY", "0")  # no toast on the test box
+    monkeypatch.setenv("AGENTS_DESKTOP_NOTIFY", "0")  # no toast on the test box
     workspace = tmp_path / "agents" / "test-worker"
     workspace.mkdir(parents=True)
     (workspace / "watch_channel.py").write_text(WATCHER)
@@ -205,9 +205,9 @@ def test_a_watcher_wakes_the_agent_on_the_real_host_and_survives_a_restart(tmp_p
     automations = AutomationStore(str(tmp_path / "executor-state.db"))
     row = automations.get(automation_id)
     assert row["state"] == "active" and row["fire_count"] == 1 and row["session_key"] == "thread-1"
-    log = workspace / ".cowork" / "automations" / f"{automation_id}.log"
+    log = workspace / ".agents" / "automations" / f"{automation_id}.log"
     assert log.exists() and "start watch_channel.py" in log.read_text()
-    assert (workspace / ".cowork" / "automations" / "triggers.jsonl").exists()
+    assert (workspace / ".agents" / "automations" / "triggers.jsonl").exists()
 
     # Restart the host: the persisted watcher comes back without an app, and a
     # reconnecting app (no code) still finds everything.

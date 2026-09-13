@@ -25,12 +25,12 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/skill.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/local_chat_cache_service.dart';
-import 'package:cowork/services/skills/skill_frontmatter_parser.dart';
-import 'package:cowork/services/skills/skill_registry.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/models/skill.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
+import 'package:chuk_chat/services/skills/skill_registry.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Thrown for storage-level failures. Spec violations surface as
 /// [SkillParseException] from the shared parser instead.

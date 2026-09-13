@@ -3,12 +3,12 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:cowork/models/stored_chat.dart';
-import 'package:cowork/services/chat_storage_mutations.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/local_chat_cache_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

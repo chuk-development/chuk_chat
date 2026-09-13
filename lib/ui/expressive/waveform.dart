@@ -2,7 +2,7 @@
 ///
 /// The reference messenger draws a voice message this way — evenly spaced,
 /// round-capped bars with a comfortable minimum height, the played part in the
-/// foreground colour and the rest muted. CoWork has no voice MESSAGE (the
+/// foreground colour and the rest muted. Agents has no voice MESSAGE (the
 /// microphone dictates a message instead of attaching one), so the same painter
 /// draws the live level while the microphone is open: the reader sees their own
 /// voice in the same shape a voice note would have.

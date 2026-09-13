@@ -21,7 +21,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 INSTALL_SH = REPO_ROOT / "scripts" / "install.sh"
-UNIT_TEMPLATE = REPO_ROOT / "scripts" / "cowork-manager.service"
+UNIT_TEMPLATE = REPO_ROOT / "scripts" / "agents-manager.service"
 
 #: Everything that could reach the real machine, switched off.
 SAFE_FLAGS = ["--no-runtime", "--no-env", "--no-service"]
@@ -37,7 +37,7 @@ def run_install(home: Path, *args: str) -> subprocess.CompletedProcess:
     env["HOME"] = str(home)
     env["XDG_CONFIG_HOME"] = str(home / ".config")
     # Never inherit the developer's own settings into the test install.
-    for leaked in ("COWORK_HOME", "COWORK_SANDBOX_IMAGE", "COWORK_SANDBOX_KIND", "COWORK_RUNTIME"):
+    for leaked in ("AGENTS_HOME", "AGENTS_SANDBOX_IMAGE", "AGENTS_SANDBOX_KIND", "AGENTS_RUNTIME"):
         env.pop(leaked, None)
     return subprocess.run(
         ["bash", str(INSTALL_SH), *args],
@@ -57,7 +57,7 @@ def home(tmp_path) -> Path:
 
 
 def unit_path(home: Path) -> Path:
-    return home / ".config" / "systemd" / "user" / "cowork-manager.service"
+    return home / ".config" / "systemd" / "user" / "agents-manager.service"
 
 
 # ------------------------------------------------------------------- shape
@@ -95,7 +95,7 @@ def test_invalid_sandbox_kind_is_rejected(home):
 def test_install_creates_the_expected_layout(home):
     proc = run_install(home, *SAFE_FLAGS)
     assert proc.returncode == 0, proc.stderr + proc.stdout
-    root = home / ".cowork"
+    root = home / ".agents"
     assert (root / "agents").is_dir()
     assert (root / "logs").is_dir()
     launcher = root / "bin" / "cowork-host"
@@ -108,7 +108,7 @@ def test_install_creates_the_expected_layout(home):
 
 def test_launcher_points_at_the_checkouts_venv(home):
     run_install(home, *SAFE_FLAGS)
-    body = (home / ".cowork" / "bin" / "cowork-host").read_text(encoding="utf-8")
+    body = (home / ".agents" / "bin" / "cowork-host").read_text(encoding="utf-8")
     assert str(REPO_ROOT / "host" / ".venv" / "bin" / "cowork-host") in body
 
 
@@ -116,9 +116,9 @@ def test_unit_file_is_fully_substituted(home):
     run_install(home, *SAFE_FLAGS)
     unit = unit_path(home).read_text(encoding="utf-8")
     assert "@" not in unit.split("[Service]")[1], "a placeholder was left unsubstituted"
-    assert f"ExecStart={home}/.cowork/bin/cowork-host run" in unit
+    assert f"ExecStart={home}/.agents/bin/cowork-host run" in unit
     assert "--sandbox docker" in unit
-    assert "COWORK_SANDBOX_IMAGE=cowork-base:latest" in unit
+    assert "AGENTS_SANDBOX_IMAGE=agents-base:latest" in unit
     assert "WantedBy=default.target" in unit
 
 
@@ -126,11 +126,11 @@ def test_unit_file_honours_the_sandbox_and_tag_flags(home):
     run_install(home, "--sandbox", "local", "--tag", "custom:9", *SAFE_FLAGS)
     unit = unit_path(home).read_text(encoding="utf-8")
     assert "--sandbox local" in unit
-    assert "COWORK_SANDBOX_IMAGE=custom:9" in unit
+    assert "AGENTS_SANDBOX_IMAGE=custom:9" in unit
 
 
 def test_prefix_moves_the_install_root(home):
-    prefix = home / "elsewhere" / "cowork"
+    prefix = home / "elsewhere" / "agents"
     proc = run_install(home, "--prefix", str(prefix), *SAFE_FLAGS)
     assert proc.returncode == 0, proc.stderr
     assert (prefix / "agents").is_dir()
@@ -147,7 +147,7 @@ def test_running_twice_changes_nothing(home):
     assert first.returncode == 0, first.stderr
 
     unit_before = unit_path(home).read_bytes()
-    launcher = home / ".cowork" / "bin" / "cowork-host"
+    launcher = home / ".agents" / "bin" / "cowork-host"
     launcher_before = launcher.read_bytes()
     tree_before = sorted(p.relative_to(home) for p in home.rglob("*"))
 
@@ -174,7 +174,7 @@ def test_second_run_after_a_config_change_updates_the_unit(home):
 def test_dry_run_creates_nothing(home):
     proc = run_install(home, "--dry-run", *SAFE_FLAGS)
     assert proc.returncode == 0, proc.stderr
-    assert not (home / ".cowork").exists()
+    assert not (home / ".agents").exists()
     assert not unit_path(home).exists()
     assert "would run:" in proc.stdout or "would write:" in proc.stdout
 
@@ -197,7 +197,7 @@ def test_a_missing_runtime_aborts_before_anything_is_created(home):
     assert proc.returncode == 1
     assert "no container runtime found" in proc.stderr
     assert "stopped BEFORE changing anything" in proc.stderr
-    assert not (home / ".cowork").exists()
+    assert not (home / ".agents").exists()
     assert not unit_path(home).exists()
 
 

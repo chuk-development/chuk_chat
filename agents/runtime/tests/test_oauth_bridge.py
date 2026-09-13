@@ -22,8 +22,8 @@ import time
 
 import httpx
 
-from cowork_agent import oauth_bridge as mod
-from cowork_agent.oauth_bridge import (
+from chuk_agents_runtime import oauth_bridge as mod
+from chuk_agents_runtime.oauth_bridge import (
     BackendOAuthClient,
     CredentialStash,
     OAuthBridge,
@@ -33,7 +33,7 @@ from cowork_agent.oauth_bridge import (
     pkce_pair,
     register_oauth_tool,
 )
-from cowork_agent.registry import ToolRegistry
+from chuk_agents_runtime.registry import ToolRegistry
 
 
 class Session:

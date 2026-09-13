@@ -1,4 +1,4 @@
-import 'package:cowork/models/tool_call.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 
 /// The type of a content block within an AI response.
 enum ContentBlockType { text, toolCalls, reasoning, sandboxArtifact }

@@ -18,7 +18,7 @@ library;
 
 import 'package:yaml/yaml.dart';
 
-import 'package:cowork/models/skill.dart';
+import 'package:chuk_chat/models/skill.dart';
 
 /// Thrown when a SKILL.md violates the spec.
 class SkillParseException implements Exception {

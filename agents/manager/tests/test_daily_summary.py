@@ -15,19 +15,19 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from cowork_manager.autonomy import (
+from chuk_agents_manager.autonomy import (
     DAILY_SUMMARY_JOB_ID,
     JobDispatcher,
     UnattendedRunner,
     register_daily_summary,
 )
-from cowork_manager.daily_summary import (
+from chuk_agents_manager.daily_summary import (
     daily_summary_script,
     gather_activity,
     summary_path,
     write_daily_summary,
 )
-from cowork_manager.scheduler import JobMode, Scheduler, utc
+from chuk_agents_manager.scheduler import JobMode, Scheduler, utc
 
 DAY = date(2026, 2, 3)
 
@@ -239,17 +239,17 @@ def test_rerun_overwrites_not_appends(tmp_path: Path) -> None:
 # -- on-disk journal reading ------------------------------------------------
 
 
-def test_reads_cowork_journal_files(tmp_path: Path) -> None:
-    cowork = tmp_path / ".cowork"
-    cowork.mkdir()
+def test_reads_agents_journal_files(tmp_path: Path) -> None:
+    agents = tmp_path / ".agents"
+    agents.mkdir()
     # Parent journal + one subagent journal — both must be picked up.
-    (cowork / "journal.jsonl").write_text(
+    (agents / "journal.jsonl").write_text(
         json.dumps(_journal_rows()[0]) + "\n"
         "not valid json\n"  # a corrupt line must be skipped, not raised
         + json.dumps(_journal_rows()[1]) + "\n",
         encoding="utf-8",
     )
-    (cowork / "journal-sub1.jsonl").write_text(
+    (agents / "journal-sub1.jsonl").write_text(
         json.dumps(_journal_rows()[2]) + "\n", encoding="utf-8"
     )
     activity = gather_activity(day=DAY, workspace=tmp_path)
@@ -290,9 +290,9 @@ def test_daily_summary_script_zero_tokens(tmp_path: Path) -> None:
         now=lambda: utc(2026, 2, 4, 0, 0),
     )
     # Seed an on-disk journal so the script reads real activity.
-    cowork = tmp_path / ".cowork"
-    cowork.mkdir()
-    (cowork / "journal.jsonl").write_text(
+    agents = tmp_path / ".agents"
+    agents.mkdir()
+    (agents / "journal.jsonl").write_text(
         "\n".join(json.dumps(r) for r in _journal_rows()[:3]) + "\n",
         encoding="utf-8",
     )
@@ -359,9 +359,9 @@ def test_registered_job_fires_and_writes(tmp_path: Path) -> None:
         clock=lambda: utc(2026, 2, 4, 0, 0),
     )
     # Seed journal activity for the 3rd.
-    cowork = tmp_path / ".cowork"
-    cowork.mkdir()
-    (cowork / "journal.jsonl").write_text(
+    agents = tmp_path / ".agents"
+    agents.mkdir()
+    (agents / "journal.jsonl").write_text(
         "\n".join(json.dumps(r) for r in _journal_rows()[:3]) + "\n",
         encoding="utf-8",
     )

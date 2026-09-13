@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/services/account_session.dart';
+import 'package:chuk_chat/services/account_session.dart';
 
 /// The app's own access-token refresh, replacing gotrue's auto refresh
 /// (bead cowork-2n1; `autoRefreshToken: false` in `SupabaseService`).

@@ -3,21 +3,21 @@ and the whole path RoomBinding -> RoomDriver -> encrypted executor turn."""
 
 from __future__ import annotations
 
-from cowork_manager import GroupRoom, RoomBinding, RoomDriver, RoomMember
+from chuk_agents_manager import GroupRoom, RoomBinding, RoomDriver, RoomMember
 
-from cowork_executor import (
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     loopback_pair,
     make_room_task_sender,
 )
-from cowork_agent import MockModelClient
+from chuk_agents_runtime import MockModelClient
 
 from wiring import paired_channel
 
 
 def _executor(tmp_path, endpoint, channel, model_factory):
-    from cowork_sandbox import LocalEnvironment
+    from chuk_agents_sandbox import LocalEnvironment
 
     return Executor(
         name="member",

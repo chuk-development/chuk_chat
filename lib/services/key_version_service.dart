@@ -2,8 +2,8 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Represents a previous encryption key's metadata.
 class PreviousKeyInfo {

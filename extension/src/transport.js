@@ -1,10 +1,10 @@
-// Two ways to reach the CoWork host, one interface.
+// Two ways to reach the Agents host, one interface.
 //
 //   native — chrome.runtime.connectNative to a small local process. Auth is the
 //            host manifest's `allowed_origins`, which names this extension id
 //            and nothing else; only the local user can write that file. No port,
 //            no token, no origin check. Used when the host runs on this machine.
-//   relay  — a WebSocket to the CoWork relay, for a host on another machine.
+//   relay  — a WebSocket to the Agents relay, for a host on another machine.
 //
 // Both carry the same frames: `browser_cmd` in, `browser_result` out, plus a
 // `browser_attach` hello so the host knows what this browser can do.

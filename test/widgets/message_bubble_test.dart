@@ -5,15 +5,15 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
-import 'package:cowork/ui/expressive/message_stamp.dart';
-import 'package:cowork/utils/automation_message.dart';
-import 'package:cowork/widgets/message_bubble.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
+import 'package:chuk_chat/ui/expressive/message_stamp.dart';
+import 'package:chuk_chat/utils/automation_message.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// The exact text the host submits when an automation fires, header +
 /// operator prompt + payload (see `fired_prompt` in
-/// `agent/src/cowork_agent/automations.py`).
+/// `agent/src/agents_agent/automations.py`).
 const String _wakeText =
     '[automation a2f1d3d1 fired: Wahlradar LT Sachsen-Anhalt 2026]\n'
     'check the seat projection and tell me what moved\n'

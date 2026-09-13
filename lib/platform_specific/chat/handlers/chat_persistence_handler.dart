@@ -2,10 +2,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Handles chat persistence and storage
 /// Whether [stored] holds more than [patch] would write, i.e. the patch

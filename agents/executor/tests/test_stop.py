@@ -16,12 +16,12 @@ import time
 from dataclasses import dataclass
 
 import pytest
-from cowork_crypto import CoworkFrameSealer, DeviceIdentity
-from cowork_manager import encode_frame, make_request
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_crypto import AgentsFrameSealer, DeviceIdentity
+from chuk_agents_manager import encode_frame, make_request
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_agent import MockModelClient, ModelResponse, tool_call_response
-from cowork_executor import (
+from chuk_agents_runtime import MockModelClient, ModelResponse, tool_call_response
+from chuk_agents_executor import (
     METHOD_STOP,
     ControllerSession,
     Executor,
@@ -38,7 +38,7 @@ class GatedModel:
     """A model that blocks in the middle of a turn, so a run is provably in
     flight when the stop is sent.
 
-    It mirrors the real :class:`~cowork_agent.BackendModelClient` on the one point
+    It mirrors the real :class:`~chuk_agents_runtime.BackendModelClient` on the one point
     that matters here: ``cancel()`` unblocks the wait and the turn then **fails**
     instead of returning an answer, exactly as a socket closed under a blocking
     ``recv`` does. The executor finds that ``cancel`` by name and hangs it on the
@@ -188,7 +188,7 @@ def test_a_stop_from_an_unapproved_device_is_rejected(gated):
     assert model.started.wait(10.0)
 
     # An intruder with the channel key but an UNAPPROVED signing identity.
-    intruder = CoworkFrameSealer(
+    intruder = AgentsFrameSealer(
         channel_key=channel.channel_key,
         key_version=KEY_VERSION,
         device_id="intruder-phone",

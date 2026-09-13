@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// The scale [MorphTap] currently applies to the tile.
 double _tileScale(WidgetTester tester) {

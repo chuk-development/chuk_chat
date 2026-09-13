@@ -1,16 +1,16 @@
 # Handover — Python side (agent / executor / host), 2026-09-05
 
 Written by the session that held the Python-committer role (cowork-49) on
-handing it to cowork-13. Everything below is on branch `cowork`, single
-worktree `/home/user/git/cowork`, branches `cowork` + `master` only.
+handing it to cowork-13. Everything below is on branch `agents`, single
+worktree `/home/user/git/cowork`, branches `agents` + `master` only.
 
 ## 1. What lives where
 
 | Area | Path | Notes |
 |---|---|---|
-| Agent runtime | `agent/src/cowork_agent/` | `loop.py` (tool loop), `runtime.py` (`build_runtime` wiring), `context.py` (context ladder / compaction), `memory.py` + `mem0_provider.py` (mem0), `backend.py` (`SupabaseSession`, `BackendModelClient`, `/v2/ws`), `model.py` (`ModelResponse`, `MockModelClient`, `tool_call_response`), `mcp_client.py` (MCP + OAuth refresh, owner: cowork-47), `prompt.py`, `registry.py`, `tool_search.py`, `state.py` (SQLite: sessions, messages, runs). |
-| Executor | `executor/src/cowork_executor/` | `executor.py` (task worker, per-task model select, MCP manager cache, credential back-channels, debug tap), `protocol.py` (frame builders), `backend.py` (model factory/select), `controller.py`. |
-| Host | `host/src/cowork_host/` | `host.py` (`LocalHost`: provisioning, session policy, notifier), `party.py` (relay session; drops frames while detached), `notify.py`/`desktop_notify.py` (owner: cowork-98). |
+| Agent runtime | `agent/src/chuk_agents_runtime/` | `loop.py` (tool loop), `runtime.py` (`build_runtime` wiring), `context.py` (context ladder / compaction), `memory.py` + `mem0_provider.py` (mem0), `backend.py` (`SupabaseSession`, `BackendModelClient`, `/v2/ws`), `model.py` (`ModelResponse`, `MockModelClient`, `tool_call_response`), `mcp_client.py` (MCP + OAuth refresh, owner: cowork-47), `prompt.py`, `registry.py`, `tool_search.py`, `state.py` (SQLite: sessions, messages, runs). |
+| Executor | `executor/src/chuk_agents_executor/` | `executor.py` (task worker, per-task model select, MCP manager cache, credential back-channels, debug tap), `protocol.py` (frame builders), `backend.py` (model factory/select), `controller.py`. |
+| Host | `host/src/chuk_agents_host/` | `host.py` (`LocalHost`: provisioning, session policy, notifier), `party.py` (relay session; drops frames while detached), `notify.py`/`desktop_notify.py` (owner: cowork-98). |
 | Contracts | `docs/WIRE_CONTRACT.md` | The wire truth. Frames below are documented there. |
 | Design | `docs/context-compaction-design.md` | Compaction / memory design + live validation log (§10a). |
 | Live probes | `agent/tests/live_*.py` | Not pytest-collected; run directly (see §5). |
@@ -20,7 +20,7 @@ There is no `<tool_call>` text protocol anywhere in Python; do not reintroduce i
 
 ## 2. How to commit (rules that applied, keep them)
 
-- Commit **directly on `cowork`**. No worktrees left behind; delete any you make.
+- Commit **directly on `agents`**. No worktrees left behind; delete any you make.
 - Identity: `chukfinley <77645077+chukfinley@users.noreply.github.com>` via the
   global git config. **No** `-c user.*` overrides, **no** `Claude-Session:`
   links, **no** `Co-Authored-By` trailers.
@@ -141,7 +141,7 @@ is run with the real app once 98's `tokenRefreshed → provisionAccount` and the
 - `cowork-kjl.5/.6` (P3) here.now follow-ups.
 - Model probe (deepseek-v4-flash-0731 via fireworks; newest Gemini 3) was
   reassigned to cowork-13 — `tests/live_native_probe.py` takes
-  `COWORK_LIVE_MODEL` to pick a model.
+  `AGENTS_LIVE_MODEL` to pick a model.
 
 ## 7. Known limitations / next steps
 

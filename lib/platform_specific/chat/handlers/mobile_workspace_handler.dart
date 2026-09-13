@@ -1,8 +1,8 @@
 // lib/platform_specific/chat/handlers/mobile_workspace_handler.dart
 import 'package:flutter/material.dart';
 
-import 'package:cowork/pages/workspace_management_page.dart';
-import 'package:cowork/services/workspace_storage_service.dart';
+import 'package:chuk_chat/pages/workspace_management_page.dart';
+import 'package:chuk_chat/services/workspace_storage_service.dart';
 
 /// Handles mobile-specific workspace selection UI and workspace–chat linking.
 ///

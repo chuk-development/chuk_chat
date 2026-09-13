@@ -15,7 +15,7 @@
 /// AES-256-GCM key that already protects chat payloads and the pairing record.
 /// It is NOT chuk_chat's per-row `mcp_sync_service.dart`: that one assumes the
 /// hosted chuk infrastructure. This matches its intent (share connectors,
-/// encrypted, owner-only) on CoWork's Supabase + encryption stack.
+/// encrypted, owner-only) on Agents's Supabase + encryption stack.
 ///
 /// Every method is defensive: any failure (not initialised, not signed in, no
 /// encryption key, network error, corrupt/foreign ciphertext) resolves to a
@@ -28,8 +28,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Reads and writes the encrypted connector mirror in Supabase.
 ///

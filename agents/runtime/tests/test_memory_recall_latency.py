@@ -3,7 +3,7 @@
 import threading
 import time
 
-from cowork_agent.memory import MemoryStore
+from chuk_agents_runtime.memory import MemoryStore
 
 
 def test_slow_recall_is_bounded_and_cannot_queue_more_workers(tmp_path, monkeypatch):
@@ -46,7 +46,7 @@ def test_fast_recall_keeps_the_existing_context_shape(tmp_path, monkeypatch):
 
 
 def test_runtime_foreground_uses_bounded_recall(tmp_path):
-    from cowork_agent import LocalEnvironment, MockModelClient, build_runtime
+    from chuk_agents_runtime import LocalEnvironment, MockModelClient, build_runtime
 
     class Writer(MockModelClient):
         def cheap_clone(self):
@@ -60,7 +60,7 @@ def test_runtime_foreground_uses_bounded_recall(tmp_path):
 
 
 def test_chat_reaches_model_while_memory_service_is_still_blocked(tmp_path, monkeypatch):
-    from cowork_agent import LocalEnvironment, MockModelClient, build_runtime
+    from chuk_agents_runtime import LocalEnvironment, MockModelClient, build_runtime
 
     entered, release = threading.Event(), threading.Event()
 

@@ -1,37 +1,37 @@
-// COWORK ADAPTATION (chuk_chat/lib/pages/about_page.dart), line by line:
-//  - dropped `package:package_info_plus` — not in CoWork's pubspec. The app
+// AGENTS ADAPTATION (chuk_chat/lib/pages/about_page.dart), line by line:
+//  - dropped `package:package_info_plus` — not in Agents's pubspec. The app
 //    name is the constant [AboutPage.appName] and the version comes from
 //    `--dart-define=APP_VERSION` ([AboutPage.appVersion]).
-//  - dropped `package:flutter_svg` + `assets/logo.svg` — CoWork has no such
+//  - dropped `package:flutter_svg` + `assets/logo.svg` — Agents has no such
 //    vector asset (see widgets/brand_wordmark.dart); the hero shows an icon.
 //  - dropped `services/update_check_service.dart` and the update badge — it
-//    polls the chuk_chat release feed, which CoWork does not have.
-//  - branding: the product name stays 'Chuk Chat' (CoWork is a mode inside it,
+//    polls the chuk_chat release feed, which Agents does not have.
+//  - branding: the product name stays 'Chuk Chat' (Agents is a mode inside it,
 //    never the product); terms/privacy rows removed (no such pages yet), the
 //    GitHub row points at the repository this build comes from.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/services/developer_options_service.dart';
-import 'package:cowork/utils/build_info.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/developer_options_service.dart';
+import 'package:chuk_chat/utils/build_info.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 class AboutPage extends StatefulWidget {
   const AboutPage({super.key});
 
-  /// COWORK ADAPTATION: replaces `PackageInfo.appName`. The product is
-  /// chuk_chat; CoWork is only a mode inside it, so it is never the name.
+  /// AGENTS ADAPTATION: replaces `PackageInfo.appName`. The product is
+  /// chuk_chat; Agents is only a mode inside it, so it is never the name.
   static const String appName = 'Chuk Chat';
 
-  /// COWORK ADAPTATION: replaces `PackageInfo.version`. Empty when the build
+  /// AGENTS ADAPTATION: replaces `PackageInfo.version`. Empty when the build
   /// did not pass `--dart-define=APP_VERSION=…`; the UI then hides the line.
   static const String appVersion = String.fromEnvironment('APP_VERSION');
 
@@ -121,8 +121,8 @@ class _AboutPageState extends State<AboutPage> {
       backgroundColor: colorScheme.surface,
       title: l.about,
       builder: (BuildContext context) {
-        // COWORK ADAPTATION: upstream awaits `PackageInfo.fromPlatform()`
-        // here. CoWork reads the build-time constants, so there is nothing
+        // AGENTS ADAPTATION: upstream awaits `PackageInfo.fromPlatform()`
+        // here. Agents reads the build-time constants, so there is nothing
         // to await and no loading spinner.
         final String? versionText = AboutPage.appVersion.trim().isEmpty
             ? null
@@ -153,7 +153,7 @@ class _AboutPageState extends State<AboutPage> {
                         ),
                         color: m3.surfaceContainerHigh,
                       ),
-                      // COWORK ADAPTATION: upstream draws assets/logo.svg.
+                      // AGENTS ADAPTATION: upstream draws assets/logo.svg.
                       child: AppIcon(
                         Icons.diversity_3_outlined,
                         size: 44,
@@ -224,8 +224,8 @@ class _AboutPageState extends State<AboutPage> {
                     ),
                   ],
                   const SizedBox(height: 14),
-                  // COWORK ADAPTATION: upstream shows an update badge fed by
-                  // UpdateCheckService. CoWork has no release feed, so the
+                  // AGENTS ADAPTATION: upstream shows an update badge fed by
+                  // UpdateCheckService. Agents has no release feed, so the
                   // badge states what this build really is. Only the agent
                   // host is self-hosted, so the badge must not claim more.
                   ExpressiveBadge(
@@ -237,7 +237,7 @@ class _AboutPageState extends State<AboutPage> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Text(
-                      'In CoWork mode the agent host runs on your own '
+                      'In Agents mode the agent host runs on your own '
                       'machine. The app, your account and the model APIs '
                       'are not self-hosted.',
                       textAlign: TextAlign.center,

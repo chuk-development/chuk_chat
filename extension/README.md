@@ -1,4 +1,4 @@
-# CoWork browser add-on
+# Agents browser add-on
 
 Your coworker, in the browser you already have open. Two things it does:
 
@@ -25,16 +25,16 @@ The page goes to the model as a small tree the content script builds —
 screenshot with coordinates. Screenshots exist as an extra
 (`browser_take_screenshot`), not as the main channel.
 
-## How it reaches CoWork
+## How it reaches Agents
 
 Two transports, one command vocabulary:
 
 * **native** — `runtime.connectNative("dev.chuk.cowork")` starts
-  `tools/cowork-browser-bridge`, which passes frames to the CoWork host over a
+  `tools/agents-browser-bridge`, which passes frames to the Agents host over a
   unix socket. The access rule is the host manifest's `allowed_origins`: it
   names this add-on and nothing else, and only you can write that file. No port,
   no token.
-* **relay** — a WebSocket, for a CoWork host on another machine. Set it under
+* **relay** — a WebSocket, for a Agents host on another machine. Set it under
   the add-on's settings.
 
 ## Build and load
@@ -42,7 +42,7 @@ Two transports, one command vocabulary:
 ```bash
 ./build.sh chrome     # -> dist/chrome, load unpacked
 ./build.sh firefox    # -> dist/firefox, load temporary add-on
-../tools/cowork-browser-bridge/install_host_manifest.py --chrome-id <id from chrome://extensions>
+../tools/agents-browser-bridge/install_host_manifest.py --chrome-id <id from chrome://extensions>
 ```
 
 ## The command vocabulary
@@ -74,7 +74,7 @@ Every tab it touches carries a lease: `origin` says whether the coworker opened
 the tab itself or the user handed it over, `state` is `active`, `deliverable`
 or `handoff`. Nothing is injected into a tab without a lease — the manifests
 declare no content scripts at all — so a tab it was never given carries no
-CoWork code.
+Agents code.
 
 `browser_handoff` gives the wheel back instead of pushing through a wall, and
 `browser_report_wall` reports one as a result rather than retrying.

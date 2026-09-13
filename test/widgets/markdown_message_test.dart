@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 const Color kAccent = Color(0xFF1565C0);
 const Color kText = Color(0xFF111111);

@@ -51,29 +51,29 @@ They exist only live; a replay cannot carry them, so their cards vanish.
 `chat_storage_crud.dart` `_doSaveChat` (untracked, changed 03:38, storage
 session) now requires a signed-in Supabase user and a loaded encryption key.
 The replay loader writes its rows through that `saveChat` and only logs the
-failure → `cowork_replay_loader_test` 10/12 red, my parity test red at the
+failure → `agents_replay_loader_test` 10/12 red, my parity test red at the
 same line, and in the app a missing key (cowork-6v5) means a replay lands
 nothing in the cache. Reported to cowork-b7 for the storage session.
 
 ## Built (2026-09-05 ~04:30, after the coordinator handed 47's files to me)
 
 All four app files carry the contract now; Python (cowork-b5) sends the frames
-(`agent/src/cowork_agent/tool_events.py`, `protocol.tool_payload` /
+(`agent/src/chuk_agents_runtime/tool_events.py`, `protocol.tool_payload` /
 `done_payload(run_stamps)`).
 
-- `lib/services/cowork/cowork_relay_client.dart` — `CoworkRelayTool.argumentMap`
+- `lib/services/agents/agents_relay_client.dart` — `AgentsRelayTool.argumentMap`
   / `callId` / `startedAt` / `completedAt`; `fromPayload` reads `arguments`
   (object), `result`, `status` (the host's `error` verdict wins), `call_id`,
   `started_at`, `completed_at`; old frames (`command` + `stdout`) decode as
-  before. `CoworkRelayDone.startedAt` / `finishedAt` / `firstMid` / `lastMid`
+  before. `AgentsRelayDone.startedAt` / `finishedAt` / `firstMid` / `lastMid`
   + `workedFor`. Top-level `epochSecondsToDateTime`.
-- `lib/services/cowork/cowork_run_ledger.dart` — `toolCallFromRelay(event,
+- `lib/services/agents/agents_run_ledger.dart` — `toolCallFromRelay(event,
   {now})`: THE one mapping for both paths (object args, host clock, fallback
   clock). `recordTool(sessionKey, event)`: appends, or fills an open line with
-  the same call id / name. `CoworkRun.finishedAt` / `hostStamped` / `firstMid`
+  the same call id / name. `AgentsRun.finishedAt` / `hostStamped` / `firstMid`
   / `lastMid` / `workedFor`; `finish(...)` takes the stamps; `adoptRunning`
   marks a host clock.
-- `lib/services/cowork/cowork_replay_loader.dart` — tool frames go through
+- `lib/services/agents/agents_replay_loader.dart` — tool frames go through
   `toolCallFromRelay`; a replayed run terminal writes `generationMs` on the
   answer row (never `startedAt`); `run_state.started_at` reaches the ledger.
 - `lib/services/websocket_chat_service.dart` — completed tool frames →
@@ -82,14 +82,14 @@ All four app files carry the contract now; Python (cowork-b5) sends the frames
 
 Green (each file alone, `--timeout 60s`): `dart analyze` on the six files 0
 issues; `tool_events_contract_test` 8/8 (new), `tool_card_parity_test` 5/5
-(timestamps, `generationMs`, cursor), `cowork_run_ledger_test` 14/14,
-`cowork_replay_loader_test` 16/16, `websocket_chat_service_test` 18/18.
+(timestamps, `generationMs`, cursor), `agents_run_ledger_test` 14/14,
+`agents_replay_loader_test` 16/16, `websocket_chat_service_test` 18/18.
 
 P8 review F11 (recordTool could fill an open line of the same name that
 carried another host id): fixed in the ledger — a known, differing `call_id`
 is never filled; `openTool` takes an optional `callId` so a host that grows
 `running` frames closes the right line. Verified: analyze 0,
-`tool_events_contract_test` 10/10 (two new cases), `cowork_run_ledger_test`
+`tool_events_contract_test` 10/10 (two new cases), `agents_run_ledger_test`
 17/17, parity 5/5 against f7's in-flight loader/relay/adapter edits.
 
 Still open: the before/after screenshots (screen locked, host restart #2
@@ -105,7 +105,7 @@ pending) and `bd close cowork-b45 cowork-al2` after the live check.
 - `docs/PROPOSAL_2026-09-05_TOOLCARDS_cowork-84.md` — the concrete Dart diffs
   for cowork-47's files (relay client, ledger `toolCallFromRelay`, loader
   `generationMs` without `startedAt`, `advanceCursor` on a live `done`).
-- `app/test/services/cowork/tool_card_parity_test.dart` — the same scripted
+- `app/test/services/agents/tool_card_parity_test.dart` — the same scripted
   run through adapter → ledger → fold and through loader → cached rows; asserts
   count, order, name, arguments, status, result are equal. Timestamps join the
   comparison once the frames carry them. Red today only because of the storage
@@ -115,7 +115,7 @@ pending) and `bd close cowork-b45 cowork-al2` after the live check.
 
 1. Storage session: `saveChat` must fill the in-memory cache before Supabase /
    encryption (it was the "instant-paint cache") or the loader gets its own
-   local sink. Then `cowork_replay_loader_test` and the parity test run again.
+   local sink. Then `agents_replay_loader_test` and the parity test run again.
 2. cowork-b5 lands the frames (contract section), cowork-47 the app mapping
    (proposal file). Then extend `_visible()` in the parity test with
    `startedAt` / `completedAt`.

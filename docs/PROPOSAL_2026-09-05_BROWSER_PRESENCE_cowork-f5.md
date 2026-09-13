@@ -11,7 +11,7 @@ f5, Dart only) derives that state in the app from the `tool` frames of the
 Playwright MCP server (`mcp__playwright__browser_*`, `browser_close`) and from
 the executor's `browser_view` verdicts. That works live and in replay, but the
 host holds the real truth: it sees the same tool events, it counts the windows
-on the Xvfb display (`cowork-vnc-up` prints `WINDOWS=<n>`), and it knows when
+on the Xvfb display (`agents-vnc-up` prints `WINDOWS=<n>`), and it knows when
 the sandbox goes away. Phase d puts that truth on the wire, additively.
 
 ## Wire changes (docs/WIRE_CONTRACT.md, additive)
@@ -38,7 +38,7 @@ the state), or on the live VNC stream id when the flip comes from the VNC path
 sent on a change, never repeated. `started`/`stopped`/`error` keep their
 meaning (they are about the VNC stream, not the browser).
 
-## Executor (executor/src/cowork_executor/executor.py)
+## Executor (executor/src/chuk_agents_executor/executor.py)
 
 * `self._browser_open: bool = False` (one sandbox, one browser per executor).
 * `_on_tool_event(request_id, session_key, fields)`: derive the new state from
@@ -71,7 +71,7 @@ status) -> bool | None` in `protocol.py` next to `browser_view_payload`, and
 
 ## App (Dart, f5)
 
-* `CoworkRelayRunState.browserOpen` (`bool?`, parsed from `browser_open`) —
+* `AgentsRelayRunState.browserOpen` (`bool?`, parsed from `browser_open`) —
   relay_client is 47's file: three additive lines, announced.
 * `BrowserPresence`: `run_state` with `browserOpen != null` sets the value;
   `browser_view` `opened`/`closed` set it. Tool-frame derivation stays as

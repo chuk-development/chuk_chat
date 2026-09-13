@@ -3,7 +3,7 @@
 Session `cowork-reasoning` (coordinator: cowork-b7, then cowork-76). Beads
 `cowork-0ia` (reasoning), `cowork-b45` / `cowork-al2` (tool frames + "Worked
 for 0s", Python part), `cowork-3hk` (thinking default `medium`, Dart, open).
-Everything below is UNCOMMITTED on branch `cowork`; commit release is the
+Everything below is UNCOMMITTED on branch `agents`; commit release is the
 user's call (cowork-47 is the Python committer). No worktree, no branch switch.
 
 ## What was wrong (three causes, all proved)
@@ -12,11 +12,11 @@ user's call (cowork-47 is the Python committer). No worktree, no branch switch.
    `_chat_once` received the backend's `kind: "reasoning"` frames, appended them
    to `raw["reasoning"]` and dropped them. The executor's `StreamingModelClient`
    only had `on_delta`; `protocol.py` had no reasoning payload. The Dart chain
-   (relay `case 'reasoning'` → `CoworkRelayReasoning` → adapter `ReasoningEvent`
+   (relay `case 'reasoning'` → `AgentsRelayReasoning` → adapter `ReasoningEvent`
    → chuk `StreamingManager.reasoningBuffer` → `MessageBubble.reasoning`) was
    already complete and waiting.
 2. **The thinking block was hidden behind the verbose toggle.**
-   `cowork_thread_view.dart` passed `showReasoningTokens: _verbose` (default
+   `agents_thread_view.dart` passed `showReasoningTokens: _verbose` (default
    false). chuk_chat binds it to the user's own "show reasoning" setting
    (`AppThemeService.showReasoningTokens`, default true). Coordinator decision:
    chuk semantics; tool calls / tps stay on verbose.
@@ -36,7 +36,7 @@ user's call (cowork-47 is the Python committer). No worktree, no branch switch.
 
 ### Python (agent / executor) — all suites green, ruff F/E9 clean
 
-- `agent/src/cowork_agent/backend.py`
+- `agent/src/chuk_agents_runtime/backend.py`
   - `BackendModelClient.on_reasoning` seam next to `on_delta`; fired per
     `reasoning` frame; a raising sink never aborts the turn; not inherited by
     `cheap_clone` (housekeeping must not narrate into the thread).
@@ -44,7 +44,7 @@ user's call (cowork-47 is the Python committer). No worktree, no branch switch.
   - `REASONING_LADDER`, `supported_efforts(models, model_id)`,
     `clamp_reasoning_effort(models, model_id, effort)` (see WIRE_CONTRACT
     `reasoning` section for the rules).
-- `executor/src/cowork_executor/executor.py`
+- `executor/src/chuk_agents_executor/executor.py`
   - `StreamingModelClient(inner, on_delta=, on_reasoning=)`; fallback for a
     non-streaming inner emits reasoning once, then text.
   - `_run_task`: `on_reasoning=lambda t: self._event(rid, reasoning_payload(t))`;
@@ -54,31 +54,31 @@ user's call (cowork-47 is the Python committer). No worktree, no branch switch.
     to the runs row (`_record_run_effort`), and `run.reasoning_effort` updated.
   - `_record_run` returns the closed row's stamps; the live `done` carries
     `started_at / finished_at / first_mid / last_mid` (`run_stamps=`).
-- `executor/src/cowork_executor/protocol.py`: `reasoning_payload(text)`;
+- `executor/src/chuk_agents_executor/protocol.py`: `reasoning_payload(text)`;
   `tool_payload(**fields)` (the shared shape); `done_payload(run_stamps=)`.
-- `executor/src/cowork_executor/backend.py`: `make_backend_model_select` clamps
+- `executor/src/chuk_agents_executor/backend.py`: `make_backend_model_select` clamps
   the effort against the catalogue it already holds, warns once per
   (model, level), builds the client with the effective level.
-- `agent/src/cowork_agent/tool_events.py` (NEW): `tool_event_fields`,
+- `agent/src/chuk_agents_runtime/tool_events.py` (NEW): `tool_event_fields`,
   `tool_status`, `result_text` — ONE shape for live and replayed tool events
   (name, arguments, call_id, command only for run_command/run_python, result,
   projected exit_code/stdout/stderr/timed_out, status, started_at,
   completed_at, duration_ms).
-- `agent/src/cowork_agent/loop.py`: `AgentLoop(tool_event_observer=)`; one event
+- `agent/src/chuk_agents_runtime/loop.py`: `AgentLoop(tool_event_observer=)`; one event
   per native tool call after its result (`_emit_tool`); `_persist_assistant`
   stores `content["reasoning"]` from `response.raw`.
-- `agent/src/cowork_agent/runtime.py`: `build_runtime(tool_event_observer=)`
+- `agent/src/chuk_agents_runtime/runtime.py`: `build_runtime(tool_event_observer=)`
   threaded to the loop (distinct from the pre-existing `tool_observer`, the
   journaling registry's subagent summary hook — a duplicate name broke the host
   import once; both packages are import-tested before every save now).
-- `agent/src/cowork_agent/state.py`: `replay_events` emits a `reasoning` event
+- `agent/src/chuk_agents_runtime/state.py`: `replay_events` emits a `reasoning` event
   before a turn's `delta` / `tool` events (same `mid`); tool events rebuilt via
   `tool_event_fields` with `started_at` = assistant row `created_at`,
   `completed_at` = tool row `created_at`; result rows matched per turn by
   `tool_call_id`, else by position (`_tool_rows_after`, `_match_tool_row`);
   `run_stamp_fields(row)`; `run_terminals` carries the four stamps;
   `update_run_reasoning_effort(run_id, effort)`.
-- `agent/src/cowork_agent/__init__.py`: exports `run_stamp_fields`,
+- `agent/src/chuk_agents_runtime/__init__.py`: exports `run_stamp_fields`,
   `tool_event_fields`, `tool_status`, `result_text`, `clamp_reasoning_effort`,
   `supported_efforts`.
 
@@ -97,19 +97,19 @@ and `host`, plus `uv run ruff check --select F,E9 src tests`.
 ### Dart (app) — owner boundaries respected
 
 - `app/lib/services/websocket_chat_service.dart` (my inbound mapping spot):
-  `_isReplay` treats `CoworkRelayReasoning(replay: true)` as history, so a
+  `_isReplay` treats `AgentsRelayReasoning(replay: true)` as history, so a
   replayed thinking never enters a live run. Tests +2 in
   `test/services/websocket_chat_service_test.dart` (18 green).
-- `app/lib/widgets/cowork_thread_view.dart`: `showReasoningTokens:
+- `app/lib/widgets/agents_thread_view.dart`: `showReasoningTokens:
   AppThemeService.instance.showReasoningTokens` on both `ChukChatUI*` calls;
   listener `_onThemeChanged` so the setting reflows live. Test file: the
   quiet-default assertion now expects the thinking block visible; new test
   "the thinking block follows the 'show reasoning' setting, not verbose"
   (flips the persisted preference through the service's cached prefs instance
   — the setter debounces a Supabase sync on a timer the harness rejects).
-  `cowork_thread_view_test.dart` 23/23, scoped `flutter analyze` 0.
-- Built by cowork-47 on my diff proposal: `CoworkRelayReasoning(replay, mid)` in
-  `cowork_relay_client.dart`; replay loader writes replayed reasoning into the
+  `agents_thread_view_test.dart` 23/23, scoped `flutter analyze` 0.
+- Built by cowork-47 on my diff proposal: `AgentsRelayReasoning(replay, mid)` in
+  `agents_relay_client.dart`; replay loader writes replayed reasoning into the
   restored answer row (`aiReasoning` → `row['reasoning']`).
 
 ### Docs
@@ -125,7 +125,7 @@ Not pytest-collected. Runs an in-process `Executor` with a real
 `BackendModelClient` (session from the app's own storage, token-rotation guard
 like `live_native_probe.py`: never refreshes, needs >15 min token headroom).
 Costs cents. `cd executor && uv run python tests/live_reasoning_probe.py`
-(env: `COWORK_LIVE_MODEL`, `COWORK_LIVE_PROVIDER`, `COWORK_LIVE_REASONING`).
+(env: `AGENTS_LIVE_MODEL`, `AGENTS_LIVE_PROVIDER`, `AGENTS_LIVE_REASONING`).
 
 Run 2026-09-05 ~04:35, glm-5.3-flash @ fireworks/serverless, effort `high`:
 
@@ -153,7 +153,7 @@ The probe's checks (after the check fix): reasoning arrives, precedes the
 first delta, is its own channel; one tool frame per native call with
 arguments/status/clocks and a plain command line; done stamped; command ran.
 The clamp has NOT been probed live yet (it needs a token with >15 min
-headroom; the result must equal the `high` run when `COWORK_LIVE_REASONING=medium`).
+headroom; the result must equal the `high` run when `AGENTS_LIVE_REASONING=medium`).
 
 ## Host restarts
 
@@ -171,7 +171,7 @@ headroom; the result must equal the `high` run when `COWORK_LIVE_REASONING=mediu
 ## Verification tasks from the coordinator (2026-09-05, ~05:10)
 
 - **cowork-jqi (host-side OAuth for catalogue connectors): CLOSED, superseded
-  by P5 device OAuth.** Verified in `agent/src/cowork_agent/mcp_client.py`: an
+  by P5 device OAuth.** Verified in `agent/src/chuk_agents_runtime/mcp_client.py`: an
   `oauth` entry without `access_token` stays a configured server; with
   `oauth.refresh_token` + `token_endpoint` the first request mints a token
   (`_http_headers` → `refresh_token`), on 401 the manager forces a refresh and

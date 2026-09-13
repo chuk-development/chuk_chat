@@ -1,7 +1,7 @@
 [project]
-name = "cowork-sandbox"
+name = "chuk-agents-sandbox"
 version = "0.1.0"
-description = "CoWork execution sandbox: BaseEnvironment ABC + snapshot-file session persistence, local and docker backends."
+description = "Agents execution sandbox: BaseEnvironment ABC + snapshot-file session persistence, local and docker backends."
 readme = "README.md"
 authors = [
     { name = "chukfinley", email = "chuk@chuk.dev" }

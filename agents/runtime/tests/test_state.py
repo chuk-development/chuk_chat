@@ -1,6 +1,6 @@
 import threading
 
-from cowork_agent.state import StateStore
+from chuk_agents_runtime.state import StateStore
 
 
 def test_append_and_get_conversation_ordered_by_id(tmp_path):

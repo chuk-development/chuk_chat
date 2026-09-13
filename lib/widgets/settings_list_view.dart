@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/staggered.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
 
 /// Scroll container for settings-style pages with a bounded set of rows.
 ///

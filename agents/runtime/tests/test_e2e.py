@@ -4,11 +4,11 @@ The loop must execute the command via LocalEnvironment, append every message to
 SQLite, and return the final answer.
 """
 
-from cowork_agent.environment import LocalEnvironment
-from cowork_agent.loop import StopReason
-from cowork_agent.model import MockModelClient, tool_call_response
-from cowork_agent.runtime import build_runtime
-from cowork_agent.state import StateStore
+from chuk_agents_runtime.environment import LocalEnvironment
+from chuk_agents_runtime.loop import StopReason
+from chuk_agents_runtime.model import MockModelClient, tool_call_response
+from chuk_agents_runtime.runtime import build_runtime
+from chuk_agents_runtime.state import StateStore
 
 
 def test_run_command_end_to_end(tmp_path):
@@ -26,7 +26,7 @@ def test_run_command_end_to_end(tmp_path):
         model,
         db_path=db,
         environment=LocalEnvironment(),
-        system_prompt="You are a CoWork agent.",
+        system_prompt="You are a Agents agent.",
     )
     result = loop.run("e2e-session", "please make a file")
 

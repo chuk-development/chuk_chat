@@ -13,12 +13,12 @@ from __future__ import annotations
 import json
 import threading
 
-from cowork_agent import SupabaseSession
-from cowork_manager import RosterStore, RuntimeStatus
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import SupabaseSession
+from chuk_agents_manager import RosterStore, RuntimeStatus
+from chuk_agents_sandbox import LocalEnvironment
 from websockets.sync.server import serve
 
-from cowork_executor import (
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     ExecutorSupervisor,
@@ -121,7 +121,7 @@ def test_backend_factory_drives_encrypted_executor(tmp_path):
             environment=LocalEnvironment(workdir=a.workspace_dir),
             db_path=str(tmp_path / "executor-state.db"),
             model_factory=factory,
-            system_prompt="You are a CoWork coworker.",
+            system_prompt="You are a Agents coworker.",
         )
 
     supervisor = ExecutorSupervisor(roster, exec_factory)

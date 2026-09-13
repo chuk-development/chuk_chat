@@ -15,8 +15,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/pill_geometry.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
 
 class ConnectedGroup extends StatelessWidget {
   const ConnectedGroup({

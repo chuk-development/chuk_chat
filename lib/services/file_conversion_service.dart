@@ -1,6 +1,6 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/file_conversion_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/services/file_conversion_service.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: hosted-only — upstream POSTs the file to the hosted converter and
-// gets markdown back. In CoWork the host reads files itself, so the client
+// gets markdown back. In Agents the host reads files itself, so the client
 // never converts one. Both entry points return the upstream failure shape.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
@@ -12,7 +12,7 @@ class FileConversionService {
 
   static const Map<String, dynamic> _unavailable = <String, dynamic>{
     'success': false,
-    'error': 'File conversion runs on the CoWork host, not on the client.',
+    'error': 'File conversion runs on the Agents host, not on the client.',
     'markdown': null,
   };
 

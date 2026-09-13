@@ -1,7 +1,7 @@
 """The wall-clock guard for runs (Bead cowork-qxa).
 
 A run that keeps going after the app detached had no upper bound on the host.
-Now ``RUN_MAX_SECONDS`` (``COWORK_RUN_MAX_SECONDS``, default 7200) arms a
+Now ``RUN_MAX_SECONDS`` (``AGENTS_RUN_MAX_SECONDS``, default 7200) arms a
 timer per run; on expiry the executor fires the run's kill switch exactly as a
 user's stop does, and the run closes with ``reason == "timeout"`` — persisted
 on the ``runs`` row, on the ``done`` frame and in the host's ``on_run_finished``
@@ -12,11 +12,11 @@ from __future__ import annotations
 
 import threading
 
-from cowork_agent import MockModelClient, ModelResponse, StateStore
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, ModelResponse, StateStore
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor.executor import RUN_TIMEOUT_REASON
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor.executor import RUN_TIMEOUT_REASON
 
 from wiring import paired_channel
 
@@ -118,7 +118,7 @@ def test_zero_disables_the_guard(tmp_path):
 
 
 def test_the_default_comes_from_the_module_constant(tmp_path, monkeypatch):
-    import cowork_executor.executor as executor_module
+    import chuk_agents_executor.executor as executor_module
 
     monkeypatch.setattr(executor_module, "RUN_MAX_SECONDS", 1234.0)
     executor, _ = _rig(tmp_path, lambda: MockModelClient(["x"]))

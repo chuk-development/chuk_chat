@@ -12,7 +12,7 @@ import json
 
 import pytest
 
-from cowork_host import doctor
+from chuk_agents_host import doctor
 
 
 class FakeProc:

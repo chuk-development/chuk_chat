@@ -4,12 +4,12 @@ import base64
 import json
 
 import pytest
-from cowork_crypto import ApprovedDevices, CoworkFrameOpener, CoworkFrameSealer
-from cowork_crypto.device_keys import DeviceIdentity
-from cowork_crypto.frame import CoworkFrameRejected
-from cowork_host.controller_sessions import ControllerSessions, b64, mac, transcript
-from cowork_host.pairing_store import HostTrust
-from cowork_host.cloud_party import _OpenedFrames
+from chuk_agents_crypto import ApprovedDevices, AgentsFrameOpener, AgentsFrameSealer
+from chuk_agents_crypto.device_keys import DeviceIdentity
+from chuk_agents_crypto.frame import AgentsFrameRejected
+from chuk_agents_host.controller_sessions import ControllerSessions, b64, mac, transcript
+from chuk_agents_host.pairing_store import HostTrust
+from chuk_agents_host.cloud_party import _OpenedFrames
 
 
 def controller(host, device, identity=None):
@@ -45,10 +45,10 @@ def controller(host, device, identity=None):
     return (
         identity,
         proof,
-        CoworkFrameSealer(
+        AgentsFrameSealer(
             channel_key=key, key_version=1, device_id=device, signing_identity=identity
         ),
-        CoworkFrameOpener(channel_key=key, key_version=1, approved_devices=approved),
+        AgentsFrameOpener(channel_key=key, key_version=1, approved_devices=approved),
     )
 
 
@@ -80,7 +80,7 @@ def test_two_devices_reconnect_and_broadcast(host):
     old = phone[2].seal(b'{"type":"stop"}')
     controller(host, "phone", phone[0])
     # Phone reconnect invalidates old traffic but leaves desktop live.
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         host.open(old)
     assert host.open(desktop[2].seal(b'{"type":"agent_list"}'))
 
@@ -91,18 +91,18 @@ def test_proof_and_frame_replays_rejected(host):
         host.confirm(client[1])
     frame = client[2].seal(b"{}")
     assert host.open(frame) == b"{}"
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         host.open(frame)
 
 
 def test_unknown_device_cannot_send_frame(host):
-    rogue = CoworkFrameSealer(
+    rogue = AgentsFrameSealer(
         channel_key=host.trust.channel_key,
         key_version=1,
         device_id="rogue",
         signing_identity=DeviceIdentity.generate(),
     )
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         host.open(rogue.seal(b"{}"))
 
 
@@ -130,7 +130,7 @@ def test_executor_tickets_are_one_use_and_bounded():
     opener = _OpenedFrames()
     raw = base64.b64decode(opener.put(b"private payload"))
     assert opener.open(raw) == b"private payload"
-    with pytest.raises(CoworkFrameRejected):
+    with pytest.raises(AgentsFrameRejected):
         opener.open(raw)
     for _ in range(1024):
         opener.put(b"x")
@@ -141,9 +141,9 @@ def test_executor_tickets_are_one_use_and_bounded():
 def test_real_executor_broadcasts_new_agent_to_both_devices_under_one_second(tmp_path):
     import queue
     import time
-    from cowork_host import LocalHost
-    from cowork_host.cloud_party import CloudHostParty
-    from cowork_agent import MockModelClient
+    from chuk_agents_host import LocalHost
+    from chuk_agents_host.cloud_party import CloudHostParty
+    from chuk_agents_runtime import MockModelClient
 
     host = LocalHost(
         port=0,

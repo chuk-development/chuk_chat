@@ -1,5 +1,5 @@
 # The two sandbox images, built here instead of on every machine that installs
-# CoWork (§6, §9).
+# Agents (§6, §9).
 #
 # Why this exists: `scripts/install.sh` used to build `sandbox/docker/Dockerfile`
 # locally. That build is now ~1.4 GB and includes LibreOffice, so every fresh

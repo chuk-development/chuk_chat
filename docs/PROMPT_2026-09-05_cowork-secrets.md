@@ -1,6 +1,6 @@
 # Auftrag fuer Session cowork-secrets: Secrets-Tresor (API-Keys, die die AI nie sieht)
 
-Repo /home/user/git/cowork, Branch cowork, geteilter Working-Tree, KEIN Worktree.
+Repo /home/user/git/cowork, Branch agents, geteilter Working-Tree, KEIN Worktree.
 Koordinator: Session `cowork-76`. ZUERST per SendMessage bei `cowork-76` melden mit deinem
 Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowork-76.
 
@@ -10,10 +10,10 @@ Session-Namen (ListAgents) und "Auftrag gelesen"; danach alle Meldungen an cowor
 3. docs/HANDOVER_2026-09-05_PYTHON.md (Layout, Commit-Regeln, Suiten), docs/HANDOVER_2026-09-05_MCP_cowork-47.md
    (wie Geheimnisse heute vom Geraet zum Host wandern: mcp_servers/mcp_credentials, Spiegel in Supabase,
    EncryptionService), docs/SUPABASE_SCHEMA.md, docs/PRODUCT_PHILOSOPHY.md.
-4. Python: agent/src/cowork_agent/{tools.py,registry.py,loop.py}, executor/src/cowork_executor/{executor.py
-   (_env_shim, run_command/run_python-Pfad, _accept_task, Frames), protocol.py}, host/src/cowork_host/host.py.
+4. Python: agent/src/chuk_agents_runtime/{tools.py,registry.py,loop.py}, executor/src/chuk_agents_executor/{executor.py
+   (_env_shim, run_command/run_python-Pfad, _accept_task, Frames), protocol.py}, host/src/chuk_agents_host/host.py.
    Dart: app/lib/services/mcp/mcp_store.dart (Secure-Storage + verschluesselter Supabase-Spiegel als Vorbild),
-   app/lib/services/cowork/cowork_relay_client.dart, cowork_thread_view.dart (approval_request-Karte als Vorbild
+   app/lib/services/agents/agents_relay_client.dart, agents_thread_view.dart (approval_request-Karte als Vorbild
    fuer einen Dialog, den der Host anfordert), app/lib/pages/settings/ (Section-Map im Hub).
 
 ## Was gebaut wird (User-Wunsch, woertlich sinngemaess)
@@ -57,14 +57,14 @@ Keys managen. E2E-verschluesselt in Supabase, E2E zum Python-Host."
 - `services/secrets/secrets_store.dart` (Secure Storage + Supabase-Spiegel, Vorbild McpStore), Relay-Client:
   case `secret_request` + `sendSecrets()`; Thread-View: Dialog/Karte bei `secret_request` (Vorbild approval_request),
   Settings-Seite "API Keys" (Liste, hinzufuegen, Wert aendern, loeschen; Werte nie anzeigen, nur "gesetzt"),
-  im Hub als Eintrag der CoWork-Sektion (Section-Map in pages/settings_page.dart + desktop_settings_modal.dart,
+  im Hub als Eintrag der Agents-Sektion (Section-Map in pages/settings_page.dart + desktop_settings_modal.dart,
   Owner-Session f7 ist fertig, Ansage an cowork-76 vor dem Edit). Tests: store, relay_client (Frame-Parse/Send),
   thread_view (Dialog → sendSecrets), settings page.
 
 ## Grenzen / Regeln (hart)
 - Kein Commit, nie, ausser der User gibt es DIR direkt in dieser Session.
 - Deine Dateien: neue Dateien unter services/secrets/**, pages/secrets_settings_page.dart, Python: neues Modul
-  agent/src/cowork_agent/secrets.py + executor secrets-Teil; in bestehenden Dateien (tools.py/registry.py,
+  agent/src/chuk_agents_runtime/secrets.py + executor secrets-Teil; in bestehenden Dateien (tools.py/registry.py,
   executor.py, protocol.py, host.py, relay_client, thread_view, settings hubs, pubspec append-only) nur additive
   Hunks mit Ansage an cowork-76 VOR dem Edit. Parallel arbeitet Session cowork-automations in tools/registry/
   executor/host/relay_client/thread_view — frisch lesen, nur eigene Hunks, Tree muss zwischen Schritten kompilieren.

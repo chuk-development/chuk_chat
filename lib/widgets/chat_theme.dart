@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-/// Shared look tokens for the CoWork chat surface.
+/// Shared look tokens for the Agents chat surface.
 ///
 /// The goal is the familiar ChatGPT transcript: one centered, width-capped
 /// column, a generous vertical rhythm, a quiet grey pill for the user, and the

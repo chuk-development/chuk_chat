@@ -6,14 +6,14 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart'
-    show CoworkSecureKeyValueStore;
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/mcp_oauth.dart';
-import 'package:cowork/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
+    show AgentsSecureKeyValueStore;
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
 /// In-memory secure backend so secrets round-trip with no platform channel.
-class _MemorySecrets implements CoworkSecureKeyValueStore {
+class _MemorySecrets implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
 
   @override

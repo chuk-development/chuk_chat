@@ -12,7 +12,7 @@ wheels = [
 ]
 
 [[package]]
-name = "cowork-sandbox"
+name = "chuk-agents-sandbox"
 version = "0.1.0"
 source = { editable = "." }
 

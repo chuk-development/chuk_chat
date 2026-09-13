@@ -2,11 +2,11 @@
 
 This is the provisioning contract for the "reinstall anywhere, reconnect
 automatically" feature (see `docs/PRODUCT_PHILOSOPHY.md`). The Flutter client
-mirrors its CoWork trust record to Supabase so a fresh install can sign in and
+mirrors its Agents trust record to Supabase so a fresh install can sign in and
 reconnect to the same running Python server with no re-pairing.
 
 The client code that reads and writes this table is
-`app/lib/services/cowork/supabase_pairing_sync.dart` (`SupabasePairingSync`).
+`app/lib/services/agents/supabase_pairing_sync.dart` (`SupabasePairingSync`).
 
 ## What Supabase stores
 
@@ -53,26 +53,26 @@ row: its own.
 alter table public.cowork_pairings enable row level security;
 
 -- Read your own row.
-create policy "cowork_pairings_select_own"
+create policy "agents_pairings_select_own"
   on public.cowork_pairings
   for select
   using (auth.uid() = user_id);
 
 -- Insert only a row owned by you.
-create policy "cowork_pairings_insert_own"
+create policy "agents_pairings_insert_own"
   on public.cowork_pairings
   for insert
   with check (auth.uid() = user_id);
 
 -- Update only your row, and you cannot reassign it to someone else.
-create policy "cowork_pairings_update_own"
+create policy "agents_pairings_update_own"
   on public.cowork_pairings
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Delete your row (the "un-pair / forget" action).
-create policy "cowork_pairings_delete_own"
+create policy "agents_pairings_delete_own"
   on public.cowork_pairings
   for delete
   using (auth.uid() = user_id);
@@ -170,26 +170,26 @@ same owner-only scheme as `cowork_pairings`.
 alter table public.cowork_mcp_connectors enable row level security;
 
 -- Read your own row.
-create policy "cowork_mcp_connectors_select_own"
+create policy "agents_mcp_connectors_select_own"
   on public.cowork_mcp_connectors
   for select
   using (auth.uid() = user_id);
 
 -- Insert only a row owned by you.
-create policy "cowork_mcp_connectors_insert_own"
+create policy "agents_mcp_connectors_insert_own"
   on public.cowork_mcp_connectors
   for insert
   with check (auth.uid() = user_id);
 
 -- Update only your row, and you cannot reassign it to someone else.
-create policy "cowork_mcp_connectors_update_own"
+create policy "agents_mcp_connectors_update_own"
   on public.cowork_mcp_connectors
   for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- Delete your row (clearing every connector).
-create policy "cowork_mcp_connectors_delete_own"
+create policy "agents_mcp_connectors_delete_own"
   on public.cowork_mcp_connectors
   for delete
   using (auth.uid() = user_id);
@@ -404,20 +404,20 @@ is used. The rows carry no answer content.
 ```sql
 create table if not exists public.cowork_device_tokens (
   user_id    uuid        not null references auth.users (id) on delete cascade,
-  device_id  text        not null,      -- stable per app install (the CoWork device id)
+  device_id  text        not null,      -- stable per app install (the Agents device id)
   token      text        not null,      -- FCM registration token
   platform   text        not null,      -- 'android' | 'ios' | 'linux'
   updated_at timestamptz not null default now(),
   primary key (user_id, device_id)
 );
 alter table public.cowork_device_tokens enable row level security;
-create policy cowork_device_tokens_select_own on public.cowork_device_tokens
+create policy agents_device_tokens_select_own on public.cowork_device_tokens
   for select to authenticated using (auth.uid() = user_id);
-create policy cowork_device_tokens_insert_own on public.cowork_device_tokens
+create policy agents_device_tokens_insert_own on public.cowork_device_tokens
   for insert to authenticated with check (auth.uid() = user_id);
-create policy cowork_device_tokens_update_own on public.cowork_device_tokens
+create policy agents_device_tokens_update_own on public.cowork_device_tokens
   for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy cowork_device_tokens_delete_own on public.cowork_device_tokens
+create policy agents_device_tokens_delete_own on public.cowork_device_tokens
   for delete to authenticated using (auth.uid() = user_id);
 grant select, insert, update, delete on public.cowork_device_tokens to authenticated;
 ```
@@ -445,24 +445,24 @@ create table if not exists public.cowork_run_notifications (
   consumed_at  timestamptz,
   unique (user_id, run_id, kind)        -- the dedup guarantee
 );
-create index if not exists idx_cowork_run_notifications_open
+create index if not exists idx_agents_run_notifications_open
   on public.cowork_run_notifications (user_id, created_at desc)
   where consumed_at is null;
 alter table public.cowork_run_notifications enable row level security;
-create policy cowork_run_notifications_select_own on public.cowork_run_notifications
+create policy agents_run_notifications_select_own on public.cowork_run_notifications
   for select to authenticated using (auth.uid() = user_id);
-create policy cowork_run_notifications_insert_own on public.cowork_run_notifications
+create policy agents_run_notifications_insert_own on public.cowork_run_notifications
   for insert to authenticated with check (auth.uid() = user_id);
-create policy cowork_run_notifications_update_own on public.cowork_run_notifications
+create policy agents_run_notifications_update_own on public.cowork_run_notifications
   for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy cowork_run_notifications_delete_own on public.cowork_run_notifications
+create policy agents_run_notifications_delete_own on public.cowork_run_notifications
   for delete to authenticated using (auth.uid() = user_id);
 grant select, insert, update, delete on public.cowork_run_notifications to authenticated;
 ```
 
 ## Access pattern
 
-- Host (`cowork_host.notify.SupabaseNotifier`): `POST /rest/v1/cowork_run_notifications`
+- Host (`chuk_agents_host.notify.SupabaseNotifier`): `POST /rest/v1/cowork_run_notifications`
   with `Prefer: return=representation,resolution=ignore-duplicates` (a retry is a
   no-op), then `POST /functions/v1/notify-run {"notification_id"}`. On 401 the host
   refreshes its session once and retries; a failed delivery waits in a bounded
@@ -493,9 +493,9 @@ content) or rebuilds the app with their own `google-services.json`.
 
 ---
 
-# CoWork threads — `cowork_chats` (bead cowork-sha)
+# Agents threads — `cowork_chats` (bead cowork-sha)
 
-The chat rows. CoWork stores a thread the way chuk_chat stores a chat: the
+The chat rows. Agents stores a thread the way chuk_chat stores a chat: the
 verbatim chuk_chat storage modules (`chat_storage_crud/sync/mutations/sidebar`,
 `chat_preload_service`, `chat_sync_service`, `local_chat_cache_native`) are
 imported unchanged, with one mechanical rewrite in `scripts/import_chat_ui.sh`:
@@ -505,7 +505,7 @@ project's SQL editor.
 
 Three copies of every thread, in this order of authority:
 
-1. **The Python host** (`agent/src/cowork_agent/state.py`) — the truth. The
+1. **The Python host** (`agent/src/chuk_agents_runtime/state.py`) — the truth. The
    app asks for a replay with its cursor (`after_id`, docs/WIRE_CONTRACT.md)
    and folds the answer into the copies below.
 2. **The local SQLite cache** (`chat_cache.db` under the app-support
@@ -515,7 +515,7 @@ Three copies of every thread, in this order of authority:
    the cloud before the host has been paired again, and `ChatSyncService`
    (30 s poll on `id, updated_at`) pulls what another device wrote.
 
-The write path is `app/lib/services/storage/cowork_chat_store.dart`: memory,
+The write path is `app/lib/services/storage/agents_chat_store.dart`: memory,
 then the SQLite row, then an `upsert` here on `(user_id, id)`, best-effort.
 Reads and the sidebar go through the chuk_chat modules unchanged
 (`loadFullChat` is cache-first).
@@ -533,8 +533,8 @@ executor's `session_key` in plaintext: it is a routing key, not user content.
 
 - `encrypted_chats.id` is a `uuid`; a session key (`default`, an agent id) is
   not one.
-- CoWork and chuk_chat share this Supabase project. A shared table would list
-  every CoWork thread in chuk_chat's chat sidebar and let either app delete
+- Agents and chuk_chat share this Supabase project. A shared table would list
+  every Agents thread in chuk_chat's chat sidebar and let either app delete
   the other's rows.
 
 ## Table
@@ -551,7 +551,7 @@ create table if not exists public.cowork_chats (
   updated_at        timestamptz not null default now(),
   primary key (user_id, id)
 );
-create index if not exists idx_cowork_chats_user_updated
+create index if not exists idx_agents_chats_user_updated
   on public.cowork_chats (user_id, updated_at desc);
 ```
 
@@ -561,25 +561,25 @@ way it does in chuk_chat.
 
 ## Row-Level Security
 
-RLS on, owner-only, the same four policies as every other CoWork table:
+RLS on, owner-only, the same four policies as every other Agents table:
 
 ```sql
 alter table public.cowork_chats enable row level security;
-create policy cowork_chats_select_own on public.cowork_chats
+create policy agents_chats_select_own on public.cowork_chats
   for select to authenticated using ((select auth.uid()) = user_id);
-create policy cowork_chats_insert_own on public.cowork_chats
+create policy agents_chats_insert_own on public.cowork_chats
   for insert to authenticated with check ((select auth.uid()) = user_id);
-create policy cowork_chats_update_own on public.cowork_chats
+create policy agents_chats_update_own on public.cowork_chats
   for update to authenticated
   using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
-create policy cowork_chats_delete_own on public.cowork_chats
+create policy agents_chats_delete_own on public.cowork_chats
   for delete to authenticated using ((select auth.uid()) = user_id);
 grant select, insert, update, delete on public.cowork_chats to authenticated;
 ```
 
 ## Client access pattern
 
-- Host replay committed → `CoworkChatStore.replaceThread(sessionKey, rows)`:
+- Host replay committed → `AgentsChatStore.replaceThread(sessionKey, rows)`:
   `upsert({id, user_id, encrypted_payload, encrypted_title, updated_at},
   onConflict: 'user_id,id')`, then the server's `created_at`/`updated_at`
   are adopted locally so the sync's "cloud newer?" check compares like with
@@ -603,14 +603,14 @@ needs to route a row to a thread, and it carries no content.
 
 ---
 
-# CoWork secrets — `cowork_secrets` (docs/WIRE_CONTRACT.md, "Secrets")
+# Agents secrets — `cowork_secrets` (docs/WIRE_CONTRACT.md, "Secrets")
 
 The user's API keys, the way the agent uses them without ever seeing them.
 The device keeps the set in secure storage (`SecretsStore`,
 `app/lib/services/secrets/secrets_store.dart`) and mirrors it here so a
 fresh install on another device pulls it back, signs in, and forwards it to
 the host on its first provision. The host holds its own encrypted copy at
-rest (`~/.cowork/secrets.enc`); this table is the cross-device copy.
+rest (`~/.agents/secrets.enc`); this table is the cross-device copy.
 
 The DDL is `supabase/migrations/20260905120000_cowork_secrets.sql`; run it
 once in the project's SQL editor.
@@ -621,7 +621,7 @@ One row per name. `name` is plaintext on purpose: it is a label in the
 style of an environment variable (`PEXELS_API_KEY`), and the sync needs to
 compare names without decrypting. `ciphertext` is the value as an
 `EncryptionService` envelope — the same per-user password-derived
-AES-256-GCM key as every other CoWork mirror. A leaked anon key, a dump or
+AES-256-GCM key as every other Agents mirror. A leaked anon key, a dump or
 an admin see the names and opaque blobs.
 
 ## Table
@@ -633,14 +633,14 @@ create table if not exists public.cowork_secrets (
   ciphertext text        not null,      -- AES-256-GCM envelope JSON of the value
   updated_at timestamptz not null default now(),
   primary key (user_id, name),
-  constraint cowork_secrets_name_shape check (name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$')
+  constraint agents_secrets_name_shape check (name ~ '^[A-Za-z_][A-Za-z0-9_]{0,127}$')
 );
 ```
 
 ## Row-Level Security
 
-RLS on, owner-only, the same four policies as every other CoWork table
-(`cowork_secrets_{select,insert,update,delete}_own` on `auth.uid() =
+RLS on, owner-only, the same four policies as every other Agents table
+(`agents_secrets_{select,insert,update,delete}_own` on `auth.uid() =
 user_id`), plus the grant to `authenticated`. See the migration.
 
 ## Client access pattern

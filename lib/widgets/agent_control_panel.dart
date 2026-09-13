@@ -10,11 +10,11 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/services/cowork/schedule_spec.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/schedule_spec.dart';
 
 class AgentControlPanel extends StatefulWidget {
   const AgentControlPanel({
@@ -24,12 +24,12 @@ class AgentControlPanel extends StatefulWidget {
     this.onScheduleSubmitted,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final AgentControlSource source;
 
   /// Retired. The panel no longer sets schedules: nothing installed them on the
   /// host, and the Automations page is where a real schedule lives. Kept only
-  /// because `cowork_shell_state.dart` still passes it; it is never called.
+  /// because `agents_shell_state.dart` still passes it; it is never called.
   final void Function(ScheduleSpec spec)? onScheduleSubmitted;
 
   @override

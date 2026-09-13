@@ -24,8 +24,8 @@ import json
 import tempfile
 from pathlib import Path
 
-from cowork_agent.memory import MemoryStore
-from cowork_agent.model import ModelResponse
+from chuk_agents_runtime.memory import MemoryStore
+from chuk_agents_runtime.model import ModelResponse
 
 
 class _StubWriter:
@@ -46,7 +46,7 @@ class _StubWriter:
 
 
 def main() -> int:
-    root = Path(tempfile.mkdtemp(prefix="cowork_mem_twotask_")) / "memory"
+    root = Path(tempfile.mkdtemp(prefix="agents_mem_twotask_")) / "memory"
     writer = _StubWriter()
 
     # -- task 1 -----------------------------------------------------------

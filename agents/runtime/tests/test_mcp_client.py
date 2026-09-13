@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from cowork_agent.mcp_client import (
+from chuk_agents_runtime.mcp_client import (
     AUTH_APP_SESSION,
     AUTH_OAUTH,
     HTTP,
@@ -34,8 +34,8 @@ from cowork_agent.mcp_client import (
     token_expired,
     tool_name,
 )
-from cowork_agent.prompt import render_tool_docs
-from cowork_agent.registry import ToolRegistry
+from chuk_agents_runtime.prompt import render_tool_docs
+from chuk_agents_runtime.registry import ToolRegistry
 
 FAKE_SERVER = str(Path(__file__).parent / "fake_mcp_server.py")
 
@@ -110,8 +110,8 @@ def test_parse_config_rejects_garbage():
 
 
 def test_load_config_from_workspace(tmp_path):
-    (tmp_path / ".cowork").mkdir()
-    (tmp_path / ".cowork" / "mcp.json").write_text(
+    (tmp_path / ".agents").mkdir()
+    (tmp_path / ".agents" / "mcp.json").write_text(
         json.dumps({"mcpServers": {"a": {"command": "true"}}})
     )
     configs, errors = load_mcp_config(str(tmp_path))
@@ -1072,7 +1072,7 @@ def test_closed_reader_invalidates_connection_without_replaying_tool(monkeypatch
     error_type = type("MCPError", (Exception,), {})
     future.set_exception(error_type("Connection closed"))
     monkeypatch.setattr(
-        "cowork_agent.mcp_client.asyncio.run_coroutine_threadsafe",
+        "chuk_agents_runtime.mcp_client.asyncio.run_coroutine_threadsafe",
         lambda *args: future,
     )
     assert connection.alive()

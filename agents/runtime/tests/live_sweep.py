@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session  # noqa: E402
 
-from cowork_agent import (  # noqa: E402
+from chuk_agents_runtime import (  # noqa: E402
     BackendModelClient,
     LocalEnvironment,
     ToolRegistry,
@@ -27,7 +27,7 @@ from cowork_agent import (  # noqa: E402
 )
 PROMPT = (
     "Write a small Python test script named test_demo.py in the workspace. "
-    "It must print 'cowork ok'. Then run it and report the output."
+    "It must print 'agents ok'. Then run it and report the output."
 )
 
 DEFAULT_CANDIDATES = [

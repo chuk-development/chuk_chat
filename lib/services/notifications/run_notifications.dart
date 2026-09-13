@@ -11,7 +11,7 @@ library;
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Test seam: how a consume is written. The default talks to Supabase.
 typedef RunNotificationsWriter =

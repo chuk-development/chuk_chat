@@ -2,8 +2,8 @@ import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/session_refresh_scheduler.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/session_refresh_scheduler.dart';
 
 class _Source implements AccountSessionSource {
   _Source(this._current);

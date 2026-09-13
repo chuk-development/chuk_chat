@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/services/streaming_manager_io.dart' as native;
-import 'package:cowork/services/streaming_manager_stub.dart' as web;
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/streaming_manager_io.dart' as native;
+import 'package:chuk_chat/services/streaming_manager_stub.dart' as web;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

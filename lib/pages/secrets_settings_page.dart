@@ -7,13 +7,13 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/services/secrets/secrets_service.dart';
-import 'package:cowork/services/secrets/secrets_store.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/services/secrets/secrets_service.dart';
+import 'package:chuk_chat/services/secrets/secrets_store.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class SecretsSettingsPage extends StatefulWidget {
   const SecretsSettingsPage({super.key, SecretsService? service})

@@ -4,18 +4,18 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/pdf_attachment_service.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
-import 'package:cowork/ui/expressive/connected_group.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/chat_document_view.dart';
-import 'package:cowork/widgets/sandbox_artifact_block.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/pdf_attachment_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/chat_document_view.dart';
+import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 
 part 'chat_documents_explorer.dart';
 
@@ -36,7 +36,7 @@ class ChatDocumentsPanel extends StatefulWidget {
     this.fullPage = false,
   });
   final String sessionKey;
-  final CoworkRelayController? controller;
+  final AgentsRelayController? controller;
 
   /// Use inside a normal Navigator route on mobile. Dialog callers are unchanged.
   final bool fullPage;
@@ -59,7 +59,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   String? _coworker;
   bool _loading = true;
   final _explorerOptions = _ExplorerOptions();
-  StreamSubscription<CoworkRelayInbound>? _subscription;
+  StreamSubscription<AgentsRelayInbound>? _subscription;
 
   @override
   void initState() {
@@ -73,7 +73,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   bool _reading = false;
   String? _selectedId;
   int _selectionEpoch = 0;
-  CoworkRelayPhase? _phase;
+  AgentsRelayPhase? _phase;
 
   static String? _clean(String? value) {
     final trimmed = value?.trim();
@@ -87,7 +87,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   void _connectionChanged() {
     final phase = widget.controller?.state.value.phase;
-    if (phase == CoworkRelayPhase.paired && _phase != phase) {
+    if (phase == AgentsRelayPhase.paired && _phase != phase) {
       unawaited(_request());
       unawaited(_requestCoworkerName());
       if (_selectedId != null) unawaited(_request(id: _selectedId));
@@ -97,7 +97,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   Future<void> _load() async {
     try {
-      final chat = await CoworkChatStore.loadThread(widget.sessionKey);
+      final chat = await AgentsChatStore.loadThread(widget.sessionKey);
       if (!mounted) return;
       for (final message in chat?.messages ?? []) {
         try {
@@ -155,15 +155,15 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
   Future<void> _request({String? id}) async {
     final control = widget.controller;
     if (control == null ||
-        control is! CoworkDocumentsControl ||
-        control.state.value.phase != CoworkRelayPhase.paired) {
+        control is! AgentsDocumentsControl ||
+        control.state.value.phase != AgentsRelayPhase.paired) {
       if (mounted && id != null && id == _selectedId) {
         setState(() => _reading = false);
       }
       return;
     }
     try {
-      await (control as CoworkDocumentsControl).requestDocuments(
+      await (control as AgentsDocumentsControl).requestDocuments(
         widget.sessionKey,
         id: id,
       );
@@ -186,7 +186,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     if (_coworker != null) return;
     final control = widget.controller;
     if (control == null ||
-        control.state.value.phase != CoworkRelayPhase.paired) {
+        control.state.value.phase != AgentsRelayPhase.paired) {
       return;
     }
     try {
@@ -196,9 +196,9 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
     }
   }
 
-  void _receive(CoworkRelayInbound event) {
+  void _receive(AgentsRelayInbound event) {
     if (!mounted) return;
-    if (event is CoworkRelayAgentList) {
+    if (event is AgentsRelayAgentList) {
       for (final agent in event.agents) {
         if (agent.agentId != widget.sessionKey) continue;
         final name = _clean(agent.name);
@@ -209,13 +209,13 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
       }
       return;
     }
-    if (event is CoworkRelayFile &&
+    if (event is AgentsRelayFile &&
         event.document?['session_key'] == widget.sessionKey) {
       setState(() {
         if (_adopt(event.document!)) _persist(event.document!);
       });
     }
-    if (event is! CoworkRelayDocuments ||
+    if (event is! AgentsRelayDocuments ||
         event.payload['session_key'] != widget.sessionKey) {
       return;
     }
@@ -247,7 +247,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
 
   void _persist(Map<String, dynamic> doc) {
     if (doc['kind'] != 'file' && _hasContent(doc)) {
-      unawaited(CoworkChatStore.saveDocumentSnapshot(widget.sessionKey, doc));
+      unawaited(AgentsChatStore.saveDocumentSnapshot(widget.sessionKey, doc));
     }
   }
 
@@ -547,7 +547,7 @@ class _ChatDocumentsPanelState extends State<ChatDocumentsPanel> {
         '$saved saved',
         if (files > 0) '$files ${files == 1 ? 'file' : 'files'}',
       ],
-      if (CoworkChatStore.isDirty(widget.sessionKey)) 'Sync pending',
+      if (AgentsChatStore.isDirty(widget.sessionKey)) 'Sync pending',
     ];
     return Container(
       decoration: BoxDecoration(

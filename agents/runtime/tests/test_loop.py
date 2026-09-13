@@ -2,19 +2,19 @@ import os
 
 import pytest
 
-from cowork_agent.loop import (
+from chuk_agents_runtime.loop import (
     AgentLoop,
     IterationBudget,
     KillSwitch,
     StopReason,
 )
-from cowork_agent.model import (
+from chuk_agents_runtime.model import (
     MockModelClient,
     ModelResponse,
     tool_call_response,
 )
-from cowork_agent.registry import ToolRegistry
-from cowork_agent.state import StateStore
+from chuk_agents_runtime.registry import ToolRegistry
+from chuk_agents_runtime.state import StateStore
 
 
 def _echo_call(**arguments) -> ModelResponse:
@@ -100,7 +100,7 @@ def _finish_call(summary: str = "the result") -> ModelResponse:
 
 
 def test_finish_tool_terminates_with_summary(tmp_path):
-    from cowork_agent.tools import register_finish
+    from chuk_agents_runtime.tools import register_finish
 
     reg = _reg_with_echo()
     register_finish(reg)
@@ -123,8 +123,8 @@ PYTHON_CODE = "import sys\nprint(6 * 7)\nsys.exit(3)"
 
 
 def test_python_tool_runs_code_in_env(tmp_path):
-    from cowork_agent.environment import LocalEnvironment
-    from cowork_agent.tools import register_run_python
+    from chuk_agents_runtime.environment import LocalEnvironment
+    from chuk_agents_runtime.tools import register_run_python
 
     reg = _reg_with_echo()
     register_run_python(reg, LocalEnvironment())
@@ -483,7 +483,7 @@ def test_an_interrupt_mid_batch_skips_the_rest_but_answers_every_call(tmp_path):
 def test_debug_observer_gets_each_round_in_the_contract_shape(tmp_path):
     """The debug "copy raw context" tap fires once per model round with the exact
     outbound payload and the ladder's stats, in the fixed dict shape."""
-    from cowork_agent.context import ContextLadder
+    from chuk_agents_runtime.context import ContextLadder
 
     # Round 1 makes a tool call (continues); round 2 is bare text (finishes).
     model = MockModelClient([_echo_call(v="hi"), "done"])
@@ -772,7 +772,7 @@ def test_memory_rows_never_replay_as_user_turns(tmp_path):
 
 
 def test_turn_observer_gets_the_prompt_the_answer_and_the_tools(tmp_path):
-    from cowork_agent.loop import TurnRecord
+    from chuk_agents_runtime.loop import TurnRecord
 
     records: list[TurnRecord] = []
     model = MockModelClient([_echo_call(v="hi"), "finished"])

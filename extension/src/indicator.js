@@ -2,13 +2,13 @@
 // must never have to guess whether something else is holding the mouse.
 
 (() => {
-  const ID = "cowork-agent-indicator";
+  const ID = "agents-agent-indicator";
   const runtime = (globalThis.browser ?? globalThis.chrome).runtime;
 
   const LOOK = {
-    active: { bar: "linear-gradient(90deg,#7c5cff,#00c2a8)", chip: "#7c5cff", text: "CoWork is driving" },
-    deliverable: { bar: "linear-gradient(90deg,#00c2a8,#7c5cff)", chip: "#00a48f", text: "CoWork has something for you" },
-    handoff: { bar: "linear-gradient(90deg,#ff9f43,#ff6b6b)", chip: "#e8722c", text: "CoWork needs you here" },
+    active: { bar: "linear-gradient(90deg,#7c5cff,#00c2a8)", chip: "#7c5cff", text: "Agents is driving" },
+    deliverable: { bar: "linear-gradient(90deg,#00c2a8,#7c5cff)", chip: "#00a48f", text: "Agents has something for you" },
+    handoff: { bar: "linear-gradient(90deg,#ff9f43,#ff6b6b)", chip: "#e8722c", text: "Agents needs you here" },
   };
 
   function show(on, state, label) {
@@ -41,6 +41,6 @@
   }
 
   runtime.onMessage.addListener((msg) => {
-    if (msg && msg.channel === "cowork" && msg.op === "driving") show(msg.on, msg.state, msg.label);
+    if (msg && msg.channel === "agents" && msg.op === "driving") show(msg.on, msg.state, msg.label);
   });
 })();

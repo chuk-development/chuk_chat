@@ -6,7 +6,7 @@
 // other MCP address into.
 //
 // Ported verbatim from chuk_chat so the screen looks and behaves identically.
-// The only wiring difference is behind McpService: on CoWork "connect" records
+// The only wiring difference is behind McpService: on Agents "connect" records
 // the server for the paired local backend, which does the sign-in and the tool
 // discovery when a task runs — the device does not open a browser or dial the
 // server itself. See McpService.
@@ -15,18 +15,18 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/services/mcp/mcp_catalogue.dart';
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/mcp_icon_cache.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class McpConnectorsPage extends StatefulWidget {
   const McpConnectorsPage({super.key});

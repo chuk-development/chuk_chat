@@ -6,9 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/services/cowork/agent_file_saver.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/widgets/agent_run_views.dart';
+import 'package:chuk_chat/services/agents/agent_file_saver.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/widgets/agent_run_views.dart';
 
 /// A 1x1 transparent PNG — the smallest real image to prove a preview renders.
 final Uint8List _pngBytes = base64.decode(
@@ -21,7 +21,7 @@ class _RecordingSaver implements AgentFileSaver {
   Object? failWith;
 
   @override
-  Future<String> save(CoworkRelayFile file) async {
+  Future<String> save(AgentsRelayFile file) async {
     final error = failWith;
     if (error != null) throw error;
     saved.add(file.name);
@@ -41,7 +41,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           const AgentToolLine(
-            call: CoworkRelayTool(
+            call: AgentsRelayTool(
               'run_command',
               arguments: 'ls /tmp',
               result: 'a.txt',
@@ -78,7 +78,7 @@ void main() {
             children: [
               AgentToolLine(
                 key: Key('ok'),
-                call: CoworkRelayTool(
+                call: AgentsRelayTool(
                   'run_command',
                   arguments: 'true',
                   exitCode: 0,
@@ -86,7 +86,7 @@ void main() {
               ),
               AgentToolLine(
                 key: Key('bad'),
-                call: CoworkRelayTool(
+                call: AgentsRelayTool(
                   'run_command',
                   arguments: 'ls /nope',
                   result: 'No such file or directory',
@@ -120,7 +120,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           const AgentToolLine(
-            call: CoworkRelayTool(
+            call: AgentsRelayTool(
               'run_command',
               arguments: 'sleep 2',
               exitCode: 0,
@@ -135,7 +135,7 @@ void main() {
         _host(
           const AgentToolLine(
             key: Key('no-duration'),
-            call: CoworkRelayTool(
+            call: AgentsRelayTool(
               'run_command',
               arguments: 'sleep 2',
               exitCode: 0,
@@ -169,7 +169,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           AgentFileCard(
-            file: CoworkRelayFile(
+            file: AgentsRelayFile(
               name: 'screenshot.png',
               mimeType: 'image/png',
               declaredSize: _pngBytes.length,
@@ -193,7 +193,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           AgentFileCard(
-            file: CoworkRelayFile(
+            file: AgentsRelayFile(
               name: 'report.csv',
               mimeType: 'text/csv',
               declaredSize: 3,
@@ -223,7 +223,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           AgentFileCard(
-            file: CoworkRelayFile(
+            file: AgentsRelayFile(
               name: 'report.csv',
               mimeType: 'text/csv',
               declaredSize: 3,
@@ -247,7 +247,7 @@ void main() {
       await tester.pumpWidget(
         _host(
           AgentFileCard(
-            file: const CoworkRelayFile(
+            file: const AgentsRelayFile(
               name: 'shot.png',
               mimeType: 'image/png',
               declaredSize: 12,

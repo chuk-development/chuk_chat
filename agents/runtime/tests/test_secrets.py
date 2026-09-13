@@ -10,7 +10,7 @@ from __future__ import annotations
 import base64
 from urllib.parse import quote
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     DictSecrets,
     LocalEnvironment,
     Scrubber,
@@ -20,8 +20,8 @@ from cowork_agent import (
     status_map,
     valid_name,
 )
-from cowork_agent.model import MockModelClient, tool_call_response
-from cowork_agent.registry import ToolRegistry as PlainRegistry
+from chuk_agents_runtime.model import MockModelClient, tool_call_response
+from chuk_agents_runtime.registry import ToolRegistry as PlainRegistry
 
 VALUE = "sk-live-0123456789abcdef"
 

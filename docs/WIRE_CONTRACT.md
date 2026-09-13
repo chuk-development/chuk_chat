@@ -1,4 +1,4 @@
-# CoWork wire contract: run state, replay cursor, completion
+# Agents wire contract: run state, replay cursor, completion
 
 This file is the contract between the Flutter app and the Python executor for the
 frames that carry run state, history replay and run completion. Three sessions work
@@ -12,7 +12,7 @@ fields they do not know.
 
 ## Rules
 
-- All frames travel inside the sealed CoWork frame, as today.
+- All frames travel inside the sealed Agents frame, as today.
 - The contract is additive. A receiver MUST ignore unknown fields. A sender MUST NOT
   remove or rename an existing field.
 - `session_key` selects the thread on the executor. It equals the agent's thread key
@@ -65,7 +65,7 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 | `task` | `prompt`, `session_key`, `model`?, `provider`?, `reasoning_effort`?, `mcp_servers`?, `herenow`?, `debug`?, `regenerate`? | Existing. Field names are `model` and `provider` (NOT `model_id` / `provider_slug`). There is no `fast_mode` field; Fast mode is a model + `reasoning_effort` chosen by the app. |
 | `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
-| `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`COWORK_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
+| `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
 | `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
 
 ### Token freshness (bead cowork-c91)
@@ -331,7 +331,7 @@ The host's word on whether the agent has a browser window right now. The
 agent's browser is the Playwright MCP server in its sandbox: a completed
 `mcp__playwright__browser_*` tool (also through the `tool_call` wrapper) means
 a page is open, a completed `browser_close` means it is gone, and
-`cowork-vnc-up`'s window count (`WINDOWS=<n>`) on a `browser_start` is the
+`agents-vnc-up`'s window count (`WINDOWS=<n>`) on a `browser_start` is the
 ground truth when the display is asked. `browser_open` rides in every
 `run_state`; `opened` / `closed` are pushed once per change, on the stream that
 learned it, and land BEFORE the `tool` frame that caused the flip. `started` /
@@ -366,7 +366,7 @@ above `none`); a turn without reasoning sends no such frame.
   (`reasoning`); it is never sent back to the model as history.
 - `text` is the field. An older app that only knows `delta` ignores the frame.
 - The host clamps the task's `reasoning_effort` to the model's catalogue
-  `supported_efforts` before it reaches the backend (`cowork_agent.
+  `supported_efforts` before it reaches the backend (`chuk_agents_runtime.
   clamp_reasoning_effort`): an unsupported level makes the backend send NO
   reasoning at all (proved live: `medium` on glm-5.3-flash = zero frames,
   `high` = streamed thinking). An unsupported graded level goes to the next
@@ -426,7 +426,7 @@ Semantics, in this order:
 `reason` values: `finished`, `max_iterations`, `budget_exhausted`,
 `token_budget_exhausted`, `estop`, `interrupted` (the user's stop), `failed`,
 `host_restarted`, and `timeout` (Bead cowork-qxa): the host's wall-clock guard
-stopped the run — `COWORK_RUN_MAX_SECONDS`, default 7200, `0` disables — the
+stopped the run — `AGENTS_RUN_MAX_SECONDS`, default 7200, `0` disables — the
 way a stop does (kill switch, model call cancelled), persisted with that
 reason, notified like any other terminal. The app renders `timeout` like a
 stop (`wasStopped`).
@@ -434,7 +434,7 @@ stop (`wasStopped`).
 Persisted run terminals are replayed in message-id order, interleaved with the
 messages of that run.
 
-App-side helpers on `CoworkRelayDone`:
+App-side helpers on `AgentsRelayDone`:
 
 - `isHistoryEnd` = `reason == 'replay'`
 - `isReplay` = `replay == true || reason == 'replay'` (kept for compatibility)
@@ -454,7 +454,7 @@ key for notifications (set once, whichever channel fires first). `seen_at` is se
 
 A `done` sent while an app is attached is not announced (the user is watching),
 but only the `run_ack` proves the app showed it. The host therefore arms a
-15 s timer per run at `done` (`COWORK_RUN_ACK_TIMEOUT_SECONDS`); the ack cancels
+15 s timer per run at `done` (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`); the ack cancels
 it, expiry treats the run as finished while away and notifies exactly as a
 detached run would (`notified_at` dedups). `seen_at` stays unset, so the next
 replay's `done` says `while_away` too. Runs an automation or job started are
@@ -473,7 +473,7 @@ Proposed 2026-09-05 by session cowork-84. Additive. Python side: cowork-b5.
 App side (relay client, ledger, replay loader): cowork-47. Rendering: cowork-84.
 
 Python side IMPLEMENTED 2026-09-05 (session cowork-reasoning, uncommitted):
-`cowork_agent.tool_events.tool_event_fields` is the one shape; the loop emits it
+`chuk_agents_runtime.tool_events.tool_event_fields` is the one shape; the loop emits it
 live through `AgentLoop(tool_event_observer=...)` (wired by the executor,
 `_env_shim.on_run` no longer emits tool frames), `StateStore.replay_events`
 rebuilds it from the rows, `StateStore.run_stamp_fields` stamps every `done`.
@@ -675,9 +675,9 @@ falls back to the thread the socket is bound to, as before.
 ## Automations: schedules, watchers, self-wake (session cowork-94)
 
 Proposed 2026-09-05 by session cowork-94 (automations). Additive. Python side:
-`host/src/cowork_host/automations.py` (store, scheduler, watcher supervisor,
-trigger watchdog), `agent/src/cowork_agent/automations.py` (tools, spec
-parsing, cron), `agent/src/cowork_agent/cowork_hooks.py` (the self-wake module
+`host/src/chuk_agents_host/automations.py` (store, scheduler, watcher supervisor,
+trigger watchdog), `agent/src/chuk_agents_runtime/automations.py` (tools, spec
+parsing, cron), `agent/src/chuk_agents_runtime/agents_hooks.py` (the self-wake module
 a watcher script imports), executor hunks (`submit_task`, `automation_*`
 frames). App side: relay client, thread view card, replay loader, Automations
 page.
@@ -797,7 +797,7 @@ starts once the app connects.
   file in the workspace. It runs supervised as a child process with the
   sandbox's boundaries (local: a process in the workspace; docker: `docker
   exec` in the agent's container), cwd = workspace, stdout/stderr appended to
-  `.cowork/automations/<id>.log`. A crash restarts it with backoff (1 s
+  `.agents/automations/<id>.log`. A crash restarts it with backoff (1 s
   doubling to 60 s); more than 10 crashes in 10 minutes → `failed`. Exit 0 →
   `done`. Returns `{id, kind, name, log_path, state}`.
 - `list_automations()` — this session's automations only.
@@ -812,13 +812,13 @@ automations code calls that provider; it never reads or logs a value.
 ### Self-wake from a script
 
 ```python
-from cowork_hooks import trigger
+from agents_hooks import trigger
 trigger("new video", payload={"url": url, "title": title})
 ```
 
-`cowork_hooks.py` is installed by the host into `<workspace>/.cowork/
+`agents_hooks.py` is installed by the host into `<workspace>/.agents/
 automations/` and put on the watcher's `PYTHONPATH`. `trigger()` appends ONE
-JSON line to `.cowork/automations/triggers.jsonl` (O_APPEND, one write, so
+JSON line to `.agents/automations/triggers.jsonl` (O_APPEND, one write, so
 lines never interleave): `{"automation_id", "reason", "payload", "ts"}`. No
 network, no socket. The host tails that file (poll 1 s), maps the line to the
 watcher's session and starts the task. Rules:
@@ -829,7 +829,7 @@ watcher's session and starts the task. Rules:
 - payload cap: 16 KB of JSON; a larger payload is cut and marked
   `"truncated": true`.
 - a line for an unknown, paused, cancelled or failed automation is ignored.
-- `trigger()` outside a watcher (no `COWORK_AUTOMATION_ID` in the env, e.g.
+- `trigger()` outside a watcher (no `AGENTS_AUTOMATION_ID` in the env, e.g.
   the model testing the script with `python`) returns `False` and writes
   nothing.
 
@@ -851,7 +851,7 @@ restarted until the file is gone.
 ## Secrets (API keys the model never sees)
 
 Proposed 2026-09-05 by session cowork-26 (cowork-secrets). Additive. Python
-side: `cowork_agent.secrets` (tools, scrubber), `cowork_executor.secrets`
+side: `chuk_agents_runtime.secrets` (tools, scrubber), `chuk_agents_executor.secrets`
 (vault, at rest), executor frame handling, host wiring. App side: relay client
 (`secret_request` in, `secrets` out), thread view (the request card), settings
 page "API Keys", `services/secrets/**`.
@@ -944,14 +944,14 @@ names the user has set, every one `"set"`.
   model and the store get) and the executor's frame sealer (what the app
   gets). It replaces every stored value of 8 or more characters — raw,
   base64, base64url and URL-encoded — with `[REDACTED:<NAME>]`.
-- At rest on the host: `~/.cowork/secrets.enc`, AES-256-GCM under a key
+- At rest on the host: `~/.agents/secrets.enc`, AES-256-GCM under a key
   derived from the host's own device identity, so a host restart with no app
   attached still has the set. Reloaded at start; overwritten by the next
   `secrets` frame.
 
 ### Device persistence
 
-Secure storage (one record, `cowork_secrets_v1`) plus the Supabase table
+Secure storage (one record, `agents_secrets_v1`) plus the Supabase table
 `cowork_secrets` — one row per name, the value as an `EncryptionService`
 envelope (see `docs/SUPABASE_SCHEMA.md`), owner-only RLS. A fresh install
 signs in, pulls the rows, decrypts, and forwards the set on its first
@@ -960,8 +960,8 @@ provision.
 ## Interactive shell and background commands (session cowork-75, "cowork-terminal")
 
 Proposed 2026-09-05 by session cowork-75. Additive. Python side:
-`agent/src/cowork_agent/shell_tools.py` (the tools, over the existing tmux
-driver `cowork_agent.terminal.TerminalManager`), `executor/src/cowork_executor/
+`agent/src/chuk_agents_runtime/shell_tools.py` (the tools, over the existing tmux
+driver `chuk_agents_runtime.terminal.TerminalManager`), `executor/src/chuk_agents_executor/
 shell.py` (the wake-up of the agent when a background job ends), one trigger
 consumer in the host. App side: nothing. The shell tools are ordinary tools
 and show as tool cards (`tool` frames, name / arguments / result). One new
@@ -1027,12 +1027,12 @@ every result.
 ### In the sandbox (informative)
 
 - Sessions: `cw-<task>-<name>` on the default tmux server of the sandbox user
-  (`cowork`, passwordless sudo, in the Docker image; the host user in the
+  (`agents`, passwordless sudo, in the Docker image; the host user in the
   local sandbox).
-- Jobs: `<workspace>/.cowork/jobs/<job_id>.{cmd,log,pid,exit,json}`. The
+- Jobs: `<workspace>/.agents/jobs/<job_id>.{cmd,log,pid,exit,json}`. The
   wrapper is `setsid`-detached, runs `timeout 86400 bash -c <cmd>`, writes
   the exit code to `.exit`, then appends ONE line to
-  `.cowork/automations/triggers.jsonl` (the automations' self-wake file):
+  `.agents/automations/triggers.jsonl` (the automations' self-wake file):
   `{"kind": "job", "job_id", "session_key", "exit_code", "timed_out", "ts"}`.
   The tail accepts a line with `kind` and no `automation_id`; the automations
   consumer never sees a `job` line. A cancelled job (`job_cancel`) writes no
@@ -1058,7 +1058,7 @@ automations manager, `kind: job` goes to the executor's job router. The router:
    ```json
    {"type": "job", "event": "finished", "job_id": "<id>", "session_key": "<key>",
     "command": "<text>", "exit_code": <int>, "state": "finished" | "failed" | "cancelled" | "timed_out",
-    "log_path": ".cowork/jobs/<id>.log", "tail": "<last lines>", "at": <unix seconds>,
+    "log_path": ".agents/jobs/<id>.log", "tail": "<last lines>", "at": <unix seconds>,
     "replay": <bool>?, "mid": <int>?}
    ```
    The app may draw a card for it; ignoring it loses nothing, because the
@@ -1102,7 +1102,7 @@ this host.
 - The host stores `(agent_id, name, created_by_app, updated_at)` in its own
   small table (`coworker_names` in `roster.db`). It does NOT touch the
   `RosterStore` row of the running agent: that row's `name` is also the
-  workspace directory name (`~/.cowork/agents/<name>`), and a rename must
+  workspace directory name (`~/.agents/agents/<name>`), and a rename must
   never move a workspace. A display name is a label, not an identity.
 - The app asks for the list on every pair (`agent_list` request, like
   `automation_list`), and every `agent_create` / `agent_rename` is answered
@@ -1160,10 +1160,10 @@ Host → app, `agent_list`:
 
 ### Implemented
 
-App: `CoworkRelayController.createAgent` / `renameAgent` / `requestAgentList`
-send the frames; `CoworkRelayAgentList` on `inbound`; the shell asks in
+App: `AgentsRelayController.createAgent` / `renameAgent` / `requestAgentList`
+send the frames; `AgentsRelayAgentList` on `inbound`; the shell asks in
 `_onPaired` and merges through `AgentRosterSource.applyHostNames` (ids deleted
-in this session are skipped). Host: `cowork_host/coworker_names.py`
+in this session are skipped). Host: `chuk_agents_host/coworker_names.py`
 (`CoworkerNameStore` on `roster.db`, `handle_agent_frame`), wired as the
 executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 `agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
@@ -1176,12 +1176,12 @@ client's `skills_list` case.
 
 ### The idea
 
-A skill is `<workspace>/skills/<name>/SKILL.md` on the host (`cowork_agent.skills`).
+A skill is `<workspace>/skills/<name>/SKILL.md` on the host (`chuk_agents_runtime.skills`).
 The repository's `skills/` directory is the shipped seed set, **grouped by
 source**: `skills/builtin/<name>/` and `skills/workspace/<name>/`. That grouping
 is the only place the built-in/workspace split is decided — no list of names
 anywhere, and reclassifying a skill is a `git mv`. The host copies both groups
-flat into a fresh workspace once (`cowork_host.seed_skills`). The app compiles
+flat into a fresh workspace once (`chuk_agents_host.seed_skills`). The app compiles
 nothing in and reads no SKILL.md: **the host is the truth for which skills
 exist**, the
 app shows that list and flips one switch per skill, and the agent gets exactly
@@ -1207,7 +1207,7 @@ App → host, `skills_list` (request) / host → app `skills_list` (reply):
 ```
 
 - `source` is `builtin` when the name was seeded from `skills/builtin/` — a
-  skill that documents CoWork's own machinery (schedules, secrets, the sandbox
+  skill that documents Agents's own machinery (schedules, secrets, the sandbox
   terminal, the workspace) and belongs to the app. Everything else is
   `workspace`: what the agent or the user put there, plus the skills seeded
   from `skills/workspace/`, which ship in the box but belong to the coworker.
@@ -1243,7 +1243,7 @@ writes `<workspace>/skills/<name>/SKILL.md` and answers with `skills_list`.
 
 ## Agent status: model, spend, clock, sandbox (bead cowork-6ag)
 
-Python side IMPLEMENTED 2026-09-07 (`cowork_executor.protocol.agent_status_payload`,
+Python side IMPLEMENTED 2026-09-07 (`chuk_agents_executor.protocol.agent_status_payload`,
 `Executor._handle_agent_status`). App side: `RelayAgentControlSource` feeding
 `AgentControlPanel`.
 
@@ -1364,7 +1364,7 @@ the kind was widened instead.
 `chart.kind` is `bar | column_delta | line | grouped | stacked`. Several series
 replace `points` with `series: [{name, direction, color, points: [...]}]`.
 The whole contract is written down in `app/lib/widgets/charts/chart_spec.dart`;
-`agent/src/cowork_agent/chat_documents.py` validates against that comment and
+`agent/src/chuk_agents_runtime/chat_documents.py` validates against that comment and
 names what is wrong (`chart point 2 color must be a hex color like #009EE0`)
 rather than trimming it away.
 

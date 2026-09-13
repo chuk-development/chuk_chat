@@ -17,52 +17,52 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/pages/about_page.dart';
-import 'package:cowork/pages/account_settings_page.dart';
-import 'package:cowork/pages/agent_profile_edit_page.dart';
-import 'package:cowork/pages/agent_profile_page.dart';
-import 'package:cowork/pages/automations_page.dart';
-import 'package:cowork/pages/coming_soon_page.dart';
-import 'package:cowork/pages/cowork_pairing_page.dart';
-import 'package:cowork/pages/customization_page.dart';
-import 'package:cowork/pages/desktop_settings_modal.dart';
-import 'package:cowork/pages/login_page.dart';
-import 'package:cowork/pages/mobile_cowork_settings_page.dart';
-import 'package:cowork/pages/pricing_page.dart';
-import 'package:cowork/pages/secrets_settings_page.dart';
-import 'package:cowork/pages/settings/developer_settings_page.dart';
-import 'package:cowork/pages/settings/embedding_settings_page.dart';
-import 'package:cowork/pages/settings/herenow_settings_page.dart';
-import 'package:cowork/pages/settings/mcp_connectors_page.dart';
-import 'package:cowork/pages/settings_page.dart';
-import 'package:cowork/pages/skills_settings_page.dart';
-import 'package:cowork/pages/theme_page.dart';
-import 'package:cowork/pages/usage_details_page.dart';
-import 'package:cowork/pages/workspace_management_page.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
-import 'package:cowork/services/chat_mode_service.dart';
-import 'package:cowork/services/cowork/agent_control_source.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/services/settings/mobile_chat_preferences.dart';
-import 'package:cowork/widgets/agent_control_panel.dart';
-import 'package:cowork/widgets/attachment_preview_bar.dart';
-import 'package:cowork/widgets/browser_view_page.dart';
-import 'package:cowork/widgets/chat_documents_panel.dart';
-import 'package:cowork/widgets/chat_mode_selector.dart';
-import 'package:cowork/widgets/messenger_context_menu.dart';
-import 'package:cowork/widgets/model_selection_dropdown.dart';
-import 'package:cowork/widgets/room_create_sheet.dart';
-import 'package:cowork/widgets/room_list_view.dart';
-import 'package:cowork/widgets/room_members_sheet.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/pages/agent_profile_page.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/pages/agents_pairing_page.dart';
+import 'package:chuk_chat/pages/customization_page.dart';
+import 'package:chuk_chat/pages/desktop_settings_modal.dart';
+import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
+import 'package:chuk_chat/pages/pricing_page.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
+import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
+import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
+import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/pages/theme_page.dart';
+import 'package:chuk_chat/pages/usage_details_page.dart';
+import 'package:chuk_chat/pages/workspace_management_page.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
+import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
+import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/widgets/chat_mode_selector.dart';
+import 'package:chuk_chat/widgets/messenger_context_menu.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/room_list_view.dart';
+import 'package:chuk_chat/widgets/room_members_sheet.dart';
 
 import '../support/fake_relay_controller.dart';
 import '../support/shell_config.dart';
@@ -75,7 +75,7 @@ const Map<String, String> _cannotMount = <String, String>{
       'throws "call SupabaseService.initialize() first". The throw escapes as '
       'an unhandled async error, so the screen never reaches a frame worth '
       'measuring. It is also on this task\'s do-not-touch list.',
-  'messenger_shell / cowork_thread_view': 'the whole live chat stack (relay, '
+  'messenger_shell / agents_thread_view': 'the whole live chat stack (relay, '
       'storage, streaming). Covered by its own tests in test/widgets/.',
   'fullscreen_map_page': 'needs a tile provider and a network map surface.',
   'recover_chats_page': 'reads PasswordResetService, which reaches through '
@@ -129,39 +129,39 @@ class _Screen {
 // fixtures
 // ---------------------------------------------------------------------------
 
-CoworkAgent _agent({
+AgentsAgent _agent({
   String id = 'amber',
   String name = 'Amber Fitzgerald-Okonkwo',
   String? role = 'Research and long-form writing',
   bool running = true,
-}) => CoworkAgent(
+}) => AgentsAgent(
   id: id,
   name: name,
   role: role,
   brief: 'Reads the week and writes the Monday memo.',
   running: running,
   lastActivity: DateTime(2026, 1, 5, 14, 3),
-  threads: <CoworkThreadInfo>[
-    CoworkThreadInfo(key: '$id-main', title: 'General'),
-    CoworkThreadInfo(key: '$id-memo', title: 'Monday memo'),
+  threads: <AgentsThreadInfo>[
+    AgentsThreadInfo(key: '$id-main', title: 'General'),
+    AgentsThreadInfo(key: '$id-memo', title: 'Monday memo'),
   ],
 );
 
-List<CoworkAgent> _roster() => <CoworkAgent>[
+List<AgentsAgent> _roster() => <AgentsAgent>[
   _agent(),
   _agent(id: 'cobalt', name: 'Cobalt', role: 'Ops', running: false),
   _agent(id: 'jade', name: 'Jade', role: 'Design', running: false),
   _agent(id: 'onyx', name: 'Onyx', role: 'Finance', running: false),
 ];
 
-CoworkRoomMember _member(String id, String handle) =>
-    CoworkRoomMember(agentId: id, handle: handle);
+AgentsRoomMember _member(String id, String handle) =>
+    AgentsRoomMember(agentId: id, handle: handle);
 
 /// A room at the cap, which is the case the member sheet has to survive.
-CoworkRoom _fullRoom() => CoworkRoom(
+AgentsRoom _fullRoom() => AgentsRoom(
   id: 'r1',
   name: 'Launch week war room',
-  members: <CoworkRoomMember>[
+  members: <AgentsRoomMember>[
     _member('a', 'amber'),
     _member('b', 'cobalt'),
     _member('c', 'jade'),
@@ -174,7 +174,7 @@ CoworkRoom _fullRoom() => CoworkRoom(
 /// Wraps a panel that has no scaffold of its own.
 Widget _hosted(Widget child) => Scaffold(body: SafeArea(child: child));
 
-/// Presents [builder] the way `cowork_shell_state` presents it: a scroll
+/// Presents [builder] the way `agents_shell_state` presents it: a scroll
 /// controlled modal bottom sheet. The sheet's own constraints are what the
 /// content has to live inside, so mounting it flat would test a window the
 /// user never sees.
@@ -214,8 +214,8 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('skills_settings_page', (_) => const SkillsSettingsPage()),
   _Screen('automations_page', (_) => const AutomationsPage()),
   _Screen('login_page', (_) => const LoginPage()),
-  _Screen('cowork_pairing_page',
-      (_) => const CoworkPairingPage(cameraAvailable: false)),
+  _Screen('agents_pairing_page',
+      (_) => const AgentsPairingPage(cameraAvailable: false)),
   _Screen('coming_soon_page', (_) => const ComingSoonPage(
         title: 'Workspaces',
         message: 'Not on the phone yet. The host still owns this one.',
@@ -264,7 +264,7 @@ List<_Screen> _screens() => <_Screen>[
       onRename: (_) {},
     );
   }),
-  _Screen('mobile_cowork_settings_page', (_Bag bag) {
+  _Screen('mobile_agents_settings_page', (_Bag bag) {
     final LocalAgentRosterSource source = LocalAgentRosterSource(
       seed: _roster(),
     );
@@ -273,7 +273,7 @@ List<_Screen> _screens() => <_Screen>[
     bag.keep(profiles, profiles.dispose);
     final MobileChatPreferences prefs = MobileChatPreferences();
     bag.keep(prefs, prefs.dispose);
-    return MobileCoworkSettingsPage(
+    return MobileAgentsSettingsPage(
       agentId: 'amber',
       source: source,
       profiles: profiles,
@@ -395,9 +395,9 @@ List<_Screen> _screens() => <_Screen>[
           sandbox: ControlAvailable<AgentSandbox>(
             AgentSandbox(
               kind: 'docker',
-              container: 'cowork-amber-0a1b2c3d',
+              container: 'agents-amber-0a1b2c3d',
               containerId: 'deadbeef0011',
-              workspace: '/home/chuk/.cowork/agents/amber/workspace',
+              workspace: '/home/chuk/.agents/agents/amber/workspace',
             ),
           ),
           skills: ControlAvailable<List<AgentSkill>>(<AgentSkill>[
@@ -424,7 +424,7 @@ List<_Screen> _screens() => <_Screen>[
     (_) => _sheetHost(
       (BuildContext context) => RoomMembersSheet(
         room: _fullRoom(),
-        candidates: const <CoworkAgent>[],
+        candidates: const <AgentsAgent>[],
         onAdd: (_) {},
         onRemove: (_) {},
       ),
@@ -435,10 +435,10 @@ List<_Screen> _screens() => <_Screen>[
     'widgets/room_members_sheet (room of two, roster waiting)',
     (_) => _sheetHost(
       (BuildContext context) => RoomMembersSheet(
-        room: CoworkRoom(
+        room: AgentsRoom(
           id: 'r2',
           name: 'ops',
-          members: <CoworkRoomMember>[
+          members: <AgentsRoomMember>[
             _member('a', 'amber'),
             _member('b', 'cobalt'),
           ],
@@ -461,9 +461,9 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('widgets/room_list_view', (_Bag bag) {
     final LocalRoomSource source = LocalRoomSource();
     bag.keep(source, source.dispose);
-    source.addRoom(CoworkRoomDraft(
+    source.addRoom(AgentsRoomDraft(
       name: 'Launch week war room',
-      members: <CoworkRoomMember>[
+      members: <AgentsRoomMember>[
         _member('a', 'amber'),
         _member('b', 'cobalt'),
         _member('c', 'jade'),
@@ -472,9 +472,9 @@ List<_Screen> _screens() => <_Screen>[
         _member('f', 'indigo'),
       ],
     ));
-    source.addRoom(CoworkRoomDraft(
+    source.addRoom(AgentsRoomDraft(
       name: 'ops',
-      members: <CoworkRoomMember>[_member('a', 'amber'), _member('b', 'cobalt')],
+      members: <AgentsRoomMember>[_member('a', 'amber'), _member('b', 'cobalt')],
     ));
     return _hosted(
       RoomListView(
@@ -580,9 +580,9 @@ List<_Screen> _screens() => <_Screen>[
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
   });
-  tearDown(() => CoworkRelayLink.instance.reset());
+  tearDown(() => AgentsRelayLink.instance.reset());
 
   test('the screens this sweep cannot mount are named, with the reason', () {
     expect(_cannotMount, isNotEmpty);

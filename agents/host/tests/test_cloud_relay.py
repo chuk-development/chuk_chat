@@ -15,8 +15,8 @@ import uuid
 
 import pytest
 
-from cowork_host.account_store import AccountStore
-from cowork_host.cloud_relay import (
+from chuk_agents_host.account_store import AccountStore
+from chuk_agents_host.cloud_relay import (
     CODE_CONTROLLER_OFFLINE,
     CODE_PAIRING_UNCLAIMED,
     DEFAULT_RELAY_BASE_URL,
@@ -31,15 +31,15 @@ from cowork_host.cloud_relay import (
     unwrap_payload,
     wrap_payload,
 )
-from cowork_host.pairing_uri import pairing_uri, qr_lines
-from cowork_host.protocol import (
+from chuk_agents_host.pairing_uri import pairing_uri, qr_lines
+from chuk_agents_host.protocol import (
     ROLE_CONTROLLER,
     ROLE_EXECUTOR,
     frame_envelope,
     join_message,
     pairing_envelope,
 )
-from cowork_host.relay import EVENT_JOIN, EVENT_LEAVE
+from chuk_agents_host.relay import EVENT_JOIN, EVENT_LEAVE
 
 
 class FakeWebSocket:

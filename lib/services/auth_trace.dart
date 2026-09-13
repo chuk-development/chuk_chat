@@ -13,7 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// answered.
 ///
 /// This writes one line per event to the platform log — `adb logcat | grep
-/// COWORK-AUTH` reads it back — and keeps the last few in preferences so the
+/// AGENTS-AUTH` reads it back — and keeps the last few in preferences so the
 /// answer survives the restart that follows.
 class AuthTrace {
   const AuthTrace._();
@@ -34,7 +34,7 @@ class AuthTrace {
   static void note(String event, {Map<String, Object?> detail = const {}}) {
     final String line = detail.isEmpty ? event : '$event ${jsonEncode(detail)}';
     // Not behind kDebugMode: a release build is where this is needed.
-    debugPrint('COWORK-AUTH $line');
+    debugPrint('AGENTS-AUTH $line');
     final String entry = '${DateTime.now().toIso8601String()} $line';
     _chain = _chain.then((_) => _append(entry));
     unawaited(_chain);

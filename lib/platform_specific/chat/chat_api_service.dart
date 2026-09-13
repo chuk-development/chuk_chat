@@ -1,15 +1,15 @@
 // lib/platform_specific/chat/chat_api_service.dart
 import 'dart:async';
 import 'dart:convert';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/constants/file_constants.dart';
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/file_conversion_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/file_conversion_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// A service for handling chat-related API interactions,
 /// such as file uploads.

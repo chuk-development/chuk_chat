@@ -1,4 +1,4 @@
-// flutter_rfb's SizeTrackingWidget (CoWork fork) must follow its child's size
+// flutter_rfb's SizeTrackingWidget (Agents fork) must follow its child's size
 // across rebuilds, not just measure once — a framebuffer resize otherwise
 // leaves the tap/wheel coordinate mapping stale.
 import 'package:flutter/widgets.dart';

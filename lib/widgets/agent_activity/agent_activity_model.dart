@@ -6,7 +6,7 @@
 // produces, so the wording and the source extraction are testable on
 // their own.
 
-import 'package:cowork/models/tool_call.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 
 /// What a timeline line represents. Drives the icon and the wording.
 enum AgentActivityKind {

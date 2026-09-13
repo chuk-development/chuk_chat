@@ -2,20 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 
 /// A controller the test drives directly: set [set], push [emit] — no socket
 /// and no real pairing ceremony. Shared by the adapter, ledger, replay-loader
 /// and thread-view tests so they all exercise the same seam.
-class FakeRelayController implements CoworkRelayController {
-  final ValueNotifier<CoworkRelayState> _state =
-      ValueNotifier<CoworkRelayState>(
-    const CoworkRelayState(phase: CoworkRelayPhase.idle),
+class FakeRelayController implements AgentsRelayController {
+  final ValueNotifier<AgentsRelayState> _state =
+      ValueNotifier<AgentsRelayState>(
+    const AgentsRelayState(phase: AgentsRelayPhase.idle),
   );
-  final StreamController<CoworkRelayInbound> _inbound =
-      StreamController<CoworkRelayInbound>.broadcast(sync: true);
+  final StreamController<AgentsRelayInbound> _inbound =
+      StreamController<AgentsRelayInbound>.broadcast(sync: true);
 
   int connectCalls = 0;
   final List<(String, int, int)> replayPages = <(String, int, int)>[];
@@ -61,10 +61,10 @@ class FakeRelayController implements CoworkRelayController {
   Object? taskError;
 
   @override
-  ValueListenable<CoworkRelayState> get state => _state;
+  ValueListenable<AgentsRelayState> get state => _state;
 
   @override
-  Stream<CoworkRelayInbound> get inbound => _inbound.stream;
+  Stream<AgentsRelayInbound> get inbound => _inbound.stream;
 
   @override
   Future<void> connect({
@@ -72,8 +72,8 @@ class FakeRelayController implements CoworkRelayController {
     required String pairingCode,
   }) async {
     connectCalls++;
-    _state.value = const CoworkRelayState(
-      phase: CoworkRelayPhase.paired,
+    _state.value = const AgentsRelayState(
+      phase: AgentsRelayPhase.paired,
       peerDeviceId: 'host-laptop-1',
       sas: '428913',
     );
@@ -82,25 +82,25 @@ class FakeRelayController implements CoworkRelayController {
   @override
   Future<void> reconnect({
     required Uri hostUrl,
-    required CoworkStoredPairing pairing,
+    required AgentsStoredPairing pairing,
   }) async {
     reconnectCalls++;
     if (reconnectFails) {
-      _state.value = const CoworkRelayState(
-        phase: CoworkRelayPhase.error,
+      _state.value = const AgentsRelayState(
+        phase: AgentsRelayPhase.error,
         detail: 'Host unreachable',
       );
       return;
     }
-    _state.value = const CoworkRelayState(
-      phase: CoworkRelayPhase.paired,
+    _state.value = const AgentsRelayState(
+      phase: AgentsRelayPhase.paired,
       peerDeviceId: 'host-laptop-1',
       detail: 'Reconnected',
     );
   }
 
   @override
-  CoworkStoredPairing? get establishedTrust => null;
+  AgentsStoredPairing? get establishedTrust => null;
 
   @override
   Future<void> provisionAccount(AccountSession session) async {
@@ -227,9 +227,9 @@ class FakeRelayController implements CoworkRelayController {
     _state.dispose();
   }
 
-  void set(CoworkRelayState next) => _state.value = next;
+  void set(AgentsRelayState next) => _state.value = next;
 
-  void emit(CoworkRelayInbound event) {
+  void emit(AgentsRelayInbound event) {
     if (!_inbound.isClosed) _inbound.add(event);
   }
 }

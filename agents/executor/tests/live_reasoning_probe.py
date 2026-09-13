@@ -7,8 +7,8 @@ backend (api.chuk.chat); it costs cents.
 
     cd executor && uv run python tests/live_reasoning_probe.py
 
-Env (all optional): COWORK_LIVE_MODEL, COWORK_LIVE_PROVIDER,
-COWORK_LIVE_REASONING (default "medium"). The account session comes from the
+Env (all optional): AGENTS_LIVE_MODEL, AGENTS_LIVE_PROVIDER,
+AGENTS_LIVE_REASONING (default "medium"). The account session comes from the
 running app's own storage (see agent/tests/test_live_model._session).
 
 Token rotation guard (same as live_native_probe): the app's refresh token is
@@ -35,10 +35,10 @@ from live_native_probe import (  # noqa: E402
 )
 from test_live_model import _session, _setting  # noqa: E402
 
-from cowork_agent import BackendModelClient, fetch_models_info, resolve_model  # noqa: E402
-from cowork_sandbox import LocalEnvironment  # noqa: E402
+from chuk_agents_runtime import BackendModelClient, fetch_models_info, resolve_model  # noqa: E402
+from chuk_agents_sandbox import LocalEnvironment  # noqa: E402
 
-from cowork_executor import ControllerSession, Executor, loopback_pair  # noqa: E402
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair  # noqa: E402
 
 from wiring import paired_channel  # noqa: E402
 
@@ -72,16 +72,16 @@ def main() -> int:
     _forbid_refresh(session)
 
     models = fetch_models_info(session)
-    wanted = _setting("COWORK_LIVE_MODEL") or "z-ai/glm-5.3-flash"
+    wanted = _setting("AGENTS_LIVE_MODEL") or "z-ai/glm-5.3-flash"
     if wanted not in {m.get("id") for m in models}:
         print(f"model {wanted!r} is not in /v1/models_info — falling back to the default")
         wanted = None
     resolved = resolve_model(
         models,
         preferred_model_id=wanted,
-        preferred_provider=_setting("COWORK_LIVE_PROVIDER"),
+        preferred_provider=_setting("AGENTS_LIVE_PROVIDER"),
     )
-    effort = _setting("COWORK_LIVE_REASONING") or "medium"
+    effort = _setting("AGENTS_LIVE_REASONING") or "medium"
     print(f"model    : {resolved.model_id}")
     print(f"provider : {resolved.provider_slug}")
     print(f"reasoning: {effort}")
@@ -95,7 +95,7 @@ def main() -> int:
             reasoning_effort=effort,
         )
 
-    with tempfile.TemporaryDirectory(prefix="cowork-reasoning-probe-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="agents-reasoning-probe-") as tmp:
         workspace = Path(tmp) / "ws"
         workspace.mkdir()
         channel = paired_channel()

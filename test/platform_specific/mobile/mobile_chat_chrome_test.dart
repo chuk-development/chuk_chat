@@ -2,14 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/agent_status.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/agent_status.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import '../../support/fake_relay_controller.dart';
 
 import 'mobile_support.dart';
@@ -98,7 +98,7 @@ void main() {
     expect(reconnects, 1);
     expect(profiles, 0);
   });
-  tearDown(() => CoworkRelayLink.instance.reset());
+  tearDown(() => AgentsRelayLink.instance.reset());
 
   testWidgets(
     'files and screen remain real48px actions at320px with large text',
@@ -175,7 +175,7 @@ void main() {
     tester,
   ) async {
     final controller = FakeRelayController();
-    CoworkRelayLink.instance.bind(controller);
+    AgentsRelayLink.instance.bind(controller);
     await pumpPhone(
       tester,
       MobileChatChrome(
@@ -184,14 +184,14 @@ void main() {
       ),
     );
     expect(find.text('Offline'), findsOneWidget);
-    controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
+    controller.set(const AgentsRelayState(phase: AgentsRelayPhase.paired));
     await tester.pump();
     final active = tester.widget<Text>(find.text('Active now'));
     expect(
       active.style!.color,
       Theme.of(tester.element(find.text('Active now'))).colorScheme.primary,
     );
-    CoworkRelayLink.instance.unbind();
+    AgentsRelayLink.instance.unbind();
     await tester.pump();
     expect(find.text('Offline'), findsOneWidget);
     await controller.dispose();
@@ -201,8 +201,8 @@ void main() {
   ) async {
     for (final double scale in <double>[1.0, 1.15, 1.3]) {
       final controller = FakeRelayController();
-      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
-      CoworkRelayLink.instance.bind(controller);
+      controller.set(const AgentsRelayState(phase: AgentsRelayPhase.paired));
+      AgentsRelayLink.instance.bind(controller);
       await pumpPhone(
         tester,
         MediaQuery(
@@ -263,7 +263,7 @@ void main() {
       final Rect face = tester.getRect(find.byType(AgentFace));
       expect(dot.left, greaterThan(face.right));
 
-      CoworkRelayLink.instance.unbind();
+      AgentsRelayLink.instance.unbind();
       await controller.dispose();
     }
   });
@@ -509,8 +509,8 @@ void main() {
     'large text grows the chrome and reduced motion keeps dots static',
     (tester) async {
       final controller = FakeRelayController();
-      controller.set(const CoworkRelayState(phase: CoworkRelayPhase.paired));
-      CoworkRelayLink.instance.bind(controller);
+      controller.set(const AgentsRelayState(phase: AgentsRelayPhase.paired));
+      AgentsRelayLink.instance.bind(controller);
       await pumpPhone(
         tester,
         MediaQuery(

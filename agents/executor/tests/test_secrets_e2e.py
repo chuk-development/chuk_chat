@@ -16,18 +16,18 @@ import sqlite3
 import threading
 import time
 
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_manager import decode_frames
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_manager import decode_frames
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import (
+from chuk_agents_executor import (
     ControllerSession,
     Executor,
     SecretsVault,
     loopback_pair,
     secrets_payload,
 )
-from cowork_executor.protocol import METHOD_EVENT
+from chuk_agents_executor.protocol import METHOD_EVENT
 
 from wiring import paired_channel
 

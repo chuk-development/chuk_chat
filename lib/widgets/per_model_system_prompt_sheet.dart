@@ -1,11 +1,11 @@
 // lib/widgets/per_model_system_prompt_sheet.dart
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/services/per_model_system_prompt_service.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// Bottom sheet for editing a per-model system prompt and merge mode.
 ///

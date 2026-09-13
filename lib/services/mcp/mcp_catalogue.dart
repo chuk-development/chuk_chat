@@ -12,7 +12,7 @@
 // entry at all.
 //
 // Ported verbatim from chuk_chat so the connector list is identical. The one
-// difference is where the sign-in and the tool discovery run: on CoWork the
+// difference is where the sign-in and the tool discovery run: on Agents the
 // host (the local Python backend) connects to each server, not the device —
 // see McpService and McpStore. The catalogue data (names, URLs, descriptions,
 // icons, auth kinds) is unchanged.
@@ -21,7 +21,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 
 /// One credential a server takes on its URL instead of through a browser
 /// sign-in: an API key, a project id. The reader types the value; it is added
@@ -157,7 +157,7 @@ class McpCatalogueEntry {
   }
 }
 
-/// The bundled logo path for [id]. CoWork ships no brand logos in the binary,
+/// The bundled logo path for [id]. Agents ships no brand logos in the binary,
 /// so this is always null and every connector logo resolves at runtime from
 /// the named icon or the site favicon. The parameter is kept so the connectors
 /// UI can stay a verbatim port of chuk_chat's.
@@ -177,10 +177,10 @@ const List<String> kMcpCategories = [
 
 /// Connectors our own API server fronts.
 ///
-/// CoWork has no hosted API server of its own — every task runs against the
+/// Agents has no hosted API server of its own — every task runs against the
 /// user's paired local backend — so there are no app-session connectors to
 /// front. chuk_chat listed GitHub here (reached through its `/v1/mcp/github`
-/// broker); on CoWork GitHub is reached like any other server, by URL. The
+/// broker); on Agents GitHub is reached like any other server, by URL. The
 /// function is kept, returning an empty list, so the connectors UI stays a
 /// verbatim port.
 List<McpCatalogueEntry> firstPartyConnectors() => const <McpCatalogueEntry>[];

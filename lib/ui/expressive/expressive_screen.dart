@@ -20,9 +20,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
 
 class ExpressiveScreen extends StatelessWidget {
   const ExpressiveScreen({

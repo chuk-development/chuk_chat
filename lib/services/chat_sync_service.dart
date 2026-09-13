@@ -1,15 +1,15 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
-import 'package:cowork/services/chat_preload_service.dart';
-import 'package:cowork/services/chat_storage_mutations.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/diagnostics_log_service.dart';
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/mcp/mcp_sync_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/chat_preload_service.dart';
+import 'package:chuk_chat/services/chat_storage_mutations.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_sync_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
 /// Service for syncing chats between local state and Supabase.

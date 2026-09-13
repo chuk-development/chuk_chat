@@ -10,7 +10,7 @@
 ///  * signed out → delete the row (a push must not reach a signed-out phone);
 ///  * a push tapped (warm or cold) → [NotificationRouter].
 ///
-/// `device_id` is the CoWork device id from the pairing store — the same id
+/// `device_id` is the Agents device id from the pairing store — the same id
 /// the host already knows this install by.
 ///
 /// **Firebase is optional.** Without `google-services.json` (Android) or on
@@ -28,9 +28,9 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show AuthChangeEvent, AuthState;
 
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/notifications/notification_router.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// A push message as the service sees it: only the `data` map matters.
 @immutable
@@ -217,7 +217,7 @@ class PushService {
   }
 
   static Future<String> _defaultDeviceId() async =>
-      (await CoworkPairingStore().loadOrCreateIdentity()).deviceId;
+      (await AgentsPairingStore().loadOrCreateIdentity()).deviceId;
 
   static String? _defaultUserId() {
     if (!SupabaseService.isInitialized) return null;
@@ -311,7 +311,7 @@ class FirebasePushTransport implements PushTransport {
       // Throws without google-services.json / GoogleService-Info.plist. That
       // is the "keys missing" state: the build works, push is off.
       await Firebase.initializeApp();
-      FirebaseMessaging.onBackgroundMessage(coworkPushBackgroundHandler);
+      FirebaseMessaging.onBackgroundMessage(agentsPushBackgroundHandler);
       _messaging = FirebaseMessaging.instance;
       return true;
     } catch (error) {
@@ -349,4 +349,4 @@ class FirebasePushTransport implements PushTransport {
 /// content to process, so there is nothing to do here. It exists so the
 /// plugin has a registered handler and does not warn.
 @pragma('vm:entry-point')
-Future<void> coworkPushBackgroundHandler(RemoteMessage message) async {}
+Future<void> agentsPushBackgroundHandler(RemoteMessage message) async {}

@@ -1,9 +1,9 @@
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/models/artifact.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/artifact_storage_service.dart';
-import 'package:cowork/utils/artifact_tag_parser.dart';
+import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/artifact_storage_service.dart';
+import 'package:chuk_chat/utils/artifact_tag_parser.dart';
 
 /// Processes inline `<artifact>` tags emitted by the assistant. For each tag:
 ///

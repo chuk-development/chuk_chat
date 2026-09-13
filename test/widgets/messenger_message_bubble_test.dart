@@ -5,17 +5,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/models/chat_message.dart';
-import 'package:cowork/services/settings/mobile_chat_preferences.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/widgets/agent_activity/agent_activity_timeline.dart';
-import 'package:cowork/widgets/message_bubble.dart';
-import 'package:cowork/widgets/sandbox_artifact_block.dart';
-import 'package:cowork/widgets/messenger_typing_indicator.dart';
-import 'package:cowork/widgets/markdown_message.dart';
-import 'package:cowork/ui/expressive/message_stamp.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/models/chat_message.dart';
+import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/ui/expressive/message_stamp.dart';
 
 Widget wrap(Widget child) => MaterialApp(
   localizationsDelegates: const [

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cowork_manager.relay import (
+from chuk_agents_manager.relay import (
     CapabilityDescriptor,
     CorrelationMap,
     RelayBridge,
@@ -75,7 +75,7 @@ def test_build_upgrade_headers() -> None:
 def test_capability_descriptor_roundtrip() -> None:
     cap = CapabilityDescriptor(
         role="controller",
-        name="chuk-cowork",
+        name="chuk-agents",
         version="0.1.0",
         renders=("chart", "map", "sandbox_artifact"),
     )

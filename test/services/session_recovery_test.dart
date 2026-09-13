@@ -11,8 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart'
         Session,
         User;
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/session_recovery.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
 
 String _jwt({required int exp, String sub = 'user-1'}) {
   String part(Map<String, Object> claims) =>

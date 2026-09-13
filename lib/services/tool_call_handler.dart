@@ -1,14 +1,14 @@
-// COWORK STUB. Upstream: chuk_chat/lib/services/tool_call_handler.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
+// AGENTS STUB. Upstream: chuk_chat/lib/services/tool_call_handler.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: replaced by relay — THE FOLD. Upstream runs a full client-side tool
 // loop (discovery, execution, fact-check, retry, continuation passes) against
-// its own ToolExecutor. In CoWork the HOST runs every tool; the client must
+// its own ToolExecutor. In Agents the HOST runs every tool; the client must
 // never dispatch one.
 //
 // `processAssistantResponse` ALWAYS returns a final answer with
 // `shouldContinue == false`, so `startStreamPass` runs exactly once per turn
 // and the tool loop, fact-check, retry and continuation passes are
 // structurally unreachable. It fills `toolCalls` / `producedBlocks` from
-// CoworkRunLedger, so MessageBubble's tool timeline, activity header and
+// AgentsRunLedger, so MessageBubble's tool timeline, activity header and
 // artifact cards light up from real host data with no edit to any imported file.
 //
 // Divergence from upstream, deliberate: `ToolLoopSession.enforcer` is dropped
@@ -16,13 +16,13 @@
 // No imported file reads it.
 // Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
 
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 
-/// One user turn's tool-loop state. In CoWork it only carries what the
+/// One user turn's tool-loop state. In Agents it only carries what the
 /// renderer reads back ([toolCalls], [producedBlocks]).
 class ToolLoopSession {
   ToolLoopSession({
@@ -72,7 +72,7 @@ class ToolLoopSession {
   String factCheckCandidateReasoning = '';
 }
 
-/// One more pass over the model. Never produced in CoWork.
+/// One more pass over the model. Never produced in Agents.
 class ToolLoopStep {
   const ToolLoopStep({
     required this.message,
@@ -100,7 +100,7 @@ class RoundSegment {
   bool get isToolCall => toolCall != null;
 }
 
-/// The outcome of one round. In CoWork only [ToolLoopResult.finalAnswer] is
+/// The outcome of one round. In Agents only [ToolLoopResult.finalAnswer] is
 /// ever produced.
 class ToolLoopResult {
   const ToolLoopResult._({
@@ -207,7 +207,7 @@ class ToolTurnSignals {
   }
 }
 
-/// The CoWork fold: one pass per turn, no client-side tool dispatch.
+/// The Agents fold: one pass per turn, no client-side tool dispatch.
 class ToolCallHandler {
   ToolCallHandler._internal();
 
@@ -252,7 +252,7 @@ class ToolCallHandler {
   ///
   /// This is the fold. The turn's stream is already over by the time the
   /// caller gets here (`onComplete`), so everything the host did during it is
-  /// sitting in [CoworkRunLedger] under this chat's session key. Taking it and
+  /// sitting in [AgentsRunLedger] under this chat's session key. Taking it and
   /// handing it back as `toolCalls` / `producedBlocks` is what lights up the
   /// imported renderer — the caller writes `toolCalls` onto the message and
   /// appends `producedBlocks` to its content blocks.
@@ -269,12 +269,12 @@ class ToolCallHandler {
     List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[],
   }) async {
     // `discoveryContextKey` is the chat id every imported caller passes, and a
-    // CoWork chat id IS the executor's session key. The link's current thread
+    // Agents chat id IS the executor's session key. The link's current thread
     // is the fallback for a caller that had none.
     final sessionKey = (session.discoveryContextKey?.isNotEmpty ?? false)
         ? session.discoveryContextKey!
-        : CoworkRelayLink.instance.sessionKey.value;
-    final run = CoworkRunLedger.instance.take(sessionKey);
+        : AgentsRelayLink.instance.sessionKey.value;
+    final run = AgentsRunLedger.instance.take(sessionKey);
 
     // Anything the ledger recorded is appended to whatever the session already
     // carried, so a caller that pre-seeded the session keeps its rows.

@@ -11,8 +11,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:cowork/services/chat_cache_search_text.dart';
-import 'package:cowork/services/encryption_service.dart';
+import 'package:chuk_chat/services/chat_cache_search_text.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';

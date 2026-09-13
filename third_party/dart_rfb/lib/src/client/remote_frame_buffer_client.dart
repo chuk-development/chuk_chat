@@ -124,7 +124,7 @@ class RemoteFrameBufferClient {
             case 1: // SetColorMapEntries
               final int numberOfColors =
                   (await socket.readSync(length: 5).run()).getUint16(3);
-              // CoWork fork: upstream dropped this Task without running it,
+              // Agents fork: upstream dropped this Task without running it,
               // leaving the colour-map body in the stream (desync).
               await socket.readSync(length: numberOfColors * 6).run();
               yield const RemoteFrameBufferClientReadMessage
@@ -144,7 +144,7 @@ class RemoteFrameBufferClient {
                   'Error reading server cut text: $error',
                 ),
               );
-              // CoWork fork: never log the clipboard TEXT (it would reach the
+              // Agents fork: never log the clipboard TEXT (it would reach the
               // host console); the length is enough for diagnostics.
               logger.info('< ServerCutText (${message.text.length} chars, dropped)');
               yield RemoteFrameBufferClientReadMessage.serverCutTextMessage(
@@ -241,7 +241,7 @@ class RemoteFrameBufferClient {
               ),
             );
           },
-          // CoWork fork: the sandbox clipboard is never surfaced. The message
+          // Agents fork: the sandbox clipboard is never surfaced. The message
           // is fully consumed off the wire (framing stays intact) and dropped
           // here, so no code path can hand it to the app.
           serverCutTextMessage:
@@ -587,7 +587,7 @@ class RemoteFrameBufferClient {
           Config(
             frameBufferHeight: serverInitMessage.frameBufferHeightInPixels,
             frameBufferWidth: serverInitMessage.frameBufferWidthInPixels,
-            // CoWork fork: the client unconditionally forces bgra8888 right
+            // Agents fork: the client unconditionally forces bgra8888 right
             // after ServerInit (see _setPixelFormat); raw rect bodies are sized
             // from THIS format, so it must be the one on the wire — not the
             // server's native one (a 16-bpp server would otherwise desync).

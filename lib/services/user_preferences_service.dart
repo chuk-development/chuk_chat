@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/model_cache_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/core/model_selection_events.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/core/model_selection_events.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();

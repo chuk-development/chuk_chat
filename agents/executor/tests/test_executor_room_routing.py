@@ -4,15 +4,15 @@ from __future__ import annotations
 
 import threading
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor.protocol import room_create_payload
-from cowork_agent import MockModelClient
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor.protocol import room_create_payload
+from chuk_agents_runtime import MockModelClient
 
 from wiring import paired_channel
 
 
 def _run_executor(tmp_path, on_room_frame=None):
-    from cowork_sandbox import LocalEnvironment
+    from chuk_agents_sandbox import LocalEnvironment
 
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()

@@ -9,12 +9,12 @@ import sqlite3
 
 import httpx
 
-from cowork_agent import StateStore, SupabaseSession
+from chuk_agents_runtime import StateStore, SupabaseSession
 
-from cowork_host.coworker_names import CoworkerNameStore, host_agent_id
-from cowork_host.desktop_notify import DesktopNotifier
-from cowork_host.desktop_notify import completion_text as desktop_completion_text
-from cowork_host.notify import SupabaseNotifier
+from chuk_agents_host.coworker_names import CoworkerNameStore, host_agent_id
+from chuk_agents_host.desktop_notify import DesktopNotifier
+from chuk_agents_host.desktop_notify import completion_text as desktop_completion_text
+from chuk_agents_host.notify import SupabaseNotifier
 
 SUPABASE = "https://proj.supabase.co"
 

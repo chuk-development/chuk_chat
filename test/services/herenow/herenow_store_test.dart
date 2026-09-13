@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/herenow/herenow_store.dart';
+import 'package:chuk_chat/services/herenow/herenow_store.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

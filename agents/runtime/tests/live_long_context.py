@@ -28,14 +28,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from test_live_model import _session  # reuse the app-session / .env loader
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     BackendModelClient,
     LocalEnvironment,
     build_runtime,
     fetch_models_info,
     resolve_model,
 )
-from cowork_agent.context import LadderConfig
+from chuk_agents_runtime.context import LadderConfig
 
 CODENAME = "BLUEFALCON"
 LAUNCH = "2026-11-15"

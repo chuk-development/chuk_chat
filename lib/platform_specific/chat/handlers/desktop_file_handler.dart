@@ -7,11 +7,11 @@ import 'package:flutter/foundation.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:cowork/constants/file_constants.dart';
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/platform_specific/chat/chat_api_service.dart';
-import 'package:cowork/services/image_storage_service.dart';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 /// Temporary container for validated files before upload.
 class ValidatedFile {

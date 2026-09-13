@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-import cowork_host.serve as serve
-from cowork_host import TaskServer
+import chuk_agents_host.serve as serve
+from chuk_agents_host import TaskServer
 
 
 class _RecordingExecutor:

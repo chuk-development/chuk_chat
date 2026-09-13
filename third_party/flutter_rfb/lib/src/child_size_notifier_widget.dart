@@ -4,7 +4,7 @@ import 'package:flutter/widgets.dart';
 ///
 /// Inspired by: https://stackoverflow.com/a/58004112/373138
 ///
-/// CoWork fork: upstream measured once, in `initState`'s post-frame callback.
+/// Agents fork: upstream measured once, in `initState`'s post-frame callback.
 /// A framebuffer that changes size mid-session (desktop-size change, a
 /// different Xvfb geometry) left the notifier stale, and with it the tap and
 /// wheel coordinate mapping. The size is now re-read after every build and the

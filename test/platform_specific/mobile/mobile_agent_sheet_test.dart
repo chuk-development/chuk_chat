@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 import 'mobile_support.dart';
 

@@ -1,4 +1,4 @@
-from cowork_agent.model import (
+from chuk_agents_runtime.model import (
     MockModelClient,
     ModelResponse,
     parse_openai_response,

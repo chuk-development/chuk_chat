@@ -1,25 +1,26 @@
 [project]
-name = "cowork-host"
+name = "chuk-agents-host"
 version = "0.1.0"
-description = "CoWork local host: a blind localhost relay + pairing initiator that runs the whole CoWork platform on one machine, no prod relay."
+description = "Agents local host: a blind localhost relay + pairing initiator that runs the whole Agents platform on one machine, no prod relay."
 readme = "README.md"
 authors = [
     { name = "chukfinley", email = "chuk@chuk.dev" }
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "cowork-agent",
-    "cowork-sandbox",
-    "cowork-crypto",
-    "cowork-manager",
-    "cowork-executor",
+    "chuk-agents-runtime",
+    "chuk-agents-sandbox",
+    "chuk-agents-crypto",
+    "chuk-agents-config",
+    "chuk-agents-manager",
+    "chuk-agents-executor",
     "websockets>=13",
     "aiortc>=1.15.0",
     "qrcode>=8",
 ]
 
 [project.scripts]
-cowork-host = "cowork_host.cli:main"
+cowork-host = "chuk_agents_host.cli:main"
 
 [dependency-groups]
 dev = [
@@ -27,11 +28,12 @@ dev = [
 ]
 
 [tool.uv.sources]
-cowork-agent = { path = "../agent", editable = true }
-cowork-sandbox = { path = "../sandbox", editable = true }
-cowork-crypto = { path = "../common/cowork_crypto", editable = true }
-cowork-manager = { path = "../manager", editable = true }
-cowork-executor = { path = "../executor", editable = true }
+chuk-agents-runtime = { path = "../agent", editable = true }
+chuk-agents-sandbox = { path = "../sandbox", editable = true }
+chuk-agents-crypto = { path = "../common/chuk_agents_crypto", editable = true }
+chuk-agents-config = { path = "../common/chuk_agents_config", editable = true }
+chuk-agents-manager = { path = "../manager", editable = true }
+chuk-agents-executor = { path = "../executor", editable = true }
 
 [build-system]
 requires = ["uv_build>=0.9.28,<0.10.0"]

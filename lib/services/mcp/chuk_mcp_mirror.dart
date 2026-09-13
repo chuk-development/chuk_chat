@@ -1,15 +1,15 @@
-/// chuk_chat's connector mirror, read (and later written) by CoWork.
+/// chuk_chat's connector mirror, read (and later written) by Agents.
 ///
 /// chuk_chat keeps every connected MCP server in Supabase `service_credentials`
 /// as one row per connector: `service_name = 'mcp_<catalogue id>'`,
 /// `encrypted_data` = an `EncryptionService` envelope of
 /// `{"connection": McpConnection.toJson, "secrets": _McpSecrets.toJson | null}`
-/// (chuk's `McpSyncBlob`). CoWork and chuk_chat share the Supabase project, the
+/// (chuk's `McpSyncBlob`). Agents and chuk_chat share the Supabase project, the
 /// user and the password-derived key, so a row chuk wrote is readable here as
 /// it is — which is how a connector signed in inside chuk_chat shows up as
-/// connected in CoWork (bead cowork-hza).
+/// connected in Agents (bead cowork-hza).
 ///
-/// CoWork's own mirror (`cowork_mcp_connectors`, one blob per user) stays the
+/// Agents's own mirror (`cowork_mcp_connectors`, one blob per user) stays the
 /// primary; this one fills the gaps. Everything is best-effort: no Supabase,
 /// no user, no key, a missing table, an undecryptable row — each resolves to
 /// "nothing from chuk" and the local store keeps working. Nothing decrypted is
@@ -20,8 +20,8 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// One chuk row, decrypted: the connection as JSON and its secrets, if any.
 @immutable

@@ -14,7 +14,7 @@ import threading
 
 import pytest
 
-from cowork_host.webrtc_transport import (
+from chuk_agents_host.webrtc_transport import (
     WebRTCEndpoint,
     WebRTCError,
     _Reassembler,

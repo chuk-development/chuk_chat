@@ -15,7 +15,7 @@ import { api, hasDebugger, hasTabGroups } from "./api.js";
 import { Leases, ORIGIN, STATE } from "./leases.js";
 
 const PROTOCOL_VERSION = "1.3";
-const GROUP_TITLE = "CoWork";
+const GROUP_TITLE = "Agents";
 
 export class Driver {
   constructor() {
@@ -70,7 +70,7 @@ export class Driver {
   /**
    * Put the page scripts into a tab, once, and only into a tab under lease.
    * Nothing is declared in the manifest any more, so a tab the coworker was
-   * never given carries no CoWork code at all.
+   * never given carries no Agents code at all.
    */
   async ensureInjected(tabId) {
     if (!this.leases.held(tabId)) throw new Error(`no lease on tab ${tabId}`);
@@ -92,7 +92,7 @@ export class Driver {
     this.leases.setState(this.tabId, state);
     try {
       await api.tabs.sendMessage(this.tabId, {
-        channel: "cowork",
+        channel: "agents",
         op: "driving",
         on: state !== null,
         state,
@@ -156,7 +156,7 @@ export class Driver {
   async ask(op, extra = {}) {
     const tabId = await this.ownTab();
     await this.ensureInjected(tabId);
-    const reply = await api.tabs.sendMessage(tabId, { channel: "cowork", op, ...extra });
+    const reply = await api.tabs.sendMessage(tabId, { channel: "agents", op, ...extra });
     if (!reply) throw new Error(`no answer from the page for "${op}"`);
     if (!reply.ok) throw new Error(reply.error);
     return reply.data;

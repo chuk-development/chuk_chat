@@ -5,10 +5,10 @@ cowork-al2)."""
 
 from __future__ import annotations
 
-from cowork_agent import MockModelClient, StateStore, tool_call_response
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, StateStore, tool_call_response
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
 
 from wiring import paired_channel
 

@@ -1,10 +1,10 @@
 // lib/services/message_composition_service.dart
 import 'dart:math' as math;
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/input_validator.dart';
-import 'package:cowork/utils/token_estimator.dart';
-import 'package:cowork/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/input_validator.dart';
+import 'package:chuk_chat/utils/token_estimator.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:flutter/foundation.dart';
 
 /// Result of message composition preparation

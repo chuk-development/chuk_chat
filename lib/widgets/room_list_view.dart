@@ -9,12 +9,12 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class RoomListView extends StatelessWidget {
   const RoomListView({
@@ -116,7 +116,7 @@ class RoomListView extends StatelessWidget {
     );
   }
 
-  Widget _roomTile(BuildContext context, CoworkRoom room) {
+  Widget _roomTile(BuildContext context, AgentsRoom room) {
     final theme = Theme.of(context);
     final count = room.members.length;
     return ListTile(
@@ -175,7 +175,7 @@ class RoomListView extends StatelessWidget {
     );
   }
 
-  Future<void> _promptRename(BuildContext context, CoworkRoom room) async {
+  Future<void> _promptRename(BuildContext context, AgentsRoom room) async {
     final name = await showDialog<String>(
       context: context,
       builder: (dialogContext) => _RenameDialog(initial: room.name),
@@ -194,7 +194,7 @@ class RoomListView extends StatelessWidget {
   /// on top of the third avatar and was too small to read. A row cannot
   /// overlap, and [ExpressiveBadge] carries the app's own label size, so the
   /// number stays legible when the user scales text up.
-  Widget _memberStack(CoworkRoom room) {
+  Widget _memberStack(AgentsRoom room) {
     const int shown = 3;
     // The face, the box it sits in, and how far each face is pushed right.
     // 32 px faces in a 36 px box leave a 2 px ring of air top and bottom;

@@ -15,7 +15,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 
 enum ChatMode {
   /// Answers right away. Fast means fast — a light model, reasoning off.

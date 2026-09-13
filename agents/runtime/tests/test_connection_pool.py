@@ -1,7 +1,7 @@
 """Exclusive, bounded reuse of fully drained model connections."""
 from unittest.mock import Mock
 
-from cowork_agent.connection_pool import BackendConnectionPool
+from chuk_agents_runtime.connection_pool import BackendConnectionPool
 from test_backend import MockWsServer, _client, _session
 
 
@@ -60,7 +60,7 @@ def test_error_stream_is_not_reused():
     pool = BackendConnectionPool()
     try:
         import pytest
-        from cowork_agent.backend import BackendModelError
+        from chuk_agents_runtime.backend import BackendModelError
         client = _client(server, _session(), connection_pool=pool)
         with pytest.raises(BackendModelError):
             client.complete([{'role': 'user', 'content': 'hi'}])

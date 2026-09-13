@@ -4,7 +4,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
 
 /// Service for determining model capabilities like vision and reasoning.
 /// Uses ONLY cached API data (the `supports_*` fields from /v1/models_info).

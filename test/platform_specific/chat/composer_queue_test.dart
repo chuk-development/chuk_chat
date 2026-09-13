@@ -5,7 +5,7 @@
 // the send target never turns into a stop.
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/chat/composer_queue.dart';
+import 'package:chuk_chat/platform_specific/chat/composer_queue.dart';
 
 void main() {
   group('PendingMessageQueue', () {

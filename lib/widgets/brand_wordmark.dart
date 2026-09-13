@@ -1,10 +1,10 @@
-// COWORK STUB. Upstream: chuk_chat/lib/widgets/brand_wordmark.dart.
+// AGENTS STUB. Upstream: chuk_chat/lib/widgets/brand_wordmark.dart.
 // Reason: upstream renders the frozen brand lockup from assets/wordmark.svg,
 // which reads "Chuk Chat — Private and Secure. Always." This build has no such
 // vector asset, so the wordmark is drawn as text at the same ink height.
 // `SbBrand` only reaches this widget when its label is literally 'Chuk Chat'
 // (see widgets/sidebar/sidebar_chrome.dart). The product name is Chuk Chat;
-// CoWork is a mode inside it and never appears here.
+// Agents is a mode inside it and never appears here.
 import 'package:flutter/material.dart';
 
 /// Text stand-in for the frozen brand lockup.

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/chart_widget.dart';
+import 'package:chuk_chat/widgets/chart_widget.dart';
 
 Future<void> _pumpChart(WidgetTester tester, Map<String, dynamic> data) async {
   await tester.pumpWidget(

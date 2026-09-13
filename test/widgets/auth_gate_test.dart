@@ -6,9 +6,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/session_recovery.dart';
-import 'package:cowork/widgets/auth_gate.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
+import 'package:chuk_chat/widgets/auth_gate.dart';
 
 String _jwt({required int exp}) {
   String part(Map<String, Object> claims) =>

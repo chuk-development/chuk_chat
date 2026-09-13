@@ -1,4 +1,4 @@
-# CoWork agent base image (§6, §9).
+# Agents agent base image (§6, §9).
 #
 # One of these runs per agent: a small Debian the agent owns completely. It may
 # `sudo apt install` anything, break it, and be thrown away — the workspace it
@@ -19,7 +19,7 @@
 #
 # Deliberately NOT here: the browser stack (Chromium + its system libraries,
 # several hundred MB). It lands in a separate image built on top of this one —
-# `Dockerfile.browser`, tagged `cowork-browser:latest` — so an agent that never
+# `Dockerfile.browser`, tagged `agents-browser:latest` — so an agent that never
 # browses does not pay for it, and so this image stays quick to build. §8 makes
 # that the normal case: API tools first, the browser only as the fallback.
 
@@ -31,9 +31,9 @@ FROM ${DEBIAN_BASE}
 # pins and does not drift with the Debian release.
 ARG UV_VERSION=0.9.28
 ARG PYTHON_VERSION=3.12
-ARG COWORK_USER=cowork
-ARG COWORK_UID=1000
-ARG COWORK_GID=1000
+ARG AGENTS_USER=agents
+ARG AGENTS_UID=1000
+ARG AGENTS_GID=1000
 
 ENV DEBIAN_FRONTEND=noninteractive \
     LANG=C.UTF-8 \
@@ -208,13 +208,13 @@ RUN set -eux; \
 # "its own little Debian box it can apt-install into" (§6). Isolation here is
 # about a disposable environment, not about defending the host from the agent.
 RUN set -eux; \
-    groupadd -g "${COWORK_GID}" "${COWORK_USER}"; \
-    useradd -m -u "${COWORK_UID}" -g "${COWORK_GID}" -s /bin/bash "${COWORK_USER}"; \
-    printf '%s ALL=(ALL) NOPASSWD:ALL\n' "${COWORK_USER}" > /etc/sudoers.d/"${COWORK_USER}"; \
-    chmod 0440 /etc/sudoers.d/"${COWORK_USER}"; \
+    groupadd -g "${AGENTS_GID}" "${AGENTS_USER}"; \
+    useradd -m -u "${AGENTS_UID}" -g "${AGENTS_GID}" -s /bin/bash "${AGENTS_USER}"; \
+    printf '%s ALL=(ALL) NOPASSWD:ALL\n' "${AGENTS_USER}" > /etc/sudoers.d/"${AGENTS_USER}"; \
+    chmod 0440 /etc/sudoers.d/"${AGENTS_USER}"; \
     visudo -c; \
-    install -d -o "${COWORK_UID}" -g "${COWORK_GID}" -m 0755 /workspace; \
-    printf 'cd /workspace 2>/dev/null || true\n' >> /home/"${COWORK_USER}"/.bashrc
+    install -d -o "${AGENTS_UID}" -g "${AGENTS_GID}" -m 0755 /workspace; \
+    printf 'cd /workspace 2>/dev/null || true\n' >> /home/"${AGENTS_USER}"/.bashrc
 
 # yt-dlp, installed system-wide with uv so it lands on PATH (UV_TOOL_BIN_DIR)
 # and any agent can pull a video's captions immediately. The youtube-transcript
@@ -225,16 +225,16 @@ RUN set -eux; \
     uv tool install yt-dlp; \
     yt-dlp --version
 
-COPY entrypoint.sh /usr/local/bin/cowork-entrypoint
-RUN chmod 0755 /usr/local/bin/cowork-entrypoint
+COPY entrypoint.sh /usr/local/bin/agents-entrypoint
+RUN chmod 0755 /usr/local/bin/agents-entrypoint
 
-ENV COWORK_USER=${COWORK_USER} \
-    COWORK_WORKSPACE=/workspace
+ENV AGENTS_USER=${AGENTS_USER} \
+    AGENTS_WORKSPACE=/workspace
 
 WORKDIR /workspace
 
 # The entrypoint runs as root only to align the agent user with the host owner of
 # the bind mount, then hands control to the command. Commands arrive later as
-# `docker exec -u cowork`, so nothing the agent runs is root by default.
-ENTRYPOINT ["/usr/local/bin/cowork-entrypoint"]
+# `docker exec -u agents`, so nothing the agent runs is root by default.
+ENTRYPOINT ["/usr/local/bin/agents-entrypoint"]
 CMD ["sleep", "infinity"]

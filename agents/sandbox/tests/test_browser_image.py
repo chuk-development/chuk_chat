@@ -54,7 +54,7 @@ def test_the_browser_variant_builds_on_top_of_the_base_image():
     froms = [line for line in lines if line.upper().startswith("FROM ")]
     assert froms == ["FROM ${BASE_IMAGE}"]
     args = " ".join(line for line in lines if line.upper().startswith("ARG "))
-    assert "BASE_IMAGE=cowork-base:latest" in args
+    assert "BASE_IMAGE=agents-base:latest" in args
 
 
 def test_the_base_image_installs_no_browser():
@@ -78,7 +78,7 @@ def test_the_browser_variant_pins_the_installer_and_keeps_the_entrypoint():
     assert 'playwright==${PLAYWRIGHT_VERSION}"' in text or "playwright==${PLAYWRIGHT_VERSION}" in text
     # The uid-remapping entrypoint must survive, or workspace files land on the
     # host owned by the wrong user.
-    assert any(line.startswith("ENTRYPOINT") and "cowork-entrypoint" in line for line in lines)
+    assert any(line.startswith("ENTRYPOINT") and "agents-entrypoint" in line for line in lines)
     # A browser in a container has no CAP_SYS_ADMIN for its own sandbox; the
     # marker browser-use reads for that has to be set.
     assert "IN_DOCKER=true" in text
@@ -89,9 +89,9 @@ def test_the_browser_variant_pins_the_installer_and_keeps_the_entrypoint():
 
 def test_launcher_uses_preinstalled_server_and_profile_supervisor():
     launcher = (DOCKER_DIR / "browser-mcp.sh").read_text()
-    assert "exec python3 /usr/local/lib/cowork/browser-mcp-owner.py playwright-mcp" in launcher
+    assert "exec python3 /usr/local/lib/agents/browser-mcp-owner.py playwright-mcp" in launcher
     assert "exec npx" not in launcher
-    assert "COPY browser-mcp-owner.py /usr/local/lib/cowork/browser-mcp-owner.py" in BROWSER.read_text()
+    assert "COPY browser-mcp-owner.py /usr/local/lib/agents/browser-mcp-owner.py" in BROWSER.read_text()
     assert "playwright-mcp --version" in BROWSER.read_text()
 
 
@@ -187,7 +187,7 @@ def test_supervisor_reaps_detached_browser_child_on_mcp_exit(tmp_path):
     )
     result = subprocess.run(
         [sys.executable, str(OWNER_PATH), sys.executable, "-c", code],
-        env={**os.environ, "COWORK_BROWSER_PROFILE": str(tmp_path)},
+        env={**os.environ, "AGENTS_BROWSER_PROFILE": str(tmp_path)},
         capture_output=True, text=True, timeout=10,
     )
     assert result.returncode == 0, result.stderr
@@ -197,11 +197,11 @@ def test_supervisor_reaps_detached_browser_child_on_mcp_exit(tmp_path):
 
 def test_concurrent_launch_fails_without_touching_profile(tmp_path):
     import fcntl
-    with (tmp_path / ".cowork-launcher.lock").open("a") as lease:
+    with (tmp_path / ".agents-launcher.lock").open("a") as lease:
         fcntl.flock(lease, fcntl.LOCK_EX | fcntl.LOCK_NB)
         result = subprocess.run(
             [sys.executable, str(OWNER_PATH), sys.executable, "-c", "print('should not run')"],
-            env={**os.environ, "COWORK_BROWSER_PROFILE": str(tmp_path)},
+            env={**os.environ, "AGENTS_BROWSER_PROFILE": str(tmp_path)},
             capture_output=True, text=True, timeout=10,
         )
     assert result.returncode == 1
@@ -218,7 +218,7 @@ def test_supervisor_sigterm_reaps_owned_children_and_releases_profile(tmp_path):
     )
     process = subprocess.Popen(
         [sys.executable, str(OWNER_PATH), sys.executable, "-c", code],
-        env={**os.environ, "COWORK_BROWSER_PROFILE": str(tmp_path)},
+        env={**os.environ, "AGENTS_BROWSER_PROFILE": str(tmp_path)},
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
     )
     try:
@@ -231,7 +231,7 @@ def test_supervisor_sigterm_reaps_owned_children_and_releases_profile(tmp_path):
         assert not Path(f"/proc/{pid}").exists()
         result = subprocess.run(
             [sys.executable, str(OWNER_PATH), sys.executable, "-c", "print('reconnected')"],
-            env={**os.environ, "COWORK_BROWSER_PROFILE": str(tmp_path)},
+            env={**os.environ, "AGENTS_BROWSER_PROFILE": str(tmp_path)},
             capture_output=True, text=True, timeout=10,
         )
         assert result.returncode == 0, result.stderr

@@ -5,7 +5,7 @@
 // A watcher or a schedule wakes the agent by submitting a run whose prompt
 // text carries the marker header, then the operator's own prompt, then the
 // observed payload as data. That text lands in the thread as a user turn
-// (`CoworkRelayUser`), which is exactly wrong on screen: nobody typed it, and
+// (`AgentsRelayUser`), which is exactly wrong on screen: nobody typed it, and
 // the payload is a JSON blob the reader never wants to see.
 //
 // The recognition has to work from the text alone. The wake reaches the app as
@@ -32,7 +32,7 @@ class AutomationWake {
 }
 
 /// The header the host writes first in a fired task's prompt, mirroring
-/// `fired_prompt()` in `agent/src/cowork_agent/automations.py`. The name runs
+/// `fired_prompt()` in `agent/src/agents_agent/automations.py`. The name runs
 /// to the last `]` on the line, so a name that itself contains a bracket
 /// still parses.
 final RegExp _headerPattern = RegExp(

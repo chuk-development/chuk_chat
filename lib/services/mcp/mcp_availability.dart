@@ -5,8 +5,8 @@
 // registry / prompt builder can reason about availability without importing
 // the whole connect stack (which would form an import cycle).
 
-import 'package:cowork/services/mcp/mcp_catalogue.dart';
-import 'package:cowork/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 
 /// Every catalogue server the reader has NOT connected yet, in catalogue
 /// order. Registry / hand-added servers are not here: they have no constant

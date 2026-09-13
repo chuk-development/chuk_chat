@@ -1,10 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:cowork/services/user_preferences_service.dart';
-import 'package:cowork/widgets/model_selection_dropdown.dart';
-import 'package:cowork/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 /// Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 ///

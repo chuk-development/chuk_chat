@@ -16,8 +16,8 @@
 //
 // Or use the run.sh helper script which handles everything.
 
-import 'package:cowork/env_loader.dart';
-import 'package:cowork/web_env.dart' as web_env;
+import 'package:chuk_chat/env_loader.dart';
+import 'package:chuk_chat/web_env.dart' as web_env;
 
 class SupabaseConfig {
   // Compile-time values (from --dart-define)

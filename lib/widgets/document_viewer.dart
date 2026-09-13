@@ -1,11 +1,11 @@
 // lib/widgets/document_viewer.dart
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:flutter/services.dart';
-import 'package:cowork/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 /// Document viewer for markdown-converted files
 class DocumentViewer extends StatefulWidget {

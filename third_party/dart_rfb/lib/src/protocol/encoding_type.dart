@@ -8,7 +8,7 @@ part 'encoding_type.freezed.dart';
 ///
 /// See: https://www.rfc-editor.org/rfc/rfc6143.html#section-7.7
 ///
-/// CoWork fork: the `unsupported` variant now round-trips its numeric id
+/// Agents fork: the `unsupported` variant now round-trips its numeric id
 /// (upstream serialised it as -1), so it doubles as the carrier for encodings
 /// this union has no dedicated variant for — Tight (7) and the Tight
 /// pseudo-encodings (JPEG quality, compression level). Adding real variants

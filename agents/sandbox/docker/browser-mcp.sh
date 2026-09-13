@@ -1,9 +1,9 @@
 #!/bin/sh
-# cowork-browser-mcp — launch the Playwright MCP server INSIDE the sandbox
+# agents-browser-mcp — launch the Playwright MCP server INSIDE the sandbox
 # container, headed, on a virtual display the user can watch over VNC (§9.1).
 #
 # The agent runtime runs on the host and speaks to this over stdio via
-# `docker exec -i <container> cowork-browser-mcp`. Because it runs in the
+# `docker exec -i <container> agents-browser-mcp`. Because it runs in the
 # container, the Chromium it launches renders to the container's Xvfb :99 — the
 # same display x11vnc serves — so "the browser the agent drives" and "the browser
 # the user watches" are one and the same process.
@@ -14,10 +14,10 @@
 
 set -eu
 
-DISPLAY_NUM="${COWORK_BROWSER_DISPLAY:-:99}"
-SCREEN="${COWORK_BROWSER_SCREEN:-1280x800x24}"
-PROFILE="${COWORK_BROWSER_PROFILE:-/workspace/.cowork/chrome-profile}"
-VIEWPORT="${COWORK_BROWSER_VIEWPORT:-1280x800}"
+DISPLAY_NUM="${AGENTS_BROWSER_DISPLAY:-:99}"
+SCREEN="${AGENTS_BROWSER_SCREEN:-1280x800x24}"
+PROFILE="${AGENTS_BROWSER_PROFILE:-/workspace/.agents/chrome-profile}"
+VIEWPORT="${AGENTS_BROWSER_VIEWPORT:-1280x800}"
 
 # Bring up Xvfb on the display if nothing answers there yet.
 if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
@@ -36,7 +36,7 @@ fi
 # Fail loudly if the display never came up, instead of launching the MCP server
 # against a dead display and surfacing a confusing browser error later.
 if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
-    echo "cowork-browser-mcp: Xvfb did not start on ${DISPLAY_NUM}" >&2
+    echo "agents-browser-mcp: Xvfb did not start on ${DISPLAY_NUM}" >&2
     cat /tmp/xvfb.log >&2 2>/dev/null || true
     exit 1
 fi
@@ -53,8 +53,8 @@ export DISPLAY="${DISPLAY_NUM}"
 # 48x48 bitmaps: measured 10x16 -> 48x48, about five times the height. The theme
 # comes from Dockerfile.browser; if it is ever missing, libXcursor simply falls
 # back to the old core font and nothing breaks.
-export XCURSOR_THEME="${COWORK_BROWSER_CURSOR_THEME:-DMZ-White}"
-export XCURSOR_SIZE="${COWORK_BROWSER_CURSOR_SIZE:-64}"
+export XCURSOR_THEME="${AGENTS_BROWSER_CURSOR_THEME:-DMZ-White}"
+export XCURSOR_SIZE="${AGENTS_BROWSER_CURSOR_SIZE:-64}"
 
 mkdir -p "${PROFILE}"
 
@@ -64,8 +64,8 @@ mkdir -p "${PROFILE}"
 # --user-data-dir in the workspace so a login done via the VNC hand-off survives.
 # The image already installs the pinned server. Do not invoke npx here: a
 # browser reconnect must not depend on npm registry availability/cache state.
-exec python3 /usr/local/lib/cowork/browser-mcp-owner.py playwright-mcp \
-    --executable-path "${COWORK_BROWSER_EXECUTABLE:-/usr/local/bin/chromium}" \
+exec python3 /usr/local/lib/agents/browser-mcp-owner.py playwright-mcp \
+    --executable-path "${AGENTS_BROWSER_EXECUTABLE:-/usr/local/bin/chromium}" \
     --user-data-dir "${PROFILE}" \
     --no-sandbox \
     --viewport-size "${VIEWPORT}" \

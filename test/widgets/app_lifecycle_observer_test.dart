@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/app_lifecycle_observer.dart';
+import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 
 /// `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 /// `app/lib`: no widget observed the binding at app level, so every resume and

@@ -13,7 +13,7 @@ import 'package:crypto/crypto.dart' as crypto;
 import 'package:dio/dio.dart';
 import 'package:dio/io.dart';
 import 'package:flutter/foundation.dart';
-import 'package:cowork/utils/certificate_pinning.dart';
+import 'package:chuk_chat/utils/certificate_pinning.dart';
 
 /// Configure Dio with a [badCertificateCallback] that validates
 /// the server certificate against the pinned SHA-256 hashes.

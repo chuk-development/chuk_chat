@@ -2,14 +2,14 @@
 //
 // Connecting, storing and sharing MCP connectors — the device half.
 //
-// This is the CoWork adaptation of chuk_chat's McpService. The connectors UI
+// This is the Agents adaptation of chuk_chat's McpService. The connectors UI
 // (the list, the connect card, the detail page) is a verbatim port and calls
 // exactly the same surface: `connections`, `connect`, `connectByUrl`,
 // `connectWithCredentials`, `disconnect`, `connectionFor`. What changed is what
 // sits behind that surface.
 //
 // chuk_chat ran the live MCP client here and forwarded nothing — the device WAS
-// the transport. CoWork's transport is the paired local Python backend: the
+// the transport. Agents's transport is the paired local Python backend: the
 // host dials each server and discovers the tools when a task runs (see
 // McpStore.forwardPayloads and the agent's `mcp_client.py`).
 //
@@ -32,15 +32,15 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:cowork/services/mcp/mcp_catalogue.dart';
-import 'package:cowork/services/mcp/mcp_connection.dart';
-import 'package:cowork/services/mcp/chuk_mcp_mirror.dart';
-import 'package:cowork/services/mcp/mcp_connector_sync.dart';
-import 'package:cowork/services/mcp/mcp_oauth.dart';
-import 'package:cowork/services/mcp/mcp_redirect.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/mcp/mcp_probe_control.dart';
-import 'package:cowork/services/mcp/mcp_store.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/mcp/chuk_mcp_mirror.dart';
+import 'package:chuk_chat/services/mcp/mcp_connector_sync.dart';
+import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
+import 'package:chuk_chat/services/mcp/mcp_redirect.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
 /// The MCP revision the challenge probe claims to speak. It only has to be a
 /// version the server recognizes well enough to answer `401` instead of
@@ -50,7 +50,7 @@ const String kMcpProtocolVersion = '2025-06-18';
 /// What a connect attempt ended in, for the UI to show.
 enum McpConnectStatus { connected, cancelled, failed }
 
-/// A handle the screen keeps so it can stop a connect. On CoWork the connect
+/// A handle the screen keeps so it can stop a connect. On Agents the connect
 /// completes at once — the host does the sign-in later — so this rarely fires,
 /// but the ported UI keeps it so the screens stay identical to chuk_chat's.
 class McpConnectCanceler {
@@ -239,7 +239,7 @@ class McpService {
     var readable = false;
     try {
       readable = await _pullOwnMirror();
-      // Both mirrors always run: the own one holds this user's CoWork set, the
+      // Both mirrors always run: the own one holds this user's Agents set, the
       // chuk one what the other app connected, and either may be the ahead one.
       readable = await _pullChukMirror() || readable;
     } catch (e) {
@@ -309,7 +309,7 @@ class McpService {
   }
 
   /// What chuk_chat connected, adopted where this device has nothing
-  /// (bead cowork-hza). A connector chuk knows and CoWork does not is added
+  /// (bead cowork-hza). A connector chuk knows and Agents does not is added
   /// with chuk's config; its secrets are taken only when the local record is
   /// unusable (47's rule — never over a live one, a mirror can be older); its
   /// API credentials only when none are stored here. Then the list is the
@@ -657,7 +657,7 @@ class McpService {
     // well-known paths) and the scopes it wants (Atlassian and Linear name
     // theirs only here — without them the token is minted for the wrong grant
     // and every tool call comes back 403). chuk_chat got this for free because
-    // it dialed the server with its MCP client; CoWork has no device-side MCP
+    // it dialed the server with its MCP client; Agents has no device-side MCP
     // client, so it sends one unauthenticated request and reads the header.
     final challenge = wwwAuthenticate ?? await _challengeFor(endpoint);
     final McpAuthServer server;
@@ -881,7 +881,7 @@ class McpService {
   static Future<void> probe({McpProbeControl? control}) async {
     final McpProbeControl? target =
         control ??
-        CoworkRelayLink.instance.controller.value as McpProbeControl?;
+        AgentsRelayLink.instance.controller.value as McpProbeControl?;
     if (target == null) return;
     try {
       final List<Map<String, dynamic>> payloads = await store.forwardPayloads();

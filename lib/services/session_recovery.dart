@@ -11,15 +11,15 @@ import 'package:supabase_flutter/supabase_flutter.dart'
         AuthRetryableFetchException,
         Session;
 
-import 'package:cowork/services/network_status_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/cowork/cowork_cloud_relay.dart';
-import 'package:cowork/services/cowork/cowork_pairing_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/secrets/secrets_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/supabase_config.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/secrets/secrets_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/supabase_config.dart';
 
 /// Session recovery through the paired host (bead cowork-2n1).
 ///
@@ -62,7 +62,7 @@ class SessionStash {
 
   /// Where a stash survives a crash mid-recovery. Cleared once the app holds
   /// a live session again.
-  static const String prefsKey = 'cowork.session_stash_v1';
+  static const String prefsKey = 'agents.session_stash_v1';
 
   /// The stash main() set aside at startup, for [AuthGate] to pick up.
   static SessionStash? pending;
@@ -262,7 +262,7 @@ bool isTransportFailure(Object? error) {
 }
 
 /// The relay side of a recovery, behind a small seam so the procedure is
-/// testable with no socket. [CoworkRelayRecoveryLink] is the real one.
+/// testable with no socket. [AgentsRelayRecoveryLink] is the real one.
 abstract interface class RecoveryLink {
   /// Attaches to the stored host with no code. [sessionSource] answers the
   /// host's `reprovision_request`s, [adopter] takes its
@@ -279,18 +279,18 @@ abstract interface class RecoveryLink {
   Future<void> dispose();
 }
 
-/// [RecoveryLink] over a real [CoworkRelayClient] built from the app's stored
+/// [RecoveryLink] over a real [AgentsRelayClient] built from the app's stored
 /// device identity.
-class CoworkRelayRecoveryLink implements RecoveryLink {
-  CoworkRelayRecoveryLink({
-    required CoworkPairingStore store,
-    required CoworkStoredPairing pairing,
+class AgentsRelayRecoveryLink implements RecoveryLink {
+  AgentsRelayRecoveryLink({
+    required AgentsPairingStore store,
+    required AgentsStoredPairing pairing,
   }) : _store = store,
        _pairing = pairing;
 
-  final CoworkPairingStore _store;
-  final CoworkStoredPairing _pairing;
-  CoworkRelayClient? _client;
+  final AgentsPairingStore _store;
+  final AgentsStoredPairing _pairing;
+  AgentsRelayClient? _client;
 
   @override
   Future<void> attach({
@@ -298,13 +298,13 @@ class CoworkRelayRecoveryLink implements RecoveryLink {
     required Future<AccountSession?> Function(String refreshToken) adopter,
   }) async {
     final identity = await _store.loadOrCreateIdentity();
-    final client = CoworkRelayClient(
+    final client = AgentsRelayClient(
       deviceId: identity.deviceId,
       signingKeyPair: identity.keyPair,
       // The stored trust names the cloud relay, so the recovery link must dial
       // it the same way the shell does: authenticated as this account's
       // controller. A local `ws://` trust still opens the plain socket.
-      connector: coworkCloudRelayConnector(
+      connector: agentsCloudRelayConnector(
         deviceId: identity.deviceId,
         sessionSource: sessionSource,
       ),

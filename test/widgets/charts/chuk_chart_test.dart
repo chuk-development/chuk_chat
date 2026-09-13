@@ -5,8 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/charts/chart_painter.dart';
-import 'package:cowork/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/widgets/charts/chart_painter.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 
 import 'chart_fixtures.dart';
 import 'chart_test_support.dart';

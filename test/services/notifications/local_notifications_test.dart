@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/services/notifications/local_notifications.dart';
-import 'package:cowork/services/notifications/notification_router.dart';
+import 'package:chuk_chat/services/notifications/local_notifications.dart';
+import 'package:chuk_chat/services/notifications/notification_router.dart';
 
 /// Records every call; the platform plugin never runs in a test.
 class FakeBackend implements LocalNotificationsBackend {
@@ -156,8 +156,8 @@ void main() {
     // A D-Bus notification draws the app logo only when the sender hands the
     // picture over; a missing asset is a blank slot in the toast, which is
     // exactly the bug this guards.
-    expect(kCoworkNotificationIconAsset, 'assets/icons/app_icon.png');
-    expect(File(kCoworkNotificationIconAsset).existsSync(), isTrue);
+    expect(kAgentsNotificationIconAsset, 'assets/icons/app_icon.png');
+    expect(File(kAgentsNotificationIconAsset).existsSync(), isTrue);
     expect(
       File('pubspec.yaml').readAsStringSync(),
       contains('- assets/icons/'),

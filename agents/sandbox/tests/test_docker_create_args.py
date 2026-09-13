@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import os
 
-from cowork_sandbox.docker import CONTAINER_WORKSPACE, DockerEnvironment
-from cowork_sandbox.lifecycle import CliResult
+from chuk_agents_sandbox.docker import CONTAINER_WORKSPACE, DockerEnvironment
+from chuk_agents_sandbox.lifecycle import CliResult
 
 
 class _FakeCli:

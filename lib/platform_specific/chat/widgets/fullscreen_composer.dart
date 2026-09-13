@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// Opens a fullscreen text composition sheet for the chat composer.
 /// Returns the edited text, or null if dismissed.

@@ -7,9 +7,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
 
 class RoomCreateSheet extends StatefulWidget {
   const RoomCreateSheet({
@@ -20,9 +20,9 @@ class RoomCreateSheet extends StatefulWidget {
   });
 
   /// The coworkers that can join. Usually the roster's visible agents.
-  final List<CoworkAgent> agents;
+  final List<AgentsAgent> agents;
 
-  final void Function(CoworkRoomDraft draft) onSubmit;
+  final void Function(AgentsRoomDraft draft) onSubmit;
   final VoidCallback? onCancel;
 
   @override
@@ -59,12 +59,12 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
     final name = _nameController.text.trim();
     setState(() => _nameError = name.isEmpty ? 'Name the room.' : null);
     if (name.isEmpty || _selected.length < 2) return;
-    final members = <CoworkRoomMember>[
+    final members = <AgentsRoomMember>[
       for (final agent in widget.agents)
         if (_selected.contains(agent.id))
-          CoworkRoomMember(agentId: agent.id, handle: agent.name),
+          AgentsRoomMember(agentId: agent.id, handle: agent.name),
     ];
-    widget.onSubmit(CoworkRoomDraft(name: name, members: members));
+    widget.onSubmit(AgentsRoomDraft(name: name, members: members));
   }
 
   @override
@@ -144,7 +144,7 @@ class _RoomCreateSheetState extends State<RoomCreateSheet> {
     );
   }
 
-  Widget _memberTile(BuildContext context, CoworkAgent agent) {
+  Widget _memberTile(BuildContext context, AgentsAgent agent) {
     final selected = _selected.contains(agent.id);
     // A full room disables the unchosen rows, so the cap is a wall, not a warning.
     final enabled = selected || !_full;

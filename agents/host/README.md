@@ -1,6 +1,6 @@
 # cowork-host
 
-A runnable **host** for the whole CoWork platform on one machine.
+A runnable **host** for the whole Agents platform on one machine.
 
 By default it reaches the app through the **cloud relay**
 (`wss://api.chuk.chat/v2/relay/ws`): the host dials *out*, so a phone on mobile
@@ -12,11 +12,11 @@ It bundles four things into one process:
 1. a **pipe to the app** — the cloud relay by default, or a **blind localhost
    relay** (a `websockets` server on `127.0.0.1:<port>`) with `--local-relay`,
    which routes JSON messages verbatim between two parties on the same channel;
-2. an **agent roster** (`cowork_manager`) with a persistent workspace per agent;
-3. the **pairing initiator** (`cowork_crypto`, §15) — it prints a short human code
-   the CoWork app types in to establish an E2E channel key + mutual device trust;
-4. a **task server** that runs the real `cowork_executor` Executor (agent loop +
-   sandbox + encrypted frames) under the `cowork_manager` supervisor.
+2. an **agent roster** (`chuk_agents_manager`) with a persistent workspace per agent;
+3. the **pairing initiator** (`chuk_agents_crypto`, §15) — it prints a short human code
+   the Agents app types in to establish an E2E channel key + mutual device trust;
+4. a **task server** that runs the real `chuk_agents_executor` Executor (agent loop +
+   sandbox + encrypted frames) under the `chuk_agents_manager` supervisor.
 
 The Dart app implements the *other* end of the same local relay protocol.
 
@@ -31,13 +31,13 @@ uv run cowork-host --local-relay --port 8787   # same-machine development
 You will see a QR code, the link it encodes, and the code to type:
 
 ```
-  Scan this with the CoWork app:
+  Scan this with the Agents app:
 
     <QR block>
 
   ...or paste this link into the app:  cowork://pair?c=<pairing channel>&k=<code>&r=wss%3A%2F%2Fapi.chuk.chat
 
-  Open the CoWork app, Connect to  wss://api.chuk.chat/v2/relay/ws  and enter code:  1a2b3c4d5e6f7a8b-428913
+  Open the Agents app, Connect to  wss://api.chuk.chat/v2/relay/ws  and enter code:  1a2b3c4d5e6f7a8b-428913
 ```
 
 Scan it to pair, then drive the agent from your phone. The QR is the default
@@ -70,7 +70,7 @@ The relay wants a Supabase JWT, and a brand-new host has no account. So:
 - On connect a party sends `{"type":"join","channel":"<id>","role":"executor"|"controller"}`.
   The relay pairs the two roles on a channel and forwards everything after, blind.
 - Pairing envelopes: `{"type":"pairing","step":"commit|pubkey|reveal|confirm-d|confirm-c|device-d|device-c","data":{...}}`.
-- Sealed frames: `{"type":"frame","frame":"<base64 of a sealed CoWork frame>"}`
+- Sealed frames: `{"type":"frame","frame":"<base64 of a sealed Agents frame>"}`
   — token provisioning, tasks, and streamed results all ride sealed frames.
 
 The host is the **executor** role and the pairing **initiator**; the app is the

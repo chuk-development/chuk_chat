@@ -20,7 +20,7 @@ import uuid
 
 import pytest
 
-from cowork_sandbox import (
+from chuk_agents_sandbox import (
     CONTAINER_WORKSPACE,
     LABEL_AGENT,
     LABEL_MANAGED,
@@ -38,9 +38,9 @@ pytestmark = pytest.mark.skipif(
     reason="docker CLI or daemon unavailable in this environment",
 )
 
-#: Small image every developer already has. Point this at ``cowork-base:latest``
+#: Small image every developer already has. Point this at ``agents-base:latest``
 #: to exercise the real agent image (passwordless sudo, python 3.12, tmux).
-IMAGE = os.environ.get("COWORK_TEST_IMAGE", "debian:stable-slim")
+IMAGE = os.environ.get("AGENTS_TEST_IMAGE", "debian:stable-slim")
 
 
 def unique_agent() -> str:
@@ -284,7 +284,7 @@ def test_cancel_kills_the_command_in_flight_but_keeps_the_container(env):
     one environment serves one command thread by construction (it tracks one cwd,
     one snapshot and one in-flight process), so a second caller would race it.
     """
-    marker = "/tmp/cowork-cancel-marker"
+    marker = "/tmp/agents-cancel-marker"
     env.run(f"rm -f {marker}")
     container = env.container_id
     assert container is not None
@@ -328,10 +328,10 @@ def test_cancel_kills_the_command_in_flight_but_keeps_the_container(env):
 
 def test_base_image_gives_the_agent_sudo_python_and_tmux():
     """Only runs where the base image exists; asserts what §6/§9 promise it has."""
-    e = DockerEnvironment(image="cowork-base:latest", agent_id=unique_agent())
+    e = DockerEnvironment(image="agents-base:latest", agent_id=unique_agent())
     try:
         who = e.run("whoami")
-        assert who.stdout.strip() == "cowork"
+        assert who.stdout.strip() == "agents"
         assert e.run("sudo -n true").ok, "passwordless sudo is missing"
         version = e.run("python3 --version")
         assert version.stdout.strip().startswith("Python 3.12"), version.stdout

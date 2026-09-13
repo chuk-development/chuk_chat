@@ -11,10 +11,10 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import Executor, loopback_pair
-from cowork_executor.protocol import mcp_tools_payload
+from chuk_agents_executor import Executor, loopback_pair
+from chuk_agents_executor.protocol import mcp_tools_payload
 
 from wiring import paired_channel
 

@@ -3,8 +3,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:share_plus/share_plus.dart';
 
-import 'package:cowork/services/download_preferences_service.dart';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/services/download_preferences_service.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 
 /// Outcome of a save attempt. Callers use this to drive snackbars or follow-up
 /// actions without needing to know which underlying mechanism ran.

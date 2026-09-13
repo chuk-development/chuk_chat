@@ -5,8 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 
 /// Cross-device developer options toggle.
 ///

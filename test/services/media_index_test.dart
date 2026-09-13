@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/services/cowork/media_index.dart';
+import 'package:chuk_chat/services/agents/media_index.dart';
 
 void main() {
   test('files and pictures are indexed out of the rows', () {

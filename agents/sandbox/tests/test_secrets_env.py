@@ -4,8 +4,8 @@ snapshot, not the next command."""
 
 from __future__ import annotations
 
-from cowork_sandbox import LocalEnvironment
-from cowork_sandbox.base import _is_env_name
+from chuk_agents_sandbox import LocalEnvironment
+from chuk_agents_sandbox.base import _is_env_name
 
 
 def test_env_reaches_the_command_only(tmp_path):

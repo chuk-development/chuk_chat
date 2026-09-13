@@ -4,11 +4,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-import 'package:cowork/services/api_config_service.dart';
-import 'package:cowork/services/model_cache_service.dart';
-import 'package:cowork/services/model_capabilities_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/services/user_preferences_service.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
+import 'package:chuk_chat/services/model_cache_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/services/user_preferences_service.dart';
 
 class ModelPrefetchService {
   const ModelPrefetchService._();

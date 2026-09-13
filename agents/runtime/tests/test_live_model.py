@@ -10,9 +10,9 @@ normal ``pytest`` run. Provide EITHER a token pair (preferred — no password
 ever touches this process) or email + password for the one-time GoTrue login:
 
     # token (read from a logged-in client)
-    export COWORK_LIVE_ACCESS_TOKEN=... COWORK_LIVE_REFRESH_TOKEN=...
+    export AGENTS_LIVE_ACCESS_TOKEN=... AGENTS_LIVE_REFRESH_TOKEN=...
     # or credentials
-    export COWORK_LIVE_EMAIL=... COWORK_LIVE_PASSWORD=...
+    export AGENTS_LIVE_EMAIL=... AGENTS_LIVE_PASSWORD=...
     # plus the project (or put them in the repo .env)
     export SUPABASE_URL=... SUPABASE_ANON_KEY=...
 
@@ -29,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     BackendModelClient,
     LocalEnvironment,
     SupabaseSession,
@@ -113,8 +113,8 @@ def _session() -> SupabaseSession:
             anon_key=anon_key,
         )
 
-    access = _setting("COWORK_LIVE_ACCESS_TOKEN")
-    refresh = _setting("COWORK_LIVE_REFRESH_TOKEN")
+    access = _setting("AGENTS_LIVE_ACCESS_TOKEN")
+    refresh = _setting("AGENTS_LIVE_REFRESH_TOKEN")
     if access and refresh:
         return SupabaseSession(
             access_token=access,
@@ -123,23 +123,23 @@ def _session() -> SupabaseSession:
             anon_key=anon_key,
         )
 
-    email = _setting("COWORK_LIVE_EMAIL")
-    password = _setting("COWORK_LIVE_PASSWORD")
+    email = _setting("AGENTS_LIVE_EMAIL")
+    password = _setting("AGENTS_LIVE_PASSWORD")
     if email and password:
         # One-time bootstrap: the password is traded for a token here and never
         # stored, logged, or sent anywhere but Supabase GoTrue.
         return login(email, password, supabase_url=supabase_url, anon_key=anon_key)
 
     pytest.skip(
-        "put COWORK_LIVE_ACCESS_TOKEN+COWORK_LIVE_REFRESH_TOKEN or "
-        "COWORK_LIVE_EMAIL+COWORK_LIVE_PASSWORD in .env.live to run the live test"
+        "put AGENTS_LIVE_ACCESS_TOKEN+AGENTS_LIVE_REFRESH_TOKEN or "
+        "AGENTS_LIVE_EMAIL+AGENTS_LIVE_PASSWORD in .env.live to run the live test"
     )
 
 
 @pytest.mark.live
 def test_the_real_model_writes_a_file_instead_of_printing_it(tmp_path, monkeypatch):
     session = _session()
-    model_id = _setting("COWORK_LIVE_MODEL")
+    model_id = _setting("AGENTS_LIVE_MODEL")
     resolved = resolve_model(fetch_models_info(session), preferred_model_id=model_id)
     print(f"\n[live] model={resolved.model_id} provider={resolved.provider_slug}")
 
@@ -161,7 +161,7 @@ def test_the_real_model_writes_a_file_instead_of_printing_it(tmp_path, monkeypat
     result = loop.run(
         "live-1",
         "Write a small Python test script named test_demo.py in the workspace. "
-        "It must print 'cowork ok'. Then run it and report the output.",
+        "It must print 'agents ok'. Then run it and report the output.",
     )
     print(f"[live] stop={result.reason.value} iterations={result.iterations}")
     print(f"[live] answer:\n{result.final_answer}")
@@ -173,4 +173,4 @@ def test_the_real_model_writes_a_file_instead_of_printing_it(tmp_path, monkeypat
         "the model produced no file — it printed the script instead of calling "
         f"write_file. Answer was:\n{result.final_answer}"
     )
-    assert "cowork ok" in written[0].read_text()
+    assert "agents ok" in written[0].read_text()

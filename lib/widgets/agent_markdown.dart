@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/utils/lenient_json.dart';
-import 'package:cowork/widgets/chart_widget.dart';
-import 'package:cowork/widgets/markdown_message.dart';
+import 'package:chuk_chat/utils/lenient_json.dart';
+import 'package:chuk_chat/widgets/chart_widget.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 /// One piece of an agent reply: prose, or a chart the agent asked for.
 sealed class AgentSegment {

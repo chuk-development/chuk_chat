@@ -2,9 +2,9 @@ import 'dart:ui';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/constants.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/utils/color_extensions.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
 
 class ThemeSettings {
   const ThemeSettings({

@@ -7,9 +7,9 @@ the sealed loopback in the executor tests; this checks the frame in, frames out.
 
 from __future__ import annotations
 
-from cowork_manager import RoomBinding, RoomCaps, RoomStore
+from chuk_agents_manager import RoomBinding, RoomCaps, RoomStore
 
-from cowork_host import RoomService
+from chuk_agents_host import RoomService
 
 
 def _store_with_room(handles):
@@ -103,7 +103,7 @@ def test_caps_override_reaches_the_service():
 
 
 def test_the_service_records_the_transcript_and_starts_fresh_each_time():
-    from cowork_manager import RoomTranscriptStore
+    from chuk_agents_manager import RoomTranscriptStore
 
     store, room_id = _store_with_room(["amber", "cobalt"])
     binding = RoomBinding()
@@ -134,7 +134,7 @@ def test_the_service_records_the_transcript_and_starts_fresh_each_time():
 
 
 def test_handle_room_history_replays_the_stored_transcript():
-    from cowork_manager import RoomTranscriptStore
+    from chuk_agents_manager import RoomTranscriptStore
 
     store, room_id = _store_with_room(["amber", "cobalt"])
     binding = RoomBinding()
@@ -211,7 +211,7 @@ def test_handle_room_create_skips_members_over_the_cap():
 
 
 def test_handle_room_delete_drops_the_room_and_its_transcript():
-    from cowork_manager import RoomTranscriptStore
+    from chuk_agents_manager import RoomTranscriptStore
 
     store, room_id = _store_with_room(["amber", "cobalt"])
     binding = RoomBinding()
@@ -254,7 +254,7 @@ def test_handle_room_rename_of_an_unknown_room_is_a_noop():
 
 
 def _service_capturing():
-    from cowork_manager import RoomStore, RoomTranscriptStore
+    from chuk_agents_manager import RoomStore, RoomTranscriptStore
 
     store = RoomStore()
     binding = RoomBinding()
@@ -269,7 +269,7 @@ def _service_capturing():
 
 
 def test_dispatch_routes_create_task_rename_delete_history():
-    from cowork_host import dispatch_room_frame
+    from chuk_agents_host import dispatch_room_frame
 
     service, store, frames = _service_capturing()
 
@@ -296,7 +296,7 @@ def test_dispatch_routes_create_task_rename_delete_history():
 
 
 def test_dispatch_ignores_a_payload_without_a_room_id():
-    from cowork_host import dispatch_room_frame
+    from chuk_agents_host import dispatch_room_frame
 
     service, store, frames = _service_capturing()
     dispatch_room_frame(service, {"type": "room_create", "name": "x"})  # no room_id
@@ -306,7 +306,7 @@ def test_dispatch_ignores_a_payload_without_a_room_id():
 
 
 def test_add_and_remove_member_via_dispatch():
-    from cowork_host import dispatch_room_frame
+    from chuk_agents_host import dispatch_room_frame
 
     service, store, frames = _service_capturing()
     dispatch_room_frame(service, {

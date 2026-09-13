@@ -105,23 +105,23 @@ const bool kFeaturePaymentsDirect = bool.fromEnvironment(
 );
 
 // ============================================================================
-// COWORK-ONLY FEATURE FLAGS
+// AGENTS-ONLY FEATURE FLAGS
 // ============================================================================
 // Appended by scripts/import_chat_ui.sh after the verbatim copy of chuk_chat's
 // platform_config.dart. These flags do not exist upstream; keep them here so a
 // re-sync never drops them.
 
-/// CoWork mode — a phone-driven agent that runs on the user's laptop with real
+/// Agents mode — a phone-driven agent that runs on the user's laptop with real
 /// system/CLI access, sandboxed execution and a persistent tray daemon. Lives in
-/// the SAME app as Chat; a top-left switcher toggles between Chat and CoWork.
-/// Disabled by default; enable via --dart-define=FEATURE_COWORK=true.
-/// See docs/COWORK_BUILD_PLAN.md.
-const bool kFeatureCoWork = bool.fromEnvironment(
-  'FEATURE_COWORK',
+/// the SAME app as Chat; a top-left switcher toggles between Chat and Agents.
+/// Disabled by default; enable via --dart-define=FEATURE_AGENTS=true.
+/// See docs/AGENTS_BUILD_PLAN.md.
+const bool kFeatureAgents = bool.fromEnvironment(
+  'FEATURE_AGENTS',
   defaultValue: false,
 );
 
-/// CoWork Demo — laptop-native agent tools (`run_command`, `read_file`,
+/// Agents Demo — laptop-native agent tools (`run_command`, `read_file`,
 /// `write_file`, `list_directory`) that let the running app's agent loop act
 /// on the local machine. Every path and command cwd is jailed under a
 /// configurable root (default the user's home), reads of obvious secret paths
@@ -129,10 +129,10 @@ const bool kFeatureCoWork = bool.fromEnvironment(
 /// the real filesystem, so they stay OFF by default and register only on a
 /// build that opts in.
 ///
-/// Disabled by default; enable via --dart-define=FEATURE_COWORK_DEMO=true.
+/// Disabled by default; enable via --dart-define=FEATURE_AGENTS_DEMO=true.
 /// When off, none of the four tools register and a normal build is unchanged.
-const bool kFeatureCoworkDemo = bool.fromEnvironment(
-  'FEATURE_COWORK_DEMO',
+const bool kFeatureAgentsDemo = bool.fromEnvironment(
+  'FEATURE_AGENTS_DEMO',
   defaultValue: false,
 );
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 /// A round, accent-filled icon button — one shared widget so the "new chat"
 /// control looks identical wherever it appears (the mobile sidebar row and

@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/room_create_sheet.dart';
 
-CoworkAgent _agent(String id, String name, {String? role}) => CoworkAgent(
+AgentsAgent _agent(String id, String name, {String? role}) => AgentsAgent(
       id: id,
       name: name,
       role: role,
-      threads: const <CoworkThreadInfo>[],
+      threads: const <AgentsThreadInfo>[],
     );
 
 void main() {
-  Future<List<CoworkRoomDraft>> pump(
+  Future<List<AgentsRoomDraft>> pump(
     WidgetTester tester,
-    List<CoworkAgent> agents, {
+    List<AgentsAgent> agents, {
     VoidCallback? onCancel,
   }) async {
-    final drafts = <CoworkRoomDraft>[];
+    final drafts = <AgentsRoomDraft>[];
     await tester.pumpWidget(
       MaterialApp(
         home: Scaffold(
@@ -34,7 +34,7 @@ void main() {
     return drafts;
   }
 
-  List<CoworkAgent> six() =>
+  List<AgentsAgent> six() =>
       [for (var i = 0; i < 7; i++) _agent('id$i', 'agent-$i')];
 
   testWidgets('Create is disabled until a name and two members are set',
@@ -122,7 +122,7 @@ void main() {
   });
 
   testWidgets('an empty roster says so and cannot create', (tester) async {
-    await pump(tester, const <CoworkAgent>[]);
+    await pump(tester, const <AgentsAgent>[]);
     expect(find.text('No coworkers to add yet.'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'x');
     await tester.pumpAndSettle();

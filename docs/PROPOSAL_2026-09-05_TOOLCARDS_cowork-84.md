@@ -17,20 +17,20 @@ does not edit them. Python (frames, persistence, replay): cowork-b5.
   to chuk_chat master. Nothing to change in the renderer.
 - The app-side mapping of one `tool` frame is the same on both paths for
   `name`, `arguments.command`, `arguments.exit_code`, `status`, `result`.
-  The parity test `app/test/services/cowork/tool_card_parity_test.dart`
+  The parity test `app/test/services/agents/tool_card_parity_test.dart`
   (cowork-84) pins that and stays green today.
 
 What differs comes from the host (two different frame sources, no timestamps)
 and from three small gaps on the app side, below.
 
-## 1. `cowork_relay_client.dart` — `CoworkRelayTool.fromPayload`
+## 1. `agents_relay_client.dart` — `AgentsRelayTool.fromPayload`
 
 Read the new fields. `arguments` is an object now; `_asText` returns null for
 it today, so every card would lose its arguments once b5 ships.
 
 ```dart
-class CoworkRelayTool extends CoworkRelayInbound {
-  const CoworkRelayTool(
+class AgentsRelayTool extends AgentsRelayInbound {
+  const AgentsRelayTool(
     this.name, {
     this.status,
     this.arguments,
@@ -49,7 +49,7 @@ class CoworkRelayTool extends CoworkRelayInbound {
     this.raw = const {},
   });
 
-  factory CoworkRelayTool.fromPayload(Map<String, dynamic> payload) {
+  factory AgentsRelayTool.fromPayload(Map<String, dynamic> payload) {
     ...
     final rawArgs = payload['arguments'];
     final argumentMap = rawArgs is Map
@@ -68,7 +68,7 @@ class CoworkRelayTool extends CoworkRelayInbound {
         _asText(payload['error']) ??
         (stderr != null && stderr.isNotEmpty && failed ? stderr : stdout);
     ...
-    return CoworkRelayTool(
+    return AgentsRelayTool(
       name,
       ...
       argumentMap: argumentMap,
@@ -93,12 +93,12 @@ class CoworkRelayTool extends CoworkRelayInbound {
 }
 ```
 
-`CoworkRelayDone`: add `startedAt`, `finishedAt` (DateTime?, same `_asEpoch`),
+`AgentsRelayDone`: add `startedAt`, `finishedAt` (DateTime?, same `_asEpoch`),
 `firstMid`, `lastMid` (int?, `_asInt`). Decode in the `case 'done'` branch.
 
-`CoworkRelayRunState` already has `startedAt` (double). Keep it.
+`AgentsRelayRunState` already has `startedAt` (double). Keep it.
 
-## 2. `cowork_run_ledger.dart` — one mapping, both paths
+## 2. `agents_run_ledger.dart` — one mapping, both paths
 
 Today the ledger (`openTool` + `closeTool`) and the loader each build their
 own `ToolCall`. Put the mapping in ONE place and let both call it:
@@ -106,7 +106,7 @@ own `ToolCall`. Put the mapping in ONE place and let both call it:
 ```dart
 /// The renderer's shape of one host tool frame. Used by the live path
 /// (ledger) and the replay path (loader) so both draw the same card.
-ToolCall toolCallFromRelay(CoworkRelayTool event, {DateTime? now}) {
+ToolCall toolCallFromRelay(AgentsRelayTool event, {DateTime? now}) {
   final clock = now ?? DateTime.now();
   final args = <String, dynamic>{
     if (event.argumentMap != null)
@@ -133,15 +133,15 @@ ToolCall toolCallFromRelay(CoworkRelayTool event, {DateTime? now}) {
 function (name, args, result, status, timestamps). `openTool` sets
 `startedAt` from the frame when present.
 
-`CoworkRun`: add `finishedAt`, `firstMid`, `lastMid`; `finish(...)` takes
+`AgentsRun`: add `finishedAt`, `firstMid`, `lastMid`; `finish(...)` takes
 them from the live `done`. `adoptRunning` already takes `startedAt`.
 
-## 3. `cowork_replay_loader.dart`
+## 3. `agents_replay_loader.dart`
 
-a) `case CoworkRelayTool`: replace the inline `ToolCall(...)` with
+a) `case AgentsRelayTool`: replace the inline `ToolCall(...)` with
    `toolCallFromRelay(event)`.
 
-b) `case CoworkRelayDone` (persisted run terminal, not history end): before
+b) `case AgentsRelayDone` (persisted run terminal, not history end): before
    `_closeAiRow(draft)`, stamp the run length on the open answer row:
 
 ```dart
@@ -159,7 +159,7 @@ if (started != null && finished != null && draft.aiRow != null) {
    the age of the thread on the next save. With `generationMs` only, the
    timeline uses it as `finalDuration` and the handler skips the row.
 
-c) `case CoworkRelayRunState`: pass the host clock through:
+c) `case AgentsRelayRunState`: pass the host clock through:
    `adoptRunning(..., startedAt: event.startedAt == null ? null : DateTime.fromMillisecondsSinceEpoch((event.startedAt! * 1000).round()))`.
 
 d) Cursor after a LIVE run. Make `_advanceCursor` public
@@ -174,10 +174,10 @@ d) Cursor after a LIVE run. Make `_advanceCursor` public
 ## 4. `websocket_chat_service.dart` — live `done`
 
 ```dart
-case CoworkRelayDone():
+case AgentsRelayDone():
   final lastMid = event.lastMid;
   if (lastMid != null) {
-    CoworkReplayLoader.instance.advanceCursor(sessionKey, lastMid);
+    AgentsReplayLoader.instance.advanceCursor(sessionKey, lastMid);
   }
   endRun(...);   // unchanged; ledger.finish also gets startedAt/finishedAt
 ```

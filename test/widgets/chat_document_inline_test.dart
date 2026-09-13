@@ -9,12 +9,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/widgets/chat_document_inline.dart';
-import 'package:cowork/widgets/charts/chuk_chart.dart';
-import 'package:cowork/widgets/chuk_table.dart';
-import 'package:cowork/widgets/markdown_message.dart';
-import 'package:cowork/widgets/sandbox_artifact_block.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/widgets/chat_document_inline.dart';
+import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
+import 'package:chuk_chat/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
+import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 
 Widget wrap(Widget child) => MaterialApp(
   home: Scaffold(

@@ -3,7 +3,7 @@ respects the stop seam and the caps."""
 
 from __future__ import annotations
 
-from cowork_manager import (
+from chuk_agents_manager import (
     GroupRoom,
     RoomCaps,
     RoomContext,

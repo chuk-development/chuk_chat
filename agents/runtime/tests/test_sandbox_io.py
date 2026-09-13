@@ -14,14 +14,14 @@ import os
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     ProcessResult,
     TransferError,
     fetch_bytes,
     stat_file,
 )
-from cowork_agent.sandbox_io import CHUNK_BYTES
+from chuk_agents_runtime.sandbox_io import CHUNK_BYTES
 
 
 class TruncatingEnvironment:

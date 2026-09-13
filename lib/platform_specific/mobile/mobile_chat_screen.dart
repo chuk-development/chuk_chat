@@ -1,7 +1,7 @@
 /// The phone chat page: the messenger's floating chrome over the chat body.
 ///
 /// The body is whatever the shell already renders for a thread (the
-/// `CoworkThreadView`, which holds the verbatim chuk_chat phone screen). This
+/// `AgentsThreadView`, which holds the verbatim chuk_chat phone screen). This
 /// page only adds what a messenger needs around it:
 ///
 ///  * the floating [MobileChatChrome] on top, and the `topInset` the body
@@ -18,14 +18,14 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/ui/expressive/agent_theme.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/ui/expressive/motion.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/ui/expressive/agent_theme.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 /// Builds the chat body. [topInset] is the space the body must leave at the
-/// top; pass it to `CoworkThreadView.topInset` → `ChukChatUIMobile.topInset`.
+/// top; pass it to `AgentsThreadView.topInset` → `ChukChatUIMobile.topInset`.
 typedef MobileChatBodyBuilder =
     Widget Function(BuildContext context, double topInset);
 
@@ -44,7 +44,7 @@ class MobileChatScreen extends StatefulWidget {
     this.active = true,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final VoidCallback onBack;
   final MobileChatBodyBuilder bodyBuilder;
   final VoidCallback? onOpenProfile;

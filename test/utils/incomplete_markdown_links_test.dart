@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/utils/incomplete_markdown_links.dart';
+import 'package:chuk_chat/utils/incomplete_markdown_links.dart';
 
 void main() {
   test('unfinished URLs are not fabricated or exposed as broken markdown', () {

@@ -5,16 +5,16 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:cowork/services/file_save_service.dart';
-import 'package:cowork/services/image_storage_service.dart';
-import 'package:cowork/utils/image_clipboard_service.dart';
-import 'package:cowork/widgets/nice_snackbar.dart';
+import 'package:chuk_chat/services/file_save_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/image_clipboard_service.dart';
+import 'package:chuk_chat/widgets/nice_snackbar.dart';
 
 /// Full-screen image viewer with zoom and pan capabilities
 class ImageViewer extends StatefulWidget {

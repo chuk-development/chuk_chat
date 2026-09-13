@@ -6,9 +6,9 @@ from __future__ import annotations
 
 import sqlite3
 
-from cowork_manager import RosterStore
+from chuk_agents_manager import RosterStore
 
-from cowork_host.coworker_names import (
+from chuk_agents_host.coworker_names import (
     CoworkerNameStore,
     clean_name,
     handle_agent_frame,

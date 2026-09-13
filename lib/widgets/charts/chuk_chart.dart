@@ -14,12 +14,12 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/charts/chart_painter.dart';
-import 'package:cowork/widgets/charts/chart_palette.dart';
-import 'package:cowork/widgets/charts/chart_spec.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/charts/chart_painter.dart';
+import 'package:chuk_chat/widgets/charts/chart_palette.dart';
+import 'package:chuk_chat/widgets/charts/chart_spec.dart';
 
-export 'package:cowork/widgets/charts/chart_spec.dart';
+export 'package:chuk_chat/widgets/charts/chart_spec.dart';
 
 /// The card radius. The same 12 [ChukTable] uses, so a chart next to a table
 /// is the same object.

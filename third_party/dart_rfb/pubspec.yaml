@@ -7,7 +7,7 @@ publish_to: none # vendored fork, lives in the app repo
 environment:
   sdk: ">=2.18.4 <3.0.0"
 
-# CoWork vendored fork (see app/pubspec.yaml): adds the Tight encoding. The
+# Agents vendored fork (see app/pubspec.yaml): adds the Tight encoding. The
 # upstream dev_dependencies (build_runner/freezed/mockito/test) are dropped on
 # purpose — the committed *.freezed.dart files are used as-is and no codegen
 # runs, and their pins no longer resolve against the current SDK.

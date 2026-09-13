@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Keeps track of a password revision marker so that other sessions can detect
 /// password updates and force a logout.

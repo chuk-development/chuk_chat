@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:cowork/models/chat_reply.dart';
+import 'package:chuk_chat/models/chat_reply.dart';
 
 void main() {
   test('reply preserves quoted context and typed answer across replay', () {

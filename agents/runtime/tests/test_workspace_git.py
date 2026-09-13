@@ -10,16 +10,16 @@ import subprocess
 
 import pytest
 
-from cowork_agent.environment import LocalEnvironment
-from cowork_agent.registry import ToolRegistry
-from cowork_agent.tools import register_file_tools
-from cowork_agent.workspace_git import (
+from chuk_agents_runtime.environment import LocalEnvironment
+from chuk_agents_runtime.registry import ToolRegistry
+from chuk_agents_runtime.tools import register_file_tools
+from chuk_agents_runtime.workspace_git import (
     JOURNAL_PATH,
     GitWorkspace,
     redact_args,
     summarize_result,
 )
-from cowork_agent.workspace_tools import JournalingRegistry, register_workspace_tools
+from chuk_agents_runtime.workspace_tools import JournalingRegistry, register_workspace_tools
 
 pytestmark = pytest.mark.skipif(
     shutil.which("git") is None, reason="git is not installed"
@@ -124,7 +124,7 @@ def test_an_existing_repo_is_adopted_without_rewriting_its_config(tmp_path):
     assert _git(root, "config", "--local", "--get", "user.name").strip() == "Real Person"
     assert "their commit" in _git(root, "log", "--format=%s")
     # the agent's own commits are attributed to the agent, not to the user
-    assert _git(root, "log", "-1", "--format=%an").strip() == "CoWork Agent"
+    assert _git(root, "log", "-1", "--format=%an").strip() == "Agents Agent"
 
 
 def test_the_journal_survives_a_restart_and_keeps_counting(tmp_path):
@@ -160,7 +160,7 @@ def test_a_mutating_command_is_committed_without_guessing_what_it_did(tmp_path):
     by looking at the tree afterwards."""
     workspace = _ws(tmp_path)
     registry = JournalingRegistry(workspace)
-    from cowork_agent.tools import register_run_command
+    from chuk_agents_runtime.tools import register_run_command
 
     register_run_command(registry, LocalEnvironment())
 
@@ -381,7 +381,7 @@ def test_media_patterns_are_ignored_by_default(tmp_path):
 
 
 def test_without_git_the_feature_switches_off_and_the_loop_runs(tmp_path, monkeypatch):
-    monkeypatch.setattr("cowork_agent.workspace_git.shutil.which", lambda _: None)
+    monkeypatch.setattr("chuk_agents_runtime.workspace_git.shutil.which", lambda _: None)
     workspace = GitWorkspace.open(tmp_path / "nogit")
     assert workspace is not None and workspace.enabled is False
 
@@ -432,8 +432,8 @@ def test_no_workspace_means_no_versioning():
 
 
 def test_build_runtime_versions_the_workspace_end_to_end(tmp_path):
-    from cowork_agent.model import MockModelClient, tool_call_response
-    from cowork_agent.runtime import build_runtime
+    from chuk_agents_runtime.model import MockModelClient, tool_call_response
+    from chuk_agents_runtime.runtime import build_runtime
 
     workspace = tmp_path / "ws"
     target = workspace / "made.txt"
@@ -445,7 +445,7 @@ def test_build_runtime_versions_the_workspace_end_to_end(tmp_path):
         db_path=str(tmp_path / "state.db"),
         environment=LocalEnvironment(),
         workspace=str(workspace),
-        system_prompt="You are a CoWork agent.",
+        system_prompt="You are a Agents agent.",
     )
 
     loop.run("session", "write a file")
@@ -461,8 +461,8 @@ def test_build_runtime_versions_the_workspace_end_to_end(tmp_path):
 
 
 def test_build_runtime_can_leave_the_workspace_unversioned(tmp_path):
-    from cowork_agent.model import MockModelClient
-    from cowork_agent.runtime import build_runtime
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.runtime import build_runtime
 
     workspace = tmp_path / "plain"
     workspace.mkdir()

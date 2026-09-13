@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local Android emulator for CoWork: one x86_64 AVD, KVM, NVIDIA GPU.
+# Local Android emulator for Agents: one x86_64 AVD, KVM, NVIDIA GPU.
 #
 # The phone (Pixel 7 Pro, arm64) stays the release target. This AVD is the
 # target an agent can start without hardware. It is x86_64 because the host is
@@ -19,13 +19,13 @@ EMULATOR="$SDK/emulator/emulator"
 AVDMANAGER="$SDK/cmdline-tools/latest/bin/avdmanager"
 ADB="${ADB:-$(command -v adb || echo "$SDK/platform-tools/adb")}"
 
-AVD="${COWORK_AVD:-cowork_x64}"
-IMAGE="${COWORK_AVD_IMAGE:-system-images;android-36;google_apis;x86_64}"
-DEVICE="${COWORK_AVD_DEVICE:-pixel_7_pro}"
-RAM_MB="${COWORK_AVD_RAM:-4096}"
-DATA_GB="${COWORK_AVD_DATA:-8}"
-GPU_MODE="${COWORK_AVD_GPU:-host}"
-LOG="${COWORK_AVD_LOG:-/tmp/cowork-emulator.log}"
+AVD="${AGENTS_AVD:-cowork_x64}"
+IMAGE="${AGENTS_AVD_IMAGE:-system-images;android-36;google_apis;x86_64}"
+DEVICE="${AGENTS_AVD_DEVICE:-pixel_7_pro}"
+RAM_MB="${AGENTS_AVD_RAM:-4096}"
+DATA_GB="${AGENTS_AVD_DATA:-8}"
+GPU_MODE="${AGENTS_AVD_GPU:-host}"
+LOG="${AGENTS_AVD_LOG:-/tmp/agents-emulator.log}"
 GBOARD_PKG="com.google.android.inputmethod.latin"
 GBOARD="$GBOARD_PKG/com.android.inputmethod.latin.LatinIME"
 
@@ -83,7 +83,7 @@ start() {
   command -v memguard-allow >/dev/null && guard=(memguard-allow 8G)
   setsid "${guard[@]}" "$EMULATOR" -avd "$AVD" -gpu "$GPU_MODE" -accel on \
     -no-boot-anim -no-metrics -no-audio -feature -Bluetooth \
-    ${COWORK_AVD_EXTRA:-} >"$LOG" 2>&1 < /dev/null &
+    ${AGENTS_AVD_EXTRA:-} >"$LOG" 2>&1 < /dev/null &
   wait_boot
 }
 
@@ -96,7 +96,7 @@ tune_input() {
   local s; s="$(serial)"
   [ -n "$s" ] || return 0
   "$ADB" -s "$s" shell settings put secure show_ime_with_hard_keyboard 0 >/dev/null 2>&1 || true
-  if [ "${COWORK_AVD_SOFT_KEYBOARD:-0}" = "1" ]; then
+  if [ "${AGENTS_AVD_SOFT_KEYBOARD:-0}" = "1" ]; then
     "$ADB" -s "$s" shell pm enable "$GBOARD_PKG" >/dev/null 2>&1 || true
     "$ADB" -s "$s" shell ime enable "$GBOARD" >/dev/null 2>&1 || true
     "$ADB" -s "$s" shell ime set "$GBOARD" >/dev/null 2>&1 || true
@@ -141,7 +141,7 @@ status() {
 shot() {
   local s; s="$(serial)"
   [ -n "$s" ] || { echo "no emulator running" >&2; exit 1; }
-  local out="${1:-/tmp/cowork-emulator.png}"
+  local out="${1:-/tmp/agents-emulator.png}"
   "$ADB" -s "$s" exec-out screencap -p > "$out"
   echo "$out"
 }
@@ -155,7 +155,7 @@ stop() {
 
 case "${1:-start}" in
   start) start ;;
-  keyboard) shift; COWORK_AVD_SOFT_KEYBOARD="${1:-0}" tune_input ;;
+  keyboard) shift; AGENTS_AVD_SOFT_KEYBOARD="${1:-0}" tune_input ;;
   wait) shift; wait_boot "${1:-300}" ;;
   status) status ;;
   shot) shift; shot "${1:-}" ;;

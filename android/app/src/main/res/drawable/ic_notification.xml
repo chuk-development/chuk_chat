@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Status-bar icon for CoWork notifications. Android renders it as a white
+<!-- Status-bar icon for Agents notifications. Android renders it as a white
      silhouette on the accent colour, so it is a single-colour shape: a
      speech bubble with a check mark ("answer ready"). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"

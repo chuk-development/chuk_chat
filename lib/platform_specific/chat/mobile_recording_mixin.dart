@@ -3,19 +3,19 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/platform_specific/chat/chat_api_service.dart';
-import 'package:cowork/platform_specific/chat/chat_scroll_mixin.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
-import 'package:cowork/platform_specific/chat/handlers/audio_recording_handler.dart';
-import 'package:cowork/platform_specific/chat/handlers/streaming_message_handler.dart';
-import 'package:cowork/platform_specific/chat/mobile_attach_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_message_edit_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_model_selection_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_send_mixin.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/platform_specific/chat/regen_variant_seed.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/audio_recording_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/streaming_message_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_attach_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_message_edit_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_model_selection_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_send_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// The microphone: tapping it, and what happens to what was said.
 ///

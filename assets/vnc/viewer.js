@@ -10,9 +10,9 @@
 //
 // Host contract
 // -------------
-// The host drives the page through `window.cowork` and reads it back through
-// the `CoworkVncBridge` JavaScript channel. The page never starts on its own:
-// the RFB password arrives with `cowork.start()`, so it never rides a URL.
+// The host drives the page through `window.agents` and reads it back through
+// the `AgentsVncBridge` JavaScript channel. The page never starts on its own:
+// the RFB password arrives with `agents.start()`, so it never rides a URL.
 //
 // Numbers below are measured behaviour, not taste. Each one carries the
 // reason it has that value.
@@ -103,7 +103,7 @@ const wsUrl = (() => {
 })();
 
 function post(message) {
-  const bridge = window.CoworkVncBridge;
+  const bridge = window.AgentsVncBridge;
   if (bridge === undefined || bridge === null) return;
   try {
     bridge.postMessage(JSON.stringify(message));
@@ -747,7 +747,7 @@ function connect() {
   //
   // Nothing is lost by switching it off. The page needs no DOM focus, because
   // it never reads the keyboard itself: every key arrives from the host
-  // through `cowork.typeText` and `cowork.sendKeysym`.
+  // through `agents.typeText` and `agents.sendKeysym`.
   rfb.focusOnClick = false;
   // Deliberately NOT enabling continuous updates. Our x11vnc is 0.9.16: the
   // binary has no such code, it never sends EndOfContinuousUpdates, and a
@@ -827,7 +827,7 @@ function ctrlChord(rfb, keysym, code) {
   rfb.sendKey(KEYSYM_CTRL_L, "ControlLeft", false);
 }
 
-window.cowork = {
+window.agents = {
   // The one way in. The password never rides the page URL, so it cannot land
   // in a WebView history entry or a log line — and it is never posted back.
   start(password) {
@@ -913,5 +913,5 @@ window.cowork = {
   },
 };
 
-// The page is up. The host answers with `cowork.start(password)`.
+// The page is up. The host answers with `agents.start(password)`.
 post({ event: "ready" });

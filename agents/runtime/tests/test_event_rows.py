@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import base64
 
-from cowork_agent import StateStore
+from chuk_agents_runtime import StateStore
 
 
 def _store(tmp_path) -> StateStore:

@@ -13,9 +13,9 @@ import uuid
 
 import pytest
 
-from cowork_manager import ContainerSupervisor, RosterStore, RuntimeStatus
-from cowork_manager.containers import roster_workspace_resolver
-from cowork_sandbox import DEFAULT_TASK_ID, DockerUnavailableError, ProcessResult
+from chuk_agents_manager import ContainerSupervisor, RosterStore, RuntimeStatus
+from chuk_agents_manager.containers import roster_workspace_resolver
+from chuk_agents_sandbox import DEFAULT_TASK_ID, DockerUnavailableError, ProcessResult
 
 
 class FakeEnv:
@@ -69,7 +69,7 @@ class FakeCli:
 
     def run(self, *args, timeout=None):
         self.calls.append(args)
-        from cowork_sandbox import CliResult
+        from chuk_agents_sandbox import CliResult
 
         return CliResult("", "", 0)
 
@@ -77,7 +77,7 @@ class FakeCli:
 def make_supervisor(**kwargs) -> ContainerSupervisor:
     return ContainerSupervisor(
         workspace_resolver=kwargs.pop("workspace_resolver", lambda _a: "/tmp/ws"),
-        image=kwargs.pop("image", "cowork-base:test"),
+        image=kwargs.pop("image", "agents-base:test"),
         cli=kwargs.pop("cli", FakeCli()),
         env_factory=kwargs.pop("env_factory", FakeEnv),
         **kwargs,
@@ -106,9 +106,9 @@ def test_start_is_idempotent():
 
 
 def test_start_uses_the_agents_workspace_as_the_mount():
-    sup = make_supervisor(workspace_resolver=lambda aid: f"/home/user/.cowork/{aid}")
+    sup = make_supervisor(workspace_resolver=lambda aid: f"/home/user/.agents/{aid}")
     sup.start("agent-7")
-    assert FakeEnv.instances[0].workdir == "/home/user/.cowork/agent-7"
+    assert FakeEnv.instances[0].workdir == "/home/user/.agents/agent-7"
 
 
 def test_start_reports_error_when_the_runtime_is_missing():
@@ -230,13 +230,13 @@ def test_reap_orphans_passes_the_live_sessions_to_the_reaper(monkeypatch):
     def fake_reap(*, active_session_ids, cli):
         seen["sessions"] = set(active_session_ids)
         seen["cli"] = cli
-        return ["cowork-old"]
+        return ["agents-old"]
 
-    monkeypatch.setattr("cowork_manager.containers.reap_orphans", fake_reap)
+    monkeypatch.setattr("chuk_agents_manager.containers.reap_orphans", fake_reap)
     cli = FakeCli()
     sup = make_supervisor(cli=cli)
     sup.start("a")
-    assert sup.reap_orphans() == ["cowork-old"]
+    assert sup.reap_orphans() == ["agents-old"]
     assert seen["sessions"] == {FakeEnv.instances[0].session_id}
     assert seen["cli"] is cli
 
@@ -247,9 +247,9 @@ def test_reap_orphans_passes_the_live_sessions_to_the_reaper(monkeypatch):
 def test_roster_workspace_resolver_reads_the_agent_row():
     roster = RosterStore(":memory:")
     try:
-        agent = roster.create(workspace_dir="/home/user/.cowork/agents/ada")
+        agent = roster.create(workspace_dir="/home/user/.agents/agents/ada")
         resolve = roster_workspace_resolver(roster)
-        assert resolve(agent.id) == "/home/user/.cowork/agents/ada"
+        assert resolve(agent.id) == "/home/user/.agents/agents/ada"
         assert resolve("missing") is None
     finally:
         roster.close()
@@ -268,7 +268,7 @@ def test_roster_workspace_resolver_treats_an_empty_dir_as_none():
 
 
 def _docker_ready() -> bool:
-    from cowork_sandbox import docker_available
+    from chuk_agents_sandbox import docker_available
 
     return docker_available()
 
@@ -276,7 +276,7 @@ def _docker_ready() -> bool:
 @pytest.mark.skipif(not _docker_ready(), reason="docker CLI or daemon unavailable")
 def test_supervisor_drives_a_real_container(tmp_path):
     """The whole path: start, run in the box, see the mount, destroy, reap."""
-    image = os.environ.get("COWORK_TEST_IMAGE", "debian:stable-slim")
+    image = os.environ.get("AGENTS_TEST_IMAGE", "debian:stable-slim")
     agent_id = f"pytest-sup-{uuid.uuid4().hex[:8]}"
     workspace = tmp_path / "ws"
     workspace.mkdir()
@@ -299,6 +299,6 @@ def test_supervisor_drives_a_real_container(tmp_path):
         assert again.container_id == state.container_id
     finally:
         sup.destroy(agent_id)
-    from cowork_sandbox import find_agent_container
+    from chuk_agents_sandbox import find_agent_container
 
     assert find_agent_container(agent_id=agent_id) is None

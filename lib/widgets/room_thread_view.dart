@@ -10,9 +10,9 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/bubble_shape.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/models/cowork_room.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/models/agents_room.dart';
 
 class RoomThreadView extends StatelessWidget {
   const RoomThreadView({
@@ -20,7 +20,7 @@ class RoomThreadView extends StatelessWidget {
     required this.roomName,
     required this.userMessage,
     required this.turns,
-    this.members = const <CoworkRoomMember>[],
+    this.members = const <AgentsRoomMember>[],
     this.stop,
     this.running = false,
   });
@@ -29,17 +29,17 @@ class RoomThreadView extends StatelessWidget {
 
   /// The room's members, shown as a compact strip under the name so the user
   /// sees who is in the room they are talking to. Empty hides the strip.
-  final List<CoworkRoomMember> members;
+  final List<AgentsRoomMember> members;
 
   /// What the user posted to the room. Shown at the top so the replies have a
   /// subject.
   final String userMessage;
 
-  /// The agent turns, in order. Rendered grouped by [CoworkRoomTurn.round].
-  final List<CoworkRoomTurn> turns;
+  /// The agent turns, in order. Rendered grouped by [AgentsRoomTurn.round].
+  final List<AgentsRoomTurn> turns;
 
   /// Why the exchange ended, or null while it is still running.
-  final CoworkRoomStop? stop;
+  final AgentsRoomStop? stop;
 
   /// True while the host is still producing turns.
   final bool running;
@@ -139,7 +139,7 @@ class RoomThreadView extends StatelessWidget {
     );
   }
 
-  Widget _turnBubble(BuildContext context, CoworkRoomTurn turn) {
+  Widget _turnBubble(BuildContext context, AgentsRoomTurn turn) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -197,9 +197,9 @@ class RoomThreadView extends StatelessWidget {
     );
   }
 
-  Widget _stopFooter(BuildContext context, CoworkRoomStop stop) {
+  Widget _stopFooter(BuildContext context, AgentsRoomStop stop) {
     final theme = Theme.of(context);
-    final failed = stop == CoworkRoomStop.turnFailed;
+    final failed = stop == AgentsRoomStop.turnFailed;
     final color = failed ? theme.colorScheme.error : theme.hintColor;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),

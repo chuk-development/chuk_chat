@@ -5,15 +5,15 @@
 // Only what is not secret lives here. The bearer token stays in secure
 // storage, keyed by the same id — see [McpStore]. Ported in shape from
 // chuk_chat's McpConnection so the connectors UI is identical, but trimmed to
-// what CoWork forwards to the Python agent: the live client, the OAuth sign-in
+// what Agents forwards to the Python agent: the live client, the OAuth sign-in
 // and tool discovery all run host-side, not on the device.
 
-import 'package:cowork/services/mcp/mcp_catalogue.dart';
+import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 
 /// How a connection proves who it is.
 enum McpAuth {
   /// The server signs the user in through the browser and hands back a token
-  /// of its own. Every third-party connector works this way. On CoWork the
+  /// of its own. Every third-party connector works this way. On Agents the
   /// host runs that sign-in; the device only records that the server is
   /// wanted. When a token is present it is forwarded to the host.
   oauth,
@@ -39,7 +39,7 @@ enum McpAuth {
   }
 }
 
-/// One tool a server offers. Kept minimal because CoWork discovers the live
+/// One tool a server offers. Kept minimal because Agents discovers the live
 /// tool list host-side; this only carries what the connectors UI shows.
 class McpTool {
   const McpTool({required this.name, this.description = ''});

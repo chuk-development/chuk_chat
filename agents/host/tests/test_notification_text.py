@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import sqlite3
 
-from cowork_host.coworker_names import CoworkerNameStore, host_agent_id
-from cowork_host.notification_text import (
+from chuk_agents_host.coworker_names import CoworkerNameStore, host_agent_id
+from chuk_agents_host.notification_text import (
     DEFAULT_COWORKER,
     RunLabels,
     approval_text,

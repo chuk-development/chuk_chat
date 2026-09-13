@@ -10,10 +10,10 @@ no credits are spent no matter what a task names.
 
 from __future__ import annotations
 
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
 
 from wiring import paired_channel
 
@@ -170,7 +170,7 @@ def test_selector_failure_is_an_error_terminal_and_the_worker_survives(tmp_path)
 
         # The durable record agrees with the terminal (docs/WIRE_CONTRACT.md): an
         # app that reconnects later must see this run as failed, not running.
-        from cowork_agent import StateStore
+        from chuk_agents_runtime import StateStore
 
         store = StateStore(str(tmp_path / "s.db"))
         try:
@@ -196,7 +196,7 @@ def test_stop_closes_and_forgets_the_cached_mem0_handles(tmp_path, monkeypatch):
     same embedded Qdrant folder; when the executor stops, those handles must be
     closed and forgotten, or the storage lock outlives the process that owns the
     workspace and the next start hits "already accessed"."""
-    from cowork_agent import memory as memory_mod
+    from chuk_agents_runtime import memory as memory_mod
 
     closed: list[str] = []
 
@@ -241,7 +241,7 @@ def test_a_non_string_prompt_is_refused_before_anything_is_recorded(tmp_path):
         assert events and events[-1]["type"] == "error"
         assert "prompt must be a string" in str(events[-1])
 
-        from cowork_agent import StateStore
+        from chuk_agents_runtime import StateStore
 
         store = StateStore(str(tmp_path / "s.db"))
         try:
@@ -258,11 +258,11 @@ def test_the_runs_row_and_the_log_prove_which_model_a_task_ran_on(tmp_path, capl
     logs one line per accepted task naming them — never the prompt."""
     import logging
 
-    from cowork_agent import StateStore
+    from chuk_agents_runtime import StateStore
 
     factory, select, _calls = _recording_pair()
     executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
-    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+    with caplog.at_level(logging.INFO, logger="chuk_agents_executor.executor"):
         events = _run(
             executor,
             controller,
@@ -293,11 +293,11 @@ def test_the_runs_row_and_the_log_prove_which_model_a_task_ran_on(tmp_path, capl
 def test_a_task_naming_nothing_is_recorded_as_host_default(tmp_path, caplog):
     import logging
 
-    from cowork_agent import StateStore
+    from chuk_agents_runtime import StateStore
 
     factory, select, _calls = _recording_pair()
     executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
-    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+    with caplog.at_level(logging.INFO, logger="chuk_agents_executor.executor"):
         events = _run(executor, controller, "do it")
     assert events[-1]["type"] == "done"
 
@@ -325,7 +325,7 @@ _CATALOGUE = [
 
 
 def _fake_session():
-    from cowork_agent import SupabaseSession
+    from chuk_agents_runtime import SupabaseSession
 
     return SupabaseSession(
         access_token="valid-token",
@@ -341,10 +341,10 @@ def test_the_selector_clamps_an_unsupported_effort_and_logs_once(caplog):
     stronger level and says so once per (model, level)."""
     import logging
 
-    from cowork_executor.backend import make_backend_model_select
+    from chuk_agents_executor.backend import make_backend_model_select
 
     select = make_backend_model_select(_fake_session(), _CATALOGUE)
-    with caplog.at_level(logging.WARNING, logger="cowork_executor.backend"):
+    with caplog.at_level(logging.WARNING, logger="chuk_agents_executor.backend"):
         first = select("z-ai/glm-5.3-flash", "fireworks/serverless", "medium")
         second = select("z-ai/glm-5.3-flash", "fireworks/serverless", "medium")
         fine = select("z-ai/glm-5.3-flash", "fireworks/serverless", "high")
@@ -363,7 +363,7 @@ def test_the_runs_row_records_the_effective_effort_after_a_clamp(tmp_path, caplo
     """The row proves what the model really ran on, not what the app asked."""
     import logging
 
-    from cowork_agent import StateStore
+    from chuk_agents_runtime import StateStore
 
     class _Clamped(MockModelClient):
         reasoning_effort = "high"
@@ -381,7 +381,7 @@ def test_the_runs_row_records_the_effective_effort_after_a_clamp(tmp_path, caplo
         return client
 
     executor, controller = _wire(tmp_path, model_factory=factory, model_select=select)
-    with caplog.at_level(logging.INFO, logger="cowork_executor.executor"):
+    with caplog.at_level(logging.INFO, logger="chuk_agents_executor.executor"):
         events = _run(
             executor,
             controller,

@@ -12,11 +12,11 @@ and the executor drops the turn being retried before it stores the prompt.
 
 from __future__ import annotations
 
-from cowork_agent import MockModelClient
-from cowork_agent.state import StateStore
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient
+from chuk_agents_runtime.state import StateStore
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
 
 from wiring import paired_channel
 

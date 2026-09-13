@@ -16,12 +16,12 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 class RoomMembersSheet extends StatelessWidget {
   const RoomMembersSheet({
@@ -32,12 +32,12 @@ class RoomMembersSheet extends StatelessWidget {
     required this.onRemove,
   });
 
-  final CoworkRoom room;
+  final AgentsRoom room;
 
   /// Roster agents not already in the room, offered to add.
-  final List<CoworkAgent> candidates;
+  final List<AgentsAgent> candidates;
 
-  final void Function(CoworkRoomMember member) onAdd;
+  final void Function(AgentsRoomMember member) onAdd;
   final void Function(String agentId) onRemove;
 
   bool get _full => room.members.length >= kRoomMaxMembers;
@@ -138,7 +138,7 @@ class RoomMembersSheet extends StatelessWidget {
                               onPressed: _full
                                   ? null
                                   : () => onAdd(
-                                      CoworkRoomMember(
+                                      AgentsRoomMember(
                                         agentId: agent.id,
                                         handle: agent.name,
                                       ),

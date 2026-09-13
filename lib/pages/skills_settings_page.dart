@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/services/skills/cowork_skill.dart';
-import 'package:cowork/services/skills/skills_source.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/settings_list_view.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/skills/agents_skill.dart';
+import 'package:chuk_chat/services/skills/skills_source.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// The host's skills, one switch each (docs/WIRE_CONTRACT.md, "Skills").
 ///
@@ -20,7 +20,7 @@ import 'package:cowork/widgets/settings_list_view.dart';
 /// on.
 ///
 /// The two sections are the host's `source` field, never a name this page
-/// knows: `builtin` is a skill that documents CoWork's own machinery and ships
+/// knows: `builtin` is a skill that documents Agents's own machinery and ships
 /// with the app (the repository's `skills/builtin/`), `workspace` is any other
 /// file under the coworker's `skills/` — including the ones seeded from
 /// `skills/workspace/`, which belong to the coworker from the first minute.
@@ -69,7 +69,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
     });
   }
 
-  Future<void> _toggle(CoworkSkill skill, bool enabled) async {
+  Future<void> _toggle(AgentsSkill skill, bool enabled) async {
     final sent = await _source.setEnabled(skill.name, enabled);
     if (!mounted || sent) return;
     ScaffoldMessenger.of(
@@ -157,7 +157,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
               const ExpressiveInfoCard(
                 icon: Icons.verified_outlined,
                 text:
-                    'The CoWork host\'s own. Each one explains a part of '
+                    'The Agents host\'s own. Each one explains a part of '
                     'the app the coworker works with — schedules, the secrets '
                     'vault, the sandbox terminal, the workspace itself. They '
                     'ship with the host and come back with every update.',
@@ -194,7 +194,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
     );
   }
 
-  Widget _row(CoworkSkill skill) => ExpressiveSwitchRow(
+  Widget _row(AgentsSkill skill) => ExpressiveSwitchRow(
     key: ValueKey<String>('skill-${skill.name}'),
     title: skill.name,
     subtitle: skill.description.isEmpty ? null : skill.description,

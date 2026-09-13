@@ -9,11 +9,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/stream_phase.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 
 class AgentActivityTimeline extends StatefulWidget {
   const AgentActivityTimeline({

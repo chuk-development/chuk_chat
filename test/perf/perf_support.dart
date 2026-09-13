@@ -4,29 +4,29 @@
 // fake local cache the store reads through, a median, and a table printer, so
 // a run leaves numbers a person can read instead of a pass/fail dot.
 //
-// The "disk" is a map plugged into `CoworkChatStore`'s own cache seams, NOT
+// The "disk" is a map plugged into `AgentsChatStore`'s own cache seams, NOT
 // real SQLite. A `testWidgets` body runs in a fake-async zone: a real sqflite
 // read hands its answer back through the real event loop, which that zone
 // never drains, so the test would sit there forever. The seam runs the same
 // code — `resolveCacheUserId` -> `localCacheReader` -> payload parse -> the
-// store — with none of that hazard. See `test/widgets/cowork_cold_start_test.dart`.
+// store — with none of that hazard. See `test/widgets/agents_cold_start_test.dart`.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/services/account_session.dart';
-import 'package:cowork/services/cowork/agent_file_saver.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/multiplex_session.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agent_file_saver.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 
 /// A file saver that writes nowhere. No perf test hands a file to it.
 class NoopSaver implements AgentFileSaver {
   @override
-  Future<String> save(CoworkRelayFile file) async => '/dev/null/${file.name}';
+  Future<String> save(AgentsRelayFile file) async => '/dev/null/${file.name}';
 }
 
 /// No Supabase session anywhere — the cold start proper.
@@ -40,7 +40,7 @@ class FakeSessionSource implements AccountSessionSource {
   Future<AccountSession?> refresh() async => null;
 }
 
-/// The local cache, as a map. It outlives [CoworkChatStore.reset] on purpose:
+/// The local cache, as a map. It outlives [AgentsChatStore.reset] on purpose:
 /// resetting the store is the app closing, and the disk is what survives that.
 class FakeDisk {
   final Map<String, Map<String, dynamic>> rows =
@@ -57,19 +57,19 @@ class FakeDisk {
   /// Points the store at this map. Called again after every reset, because
   /// `reset` clears the seams the way process death clears the process.
   void install() {
-    CoworkChatStore.localCacheWriter =
+    AgentsChatStore.localCacheWriter =
         (String userId, Map<String, dynamic> row) async {
           rows['$userId ${row['id']}'] = row;
         };
-    CoworkChatStore.localCacheReader = (String userId, String id) async =>
+    AgentsChatStore.localCacheReader = (String userId, String id) async =>
         rows['$userId $id'];
     // No encryption key: the cloud half of every write is skipped, which is
     // exactly the offline case these tests are about.
-    CoworkChatStore.keyLoader = () async => false;
-    CoworkChatStore.outboxRead = (String key) async => kv[key];
-    CoworkChatStore.outboxWrite = (String key, String value) async =>
+    AgentsChatStore.keyLoader = () async => false;
+    AgentsChatStore.outboxRead = (String key) async => kv[key];
+    AgentsChatStore.outboxWrite = (String key, String value) async =>
         kv[key] = value;
-    CoworkChatStore.outboxDelete = (String key) async => kv.remove(key);
+    AgentsChatStore.outboxDelete = (String key) async => kv.remove(key);
   }
 }
 

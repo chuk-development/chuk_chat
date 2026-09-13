@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/widgets/browser_view_page.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:flutter_rfb/flutter_rfb.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -51,7 +51,7 @@ void main() {
       expect(find.text('connecting…'), findsOneWidget);
 
       controller.emit(
-        const CoworkRelayBrowserView(
+        const AgentsRelayBrowserView(
           status: 'started',
           message: 'no page open yet — ask the agent to open a browser',
         ),
@@ -60,7 +60,7 @@ void main() {
       expect(find.textContaining('no page open yet'), findsOneWidget);
 
       controller.emit(
-        const CoworkRelayBrowserView(
+        const AgentsRelayBrowserView(
           status: 'error',
           message: 'vnc bridge failed',
         ),
@@ -84,7 +84,7 @@ void main() {
 
       // An error still surfaces in full screen: never a silent black screen.
       controller.emit(
-        const CoworkRelayBrowserView(status: 'error', message: 'stream died'),
+        const AgentsRelayBrowserView(status: 'error', message: 'stream died'),
       );
       await tester.pump();
       expect(find.text('stream died'), findsOneWidget);
@@ -132,7 +132,7 @@ void main() {
 
     // The error banner keeps clear of the row instead of sitting behind it.
     controller.emit(
-      const CoworkRelayBrowserView(status: 'error', message: 'stream died'),
+      const AgentsRelayBrowserView(status: 'error', message: 'stream died'),
     );
     await tester.pump();
     expect(
@@ -145,7 +145,7 @@ void main() {
     tester,
   ) async {
     await pumpPage(tester);
-    controller.emit(const CoworkRelayBrowserView(status: 'started'));
+    controller.emit(const AgentsRelayBrowserView(status: 'started'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 50));
 

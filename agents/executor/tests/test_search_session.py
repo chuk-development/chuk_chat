@@ -5,9 +5,9 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
-from cowork_agent import MockModelClient, tool_call_response
-from cowork_sandbox import LocalEnvironment
-from cowork_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_runtime import MockModelClient, tool_call_response
+from chuk_agents_sandbox import LocalEnvironment
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
 from wiring import paired_channel
 
 

@@ -1,6 +1,6 @@
 # Runbook: den Coworker im eigenen Browser fahren lassen
 
-Stand 2026-09-08, Session cowork-3c. Alles committet auf `cowork`.
+Stand 2026-09-08, Session cowork-3c. Alles committet auf `agents`.
 
 ## Was schon geht und was nicht
 
@@ -35,7 +35,7 @@ Schritt.
 ## 2. Bridge registrieren
 
 ```bash
-~/git/cowork/tools/cowork-browser-bridge/install_host_manifest.py --chrome-id <die ID>
+~/git/cowork/tools/agents-browser-bridge/install_host_manifest.py --chrome-id <die ID>
 ```
 
 Das schreibt `dev.chuk.cowork.json` nach
@@ -53,7 +53,7 @@ Der laufende Host muss neu, weil die Ziel-Wahl beim Start gelesen wird:
 ```bash
 pkill -f cowork-host          # oder den laufenden sauber beenden
 cd ~/git/cowork/host
-COWORK_BROWSER_TARGET=user_browser \
+AGENTS_BROWSER_TARGET=user_browser \
   ./.venv/bin/cowork-host run --sandbox docker \
   --model z-ai/glm-5.3-flash --provider fireworks/serverless --reasoning-effort none
 ```
@@ -83,19 +83,19 @@ Liste sehen, `action: "select"` mit der `tabId` schicken und ab da mit
 der Seite läuft ein farbiger Streifen, solange er fährt.
 
 Soll er selbst etwas aufmachen, reicht `browser_navigate` — dann legt er sich
-einen eigenen Tab in einer lila Tab-Gruppe "CoWork" an und fasst deine nicht an.
+einen eigenen Tab in einer lila Tab-Gruppe "Agents" an und fasst deine nicht an.
 
 ## Wenn nichts passiert
 
-* **Der Socket existiert nur, solange ein Task läuft.** `cowork-extension-mcp`
+* **Der Socket existiert nur, solange ein Task läuft.** `agents-extension-mcp`
   wird pro Sitzung gestartet und legt dabei
-  `~/.cowork/browser-bridge.sock` an. Die Erweiterung versucht im Minutentakt
+  `~/.agents/browser-bridge.sock` an. Die Erweiterung versucht im Minutentakt
   neu zu verbinden, es kann also bis zu einer Minute dauern, bis sie nach dem
   ersten Task hängt. Nachsehen: Optionsseite der Erweiterung, oder das Panel —
-  dort steht `CoWork · native · cdp input`, wenn es steht.
-* **`ls -l ~/.cowork/browser-bridge.sock`** — ist die Datei da, läuft der
+  dort steht `Agents · native · cdp input`, wenn es steht.
+* **`ls -l ~/.agents/browser-bridge.sock`** — ist die Datei da, läuft der
   MCP-Server. Ist sie weg, läuft gerade kein Task.
-* **Service-Worker-Log**: `chrome://extensions` → bei CoWork auf
+* **Service-Worker-Log**: `chrome://extensions` → bei Agents auf
   *Service Worker* klicken, das öffnet die DevTools des Hintergrundskripts.
 * **Bridge-Log**: die Bridge schreibt nichts; wenn der Socket fehlt, schickt sie
   einmal `browser_attach_error` und beendet sich.

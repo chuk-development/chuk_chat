@@ -1,7 +1,7 @@
 # Handover cowork-f5: Agent-Browser-Presence + Backlog (3hk, sq3, qxa, axx), Host #7
 
 Session cowork-f5, 2026-09-05 (Start ~18:30, Stand 20:55). Koordinator zuletzt
-cowork-7b. Alles committet auf `cowork`; im Working Tree liegen in
+cowork-7b. Alles committet auf `agents`; im Working Tree liegen in
 `executor.py`, `host.py`, `messenger_shell_test.dart` NUR fremde (Codex-)Hunks,
 nichts von f5.
 
@@ -10,11 +10,11 @@ nichts von f5.
 | Hash | Inhalt | Bead |
 |---|---|---|
 | cb93b5b | `BrowserPresence` (Browser-offen-Ableitung aus Playwright-`tool`-Frames + `browser_view`), `BrowserViewPage.open()` = Vollbild-Route (fullscreenDialog) + Fullscreen-Toggle, Tests, Proposal | cowork-vzm |
-| b21dd18 (af, mit f5-Hunks) | Shell: Rail-Icon + Sidebar-Row + Seitenpanel weg, Top-Right-Button nur bei `_browserOpen`, Phone-Chip gegated; `CoworkRelayRunState.browserOpen`; Contract-Absatz | cowork-vzm |
+| b21dd18 (af, mit f5-Hunks) | Shell: Rail-Icon + Sidebar-Row + Seitenpanel weg, Top-Right-Button nur bei `_browserOpen`, Phone-Chip gegated; `AgentsRelayRunState.browserOpen`; Contract-Absatz | cowork-vzm |
 | 7e3ecad | Host-Wahrheit: `run_state.browser_open`, `browser_view opened/closed` (executor `_on_tool_event`, `_vnc_start` WINDOWS, `stop()`), `protocol.browser_state_from_tool` | cowork-vzm |
 | 4d2ff4a (chuk_chat master) + 010c24e | Thinking-Default `high`, Cold-Cache-Leitern ohne `medium`, Unknown-Token-Clamp; Einzel-Re-Import `chat_mode_service.dart`, Manifest-Pin | cowork-3hk |
-| 2b0fcb7 | run_ack-Timer im Host (`COWORK_RUN_ACK_TIMEOUT_SECONDS`, 15 s), `on_run_ack` verdrahtet, Ablauf = while-away-Notify | cowork-sq3 |
-| 56d6984 | Wall-Clock-Guard (`COWORK_RUN_MAX_SECONDS`, 7200), done `reason=timeout`, Dart `wasStopped` | cowork-qxa |
+| 2b0fcb7 | run_ack-Timer im Host (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`, 15 s), `on_run_ack` verdrahtet, Ablauf = while-away-Notify | cowork-sq3 |
+| 56d6984 | Wall-Clock-Guard (`AGENTS_RUN_MAX_SECONDS`, 7200), done `reason=timeout`, Dart `wasStopped` | cowork-qxa |
 | 503fbdf | Replay-Paging: `replay.limit/before_id`, `done has_more/oldest_mid/before_id`; Loader: erste Seite sofort, aeltere Seiten voranstellen, Floor-Guard | cowork-axx |
 
 Contract: docs/WIRE_CONTRACT.md — Abschnitte "run_state.browser_open and
@@ -36,7 +36,7 @@ affordance" (find.byTooltip('Settings') fehlt — Footer-Pill-Umbau, an af).
 
 20:52: Host 1314544 (Codex/User, Stand 19:27) sauber beendet (runs-Tabelle:
 0 running), Neustart aus `host/` mit
-`COWORK_SANDBOX_KIND=docker COWORK_SANDBOX_IMAGE=cowork-browser:latest ./.venv/bin/cowork-host run --sandbox docker`
+`AGENTS_SANDBOX_KIND=docker AGENTS_SANDBOX_IMAGE=agents-browser:latest ./.venv/bin/cowork-host run --sandbox docker`
 (Log `.hostlive`). Neuer Host Pid 1770577, HEAD 503fbdf. Befund: App-Device
 04c2f52f (App 1467951) reconnected ohne Code, Modell aufgeloest, "token
 provisioned; ready to serve tasks", KEIN "expected account_authentication, got
@@ -52,7 +52,7 @@ idempotent).
 2. cowork-266 (9e): Datei-/Subagent-/Approval-Karte ueberlebt App-Neustart
    (Code komplett in HEAD, Bead offen mit Note).
 3. sq3/qxa/axx live: run_ack-Timer (App im Hintergrund -> Toast nach 15 s),
-   Timeout-Done (COWORK_RUN_MAX_SECONDS klein setzen), Paging bei langem
+   Timeout-Done (AGENTS_RUN_MAX_SECONDS klein setzen), Paging bei langem
    Thread (erste Seite paint, Rest folgt).
 
 ## Hinweise fuer den Nachfolger
@@ -65,4 +65,4 @@ idempotent).
   `browser_open` sendet (alter Host); neuer Host gewinnt.
 - Replay-Paging: `kReplayPageSize = 200` in relay_client; Delta-Replays
   (`after_id > 0`) sind nie paginiert; der Loader holt aeltere Seiten ueber
-  `CoworkRelayLink.instance.controller` selbst (thread_view unveraendert).
+  `AgentsRelayLink.instance.controller` selbst (thread_view unveraendert).

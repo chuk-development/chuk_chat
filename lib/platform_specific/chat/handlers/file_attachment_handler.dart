@@ -4,15 +4,15 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:cowork/utils/io_helper.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:uuid/uuid.dart';
-import 'package:cowork/constants/file_constants.dart';
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/platform_specific/chat/chat_api_service.dart';
-import 'package:cowork/services/image_storage_service.dart';
-import 'package:cowork/utils/file_upload_validator.dart';
+import 'package:chuk_chat/constants/file_constants.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_api_service.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/utils/file_upload_validator.dart';
 
 /// Handles file and image attachments
 class FileAttachmentHandler {

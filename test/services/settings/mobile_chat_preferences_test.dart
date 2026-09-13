@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:cowork/services/settings/mobile_chat_preferences.dart';
+import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

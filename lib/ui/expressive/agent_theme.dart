@@ -15,8 +15,8 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
 /// The app theme with the accent roles re-seeded from [agentId]'s colour.
 ThemeData agentTintedTheme(

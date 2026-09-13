@@ -20,7 +20,7 @@ forward payload therefore always went out with `auth: "oauth"` and no token.
   registration → PKCE → loopback redirect → code exchange → full record.
   `_launch` / `_closeBrowser` are chuk's.
 - One deliberate addition over chuk: `_challengeFor()` sends ONE unauthenticated
-  request and reads only the status and the `WWW-Authenticate` header. CoWork has
+  request and reads only the status and the `WWW-Authenticate` header. Agents has
   no device-side MCP client by design, so without it `McpOAuth.challengeScopes`
   and `resourceMetadataUrl` were dead code — and Atlassian and Linear name their
   required scopes ONLY in that challenge. Without them the token is minted for
@@ -33,7 +33,7 @@ forward payload therefore always went out with `auth: "oauth"` and no token.
 - `McpConnectorSync` mirrors the whole record. The mirror is adopted only when
   the local record is UNUSABLE — never over a live one, because the mirror is
   written on connect and disconnect and is routinely the older copy.
-- Python (`agent/src/cowork_agent/mcp_client.py`): `token_expired`,
+- Python (`agent/src/chuk_agents_runtime/mcp_client.py`): `token_expired`,
   `refresh_access_token`, `MCPConnection.refresh_token(force=)` under a lock,
   `_http_headers` precedence, `MCPManager._retry_with_fresh_token` and `_revive`,
   and the `on_credentials_rotated` hook the executor hangs `mcp_credentials` on.
@@ -79,7 +79,7 @@ cowork-84). A live turn is written locally by the UI; the cursor only advances o
 a replay. The next reconnect asked from the stale cursor, the host honoured it,
 and `_commit` appended the host's copy of those same turns under the local ones.
 
-Fix: `CoworkReplayLoader.invalidateCursor(session)`, called from the adapter on
+Fix: `AgentsReplayLoader.invalidateCursor(session)`, called from the adapter on
 every live `done`. The next replay is then a full one, and a full replay REPLACES
 the thread instead of appending. Cost: one full replay per reconnect.
 
@@ -87,7 +87,7 @@ the thread instead of appending. Cost: one full replay per reconnect.
 (`done.last_mid`), replace that call with the already-public
 `advanceCursor(session, mid)`. That is the cheap path; `invalidateCursor` then
 becomes the fallback for a host that sends no id. Both are documented in
-`cowork_replay_loader.dart`.
+`agents_replay_loader.dart`.
 
 ### 3. Replay before auth
 
@@ -114,21 +114,21 @@ nothing is spent and a rejected pair costs nothing.
 
 ### 5. Reasoning on replay (b5's request, my files)
 
-`CoworkRelayReasoning` carries `replay` and `mid`; the replay loader buffers it
+`AgentsRelayReasoning` carries `replay` and `mid`; the replay loader buffers it
 per assistant row and writes `reasoning`, so a replayed answer shows the same
 thinking block the live one had.
 
 ## Files I own
 
-`app/lib/services/mcp/**`, `app/lib/services/cowork/cowork_relay_client.dart`,
-`cowork_replay_loader.dart`, `app/lib/services/websocket_chat_service.dart`
+`app/lib/services/mcp/**`, `app/lib/services/agents/agents_relay_client.dart`,
+`agents_replay_loader.dart`, `app/lib/services/websocket_chat_service.dart`
 (send path + replay/ledger only — the inbound reasoning mapping is cowork-b5's),
 `app/lib/pages/settings/mcp_connectors_page.dart`,
-`app/lib/widgets/mcp_connect_card.dart`, `agent/src/cowork_agent/mcp_client.py`,
+`app/lib/widgets/mcp_connect_card.dart`, `agent/src/chuk_agents_runtime/mcp_client.py`,
 the MCP sections of `docs/WIRE_CONTRACT.md`.
 
 `app/lib/services/mcp/mcp_sync_service.dart` is a deliberate no-op. chuk syncs one
-row per connector on a tick; CoWork mirrors the whole set as ONE encrypted blob,
+row per connector on a tick; Agents mirrors the whole set as ONE encrypted blob,
 pulled by `McpService.load()` and pushed on connect/disconnect. A 30-second tick
 would decrypt that blob over and over for a set that only changes when the user
 touches it — and it would be repeated chances to lay an older mirror over a
@@ -136,8 +136,8 @@ record this device has just refreshed. The reasoning is in the file header.
 
 ## Test status
 
-Green, each run on its own: Dart `cowork_relay_client_test` 46,
-`cowork_replay_loader_test` 16, `websocket_chat_service_test` 18,
+Green, each run on its own: Dart `agents_relay_client_test` 46,
+`agents_replay_loader_test` 16, `websocket_chat_service_test` 18,
 `mcp_store_test` 15, `mcp_oauth_test` 13, `mcp_service_test` 27,
 `mcp_connectors_page_test` 2, `widget_test` 3. Python `test_mcp_client` 71,
 `test_state` + `test_loop` 56, `test_regenerate` 4. Ruff clean.
@@ -149,7 +149,7 @@ independently and points at the sidebar rebuild.
 ## Open, NOT done
 
 1. **`flutter analyze` after a4's diff 8.** I changed
-   `cowork_thread_view.dart:_bootstrap` from `ChatStorageService.loadChats()` to
+   `agents_thread_view.dart:_bootstrap` from `ChatStorageService.loadChats()` to
    `loadFromCache()` (cloud pull + decrypt of every chat on every mount → local
    metadata). RAM was too tight to analyze afterwards. Verify before trusting it.
 2. **A test for the DEFAULT `_adoptRotatedSession` path.** The injected adopter
@@ -166,7 +166,7 @@ independently and points at the sidebar rebuild.
 5. **`runtime.py` / `config_token_exchange`** — see the review note above.
 6. **P7 (notifications, app side) and P8 (Opus review of the whole Flutter side)
    were assigned to me and NEVER STARTED.** The plan is
-   `docs/PLAN_2026-09-04_COWORK_CHUK_ALIGN.md` §WS-7. The host side exists
+   `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` §WS-7. The host side exists
    (`host/notify.py`, `desktop_notify.py`, `supabase/functions/notify-run`). The
    app has `notification_service.dart` as a no-op stub from the import; the real
    port goes to `services/notifications/local_notifications.dart` with the stub
@@ -178,11 +178,11 @@ independently and points at the sidebar rebuild.
 
 Dart: everything above, waiting on the user's release.
 
-Python, mine, uncommitted at the time of writing: `agent/src/cowork_agent/state.py`
-(`drop_last_user_turn`), `agent/src/cowork_agent/loop.py` (`run(regenerate=)`),
-`executor/src/cowork_executor/executor.py` (`_Run.regenerate`, `_accept_task`,
-the `loop.run` call), `executor/src/cowork_executor/protocol.py` (`task_payload`),
-`executor/src/cowork_executor/controller.py` (`send_task`),
+Python, mine, uncommitted at the time of writing: `agent/src/chuk_agents_runtime/state.py`
+(`drop_last_user_turn`), `agent/src/chuk_agents_runtime/loop.py` (`run(regenerate=)`),
+`executor/src/chuk_agents_executor/executor.py` (`_Run.regenerate`, `_accept_task`,
+the `loop.run` call), `executor/src/chuk_agents_executor/protocol.py` (`task_payload`),
+`executor/src/chuk_agents_executor/controller.py` (`send_task`),
 `agent/tests/test_state.py`, `agent/tests/test_loop.py`,
 `executor/tests/test_regenerate.py`, `agent/tests/live_native_probe.py` (the
 probe guards), `docs/WIRE_CONTRACT.md` (the `regenerate` section).

@@ -11,12 +11,12 @@ library;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/chat_model.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_chrome.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/widgets/attachment_preview_bar.dart';
+import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 
 import 'mobile_support.dart';
 
@@ -63,7 +63,7 @@ void expectAllTargetsAreBigEnough(WidgetTester tester, Finder root) {
 }
 
 void main() {
-  tearDown(() => CoworkRelayLink.instance.reset());
+  tearDown(() => AgentsRelayLink.instance.reset());
 
   testWidgets('every target in the mobile chat chrome is 48 dp', (
     tester,

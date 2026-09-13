@@ -5,7 +5,7 @@ behaviour, byte for byte."""
 
 from __future__ import annotations
 
-from cowork_agent import StateStore
+from chuk_agents_runtime import StateStore
 
 
 def _store(tmp_path) -> StateStore:

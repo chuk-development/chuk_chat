@@ -3,10 +3,10 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/l10n/app_localizations.dart';
-import 'package:cowork/ui/expressive/message_stamp.dart';
-import 'package:cowork/widgets/message_bubble.dart';
-import 'package:cowork/widgets/stamped_text.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/ui/expressive/message_stamp.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
+import 'package:chuk_chat/widgets/stamped_text.dart';
 
 /// The test font draws every glyph as a square of the font size, so a line of
 /// [n] characters at size 10 is exactly `n * 10` wide. That makes "does the

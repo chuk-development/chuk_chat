@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from cowork_manager.autonomy import (
+from chuk_agents_manager.autonomy import (
     JobDispatcher,
     Notification,
     NotificationKind,
@@ -26,7 +26,7 @@ from cowork_manager.autonomy import (
     UnattendedRunner,
     should_deliver,
 )
-from cowork_manager.scheduler import JobMode, Scheduler, utc
+from chuk_agents_manager.scheduler import JobMode, Scheduler, utc
 
 NOW = utc(2026, 2, 3, 12, 0)
 
@@ -444,8 +444,8 @@ def test_run_event_kinds_are_all_handled(kind: RunEventKind) -> None:
 
 
 def test_roster_schedules_become_jobs_and_bad_ones_are_reported() -> None:
-    from cowork_manager.autonomy import load_roster_schedules
-    from cowork_manager.roster import RosterStore
+    from chuk_agents_manager.autonomy import load_roster_schedules
+    from chuk_agents_manager.roster import RosterStore
 
     clock = FakeClock()
     model = FakeModel(clock)
@@ -478,7 +478,7 @@ def test_roster_schedules_become_jobs_and_bad_ones_are_reported() -> None:
 
 
 def test_zero_interval_is_rejected() -> None:
-    from cowork_manager.scheduler import parse_schedule
+    from chuk_agents_manager.scheduler import parse_schedule
 
     with pytest.raises(ValueError):
         parse_schedule("every 0m")

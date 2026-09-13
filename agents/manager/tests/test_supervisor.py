@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cowork_manager.supervisor import RuntimeStatus, StubSupervisor
+from chuk_agents_manager.supervisor import RuntimeStatus, StubSupervisor
 
 
 def test_status_defaults_to_stopped() -> None:

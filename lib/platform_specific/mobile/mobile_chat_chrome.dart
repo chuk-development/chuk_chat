@@ -18,16 +18,16 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/agent_status.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/top_veil.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/agent_status.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
 
 class MobileChatChrome extends StatelessWidget {
   const MobileChatChrome({
@@ -43,7 +43,7 @@ class MobileChatChrome extends StatelessWidget {
     this.profiles,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
 
   /// Back to the coworker list.
   final VoidCallback onBack;
@@ -173,18 +173,18 @@ class _AgentPill extends StatelessWidget {
     this.onReconnect,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final VoidCallback? onTap;
   final VoidCallback? onReconnect;
   final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<CoworkRelayController?>(
-      valueListenable: CoworkRelayLink.instance.controller,
+    return ValueListenableBuilder<AgentsRelayController?>(
+      valueListenable: AgentsRelayLink.instance.controller,
       builder: (context, controller, _) => controller == null
           ? _surface(context, paired: false)
-          : ValueListenableBuilder<CoworkRelayState>(
+          : ValueListenableBuilder<AgentsRelayState>(
               valueListenable: controller.state,
               builder: (context, state, _) =>
                   _surface(context, paired: state.isPaired),

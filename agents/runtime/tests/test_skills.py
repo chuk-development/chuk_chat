@@ -13,7 +13,7 @@ import json
 
 import pytest
 
-from cowork_agent import (
+from chuk_agents_runtime import (
     LocalEnvironment,
     MockModelClient,
     SkillError,
@@ -46,7 +46,7 @@ def _texts(messages: list[dict]) -> str:
 
 @pytest.mark.parametrize("had_skills", [False, True])
 def test_existing_session_gets_installed_and_disabled_skills_without_rewriting_history(tmp_path, had_skills):
-    from cowork_agent.skills import SkillSettingsStore
+    from chuk_agents_runtime.skills import SkillSettingsStore
 
     workspace = tmp_path / "workspace"
     root = workspace / "skills"
@@ -123,7 +123,7 @@ def test_a_description_of_exactly_300_characters_is_accepted(tmp_path):
 
 @pytest.mark.parametrize("length", [301, 554, 1024])
 def test_catalog_descriptions_are_bounded_without_rejecting_repo_skills(tmp_path, length):
-    from cowork_agent.skills import skills_inventory
+    from chuk_agents_runtime.skills import skills_inventory
 
     description = "x" * length
     _write_skill(tmp_path, "song-id", description)
@@ -363,7 +363,7 @@ def _library_names(root, **kw):
 
 
 def test_a_switched_off_skill_never_reaches_the_prompt_or_the_tool(tmp_path):
-    from cowork_agent import SkillSettingsStore
+    from chuk_agents_runtime import SkillSettingsStore
 
     workspace = tmp_path / "ws"
     _write_skill(workspace / "skills", "deploy", "Deploys the app to production.")
@@ -390,7 +390,7 @@ def test_a_switched_off_skill_never_reaches_the_prompt_or_the_tool(tmp_path):
 
 
 def test_an_absent_row_means_on_and_only_off_rows_are_stored(tmp_path):
-    from cowork_agent import SkillSettingsStore
+    from chuk_agents_runtime import SkillSettingsStore
 
     store = SkillSettingsStore(tmp_path / "s.db")
     assert store.disabled() == set()
@@ -433,7 +433,7 @@ def test_an_unreadable_settings_store_means_all_skills_on(tmp_path):
 
 
 def test_the_inventory_lists_every_skill_with_switch_and_source(tmp_path):
-    from cowork_agent import SkillSettingsStore, skills_inventory
+    from chuk_agents_runtime import SkillSettingsStore, skills_inventory
 
     seeds = tmp_path / "seed"
     _write_skill(seeds / "workspace", "youtube", "Summarizes a YouTube video.")
@@ -464,7 +464,7 @@ def test_the_inventory_lists_every_skill_with_switch_and_source(tmp_path):
 
 
 def test_a_control_flips_the_switch_and_answers_with_the_list(tmp_path):
-    from cowork_agent import SkillSettingsStore, apply_skill_control
+    from chuk_agents_runtime import SkillSettingsStore, apply_skill_control
 
     root = tmp_path / "ws" / "skills"
     _write_skill(root, "deploy", "Deploys the app to production.")
@@ -499,7 +499,7 @@ def test_a_control_flips_the_switch_and_answers_with_the_list(tmp_path):
 
 
 def test_a_switch_flipped_between_sessions_is_seen_by_the_next_prompt(tmp_path):
-    from cowork_agent import SkillSettingsStore
+    from chuk_agents_runtime import SkillSettingsStore
 
     workspace = tmp_path / "ws"
     _write_skill(workspace / "skills", "deploy", "Deploys the app to production.")

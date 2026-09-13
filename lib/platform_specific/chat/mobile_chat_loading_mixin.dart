@@ -4,19 +4,19 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
-import 'package:cowork/platform_specific/chat/chat_scroll_mixin.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:cowork/platform_specific/chat/chat_ui_mobile.dart';
-import 'package:cowork/platform_specific/chat/handlers/message_actions_handler.dart';
-import 'package:cowork/platform_specific/chat/mobile_attach_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_model_selection_mixin.dart';
-import 'package:cowork/platform_specific/chat/mobile_send_mixin.dart';
-import 'package:cowork/platform_specific/chat/model_provider_resolution_mixin.dart';
-import 'package:cowork/platform_specific/chat/regen_variant_seed.dart';
-import 'package:cowork/services/chat_reaction_service.dart';
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/chat_storage_state.dart';
-import 'package:cowork/services/multiplex_session.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_scroll_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
+import 'package:chuk_chat/platform_specific/chat/handlers/message_actions_handler.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_attach_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_model_selection_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/mobile_send_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/model_provider_resolution_mixin.dart';
+import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
+import 'package:chuk_chat/services/chat_reaction_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/chat_storage_state.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
 
 /// Opening a chat, and leaving one.
 ///

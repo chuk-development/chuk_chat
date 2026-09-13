@@ -3,26 +3,26 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/room_members_sheet.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/room_members_sheet.dart';
 
-CoworkRoomMember _m(String id, String h) =>
-    CoworkRoomMember(agentId: id, handle: h);
+AgentsRoomMember _m(String id, String h) =>
+    AgentsRoomMember(agentId: id, handle: h);
 
-CoworkAgent _agent(String id, String name) =>
-    CoworkAgent(id: id, name: name, threads: const <CoworkThreadInfo>[]);
+AgentsAgent _agent(String id, String name) =>
+    AgentsAgent(id: id, name: name, threads: const <AgentsThreadInfo>[]);
 
-CoworkRoom _room(List<CoworkRoomMember> members) =>
-    CoworkRoom(id: 'r1', name: 'launch', members: members);
+AgentsRoom _room(List<AgentsRoomMember> members) =>
+    AgentsRoom(id: 'r1', name: 'launch', members: members);
 
 void main() {
-  Future<(List<CoworkRoomMember>, List<String>)> pump(
+  Future<(List<AgentsRoomMember>, List<String>)> pump(
     WidgetTester tester, {
-    required CoworkRoom room,
-    required List<CoworkAgent> candidates,
+    required AgentsRoom room,
+    required List<AgentsAgent> candidates,
   }) async {
-    final added = <CoworkRoomMember>[];
+    final added = <AgentsRoomMember>[];
     final removed = <String>[];
     await tester.pumpWidget(
       MaterialApp(

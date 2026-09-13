@@ -11,8 +11,8 @@ from pathlib import Path
 
 import pytest
 
-from cowork_agent import StateStore
-from cowork_host.automations import (
+from chuk_agents_runtime import StateStore
+from chuk_agents_host.automations import (
     EVENT_CANCELLED,
     EVENT_CREATED,
     EVENT_DONE,
@@ -26,7 +26,7 @@ from cowork_host.automations import (
 
 WATCHER_OK = """
 import time
-from cowork_hooks import trigger
+from agents_hooks import trigger
 time.sleep(0.2)
 trigger("seen", payload={"n": 1})
 time.sleep(2.0)
@@ -37,7 +37,7 @@ time.sleep(30)
 WATCHER_CRASH = "import sys; sys.exit(3)\n"
 WATCHER_CLEAN_EXIT = "print('bye')\n"
 WATCHER_JOB = """
-from cowork_hooks import trigger
+from agents_hooks import trigger
 trigger("job done", payload={"exit": 0}, kind="job")
 import time; time.sleep(30)
 """
@@ -248,10 +248,10 @@ def test_a_watcher_runs_in_the_workspace_triggers_and_the_trigger_becomes_a_task
     (tmp_path / "ws" / "watch.py").write_text(WATCHER_OK)
     try:
         out = manager.start_watcher("s1", "watch.py", "yt", True)
-        assert out["ok"] and out["kind"] == "watcher" and out["log_path"] == ".cowork/automations/" + out["id"] + ".log"
+        assert out["ok"] and out["kind"] == "watcher" and out["log_path"] == ".agents/automations/" + out["id"] + ".log"
         assert manager.running_watchers() == [out["id"]]
         # The hook module was installed next to the trigger file.
-        assert (tmp_path / "ws" / ".cowork" / "automations" / "cowork_hooks.py").is_file()
+        assert (tmp_path / "ws" / ".agents" / "automations" / "agents_hooks.py").is_file()
         lines = lambda: len(manager.triggers_path().read_text().splitlines()) if manager.triggers_path().exists() else 0  # noqa: E731
         assert _wait(lambda: lines() >= 1)
         assert manager.run_watchdog_once() == 1
@@ -419,7 +419,7 @@ def test_clean_exit_waits_for_final_trigger_delivery(tmp_path, blocked_by):
     host, clock = _Host(provisioned=blocked_by != "unprovisioned"), _Clock()
     manager = _manager(tmp_path, host, clock, rate_window=30.0)
     (tmp_path / "ws" / "final.py").write_text(
-        "from cowork_hooks import trigger\n"
+        "from agents_hooks import trigger\n"
         "trigger('final results', payload={'final': True, 'percentage': 42})\n"
     )
     try:
@@ -455,7 +455,7 @@ def test_final_trigger_arriving_after_initial_tail_read_is_not_lost(tmp_path, mo
     host, clock = _Host(), _Clock()
     manager = _manager(tmp_path, host, clock)
     (tmp_path / "ws" / "final.py").write_text(
-        "from cowork_hooks import trigger\ntrigger('final results', payload={'final': True})\n"
+        "from agents_hooks import trigger\ntrigger('final results', payload={'final': True})\n"
     )
     try:
         out = manager.start_watcher("s1", "final.py", "election", True)
@@ -493,7 +493,7 @@ def test_watchers_get_the_secrets_env_and_the_hook_env(tmp_path):
     manager = _manager(tmp_path, host, clock, env_provider=lambda: {"MY_KEY": "sekret", "bad name": "x"})
     (tmp_path / "ws" / "env.py").write_text(
         "import os, json\n"
-        "print(json.dumps({k: os.environ.get(k) for k in ('MY_KEY', 'COWORK_AUTOMATION_ID', 'COWORK_TRIGGERS_PATH', 'bad name')}))\n"
+        "print(json.dumps({k: os.environ.get(k) for k in ('MY_KEY', 'AGENTS_AUTOMATION_ID', 'AGENTS_TRIGGERS_PATH', 'bad name')}))\n"
     )
     try:
         out = manager.start_watcher("s1", "env.py", None, False)
@@ -501,8 +501,8 @@ def test_watchers_get_the_secrets_env_and_the_hook_env(tmp_path):
         assert _wait(lambda: log.exists() and "MY_KEY" in log.read_text())
         line = [l for l in log.read_text().splitlines() if l.startswith("{")][0]
         seen = json.loads(line)
-        assert seen["MY_KEY"] == "sekret" and seen["COWORK_AUTOMATION_ID"] == out["id"]
-        assert seen["COWORK_TRIGGERS_PATH"] == ".cowork/automations/triggers.jsonl"
+        assert seen["MY_KEY"] == "sekret" and seen["AGENTS_AUTOMATION_ID"] == out["id"]
+        assert seen["AGENTS_TRIGGERS_PATH"] == ".agents/automations/triggers.jsonl"
         assert seen["bad name"] is None
     finally:
         manager.stop()
@@ -550,7 +550,7 @@ def test_active_watchers_and_unread_triggers_survive_restart(tmp_path):
     finally:
         first.stop()
     assert first.running_watchers() == []
-    assert Path(tmp_path / "ws" / ".cowork" / "automations" / (out["id"] + ".log")).exists()
+    assert Path(tmp_path / "ws" / ".agents" / "automations" / (out["id"] + ".log")).exists()
 
     second = _manager(tmp_path, host, clock)
     second.start()
@@ -648,7 +648,7 @@ def test_pep723_watcher_uses_uv_and_receives_repeatable_hook(tmp_path):
     manager.start()
     script = tmp_path / 'ws' / 'monitor.py'
     script.write_text('# /// script\n# dependencies = []\n# ///\n'
-                      'from cowork_hooks import trigger\nimport time\n'
+                      'from agents_hooks import trigger\nimport time\n'
                       'assert trigger("first", payload={"n": 1})\ntime.sleep(0.5)\n'
                       'assert trigger("final", payload={"n": 2})\n')
     try:
@@ -709,7 +709,7 @@ def test_a_report_for_a_closed_row_is_recorded_not_swallowed(tmp_path):
 def test_a_pep723_script_falls_back_to_the_interpreter_without_uv(tmp_path, monkeypatch):
     """No uv on the host means the watcher runs on python, not a crash loop
     into ``failed``."""
-    import cowork_host.automations as automations_module
+    import chuk_agents_host.automations as automations_module
 
     host, clock = _Host(), _Clock()
     manager = _manager(tmp_path, host, clock)

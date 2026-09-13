@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show Session, User;
 
-import 'package:cowork/services/account_session.dart';
+import 'package:chuk_chat/services/account_session.dart';
 
 /// A JWT whose only claim that matters is `exp` (gotrue reads it unverified).
 String _jwt({required int exp, String sub = 'user-1'}) {

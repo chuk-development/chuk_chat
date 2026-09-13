@@ -5,16 +5,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/services/cowork/room_source.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
-import 'package:cowork/widgets/room_list_view.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/services/agents/room_source.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/room_list_view.dart';
 
-CoworkRoomMember _m(String id, String handle) =>
-    CoworkRoomMember(agentId: id, handle: handle);
+AgentsRoomMember _m(String id, String handle) =>
+    AgentsRoomMember(agentId: id, handle: handle);
 
-CoworkRoomDraft _draft(String name, int members) => CoworkRoomDraft(
+AgentsRoomDraft _draft(String name, int members) => AgentsRoomDraft(
   name: name,
   members: [for (var i = 0; i < members; i++) _m('id$name$i', '$name-$i')],
 );

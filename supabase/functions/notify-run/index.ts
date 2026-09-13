@@ -101,7 +101,7 @@ export function buildFcmMessage(token: string, row: Record<string, unknown>): Re
       android: {
         priority: "HIGH",
         notification: {
-          channel_id: "cowork_completion",
+          channel_id: "agents_completion",
           // One outstanding notification per thread: a newer one replaces it.
           tag: String(row.session_key ?? ""),
           click_action: "FLUTTER_NOTIFICATION_CLICK",

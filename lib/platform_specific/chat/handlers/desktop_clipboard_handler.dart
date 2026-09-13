@@ -7,9 +7,9 @@ import 'package:flutter/services.dart';
 
 import 'package:pasteboard/pasteboard.dart';
 
-import 'package:cowork/utils/clipboard_text_sanitizer.dart';
-import 'package:cowork/utils/io_helper.dart';
-import 'package:cowork/utils/path_provider_stub.dart'
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
+import 'package:chuk_chat/utils/io_helper.dart';
+import 'package:chuk_chat/utils/path_provider_stub.dart'
     if (dart.library.io) 'package:path_provider/path_provider.dart';
 
 /// Handles desktop-specific clipboard operations and context menus.

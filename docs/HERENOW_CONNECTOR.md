@@ -2,7 +2,7 @@
 
 A first-class, approval-gated way for a coworker to put a file or a folder on the
 public web and hand the user back a live URL. here.now (https://here.now) does
-the hosting; Cowork owns the tool, the two gates, and the consent round-trip.
+the hosting; Agents owns the tool, the two gates, and the consent round-trip.
 
 This is the "publish this / host this / make a website" capability. It is built
 the way an official connector is built: the model reaches it only through one
@@ -57,7 +57,7 @@ one `HN_RESULT <json>` line.
 
 ## Layers touched
 
-- **Agent** — `agent/src/cowork_agent/herenow.py`: `HereNowConfig`,
+- **Agent** — `agent/src/chuk_agents_runtime/herenow.py`: `HereNowConfig`,
   `PublishRequest`, `ApprovalGate`, the embedded publisher, `herenow_publish`.
   `build_runtime(herenow_config=, herenow_gate=)` registers it only when enabled.
 - **Executor** — `protocol.py`: `approval_request_payload` (executor→app event),
@@ -67,7 +67,7 @@ one `HN_RESULT <json>` line.
   timeout and a kill-switch cancel, and `_resolve_approval` on the serve thread.
 - **App (Flutter)** — a `HereNowStore` (enabled + approval mode), a settings
   screen to toggle it, the config forwarded on the task frame in
-  `cowork_relay_client`, and an inbound `approval_request` → Approve/Deny UI →
+  `agents_relay_client`, and an inbound `approval_request` → Approve/Deny UI →
   `approval_decision` reply.
 - **Host** — none. The host is a blind forwarder; `approval_decision` rides the
   same app→executor submit path as `stop` and `browser_*`.

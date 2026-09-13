@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from cowork_manager import RoomTranscriptStore, RoomTurn
+from chuk_agents_manager import RoomTranscriptStore, RoomTurn
 
 
 def _turn(round, handle, text):

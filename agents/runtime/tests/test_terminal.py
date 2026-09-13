@@ -16,8 +16,8 @@ import shlex
 
 import pytest
 
-from cowork_agent import ProcessResult, ToolRegistry, render_tool_docs
-from cowork_agent.terminal import (
+from chuk_agents_runtime import ProcessResult, ToolRegistry, render_tool_docs
+from chuk_agents_runtime.terminal import (
     TerminalManager,
     diff_screens,
     normalize_screen,

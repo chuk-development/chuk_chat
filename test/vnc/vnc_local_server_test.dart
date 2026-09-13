@@ -5,7 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/vnc_local_server.dart';
+import 'package:chuk_chat/widgets/vnc_local_server.dart';
 
 /// The loopback server behind the noVNC viewer.
 ///

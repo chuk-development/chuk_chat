@@ -1,6 +1,6 @@
 // lib/services/api_config_service_stub.dart
 // Web stub — no dart:io Platform access.
-import 'package:cowork/services/api_config_base.dart' as base;
+import 'package:chuk_chat/services/api_config_base.dart' as base;
 
 /// Service for managing API configuration across different environments and platforms.
 /// Web stub — returns 'web' for platform.

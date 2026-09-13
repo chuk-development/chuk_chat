@@ -15,22 +15,22 @@
 // that fails on a busy machine is noise, but a tenfold regression must still be
 // caught.
 //
-// The store's SQLite is replaced by a map through `CoworkChatStore`'s own cache
+// The store's SQLite is replaced by a map through `AgentsChatStore`'s own cache
 // seams — see `perf_support.dart` for why a real sqflite read would hang here.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/chat_storage_service.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_replay_loader.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/services/multiplex_session.dart';
-import 'package:cowork/services/settings/verbose_service.dart';
-import 'package:cowork/services/storage/cowork_chat_store.dart';
-import 'package:cowork/widgets/cowork_thread_view.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/widgets/agents_thread_view.dart';
 
 import '../support/fake_relay_controller.dart';
 import 'perf_support.dart';
@@ -64,11 +64,11 @@ void main() {
   Future<void> resetWorld() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await VerboseService.instance.setEnabled(false);
-    CoworkRelayLink.instance.reset();
-    CoworkRunLedger.instance.reset();
-    CoworkReplayLoader.instance.reset();
+    AgentsRelayLink.instance.reset();
+    AgentsRunLedger.instance.reset();
+    AgentsReplayLoader.instance.reset();
     await ChatStorageService.reset();
-    await CoworkChatStore.reset();
+    await AgentsChatStore.reset();
     await MultiplexSession.shutdown();
   }
 
@@ -113,14 +113,14 @@ void main() {
     await tester.runAsync(() async {
       await resetWorld();
       disk.install();
-      CoworkChatStore.userIdProvider = () => 'perf-user';
-      await CoworkChatStore.replaceThread(sessionKey, transcript(rows));
-      await CoworkChatStore.pending(sessionKey);
-      // What `CoworkChatStorageBootstrap._signedIn` writes on a session.
-      await CoworkChatStore.rememberUser('perf-user');
+      AgentsChatStore.userIdProvider = () => 'perf-user';
+      await AgentsChatStore.replaceThread(sessionKey, transcript(rows));
+      await AgentsChatStore.pending(sessionKey);
+      // What `AgentsChatStorageBootstrap._signedIn` writes on a session.
+      await AgentsChatStore.rememberUser('perf-user');
       // Process death: the store forgets its memory, its seams and the live
       // session. Only the preferences key and the disk map are left.
-      await CoworkChatStore.reset();
+      await AgentsChatStore.reset();
       await ChatStorageService.reset();
       disk.install();
       await drainNotifyDebounce();
@@ -157,7 +157,7 @@ void main() {
     final watch = Stopwatch()..start();
     await tester.pumpWidget(
       perfApp(
-        CoworkThreadView(
+        AgentsThreadView(
           controllerBuilder: () async => controller,
           sessionSource: const FakeSessionSource(),
           threadKey: threadKey,
@@ -191,7 +191,7 @@ void main() {
     // The guarantee under the number: this really was a cold start.
     expect(
       controller.state.value.phase,
-      CoworkRelayPhase.idle,
+      AgentsRelayPhase.idle,
       reason: 'the transport must never leave idle in a cold-start measurement',
     );
     expect(
@@ -300,14 +300,14 @@ void main() {
     // In `runAsync`, so the store's own futures complete on the real event
     // loop instead of waiting for a fake-async zone that never drains them.
     final table = PerfTable(
-      'CoworkChatStore.loadThread alone: read + parse + model build',
+      'AgentsChatStore.loadThread alone: read + parse + model build',
     );
     final medians = <int, double>{};
 
     for (int i = 0; i < 2; i++) {
       await writeThenClose(tester, 'parse:warmup-$i', 2000);
       await tester.runAsync(
-        () async => CoworkChatStore.loadThread('parse:warmup-$i'),
+        () async => AgentsChatStore.loadThread('parse:warmup-$i'),
       );
     }
 
@@ -320,7 +320,7 @@ void main() {
         bytes = disk.payloadBytesOf('perf-user', key);
         await tester.runAsync(() async {
           final watch = Stopwatch()..start();
-          final chat = await CoworkChatStore.loadThread(key);
+          final chat = await AgentsChatStore.loadThread(key);
           watch.stop();
           expect(
             chat?.messages,
@@ -457,7 +457,7 @@ void main() {
     );
   }, timeout: _guard);
 
-  test('CoworkReplayLoader.appendWithoutRepeats over a long cache', () {
+  test('AgentsReplayLoader.appendWithoutRepeats over a long cache', () {
     // The join the app runs every time the host answers with a delta. Step one
     // walks every possible overlap length k from min(n, m) down to 1 and
     // compares up to k rows for each, so its cost is driven by the DELTA, not
@@ -474,7 +474,7 @@ void main() {
         ];
 
     final table = PerfTable(
-      'CoworkReplayLoader.appendWithoutRepeats (cache = 2000 rows)',
+      'AgentsReplayLoader.appendWithoutRepeats (cache = 2000 rows)',
     );
     const int cacheSize = 2000;
     final List<Map<String, String>> cache = rows(cacheSize);
@@ -487,12 +487,12 @@ void main() {
     ) {
       final samples = <double>[];
       // One warm-up outside the samples: the first call pays for JIT.
-      CoworkReplayLoader.appendWithoutRepeats(existing, delta);
+      AgentsReplayLoader.appendWithoutRepeats(existing, delta);
       for (int run = 0; run < _microRuns; run++) {
         late List<Map<String, String>> out;
         samples.add(
           timedMs(() {
-            out = CoworkReplayLoader.appendWithoutRepeats(existing, delta);
+            out = AgentsReplayLoader.appendWithoutRepeats(existing, delta);
           }),
         );
         expect(out, isNotEmpty);

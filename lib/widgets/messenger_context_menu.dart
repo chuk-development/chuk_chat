@@ -2,8 +2,8 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// A focused message above a separate action sheet, like a messenger's
 /// long-press menu. The transcript remains in place beneath a soft scrim.

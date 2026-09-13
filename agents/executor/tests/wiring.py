@@ -6,10 +6,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from cowork_crypto import (
+from chuk_agents_crypto import (
     ApprovedDevices,
-    CoworkFrameOpener,
-    CoworkFrameSealer,
+    AgentsFrameOpener,
+    AgentsFrameSealer,
     DeviceIdentity,
     derive_channel_key,
     generate_x25519_keypair,
@@ -23,8 +23,8 @@ KEY_VERSION = 1
 @dataclass
 class Party:
     device_id: str
-    sealer: CoworkFrameSealer
-    opener: CoworkFrameOpener
+    sealer: AgentsFrameSealer
+    opener: AgentsFrameOpener
 
 
 @dataclass
@@ -58,13 +58,13 @@ def paired_channel() -> PairedChannel:
 
     controller = Party(
         device_id=CONTROLLER_DEVICE,
-        sealer=CoworkFrameSealer(
+        sealer=AgentsFrameSealer(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             device_id=CONTROLLER_DEVICE,
             signing_identity=ctrl_id,
         ),
-        opener=CoworkFrameOpener(
+        opener=AgentsFrameOpener(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             approved_devices=ctrl_approved,
@@ -72,13 +72,13 @@ def paired_channel() -> PairedChannel:
     )
     executor = Party(
         device_id=EXECUTOR_DEVICE,
-        sealer=CoworkFrameSealer(
+        sealer=AgentsFrameSealer(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             device_id=EXECUTOR_DEVICE,
             signing_identity=exec_id,
         ),
-        opener=CoworkFrameOpener(
+        opener=AgentsFrameOpener(
             channel_key=channel_key,
             key_version=KEY_VERSION,
             approved_devices=exec_approved,

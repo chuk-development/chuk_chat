@@ -143,8 +143,8 @@ class McpOAuth {
 
   final http.Client _http;
 
-  static const String clientName = 'CoWork';
-  static const String clientUri = 'https://cowork.chuk.chat';
+  static const String clientName = 'Agents';
+  static const String clientUri = 'https://agents.chuk.chat';
 
   // ─── Discovery ─────────────────────────────────────────────────────────
 

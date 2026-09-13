@@ -4,9 +4,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import 'package:cowork/utils/clipboard_text_sanitizer.dart';
-import 'package:cowork/utils/tool_parser.dart';
-import 'package:cowork/widgets/message_bubble.dart';
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
 
 /// Handles message-related actions (copy, edit, resend)
 class MessageActionsHandler {

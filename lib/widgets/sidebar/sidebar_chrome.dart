@@ -3,12 +3,12 @@
 // Uses rounded icon variants for a softer, less standard look.
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
-import 'package:cowork/utils/color_extensions.dart';
-import 'package:cowork/utils/theme_extensions.dart';
-import 'package:cowork/widgets/brand_wordmark.dart';
-import 'package:cowork/widgets/sidebar/hover_marquee_text.dart';
-import 'package:cowork/constants.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/utils/color_extensions.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
+import 'package:chuk_chat/constants.dart';
 
 class SidebarTokens {
   final Color iconFg;

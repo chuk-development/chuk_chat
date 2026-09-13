@@ -30,7 +30,7 @@ import pytest
 
 DOCKER_DIR = Path(__file__).resolve().parents[1] / "docker"
 BASE = DOCKER_DIR / "Dockerfile"
-BASE_IMAGE = "cowork-base:latest"
+BASE_IMAGE = "agents-base:latest"
 
 #: distribution name on PyPI -> module name to import.
 DOC_PACKAGES = {

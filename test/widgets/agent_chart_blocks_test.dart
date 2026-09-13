@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/widgets/agent_markdown.dart';
-import 'package:cowork/widgets/chart_widget.dart';
+import 'package:chuk_chat/widgets/agent_markdown.dart';
+import 'package:chuk_chat/widgets/chart_widget.dart';
 
 const _electionChart = '''
 Stand 22:25 Uhr.

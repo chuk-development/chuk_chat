@@ -9,12 +9,12 @@ from __future__ import annotations
 import threading
 import time
 
-from cowork_agent import MockModelClient, StateStore, tool_call_response
-from cowork_agent.automations import RecordingBackend
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_runtime import MockModelClient, StateStore, tool_call_response
+from chuk_agents_runtime.automations import RecordingBackend
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import ControllerSession, Executor, loopback_pair
-from cowork_executor.protocol import (
+from chuk_agents_executor import ControllerSession, Executor, loopback_pair
+from chuk_agents_executor.protocol import (
     automation_control_payload,
     automation_list_request_payload,
 )
@@ -207,7 +207,7 @@ def test_agent_frames_reach_the_host_hook_and_answer_with_the_list(tmp_path):
     """Coworker names (docs/WIRE_CONTRACT.md "Coworker names"): create, rename
     and the list request all reach the host hook and each is answered with one
     ``agent_list`` terminal."""
-    from cowork_executor import agent_create_payload, agent_list_request_payload, agent_rename_payload
+    from chuk_agents_executor import agent_create_payload, agent_list_request_payload, agent_rename_payload
 
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
@@ -241,7 +241,7 @@ def test_agent_frames_reach_the_host_hook_and_answer_with_the_list(tmp_path):
 
 
 def test_agent_frames_without_a_hook_are_refused(tmp_path):
-    from cowork_executor import agent_list_request_payload
+    from chuk_agents_executor import agent_list_request_payload
 
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()

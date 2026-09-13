@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/cowork_room.dart';
-import 'package:cowork/widgets/room_thread_view.dart';
+import 'package:chuk_chat/models/agents_room.dart';
+import 'package:chuk_chat/widgets/room_thread_view.dart';
 
 void main() {
   Future<void> pump(
     WidgetTester tester, {
-    required List<CoworkRoomTurn> turns,
-    List<CoworkRoomMember> members = const <CoworkRoomMember>[],
-    CoworkRoomStop? stop,
+    required List<AgentsRoomTurn> turns,
+    List<AgentsRoomMember> members = const <AgentsRoomMember>[],
+    AgentsRoomStop? stop,
     bool running = false,
   }) async {
     await tester.pumpWidget(
@@ -34,10 +34,10 @@ void main() {
     await pump(
       tester,
       turns: const [
-        CoworkRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'ship it'),
-        CoworkRoomTurn(round: 1, agentId: 'b', handle: 'cobalt', text: 'agreed'),
+        AgentsRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'ship it'),
+        AgentsRoomTurn(round: 1, agentId: 'b', handle: 'cobalt', text: 'agreed'),
       ],
-      stop: CoworkRoomStop.noMoreMentions,
+      stop: AgentsRoomStop.noMoreMentions,
     );
 
     expect(find.text('launch'), findsOneWidget);
@@ -51,10 +51,10 @@ void main() {
     await pump(
       tester,
       turns: const [
-        CoworkRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
-        CoworkRoomTurn(round: 2, agentId: 'b', handle: 'cobalt', text: 'y'),
+        AgentsRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
+        AgentsRoomTurn(round: 2, agentId: 'b', handle: 'cobalt', text: 'y'),
       ],
-      stop: CoworkRoomStop.noMoreMentions,
+      stop: AgentsRoomStop.noMoreMentions,
     );
 
     expect(find.text('Round 1'), findsOneWidget);
@@ -65,10 +65,10 @@ void main() {
     await pump(
       tester,
       turns: const [
-        CoworkRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
-        CoworkRoomTurn(round: 1, agentId: 'b', handle: 'cobalt', text: 'y'),
+        AgentsRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
+        AgentsRoomTurn(round: 1, agentId: 'b', handle: 'cobalt', text: 'y'),
       ],
-      stop: CoworkRoomStop.noMoreMentions,
+      stop: AgentsRoomStop.noMoreMentions,
     );
     expect(find.text('Round 1'), findsOneWidget);
     expect(find.text('Round 2'), findsNothing);
@@ -78,9 +78,9 @@ void main() {
     await pump(
       tester,
       turns: const [
-        CoworkRoomTurn(round: 3, agentId: 'a', handle: 'amber', text: 'x'),
+        AgentsRoomTurn(round: 3, agentId: 'a', handle: 'amber', text: 'x'),
       ],
-      stop: CoworkRoomStop.roundsExhausted,
+      stop: AgentsRoomStop.roundsExhausted,
     );
     expect(find.text('Reached the round limit'), findsOneWidget);
   });
@@ -90,7 +90,7 @@ void main() {
     await pump(
       tester,
       turns: const [
-        CoworkRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
+        AgentsRoomTurn(round: 1, agentId: 'a', handle: 'amber', text: 'x'),
       ],
       running: true,
     );
@@ -100,17 +100,17 @@ void main() {
   });
 
   test('stop reasons parse from the wire and carry a label', () {
-    expect(CoworkRoomStop.fromWire('rounds_exhausted'),
-        CoworkRoomStop.roundsExhausted);
-    expect(CoworkRoomStop.fromWire('messages_exhausted'),
-        CoworkRoomStop.messagesExhausted);
-    expect(CoworkRoomStop.fromWire('stopped'), CoworkRoomStop.stopped);
-    expect(CoworkRoomStop.fromWire('turn_failed'), CoworkRoomStop.turnFailed);
-    expect(CoworkRoomStop.fromWire('no_more_mentions'),
-        CoworkRoomStop.noMoreMentions);
-    expect(CoworkRoomStop.fromWire('who knows'), isNull);
-    expect(CoworkRoomStop.fromWire(null), isNull);
-    expect(CoworkRoomStop.messagesExhausted.label, 'Reached the message limit');
+    expect(AgentsRoomStop.fromWire('rounds_exhausted'),
+        AgentsRoomStop.roundsExhausted);
+    expect(AgentsRoomStop.fromWire('messages_exhausted'),
+        AgentsRoomStop.messagesExhausted);
+    expect(AgentsRoomStop.fromWire('stopped'), AgentsRoomStop.stopped);
+    expect(AgentsRoomStop.fromWire('turn_failed'), AgentsRoomStop.turnFailed);
+    expect(AgentsRoomStop.fromWire('no_more_mentions'),
+        AgentsRoomStop.noMoreMentions);
+    expect(AgentsRoomStop.fromWire('who knows'), isNull);
+    expect(AgentsRoomStop.fromWire(null), isNull);
+    expect(AgentsRoomStop.messagesExhausted.label, 'Reached the message limit');
   });
 
   testWidgets('the member strip shows each members handle', (tester) async {
@@ -118,8 +118,8 @@ void main() {
       tester,
       turns: const [],
       members: const [
-        CoworkRoomMember(agentId: 'a', handle: 'amber'),
-        CoworkRoomMember(agentId: 'b', handle: 'cobalt'),
+        AgentsRoomMember(agentId: 'a', handle: 'amber'),
+        AgentsRoomMember(agentId: 'b', handle: 'cobalt'),
       ],
     );
     expect(find.text('@amber'), findsOneWidget);

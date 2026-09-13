@@ -2,10 +2,10 @@
 // Web stub - uses same logic but without Platform checks for notification services
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/models/stream_phase.dart';
-import 'package:cowork/utils/stream_error_sanitizer.dart';
-import 'package:cowork/services/streaming_chat_service.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 /// Web stub - no notification/foreground service integration

@@ -5,12 +5,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from cowork_executor.browser_profile import retired_browser_hostname
+from chuk_agents_executor.browser_profile import retired_browser_hostname
 
 
 @pytest.fixture
 def inventory(tmp_path, monkeypatch):
-    profile = tmp_path / ".cowork" / "chrome-profile"
+    profile = tmp_path / ".agents" / "chrome-profile"
     profile.mkdir(parents=True)
     lock = profile / "SingletonLock"
     lock.symlink_to("retired-host-104")
@@ -23,7 +23,7 @@ def inventory(tmp_path, monkeypatch):
     def run(args, **kwargs):
         calls.append(args)
         return SimpleNamespace(stdout=("\n".join(c["Id"] for c in containers) if args[1] == "ps" else json.dumps(containers)))
-    monkeypatch.setattr("cowork_executor.browser_profile.subprocess.run", run)
+    monkeypatch.setattr("chuk_agents_executor.browser_profile.subprocess.run", run)
     return tmp_path, containers, lock, calls
 
 
@@ -54,7 +54,7 @@ def test_current_container_requires_matching_workspace_and_managed_label(invento
 
 def test_custom_profile_is_not_attested(inventory):
     workspace, containers, _, _ = inventory
-    containers[0]["Config"]["Env"] = ["COWORK_BROWSER_PROFILE=/elsewhere"]
+    containers[0]["Config"]["Env"] = ["AGENTS_BROWSER_PROFILE=/elsewhere"]
     assert retired_browser_hostname("docker", "current-container", str(workspace)) is None
 
 
@@ -62,7 +62,7 @@ def test_inventory_failure_fails_closed(inventory, monkeypatch):
     workspace, _, _, _ = inventory
     def fail(*args, **kwargs):
         raise OSError("docker unavailable")
-    monkeypatch.setattr("cowork_executor.browser_profile.subprocess.run", fail)
+    monkeypatch.setattr("chuk_agents_executor.browser_profile.subprocess.run", fail)
     assert retired_browser_hostname("docker", "current-container", str(workspace)) is None
 
 

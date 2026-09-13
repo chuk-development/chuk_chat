@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "CoWork",
+  "name": "Agents",
   "version": "0.1.0",
-  "description": "CoWork in your browser: talk about the page, or let your coworker drive its own tab.",
+  "description": "Agents in your browser: talk about the page, or let your coworker drive its own tab.",
   "minimum_chrome_version": "116",
   "icons": {
     "128": "icons/icon-128.png"
@@ -12,7 +12,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open CoWork"
+    "default_title": "Open Agents"
   },
   "options_page": "src/options.html",
   "side_panel": {
@@ -38,7 +38,7 @@
         "default": "Ctrl+Shift+K",
         "mac": "Command+Shift+K"
       },
-      "description": "Toggle the CoWork panel"
+      "description": "Toggle the Agents panel"
     }
   },
   "content_security_policy": {

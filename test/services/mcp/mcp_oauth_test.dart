@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
-import 'package:cowork/services/mcp/mcp_oauth.dart';
+import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 
 http.Response _json(Map<String, dynamic> body) => http.Response(
       jsonEncode(body),

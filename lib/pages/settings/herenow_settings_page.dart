@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/services/herenow/herenow_store.dart';
-import 'package:cowork/widgets/expressive_settings.dart';
+import 'package:chuk_chat/services/herenow/herenow_store.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// The here.now publishing connector: let a coworker put a file or a folder on
 /// the public web and hand back a live URL. Off by default — while it is off,
@@ -14,7 +14,7 @@ import 'package:cowork/widgets/expressive_settings.dart';
 ///
 /// Config lives in SharedPreferences (`herenow_connector_v1`); nothing here is
 /// secret. The agent-side gate is enforced host-side — this screen only sets
-/// what CoWork forwards on the task frame.
+/// what Agents forwards on the task frame.
 class HereNowSettingsPage extends StatefulWidget {
   const HereNowSettingsPage({super.key, HereNowStore? store})
     : _injectedStore = store;

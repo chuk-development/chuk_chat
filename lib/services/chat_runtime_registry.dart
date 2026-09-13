@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'package:cowork/services/chat_runtime.dart';
+import 'package:chuk_chat/services/chat_runtime.dart';
 
 /// Singleton registry of per-chat [ChatRuntime]s.
 ///

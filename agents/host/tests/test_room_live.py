@@ -17,12 +17,12 @@ from __future__ import annotations
 
 import pytest
 
-from cowork_agent import MockModelClient
-from cowork_manager import RoomBinding, RoomStore
-from cowork_sandbox import make_environment
+from chuk_agents_runtime import MockModelClient
+from chuk_agents_manager import RoomBinding, RoomStore
+from chuk_agents_sandbox import make_environment
 
-from cowork_host import RoomAgentPool, RoomService
-from cowork_host.room_service import dispatch_room_frame
+from chuk_agents_host import RoomAgentPool, RoomService
+from chuk_agents_host.room_service import dispatch_room_frame
 
 
 class _Members:

@@ -10,11 +10,11 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/services/cowork/agent_file_saver.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/utils/theme_extensions.dart';
+import 'package:chuk_chat/services/agents/agent_file_saver.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// One tool call, as a single quiet line that opens on tap.
 ///
@@ -28,7 +28,7 @@ class AgentToolLine extends StatefulWidget {
     this.initiallyExpanded = false,
   });
 
-  final CoworkRelayTool call;
+  final AgentsRelayTool call;
   final bool initiallyExpanded;
 
   @override
@@ -103,7 +103,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
 
   Widget _buildDetail(
     BuildContext context,
-    CoworkRelayTool call,
+    AgentsRelayTool call,
     TextStyle? mono,
   ) {
     final theme = Theme.of(context);
@@ -129,7 +129,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
     );
   }
 
-  static String? _shortResult(CoworkRelayTool call) {
+  static String? _shortResult(AgentsRelayTool call) {
     final result = call.result;
     if (result == null || result.trim().isEmpty) return null;
     final line = _oneLine(result);
@@ -141,7 +141,7 @@ class _AgentToolLineState extends State<AgentToolLine> {
     return flat.length <= 80 ? flat : '${flat.substring(0, 80)}…';
   }
 
-  static String _failureTag(CoworkRelayTool call) {
+  static String _failureTag(AgentsRelayTool call) {
     if (call.timedOut) return 'timed out';
     if (call.exitCode != null) return 'exit ${call.exitCode}';
     return 'failed';
@@ -226,7 +226,7 @@ class _AgentReasoningBlockState extends State<AgentReasoningBlock> {
 class AgentFileCard extends StatefulWidget {
   const AgentFileCard({super.key, required this.file, required this.saver});
 
-  final CoworkRelayFile file;
+  final AgentsRelayFile file;
   final AgentFileSaver saver;
 
   @override
@@ -373,7 +373,7 @@ class _AgentFileCardState extends State<AgentFileCard> {
     );
   }
 
-  static String _subtitle(CoworkRelayFile file) {
+  static String _subtitle(AgentsRelayFile file) {
     final size = file.bytes?.length ?? file.declaredSize;
     if (size == null) return file.mimeType;
     return '${file.mimeType} · ${formatBytes(size)}';

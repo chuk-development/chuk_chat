@@ -3,16 +3,16 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:cowork/services/automations/cowork_automation.dart';
-import 'package:cowork/widgets/automation_card.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/widgets/automation_card.dart';
 
-CoworkAutomation _automation({
+AgentsAutomation _automation({
   String state = 'active',
   String kind = 'schedule',
   int fireCount = 3,
   String? error,
 }) =>
-    CoworkAutomation.fromPayload(<String, dynamic>{
+    AgentsAutomation.fromPayload(<String, dynamic>{
       'id': 'ab12cd34',
       'session_key': 'thread-1',
       'kind': kind,
@@ -99,7 +99,7 @@ void main() {
 
   testWidgets('a long task is one line until the row is opened', (tester) async {
     final long = List<String>.filled(60, 'sammle die zahlen').join(' ');
-    final a = CoworkAutomation.fromPayload(<String, dynamic>{
+    final a = AgentsAutomation.fromPayload(<String, dynamic>{
       'id': 'x1',
       'session_key': 'thread-1',
       'kind': 'schedule',

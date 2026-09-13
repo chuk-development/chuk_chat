@@ -14,7 +14,7 @@
 /// ## Why it is built out of `widgets/sidebar/sidebar_chrome.dart`
 ///
 /// The chrome (`SidebarTokens`, `SbBrand`, `SbRailRow`, `SbSectionLabel`,
-/// `SbHairline`) is chuk_chat's, imported verbatim. CoWork's sidebar shows
+/// `SbHairline`) is chuk_chat's, imported verbatim. Agents's sidebar shows
 /// different CONTENT — agents, not chat history — but it must not look like a
 /// different product, so it takes every colour, radius, weight and motion from
 /// the same tokens chuk's own sidebar uses. Nothing here invents a colour:
@@ -44,27 +44,27 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/constants.dart';
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_read_marks.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/services/profile_service.dart';
-import 'package:cowork/services/supabase_service.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
-import 'package:cowork/widgets/anchored_menu.dart';
-import 'package:cowork/widgets/coworker_name_dialog.dart';
-import 'package:cowork/widgets/credit_display.dart';
-import 'package:cowork/widgets/menu_tile_group.dart';
-import 'package:cowork/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/services/profile_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/agent_avatar.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/coworker_name_dialog.dart';
+import 'package:chuk_chat/widgets/credit_display.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 // The name dialog moved to its own file when it was rebuilt in the app's
 // language; it is exported here so every caller keeps one import.
-export 'package:cowork/widgets/coworker_name_dialog.dart';
+export 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 
 /// The brand row's sizing knob.
 ///
@@ -122,7 +122,7 @@ class AgentRosterView extends StatefulWidget {
 
   /// Opens a coworker's profile page (its row menu → Profile). Hidden when
   /// null.
-  final void Function(CoworkAgent agent)? onOpenProfile;
+  final void Function(AgentsAgent agent)? onOpenProfile;
 
   /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
   final VoidCallback? onOpenRooms;
@@ -431,8 +431,8 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
-  List<CoworkAgent> _bucket(List<CoworkAgent> agents, AgentActivity activity) =>
-      <CoworkAgent>[
+  List<AgentsAgent> _bucket(List<AgentsAgent> agents, AgentActivity activity) =>
+      <AgentsAgent>[
         for (final a in agents)
           if (a.activity == activity) a,
       ];
@@ -442,7 +442,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   List<Widget> _section(
     BuildContext context,
     String label,
-    List<CoworkAgent> agents,
+    List<AgentsAgent> agents,
   ) {
     if (agents.isEmpty) return const <Widget>[];
     return <Widget>[
@@ -451,7 +451,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     ];
   }
 
-  Widget _tile(BuildContext context, CoworkAgent agent) => _AgentTile(
+  Widget _tile(BuildContext context, AgentsAgent agent) => _AgentTile(
     key: ValueKey<String>('agent-tile-${agent.id}'),
     agent: agent,
     selected:
@@ -481,7 +481,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   /// chuk's `_renameChatDialog` (`sidebar_desktop.dart`), for a coworker:
   /// the same `AlertDialog` with one autofocused `TextField`, Enter or the
   /// Rename button submits, Cancel or an unchanged / empty name does nothing.
-  Future<void> _renameAgentDialog(CoworkAgent agent) async {
+  Future<void> _renameAgentDialog(AgentsAgent agent) async {
     final newName = await showCoworkerNameDialog(
       context,
       title: 'Rename agent',
@@ -525,7 +525,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   List<Widget> _hiddenSection(
     BuildContext context,
     SidebarTokens t,
-    List<CoworkAgent> hidden,
+    List<AgentsAgent> hidden,
   ) {
     final TextTheme text = Theme.of(context).textTheme;
     return <Widget>[
@@ -592,7 +592,7 @@ class _AgentTile extends StatefulWidget {
     this.profiles,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final bool selected;
   final DateTime now;
   final VoidCallback? onTap;

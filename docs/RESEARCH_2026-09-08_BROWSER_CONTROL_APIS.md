@@ -101,7 +101,7 @@ installiert:
 ```json
 // ~/.config/google-chrome/NativeMessagingHosts/dev.chuk.cowork.json
 { "name": "dev.chuk.cowork", "type": "stdio",
-  "path": "/usr/local/bin/cowork-browser-bridge",
+  "path": "/usr/local/bin/agents-browser-bridge",
   "allowed_origins": ["chrome-extension://<unsere-id>/"] }
 ```
 
@@ -175,7 +175,7 @@ von OpenAI für Firefox.** Nur Drittanbieter.
 Konsequenz: Chrome zuerst, mit `debugger`. Firefox als zweite Stufe mit
 reduziertem Funktionsumfang, ehrlich benannt.
 
-## 4. Was das für CoWork ändert
+## 4. Was das für Agents ändert
 
 Gegenüber `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md`:
 

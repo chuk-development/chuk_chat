@@ -3,15 +3,15 @@
 From cowork-c6 (mobile layer). Mounts the Grok-Bot phone layout on narrow
 windows. Everything it calls already exists in the shell; the new widgets are
 in `app/lib/platform_specific/mobile/` (analyze 0, tests green).
-`CoworkThreadView` already has `topInset` and `phoneLayout` (c6 set them).
+`AgentsThreadView` already has `topInset` and `phoneLayout` (c6 set them).
 
 ## Imports (add)
 
 ```dart
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_sheet.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
-import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 ```
 
 ## build(): the `thread` local becomes a builder
@@ -19,7 +19,7 @@ import 'package:cowork/platform_specific/mobile/mobile_layout.dart';
 Replace
 
 ```dart
-        final thread = CoworkThreadView(
+        final thread = AgentsThreadView(
           key: _threadViewKey,
           ...
           onOpenModelScreen: _openModelScreen,
@@ -32,8 +32,8 @@ with
         // One builder for both layouts. The GlobalKey keeps the live thread
         // view (and its socket) alive when the layout flips; the phone layout
         // only adds the floating-bar inset and forces chuk's phone screen.
-        CoworkThreadView buildThread({double topInset = 0, bool phone = false}) =>
-            CoworkThreadView(
+        AgentsThreadView buildThread({double topInset = 0, bool phone = false}) =>
+            AgentsThreadView(
               key: _threadViewKey,
               controllerBuilder: widget.relayControllerBuilder ??
                   () => _buildRelayController(_pairingStore),
@@ -107,8 +107,8 @@ with
   /// back, edge swipe) flips the same flag the tablet path uses.
   Widget _buildPhoneBody(
     BuildContext context,
-    CoworkThreadView Function({double topInset, bool phone}) buildThread,
-    CoworkAgent? agent,
+    AgentsThreadView Function({double topInset, bool phone}) buildThread,
+    AgentsAgent? agent,
   ) {
     if (_showThreadOnNarrow && agent != null) {
       return MobileChatScreen(

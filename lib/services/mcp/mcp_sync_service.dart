@@ -1,4 +1,4 @@
-// COWORK ADAPTATION. Upstream: chuk_chat/lib/services/mcp/mcp_sync_service.dart
+// AGENTS ADAPTATION. Upstream: chuk_chat/lib/services/mcp/mcp_sync_service.dart
 // @ d31526a229fdde27c82adf3661d5d3a149db8340.
 // Reason: the verbatim `chat_sync_service.dart` calls
 // `McpSyncService.pullAndReconcile()` on every sync tick. Owner: cowork-47
@@ -6,10 +6,10 @@
 // Keep the public API signature-compatible with upstream so the imported chat
 // sync compiles unchanged.
 
-/// The tick that keeps CoWork's connector set level with the cloud.
+/// The tick that keeps Agents's connector set level with the cloud.
 ///
 /// chuk_chat reconciles one row per connector here — adds, re-keys and
-/// removes. CoWork does not: its own mirror is ONE encrypted blob and the
+/// removes. Agents does not: its own mirror is ONE encrypted blob and the
 /// device stays the authority on what is connected, so a tick that could
 /// remove a connector or overwrite a live token would be a way to sign the
 /// user out, not a feature (see `McpService.adoptMirrors`, which only ever
@@ -31,7 +31,7 @@
 /// comparison almost every time.
 library;
 
-import 'package:cowork/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_service.dart';
 
 class McpSyncService {
   McpSyncService._();

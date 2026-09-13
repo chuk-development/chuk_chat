@@ -2,9 +2,9 @@
 
 import 'dart:async';
 
-import 'package:cowork/models/stored_chat.dart';
-import 'package:cowork/services/chat_runtime_registry.dart';
-import 'package:cowork/services/network_status_service.dart';
+import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';

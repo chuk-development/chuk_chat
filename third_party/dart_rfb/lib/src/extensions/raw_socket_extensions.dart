@@ -8,7 +8,7 @@ import 'package:fpdart/fpdart.dart';
 extension RawSocketExtensions on RawSocket {
   /// Read exactly [length] bytes.
   ///
-  /// CoWork fork: upstream spun on `read()` whenever bytes were not there yet
+  /// Agents fork: upstream spun on `read()` whenever bytes were not there yet
   /// — the `await` on an already-completed future only yields to the microtask
   /// queue, so a wait for the next TCP chunk pegged a core (and, on a phone,
   /// the battery) for as long as the server took. Now: bytes already buffered

@@ -1,5 +1,5 @@
 #!/bin/sh
-# cowork-vnc-up — start x11vnc on the browser display, on demand, for the live
+# agents-vnc-up — start x11vnc on the browser display, on demand, for the live
 # view / login hand-off (§9). Called via a detached `docker exec` when the user
 # opens the browser view; the host then bridges x11vnc's localhost RFB port over
 # the sealed E2E channel with `docker exec -i <container> socat STDIO
@@ -11,7 +11,7 @@
 #
 # NO flock here, on purpose. The obvious `exec flock <lock> … exec x11vnc -bg`
 # is a trap: `-bg` daemonizes and keeps every inherited fd open, INCLUDING the
-# lock fd, so x11vnc holds the lock forever and the NEXT `cowork-vnc-up`
+# lock fd, so x11vnc holds the lock forever and the NEXT `agents-vnc-up`
 # deadlocks — the executor then times out and reports "vnc start failed", i.e.
 # the view stops transmitting after the first open. x11vnc already serialises
 # itself: only one process can bind the RFB port, so a lost race just makes the
@@ -24,14 +24,14 @@
 
 set -eu
 
-DISPLAY_NUM="${COWORK_BROWSER_DISPLAY:-:99}"
-PORT="${COWORK_VNC_PORT:-5900}"
-LOG="${COWORK_VNC_LOG:-/tmp/x11vnc.log}"
+DISPLAY_NUM="${AGENTS_BROWSER_DISPLAY:-:99}"
+PORT="${AGENTS_VNC_PORT:-5900}"
+LOG="${AGENTS_VNC_LOG:-/tmp/x11vnc.log}"
 
 # Nothing to serve if the display is not up. The browser launcher brings Xvfb up;
 # if the agent never opened the browser there is nothing to watch yet.
 if ! xdpyinfo -display "${DISPLAY_NUM}" >/dev/null 2>&1; then
-    echo "cowork-vnc-up: no display ${DISPLAY_NUM} yet" >&2
+    echo "agents-vnc-up: no display ${DISPLAY_NUM} yet" >&2
     exit 3
 fi
 
@@ -56,28 +56,28 @@ elif command -v xdotool >/dev/null 2>&1; then
     [ -n "${WINDOWS}" ] || WINDOWS=-1
 fi
 
-# Per-view secret (§9.1 hardening). When the executor passes COWORK_VNC_PASSWD
+# Per-view secret (§9.1 hardening). When the executor passes AGENTS_VNC_PASSWD
 # (it runs this script as root), the secret is written to a root-only file and
 # x11vnc is started with `-passwdfile read:FILE` — re-read on EVERY client
 # connect, so a new view can rotate the secret without restarting x11vnc. The
-# agent's own code runs as `cowork` and cannot read the file, so nothing inside
+# agent's own code runs as `agents` and cannot read the file, so nothing inside
 # the sandbox can watch the screen or inject input without the secret the app
 # received inside its sealed frame. Without the variable (old callers) x11vnc
 # stays passwordless as before.
-PASS_FILE="${COWORK_VNC_PASS_FILE:-/run/cowork-vnc.pass}"
+PASS_FILE="${AGENTS_VNC_PASS_FILE:-/run/agents-vnc.pass}"
 # A secret is REQUIRED. Anything in the sandbox can run this script (it is on
 # PATH for the agent's own shell); without this rule the agent could start a
 # passwordless x11vnc itself and watch the login hand-off. The only way to get
-# `-nopw` is the explicit COWORK_VNC_ALLOW_NOPW=1, which the executor never
+# `-nopw` is the explicit AGENTS_VNC_ALLOW_NOPW=1, which the executor never
 # sets — it exists for manual debugging in a throwaway container.
-if [ -z "${COWORK_VNC_PASSWD:-}" ] && [ "${COWORK_VNC_ALLOW_NOPW:-0}" != "1" ]; then
-    echo "cowork-vnc-up: refusing to start x11vnc without COWORK_VNC_PASSWD" >&2
+if [ -z "${AGENTS_VNC_PASSWD:-}" ] && [ "${AGENTS_VNC_ALLOW_NOPW:-0}" != "1" ]; then
+    echo "agents-vnc-up: refusing to start x11vnc without AGENTS_VNC_PASSWD" >&2
     exit 4
 fi
 AUTH_ARGS="-nopw"
-if [ -n "${COWORK_VNC_PASSWD:-}" ]; then
+if [ -n "${AGENTS_VNC_PASSWD:-}" ]; then
     umask 077
-    printf '%s\n' "${COWORK_VNC_PASSWD}" > "${PASS_FILE}.tmp"
+    printf '%s\n' "${AGENTS_VNC_PASSWD}" > "${PASS_FILE}.tmp"
     chmod 600 "${PASS_FILE}.tmp"
     mv -f "${PASS_FILE}.tmp" "${PASS_FILE}"
     AUTH_ARGS="-passwdfile read:${PASS_FILE}"
@@ -110,7 +110,7 @@ fi
 #              changed instead of re-scanning 1280x800. Measured: the pixels are
 #              byte-identical to the polling capture over repeated full frames,
 #              and CPU while watching drops (154 vs 175 ticks/15 s).
-#              COWORK_VNC_XDAMAGE=0 forces the old polling behaviour back for a
+#              AGENTS_VNC_XDAMAGE=0 forces the old polling behaviour back for a
 #              display where DAMAGE misbehaves; x11vnc itself already falls back
 #              when the extension is absent.
 # -ping 30     a 1x1 framebuffer update every 30 s. The stream leaves this
@@ -145,7 +145,7 @@ fi
 #              CLOSED — measured. noVNC only sends it after the server offers
 #              it, so noVNC is safe; a hand-written client must not assume.
 # -noshm       stays. MIT-SHM is advertised, but x11vnc runs as ROOT against an
-#              Xvfb owned by `cowork`, and XShmAttach then fails with BadAccess
+#              Xvfb owned by `agents`, and XShmAttach then fails with BadAccess
 #              (measured; x11vnc aborts on the X error). Shared memory is not
 #              available to us, whatever the extension list says.
 #
@@ -158,13 +158,13 @@ fi
 # palette/copy for UI): ~0.2 MB per full 1280x800 frame instead of the 4 MB raw
 # pixels the client asked for before it could decode Tight.
 #
-# Bump COWORK_VNC_REVISION whenever the flag list changes, so a container that
+# Bump AGENTS_VNC_REVISION whenever the flag list changes, so a container that
 # is already running picks the new flags up on the next view instead of serving
 # the old ones until it is recreated.
-COWORK_VNC_REVISION=2
-DESKTOP_NAME="cowork-vnc/${COWORK_VNC_REVISION}"
+AGENTS_VNC_REVISION=2
+DESKTOP_NAME="cowork-vnc/${AGENTS_VNC_REVISION}"
 DAMAGE_ARGS="-nonap"
-if [ "${COWORK_VNC_XDAMAGE:-1}" = "0" ]; then
+if [ "${AGENTS_VNC_XDAMAGE:-1}" = "0" ]; then
     DAMAGE_ARGS="-noxdamage"
 fi
 
@@ -223,7 +223,7 @@ if ! pgrep -f "x11vnc.*-rfbport ${PORT}" >/dev/null 2>&1; then
         sleep 0.1
     done
     if [ "${up}" -eq 0 ]; then
-        echo "cowork-vnc-up: x11vnc did not come up on ${DISPLAY_NUM}" >&2
+        echo "agents-vnc-up: x11vnc did not come up on ${DISPLAY_NUM}" >&2
         cat "${LOG}" >&2 2>/dev/null || true
         exit 1
     fi

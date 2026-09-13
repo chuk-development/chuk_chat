@@ -6,8 +6,8 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'package:cowork/services/encryption_service.dart';
-import 'package:cowork/services/supabase_service.dart';
+import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 /// How a per-model system prompt combines with the base (global + workspace)
 /// system prompt at request time.

@@ -15,18 +15,18 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/ui/expressive/huge_icon.dart';
-import 'package:cowork/ui/expressive/expressive_screen.dart';
-import 'package:cowork/ui/expressive/icon_map.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/pages/agent_profile_edit_page.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/services/cowork/agent_roster_source.dart';
-import 'package:cowork/ui/expressive/agent_face.dart';
-import 'package:cowork/ui/expressive/feedback.dart';
-import 'package:cowork/ui/expressive/motion.dart';
-import 'package:cowork/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
+import 'package:chuk_chat/ui/expressive/feedback.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/working_dots.dart';
 
 class AgentProfilePage extends StatelessWidget {
   const AgentProfilePage({
@@ -47,10 +47,10 @@ class AgentProfilePage extends StatelessWidget {
   final AgentRosterSource source;
 
   /// Renames the coworker. This is the one field that reaches the host.
-  final void Function(CoworkAgent agent)? onRename;
+  final void Function(AgentsAgent agent)? onRename;
 
   /// Deletes the coworker. The page pops itself first.
-  final void Function(CoworkAgent agent)? onDelete;
+  final void Function(AgentsAgent agent)? onDelete;
 
   /// Opens the agent control surface.
   final VoidCallback? onOpenControls;
@@ -69,8 +69,8 @@ class AgentProfilePage extends StatelessWidget {
     BuildContext context, {
     required String agentId,
     required AgentRosterSource source,
-    void Function(CoworkAgent agent)? onRename,
-    void Function(CoworkAgent agent)? onDelete,
+    void Function(AgentsAgent agent)? onRename,
+    void Function(AgentsAgent agent)? onDelete,
     VoidCallback? onOpenControls,
     VoidCallback? onOpenBrowser,
     VoidCallback? onMessage,
@@ -99,7 +99,7 @@ class AgentProfilePage extends StatelessWidget {
     return AnimatedBuilder(
       animation: Listenable.merge(<Listenable>[source, _store]),
       builder: (BuildContext context, Widget? _) {
-        final CoworkAgent? agent = source.byId(agentId);
+        final AgentsAgent? agent = source.byId(agentId);
         if (agent == null) {
           // The coworker was deleted while the page was open. Say so instead of
           // rendering an empty shell.
@@ -114,7 +114,7 @@ class AgentProfilePage extends StatelessWidget {
     );
   }
 
-  Widget _build(BuildContext context, CoworkAgent agent) {
+  Widget _build(BuildContext context, AgentsAgent agent) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final TextTheme text = Theme.of(context).textTheme;
     final AgentProfile profile = _store.profileOf(agent.id);
@@ -328,7 +328,7 @@ class AgentProfilePage extends StatelessWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, CoworkAgent agent) async {
+  Future<void> _confirmDelete(BuildContext context, AgentsAgent agent) async {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final NavigatorState navigator = Navigator.of(context);
     final bool? ok = await showDialog<bool>(
@@ -358,14 +358,14 @@ class AgentProfilePage extends StatelessWidget {
     navigator.maybePop();
   }
 
-  String? _roleOf(CoworkAgent agent, AgentProfile profile) {
+  String? _roleOf(AgentsAgent agent, AgentProfile profile) {
     final String? stored = profile.role?.trim();
     if (stored != null && stored.isNotEmpty) return stored;
     final String? own = agent.role?.trim();
     return (own == null || own.isEmpty) ? null : own;
   }
 
-  String? _briefOf(CoworkAgent agent, AgentProfile profile) {
+  String? _briefOf(AgentsAgent agent, AgentProfile profile) {
     final String? stored = profile.brief?.trim();
     if (stored != null && stored.isNotEmpty) return stored;
     final String? own = agent.brief?.trim();
@@ -377,7 +377,7 @@ class AgentProfilePage extends StatelessWidget {
 class _StatePill extends StatelessWidget {
   const _StatePill({required this.agent, required this.accent});
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final Color accent;
 
   @override

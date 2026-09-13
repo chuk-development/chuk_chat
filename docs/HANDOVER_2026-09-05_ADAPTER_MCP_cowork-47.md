@@ -64,13 +64,13 @@ Three rules, each with a test:
 - **The chat UI writes the local rows; the loader writes the replayed ones.**
   Any change to one has to be checked against the other, or the same turn lands
   twice. The parity test cowork-84 added
-  (`app/test/services/cowork/tool_card_parity_test.dart`) is the tool-call half
+  (`app/test/services/agents/tool_card_parity_test.dart`) is the tool-call half
   of exactly that.
 - **`_isReplay` in the adapter decides ownership.** Anything replayed, and every
   `user` frame, belongs to the loader; everything else to the ledger. A new
   inbound type has to be classified in BOTH the adapter switch and the loader
   switch or it silently disappears.
-- **Signature changes to `CoworkRelayController` need every fake in the same
+- **Signature changes to `AgentsRelayController` need every fake in the same
   step.** There are three: `test/support/fake_relay_controller.dart`,
   `test/widget_test.dart`, `test/widgets/messenger_shell_test.dart`. I broke the
   tree once by adding `regenerate` to `sendTask` and only fixing the first.
@@ -91,11 +91,11 @@ Three rules, each with a test:
   server has answered. `docs/HANDTEST_MCP_OAUTH.md` is the 5-step, ~2-minute
   acceptance. Do this before believing the feature works.
 - **cowork-hza (P1)**: connectors already signed in inside chuk_chat show as
-  "connect" in CoWork. Mirror the connection state through the same Supabase
+  "connect" in Agents. Mirror the connection state through the same Supabase
   tables chuk_chat uses. Reassigned away from me.
 - **P7 rest (notifications, app side) and P8 (Opus review of the whole Flutter
   side)** were assigned to me and never started. Plan:
-  `docs/PLAN_2026-09-04_COWORK_CHUK_ALIGN.md` §WS-7. The host side exists
+  `docs/PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md` §WS-7. The host side exists
   (`host/notify.py`, `desktop_notify.py`, `supabase/functions/notify-run`); the
   app has `notification_service.dart` as a no-op stub from the import, and the
   real port belongs in `services/notifications/local_notifications.dart` with the
@@ -116,7 +116,7 @@ Three rules, each with a test:
 
 ## Test status at handover
 
-Dart, each run alone: `cowork_replay_loader_test` 27, `cowork_relay_client_test`
+Dart, each run alone: `agents_replay_loader_test` 27, `agents_relay_client_test`
 51, `websocket_chat_service_test` 18, `mcp_store_test` 15, `mcp_oauth_test` 13,
 `mcp_service_test` 27, `mcp_connectors_page_test` 2, `widget_test` 3.
 Python: `test_mcp_client` 71, `test_state` + `test_loop` 56, `test_regenerate` 4.

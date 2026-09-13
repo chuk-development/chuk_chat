@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from cowork_manager import RoomCaps, RoomError, RoomStore
+from chuk_agents_manager import RoomCaps, RoomError, RoomStore
 
 
 def test_create_and_get_round_trips():

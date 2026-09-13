@@ -2,13 +2,13 @@
 import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/models/stream_phase.dart';
-import 'package:cowork/utils/stream_error_sanitizer.dart';
-import 'package:cowork/services/streaming_chat_service.dart';
-import 'package:cowork/services/streaming_foreground_service.dart';
-import 'package:cowork/services/notification_service.dart';
-import 'package:cowork/utils/tool_parser.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/utils/stream_error_sanitizer.dart';
+import 'package:chuk_chat/services/streaming_chat_service.dart';
+import 'package:chuk_chat/services/streaming_foreground_service.dart';
+import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Manages multiple concurrent chat streams across different chats
 class StreamingManager {

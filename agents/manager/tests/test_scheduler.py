@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from cowork_manager.scheduler import (
+from chuk_agents_manager.scheduler import (
     Job,
     JobMode,
     MonitorSignal,

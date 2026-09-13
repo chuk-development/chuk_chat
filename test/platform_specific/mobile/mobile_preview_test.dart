@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/platform_specific/mobile/mobile_agent_list.dart';
-import 'package:cowork/platform_specific/mobile/mobile_chat_screen.dart';
-import 'package:cowork/models/chat_message.dart' show ChatMessageStatus;
-import 'package:cowork/widgets/message_bubble.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
+import 'package:chuk_chat/widgets/message_bubble.dart';
 
 import 'mobile_support.dart';
 
@@ -28,15 +28,15 @@ void main() {
 
   final DateTime now = DateTime(2026, 9, 5, 14, 30);
 
-  List<CoworkAgent> roster() => <CoworkAgent>[
+  List<AgentsAgent> roster() => <AgentsAgent>[
         agent(
           id: 'chief',
           name: 'Chief of Staff',
           role: 'ops',
           running: true,
           lastActivity: now.subtract(const Duration(minutes: 3)),
-          threads: <CoworkThreadInfo>[
-            CoworkThreadInfo(key: 'chief-1', title: 'Morning digest'),
+          threads: <AgentsThreadInfo>[
+            AgentsThreadInfo(key: 'chief-1', title: 'Morning digest'),
           ],
           onHost: true,
         ),
@@ -45,8 +45,8 @@ void main() {
           name: 'SLMob',
           role: 'Meal prepping',
           lastActivity: now.subtract(const Duration(hours: 5)),
-          threads: <CoworkThreadInfo>[
-            CoworkThreadInfo(key: 's-1', title: 'Sunday mornings at 8:41 I will send the menu'),
+          threads: <AgentsThreadInfo>[
+            AgentsThreadInfo(key: 's-1', title: 'Sunday mornings at 8:41 I will send the menu'),
           ],
         ),
         agent(
@@ -59,8 +59,8 @@ void main() {
           id: 'inbox',
           name: 'Inbox Triage',
           lastActivity: now.subtract(const Duration(days: 3)),
-          threads: <CoworkThreadInfo>[
-            CoworkThreadInfo(key: 'i-1', title: 'Sent to alex@example.com'),
+          threads: <AgentsThreadInfo>[
+            AgentsThreadInfo(key: 'i-1', title: 'Sent to alex@example.com'),
           ],
         ),
         agent(id: 'research', name: 'UX Research', role: 'Challenges'),

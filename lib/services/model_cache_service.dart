@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:cowork/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 
 class ModelCacheService {
   const ModelCacheService._();

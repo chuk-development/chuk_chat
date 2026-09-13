@@ -1,4 +1,4 @@
-# CoWork — Szenarien
+# Agents — Szenarien
 
 Konkrete Alltags-Aufgaben, die der Agent können muss. Jedes Szenario ist ein
 Realfall, kein abstraktes Feature. Aus den Szenarien leiten wir ab, welche

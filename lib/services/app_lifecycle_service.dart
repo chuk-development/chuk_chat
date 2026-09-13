@@ -6,10 +6,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
-import 'package:cowork/services/chat_sync_service.dart';
-import 'package:cowork/services/diagnostics_log_service.dart';
-import 'package:cowork/services/network_status_service.dart';
-import 'package:cowork/services/streaming_manager.dart';
+import 'package:chuk_chat/services/chat_sync_service.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/streaming_manager.dart';
 
 /// Callback when app state changes
 typedef AppStateCallback = void Function(AppLifecycleState state);

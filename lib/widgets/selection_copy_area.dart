@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show SelectedContent;
 import 'package:flutter/services.dart';
 
-import 'package:cowork/utils/clipboard_text_sanitizer.dart';
+import 'package:chuk_chat/utils/clipboard_text_sanitizer.dart';
 
 /// Pure decision logic for the copy shortcut, kept out of the widget so it can
 /// be unit-tested without a binding.

@@ -11,16 +11,16 @@
 ///
 /// A presence dot rides at the bottom right: green while a run is in flight,
 /// amber when a schedule is armed, nothing while the coworker waits. That is
-/// read from [CoworkAgent.activity], which the app actually observes.
+/// read from [AgentsAgent.activity], which the app actually observes.
 library;
 
 import 'package:flutter/material.dart';
 
-import 'package:cowork/models/cowork_agent.dart';
-import 'package:cowork/services/cowork/agent_profile_store.dart';
-import 'package:cowork/ui/expressive/face_image.dart';
-import 'package:cowork/ui/expressive/shapes.dart';
-import 'package:cowork/widgets/agent_avatar.dart';
+import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/ui/expressive/face_image.dart';
+import 'package:chuk_chat/ui/expressive/shapes.dart';
+import 'package:chuk_chat/widgets/agent_avatar.dart';
 
 /// The selected silhouette, shared by monograms, photos and editor previews.
 ShapeBorder agentAvatarShape(String id, AgentAvatarShape? shape, double size) =>
@@ -198,7 +198,7 @@ class AgentFace extends StatelessWidget {
     this.profileOverride,
   });
 
-  final CoworkAgent agent;
+  final AgentsAgent agent;
   final double size;
   final bool showPresence;
 

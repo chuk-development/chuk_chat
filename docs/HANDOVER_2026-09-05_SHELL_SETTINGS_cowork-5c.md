@@ -9,7 +9,7 @@ session was committed; the user gives that word.
 
 chuk_chat's two settings surfaces are live in `app/lib/pages/`:
 `settings_page.dart` (1155 → 602 lines) and `desktop_settings_modal.dart`
-(794 → 662). CoWork's old hub (`pages/settings/settings_page.dart`) and
+(794 → 662). Agents's old hub (`pages/settings/settings_page.dart`) and
 `pages/settings/theme_settings_page.dart` are gone; `_p4_pending/` is empty and
 deleted. The section map, the per-page decisions and why `account_settings_page`
 and `system_prompt_page` were dropped rather than adapted are written up in
@@ -17,9 +17,9 @@ and `system_prompt_page` were dropped rather than adapted are written up in
 decided".
 
 `MessengerShell._openSettings` opens chuk's hub. It needs an `AppShellConfig`
-and takes it from `CoworkApp.shellConfig` — the same static `cowork_thread_view`
+and takes it from `AgentsApp.shellConfig` — the same static `agents_thread_view`
 already reads — with a new injectable `MessengerShell.shellConfig` seam so a
-widget test can open settings without `CoworkApp` around it. A null config makes
+widget test can open settings without `AgentsApp` around it. A null config makes
 the entry a no-op instead of a crash. Bead `cowork-8y2` replaces that static
 with a value handed down the tree; do that and both readers get simpler.
 
@@ -54,7 +54,7 @@ same 110 ms cross-fade, and chuk's streaming glow on a working agent.
 
 c6's mobile diff (`docs/diffs_c6_messenger_shell.md`) is applied, with **one
 addition that is not in the diff**: c6's `_buildPhoneBody` mounted only
-`MobileAgentList` on the inbox screen, so `CoworkThreadView` — the widget that
+`MobileAgentList` on the inbox screen, so `AgentsThreadView` — the widget that
 builds the relay controller and reports pairing — was not in the tree at all. A
 phone would have had no socket until the user opened a chat: no reconnect, no
 run adoption, and a roster that never learns about the paired host. The inbox
@@ -68,8 +68,8 @@ NOT started, and the next session's job: bead `cowork-b6h` (the root_wrapper
 layout — the `AppBar` in `messenger_shell.dart` disappears, the four top-right
 actions move into chuk's floating `Positioned` row, **including the Copy full
 chat button that currently lives in that AppBar**), `cowork-8y2` (AppShellConfig
-handed down instead of the static), and `pages/cowork_shell_state.dart` with the
-`CoworkShellHost` mixin. Plan detail: `PLAN_2026-09-04_COWORK_CHUK_ALIGN.md`,
+handed down instead of the static), and `pages/agents_shell_state.dart` with the
+`AgentsShellHost` mixin. Plan detail: `PLAN_2026-09-04_AGENTS_CHUK_ALIGN.md`,
 WS-1.
 
 ## File ownership held by this session
@@ -85,9 +85,9 @@ WS-1.
 `services/api_config_base.dart`, `platform_specific/chat/chat_scroll_mixin.dart`,
 and their tests, plus `test/support/shell_config.dart`.
 
-Off limits (other sessions): `widgets/cowork_thread_view.dart` (cowork-47 for
+Off limits (other sessions): `widgets/agents_thread_view.dart` (cowork-47 for
 notification hooks, cowork-9e for one approval guard), `services/mcp/**`
-(cowork-47), `services/cowork/**`, `services/supabase_service.dart` and
+(cowork-47), `services/agents/**`, `services/supabase_service.dart` and
 `widgets/auth_gate.dart` and `main.dart`'s session-recovery lines (cowork-9e),
 `platform_specific/mobile/**` (cowork-c6), `third_party/**` and
 `widgets/browser_view_page.dart` (cowork-13).
@@ -132,7 +132,7 @@ operator used on a null value" and the real failure is invisible.
 
 `docs/diffs_c6_notifications_shell.md` is a second, additive diff for
 `pages/messenger_shell.dart` (bead `cowork-o3j`, P7): two imports, a listener on
-`NotificationRouter.instance.pending` plus `CoworkNotifications.instance
+`NotificationRouter.instance.pending` plus `AgentsNotifications.instance
 .threadLabel` in `initState`, a post-frame call for the cold start, the matching
 `removeListener` in `dispose`, and a new `_onNotificationTap` that does
 `take()` → `_select(agentId, sessionKey)` → `onOpenedFromNotification`. The

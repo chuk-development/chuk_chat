@@ -17,14 +17,14 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from cowork_agent import MemoryStore, ToolRegistry, register_memory_tool
-from cowork_agent.mem0_provider import (
+from chuk_agents_runtime import MemoryStore, ToolRegistry, register_memory_tool
+from chuk_agents_runtime.mem0_provider import (
     PROVIDER_NAME,
     ChukBackendLLM,
     register_provider,
     set_backend_client,
 )
-from cowork_agent.model import ModelResponse
+from chuk_agents_runtime.model import ModelResponse
 
 
 # -- stubs ------------------------------------------------------------------
@@ -71,7 +71,7 @@ class StubMemory:
 
 def test_provider_returns_the_backend_text():
     backend = StubBackend(reply='{"facts": ["likes tea"]}')
-    llm = ChukBackendLLM({"model": "cowork-memory-writer"}, client=backend)
+    llm = ChukBackendLLM({"model": "agents-memory-writer"}, client=backend)
 
     out = llm.generate_response(
         messages=[{"role": "user", "content": "hi"}],
@@ -87,7 +87,7 @@ def test_provider_falls_back_to_the_injected_module_client():
     backend = StubBackend(reply="ok")
     set_backend_client(backend)
     try:
-        llm = ChukBackendLLM({"model": "cowork-memory-writer"})  # no client=
+        llm = ChukBackendLLM({"model": "agents-memory-writer"})  # no client=
         assert llm.generate_response([{"role": "user", "content": "x"}]) == "ok"
     finally:
         set_backend_client(None)
@@ -95,7 +95,7 @@ def test_provider_falls_back_to_the_injected_module_client():
 
 def test_provider_without_a_client_raises_a_clear_error():
     set_backend_client(None)
-    llm = ChukBackendLLM({"model": "cowork-memory-writer"})
+    llm = ChukBackendLLM({"model": "agents-memory-writer"})
     with pytest.raises(RuntimeError, match="no backend client"):
         llm.generate_response([{"role": "user", "content": "x"}])
 
@@ -106,7 +106,7 @@ def test_register_provider_teaches_the_factory():
 
     assert PROVIDER_NAME in LlmFactory.provider_to_class
     dotted, _config = LlmFactory.provider_to_class[PROVIDER_NAME]
-    assert dotted == "cowork_agent.mem0_provider.ChukBackendLLM"
+    assert dotted == "chuk_agents_runtime.mem0_provider.ChukBackendLLM"
 
 
 # -- the memory tool, routed to Mem0 ----------------------------------------
@@ -250,8 +250,8 @@ def test_one_mem0_handle_per_workspace_root_across_stores(tmp_path, monkeypatch)
     its own handle."""
     import mem0
 
-    from cowork_agent import memory as memory_mod
-    from cowork_agent import mem0_provider
+    from chuk_agents_runtime import memory as memory_mod
+    from chuk_agents_runtime import mem0_provider
 
     monkeypatch.setattr(memory_mod, "_MEM_BY_ROOT", {})
     monkeypatch.setattr(mem0_provider, "register_provider", lambda: None)
@@ -290,7 +290,7 @@ def test_one_mem0_handle_per_workspace_root_across_stores(tmp_path, monkeypatch)
 
 
 def test_recall_messages_is_one_context_row_with_the_top_memories(tmp_path):
-    from cowork_agent.memory import RECALL_PREFIX
+    from chuk_agents_runtime.memory import RECALL_PREFIX
 
     store = MemoryStore(tmp_path, mem0_memory=StubMemory())
     rows = store.recall_messages("how should commits be phrased")
@@ -365,7 +365,7 @@ def test_observe_turn_runs_in_the_background_on_a_private_clone_and_is_joined(tm
     would hold the Qdrant lock into the next start)."""
     import threading
 
-    from cowork_agent import memory as memory_module
+    from chuk_agents_runtime import memory as memory_module
 
     class Clonable(StubBackend):
         def __init__(self):
@@ -401,7 +401,7 @@ def test_observe_turn_runs_in_the_background_on_a_private_clone_and_is_joined(tm
     assert thread is not None and thread.is_alive()
     assert mem.started.wait(5.0)
     # While the extraction runs, the provider's writer is the private clone.
-    from cowork_agent import mem0_provider
+    from chuk_agents_runtime import mem0_provider
 
     assert mem0_provider._backend_client is writer.clones[0]
 
@@ -417,7 +417,7 @@ def test_observe_turn_runs_in_the_background_on_a_private_clone_and_is_joined(tm
 
 
 def test_explicit_memory_search_and_memory_add_tools(tmp_path):
-    from cowork_agent.registry import ToolRegistry
+    from chuk_agents_runtime.registry import ToolRegistry
 
     mem = StubMemory()
     store = MemoryStore(tmp_path, mem0_memory=mem)

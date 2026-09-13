@@ -1,4 +1,4 @@
-"""``cowork-vnc-up`` — the contract the live browser view depends on (§9.1).
+"""``agents-vnc-up`` — the contract the live browser view depends on (§9.1).
 
 The script is what decides how long the user waits for the first picture and
 whether a quiet stream survives a bad mobile link (bead cowork-c0zd), so the
@@ -91,9 +91,9 @@ def rig(tmp_path):
 def _run(bin_dir: Path, tmp_path: Path, **env_extra) -> subprocess.CompletedProcess:
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
-    env["COWORK_VNC_PASSWD"] = "s3cr3t"
-    env["COWORK_VNC_PASS_FILE"] = str(tmp_path / "vnc.pass")
-    env["COWORK_VNC_LOG"] = str(tmp_path / "x11vnc.log")
+    env["AGENTS_VNC_PASSWD"] = "s3cr3t"
+    env["AGENTS_VNC_PASS_FILE"] = str(tmp_path / "vnc.pass")
+    env["AGENTS_VNC_LOG"] = str(tmp_path / "x11vnc.log")
     env.update(env_extra)
     return subprocess.run(
         ["/bin/sh", str(SCRIPT)], capture_output=True, text=True, env=env, timeout=30
@@ -153,7 +153,7 @@ def test_the_flags_that_decide_latency_and_stability_are_all_there(rig, tmp_path
     # Throughput, unchanged and still measured.
     assert "-threads" in argv and "-defer 1" in argv and "-wait 2" in argv
     # Shared memory stays off: x11vnc runs as root against an Xvfb owned by
-    # `cowork`, and XShmAttach fails with BadAccess there.
+    # `agents`, and XShmAttach fails with BadAccess there.
     assert "-noshm" in argv
     # The real remote pointer stays in the stream: x11vnc's cursor defaults are
     # what puts the agent's mouse on the user's screen (measured: RichCursor
@@ -170,7 +170,7 @@ def test_the_flags_that_decide_latency_and_stability_are_all_there(rig, tmp_path
 def test_xdamage_can_be_switched_off_for_a_display_that_misbehaves(rig, tmp_path):
     bin_dir, _running, started = rig
 
-    assert _run(bin_dir, tmp_path, COWORK_VNC_XDAMAGE="0").returncode == 0
+    assert _run(bin_dir, tmp_path, AGENTS_VNC_XDAMAGE="0").returncode == 0
     argv = _starts(started)[0]
 
     assert "-noxdamage" in argv
@@ -184,9 +184,9 @@ def test_a_passwordless_start_is_still_refused(rig, tmp_path):
     bin_dir, _running, started = rig
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}:{env['PATH']}"
-    env["COWORK_VNC_PASS_FILE"] = str(tmp_path / "vnc.pass")
-    env["COWORK_VNC_LOG"] = str(tmp_path / "x11vnc.log")
-    env.pop("COWORK_VNC_PASSWD", None)
+    env["AGENTS_VNC_PASS_FILE"] = str(tmp_path / "vnc.pass")
+    env["AGENTS_VNC_LOG"] = str(tmp_path / "x11vnc.log")
+    env.pop("AGENTS_VNC_PASSWD", None)
 
     result = subprocess.run(
         ["/bin/sh", str(SCRIPT)], capture_output=True, text=True, env=env, timeout=30

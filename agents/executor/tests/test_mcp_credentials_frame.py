@@ -15,10 +15,10 @@ import copy
 import json
 from pathlib import Path
 
-from cowork_sandbox import LocalEnvironment
+from chuk_agents_sandbox import LocalEnvironment
 
-from cowork_executor import Executor, loopback_pair
-from cowork_executor.protocol import mcp_credentials_payload
+from chuk_agents_executor import Executor, loopback_pair
+from chuk_agents_executor.protocol import mcp_credentials_payload
 
 from wiring import paired_channel
 

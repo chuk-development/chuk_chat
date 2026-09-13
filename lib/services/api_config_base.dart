@@ -1,9 +1,9 @@
 // lib/services/api_config_base.dart
 // Shared API configuration logic used by both IO and Web implementations.
 //
-// COWORK CHANGE (bd cowork-zrq): a debug build points at the SAME account
+// AGENTS CHANGE (bd cowork-zrq): a debug build points at the SAME account
 // backend as a release build. Upstream chuk_chat falls back to a local dev API
-// server in debug; CoWork has no such server. Its own host (port 8787) does not
+// server in debug; Agents has no such server. Its own host (port 8787) does not
 // serve `/v1/models_info` — the host CALLS that endpoint on the account backend
 // itself (host.py, resolve_backend_model_wiring) — and the app also runs on a
 // phone far away from the host, where 8787 is unreachable. Falling back to

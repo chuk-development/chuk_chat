@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import json
 
-from cowork_agent.context import estimate_tokens
-from cowork_agent.prompt import render_tool_docs
-from cowork_agent.registry import ToolRegistry
-from cowork_agent.tool_search import (
+from chuk_agents_runtime.context import estimate_tokens
+from chuk_agents_runtime.prompt import render_tool_docs
+from chuk_agents_runtime.registry import ToolRegistry
+from chuk_agents_runtime.tool_search import (
     CORE_TOOLS,
     apply_tool_search,
     tool_doc_tokens,
@@ -246,7 +246,7 @@ def test_tool_describe_returns_everything_the_declaration_would_have_carried():
     assert "`repo` (string, required)" in result["documentation"]
     assert result["schema"]["required"] == ["repo", "title"]
     # Character-for-character the block a non-deferred tool renders to.
-    from cowork_agent.prompt import render_tool_block
+    from chuk_agents_runtime.prompt import render_tool_block
 
     assert result["documentation"] == render_tool_block(
         "mcp__github__create_issue", result["schema"]

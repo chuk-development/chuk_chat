@@ -1,22 +1,22 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:cowork/models/chat_stream_event.dart';
-import 'package:cowork/models/content_block.dart';
-import 'package:cowork/models/tool_call.dart';
-import 'package:cowork/services/cowork/cowork_relay_client.dart';
-import 'package:cowork/services/cowork/cowork_relay_link.dart';
-import 'package:cowork/services/cowork/cowork_run_ledger.dart';
-import 'package:cowork/services/tool_call_handler.dart';
+import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart';
 
 void main() {
   const sessionKey = 'thread-1';
   final handler = ToolCallHandler();
-  final ledger = CoworkRunLedger.instance;
+  final ledger = AgentsRunLedger.instance;
 
   setUp(() {
     ledger.reset();
-    CoworkRelayLink.instance.reset();
+    AgentsRelayLink.instance.reset();
   });
 
   ToolLoopSession sessionFor(String? key) => handler.createSession(
@@ -66,7 +66,7 @@ void main() {
       ..closeTool(sessionKey, 'run_command', result: 'a\nb', exitCode: 0);
     await ledger.file(
       sessionKey,
-      CoworkRelayFile(
+      AgentsRelayFile(
         name: 'report.csv',
         mimeType: 'text/csv',
         declaredSize: 3,
@@ -137,7 +137,7 @@ void main() {
 
   test('a session with no chat id falls back to the link session key',
       () async {
-    CoworkRelayLink.instance.sessionKey.value = 'fallback-thread';
+    AgentsRelayLink.instance.sessionKey.value = 'fallback-thread';
     ledger.begin('fallback-thread');
     ledger.closeTool('fallback-thread', 'run_command', exitCode: 0);
 

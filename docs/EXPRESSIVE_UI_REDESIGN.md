@@ -28,11 +28,11 @@ relay, the roster or a chat; every screen builds on it.
 
 Two stores carry the facts the redesign needed:
 
-* `services/cowork/agent_profile_store.dart` — a coworker's picture, colour,
+* `services/agents/agent_profile_store.dart` — a coworker's picture, colour,
   role and brief. The wire carries ids and NAMES only (`agent_create`,
   `agent_rename`, `agent_list`), so these live in `SharedPreferences` on this
   device, and the profile editor says so.
-* `services/cowork/agent_read_marks.dart` — the last time the reader had a
+* `services/agents/agent_read_marks.dart` — the last time the reader had a
   thread on screen. `unread == lastActivity > lastRead`. A dot, never a count:
   the app cannot know how many messages arrived while the reader was away.
 
@@ -43,7 +43,7 @@ Two stores carry the facts the redesign needed:
   the real unread count, expressive rows (face, name, role tag, time, preview,
   unread dot), staggered entrance, long-press row menu.
 * **Phone chat chrome** (`.../mobile_chat_chrome.dart`): back target, coworker
-  pill with the status line, and the messenger's two call targets with CoWork's
+  pill with the status line, and the messenger's two call targets with Agents's
   meaning — the voice call is parked, and the VIDEO call's slot is the
   coworker's screen (the sandbox VNC view, `BrowserViewPage`), parked while it
   has none open. Then "more".
@@ -60,7 +60,7 @@ Two stores carry the facts the redesign needed:
   is given, so "delivered" and "read" answer nothing. The only mark left is the
   local queue — a clock while a message waits offline, an error glyph when the
   send gave up.
-* **Desktop** (`widgets/agent_roster_view.dart`, `widgets/cowork_thread_header.dart`):
+* **Desktop** (`widgets/agent_roster_view.dart`, `widgets/agents_thread_header.dart`):
   the same faces and unread dots in the rail, and the same contact header —
   face, name, status line, parked call and the screen target — above the
   thread. The screen button left the shell's action row; the header's

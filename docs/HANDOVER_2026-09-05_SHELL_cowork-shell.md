@@ -1,16 +1,16 @@
 # Handover — P3-rest shell (session cowork-shell = cowork-f7, 2026-09-05)
 
 Everything below is **uncommitted** in the shared working tree (branch
-`cowork`). Nothing in this session was committed; the user gives that word.
+`agents`). Nothing in this session was committed; the user gives that word.
 
 ## What was done (beads cowork-b6h, cowork-8y2, cowork-acu — all closed)
 
 ### The shell is chuk's root wrapper now (`app/lib/pages/messenger_shell.dart`)
 
 The `AppBar` is gone. The layout is `root_wrapper_desktop.dart` from chuk_chat
-master (d31526a), slot for slot, with CoWork's content:
+master (d31526a), slot for slot, with Agents's content:
 
-- One `Stack`. The chat area (`CoworkThreadView`) sits in a `Positioned.fill`
+- One `Stack`. The chat area (`AgentsThreadView`) sits in a `Positioned.fill`
   inset by the sidebar and the right panel and hidden with `Offstage` in
   compact mode — never unmounted.
 - Sidebar (`AgentRosterView`) slides in from the left: `Positioned(left: 0 |
@@ -49,7 +49,7 @@ a panel folds the sidebar when both cannot fit next to a 300 px chat (chuk
 drops the panel silently — at 800 px Control Rooms would look broken);
 opening settings does not fold the sidebar.
 
-### `CoworkShellHost` (`app/lib/pages/cowork_shell_state.dart`)
+### `AgentsShellHost` (`app/lib/pages/agents_shell_state.dart`)
 
 A mixin on `State<MessengerShell>`, a `part` of `messenger_shell.dart` (like
 chuk's `desktop_send_logic.dart` is a part of `chat_ui_desktop.dart`, so the
@@ -75,7 +75,7 @@ Control Rooms (`onOpenRooms`), Agent's browser (`onOpenBrowser`); the list;
 chuk's footer pill floating over the list's tail with the fade
 (`onOpenSettings`, label `accountLabel ?? 'Account'`, gear with tooltip
 `Settings`). Minus chuk's hosted `BalanceBadge` / `UpdateBanner`. The
-CoWork-only collapsed avatar rail (`collapsed` / `onToggleCollapsed`) is
+Agents-only collapsed avatar rail (`collapsed` / `onToggleCollapsed`) is
 deleted — chuk's mini rail replaces it. `agent_roster_view_test` 22/22 (two
 new: rail rows + gear fire; absent without callbacks).
 
@@ -84,8 +84,8 @@ new: rail rows + gear fire; absent without callbacks).
 `main.dart` builds the config in `build()` (as before) and hands it through
 `AuthGate(buildShell: (_) => MessengerShell(themeController:, shellConfig:))`
 — `auth_gate.dart` (9e's file) is untouched, the seam already existed.
-`CoworkApp.shellConfig` (the static) is gone. `MessengerShell.shellConfig` →
-`CoworkThreadView.shellConfig` (new optional parameter; `_buildChat` reads
+`AgentsApp.shellConfig` (the static) is gone. `MessengerShell.shellConfig` →
+`AgentsThreadView.shellConfig` (new optional parameter; `_buildChat` reads
 `widget.shellConfig`, import of `main.dart` removed — announced to and GO'd
 by cowork-76). A shell without a config (widget tests) has no settings entry
 (no footer pill) and the model entry falls back to the page route.
@@ -124,7 +124,7 @@ the shell off stage and muted its tickers), three finders are scoped to the
 
 - **`find.byType(X)` skips `Offstage` subtrees by default.** chuk's compact
   mode and the phone inbox keep the thread view mounted but off stage; use
-  `find.byType(CoworkThreadView, skipOffstage: false)` (the test file has a
+  `find.byType(AgentsThreadView, skipOffstage: false)` (the test file has a
   `threadView` finder and a `threadOffstage()` helper).
 - **A `ListTile` inside a coloured `Container` trips a debug assertion**
   ("ListTile background color or ink splashes may be invisible"). chuk's panel
@@ -156,9 +156,9 @@ the shell off stage and muted its tickers), three finders are scoped to the
 - `services/settings/theme_controller.dart` still alive on purpose
   (`main.dart`, `auth_gate.dart`, `MessengerShell` take it).
 - No commit. Files this session touched: `app/lib/pages/messenger_shell.dart`,
-  `app/lib/pages/cowork_shell_state.dart` (new), `app/lib/widgets/
+  `app/lib/pages/agents_shell_state.dart` (new), `app/lib/widgets/
   agent_roster_view.dart`, `app/lib/main.dart`, `app/lib/widgets/
-  cowork_thread_view.dart` (3 hunks, announced), `app/test/widgets/
+  agents_thread_view.dart` (3 hunks, announced), `app/test/widgets/
   messenger_shell_test.dart`, `app/test/widget_test.dart`, `app/test/widgets/
   agent_roster_view_test.dart`, `app/test/pages/settings_page_test.dart`
   (comment), deletions listed above.
@@ -175,25 +175,25 @@ each: F1–F9, F13, F14, F15. Open: F10 and F12 (`services/mcp/**`, cowork-47's,
 LOW), F11 (ledger, cowork-84).
 
 Files this pass edited (all announced to and GO'd by cowork-76, owners
-informed): `services/cowork/cowork_replay_loader.dart` (F1 request ordering by
+informed): `services/agents/agents_replay_loader.dart` (F1 request ordering by
 `run_state` header / request order, queued same-thread request, F2 cache-miss
 guard + `takeReplayWanted`, F13, `answerReadyRunFor`),
 `services/websocket_chat_service.dart` (F3 replay guard for subagent / file /
-approval, F14 no `run_ack` from the adapter), `services/cowork/
-cowork_relay_client.dart` (F4 `_onSocketDone` releases the socket + `_reattach`
+approval, F14 no `run_ack` from the adapter), `services/agents/
+agents_relay_client.dart` (F4 `_onSocketDone` releases the socket + `_reattach`
 dial guard, F5 no ack with an empty `user_id`, F9 `sessionKey` on
-`CoworkRelayApprovalRequest`, F15 comment), `widgets/cowork_thread_view.dart`
+`AgentsRelayApprovalRequest`, F15 comment), `widgets/agents_thread_view.dart`
 (F6 mounted check, F8 clear-then-act, F9 prompt only for the own thread, F2
 re-request hook), `services/notifications/run_notifications.dart` (F7 dedup per
-session/run), `services/notifications/cowork_notifications.dart` (additive
+session/run), `services/notifications/agents_notifications.dart` (additive
 `runId` on `onAnswerReplayed`).
 
 Results: full `flutter analyze` 0 errors (same 5 pre-existing findings);
 replay_loader 25, websocket_chat_service 18, relay_client 51, thread_view 25,
-thread_view_notifications 3, cowork_notifications 7, tool_card_parity 5,
+thread_view_notifications 3, agents_notifications 7, tool_card_parity 5,
 run_ledger 17, messenger_shell 21 — all green.
 
-Found on the side: `services/cowork/cowork_run_ledger.dart` carries four
+Found on the side: `services/agents/agents_run_ledger.dart` carries four
 literal NUL bytes in a doc comment (`"<sessionKey>\0<subagentId>"`); the
 analyzer accepts it, `grep` calls the file binary. cowork-84 was told.
 
@@ -222,21 +222,21 @@ chuk's account page and dropped it for want of the services below.
   accent-tinted pill + gear). Put the badge back exactly there, so the pill
   reads as chuk's.
 - chuk's Account page: `~/git/chuk_chat/lib/pages/account_settings_page.dart`
-  (780 lines). Its imports that CoWork lacks: `services/profile_service.dart`,
+  (780 lines). Its imports that Agents lacks: `services/profile_service.dart`,
   `services/password_change_service.dart`, `services/password_reset_service.dart`,
   `services/key_version_service.dart`, `pages/recover_chats_page.dart`,
   `widgets/settings_list_view.dart` (check `tools/chat_ui_manifest.txt` for
   what is already imported). `expressive_settings`, `theme_extensions`,
   `api_config_service`, `auth_service`, `supabase_service` exist. Port the
   services verbatim (add them to the manifest via `scripts/import_chat_ui.sh`),
-  then the page verbatim; CoWork's own `pages/account_settings_page.dart` goes.
+  then the page verbatim; Agents's own `pages/account_settings_page.dart` goes.
 - Credits come from chuk's hosted account API (`ApiConfigService` → api.chuk.chat,
   bead cowork-zrq set the default); the badge's own service is the source —
   find it with `grep -rn "class BalanceBadge" ~/git/chuk_chat/lib`.
 
 **cowork-817 — rename a coworker, create one with a name, chuk-style input.**
 - Today: create = `widgets/agent_onboarding_sheet.dart` (the "kindergarten"
-  form the user rejected), no rename at all. Data: `services/cowork/
+  form the user rejected), no rename at all. Data: `services/agents/
   agent_roster_source.dart` (`addAgent(name:, role:, brief:, …)`; add a
   `renameAgent(id, name)` there and persist it like `hideAgent`).
 - chuk's template for the dialog: `sidebar_desktop.dart` `_renameChatDialog`
