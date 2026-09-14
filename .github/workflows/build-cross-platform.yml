@@ -110,6 +110,9 @@ jobs:
       - uses: actions/checkout@v5
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # Full history + tags: scripts/release_notes.py builds the changelog
+          # from the commits between the previous tag and this one.
+          fetch-depth: 0
 
       - name: Read version
         id: bump
@@ -118,7 +121,33 @@ jobs:
           VER=$(echo "$CURRENT" | cut -d'+' -f1)
           BUILD_TS=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           PRERELEASE="${{ github.event.inputs.prerelease }}"
-          if [ "$PRERELEASE" = "true" ]; then
+          # $GITHUB_REF and $GITHUB_EVENT_NAME are read at runtime, never
+          # interpolated into the script: a tag name is attacker-controllable
+          # text and must not reach the shell parser.
+          PUSHED_REF="$GITHUB_REF"
+          if [ "$GITHUB_EVENT_NAME" = "push" ] \
+             && [ "${PUSHED_REF#refs/tags/}" != "$PUSHED_REF" ]; then
+            # A tag push carries the tag itself. Deriving it from pubspec.yaml
+            # would turn a pushed v<ver>-pre.N into the stable v<ver>, and the
+            # changelog would then cover the wrong range.
+            TAG="${PUSHED_REF#refs/tags/}"
+            VER="${TAG#v}"
+            VER="${VER%%-*}"
+            case "$TAG" in
+              *-pre.*) PRERELEASE="true" ;;
+              *)       PRERELEASE="false" ;;
+            esac
+            # Every build job takes its version from pubspec.yaml. A tag that
+            # disagrees would produce binaries whose version does not match the
+            # release they are attached to, so refuse that combination instead
+            # of shipping it.
+            PUBSPEC_VER=$(echo "$CURRENT" | cut -d'+' -f1)
+            if [ "$VER" != "$PUBSPEC_VER" ]; then
+              echo "::error::Tag $TAG does not match pubspec.yaml ($PUBSPEC_VER). Bump pubspec.yaml first, or dispatch the workflow instead."
+              exit 1
+            fi
+            echo "Tag push: using $TAG (prerelease=$PRERELEASE)"
+          elif [ "$PRERELEASE" = "true" ]; then
             # Next pre-release number for this base version. Pre-releases share
             # one base version and only the -pre.N suffix advances, so we can
             # cut many without bumping — capped at 20; the 21st must bump
@@ -136,6 +165,13 @@ jobs:
             PRERELEASE="false"
             TAG="v$VER"
           fi
+          # Every later step interpolates the tag into a shell command, so it
+          # must be a plain version tag and nothing else.
+          if ! printf '%s' "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+(-pre\.[0-9]+)?$'; then
+            echo "::error::Refusing to build tag '$TAG': not a version tag."
+            exit 1
+          fi
+
           echo "version=$VER" >> $GITHUB_OUTPUT
           echo "version_short=$VER" >> $GITHUB_OUTPUT
           echo "tag=$TAG" >> $GITHUB_OUTPUT
@@ -179,6 +215,16 @@ jobs:
           done
           echo "::warning::Tag $TAG still not visible after 30s; proceeding anyway."
 
+      - name: Generate release notes
+        run: |
+          TAG=${{ steps.bump.outputs.tag }}
+          git fetch --tags --force --quiet
+          python3 scripts/release_notes.py "$TAG" --repo "${{ github.repository }}" \
+            > RELEASE_NOTES.md
+          # The file carries commit subjects. It goes to the release body, not
+          # into the job log.
+          echo "wrote release notes: $(wc -l < RELEASE_NOTES.md) lines"
+
       - name: Create draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -204,32 +250,13 @@ jobs:
               --draft \
               $PRE_FLAG \
               --title "Chuk Chat $TAG" \
-              --notes "$(cat <<'EOF'
-          ## Downloads
-
-          **Android** (choose your architecture):
-          - **ARM64** — for modern phones (recommended)
-          - **ARM32** — for older phones
-          - **x64** — for emulators / x86 devices
-
-          **Linux x86_64:**
-          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-amd64.deb`
-          - **.AppImage** — Universal: `chmod +x *.AppImage && ./chuk_chat-*-linux-x86_64.AppImage`
-          - **.rpm** — Fedora/RHEL: `sudo rpm -i chuk_chat-*-linux-x86_64.rpm`
-
-          **Linux ARM64** (Raspberry Pi, Asahi Linux, etc.):
-          - **.deb** — Debian/Ubuntu: `sudo dpkg -i chuk_chat-*-linux-arm64.deb`
-          - **.AppImage** — Universal (if available)
-
-          **Windows:**
-          - **Setup.exe** — Installer with Start Menu shortcut (recommended)
-          - **Portable ZIP** — extract and run, no installation needed
-
-          **macOS:**
-          - DMG or ZIP — drag to Applications
-          EOF
-            )"
+              --notes-file RELEASE_NOTES.md
           fi
+
+          # An existing release may still carry the old download boilerplate
+          # instead of a changelog — overwrite it either way.
+          gh release edit "$TAG" --repo ${{ github.repository }} \
+            --notes-file RELEASE_NOTES.md
 
           # Verify the draft has the correct tag_name. If it got stuck as
           # "untagged-*", delete and recreate — the tag is now definitely
@@ -247,7 +274,7 @@ jobs:
               --draft \
               $PRE_FLAG \
               --title "Chuk Chat $TAG" \
-              --notes "See commit history for changes."
+              --notes-file RELEASE_NOTES.md
           fi
 
   # ──────────────────────────────────────────────
