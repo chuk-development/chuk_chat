@@ -42,7 +42,15 @@ OUT_DIR="$REPO/docs/screenshots/ads"
 RAW_DIR="$REPO/_scratch/app_ads_raw"
 
 command -v xdotool >/dev/null 2>&1 || { echo "xdotool is missing: sudo apt install xdotool" >&2; exit 1; }
-command -v convert >/dev/null 2>&1 || { echo "ImageMagick is missing: sudo apt install imagemagick" >&2; exit 1; }
+# Both ImageMagick tools are checked, not only convert: `import` needs the X11
+# delegate, which some packages leave out. Without this the window is grabbed
+# and the run dies at the first composite, after the moment has passed.
+for tool in import convert; do
+  command -v "$tool" >/dev/null 2>&1 || {
+    echo "ImageMagick '$tool' is missing: sudo apt install imagemagick" >&2
+    exit 1
+  }
+done
 [ -f "$BG" ] || { echo "backdrop not found: $BG" >&2; exit 1; }
 
 mkdir -p "$OUT_DIR" "$RAW_DIR"
