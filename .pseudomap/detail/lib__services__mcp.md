@@ -1,12 +1,10 @@
-# lib/services/mcp · Signatures
+# lib/services/mcp · Signaturen
 
 ## lib/services/mcp/mcp_availability.dart  (36 Z.)
-
 - L16 `List<McpCatalogueEntry> unconnectedCatalogueEntries()`  — Every catalogue server (our own first-party ones plus the offered
 - L27 `McpCatalogueEntry? catalogueEntryById(String id)`  — The catalogue entry with this [id], searching the first-party connectors
 
 ## lib/services/mcp/mcp_catalogue.dart  (1001 Z.)
-
 - L24 `class McpCredentialField`  — One credential a server takes on its URL instead of through a browser
   - L25 `const McpCredentialField({ required this.key, required this.label, this.hint, this.secret = true, this.required = true, })`
   - L34 `final String key`  — The query-parameter name the server expects, e.g. `browserbaseApiKey`.
@@ -45,7 +43,6 @@
 - L990 `String slugFor(String nameOrUrl)`  — A short, stable id for a server: used to prefix its tool names, so two
 
 ## lib/services/mcp/mcp_client.dart  (352 Z.)
-
 - L20 `kMcpProtocolVersion = '2025-06-18'`  — The revision this client speaks. Servers negotiate down if they must.
 - L24 `class McpUnauthorized implements Exception`  — Thrown when the server wants a token. [wwwAuthenticate] carries the
   - L25 `const McpUnauthorized(this.wwwAuthenticate)`
@@ -96,7 +93,6 @@
   - L344 `static String? _firstIcon(Object? icons)`
 
 ## lib/services/mcp/mcp_connection.dart  (109 Z.)
-
 - L12 `enum McpAuth`  — How a connection proves who it is.
   - L15 `oauth`
   - L20 `appSession`
@@ -118,7 +114,6 @@
   - L103 `String toolNameFor(String tool)`  — The name a model sees for [tool] on this server. Prefixed, because two
 
 ## lib/services/mcp/mcp_icon_cache.dart  (120 Z.)
-
 - L24 `class McpIconCache`
   - L25 `McpIconCache._()`
   - L27 `static const int _maxBytes = 256 * 1024`
@@ -132,7 +127,6 @@
   - L107 `static Future<void> clear()`  — Forget everything, on disk and in memory.
 
 ## lib/services/mcp/mcp_oauth.dart  (506 Z.)
-
 - L22 `class McpAuthServer`  — What a server's authorization looks like once discovered.
   - L23 `const McpAuthServer({ required this.issuer, required this.authorizationEndpoint, required this.tokenEndpoint, this.registrationEndpoint, this.scopesSupported = const <String>[], })`
   - L31 `final String issuer`
@@ -192,11 +186,9 @@
   - L501 `static String _randomString(int length)`
 
 ## lib/services/mcp/mcp_redirect.dart  (13 Z.)
-
-- conditional export: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
+- reicht weiter: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
 
 ## lib/services/mcp/mcp_redirect_io.dart  (59 Z.)
-
 - L9 `class McpRedirectListener`  — A one-shot HTTP server on 127.0.0.1 that catches the OAuth redirect.
   - L10 `McpRedirectListener._(this._server)`
   - L12 `final HttpServer _server`
@@ -209,7 +201,6 @@
   - L52 `static String _page(bool ok)`
 
 ## lib/services/mcp/mcp_redirect_stub.dart  (22 Z.)
-
 - L7 `class McpRedirectListener`
   - L8 `McpRedirectListener._()`
   - L10 `static Future<McpRedirectListener> start()`
@@ -218,7 +209,6 @@
   - L20 `Future<void> close()`
 
 ## lib/services/mcp/mcp_service.dart  (830 Z.)
-
 - L28 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
   - L28 `connected`
   - L28 `cancelled`
@@ -289,7 +279,6 @@
   - L816 `static Future<List<McpTool>?> internalFetchTools( McpConnection connection, )`  — List a connection's tools live, building a client from its stored token
 
 ## lib/services/mcp/mcp_sync_service.dart  (763 Z.)
-
 - L38 `@immutable class McpSyncBlob`  — One connection as it travels between devices: its metadata without the
   - L40 `const McpSyncBlob({required this.connection, this.secrets})`
   - L44 `final McpConnection connection`  — The connection to recreate. Its [McpConnection.tools] is always empty
@@ -341,7 +330,6 @@
   - L756 `static Future<T> _locked<T>(Future<T> Function() action)`
 
 ## lib/services/mcp/mcp_tool_bridge.dart  (59 Z.)
-
 - L17 `void syncMcpTools(ToolExecutor executor)`  — Register the tools of every connected server, replacing whatever was
 - L41 `void watchMcpConnections(ToolExecutor executor)`  — Keep an executor in step with the connections for as long as it lives.
 - L46 `List<String> _tagsFor(String serverName, String id, String toolName)`  — What `find_tools` matches on: the server, and the words of the tool name.

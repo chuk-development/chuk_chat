@@ -1,7 +1,6 @@
-# lib/widgets/workspace · Signatures
+# lib/widgets/workspace · Signaturen
 
 ## lib/widgets/workspace/workspace_actions_mixin.dart  (277 Z.)
-
 - L30 `mixin WorkspaceActionsMixin<T extends StatefulWidget> on State<T>`  — Shared workspace actions for a [State] that manages a single workspace.
   - L32 `String get workspaceId`  — Id of the workspace this state operates on.
   - L38 `bool isUploadingFile = false`
@@ -20,7 +19,6 @@
   - L268 `Future<void> removeChatFromWorkspace(String chatId)`  — Removes [chatId] from the workspace.
 
 ## lib/widgets/workspace/workspace_common_widgets.dart  (348 Z.)
-
 - L18 `class WorkspaceCountBadge extends StatelessWidget`  — Small pill with a count, used in the workspace tab bars.
   - L19 `final int count`
   - L20 `final Color color`

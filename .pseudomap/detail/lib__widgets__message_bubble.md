@@ -1,7 +1,6 @@
-# lib/widgets/message_bubble · Signatures
+# lib/widgets/message_bubble · Signaturen
 
 ## lib/widgets/message_bubble/cards.dart  (903 Z.)
-
 - part of '../message_bubble.dart'
 - L11 `class _CachedImageThumbnail extends StatefulWidget`  — Cached image thumbnail that decodes once and caches the bytes
   - L12 `const _CachedImageThumbnail({ required this.imageDataUrl, required this.width, required this.height, required this.onTap, this.borderRadius = 8, this.fit = BoxFit.cover, this.naturalAspect = false, this.maxNaturalHeight, })`
@@ -57,7 +56,6 @@
   - L894 `Future<void> _openUrl(BuildContext context, String url)`
 
 ## lib/widgets/message_bubble/chrome.dart  (451 Z.)
-
 - part of '../message_bubble.dart'
 - L10 `extension _MessageBubbleChrome on _MessageBubbleState`
   - L16 `Widget _buildBottomBar(Color iconFgColor, bool hasActions)`  — Bottom bar for AI messages: action buttons (left) + a sources pill
@@ -73,7 +71,6 @@
   - L390 `Widget _buildStatusIndicator(BuildContext context)`
 
 ## lib/widgets/message_bubble/images.dart  (646 Z.)
-
 - part of '../message_bubble.dart'
 - L12 `extension _MessageBubbleImages on _MessageBubbleState`
   - L15 `String? _modelFor(int index)`  — Human-readable generator model for the image at [index], or null when
@@ -87,8 +84,7 @@
   - L528 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
   - L581 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
 
-## lib/widgets/message_bubble/layout.dart  (785 Z.)
-
+## lib/widgets/message_bubble/layout.dart  (824 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleLayout on _MessageBubbleState`
   - L14 `String get _chatFontFamily`  — Returns the user-selected chat font family, falling back to the historic
@@ -99,15 +95,14 @@
   - L73 `String get _strippedMessage`
   - L82 `Widget _buildUserBubble(BuildContext context)`
   - L167 `Widget _buildAiBubble(BuildContext context)`
-  - L259 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
-  - L308 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
-  - L399 `Widget _buildFramedUserImageGrid(Widget child)`
-  - L407 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
-  - L705 `String _stripAttachmentHeaderForUser(String text)`
-  - L724 `Widget _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`
+  - L257 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
+  - L306 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
+  - L397 `Widget _buildFramedUserImageGrid(Widget child)`
+  - L405 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
+  - L744 `String _stripAttachmentHeaderForUser(String text)`
+  - L763 `Widget _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`
 
 ## lib/widgets/message_bubble/models.dart  (135 Z.)
-
 - part of '../message_bubble.dart'
 - L12 `class ImageMeta`  — Per-image metadata describing how an image arrived in the chat and
   - L13 `const ImageMeta({required this.source, this.caption, this.model})`
@@ -150,7 +145,6 @@
   - L133 `bool get isReasoning`
 
 ## lib/widgets/message_bubble/rich_blocks.dart  (544 Z.)
-
 - part of '../message_bubble.dart'
 - L12 `extension _MessageBubbleRichBlocks on _MessageBubbleState`
   - L13 `bool _hasVisualBlocks(String content)`
@@ -164,30 +158,29 @@
   - L498 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
   - L521 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
 
-## lib/widgets/message_bubble/tools.dart  (779 Z.)
-
+## lib/widgets/message_bubble/tools.dart  (822 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleTools on _MessageBubbleState`
-  - L15 `Widget _buildBlockReasoning(String text, Color accentColor)`  — Renders a reasoning content block as an expandable card. Renders
-  - L30 `Widget _buildInfoStatusBar(Color iconFgColor, Color accentColor)`  — Unified status bar for reasoning and model info, matching function_calling
-  - L63 `StreamPhase? _currentPhase(bool isRunning)`  — The phase of the running stream, taken straight from the stream rather
-  - L76 `Widget _buildMetaFooter()`  — The quiet line under an answer.
-  - L126 `List<Widget> _buildArtifactCards(List<ToolCall> toolCalls)`  — Renders inline artifact cards for artifact_manager tool calls, so users
-  - L233 `List<Widget> _stackArtifactCards(List<Widget> cards)`  — Wrap a list of artifact cards into one cohesive "artifact stack":
-  - L255 `Widget _buildActivityTimeline( List<ToolCall> toolCalls, { List<_ToolTimelineEntry>? contentBlockTimeline, bool live = false, })`  — Returns a self-contained tool-calls bar (the pill with the
-  - L295 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
-  - L311 `void _showToolCallDetails(ToolCall toolCall)`
-  - L349 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
-  - L430 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
-  - L512 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
-  - L537 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
-  - L628 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
-  - L662 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
-  - L705 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
-  - L740 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
+  - L15 `Widget _buildBlockReasoning( String text, Color accentColor, { bool live = false, bool carriesTurnStatus = false, })`  — Renders a reasoning content block as an expandable card. Renders
+  - L42 `Widget _buildTurnStatusOnly()`  — The turn's status with no step to hang it on: the header alone, while
+  - L62 `Widget _buildInfoStatusBar(Color iconFgColor, Color accentColor)`  — Unified status bar for reasoning and model info, matching function_calling
+  - L95 `StreamPhase? _currentPhase(bool isRunning)`  — The phase of the running stream, taken straight from the stream rather
+  - L112 `Widget _buildMetaFooter()`  — The quiet line under an answer.
+  - L163 `List<Widget> _buildArtifactCards(List<ToolCall> toolCalls)`  — Renders inline artifact cards for artifact_manager tool calls, so users
+  - L270 `List<Widget> _stackArtifactCards(List<Widget> cards)`  — Wrap a list of artifact cards into one cohesive "artifact stack":
+  - L292 `Widget _buildActivityTimeline( List<ToolCall> toolCalls, { List<_ToolTimelineEntry>? contentBlockTimeline, bool live = false, bool carriesTurnStatus = true, })`  — Returns a self-contained tool-calls bar (the pill with the
+  - L338 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
+  - L354 `void _showToolCallDetails(ToolCall toolCall)`
+  - L392 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
+  - L473 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
+  - L555 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
+  - L580 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
+  - L671 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
+  - L705 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
+  - L748 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
+  - L783 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
 
 ## lib/widgets/message_bubble/web_search_sources.dart  (292 Z.)
-
 - L14 `class WebSearchSource`  — One parsed hit from a web_search result.
   - L15 `const WebSearchSource({ required this.title, required this.url, required this.host, required this.snippet, this.age, })`
   - L23 `final String title`

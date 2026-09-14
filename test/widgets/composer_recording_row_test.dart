@@ -9,7 +9,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
+import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/waveform.dart';
 
 void main() {

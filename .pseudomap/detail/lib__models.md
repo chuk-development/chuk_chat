@@ -1,7 +1,6 @@
-# lib/models · Signatures
+# lib/models · Signaturen
 
 ## lib/models/app_shell_config.dart  (147 Z.)
-
 - L9 `class AppShellConfig`  — Bundles all theme, display, image-generation, and AI-context settings
   - L11 `final Brightness currentThemeMode`
   - L12 `final Color currentAccentColor`
@@ -60,7 +59,6 @@
   - L90 `const AppShellConfig({ required this.currentThemeMode, required this.currentAccentColor, required this.currentIconFgColor, required this.currentBgColor, required this.setThemeMode, required this.setAccentColor, required this.setIconFgColor, required this.setBgColor, required this.dynamicColorEnabled, required this.setDynamicColorEnabled, required this.contrast, required this.setContrast, required this.uiFontFamily, required this.setUiFontFamily, required this.showReasoningTokens, required this.setShowReasoningTokens, required this.showModelInfo, required this.setShowModelInfo, required this.showTps, required this.setShowTps, required this.autoSendVoiceTranscription, required this.setAutoSendVoiceTranscription, required this.imageGenEnabled, required this.setImageGenEnabled, required this.imageGenDefaultSize, required this.setImageGenDefaultSize, required this.imageGenCustomWidth, required this.setImageGenCustomWidth, required this.imageGenCustomHeight, required this.setImageGenCustomHeight, required this.imageGenUseCustomSize, required this.setImageGenUseCustomSize, required this.includeRecentImagesInHistory, required this.setIncludeRecentImagesInHistory, required this.includeAllImagesInHistory, required this.setIncludeAllImagesInHistory, required this.includeReasoningInHistory, required this.setIncludeReasoningInHistory, required this.includeToolResultsInHistory, required this.setIncludeToolResultsInHistory, required this.toolCallingEnabled, required this.setToolCallingEnabled, required this.toolDiscoveryMode, required this.setToolDiscoveryMode, required this.showToolCalls, required this.setShowToolCalls, required this.uiLocale, required this.setUiLocale, required this.chatFontSize, required this.setChatFontSize, required this.chatFontFamily, required this.setChatFontFamily, required this.uiScale, required this.setUiScale, })`
 
 ## lib/models/artifact.dart  (217 Z.)
-
 - L3 `enum ArtifactType`
   - L4 `code`
   - L5 `markdown`
@@ -107,7 +105,6 @@
   - L210 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
 
 ## lib/models/chat_message.dart  (269 Z.)
-
 - L12 `enum ChatMessageStatus`  — Delivery status of a chat message in the local queue/UI.
   - L12 `sent`
   - L12 `pending`
@@ -148,7 +145,6 @@
   - L238 `Map<String, dynamic> toJson()`
 
 ## lib/models/chat_model.dart  (122 Z.)
-
 - L3 `class ModelItem`
   - L4 `final String name`
   - L5 `final String value`
@@ -176,7 +172,6 @@
   - L108 `factory AttachedFile.fromJson(Map<String, dynamic> json)`  — Creates AttachedFile from JSON
 
 ## lib/models/chat_stream_event.dart  (161 Z.)
-
 - L10 `sealed class ChatStreamEvent`  — Events that can be received from chat streaming services.
   - L11 `const ChatStreamEvent()`
   - L13 `const factory ChatStreamEvent.content(String text) = ContentEvent`
@@ -229,7 +224,6 @@
   - L152 `static const Set<String> retryable = <String>{ upstreamNetwork, upstreamNoStream, upstreamFirstByteTimeout, connectionLost, idleTimeout, streamFailure, }`  — Failures worth re-issuing the pass for.
 
 ## lib/models/client_tool.dart  (71 Z.)
-
 - L7 `class ClientTool`  — Represents a tool that can be executed client-side.
   - L8 `ClientTool({ String? id, required this.name, required this.description, this.parameters = const {}, this.type = ToolType.builtin, this.config = const {}, this.tags = const [], }) : id = id ?? const Uuid().v4()`
   - L18 `final String id`
@@ -257,7 +251,6 @@
   - L69 `sandbox`
 
 ## lib/models/content_block.dart  (128 Z.)
-
 - L4 `enum ContentBlockType`  — The type of a content block within an AI response.
   - L4 `text`
   - L4 `toolCalls`
@@ -285,7 +278,6 @@
   - L96 `factory ContentBlock.fromJson(Map<String, dynamic> json)`
 
 ## lib/models/queued_message.dart  (105 Z.)
-
 - L6 `class QueuedMessage`  — A message persisted in the offline queue, waiting for connectivity so it
   - L7 `QueuedMessage({ required this.id, required this.chatId, required this.sendPayload, required this.attemptCount, required this.createdAt, required this.updatedAt, this.lastError, })`
   - L17 `factory QueuedMessage.fromRow(Map<String, dynamic> row)`
@@ -300,7 +292,6 @@
   - L95 `Map<String, dynamic> toRow()`
 
 ## lib/models/skill.dart  (276 Z.)
-
 - L27 `enum SkillSource`  — Where a [Skill] came from. Determines its trust level.
   - L31 `builtin`
   - L37 `user`
@@ -342,7 +333,6 @@
 - L268 `bool _mapEquals(Map<String, String> a, Map<String, String> b)`
 
 ## lib/models/stored_chat.dart  (202 Z.)
-
 - L7 `class StoredChat`  — Represents a stored chat with metadata.
   - L8 `StoredChat({ required this.id, List<ChatMessage>? messages, required this.createdAt, required this.isStarred, this.title, this.customName, this.updatedAt, this.keyVersion, this.isLocked = false, this.assistantId, }) : _messages = messages != null ? List<ChatMessage>.unmodifiable(messages) : null`
   - L24 `factory StoredChat.forSidebar({ required String id, required DateTime createdAt, required bool isStarred, String? title, String? customName, DateTime? updatedAt, int? keyVersion, bool isLocked = false, String? assistantId, })`  — Create a lightweight chat for sidebar (title only, no messages)
@@ -366,7 +356,6 @@
   - L187 `StoredChat withMessages(List<ChatMessage> messages, {String? customName})`  — Create a fully loaded version of this chat
 
 ## lib/models/stream_phase.dart  (39 Z.)
-
 - L13 `enum StreamPhase`  — The phases of one assistant turn, in the order they occur.
   - L15 `connecting`
   - L19 `processing`
@@ -376,7 +365,6 @@
   - L31 `String get label`  — The present-tense wording shown while the phase lasts.
 
 ## lib/models/tool_call.dart  (95 Z.)
-
 - L7 `class ToolCall`  — Represents a single tool call made by the AI during a conversation.
   - L8 `ToolCall({ String? id, required this.name, this.arguments = const {}, this.result, this.status = ToolCallStatus.pending, this.roundThinking, DateTime? startedAt, this.completedAt, }) : id = id ?? const Uuid().v4(), startedAt = startedAt ?? DateTime.now()`
   - L20 `final String id`
@@ -398,7 +386,6 @@
 - L82 `bool finalizeStaleToolCalls(List<ToolCall> toolCalls)`  — Utility to finalize any stale (running/pending) tool calls.
 
 ## lib/models/workspace_model.dart  (465 Z.)
-
 - L7 `class Workspace`  — Represents a workspace that combines AI persona, system prompts, files,
   - L8 `final String id`
   - L9 `final String name`

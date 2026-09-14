@@ -1,7 +1,6 @@
-# lib/services · Signatures
+# lib/services · Signaturen
 
 ## lib/services/api_config_base.dart  (116 Z.)
-
 - L14 `apiConfigEnvApiUrl = String.fromEnvironment('API_BASE_URL')`
 - L15 `apiConfigEnvApiHost = String.fromEnvironment('API_HOST')`
 - L16 `apiConfigEnvApiPort = String.fromEnvironment('API_PORT')`
@@ -20,11 +19,9 @@
 - L109 `String getConfigurationDescription(String platformName)`  — Gets a human-readable description of the current configuration.
 
 ## lib/services/api_config_service.dart  (5 Z.)
-
-- conditional export: 'api_config_service_stub.dart' if (dart.library.io) 'api_config_service_io.dart'
+- reicht weiter: 'api_config_service_stub.dart' if (dart.library.io) 'api_config_service_io.dart'
 
 ## lib/services/api_config_service_io.dart  (35 Z.)
-
 - L8 `class ApiConfigService`  — Service for managing API configuration across different environments and platforms.
   - L10 `static String get apiBaseUrl`  — Gets the appropriate API base URL based on the current environment and platform.
   - L13 `static String get artifactsBaseUrl`  — Gets the artifacts hosting base URL.
@@ -34,7 +31,6 @@
   - L32 `static String get configurationDescription`  — Gets a human-readable description of the current configuration.
 
 ## lib/services/api_config_service_stub.dart  (27 Z.)
-
 - L7 `class ApiConfigService`  — Service for managing API configuration across different environments and platforms.
   - L9 `static String get apiBaseUrl`  — Gets the appropriate API base URL based on the current environment and platform.
   - L12 `static String get artifactsBaseUrl`  — Gets the artifacts hosting base URL.
@@ -44,7 +40,6 @@
   - L24 `static String get configurationDescription`  — Gets a human-readable description of the current configuration.
 
 ## lib/services/api_status_service.dart  (59 Z.)
-
 - L9 `class ApiStatusService`  — Utility helpers for checking the availability of the primary API.
   - L10 `static String get _defaultBaseUrl`
   - L11 `static const Duration _defaultTimeout = Duration(seconds: 4)`
@@ -53,7 +48,6 @@
   - L50 `static Uri _buildUri(String base, String path)`
 
 ## lib/services/app_initialization_service.dart  (413 Z.)
-
 - L23 `class AppInitializationService`  — Callback for initialization events
   - L24 `AppInitializationService._()`
   - L26 `static final AppInitializationService _instance = AppInitializationService._()`
@@ -76,7 +70,6 @@
   - L383 `Future<bool> waitForSupabase({ Duration timeout = const Duration(seconds: 5), })`  — Wait for Supabase to be initialized
 
 ## lib/services/app_lifecycle_service.dart  (155 Z.)
-
 - L16 `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
   - L17 `AppLifecycleService._()`
   - L19 `static final AppLifecycleService _instance = AppLifecycleService._()`
@@ -95,7 +88,6 @@
   - L149 `bool get _isDesktopPlatform`
 
 ## lib/services/app_theme_service.dart  (810 Z.)
-
 - L17 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
 - L20 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
   - L21 `AppThemeService._()`
@@ -250,7 +242,6 @@
   - L805 `void dispose()`
 
 ## lib/services/approval_config.dart  (140 Z.)
-
 - L4 `enum ApprovalCategory`  — Categories of actions that may require approval
   - L5 `bash`
   - L6 `gmail`
@@ -274,14 +265,12 @@
   - L134 `bool isApprovalRequired(ApprovalCategory category)`  — Check if approval is required for a category
 
 ## lib/services/artifact_context_service.dart  (111 Z.)
-
 - L6 `class ArtifactContextService`
   - L7 `const ArtifactContextService._()`
   - L9 `static const int _maxContextChars = 140000`
   - L23 `static Future<String?> buildArtifactsSystemMessage(String chatId)`  — Builds a system-prompt section with active artifacts for [chatId].
 
 ## lib/services/artifact_diff_engine.dart  (134 Z.)
-
 - L5 `class ArtifactDiffEngine`
   - L6 `const ArtifactDiffEngine._()`
   - L8 `static const int maxEditsPerUpdate = 5`
@@ -293,7 +282,6 @@
   - L123 `static String _extractContext( String text, int pos, int matchLen, int radius, )`
 
 ## lib/services/artifact_storage_service.dart  (1888 Z.)
-
 - L15 `class ArtifactStorageService`
   - L16 `const ArtifactStorageService._()`
   - L23 `static final Map<String, Future<void> Function()> _pendingFlushers = <String, Future<void> Function()>{}`
@@ -355,14 +343,12 @@
   - L1863 `static Future<String> _decryptMaybe(String value)`
 
 ## lib/services/artifact_tag_processor.dart  (142 Z.)
-
 - L16 `class ArtifactTagProcessor`  — Processes inline `<artifact>` tags emitted by the assistant. For each tag:
   - L17 `static Future<List<ToolCall>> processTags({ required String content, required String chatId, String? messageId, })`
   - L51 `static Future<ToolCall> _processOne( ParsedArtifactTag tag, { required String chatId, String? messageId, })`
   - L121 `static ToolCall _errorCall( ParsedArtifactTag tag, { required String action, required String message, })`
 
 ## lib/services/auth_service.dart  (197 Z.)
-
 - L12 `class AuthService`
   - L13 `const AuthService()`
   - L15 `Future<void> signInWithPassword({ required String email, required String password, })`
@@ -383,7 +369,6 @@
   - L195 `String toString()`
 
 ## lib/services/bash_sandbox.dart  (457 Z.)
-
 - L9 `typedef ApprovalCallback = Future<bool> Function(String command, String reason)`  — Callback type for approval dialogs
 - L15 `class BashSandbox`  — Sandboxed Bash Command Executor
   - L16 `static const List<String> safeCommands = [ 'ls', 'cat', 'head', 'tail', 'pwd', 'whoami', 'ffmpeg', 'ffprobe', 'mkdir', 'cp', 'mv', 'rm', 'touch', 'echo', 'find', 'grep', 'wc', 'sort', 'uniq', 'file', 'stat', 'du', 'df', 'date', 'cal', 'uname', ]`
@@ -409,11 +394,9 @@
   - L397 `Future<Map<String, dynamic>> _executeDirectly(String command)`
 
 ## lib/services/chat_cache_search_text.dart  (41 Z.)
-
 - L16 `String? buildChatSearchText(String payload)`  — Build the searchable text of a chat payload: message text only.
 
 ## lib/services/chat_history_builder.dart  (295 Z.)
-
 - L29 `class ChatHistoryBuilder`
   - L30 `ChatHistoryBuilder._()`
   - L33 `static const int _recentImageWindow = 10`  — Image window when only recent images are included.
@@ -429,7 +412,6 @@
   - L245 `static Future<List<String>> resolveHistoryImages(String imagesJson)`  — Resolves a JSON-encoded list of image storage paths to base64 data URLs.
 
 ## lib/services/chat_mode_service.dart  (560 Z.)
-
 - L20 `enum ChatMode`
   - L22 `fast`
   - L25 `thinking`
@@ -480,7 +462,6 @@
   - L553 `static ChatMode parse(String? raw)`  — Map a stored string back to a mode, tolerating anything unexpected.
 
 ## lib/services/chat_preload_service.dart  (390 Z.)
-
 - L21 `class ChatPreloadService`  — Service for background preloading all chat messages.
   - L22 `ChatPreloadService._()`
   - L25 `static bool _isPreloading = false`  — Whether preload is currently running
@@ -509,7 +490,6 @@
   - L378 `static void reset()`  — Reset preload state (call on logout)
 
 ## lib/services/chat_runtime.dart  (184 Z.)
-
 - L11 `@immutable class StreamingLive`  — Immutable snapshot of the assistant placeholder's live streaming body,
   - L13 `const StreamingLive({ required this.index, required this.text, required this.reasoning, })`
   - L20 `final int index`  — Index of the placeholder message in the runtime's message list.
@@ -541,7 +521,6 @@
   - L177 `void dispose()`
 
 ## lib/services/chat_runtime_registry.dart  (95 Z.)
-
 - L15 `class ChatRuntimeRegistry`  — Singleton registry of per-chat [ChatRuntime]s.
   - L16 `ChatRuntimeRegistry._internal()`
   - L18 `static final ChatRuntimeRegistry instance = ChatRuntimeRegistry._internal()`
@@ -557,7 +536,6 @@
   - L81 `void _evictIdleIfNeeded()`  — Evict idle runtimes in LRU order while we are above the cap.
 
 ## lib/services/chat_storage_crud.dart  (1281 Z.)
-
 - L20 `class ChatStorageCrud`  — Handles CRUD operations for chat storage: save, update, delete, load.
   - L21 `ChatStorageCrud._()`
   - L24 `static String extractTitleFromMessages(List<ChatMessage> messages)`  — Extract title from messages (first user message, truncated)
@@ -580,7 +558,6 @@
   - L1197 `static Future<void> deleteChat(String chatId)`  — Delete a chat and its associated images from storage
 
 ## lib/services/chat_storage_mutations.dart  (288 Z.)
-
 - L17 `kChatPayloadVersion = 2`
 - L20 `class ChatStorageMutations`  — Handles chat mutations: star, rename, re-encrypt, export
   - L21 `ChatStorageMutations._()`
@@ -592,8 +569,7 @@
 - L264 `Future<void> saveTitlesToCache(String userId, List<StoredChat> chats)`  — Save decrypted titles to local cache for instant loading.
 
 ## lib/services/chat_storage_service.dart  (174 Z.)
-
-- conditional export: 'package:chuk_chat/models/chat_message.dart' · 'package:chuk_chat/models/stored_chat.dart' · 'package:chuk_chat/services/chat_storage_state.dart' show initChatStorageCache
+- reicht weiter: 'package:chuk_chat/models/chat_message.dart' · 'package:chuk_chat/models/stored_chat.dart' · 'package:chuk_chat/services/chat_storage_state.dart' show initChatStorageCache
 - L24 `class ChatStorageService`  — Facade class providing backward-compatible API for chat storage.
   - L30 `static bool get initialSyncComplete`  — Track if initial sync has completed (for ChatSyncService coordination)
   - L33 `static ValueNotifier<String?> get selectedChatIdNotifier`  — ValueNotifier for reactive selectedChatId updates
@@ -628,7 +604,6 @@
   - L172 `static Future<void> reset()`  — Reset all state
 
 ## lib/services/chat_storage_sidebar.dart  (521 Z.)
-
 - L15 `_kSidebarApplyChunkSize = 250`
 - L16 `_kSidebarIsolateParseThresholdChars = 12000`
 - L20 `List<Map<String, Object?>> _parseSidebarTitleCache(String raw)`  — Parse cached sidebar title JSON into a typed list.
@@ -642,7 +617,6 @@
   - L463 `static Future<void> _loadSidebarFromCache(String userId)`  — Fallback: build sidebar entries from the plaintext cache.
 
 ## lib/services/chat_storage_state.dart  (243 Z.)
-
 - L13 `sharedPrefsInstance`  — Pre-cached SharedPreferences instance for fast access
 - L16 `Future<void> initChatStorageCache()`  — Pre-initialize SharedPreferences at app startup for instant cache access
 - L26 `String chatTitlesCacheKey(String userId)`  — kv_cache key holding the sidebar title list for [userId].
@@ -682,7 +656,6 @@
   - L223 `static Future<void> reset()`  — Reset all state
 
 ## lib/services/chat_storage_sync.dart  (468 Z.)
-
 - L18 `class DeserializeResult`  — Internal class for deserialize results from isolate
   - L19 `DeserializeResult(this.messages, {this.customName})`
   - L20 `final List<Map<String, dynamic>> messages`
@@ -705,7 +678,6 @@
   - L437 `static void removeChatLocally(String chatId)`  — Remove a chat from local state only (without database operation).
 
 ## lib/services/chat_sync_service.dart  (405 Z.)
-
 - L17 `class ChatSyncService`  — Service for syncing chats between local state and Supabase.
   - L18 `ChatSyncService._()`
   - L20 `static Timer? _syncTimer`
@@ -735,14 +707,12 @@
   - L170 `static Future<void> _performSync()`  — Perform the actual sync operation
 
 ## lib/services/current_user.dart  (49 Z.)
-
 - L12 `abstract final class CurrentUser`  — Who is signed in, for the static caches that are keyed on it.
   - L18 `static String? Function()? debugIdOverride`  — Replaces the live auth lookup used by [id] and [stillOwns], so a test can
   - L22 `static String? get id`  — The active user id, or null when signed out or before Supabase is up
   - L46 `static bool stillOwns(String? userId, String? cacheOwnerUserId)`  — True while [userId] is *still the live signed-in user* and still owns the
 
 ## lib/services/customization_preferences_service.dart  (249 Z.)
-
 - L5 `class CustomizationPreferences`
   - L6 `const CustomizationPreferences({ required this.userId, required this.autoSendVoiceTranscription, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, required this.imageGenEnabled, required this.imageGenDefaultSize, required this.imageGenCustomWidth, required this.imageGenCustomHeight, required this.imageGenUseCustomSize, required this.includeRecentImagesInHistory, required this.includeAllImagesInHistory, required this.includeReasoningInHistory, required this.includeToolResultsInHistory, required this.toolCallingEnabled, required this.toolDiscoveryMode, required this.showToolCalls, required this.uiLocale, required this.chatFontSize, required this.chatFontFamily, required this.onboardingCompleted, })`
   - L30 `final String userId`
@@ -782,7 +752,6 @@
   - L247 `String toString()`
 
 ## lib/services/developer_options_service.dart  (206 Z.)
-
 - L18 `class DeveloperOptionsService`  — Cross-device developer options toggle.
   - L19 `const DeveloperOptionsService._()`
   - L21 `static const String _localKey = 'developer_options_enabled'`
@@ -806,7 +775,6 @@
   - L194 `static bool? _coerceBool(dynamic value)`
 
 ## lib/services/device_services.dart  (728 Z.)
-
 - L23 `class DeviceServices`  — Singleton service providing access to native device features.
   - L24 `static final DeviceServices _instance = DeviceServices._internal()`
   - L25 `factory DeviceServices()`
@@ -840,11 +808,9 @@
   - L679 `Map<String, dynamic> getPlatformCapabilities()`  — Returns a map describing which features are supported on the current
 
 ## lib/services/diagnostics_log_service.dart  (5 Z.)
-
-- conditional export: 'diagnostics_log_service_stub.dart' if (dart.library.io) 'diagnostics_log_service_io.dart'
+- reicht weiter: 'diagnostics_log_service_stub.dart' if (dart.library.io) 'diagnostics_log_service_io.dart'
 
 ## lib/services/diagnostics_log_service_io.dart  (566 Z.)
-
 - L15 `class DiagnosticsLogService`  — Opt-in diagnostics logger that also works in release builds.
   - L16 `const DiagnosticsLogService._()`
   - L18 `static const String _enabledKey = 'diagnostics_logging_enabled'`
@@ -885,7 +851,6 @@
   - L501 `static void _onFrameTimings(List<FrameTiming> timings)`
 
 ## lib/services/diagnostics_log_service_stub.dart  (53 Z.)
-
 - L4 `class DiagnosticsLogService`
   - L5 `const DiagnosticsLogService._()`
   - L7 `static void setAppInForeground(bool isForeground)`
@@ -902,7 +867,6 @@
   - L51 `static Future<void> clearLogs()`
 
 ## lib/services/download_preferences_service.dart  (70 Z.)
-
 - L7 `class DownloadPreferencesService`  — User preferences for how downloaded files are saved across the app.
   - L8 `const DownloadPreferencesService._()`
   - L10 `static const String _alwaysAskKey = 'download_always_ask'`
@@ -919,7 +883,6 @@
   - L68 `static bool get alwaysAsk`
 
 ## lib/services/encryption_service.dart  (974 Z.)
-
 - L15 `class _EncryptionParams`  — Parameters for background encryption
   - L16 `final Uint8List bytes`
   - L17 `final List<int> keyBytes`
@@ -1000,7 +963,6 @@
   - L949 `static Future<User?> _updateUserMetadata( User user, Map<String, dynamic> patch, )`
 
 ## lib/services/file_conversion_service.dart  (424 Z.)
-
 - L21 `class FileConversionService`  — Service for converting files to markdown using the /v1/ai/convert-file endpoint.
   - L22 `static String get _apiBaseUrl`
   - L25 `static const int maxTokensPerFile = 40000`  — Maximum tokens per file (40k tokens ≈ 160k characters at ~4 chars/token)
@@ -1010,7 +972,6 @@
   - L335 `static Future<Map<String, dynamic>> convertFileFromBytes({ required Uint8List bytes, required String fileName, required String accessToken, })`  — Convert a file from bytes (web platform) using the /v1/ai/convert-file endpoint.
 
 ## lib/services/file_save_service.dart  (144 Z.)
-
 - L11 `class SaveResult`  — Outcome of a save attempt. Callers use this to drive snackbars or follow-up
   - L12 `const SaveResult._({required this.outcome, this.path})`
   - L14 `final SaveOutcome outcome`
@@ -1028,7 +989,6 @@
   - L119 `static Future<String> _writeWithCollisionSuffix({ required String folder, required String fileName, required Uint8List bytes, })`
 
 ## lib/services/github_connection_service.dart  (252 Z.)
-
 - L21 `class GitHubConnectionStatus`
   - L22 `const GitHubConnectionStatus({ required this.connected, this.githubLogin, this.githubUserId, this.scopes, this.connectedAt, this.lastUsedAt, })`
   - L31 `final bool connected`
@@ -1075,7 +1035,6 @@
   - L242 `static String _detail(String body)`
 
 ## lib/services/github_oauth.dart  (465 Z.)
-
 - L10 `class GitHubOAuth`  — GitHub OAuth Service - Supports both OAuth App and Personal Access Token
   - L11 `static const int callbackPort = 43825`
   - L12 `static String get redirectUri`
@@ -1107,7 +1066,6 @@
   - L431 `Future<Map<String, dynamic>> addComment( String owner, String repo, int issueNumber, { required String body, })`
 
 ## lib/services/google_oauth.dart  (807 Z.)
-
 - L10 `class GoogleOAuth`  — Google OAuth Service - Backend-assisted flow for Gmail & Calendar APIs
   - L11 `static const int callbackPort = 43824`
   - L12 `static String get redirectUri`
@@ -1146,7 +1104,6 @@
   - L796 `Future<void> _loadTokens()`
 
 ## lib/services/image_compression_service.dart  (243 Z.)
-
 - L7 `Future<Uint8List> _compressImageInBackground(_CompressionParams params)`  — Top-level function for background image compression
 - L100 `class _CompressionParams`  — Parameters for background image compression
   - L101 `final Uint8List imageBytes`
@@ -1168,7 +1125,6 @@
   - L238 `static String getFileSizeMB(Uint8List bytes)`  — Gets the display size of the compressed image in MB
 
 ## lib/services/image_storage_service.dart  (339 Z.)
-
 - L13 `class StoredImage`  — Represents a stored image with metadata
   - L14 `final String path`
   - L15 `final String name`
@@ -1200,7 +1156,6 @@
   - L271 `static Future<List<ChatUsingImage>> findChatsUsingImage( String storagePath, )`  — Finds all chats that use a specific image
 
 ## lib/services/key_version_service.dart  (149 Z.)
-
 - L9 `class PreviousKeyInfo`  — Represents a previous encryption key's metadata.
   - L10 `final String salt`
   - L11 `final int version`
@@ -1222,7 +1177,6 @@
   - L128 `static Future<User?> _updateMetadata( User user, Map<String, dynamic> patch, )`
 
 ## lib/services/local_chat_cache_native.dart  (934 Z.)
-
 - L18 `class LocalChatCacheService`
   - L19 `static const String _dbName = 'chat_cache.db'`
   - L20 `static const int _dbVersion = 5`
@@ -1276,16 +1230,13 @@
 - L898 `List<Map<String, dynamic>> _parseJsonCacheInIsolate(String raw)`  — Parse JSON cache data in a background isolate (for migration reads).
 
 ## lib/services/local_chat_cache_rows.dart  (66 Z.)
-
 - L13 `Map<String, dynamic> buildPlaintextCacheRow({ required String id, required String payload, required String createdAt, required bool isStarred, String? updatedAt, String? title, })`  — Builds a plaintext cache row.
 - L38 `Map<String, dynamic>? sanitizeCacheRow(Map<String, dynamic> row)`  — Normalises a row read back from storage, or returns null when it is not
 
 ## lib/services/local_chat_cache_service.dart  (5 Z.)
-
-- conditional export: 'local_chat_cache_web.dart' if (dart.library.io) 'local_chat_cache_native.dart'
+- reicht weiter: 'local_chat_cache_web.dart' if (dart.library.io) 'local_chat_cache_native.dart'
 
 ## lib/services/local_chat_cache_web.dart  (296 Z.)
-
 - L11 `class LocalChatCacheService`
   - L12 `static const String _storageKeyPrefix = 'cached_chats_v2-'`
   - L14 `const LocalChatCacheService._()`
@@ -1318,7 +1269,6 @@
   - L293 `static Map<String, dynamic>? _sanitizeRow(Map<String, dynamic> row)`
 
 ## lib/services/message_composition_service.dart  (413 Z.)
-
 - L11 `class MessageCompositionResult`  — Result of message composition preparation
   - L12 `final bool isValid`
   - L13 `final String? errorMessage`
@@ -1352,7 +1302,6 @@
   - L409 `factory _TokenLimits.success(int maxResponseTokens)`
 
 ## lib/services/model_cache_service.dart  (184 Z.)
-
 - L7 `class ModelCacheService`
   - L8 `const ModelCacheService._()`
   - L10 `static const String _kModelsKey = 'cached_models_v2'`
@@ -1378,7 +1327,6 @@
   - L181 `static String _providerPrefsKey(String userId)`
 
 ## lib/services/model_capabilities_service.dart  (209 Z.)
-
 - L12 `class ModelCapabilitiesService`  — Service for determining model capabilities like vision and reasoning.
   - L13 `const ModelCapabilitiesService._()`
   - L16 `static final Map<String, bool> _visionSupportCache = {}`
@@ -1402,7 +1350,6 @@
   - L207 `static Future<void> refresh()`  — Refresh the in-memory cache from disk.
 
 ## lib/services/model_prefetch_service.dart  (113 Z.)
-
 - L13 `class ModelPrefetchService`
   - L14 `const ModelPrefetchService._()`
   - L16 `static bool _isPrefetching = false`
@@ -1410,7 +1357,6 @@
   - L30 `static Future<void> prefetch()`  — Prefetch the user's model/provider preferences and cache the available
 
 ## lib/services/multiplex_connection.dart  (644 Z.)
-
 - L20 `_uuid = Uuid()`
 - L25 `class MultiplexException implements Exception`  — Error surfaced by [MultiplexConnection.tool] (and the chat stream's
   - L26 `MultiplexException(this.detail, {this.code})`
@@ -1451,7 +1397,6 @@
   - L636 `Future<void> dispose()`  — Close the WS, abort all in-flight streams and reject pending tool
 
 ## lib/services/multiplex_session.dart  (419 Z.)
-
 - L29 `_idleCloseDelay = Duration(seconds: 60)`  — Default grace period before tearing down the WS after the last chat
 - L36 `_staleReconnectThreshold = Duration(seconds: 40)`  — How long without an inbound frame before [MultiplexSession.prewarm]
 - L38 `class MultiplexSession`
@@ -1478,7 +1423,6 @@
   - L417 `late StreamSubscription<ChatStreamEvent> subscription`
 
 ## lib/services/multiplex_tool_proxy.dart  (76 Z.)
-
 - L16 `class MultiplexToolOutcome`  — Result of [tryToolViaMultiplex]. Either holds a decoded body (when
   - L17 `const MultiplexToolOutcome._({this.body, this.fallback = false, this.error})`
   - L20 `factory MultiplexToolOutcome.ok(Map<String, dynamic> body)`  — Multiplex returned a result — caller should consume `body` directly.
@@ -1492,7 +1436,6 @@
 - L53 `Future<MultiplexToolOutcome> tryToolViaMultiplex({ required String tool, required Map<String, dynamic> payload, })`  — Attempt to send a tool call over the multiplex socket. Designed so
 
 ## lib/services/network_status_service.dart  (203 Z.)
-
 - L12 `class NetworkStatusService`  — Provides utilities for checking general internet reachability.
   - L14 `static const Duration _defaultTimeout = Duration(seconds: 10)`
   - L15 `static const Duration _quickTimeout = Duration(seconds: 6)`
@@ -1522,11 +1465,9 @@
   - L197 `const _ConnectivityProbe({ required this.uri, this.headers, required this.expectedStatusCodes, })`
 
 ## lib/services/notification_service.dart  (5 Z.)
-
-- conditional export: 'notification_service_stub.dart' if (dart.library.io) 'notification_service_io.dart'
+- reicht weiter: 'notification_service_stub.dart' if (dart.library.io) 'notification_service_io.dart'
 
 ## lib/services/notification_service_io.dart  (250 Z.)
-
 - L12 `class NotificationService`  — Service for handling local notifications (completion notifications with deep linking)
   - L13 `static final FlutterLocalNotificationsPlugin _plugin = FlutterLocalNotificationsPlugin()`
   - L15 `static GlobalKey<NavigatorState>? _navigatorKey`
@@ -1542,7 +1483,6 @@
   - L236 `static Future<bool> requestPermission()`  — Request notification permission (Android 13+)
 
 ## lib/services/notification_service_stub.dart  (38 Z.)
-
 - L7 `class NotificationService`  — Service for handling local notifications (completion notifications with deep linking)
   - L8 `static bool _isInitialized = false`
   - L11 `static bool get isInitialized`  — Whether the notification service has been initialized
@@ -1552,7 +1492,6 @@
   - L34 `static Future<bool> requestPermission()`  — Request notification permission (always returns true on web)
 
 ## lib/services/oauth_loopback_server.dart  (158 Z.)
-
 - L7 `class OAuthResultPageTheme`  — Colours of the small page the browser shows after the redirect.
   - L8 `const OAuthResultPageTheme({ required this.successColor, required this.errorColor, required this.background, required this.card, required this.border, required this.text, })`
   - L17 `final String successColor`
@@ -1580,11 +1519,9 @@
   - L144 `String _page(String title, bool success)`
 
 ## lib/services/offline_queue_service.dart  (9 Z.)
-
-- conditional export: 'offline_queue_service_web.dart' if (dart.library.io) 'offline_queue_service_native.dart'
+- reicht weiter: 'offline_queue_service_web.dart' if (dart.library.io) 'offline_queue_service_native.dart'
 
 ## lib/services/offline_queue_service_native.dart  (249 Z.)
-
 - L17 `class OfflineQueueService`  — Persistent offline send queue. Used by [OfflineRetryManager] to replay
   - L18 `OfflineQueueService._()`
   - L20 `static final OfflineQueueService instance = OfflineQueueService._()`
@@ -1612,7 +1549,6 @@
   - L244 `Future<void> debugReset()`  — Close DB + stream. Tests reset between cases.
 
 ## lib/services/offline_queue_service_web.dart  (171 Z.)
-
 - L15 `class OfflineQueueService`  — SharedPreferences-backed persistent queue used on web where SQLite is not
   - L16 `OfflineQueueService._()`
   - L18 `static final OfflineQueueService instance = OfflineQueueService._()`
@@ -1638,7 +1574,6 @@
   - L169 `Future<void> debugReset()`
 
 ## lib/services/offline_retry_manager.dart  (220 Z.)
-
 - L12 `class SendExecutorResult`  — Outcome of a send executor call.
   - L13 `const SendExecutorResult.success() : success = true, error = null`
   - L14 `const SendExecutorResult.failure(String this.error) : success = false`
@@ -1681,7 +1616,6 @@
   - L218 `String toString()`
 
 ## lib/services/offline_send_coordinator.dart  (114 Z.)
-
 - L15 `class OfflineSendPayload`
   - L16 `const OfflineSendPayload({ required this.chatId, required this.messageText, required this.modelId, required this.providerSlug, this.systemPrompt, this.imagesJson, this.attachmentsJson, this.attachedFilesJson, this.maxTokens, this.reasoningEffort, })`
   - L29 `factory OfflineSendPayload.fromJson(Map<String, dynamic> json)`
@@ -1704,7 +1638,6 @@
   - L111 `static OfflineSendPayload payloadFrom(QueuedMessage msg)`  — Helper to decode a [QueuedMessage]'s payload back into a typed value.
 
 ## lib/services/offline_send_executor.dart  (166 Z.)
-
 - L21 `class OfflineSendExecutor`
   - L22 `OfflineSendExecutor._()`
   - L24 `static bool _registered = false`
@@ -1712,7 +1645,6 @@
   - L36 `static Future<SendExecutorResult> _execute(QueuedMessage queued)`
 
 ## lib/services/onboarding_tour_controller.dart  (1155 Z.)
-
 - L29 `enum _Step`  — Step in the interactive tour state machine.
   - L30 `welcome`
   - L31 `pointerMenu`
@@ -1812,7 +1744,6 @@
   - L1129 `Widget build(BuildContext context)`
 
 ## lib/services/password_change_service.dart  (189 Z.)
-
 - L11 `class PasswordChangeService`
   - L12 `const PasswordChangeService()`
   - L14 `Future<String> changePassword({ required String currentPassword, required String newPassword, })`
@@ -1824,7 +1755,6 @@
   - L187 `String toString()`
 
 ## lib/services/password_reset_service.dart  (263 Z.)
-
 - L10 `class RecoveryException implements Exception`  — Exception thrown by password reset recovery operations.
   - L11 `final String message`
   - L12 `const RecoveryException(this.message)`
@@ -1838,7 +1768,6 @@
   - L225 `static Future<int> deleteLockedChats({ required int keyVersion, ValueChanged<String>? onProgress, })`  — Delete all locked chats for a specific key version.
 
 ## lib/services/password_revision_service.dart  (171 Z.)
-
 - L11 `class PasswordRevisionService`  — Keeps track of a password revision marker so that other sessions can detect
   - L12 `const PasswordRevisionService._()`
   - L14 `static const FlutterSecureStorage _storage = FlutterSecureStorage()`
@@ -1862,7 +1791,6 @@
   - L162 `static Future<void> _deleteLocalValue(String key)`
 
 ## lib/services/pdf_attachment_service.dart  (144 Z.)
-
 - L19 `String _utf8DecodeInBackground(Uint8List bytes)`
 - L21 `class PdfAttachmentService`
   - L22 `const PdfAttachmentService._()`
@@ -1880,7 +1808,6 @@
   - L135 `static Future<void> delete(String path)`  — Best-effort cleanup. Ignores errors — the storage row may already
 
 ## lib/services/per_model_system_prompt_service.dart  (558 Z.)
-
 - L16 `enum ModelPromptMode`  — How a per-model system prompt combines with the base (global + workspace)
   - L18 `off`
   - L21 `replace`
@@ -1926,7 +1853,6 @@
   - L556 `static const String legacyLocalCacheKey = _legacyLocalKey`
 
 ## lib/services/profile_service.dart  (85 Z.)
-
 - L5 `class ProfileRecord`
   - L6 `const ProfileRecord({ required this.id, required this.email, required this.displayName, })`
   - L12 `final String id`
@@ -1946,7 +1872,6 @@
   - L83 `String toString()`
 
 ## lib/services/round_content_block_service.dart  (321 Z.)
-
 - L5 `class RoundContentBlockResult`
   - L6 `const RoundContentBlockResult({ required this.blocks, required this.interimOutputText, })`
   - L11 `final List<ContentBlock> blocks`
@@ -1964,7 +1889,6 @@
   - L309 `static String _mergeReasoning(String providerReasoning, String foldedInterim)`  — Merge provider reasoning with folded interim prose into one reasoning
 
 ## lib/services/sandbox_service.dart  (598 Z.)
-
 - L10 `class SandboxInfo`
   - L11 `const SandboxInfo({ required this.sessionId, required this.chatId, required this.status, required this.createdAt, required this.lastActivity, required this.snapshotRestored, })`
   - L20 `final String sessionId`
@@ -2032,7 +1956,6 @@
   - L593 `static void clearAll()`  — Wipe everything. Called from `AuthService.signOut()` so the next
 
 ## lib/services/service_credentials_service.dart  (212 Z.)
-
 - L16 `class ServiceCredentialsService`  — Syncs encrypted OAuth tokens (Google, GitHub, MCP connectors, etc.) to
   - L17 `const ServiceCredentialsService._()`
   - L19 `static const String _table = 'service_credentials'`
@@ -2042,7 +1965,6 @@
   - L178 `static Future<int> delete( String serviceName, { bool throwOnError = false, })`  — Delete credentials for [serviceName]. Returns how many rows were removed.
 
 ## lib/services/session_manager_service.dart  (254 Z.)
-
 - L21 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
 - L24 `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
   - L25 `SessionManagerService._()`
@@ -2070,7 +1992,6 @@
   - L244 `void dispose()`
 
 ## lib/services/settings_sync_service.dart  (65 Z.)
-
 - L16 `class SettingsSyncService`  — Central coordinator for cross-device settings sync.
   - L17 `const SettingsSyncService._()`
   - L19 `static DateTime? _lastSyncAt`
@@ -2079,7 +2000,6 @@
   - L24 `static Future<void> syncAllFromSupabase({bool forceRefresh = false})`  — Sync all known settings from Supabase into local caches/prefs.
 
 ## lib/services/slack_oauth.dart  (476 Z.)
-
 - L14 `class SlackOAuth`  — Slack OAuth Service
   - L15 `static const int callbackPort = 43826`
   - L16 `static String get redirectUri`
@@ -2122,7 +2042,6 @@
   - L454 `Future<Map<String, dynamic>?> findChannel(String name)`  — Find a channel by name.
 
 ## lib/services/streaming_chat_service.dart  (162 Z.)
-
 - L11 `class StreamingChatService`  — Service for handling streaming chat responses with Server-Sent Events (SSE).
   - L12 `static String get _apiBaseUrl`
   - L15 `static Stream<ChatStreamEvent> sendStreamingChat({ required String accessToken, required String message, required String modelId, required String providerSlug, List<Map<String, String>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, })`  — Sends a streaming chat request and yields chunks as they arrive.
@@ -2133,11 +2052,9 @@
   - L160 `String toString()`
 
 ## lib/services/streaming_foreground_service.dart  (5 Z.)
-
-- conditional export: 'streaming_foreground_service_stub.dart' if (dart.library.io) 'streaming_foreground_service_io.dart'
+- reicht weiter: 'streaming_foreground_service_stub.dart' if (dart.library.io) 'streaming_foreground_service_io.dart'
 
 ## lib/services/streaming_foreground_service_io.dart  (307 Z.)
-
 - L9 `class StreamingForegroundService`  — Service to keep AI streaming alive when app is backgrounded or screen locked.
   - L10 `static bool _isInitialized = false`
   - L11 `static bool _isRunning = false`
@@ -2165,7 +2082,6 @@
   - L303 `void onNotificationDismissed()`
 
 ## lib/services/streaming_foreground_service_stub.dart  (71 Z.)
-
 - L6 `class StreamingForegroundService`  — Service to keep AI streaming alive when app is backgrounded or screen locked.
   - L7 `static final bool _isRunning = false`
   - L8 `static const bool _hasKeepAliveLock = false`
@@ -2182,11 +2098,9 @@
   - L67 `static Future<bool> requestIgnoreBatteryOptimization()`  — No-op on web — nothing to request.
 
 ## lib/services/streaming_manager.dart  (5 Z.)
+- reicht weiter: 'streaming_manager_stub.dart' if (dart.library.io) 'streaming_manager_io.dart'
 
-- conditional export: 'streaming_manager_stub.dart' if (dart.library.io) 'streaming_manager_io.dart'
-
-## lib/services/streaming_manager_base.dart  (668 Z.)
-
+## lib/services/streaming_manager_base.dart  (671 Z.)
 - L21 `abstract class StreamingManagerBase`  — Manages multiple concurrent chat streams across different chats.
   - L24 `final Map<String, ActiveStream> activeStreams = {}`  — Map of chatId -> [ActiveStream].
   - L27 `static const _completedStreamTtl = Duration(minutes: 5)`  — Remove completed streams older than the TTL to prevent memory leaks.
@@ -2213,48 +2127,47 @@
   - L252 `void completeStream(String chatId)`  — Mark a stream as completed but keep its buffered content available.
   - L275 `void evictStaleCompletedStreams()`
   - L317 `Future<void> handleStreamEvent({ required String chatId, required ChatStreamEvent event, required Function(String content, String reasoning) onUpdate, required Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Handle stream events asynchronously to allow awaiting notifications
-  - L412 `Future<void> handleStreamClose({ required String chatId, required Function(String content, String reasoning, double? tps) onComplete, })`  — Handle stream close asynchronously
-  - L451 `void onAppLifecycleChanged({required bool isInBackground})`  — Called when app lifecycle changes - manages the foreground service on
-  - L461 `Map<String, bool> getActiveStreamsInfo()`  — Get info about active streams (for debugging)
-  - L469 `String? getBufferedContent(String chatId)`  — Get the current buffered content for a chat (active or completed).
-  - L479 `String? getBufferedReasoning(String chatId)`  — Get the current buffered reasoning for a chat (active or completed).
-  - L489 `int? getStreamingMessageIndex(String chatId)`  — Get the message index being streamed for a chat (active or completed).
-  - L497 `double? getTps(String chatId)`  — Get the TPS (tokens per second) for a streaming chat
-  - L505 `Map<String, dynamic>? getLatestMeta(String chatId)`  — Get the latest stream metadata for a chat (active or completed).
-  - L513 `List<NativeToolCall> getNativeToolCalls(String chatId)`  — Native tool calls the model requested on the just-completed pass, read by
-  - L521 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
-  - L528 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed.
-  - L549 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, { String? modelId, String? provider, })`  — Store background messages for a streaming chat.
-  - L572 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get background messages with current buffer content applied.
-  - L593 `bool hasBackgroundMessages(String chatId)`  — Check if a chat has background messages stored.
-- L600 `class ActiveStream`  — One tracked stream: its subscription, buffers and bookkeeping.
-  - L601 `final StreamSubscription<ChatStreamEvent> subscription`
-  - L602 `final int messageIndex`
-  - L603 `final String chatId`
-  - L604 `final String? chatTitle`
-  - L605 `final StringBuffer contentBuffer = StringBuffer()`
-  - L606 `final StringBuffer reasoningBuffer = StringBuffer()`
-  - L607 `bool isActive = true`
-  - L610 `double? tps`
-  - L611 `Map<String, dynamic>? latestMeta`
-  - L616 `final List<NativeToolCall> nativeToolCalls = <NativeToolCall>[]`  — Native OpenAI-format tool calls the model requested this pass (assembled
-  - L621 `final DateTime startedAt = DateTime.now()`
-  - L622 `DateTime? firstTokenAt`
-  - L626 `DateTime? firstEventAt`  — The first event of any kind, token or not — when the server proved it
-  - L629 `StreamPhase phase = StreamPhase.connecting`  — What this turn is doing, for the header above the answer.
-  - L632 `DateTime? completedAt`
-  - L637 `Timer? idleTimer`
-  - L642 `Timer? uiThrottleTimer`
-  - L643 `bool uiUpdatePending = false`
-  - L646 `List<Map<String, dynamic>>? backgroundMessages`
-  - L647 `String? modelId`
-  - L648 `String? provider`
-  - L650 `ActiveStream({ required this.subscription, required this.messageIndex, required this.chatId, this.chatTitle, })`
-  - L657 `void cancelIdleTimer()`
-  - L662 `void cancelUiThrottle()`
+  - L415 `Future<void> handleStreamClose({ required String chatId, required Function(String content, String reasoning, double? tps) onComplete, })`  — Handle stream close asynchronously
+  - L454 `void onAppLifecycleChanged({required bool isInBackground})`  — Called when app lifecycle changes - manages the foreground service on
+  - L464 `Map<String, bool> getActiveStreamsInfo()`  — Get info about active streams (for debugging)
+  - L472 `String? getBufferedContent(String chatId)`  — Get the current buffered content for a chat (active or completed).
+  - L482 `String? getBufferedReasoning(String chatId)`  — Get the current buffered reasoning for a chat (active or completed).
+  - L492 `int? getStreamingMessageIndex(String chatId)`  — Get the message index being streamed for a chat (active or completed).
+  - L500 `double? getTps(String chatId)`  — Get the TPS (tokens per second) for a streaming chat
+  - L508 `Map<String, dynamic>? getLatestMeta(String chatId)`  — Get the latest stream metadata for a chat (active or completed).
+  - L516 `List<NativeToolCall> getNativeToolCalls(String chatId)`  — Native tool calls the model requested on the just-completed pass, read by
+  - L524 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
+  - L531 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed.
+  - L552 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, { String? modelId, String? provider, })`  — Store background messages for a streaming chat.
+  - L575 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get background messages with current buffer content applied.
+  - L596 `bool hasBackgroundMessages(String chatId)`  — Check if a chat has background messages stored.
+- L603 `class ActiveStream`  — One tracked stream: its subscription, buffers and bookkeeping.
+  - L604 `final StreamSubscription<ChatStreamEvent> subscription`
+  - L605 `final int messageIndex`
+  - L606 `final String chatId`
+  - L607 `final String? chatTitle`
+  - L608 `final StringBuffer contentBuffer = StringBuffer()`
+  - L609 `final StringBuffer reasoningBuffer = StringBuffer()`
+  - L610 `bool isActive = true`
+  - L613 `double? tps`
+  - L614 `Map<String, dynamic>? latestMeta`
+  - L619 `final List<NativeToolCall> nativeToolCalls = <NativeToolCall>[]`  — Native OpenAI-format tool calls the model requested this pass (assembled
+  - L624 `final DateTime startedAt = DateTime.now()`
+  - L625 `DateTime? firstTokenAt`
+  - L629 `DateTime? firstEventAt`  — The first event of any kind, token or not — when the server proved it
+  - L632 `StreamPhase phase = StreamPhase.connecting`  — What this turn is doing, for the header above the answer.
+  - L635 `DateTime? completedAt`
+  - L640 `Timer? idleTimer`
+  - L645 `Timer? uiThrottleTimer`
+  - L646 `bool uiUpdatePending = false`
+  - L649 `List<Map<String, dynamic>>? backgroundMessages`
+  - L650 `String? modelId`
+  - L651 `String? provider`
+  - L653 `ActiveStream({ required this.subscription, required this.messageIndex, required this.chatId, this.chatTitle, })`
+  - L660 `void cancelIdleTimer()`
+  - L665 `void cancelUiThrottle()`
 
 ## lib/services/streaming_manager_io.dart  (273 Z.)
-
 - L14 `class StreamingManager extends StreamingManagerBase`  — Manages multiple concurrent chat streams across different chats
   - L15 `static final StreamingManager _instance = StreamingManager._internal()`
   - L16 `factory StreamingManager()`
@@ -2277,7 +2190,6 @@
   - L260 `bool _shouldShowCompletionNotification()`
 
 ## lib/services/streaming_manager_stub.dart  (21 Z.)
-
 - L10 `class StreamingManager extends StreamingManagerBase`  — Manages multiple concurrent chat streams across different chats
   - L11 `static final StreamingManager _instance = StreamingManager._internal()`
   - L12 `factory StreamingManager()`
@@ -2285,7 +2197,6 @@
   - L18 `List<NativeToolCall> getNativeToolCalls(String chatId)`  — Native tool calls from the just-completed pass. The web transport does not
 
 ## lib/services/streaming_transcription_service.dart  (240 Z.)
-
 - L26 `class StreamingTranscriptionService`  — Manages a WebSocket connection for streaming audio chunks to the
   - L29 `static const _connectionTimeout = Duration(seconds: 5)`  — Timeout for establishing the WebSocket connection.
   - L32 `static const _transcriptionTimeout = Duration(seconds: 60)`  — Timeout for the Groq transcription after signalling "stop".
@@ -2308,11 +2219,9 @@
   - L230 `Future<void> _cleanup()`
 
 ## lib/services/supabase_schema_errors.dart  (22 Z.)
-
 - L11 `bool isMissingPreferencesColumn(PostgrestException error)`  — True when [error] says the `preferences` JSONB column is not there.
 
 ## lib/services/supabase_service.dart  (134 Z.)
-
 - L7 `class SupabaseService`
   - L8 `const SupabaseService._()`
   - L10 `static bool _initialized = false`
@@ -2328,11 +2237,9 @@
   - L124 `static Future<void> signOut()`
 
 ## lib/services/system_tray_service.dart  (5 Z.)
-
-- conditional export: 'system_tray_service_stub.dart' if (dart.library.io) 'system_tray_service_io.dart'
+- reicht weiter: 'system_tray_service_stub.dart' if (dart.library.io) 'system_tray_service_io.dart'
 
 ## lib/services/system_tray_service_io.dart  (394 Z.)
-
 - L17 `class SystemTrayService with TrayListener, WindowListener`  — Desktop system tray integration for Linux, Windows, and macOS.
   - L18 `SystemTrayService._()`
   - L20 `static final SystemTrayService instance = SystemTrayService._()`
@@ -2370,7 +2277,6 @@
   - L362 `Future<void> dispose({bool resetQuitFlag = true})`
 
 ## lib/services/system_tray_service_stub.dart  (16 Z.)
-
 - L3 `class SystemTrayService`
   - L4 `SystemTrayService._()`
   - L6 `static final SystemTrayService instance = SystemTrayService._()`
@@ -2380,7 +2286,6 @@
   - L14 `Future<void> dispose({bool resetQuitFlag = true})`
 
 ## lib/services/theme_settings_service.dart  (116 Z.)
-
 - L9 `class ThemeSettings`
   - L10 `const ThemeSettings({ required this.userId, required this.themeMode, required this.accentColor, required this.iconColor, required this.backgroundColor, })`
   - L18 `final String userId`
@@ -2403,7 +2308,6 @@
   - L114 `String toString()`
 
 ## lib/services/title_generation_service.dart  (860 Z.)
-
 - L20 `class TitleGenerationService`  — Service for automatically generating chat titles using AI.
   - L43 `static const String _titleModel = 'openai/gpt-oss-20b'`
   - L50 `static const String _preferredTitleProvider = 'groq'`
@@ -2457,7 +2361,6 @@
   - L857 `static Future<void> debugDropLegacyKeys(SharedPreferences prefs)`
 
 ## lib/services/token_activity_stats.dart  (285 Z.)
-
 - L14 `enum HeatmapMode`  — How the token-activity heatmap colours each day cell.
   - L14 `daily`
   - L14 `weekly`
@@ -2493,7 +2396,6 @@
   - L283 `int requests = 0`
 
 ## lib/services/tool_call_handler.dart  (1999 Z.)
-
 - L32 `_readOnlyToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_route',`  — Tools that only read. A round made up entirely of these can run its
 - L48 `class ToolLoopSession`
   - L49 `ToolLoopSession({ required this.latestUserMessage, required this.history, required this.accessToken, required this.enforcer, required this.toolCallingEnabled, required this.discoveryMode, this.baseSystemPrompt, this.discoveryContextKey, this.modelId, this.skipIdentity = false, this.nativeToolCalling = false, })`
@@ -2574,7 +2476,7 @@
   - L366 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
   - L372 `static const int _kMaxConsecutiveSandboxInfraFailures = 2`  — Consecutive sandbox-infrastructure failures (HTTP 0/502/503/504) allowed
   - L375 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
-  - L382 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', //`skill`returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was`skill()`would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
+  - L382 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
   - L411 `static const int _maxDiscoveryContexts = 200`
   - L417 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
   - L418 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
@@ -2618,7 +2520,6 @@
   - L1997 `final List<String> activeSkillNames = <String>[]`
 
 ## lib/services/tool_enforcer.dart  (420 Z.)
-
 - L10 `class ToolEnforcer`  — Client-side Tool Call Enforcer (inspired by Kimi K2's Enforcer).
   - L13 `int _globalCallIndex = 0`  — Global call index -- increments across the entire conversation,
   - L16 `int _currentIteration = 0`  — Current tool-loop iteration for the active user turn.
@@ -2627,7 +2528,7 @@
   - L25 `Map<String, Map<String, dynamic>> _toolSchemas = {}`  — Parameter schemas keyed by tool name.
   - L28 `bool discoveryMode = false`  — Discovery mode: when true, only find_tools + discovered tools accepted.
   - L31 `Set<String> discoveredToolNames = {}`  — Tools discovered via find_tools (names only). Updated externally.
-  - L40 `static const Set<String> _kBaseAlwaysAllowedTools = { 'notes', 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'view_chat_images', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'weather', // Artifact tools are core to chuk_chat's UX and their full schemas // live in the system prompt already — forcing the model to // find_tools round-trip them just burns a turn. 'artifact_schema', 'artifact_manager', // typst_compile is the documented follow-up for artifact_schema // type="typst"; gating it behind find_tools wastes a pass. 'typst_compile', //`skill`must be callable on the FIRST attempt. Soft discovery would // auto-allow it on a retry, but the first call is the one that matters. 'skill', }`  — Tools that always bypass discovery, regardless of prompt configuration.
+  - L40 `static const Set<String> _kBaseAlwaysAllowedTools = { 'notes', 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'view_chat_images', 'search_places', 'search_restaurants', 'geocode', 'get_route', 'weather', // Artifact tools are core to chuk_chat's UX and their full schemas // live in the system prompt already — forcing the model to // find_tools round-trip them just burns a turn. 'artifact_schema', 'artifact_manager', // typst_compile is the documented follow-up for artifact_schema // type="typst"; gating it behind find_tools wastes a pass. 'typst_compile', // `skill` must be callable on the FIRST attempt. Soft discovery would // auto-allow it on a retry, but the first call is the one that matters. 'skill', }`  — Tools that always bypass discovery, regardless of prompt configuration.
   - L68 `Set<String> _alwaysAllowedTools = _kBaseAlwaysAllowedTools`  — Tools that bypass discovery (always available without find_tools).
   - L70 `ToolEnforcer({this.maxIterations = 100})`
   - L74 `set alwaysAllowedTools(Set<String> tools)`  — Set the tools that bypass discovery mode (always callable).
@@ -2671,7 +2572,6 @@
   - L413 `const ToolCallResult({ required this.callId, required this.name, required this.result, this.isError = false, })`
 
 ## lib/services/tool_executor.dart  (1551 Z.)
-
 - L36 `class ToolExecutionResult`
   - L37 `const ToolExecutionResult({ required this.output, required this.isError, this.producedBlocks = const [], })`
   - L43 `final String output`
@@ -2726,14 +2626,13 @@
   - L1347 `static final RegExp toolFailureSniffPattern = RegExp( r'^\s*(' r'Error\b' r'|Failed\b' r'|Unable to\b' r'|Unknown [A-Za-z_]+ (?:action|operation)\b' r'|Unknown operation\b' r'|Unsupported [A-Za-z]+ (?:method|action)\b' // "<Thing> error:" with at most three words before it, so a prose // sentence that merely reaches an "error:" later does not match. r'|[A-Z][A-Za-z0-9]*(?: [A-Za-z0-9]+){0,2} error(?: \(\d+\))?:' r'|[A-Za-z ]{0,20}not authenticated\b' r'|[A-Za-z ]{0,20}(?:token )?expired\b' r')', )`  — Leading phrases the handlers actually use to report failure.
   - L1364 `static bool looksLikeToolFailure(String output)`
   - L1367 `int _coerceInt(dynamic value, {required int fallback})`
-- L1384 `_excalidrawSchemaText = ''' # Excalidraw scene schema (content field for artifact_manager) The`content`string MUST be`
+- L1384 `_excalidrawSchemaText = ''' # Excalidraw scene schema (content field for artifact_manager) The `content` string MUST be `
 - L1435 `_technicalDrawingSchemaText = ''' # Technical drawing schema (content field for artifact_manager, type="technical_drawin`
-- L1478 `_typstSchemaText = ''' # Typst schema (source is the content for typst_compile, NOT artifact_manager) Use the dedicated`
+- L1478 `_typstSchemaText = ''' # Typst schema (source is the content for typst_compile, NOT artifact_manager) Use the dedicated `
 - L1509 `_mermaidSchemaText = ''' # Mermaid schema (content for artifact_manager, type="mermaid") Standard Mermaid diagram source`
-- L1533 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example:````
+- L1533 `_svgSchemaText = ''' # SVG schema (content for artifact_manager, type="svg") Full SVG document as a string. Example: ````
 
 ## lib/services/tool_image_result_service.dart  (446 Z.)
-
 - L10 `class ToolImageUpdateResult`
   - L11 `const ToolImageUpdateResult({ required this.toolCalls, required this.imagePaths, required this.imageMetas, this.imageCostEur, this.imageGeneratedAt, })`
   - L19 `final List<ToolCall> toolCalls`
@@ -2762,7 +2661,6 @@
   - L434 `static String? _coerceDateTimeIso(dynamic value)`
 
 ## lib/services/tool_prompt_builder.dart  (1338 Z.)
-
 - L8 `class ToolPromptBuilder`  — Builds system prompts with tool calling protocol for LLM.
   - L9 `static const String toolCallStart = '<tool_call>'`
   - L10 `static const String toolCallEnd = '</tool_call>'`
@@ -2786,17 +2684,16 @@
   - L1169 `void _appendNewsProtocol(StringBuffer buffer)`
   - L1203 `String _visualOutputProtocol()`  — Chart and map rendering protocol — these are output formats, not tools.
 
-## lib/services/tool_registry.dart  (2032 Z.)
-
-- L12 `_serverBackedToolNames = { 'github', 'slack', 'google_calendar', 'gmail', // Sandbox tools — proxy through the api_serve`
-- L29 `toolCategoryMap = { 'find_tools': ToolCategory.basic, 'calculate': ToolCategory.basic, 'get_time': ToolCategory.basic, '`  — Maps tool names to their ToolCategory for enable/disable filtering.
-- L79 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
-- L115 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this`  — All built-in tool definitions with tags for discovery.
-- L1999 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
-- L2007 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
+## lib/services/tool_registry.dart  (2050 Z.)
+- L13 `_serverBackedToolNames = { 'github', 'slack', 'google_calendar', 'gmail', // Sandbox tools — proxy through the api_serve`
+- L32 `_sandboxToolNames = { 'code_run', 'sandbox_list', 'sandbox_read', 'sandbox_write', 'sandbox_reset', 'send_file_to_user',`  — The tools the remote code sandbox serves. Gated behind [kFeatureSandboxes].
+- L42 `toolCategoryMap = { 'find_tools': ToolCategory.basic, 'calculate': ToolCategory.basic, 'get_time': ToolCategory.basic, '`  — Maps tool names to their ToolCategory for enable/disable filtering.
+- L92 `discoveryCatalog = { 'Maps / Karten': 'Find places and restaurants, geocode addresses and calculate routes / ' 'Orte und`  — Discovery catalog: category labels -> human-readable descriptions.
+- L128 `builtinTools = [ // -- Meta-tool: find_tools -- ClientTool( name: 'find_tools', description: 'Discovery tool. Call this `  — All built-in tool definitions with tags for discovery.
+- L2012 `bool _isMobileRuntime()`  — Whether the current platform is a mobile device (Android/iOS).
+- L2020 `void registerBuiltinTools(ToolExecutor executor)`  — Register all built-in tools from [builtinTools] into a [ToolExecutor].
 
 ## lib/services/tool_result_cache_registry.dart  (139 Z.)
-
 - L27 `_uuid = Uuid()`
 - L29 `class _RegistryEntry`
   - L30 `_RegistryEntry(this.id, this.expiresAt)`
@@ -2824,7 +2721,6 @@
 - L138 `kCacheMissErrorCode = 'cache_miss'`  — Stable marker the server attaches (`code`) and the client matches to detect
 
 ## lib/services/tour_key_registry.dart  (78 Z.)
-
 - L16 `class TourSlots`  — Known target slots used by the onboarding tour.
   - L17 `static const String modelDropdown = 'model_dropdown'`
   - L18 `static const String modelProviderPill = 'model_provider_pill'`
@@ -2847,7 +2743,6 @@
   - L76 `void clear()`  — Drops every registered key. Intended for tests.
 
 ## lib/services/tray_action_bus.dart  (21 Z.)
-
 - L10 `class TrayActionBus`  — Decouples the desktop system tray menu from the widget tree.
   - L11 `TrayActionBus._()`
   - L13 `static final TrayActionBus instance = TrayActionBus._()`
@@ -2855,7 +2750,6 @@
   - L19 `void requestNewChat()`
 
 ## lib/services/update_check_service.dart  (302 Z.)
-
 - L17 `class UpdateCheckService`  — Checks for app updates via the GitHub Releases API.
   - L18 `const UpdateCheckService._()`
   - L20 `static const String _owner = 'chuk-development'`
@@ -2882,7 +2776,6 @@
   - L295 `const UpdateInfo({ required this.currentVersion, required this.latestVersion, required this.downloadUrl, required this.releasePageUrl, })`
 
 ## lib/services/usage_logs_service.dart  (452 Z.)
-
 - L5 `class UsageLogEntry`
   - L6 `const UsageLogEntry({ required this.modelId, required this.providerSlug, required this.promptTokens, required this.completionTokens, required this.totalTokens, required this.totalCostUsd, required this.creditsDeductedEur, required this.createdAt, this.cacheReadTokens = 0, this.cacheWriteTokens = 0, this.cacheReadCostUsd = 0, this.cacheWriteCostUsd = 0, this.promptCostUsd = 0, this.completionCostUsd = 0, })`
   - L23 `final String modelId`
@@ -2969,7 +2862,6 @@
 - L443 `DateTime? _parseDateTime(dynamic value)`
 
 ## lib/services/user_model_prefs_realtime_service.dart  (114 Z.)
-
 - L22 `class UserModelPrefsRealtimeService`
   - L23 `UserModelPrefsRealtimeService._()`
   - L24 `static final UserModelPrefsRealtimeService instance = UserModelPrefsRealtimeService._()`
@@ -2981,7 +2873,6 @@
   - L97 `void _handleSelectedModelChange(PostgresChangePayload payload)`
 
 ## lib/services/user_preferences_service.dart  (931 Z.)
-
 - L12 `class UserPreferencesService`
   - L13 `const UserPreferencesService._()`
   - L14 `static Map<String, String>? _cachedProviderPreferences`
@@ -3029,7 +2920,6 @@
   - L929 `static String? get debugCacheOwnerUserId`
 
 ## lib/services/user_status_service.dart  (177 Z.)
-
 - L25 `class UserStatusService`
   - L26 `UserStatusService._()`
   - L28 `static const String _keyPrefix = 'user_status_cache_'`
@@ -3048,7 +2938,6 @@
   - L165 `static Future<void> _writeCache( String uid, Map<String, dynamic> value, )`
 
 ## lib/services/websocket_chat_service.dart  (285 Z.)
-
 - L19 `class WebSocketChatService`  — Service for handling streaming chat responses.
   - L31 `static Stream<ChatStreamEvent> sendStreamingChat({ required String accessToken, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Sends a streaming chat request and yields chunks as they arrive.
   - L84 `static Stream<ChatStreamEvent> _sendViaMultiplex({ required MultiplexConnection connection, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Send a chat through the multiplexed `/v2/ws` connection. Yields the
@@ -3056,35 +2945,28 @@
   - L257 `static Future<List<String>> _convertImagesToBase64( List<String> imagePaths, )`  — Convert image storage paths or existing Base64 URLs to Base64 data URLs.
 
 ## lib/services/websocket_connector.dart  (10 Z.)
-
-- conditional export: 'websocket_connector_web.dart' if (dart.library.io) 'websocket_connector_io.dart'
+- reicht weiter: 'websocket_connector_web.dart' if (dart.library.io) 'websocket_connector_io.dart'
 
 ## lib/services/websocket_connector_io.dart  (53 Z.)
-
 - L28 `_sharedPinnedClient`  — One long-lived pinned [HttpClient] reused across every WebSocket connect.
 - L36 `Future<WebSocketChannel> connectWebSocket(Uri url)`  — Create a [WebSocketChannel] with certificate pinning on native platforms.
 
 ## lib/services/websocket_connector_web.dart  (15 Z.)
-
 - L12 `Future<WebSocketChannel> connectWebSocket(Uri url)`  — Create a [WebSocketChannel] on web.
 
 ## lib/services/window_close_service.dart  (5 Z.)
-
-- conditional export: 'window_close_service_stub.dart' if (dart.library.io) 'window_close_service_io.dart'
+- reicht weiter: 'window_close_service_stub.dart' if (dart.library.io) 'window_close_service_io.dart'
 
 ## lib/services/window_close_service_io.dart  (40 Z.)
-
 - L20 `Future<void> initializeWindowCloseHandler()`
 - L30 `class _CloseListener extends WindowListener`
   - L31 `bool _isClosing = false`
   - L34 `void onWindowClose()`
 
 ## lib/services/window_close_service_stub.dart  (5 Z.)
-
 - L4 `Future<void> initializeWindowCloseHandler()`
 
 ## lib/services/workspace_file_upload.dart  (88 Z.)
-
 - L7 `class WorkspaceUploadOutcome`  — What came out of [pickAndUploadWorkspaceFile].
   - L8 `const WorkspaceUploadOutcome._({this.fileName, this.error})`
   - L11 `const WorkspaceUploadOutcome.cancelled() : this._()`  — The user closed the file picker, or declined the size confirmation.
@@ -3095,7 +2977,6 @@
 - L36 `Future<WorkspaceUploadOutcome> pickAndUploadWorkspaceFile({ required String workspaceId, required void Function(String fileName) onStart, required void Function(double progress) onProgress, required void Function() onConverting, required void Function() onFinished, Future<bool> Function(int byteCount)? confirmBytes, })`  — Asks for a file and uploads it to [workspaceId].
 
 ## lib/services/workspace_message_service.dart  (384 Z.)
-
 - L9 `class WorkspaceMessageService`  — Service for composing AI messages with workspace context
   - L12 `static const int maxTotalContentLength = 500000`
   - L13 `static const int maxChatHistoryContentLength = 100000`
@@ -3113,7 +2994,6 @@
   - L373 `static int remainingFileTokenBudget(Workspace workspace, String? modelId)`  — Check whether adding [newFileTokens] additional tokens would exceed
 
 ## lib/services/workspace_storage_service.dart  (1062 Z.)
-
 - L18 `class WorkspaceStorageService`  — Service for managing workspace workspaces, chat assignments, and file attachments
   - L19 `static const String bucketName = 'workspace-files'`
   - L20 `static const String _cacheKey = 'cached_projects'`

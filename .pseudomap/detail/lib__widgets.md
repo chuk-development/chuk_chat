@@ -1,7 +1,6 @@
-# lib/widgets · Signatures
+# lib/widgets · Signaturen
 
 ## lib/widgets/accent_icon_button.dart  (70 Z.)
-
 - L13 `class AccentIconButton extends StatelessWidget`  — A round, accent-filled icon button — one shared widget so the "new chat"
   - L14 `final IconData icon`
   - L15 `final VoidCallback onTap`
@@ -14,7 +13,6 @@
   - L40 `Widget build(BuildContext context)`
 
 ## lib/widgets/anchored_menu.dart  (361 Z.)
-
 - L19 `_kAnchorGap = 6`  — Gap between the anchor and the menu.
 - L22 `_kEdgeMargin = 8`  — Smallest margin the menu keeps to the screen edges and the keyboard.
 - L26 `_kMinRoomAbove = 120`  — Below this, "open above" is not worth forcing — the menu would be a
@@ -59,7 +57,6 @@
 - L350 `List<List<Widget>> _splitOnDividers(List<Widget> items)`  — Splits a flat item list into runs at every divider, so a divider becomes
 
 ## lib/widgets/api_availability_polling.dart  (51 Z.)
-
 - L13 `mixin ApiAvailabilityPolling<T extends StatefulWidget> on State<T>`  — Retries a failed model fetch once the API answers again.
   - L14 `static const Duration _pollInterval = Duration(seconds: 8)`
   - L16 `Timer? _apiAvailabilityTimer`
@@ -70,7 +67,6 @@
   - L45 `void stopApiAvailabilityPolling()`
 
 ## lib/widgets/app_notification.dart  (209 Z.)
-
 - L22 `enum AppNotificationKind`  — What kind of thing happened. Picks the glyph and the accent down the side.
   - L24 `info`
   - L27 `success`
@@ -92,7 +88,6 @@
   - L202 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> success( BuildContext context, String message, { Duration duration = const Duration(seconds: 2), })`  — It worked.
 
 ## lib/widgets/artifact_panel.dart  (2167 Z.)
-
 - L32 `class ArtifactPanel extends StatefulWidget`
   - L33 `const ArtifactPanel({ super.key, required this.artifact, this.onClose, this.onOpenSourceChat, this.showHeader = true, })`
   - L41 `final ArtifactDocument artifact`
@@ -254,7 +249,6 @@
   - L2152 `Widget build(BuildContext context)`
 
 ## lib/widgets/ask_user_card.dart  (101 Z.)
-
 - L10 `class AskUserCard extends StatelessWidget`  — Interactive option buttons shown below messages that used the ask_user tool.
   - L11 `const AskUserCard({super.key, required this.options, required this.onSelect})`
   - L14 `final List<String> options`  — The option labels extracted from the ask_user tool call arguments.
@@ -273,7 +267,6 @@
   - L68 `Widget build(BuildContext context)`
 
 ## lib/widgets/attachment_preview_bar.dart  (1008 Z.)
-
 - L21 `typedef AttachmentRemoveCallback = void Function(String fileId)`
 - L22 `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
 - L23 `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
@@ -354,7 +347,6 @@
 - L1002 `String _extractExtension(String fileName)`
 
 ## lib/widgets/auth_gate.dart  (92 Z.)
-
 - L15 `class AuthGate extends StatefulWidget`  — Switches between [signedInBuilder] and [signedOutBuilder] based on
   - L16 `const AuthGate({ super.key, required this.signedInBuilder, required this.signedOutBuilder, this.loadingBuilder, })`
   - L23 `final WidgetBuilder signedInBuilder`
@@ -371,7 +363,6 @@
   - L79 `Widget build(BuildContext context)`
 
 ## lib/widgets/brand_wordmark.dart  (36 Z.)
-
 - L16 `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
   - L17 `final Color color`
   - L18 `final double height`
@@ -380,7 +371,6 @@
   - L27 `Widget build(BuildContext context)`
 
 ## lib/widgets/chart_widget.dart  (720 Z.)
-
 - L8 `_defaultColors = [ Color(0xFF2196F3), // blue Color(0xFFF44336), // red Color(0xFF4CAF50), // green Color(0xFFFF9800), /`  — Default color palette for charts when the AI doesn't specify colors.
 - L22 `Color _parseColor(String hex)`  — Parse a hex color string like "#FF5722" or "FF5722" into a Color.
 - L28 `Color _colorAt(int index)`
@@ -402,7 +392,6 @@
   - L665 `Widget _buildRadarChart(BuildContext context)`
 
 ## lib/widgets/chat_mode_selector.dart  (573 Z.)
-
 - L19 `class ChatModeSelector extends StatelessWidget`
   - L20 `const ChatModeSelector({ super.key, required this.mode, required this.onModeChanged, this.onModelSelected, this.onOpenModelScreen, this.selectedModelId, this.modelLabel, this.customModelLabel, this.pickedModels = const <ChatModelChoice>[], this.showLabel = true, this.reasoningEffort = ChatModeService.reasoningOff, this.reasoningLevels = const <String>[ChatModeService.reasoningOff], this.onReasoningEffortChanged, this.height = 40, this.menuAbove = false, })`
   - L38 `final ChatMode mode`
@@ -462,7 +451,6 @@
   - L566 `Widget build(BuildContext context)`
 
 ## lib/widgets/chuk_table.dart  (490 Z.)
-
 - L19 `class ParsedTable`  — One parsed markdown table plus the metadata needed to render it.
   - L20 `ParsedTable({ required this.header, required this.rows, required this.alignments, })`
   - L26 `final List<String> header`
@@ -504,7 +492,6 @@
   - L472 `Widget build(BuildContext context)`
 
 ## lib/widgets/credit_display.dart  (871 Z.)
-
 - L15 `_supabase = Supabase.instance.client`
 - L18 `_kCachedCredits = 'cached_credits'`
 - L19 `_kCachedHasSubscription = 'cached_has_subscription'`
@@ -583,7 +570,6 @@
   - L857 `Widget build(BuildContext context)`
 
 ## lib/widgets/diff_widget.dart  (505 Z.)
-
 - L7 `enum _LineType`
   - L7 `added`
   - L7 `removed`
@@ -625,7 +611,6 @@
   - L485 `Widget build(BuildContext context)`
 
 ## lib/widgets/document_viewer.dart  (119 Z.)
-
 - L10 `class DocumentViewer extends StatefulWidget`  — Document viewer for markdown-converted files
   - L11 `const DocumentViewer({ super.key, required this.fileName, required this.markdownContent, })`
   - L17 `final String fileName`
@@ -643,7 +628,6 @@
   - L100 `Widget _buildEditView()`
 
 ## lib/widgets/encrypted_image_widget.dart  (210 Z.)
-
 - L9 `class EncryptedImageWidget extends StatefulWidget`  — Widget that downloads, decrypts, and displays an encrypted image from storage
   - L10 `const EncryptedImageWidget({ super.key, required this.storagePath, this.fit = BoxFit.cover, this.width, this.height, })`
   - L18 `final String storagePath`
@@ -665,7 +649,6 @@
   - L112 `Widget build(BuildContext context)`
 
 ## lib/widgets/excalidraw_svg_export.dart  (588 Z.)
-
 - L12 `String? excalidrawToSvg(String jsonString)`
 - L97 `List<double>? _bounds(Map<String, dynamic> e)`
 - L155 `List<double> _rotate(double x, double y, double cx, double cy, double angle)`
@@ -692,7 +675,6 @@
 - L583 `double _d(dynamic v)`
 
 ## lib/widgets/expressive_settings.dart  (534 Z.)
-
 - L17 `kExpressiveOuterRadius = 26`  — Corner radius at the outer edges of a group.
 - L20 `kExpressiveInnerRadius = 6`  — Corner radius where two tiles meet.
 - L23 `kExpressiveTileGap = 3`  — Gap between the tiles of a group.
@@ -776,50 +758,47 @@
   - L503 `final String? subtitle`
   - L506 `Widget build(BuildContext context)`
 
-## lib/widgets/floating_app_bar.dart  (222 Z.)
-
+## lib/widgets/floating_app_bar.dart  (227 Z.)
 - L22 `kFloatingAppBarHeight = 62`  — Height of the header band: the chat top bar's 48 row plus its 8/6 of air
 - L25 `kFloatingAppBarChip = 42`  — Diameter of the round chips: back, and each action. The chat's menu chip.
 - L28 `_kTitleRadius = 18`  — Corner radius of the title pill. The chat's title pill.
-- L48 `EdgeInsets floatingHeaderInset(BuildContext context)`  — The room a scroll view has to leave above its first item so the floating
-- L59 `class FloatingHeaderButton extends StatelessWidget`  — A round floating chip for the header — the back arrow, and whatever a
-  - L60 `const FloatingHeaderButton({ super.key, required this.icon, required this.onPressed, this.tooltip, this.color, })`
-  - L68 `final IconData icon`
-  - L69 `final VoidCallback? onPressed`
-  - L70 `final String? tooltip`
-  - L71 `final Color? color`
-  - L74 `Widget build(BuildContext context)`
-- L105 `class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget`  — The header of a settings-style page: a floating back chip, a floating
-  - L106 `const FloatingAppBar({ super.key, required this.title, this.actions, this.leading, this.automaticallyImplyLeading = true, this.bottom, })`
-  - L116 `final Widget title`  — Usually a [Text]. It is put inside the floating pill.
-  - L120 `final List<Widget>? actions`  — The right-hand side. Wrap anything tappable in [FloatingHeaderButton] so
-  - L123 `final Widget? leading`  — Replaces the back chip.
-  - L124 `final bool automaticallyImplyLeading`
-  - L127 `final PreferredSizeWidget? bottom`  — A tab bar or search field under the header, as on a normal AppBar.
-  - L130 `Size get preferredSize`
-  - L142 `Widget _styledTitle(BuildContext context, ThemeData theme)`  — The title, in the one size every page uses.
-  - L167 `Widget build(BuildContext context)`
+- L53 `EdgeInsets floatingHeaderInset(BuildContext context, {double extra = 0})`  — The room a scroll view has to leave above its first item so the floating
+- L64 `class FloatingHeaderButton extends StatelessWidget`  — A round floating chip for the header — the back arrow, and whatever a
+  - L65 `const FloatingHeaderButton({ super.key, required this.icon, required this.onPressed, this.tooltip, this.color, })`
+  - L73 `final IconData icon`
+  - L74 `final VoidCallback? onPressed`
+  - L75 `final String? tooltip`
+  - L76 `final Color? color`
+  - L79 `Widget build(BuildContext context)`
+- L110 `class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget`  — The header of a settings-style page: a floating back chip, a floating
+  - L111 `const FloatingAppBar({ super.key, required this.title, this.actions, this.leading, this.automaticallyImplyLeading = true, this.bottom, })`
+  - L121 `final Widget title`  — Usually a [Text]. It is put inside the floating pill.
+  - L125 `final List<Widget>? actions`  — The right-hand side. Wrap anything tappable in [FloatingHeaderButton] so
+  - L128 `final Widget? leading`  — Replaces the back chip.
+  - L129 `final bool automaticallyImplyLeading`
+  - L132 `final PreferredSizeWidget? bottom`  — A tab bar or search field under the header, as on a normal AppBar.
+  - L135 `Size get preferredSize`
+  - L147 `Widget _styledTitle(BuildContext context, ThemeData theme)`  — The title, in the one size every page uses.
+  - L172 `Widget build(BuildContext context)`
 
-## lib/widgets/floating_chrome_surface.dart  (68 Z.)
-
+## lib/widgets/floating_chrome_surface.dart  (76 Z.)
 - L9 `Color floatingChromeBase(BuildContext context)`  — One step off the page background — the colour a floating card takes so it
 - L20 `class FloatingChromeSurface extends StatelessWidget`  — The one surface every floating piece of chrome uses: the two bars of the
-  - L21 `const FloatingChromeSurface({ super.key, required this.child, this.radius = 26, this.padding, this.shape, this.baseColor, })`
-  - L31 `static const double _fillAlpha = 0.98`  — Alpha of the background fill. The composer's value.
-  - L33 `final Widget child`
-  - L36 `final double radius`  — Corner radius. Ignored when [shape] is a circle.
-  - L37 `final EdgeInsetsGeometry? padding`
-  - L40 `final BoxShape? shape`  — A circle for the round chips; null takes the rounded rectangle.
-  - L49 `final Color? baseColor`  — The fill, before [_fillAlpha]. Defaults to [floatingChromeBase] — one
-  - L51 `static Color fillOf(BuildContext context, {Color? baseColor})`
-  - L55 `Widget build(BuildContext context)`
+  - L21 `const FloatingChromeSurface({ super.key, required this.child, this.radius = 26, this.borderRadius, this.padding, this.shape, this.baseColor, })`
+  - L32 `static const double _fillAlpha = 0.98`  — Alpha of the background fill. The composer's value.
+  - L34 `final Widget child`
+  - L38 `final double radius`  — Corner radius. Ignored when [shape] is a circle, or when
+  - L42 `final BorderRadius? borderRadius`  — Per-corner shape, for a bar that joins whatever sits under it. Null
+  - L43 `final EdgeInsetsGeometry? padding`
+  - L46 `final BoxShape? shape`  — A circle for the round chips; null takes the rounded rectangle.
+  - L55 `final Color? baseColor`  — The fill, before [_fillAlpha]. Defaults to [floatingChromeBase] — one
+  - L57 `static Color fillOf(BuildContext context, {Color? baseColor})`
+  - L61 `Widget build(BuildContext context)`
 
 ## lib/widgets/html_artifact_view.dart  (8 Z.)
-
-- conditional export: 'html_artifact_view_io.dart' if (dart.library.js_interop) 'html_artifact_view_web.dart'
+- reicht weiter: 'html_artifact_view_io.dart' if (dart.library.js_interop) 'html_artifact_view_web.dart'
 
 ## lib/widgets/html_artifact_view_io.dart  (114 Z.)
-
 - L28 `bool shouldLoadInWebView(Uri? uri)`  — Returns true for schemes that are allowed to load inside the WebView
 - L37 `class HtmlArtifactView extends StatelessWidget`
   - L38 `const HtmlArtifactView({ super.key, required this.html, this.captureKey, })`
@@ -834,14 +813,12 @@
   - L75 `Widget build(BuildContext context)`
 
 ## lib/widgets/html_artifact_view_source_fallback.dart  (38 Z.)
-
 - L9 `class HtmlSourceFallback extends StatelessWidget`
   - L10 `const HtmlSourceFallback({super.key, required this.html})`
   - L12 `final String html`
   - L15 `Widget build(BuildContext context)`
 
 ## lib/widgets/html_artifact_view_web.dart  (136 Z.)
-
 - L20 `bool shouldLoadInWebView(Uri? uri)`  — Matches the native predicate so the test surface is shared.
 - L29 `class HtmlArtifactView extends StatefulWidget`
   - L30 `const HtmlArtifactView({ super.key, required this.html, this.captureKey, })`
@@ -859,7 +836,6 @@
   - L104 `Widget build(BuildContext context)`
 
 ## lib/widgets/image_viewer.dart  (477 Z.)
-
 - L16 `class ImageViewer extends StatefulWidget`  — Full-screen image viewer with zoom and pan capabilities
   - L17 `const ImageViewer({ super.key, required this.imageDataUrl, this.initialIndex = 0, this.allImages, this.models, })`
   - L25 `final String imageDataUrl`
@@ -893,7 +869,6 @@
   - L473 `void _resetZoom()`
 
 ## lib/widgets/linux_webview.dart  (92 Z.)
-
 - L25 `class LinuxWebView extends StatelessWidget`
   - L26 `const LinuxWebView._html({ required this.htmlContent, required this.captureKey, })`
   - L31 `final String htmlContent`
@@ -903,7 +878,6 @@
   - L58 `Widget build(BuildContext context)`
 
 ## lib/widgets/map_block_renderer.dart  (993 Z.)
-
 - L21 `mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true)`  — Regex to find <map> blocks in message content.
 - L24 `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
 - L27 `class MapContentSegment`  — A segment of message content — either plain text or a map block.
@@ -955,7 +929,6 @@
   - L932 `Widget build(BuildContext context)`
 
 ## lib/widgets/markdown_message.dart  (1762 Z.)
-
 - L22 `class _MdSegment`  — One slice of a message: either plain markdown or a GFM table block.
   - L23 `const _MdSegment(this.text, {required this.isTable, this.table})`
   - L24 `final String text`
@@ -1052,7 +1025,6 @@
   - L1723 `Widget build(BuildContext context)`
 
 ## lib/widgets/mcp_connect_card.dart  (199 Z.)
-
 - L20 `class McpConnectCard extends StatefulWidget`  — A single Connect button for one catalogue server, shown inline under an
   - L21 `const McpConnectCard({ super.key, required this.entry, required this.onConnected, })`
   - L28 `final McpCatalogueEntry entry`  — The catalogue server to connect.
@@ -1067,7 +1039,6 @@
   - L102 `Widget build(BuildContext context)`
 
 ## lib/widgets/measure_size.dart  (49 Z.)
-
 - L6 `typedef OnWidgetSizeChange = void Function(Size size)`  — Callback invoked whenever the measured child changes size.
 - L13 `class MeasureSize extends SingleChildRenderObjectWidget`  — Reports its child's laid-out size via [onChange] after every layout in which
   - L14 `const MeasureSize({ super.key, required this.onChange, required Widget super.child, })`
@@ -1081,7 +1052,6 @@
   - L39 `void performLayout()`
 
 ## lib/widgets/menu_tile_group.dart  (87 Z.)
-
 - L12 `kMenuOuterRadius = 26`  — A menu drawn as a run of filled tiles instead of one boxed card.
 - L15 `kMenuInnerRadius = 6`  — Where two tiles of one run meet.
 - L18 `kMenuTileGap = 3`  — Air between two tiles of one run.
@@ -1094,8 +1064,7 @@
   - L52 `final double outerRadius`  — 26 is nearly a capsule on a 48 px row; take 20 for shorter rows.
   - L55 `Widget build(BuildContext context)`
 
-## lib/widgets/message_bubble.dart  (375 Z.)
-
+## lib/widgets/message_bubble.dart  (381 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
 - L90 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
 - L95 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
@@ -1110,63 +1079,63 @@
 - L143 `_cachedShowReasoningTokens`  — Cross-instance cache of the two display preferences, so a freshly built
 - L144 `_cachedShowModelInfo`
 - L146 `class MessageBubble extends StatefulWidget`
-  - L147 `const MessageBubble({ super.key, required this.message, required this.isUser, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.turnStartedAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, })`
-  - L192 `final String message`
-  - L193 `final bool isUser`
-  - L196 `final bool startsNewGroup`
-  - L197 `final bool endsGroup`
-  - L198 `final double? maxWidth`
-  - L199 `final List<MessageBubbleAction> actions`
-  - L200 `final String? reasoning`
-  - L201 `final bool isReasoningStreaming`
-  - L202 `final String? modelLabel`
-  - L203 `final String? modelProvider`
-  - L204 `final double? tps`
-  - L205 `final bool isEditing`
-  - L206 `final String? initialEditText`
-  - L207 `final ValueChanged<String>? onSubmitEdit`
-  - L208 `final VoidCallback? onCancelEdit`
-  - L209 `final bool? showReasoningTokens`
-  - L210 `final bool? showModelInfo`
-  - L211 `final bool? showTps`
-  - L212 `final List<ToolCall>? toolCalls`
-  - L213 `final bool showToolCalls`
-  - L218 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
-  - L222 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
-  - L227 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
-  - L232 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
-  - L234 `final List<String>? images`
-  - L238 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
-  - L239 `final List<DocumentAttachment>? attachments`
-  - L240 `final double? imageCostEur`
-  - L241 `final DateTime? imageGeneratedAt`
-  - L246 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
-  - L252 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
-  - L257 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
-  - L258 `final bool useSharedSelectionArea`
-  - L262 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
-  - L265 `final String? lastError`  — Last error text shown in the failed-status tooltip.
-  - L268 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
-  - L273 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
-  - L277 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
-  - L281 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
-  - L285 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
-  - L286 `final VoidCallback? onNextVariant`
-  - L289 `State<MessageBubble> createState()`
-- L292 `class _MessageBubbleState extends State<MessageBubble>`
-  - L293 `bool _complexBubbleLogged = false`
-  - L294 `bool _showUserActions = false`
-  - L297 `bool? _showReasoningTokens`
-  - L298 `bool? _showModelInfo`
-  - L304 `String? _strippedMessageCache`
-  - L305 `String? _strippedMessageSource`
-  - L308 `void initState()`
-  - L313 `Future<void> _loadPreferences()`
-  - L332 `void didUpdateWidget(covariant MessageBubble oldWidget)`
-  - L337 `Widget build(BuildContext context)`
+  - L147 `const MessageBubble({ super.key, required this.message, required this.isUser, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.chatId, this.turnStartedAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, })`
+  - L193 `final String message`
+  - L194 `final bool isUser`
+  - L197 `final bool startsNewGroup`
+  - L198 `final bool endsGroup`
+  - L199 `final double? maxWidth`
+  - L200 `final List<MessageBubbleAction> actions`
+  - L201 `final String? reasoning`
+  - L202 `final bool isReasoningStreaming`
+  - L203 `final String? modelLabel`
+  - L204 `final String? modelProvider`
+  - L205 `final double? tps`
+  - L206 `final bool isEditing`
+  - L207 `final String? initialEditText`
+  - L208 `final ValueChanged<String>? onSubmitEdit`
+  - L209 `final VoidCallback? onCancelEdit`
+  - L210 `final bool? showReasoningTokens`
+  - L211 `final bool? showModelInfo`
+  - L212 `final bool? showTps`
+  - L213 `final List<ToolCall>? toolCalls`
+  - L214 `final bool showToolCalls`
+  - L219 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
+  - L223 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
+  - L228 `final String? chatId`  — The chat this message belongs to. The status header looks the live
+  - L233 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
+  - L238 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
+  - L240 `final List<String>? images`
+  - L244 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
+  - L245 `final List<DocumentAttachment>? attachments`
+  - L246 `final double? imageCostEur`
+  - L247 `final DateTime? imageGeneratedAt`
+  - L252 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
+  - L258 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
+  - L263 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
+  - L264 `final bool useSharedSelectionArea`
+  - L268 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
+  - L271 `final String? lastError`  — Last error text shown in the failed-status tooltip.
+  - L274 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
+  - L279 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
+  - L283 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
+  - L287 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
+  - L291 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
+  - L292 `final VoidCallback? onNextVariant`
+  - L295 `State<MessageBubble> createState()`
+- L298 `class _MessageBubbleState extends State<MessageBubble>`
+  - L299 `bool _complexBubbleLogged = false`
+  - L300 `bool _showUserActions = false`
+  - L303 `bool? _showReasoningTokens`
+  - L304 `bool? _showModelInfo`
+  - L310 `String? _strippedMessageCache`
+  - L311 `String? _strippedMessageSource`
+  - L314 `void initState()`
+  - L319 `Future<void> _loadPreferences()`
+  - L338 `void didUpdateWidget(covariant MessageBubble oldWidget)`
+  - L343 `Widget build(BuildContext context)`
 
 ## lib/widgets/message_fly_in.dart  (73 Z.)
-
 - L12 `class MessageFlyIn extends StatefulWidget`  — A one-shot entrance for a just-sent message: the bubble starts a little
   - L13 `const MessageFlyIn({ super.key, required this.child, this.rise = 40, this.duration = const Duration(milliseconds: 380), })`
   - L20 `final Widget child`
@@ -1181,7 +1150,6 @@
   - L55 `Widget build(BuildContext context)`
 
 ## lib/widgets/model_selection_dropdown.dart  (1428 Z.)
-
 - L27 `_menuHorizontalPadding = 32.0`
 - L28 `_menuTrailingAllowance = 64.0`
 - L29 `_menuExtraAllowance = 12.0`
@@ -1294,7 +1262,6 @@
 - L1422 `String _stripLabPrefix(String name)`  — OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
 
 ## lib/widgets/nice_snackbar.dart  (55 Z.)
-
 - L11 `class NiceSnackBar`  — The old name for [AppNotifications], kept so the call sites that already
   - L12 `NiceSnackBar._()`
   - L14 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> show( BuildContext context, String message, { Duration duration = const Duration(seconds: 2), Color? backgroundColor, })`
@@ -1302,7 +1269,6 @@
   - L47 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> showError( BuildContext context, String message, { Duration duration = const Duration(seconds: 3), })`
 
 ## lib/widgets/password_strength_meter.dart  (145 Z.)
-
 - L9 `class PasswordStrengthMeter extends StatelessWidget`  — A widget that displays password strength with visual indicators.
   - L10 `final String password`
   - L11 `final bool showRequirements`
@@ -1316,7 +1282,6 @@
   - L132 `String _getStrengthLabel(PasswordStrength strength)`
 
 ## lib/widgets/per_model_system_prompt_sheet.dart  (290 Z.)
-
 - L15 `Future<bool?> showPerModelSystemPromptSheet({ required BuildContext context, required String modelId, required String modelName, ModelPromptConfig? initial, })`  — Bottom sheet for editing a per-model system prompt and merge mode.
 - L42 `class _PerModelSystemPromptEditor extends StatefulWidget`
   - L43 `const _PerModelSystemPromptEditor({ required this.modelId, required this.modelName, required this.initial, })`
@@ -1341,7 +1306,6 @@
   - L268 `Widget build(BuildContext context)`
 
 ## lib/widgets/route_map_widget.dart  (336 Z.)
-
 - L14 `class RouteMapWidget extends StatefulWidget`  — Displays a route map with OSRM polyline, start/end markers,
   - L15 `final double fromLat, fromLon, toLat, toLon`
   - L16 `final double centerLat, centerLon, zoom`
@@ -1359,7 +1323,6 @@
   - L113 `Widget build(BuildContext context)`
 
 ## lib/widgets/sandbox_artifact_block.dart  (528 Z.)
-
 - L35 `_kInlineTextCharCap = 16 * 1024`  — Maximum number of characters of text content we inline. Anything larger
 - L37 `class SandboxArtifactBlock extends StatefulWidget`
   - L38 `const SandboxArtifactBlock({super.key, required this.payload})`
@@ -1398,8 +1361,34 @@
   - L508 `final Future<void> Function() onSave`
   - L511 `Widget build(BuildContext context)`
 
-## lib/widgets/selection_copy_area.dart  (243 Z.)
+## lib/widgets/searchable_picker.dart  (219 Z.)
+- L24 `class PickerOption<T>`  — One row of a picker.
+  - L25 `const PickerOption({ required this.value, required this.label, this.subtitle, this.leading, this.selected = false, this.searchText, })`
+  - L34 `final T value`
+  - L35 `final String label`
+  - L38 `final String? subtitle`  — The quiet second line — a price, a provider, a hint.
+  - L41 `final Widget? leading`  — An icon or logo, drawn at the head of the row.
+  - L42 `final bool selected`
+  - L45 `final String? searchText`  — What the query is matched against. Null takes the label and subtitle.
+  - L47 `String get _haystack`
+- L56 `Future<T?> showSearchablePicker<T>( BuildContext anchorContext, { required List<PickerOption<T>> options, String? hintText, double width = 320, double maxHeight = 360, int searchThreshold = 7, })`  — Opens the picker at [anchorContext]'s widget and returns the chosen value,
+- L83 `class _PickerPanel<T> extends StatefulWidget`
+  - L84 `const _PickerPanel({ required this.options, required this.hintText, required this.width, required this.maxHeight, required this.searchable, })`
+  - L92 `final List<PickerOption<T>> options`
+  - L93 `final String hintText`
+  - L94 `final double width`
+  - L95 `final double maxHeight`
+  - L96 `final bool searchable`
+  - L99 `State<_PickerPanel<T>> createState()`
+- L102 `class _PickerPanelState<T> extends State<_PickerPanel<T>>`
+  - L103 `final TextEditingController _search = TextEditingController()`
+  - L104 `String _query = ''`
+  - L107 `void dispose()`
+  - L112 `List<PickerOption<T>> get _matches`
+  - L120 `Widget build(BuildContext context)`
+  - L167 `Widget _row(BuildContext context, PickerOption<T> option)`
 
+## lib/widgets/selection_copy_area.dart  (243 Z.)
 - L13 `class SelectionCopyShortcut`  — Pure decision logic for the copy shortcut, kept out of the widget so it can
   - L14 `const SelectionCopyShortcut._()`
   - L20 `static bool isCopyIntent({ required KeyEvent event, required bool isControlPressed, required bool isMetaPressed, required bool isShiftPressed, required bool isAltPressed, required TargetPlatform platform, })`  — Whether [event] is the "copy" shortcut for [platform].
@@ -1423,7 +1412,6 @@
   - L233 `Widget build(BuildContext context)`
 
 ## lib/widgets/settings_kit.dart  (271 Z.)
-
 - L13 `class SettingsSectionHeader extends StatelessWidget`  — Shared building blocks for the settings-style pages.
   - L14 `const SettingsSectionHeader( this.label, { super.key, this.padding = const EdgeInsets.fromLTRB(4, 20, 4, 8), })`
   - L20 `final String label`
@@ -1464,31 +1452,60 @@
   - L218 `Widget build(BuildContext context)`
   - L265 `IconData get _defaultIcon`
 
-## lib/widgets/settings_list_view.dart  (101 Z.)
-
+## lib/widgets/settings_list_view.dart  (108 Z.)
 - L20 `class SettingsListView extends StatefulWidget`  — Scroll container for settings-style pages with a bounded set of rows.
-  - L21 `const SettingsListView({ super.key, required this.children, this.padding, this.controller, this.physics, this.scrollbarMargin = 8, this.crossAxisAlignment = CrossAxisAlignment.stretch, this.headerInset = true, })`
-  - L32 `final List<Widget> children`
-  - L33 `final EdgeInsetsGeometry? padding`
-  - L34 `final ScrollController? controller`
-  - L35 `final ScrollPhysics? physics`
-  - L38 `final double scrollbarMargin`  — Inset of the scrollbar track from both ends, in logical pixels.
-  - L44 `final bool headerInset`  — Leave room at the top for the page's floating header.
-  - L45 `final CrossAxisAlignment crossAxisAlignment`
-  - L48 `State<SettingsListView> createState()`
-- L51 `class _SettingsListViewState extends State<SettingsListView>`
-  - L52 `ScrollController? _internal`
-  - L53 `ScrollController get _controller`
-  - L57 `void dispose()`
-  - L62 `EdgeInsetsGeometry _withHeaderInset( BuildContext context, EdgeInsetsGeometry? padding, )`
-  - L70 `Widget build(BuildContext context)`
+  - L21 `const SettingsListView({ super.key, required this.children, this.padding, this.controller, this.physics, this.scrollbarMargin = 8, this.crossAxisAlignment = CrossAxisAlignment.stretch, this.headerInset = true, this.extraHeaderInset = 0, })`
+  - L33 `final List<Widget> children`
+  - L34 `final EdgeInsetsGeometry? padding`
+  - L35 `final ScrollController? controller`
+  - L36 `final ScrollPhysics? physics`
+  - L39 `final double scrollbarMargin`  — Inset of the scrollbar track from both ends, in logical pixels.
+  - L45 `final bool headerInset`  — Leave room at the top for the page's floating header.
+  - L49 `final double extraHeaderInset`  — Height of whatever the floating header carries under itself — a pinned
+  - L50 `final CrossAxisAlignment crossAxisAlignment`
+  - L53 `State<SettingsListView> createState()`
+- L56 `class _SettingsListViewState extends State<SettingsListView>`
+  - L57 `ScrollController? _internal`
+  - L58 `ScrollController get _controller`
+  - L62 `void dispose()`
+  - L67 `EdgeInsetsGeometry _withHeaderInset( BuildContext context, EdgeInsetsGeometry? padding, )`
+  - L77 `Widget build(BuildContext context)`
+
+## lib/widgets/settings_search_bar.dart  (207 Z.)
+- L20 `kSettingsSearchBarHeight = 60`  — Height the pinned bar reserves under the header: the field plus its air.
+- L24 `_kFieldHeight = 44`  — Height of the field itself. The settings rail's own search field, so the
+- L28 `class SettingsSearchBar extends StatefulWidget`  — The search field of a settings page: a floating pill with the magnifier on
+  - L29 `const SettingsSearchBar({ super.key, required this.controller, required this.hintText, this.focusNode, this.onChanged, this.onSubmitted, this.textInputAction, })`
+  - L39 `final TextEditingController controller`
+  - L40 `final String hintText`
+  - L41 `final FocusNode? focusNode`
+  - L44 `final ValueChanged<String>? onChanged`  — Called on every keystroke, after the clear button has been kept in sync.
+  - L45 `final ValueChanged<String>? onSubmitted`
+  - L46 `final TextInputAction? textInputAction`
+  - L49 `State<SettingsSearchBar> createState()`
+- L52 `class _SettingsSearchBarState extends State<SettingsSearchBar>`
+  - L56 `bool _hasText = false`  — Whether the clear button belongs on screen. Tracked from the controller
+  - L59 `void initState()`
+  - L66 `void didUpdateWidget(covariant SettingsSearchBar oldWidget)`
+  - L76 `void dispose()`
+  - L81 `void _onControllerChanged()`
+  - L87 `void _clear()`
+  - L93 `Widget build(BuildContext context)`
+- L170 `class PinnedSettingsSearchBar extends StatelessWidget implements PreferredSizeWidget`  — The same bar, sized to sit in a [FloatingAppBar]'s `bottom` slot so it
+  - L172 `const PinnedSettingsSearchBar({ super.key, required this.controller, required this.hintText, this.focusNode, this.onChanged, this.onSubmitted, this.textInputAction, })`
+  - L182 `final TextEditingController controller`
+  - L183 `final String hintText`
+  - L184 `final FocusNode? focusNode`
+  - L185 `final ValueChanged<String>? onChanged`
+  - L186 `final ValueChanged<String>? onSubmitted`
+  - L187 `final TextInputAction? textInputAction`
+  - L190 `Size get preferredSize`
+  - L193 `Widget build(BuildContext context)`
 
 ## lib/widgets/technical_drawing_layers.dart  (28 Z.)
-
 - L15 `int technicalDrawingLayerPriority(Map<String, dynamic> element)`  — Paint order for one element of a technical drawing.
 
 ## lib/widgets/technical_drawing_svg_export.dart  (485 Z.)
-
 - L13 `String? technicalDrawingToSvg(String jsonString)`  — Converts a technical_drawing JSON string into an SVG document string.
 - L150 `void _writeElement(StringBuffer sb, Map<String, dynamic> e)`
 - L166 `String _strokeWidth(String weight)`
@@ -1509,7 +1526,6 @@
 - L479 `String _escapeXml(String s)`
 
 ## lib/widgets/technical_drawing_widget.dart  (856 Z.)
-
 - L17 `class TechnicalDrawingWidget extends StatelessWidget`
   - L18 `const TechnicalDrawingWidget({super.key, required this.jsonString})`
   - L20 `final String jsonString`
@@ -1560,14 +1576,12 @@
   - L838 `Widget build(BuildContext context)`
 
 ## lib/widgets/update_banner.dart  (97 Z.)
-
 - L10 `class UpdateBanner extends StatelessWidget`  — A compact banner shown in the sidebar when a new app version is available.
   - L11 `const UpdateBanner({super.key})`
   - L14 `Widget build(BuildContext context)`
   - L24 `Widget _buildBanner(BuildContext context, UpdateInfo info)`
 
 ## lib/widgets/waveform.dart  (143 Z.)
-
 - L18 `class WaveformPainter extends CustomPainter`  — Paints [bars] (each 0..1) as rounded vertical bars, colouring everything
   - L19 `WaveformPainter({ required this.bars, required this.progress, required this.playedColor, required this.restColor, this.barWidth = 3.0, })`
   - L27 `final List<double> bars`
@@ -1589,7 +1603,6 @@
   - L111 `Widget build(BuildContext context)`
 
 ## lib/widgets/weather_widget.dart  (530 Z.)
-
 - L21 `class WeatherBlockWidget extends StatelessWidget`  — Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
   - L22 `final Map<String, dynamic> data`
   - L24 `const WeatherBlockWidget({super.key, required this.data})`
@@ -1612,7 +1625,6 @@
   - L457 `LinearGradient _gradientForCode(int code, Brightness brightness)`  — Gradient background keyed on WMO code & light/dark mode.
 
 ## lib/widgets/workspace_file_viewer.dart  (666 Z.)
-
 - L16 `class WorkspaceFileViewer extends StatefulWidget`  — Dialog to view and edit workspace files and their markdown summaries
   - L17 `final WorkspaceFile file`
   - L18 `final String workspaceId`
@@ -1643,7 +1655,6 @@
   - L525 `Widget _buildMarkdownContent(Color iconFg, Color accentColor)`
 
 ## lib/widgets/workspace_panel.dart  (706 Z.)
-
 - L19 `class WorkspacePanel extends StatefulWidget`  — Right-side panel for workspace settings (Instructions + Files)
   - L20 `final String workspaceId`
   - L21 `final VoidCallback? onClose`
@@ -1671,7 +1682,6 @@
   - L640 `Widget _buildFileItem(WorkspaceFile file, bool isDark)`
 
 ## lib/widgets/workspace_selection_dropdown.dart  (283 Z.)
-
 - L11 `class WorkspaceSelectionDropdown extends StatefulWidget`
   - L12 `final String? selectedWorkspaceId`
   - L13 `final ValueChanged<String?> onWorkspaceSelected`

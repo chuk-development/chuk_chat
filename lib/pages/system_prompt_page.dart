@@ -21,6 +21,7 @@ import 'package:chuk_chat/tool_handlers/notes_tools.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/fullscreen_text_editor.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class SystemPromptPage extends StatefulWidget {
@@ -596,6 +597,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _soulCtrl,
+                    fullscreenTitle: 'Soul',
                     hintText: l.soulExample,
                     fontFamily: chatFont,
                     minLines: 6,
@@ -611,6 +613,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _userInfoCtrl,
+                    fullscreenTitle: 'User',
                     hintText: l.userExample,
                     fontFamily: chatFont,
                     minLines: 6,
@@ -626,6 +629,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
                   const SizedBox(height: 12),
                   _MaterialTextField(
                     controller: _memoryCtrl,
+                    fullscreenTitle: 'Memory',
                     hintText: l.memoryExample,
                     fontFamily: chatFont,
                     minLines: 6,
@@ -679,6 +683,7 @@ class _SystemPromptPageState extends State<SystemPromptPage> {
           const SizedBox(height: 12),
           _MaterialTextField(
             controller: _systemPromptCtrl,
+            fullscreenTitle: 'Raw system prompt',
             hintText: l.systemPromptExample,
             fontFamily: chatFont,
             minLines: 8,
@@ -753,6 +758,10 @@ class _MaterialTextField extends StatelessWidget {
   final int minLines;
   final int maxLines;
 
+  /// What the field holds, for the title bar of its full-screen editor. Null
+  /// leaves the field without an expand button.
+  final String? fullscreenTitle;
+
   /// The font family the field renders in. The whole page passes the user's
   /// chat font here so every field reads the same.
   final String? fontFamily;
@@ -765,14 +774,31 @@ class _MaterialTextField extends StatelessWidget {
     this.maxLines = 18,
     this.fontFamily,
     this.contextMenuBuilder,
+    this.fullscreenTitle,
   });
+
+  /// Opens the field on a screen of its own and takes the text back.
+  ///
+  /// These four fields are long — a soul, a profile, a memory, a whole
+  /// system prompt — and editing them through a six-line window means
+  /// scrolling the page and the field at the same time.
+  Future<void> _openFullscreen(BuildContext context) async {
+    final String? edited = await showFullscreenComposer(
+      context,
+      initialText: controller.text,
+      title: fullscreenTitle ?? 'Edit',
+      hintText: hintText,
+      closeTooltip: 'Back to settings',
+    );
+    if (edited != null) controller.text = edited;
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final m3 = theme.m3;
-    return TextField(
+    final Widget field = TextField(
       controller: controller,
       minLines: minLines,
       maxLines: maxLines,
@@ -809,6 +835,43 @@ class _MaterialTextField extends StatelessWidget {
           borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),
+    );
+
+    if (fullscreenTitle == null) return field;
+
+    // Top-right of the field, over its own padding: the composer puts the
+    // same glyph in the same place for the same job.
+    return Stack(
+      children: [
+        field,
+        Positioned(
+          top: 6,
+          right: 6,
+          child: Builder(
+            builder: (buttonContext) => Tooltip(
+              message: 'Edit full screen',
+              child: Material(
+                color: m3.surfaceContainerHigh,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: () => _openFullscreen(buttonContext),
+                  child: SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: AppIcon(
+                      Icons.open_in_full_rounded,
+                      size: 16,
+                      color: m3.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

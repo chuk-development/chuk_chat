@@ -67,15 +67,25 @@ String sidebarDisplayName(ProfileRecord? profile) {
 
 /// The destinations shared by both sidebars, with a platform-owned search
 /// entry because mobile morphs that card into a field while desktop does not.
+///
+/// New chat leads the block, on the row the collapsed rail puts its own
+/// new-chat icon on: the panel folds and unfolds without the one command
+/// people use most moving anywhere.
 List<Widget> buildSidebarNavigationCards({
   required BuildContext context,
   required bool showWorkspaces,
   required VoidCallback onWorkspacesTapped,
   required VoidCallback onMediaTapped,
+  required VoidCallback onNewChatTapped,
   required Widget searchEntry,
 }) {
   final l = AppLocalizations.of(context);
   return <Widget>[
+    SbNavCard(
+      icon: Icons.edit_square,
+      label: l?.newChat ?? 'New chat',
+      onTap: onNewChatTapped,
+    ),
     if (kFeatureWorkspaces && showWorkspaces)
       SbNavCard(
         icon: Icons.folder_rounded,

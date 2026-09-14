@@ -17,7 +17,6 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/accent_icon_button.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
@@ -312,6 +311,13 @@ class _SidebarMobileState extends State<SidebarMobile>
     final double topInset = viewPadding.top + 8.0;
     final double bottomInset = 10.0 + viewPadding.bottom;
 
+    // The navigation block is pinned under the head bar, as on the desktop:
+    // three destinations that stay put while the chats pass behind them.
+    final List<Widget> navCards = _buildMobileNavigationCards();
+    final double navBlockTop = topInset + topChromeHeight;
+    final double navBlockBottom =
+        navBlockTop + navCards.length * kSbNavRowStep - kSbCardGap;
+
     return Container(
       color: sidebarBg,
       child: Stack(
@@ -321,7 +327,7 @@ class _SidebarMobileState extends State<SidebarMobile>
               controller: scrollController,
               slivers: <Widget>[
                 SliverToBoxAdapter(
-                  child: SizedBox(height: topInset + topChromeHeight + 8),
+                  child: SizedBox(height: navBlockBottom + 6),
                 ),
                 ..._buildMobileSlivers(accentColor),
                 SliverToBoxAdapter(
@@ -331,13 +337,28 @@ class _SidebarMobileState extends State<SidebarMobile>
             ),
           ),
 
-          // The top of the sidebar names the app, not the person using it,
-          // and carries the one action that starts something: a new chat.
+          Positioned(
+            top: navBlockTop,
+            left: 4,
+            right: 4,
+            child: SbBlock(joinTop: true, children: navCards),
+          ),
+
+          // The top of the sidebar names the app, not the person using it.
+          // New chat is the first card of the block below, where the desktop
+          // rail keeps it, so both sidebars read the same.
           Positioned(
             top: topInset,
             left: kSbBlockInset + 4,
             right: kSbBlockInset + 4,
             child: SbFloatingBar(
+              // The block below joins it, so the corners tighten at the seam.
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(kSbCardRadius),
+                topRight: Radius.circular(kSbCardRadius),
+                bottomLeft: Radius.circular(kSbCardJointRadius),
+                bottomRight: Radius.circular(kSbCardJointRadius),
+              ),
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
                 child: SizedBox(
@@ -360,17 +381,6 @@ class _SidebarMobileState extends State<SidebarMobile>
                           iconSize: 22,
                           onTap: widget.onCollapseTapped!,
                         ),
-                      const SizedBox(width: 6),
-                      // The very same control as the new-chat button of the
-                      // chat top bar, so the two cannot end up different
-                      // sizes: 42 across, 22 glyph.
-                      AccentIconButton(
-                        icon: Icons.edit_square,
-                        tooltip:
-                            AppLocalizations.of(context)?.newChat ?? 'New chat',
-                        accent: accentColor,
-                        onTap: widget.onNewChatTapped,
-                      ),
                     ],
                   ),
                 ),
@@ -430,9 +440,6 @@ class _SidebarMobileState extends State<SidebarMobile>
     final theme = Theme.of(context);
     return buildSidebarChatSlivers(
       leadingSlivers: <Widget>[
-        SliverToBoxAdapter(
-          child: SbBlock(children: _buildMobileNavigationCards()),
-        ),
         if (isOfflineMode)
           SliverToBoxAdapter(
             child: SbOfflineNotice(
@@ -471,9 +478,11 @@ class _SidebarMobileState extends State<SidebarMobile>
   List<Widget> _buildMobileNavigationCards() {
     final Widget searchEntry = _searchActive
         ? SbCard(
-            // The ring follows the card's own corners, so the field keeps the
-            // outline it used to have in the shape of the row it replaced.
+            // Its own, even corners rather than the block's: a ring that
+            // runs round two tight joints and two wide corners reads as a
+            // drawing mistake, not as a field.
             outlined: true,
+            radius: kSbCardRadius,
             padding: EdgeInsets.zero,
             minHeight: kSbNavCardHeight,
             child: SbSearchField(
@@ -493,6 +502,7 @@ class _SidebarMobileState extends State<SidebarMobile>
       showWorkspaces: true,
       onWorkspacesTapped: widget.onWorkspacesTapped,
       onMediaTapped: widget.onMediaTapped,
+      onNewChatTapped: widget.onNewChatTapped,
       searchEntry: searchEntry,
     );
   }

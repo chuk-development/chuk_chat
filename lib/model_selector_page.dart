@@ -6,6 +6,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/settings_search_bar.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/searchable_picker.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -161,7 +163,6 @@ class ModelSelectorPage extends StatefulWidget {
 
 class _ModelSelectorPageState extends State<ModelSelectorPage>
     with ApiAvailabilityPolling<ModelSelectorPage> {
-  static const double _pinnedSearchHeight = 72;
 
   @override
   String get apiPollBaseUrl => _baseUrl;
@@ -754,19 +755,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.models),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(_pinnedSearchHeight),
-          child: ColoredBox(
-            color: colorScheme.surface,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
-              child: _SearchField(
-                controller: _searchController,
-                hintText: l.searchModels,
-                hasQuery: _searchQuery.isNotEmpty,
-              ),
-            ),
-          ),
+        bottom: PinnedSettingsSearchBar(
+          controller: _searchController,
+          hintText: l.searchModels,
         ),
       ),
       body: _isLoading
@@ -817,9 +808,12 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                 context,
               ).copyWith(scrollbars: false),
               child: ListView.builder(
-                padding: const EdgeInsets.all(16)
-                    .add(floatingHeaderInset(context))
-                    .add(const EdgeInsets.only(top: _pinnedSearchHeight)),
+                padding: const EdgeInsets.all(16).add(
+                  floatingHeaderInset(
+                    context,
+                    extra: kSettingsSearchBarHeight,
+                  ),
+                ),
                 // Search stays in the app bar; only the mode picker and
                 // model catalogue scroll.
                 itemCount: _displayModels.length + 2,
@@ -1018,16 +1012,12 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
               )
             : pill;
 
+        // No tick: the card's own accent border already says it is active,
+        // and the two together read as two different states.
         final Widget nameRow = _NameRow(
           model: widget.model,
           buildIconWidget: widget.buildIconWidget,
-          trailing: isActive
-              ? AppIcon(
-                  Icons.check_circle_rounded,
-                  size: 21,
-                  color: colorScheme.primary,
-                )
-              : const SizedBox.shrink(),
+          trailing: const SizedBox.shrink(),
         );
 
         final Widget? descriptionBlock = _buildDescriptionBlock(theme, m3);
@@ -1090,8 +1080,12 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
                               ),
                             ),
                           ),
+                        // Down, like the provider row above it: both open
+                        // something belonging to this card, and two different
+                        // arrows on two neighbouring rows read as two
+                        // different kinds of control.
                         AppIcon(
-                          Icons.chevron_right_rounded,
+                          Icons.keyboard_arrow_down_rounded,
                           size: 20,
                           color: m3.onSurfaceVariant,
                         ),
@@ -1310,66 +1304,10 @@ class _ProviderPill extends StatelessWidget {
     final double pillMaxWidth =
         maxWidth ??
         (screenWidth < 400 ? math.max(140.0, screenWidth - 200.0) : 280.0);
-    final double menuWidth = math
-        .min(340.0, screenWidth - 48.0)
-        .clamp(220.0, 340.0)
-        .toDouble();
-
-    return Theme(
-      data: theme.copyWith(
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: PopupMenuButton<String>(
-        color: m3.surfaceContainerHigh,
-        constraints: BoxConstraints.tightFor(width: menuWidth),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onSelected: (value) {
-          if (value == _kDisabledValue) {
-            onProviderChanged(null);
-            return;
-          }
-          if (value == kAutoCheapestProviderSlug) {
-            onAutoSelected?.call();
-            return;
-          }
-          for (final p in model.providers) {
-            if (p.slug == value) {
-              onProviderChanged(p);
-              return;
-            }
-          }
-        },
-        itemBuilder: (ctx) => [
-          PopupMenuItem<String>(
-            value: _kDisabledValue,
-            height: 40,
-            child: _buildDisabledDisplay(ctx),
-          ),
-          if (hasMultipleProviders)
-            PopupMenuItem<String>(
-              value: kAutoCheapestProviderSlug,
-              height: 44,
-              child: _buildAutoDisplay(
-                ctx,
-                cheapest: _cheapestProvider(),
-                isSelected: isAutoSelected,
-                isMenuItem: true,
-              ),
-            ),
-          ...model.providers.map(
-            (provider) => PopupMenuItem<String>(
-              value: provider.slug,
-              height: 44,
-              child: _buildProviderDisplay(
-                ctx,
-                provider,
-                isSelected:
-                    !isAutoSelected && selectedProvider?.slug == provider.slug,
-                showPrice: true,
-              ),
-            ),
-          ),
-        ],
+    return Builder(
+      builder: (anchorContext) => InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _openPicker(anchorContext, hasMultipleProviders),
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: pillMaxWidth),
           child: Container(
@@ -1385,10 +1323,20 @@ class _ProviderPill extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(l.modelProvider, style: theme.textTheme.bodyMedium),
                 const SizedBox(width: 8),
-                _buildCollapsedFace(context),
+                // The selection sits at the right end of the row, against the
+                // chevron — the same column every other value of the card
+                // stands in, instead of floating in the middle.
+                Expanded(
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [_buildCollapsedFace(context)],
+                  ),
+                ),
                 const SizedBox(width: 8),
+                // A dropdown, not a way into another page: the arrow points
+                // down, at the menu it opens.
                 AppIcon(
-                  Icons.chevron_right_rounded,
+                  Icons.keyboard_arrow_down_rounded,
                   size: 20,
                   color: m3.onSurfaceVariant,
                 ),
@@ -1398,6 +1346,79 @@ class _ProviderPill extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  /// The provider list, anchored to the row and searchable.
+  ///
+  /// A model can offer thirty providers; a plain popup menu put that list at
+  /// the top of the window with no way to look a name up.
+  Future<void> _openPicker(
+    BuildContext anchorContext,
+    bool hasMultipleProviders,
+  ) async {
+    final AppLocalizations l = AppLocalizations.of(anchorContext)!;
+    final ModelProviderInfo? cheapest = _cheapestProvider();
+    final String? picked = await showSearchablePicker<String>(
+      anchorContext,
+      hintText: 'Search providers',
+      width: 320,
+      options: <PickerOption<String>>[
+        PickerOption<String>(
+          value: _kDisabledValue,
+          label: 'Disabled',
+          leading: AppIcon(
+            Icons.block,
+            size: 16,
+            color: Theme.of(anchorContext).m3.onSurfaceVariant,
+          ),
+          selected: selectedProvider == null && !isAutoSelected,
+        ),
+        if (hasMultipleProviders)
+          PickerOption<String>(
+            value: kAutoCheapestProviderSlug,
+            label: cheapest == null
+                ? l.autoCheapest
+                : l.autoCheapestCurrently(
+                    cheapest.name,
+                    cheapest.pricing.formatTokenPrice(
+                      cheapest.pricing.completion,
+                    ),
+                  ),
+            subtitle: cheapest == null ? null : _formatInOutPrice(cheapest),
+            leading: AppIcon(
+              Icons.bolt,
+              size: 16,
+              color: Theme.of(anchorContext).m3.onSurfaceVariant,
+            ),
+            selected: isAutoSelected,
+          ),
+        for (final provider in model.providers)
+          PickerOption<String>(
+            value: provider.slug,
+            label: provider.name,
+            subtitle: _formatInOutPrice(provider),
+            leading: buildIconWidget(provider.iconUrl, Icons.business,
+                size: 16),
+            selected:
+                !isAutoSelected && selectedProvider?.slug == provider.slug,
+          ),
+      ],
+    );
+    if (picked == null) return;
+    if (picked == _kDisabledValue) {
+      onProviderChanged(null);
+      return;
+    }
+    if (picked == kAutoCheapestProviderSlug) {
+      onAutoSelected?.call();
+      return;
+    }
+    for (final provider in model.providers) {
+      if (provider.slug == picked) {
+        onProviderChanged(provider);
+        return;
+      }
+    }
   }
 
   /// Compact face shown when the pill is closed — only the current selection
@@ -1459,135 +1480,6 @@ class _ProviderPill extends StatelessWidget {
     return best;
   }
 
-  Widget _buildDisabledDisplay(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AppIcon(Icons.block, color: m3.onSurfaceVariant, size: 16),
-        const SizedBox(width: 6),
-        Text(
-          'Disabled',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            color: m3.onSurfaceVariant,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildAutoDisplay(
-    BuildContext context, {
-    required ModelProviderInfo? cheapest,
-    required bool isSelected,
-    required bool isMenuItem,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final m3 = theme.m3;
-    final l = AppLocalizations.of(context)!;
-    final Color textColor = isSelected
-        ? colorScheme.primary
-        : colorScheme.onSurface;
-
-    // Fix B.2: shorten the selected (collapsed) pill label so the model
-    // name in the surrounding row stays visible on narrow phones. The
-    // dropdown menu items still show the full "Auto (cheapest) —
-    // currently: <provider>" so users see what they're picking; only the
-    // pill's collapsed face is abbreviated to "Auto" (the bolt icon next
-    // to it carries the "auto" semantic).
-    final String label = (cheapest != null && isMenuItem)
-        ? l.autoCheapestCurrently(
-            cheapest.name,
-            cheapest.pricing.formatTokenPrice(cheapest.pricing.completion),
-          )
-        : (isMenuItem ? l.autoCheapest : 'Auto');
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AppIcon(Icons.bolt, color: textColor, size: 16),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (isMenuItem && cheapest != null)
-                Text(
-                  _formatInOutPrice(cheapest),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: m3.onSurfaceVariant,
-                    fontSize: 11,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildProviderDisplay(
-    BuildContext context,
-    ModelProviderInfo provider, {
-    required bool isSelected,
-    required bool showPrice,
-  }) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color textColor = isSelected
-        ? colorScheme.primary
-        : colorScheme.onSurface;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        buildIconWidget(provider.iconUrl, Icons.business, size: 16),
-        const SizedBox(width: 6),
-        Flexible(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                provider.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (showPrice)
-                Text(
-                  _formatInOutPrice(provider),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: m3.onSurfaceVariant,
-                    fontSize: 11,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
   String _formatInOutPrice(ModelProviderInfo provider) {
     final inPrice = provider.pricing.formatTokenPrice(provider.pricing.prompt);
     final outPrice = provider.pricing.formatTokenPrice(
@@ -1602,52 +1494,6 @@ class _AuthRequiredException implements Exception {
 }
 
 // ─── Reusable private pieces ─────────────────────────────────────────────
-
-class _SearchField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hintText;
-  final bool hasQuery;
-
-  const _SearchField({
-    required this.controller,
-    required this.hintText,
-    required this.hasQuery,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final m3 = theme.m3;
-    return TextField(
-      controller: controller,
-      style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
-      decoration: InputDecoration(
-        hintText: hintText,
-        hintStyle: theme.textTheme.bodyMedium?.copyWith(
-          color: m3.onSurfaceVariant,
-        ),
-        prefixIcon: AppIcon(Icons.search, color: m3.onSurfaceVariant, size: 20),
-        suffixIcon: hasQuery
-            ? IconButton(
-                icon: AppIcon(
-                  Icons.clear,
-                  color: m3.onSurfaceVariant,
-                  size: 20,
-                ),
-                onPressed: controller.clear,
-              )
-            : null,
-        filled: true,
-        fillColor: m3.surfaceContainer,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-      ),
-    );
-  }
-}
 
 /// One mode's data for the picker panel.
 class _ModeRowData {
@@ -1845,11 +1691,11 @@ class _ModePickerPanel extends StatelessWidget {
     return _menuPill<String>(
       context,
       label: label,
+      hintText: 'Search providers',
       onSelected: data.onPickProvider,
-      itemBuilder: (ctx) => [
+      options: [
         for (final provider in data.providers)
-          _menuRow(
-            ctx,
+          PickerOption<String>(
             value: provider.slug,
             label: provider.name,
             selected: provider.slug == data.providerSlug,
@@ -1870,11 +1716,11 @@ class _ModePickerPanel extends StatelessWidget {
     return _menuPill<String>(
       context,
       label: label,
+      hintText: 'Search models',
       onSelected: data.onPickModel,
-      itemBuilder: (ctx) => [
+      options: [
         for (final model in models)
-          _menuRow(
-            ctx,
+          PickerOption<String>(
             value: model.id,
             label: ChatModeSelector.stripLabPrefix(model.name),
             selected: model.id == data.modelId,
@@ -1894,10 +1740,9 @@ class _ModePickerPanel extends StatelessWidget {
       label: ChatModeService.reasoningLabel(data.reasoningEffort),
       subtle: true,
       onSelected: data.onPickReasoning,
-      itemBuilder: (ctx) => [
+      options: [
         for (final level in data.reasoningLevels)
-          _menuRow(
-            ctx,
+          PickerOption<String>(
             value: level,
             label: ChatModeService.reasoningLabel(level),
             selected: level == data.reasoningEffort,
@@ -1906,60 +1751,31 @@ class _ModePickerPanel extends StatelessWidget {
     );
   }
 
-  PopupMenuItem<String> _menuRow(
-    BuildContext context, {
-    required String value,
-    required String label,
-    required bool selected,
-    Widget? leading,
-  }) {
-    final theme = Theme.of(context);
-    final m3 = theme.m3;
-    return PopupMenuItem<String>(
-      value: value,
-      height: 44,
-      child: Row(
-        children: [
-          if (leading != null) ...[leading, const SizedBox(width: 10)],
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: selected
-                    ? theme.colorScheme.primary
-                    : m3.onSurfaceVariant,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
-          ),
-          if (selected)
-            AppIcon(Icons.check, size: 18, color: theme.colorScheme.primary),
-        ],
-      ),
-    );
-  }
-
+  /// The closed control: a pill with the current value and a down arrow. It
+  /// opens the shared picker, anchored to itself — a plain popup menu grew
+  /// from the row's left edge and, with forty models in it, was thrown to the
+  /// top of the window with no way to search.
   Widget _menuPill<T>(
     BuildContext context, {
     required String label,
-    required PopupMenuItemBuilder<T> itemBuilder,
+    required List<PickerOption<T>> options,
     required ValueChanged<T> onSelected,
+    String? hintText,
     bool subtle = false,
   }) {
     final theme = Theme.of(context);
     final m3 = theme.m3;
-    return Theme(
-      data: theme.copyWith(
-        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: PopupMenuButton<T>(
-        color: m3.surfaceContainerHigh,
-        constraints: const BoxConstraints(minWidth: 220, maxWidth: 340),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        onSelected: onSelected,
-        itemBuilder: itemBuilder,
+    return Builder(
+      builder: (anchorContext) => InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () async {
+          final T? picked = await showSearchablePicker<T>(
+            anchorContext,
+            options: options,
+            hintText: hintText,
+          );
+          if (picked != null) onSelected(picked);
+        },
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 240),
           child: Container(
@@ -1984,7 +1800,7 @@ class _ModePickerPanel extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
                 AppIcon(
-                  Icons.arrow_drop_down,
+                  Icons.keyboard_arrow_down_rounded,
                   color: m3.onSurfaceVariant,
                   size: 20,
                 ),

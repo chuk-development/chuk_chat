@@ -1,7 +1,6 @@
-# lib/utils · Signatures
+# lib/utils · Signaturen
 
 ## lib/utils/api_rate_limiter.dart  (248 Z.)
-
 - L4 `class RateLimitConfig`  — API rate limiting configuration for different endpoint types.
   - L5 `final int maxRequests`
   - L6 `final Duration timeWindow`
@@ -34,19 +33,15 @@
   - L218 `void logRateLimitStatus({ required String endpoint, required String userId, required RateLimitConfig config, })`  — Log rate limit status (debug mode only).
 
 ## lib/utils/arch_helper.dart  (4 Z.)
-
-- conditional export: 'arch_helper_stub.dart' if (dart.library.ffi) 'arch_helper_native.dart'
+- reicht weiter: 'arch_helper_stub.dart' if (dart.library.ffi) 'arch_helper_native.dart'
 
 ## lib/utils/arch_helper_native.dart  (43 Z.)
-
 - L12 `String getCurrentArch()`  — Returns the CPU architecture string for the current platform.
 
 ## lib/utils/arch_helper_stub.dart  (7 Z.)
-
 - L6 `String getCurrentArch()`  — Returns the CPU architecture string for the current platform.
 
 ## lib/utils/artifact_tag_parser.dart  (141 Z.)
-
 - L18 `class ParsedArtifactTag`  — A single `<artifact>` tag parsed out of assistant text.
   - L19 `ParsedArtifactTag({ required this.id, required this.type, required this.title, required this.content, this.language, required this.matchStart, required this.matchEnd, })`
   - L29 `final String id`
@@ -66,7 +61,6 @@
 - L128 `String stripArtifactTagsForDisplay( String content, { bool stripIncomplete = true, })`  — Strips complete `<artifact>...</artifact>` blocks from [content]. When
 
 ## lib/utils/build_info.dart  (44 Z.)
-
 - L12 `class BuildInfo`
   - L13 `BuildInfo._()`
   - L16 `static const String buildTimestampRaw = String.fromEnvironment('BUILD_TIMESTAMP')`  — Raw value from --dart-define=BUILD_TIMESTAMP=...
@@ -74,7 +68,6 @@
   - L33 `static String? formatted({DateTime? now})`  — Formatted display string `yyyy-MM-dd HH:mm UTC`, or null when
 
 ## lib/utils/certificate_pinning.dart  (127 Z.)
-
 - L6 `class CertificatePin`  — Certificate pin configuration for a domain.
   - L7 `final String domain`
   - L8 `final List<String> sha256Hashes`
@@ -91,29 +84,24 @@
   - L124 `static List<CertificatePin> get configuredPins`  — Get all configured pins.
 
 ## lib/utils/certificate_pinning_io.dart  (83 Z.)
-
 - L23 `void configureDioWithPinning(Dio dio, List<CertificatePin> pins)`  — Configure Dio with a [badCertificateCallback] that validates
 - L35 `void _installBadCertCallback(HttpClient client, List<CertificatePin> pins)`
 - L72 `List<int> _sha256Sync(List<int> data)`  — Synchronous SHA-256 hash.
 - L78 `HttpClient createPinnedHttpClient(List<CertificatePin> pins)`  — Create an [HttpClient] with certificate pinning configured.
 
 ## lib/utils/certificate_pinning_register.dart  (9 Z.)
-
-- conditional export: 'certificate_pinning_register_stub.dart' if (dart.library.io) 'certificate_pinning_register_io.dart'
+- reicht weiter: 'certificate_pinning_register_stub.dart' if (dart.library.io) 'certificate_pinning_register_io.dart'
 
 ## lib/utils/certificate_pinning_register_io.dart  (80 Z.)
-
 - L19 `_trustedToolApiHosts = { // OpenStreetMap / Nominatim (maps, geocoding) 'nominatim.openstreetmap.org', // OSRM (routing)`  — Trusted public API hosts used by built-in tools (weather, maps, etc.).
 - L39 `class _WindowsCertOverrides extends HttpOverrides`  — [HttpOverrides] that accepts certificates for known trusted public API
   - L41 `HttpClient createHttpClient(SecurityContext? context)`
 - L62 `void registerCertificatePinning()`  — Register the native certificate pinning configurator.
 
 ## lib/utils/certificate_pinning_register_stub.dart  (10 Z.)
-
 - L7 `void registerCertificatePinning()`  — No-op on web. The browser's TLS stack validates certificates.
 
 ## lib/utils/chat_font_resolver.dart  (72 Z.)
-
 - L11 `kFontFamilyArimo = 'Arimo'`  — Family name of the bundled Arimo font (see `pubspec.yaml`).
 - L14 `kFontFamilyMerriweather = 'Merriweather'`  — Family name of the bundled Merriweather font (see `pubspec.yaml`).
 - L17 `kFontFamilyJetBrainsMono = 'JetBrains Mono'`  — Family name of the bundled JetBrains Mono font (see `pubspec.yaml`).
@@ -123,11 +111,9 @@
 - L66 `String sanitizeUiFontFamily(String? id)`  — Normalize an unknown UI-font id back to a supported value. Defaults to the
 
 ## lib/utils/client_platform.dart  (26 Z.)
-
 - L9 `String clientPlatformName()`  — Human-readable name of the current client platform.
 
 ## lib/utils/clipboard_text_sanitizer.dart  (64 Z.)
-
 - L3 `class ClipboardTextSanitizer`
   - L4 `const ClipboardTextSanitizer._()`
   - L6 `static final RegExp _markdownImageDataUrlPattern = RegExp( r'!\[[^\]]*\]\(\s*data:image\\?/[a-zA-Z0-9.+-]+;base64,[^)]+\)', caseSensitive: false, )`
@@ -137,7 +123,6 @@
   - L50 `static Future<void> sanitizeClipboardInPlace()`  — Reads the current clipboard text and, if it contains embedded base64 image
 
 ## lib/utils/color_extensions.dart  (62 Z.)
-
 - L5 `extension ColorExtension on Color`  — Helper extension to subtly lighten or darken colors.
   - L6 `Color lighten([double amount = .1])`
   - L15 `Color darken([double amount = .1])`
@@ -145,7 +130,6 @@
   - L31 `static Color fromHexString(String? hexString, {Color? fallback})`
 
 ## lib/utils/debug_chat_formatter.dart  (260 Z.)
-
 - L13 `class DebugChatFormatter`  — Formats the full chat message list as a debug-friendly text string.
   - L14 `const DebugChatFormatter._()`
   - L16 `static const int _maxContextValueChars = 220`
@@ -160,7 +144,6 @@
   - L60 `static String format( List<Map<String, String>> messages, { Map<String, String>? context, })`  — Format a list of message maps (as used by chat UIs) into a debug string.
 
 ## lib/utils/desktop_drop_stub.dart  (36 Z.)
-
 - L5 `class DropTarget extends StatelessWidget`
   - L6 `final Widget child`
   - L7 `final void Function(DropDoneDetails)? onDragDone`
@@ -178,7 +161,6 @@
   - L34 `XFile(this.path)`
 
 ## lib/utils/exponential_backoff.dart  (205 Z.)
-
 - L5 `class BackoffConfig`  — Configuration for exponential backoff retry logic.
   - L6 `final int maxRetries`
   - L7 `final Duration initialDelay`
@@ -204,7 +186,6 @@
   - L169 `static bool shouldRetryError(dynamic error)`  — Determine if an error should trigger a retry based on common scenarios.
 
 ## lib/utils/file_upload_validator.dart  (461 Z.)
-
 - L8 `class FileValidationResult`  — File upload validation result.
   - L9 `final bool isValid`
   - L10 `final String? errorMessage`
@@ -229,21 +210,17 @@
   - L451 `static String formatFileSize(int bytes)`  — Formats file size in human-readable format.
 
 ## lib/utils/format_bytes.dart  (21 Z.)
-
 - L7 `String formatBytes(int bytes)`  — Formats a byte count for a reader: `842 B`, `1.5 KB`, `12 MB`.
 
 ## lib/utils/highlight_registry.dart  (98 Z.)
-
 - L42 `allLanguages = { 'dart': dart, 'json': json, 'python': python, 'py': python, 'javascript': javascript, 'js': javascript,`
 
 ## lib/utils/image_clipboard_service.dart  (37 Z.)
-
 - L7 `class ImageClipboardService`
   - L8 `const ImageClipboardService._()`
   - L10 `static Future<bool> copyImageBytes(Uint8List bytes)`
 
 ## lib/utils/input_validator.dart  (374 Z.)
-
 - L2 `enum PasswordStrength`  — Password strength levels.
   - L2 `weak`
   - L2 `fair`
@@ -281,15 +258,12 @@
   - L354 `static Uri? safeGeoUri({ required double lat, required double lon, String? label, })`  — Build a safe RFC 5870 `geo:` URI for handing coordinates off to an
 
 ## lib/utils/io_helper.dart  (4 Z.)
-
-- conditional export: 'io_helper_stub.dart' if (dart.library.io) 'io_helper_io.dart'
+- reicht weiter: 'io_helper_stub.dart' if (dart.library.io) 'io_helper_io.dart'
 
 ## lib/utils/io_helper_io.dart  (5 Z.)
-
-- conditional export: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException
+- reicht weiter: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException
 
 ## lib/utils/io_helper_stub.dart  (79 Z.)
-
 - L7 `class File`  — Stub File class for web
   - L8 `final String path`
   - L9 `File(this.path)`
@@ -339,13 +313,11 @@
   - L77 `String toString()`
 
 ## lib/utils/json_helpers.dart  (72 Z.)
-
 - L14 `Map<String, dynamic>? tryDecodeJsonObject(String body)`  — Decodes [body] into a JSON object, or returns null when it is not one.
 - L32 `dynamic tryParseLenientJson(String raw)`  — Lenient JSON parse for model output, which makes two mistakes often
 - L60 `bool looksLikeEncryptedPayload(String raw)`  — True when [raw] is one of our AES-GCM envelopes rather than plaintext.
 
 ## lib/utils/lru_byte_cache.dart  (86 Z.)
-
 - L10 `class LruByteCache`  — LRU (Least Recently Used) cache with a maximum total byte size.
   - L12 `final int maxSizeBytes`  — Maximum total bytes the cache may hold.
   - L17 `final LinkedHashMap<String, Uint8List> _entries = LinkedHashMap<String, Uint8List>()`  — Insertion-ordered map: oldest entries first, newest last.
@@ -361,18 +333,15 @@
   - L79 `void _evictOldest()`
 
 ## lib/utils/map_geometry.dart  (30 Z.)
-
 - L12 `bool hasPointSpread(List<LatLng> points)`  — True when [points] cover more than one place on the map.
 - L27 `double _shortestLonDelta(double a, double b)`  — Degrees between two longitudes the short way round.
 
 ## lib/utils/path_provider_stub.dart  (8 Z.)
-
 - L5 `Future<Directory> getTemporaryDirectory()`
 - L6 `Future<Directory> getApplicationDocumentsDirectory()`
 - L7 `Future<Directory> getApplicationSupportDirectory()`
 
 ## lib/utils/permission_handler_stub.dart  (24 Z.)
-
 - L4 `class Permission`
   - L5 `static final Permission microphone = Permission._()`
   - L7 `const Permission._()`
@@ -389,7 +358,6 @@
   - L22 `bool get isPermanentlyDenied`
 
 ## lib/utils/phone_linkify.dart  (95 Z.)
-
 - L21 `_scanPattern = RegExp( // Fenced code blocks. r'```[\s\S]*?```' r'|~~~[\s\S]*?~~~' // Inline code span. r'|`[^`\n]*`' //`  — One pass over the text. Each alternative is a region copied through
 - L45 `_minDigits = 7`  — Digit count of a dialable international number, per E.164.
 - L46 `_maxDigits = 15`
@@ -397,7 +365,6 @@
 - L90 `String? telUriForDisplay(String display)`  — Normalises a written number to a `tel:` URI, or returns `null` when the
 
 ## lib/utils/privacy_logger.dart  (73 Z.)
-
 - L18 `class PrivacyLogger`  — Privacy-aware logging utility.
   - L19 `const PrivacyLogger._()`
   - L22 `static void call(String message)`  — Log a message (only in debug mode)
@@ -409,7 +376,6 @@
 - L72 `void pLog(String message)`  — Shorthand for PrivacyLogger.call()
 
 ## lib/utils/secure_token_handler.dart  (148 Z.)
-
 - L9 `class SecureTokenHandler`  — Utility for secure handling of authentication tokens.
   - L10 `SecureTokenHandler._()`
   - L16 `static String maskToken(String? token)`  — Masks a token for safe display in logs and error messages.
@@ -421,7 +387,6 @@
   - L121 `static void logApiResponse({ required String endpoint, required int statusCode, String? error, bool success = true, })`  — Logs an API response with masked tokens.
 
 ## lib/utils/service_error_handler.dart  (178 Z.)
-
 - L6 `class ServiceErrorHandler`  — Centralized error handling for service operations
   - L7 `const ServiceErrorHandler._()`
   - L10 `static String handleDioException(DioException error, {String? context})`  — Handle Dio exceptions and return user-friendly error messages
@@ -435,57 +400,51 @@
   - L164 `static Duration? getRetryDelay(Object error, int attemptNumber)`  — Get retry delay for an error (used with exponential backoff)
 
 ## lib/utils/shift_key_tracker.dart  (6 Z.)
-
-- conditional export: 'shift_key_tracker_native.dart' if (dart.library.js_interop) 'shift_key_tracker_web.dart'
+- reicht weiter: 'shift_key_tracker_native.dart' if (dart.library.js_interop) 'shift_key_tracker_web.dart'
 
 ## lib/utils/shift_key_tracker_native.dart  (10 Z.)
-
 - L5 `void initShiftKeyTracker()`
 
 ## lib/utils/shift_key_tracker_web.dart  (38 Z.)
-
 - L9 `_shiftDown = false`
 - L10 `_initialized = false`
 - L12 `void initShiftKeyTracker()`
 
 ## lib/utils/stream_error_sanitizer.dart  (38 Z.)
-
 - L15 `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-## lib/utils/theme_extensions.dart  (216 Z.)
-
+## lib/utils/theme_extensions.dart  (215 Z.)
 - L3 `extension ThemeDataIconColorX on ThemeData`
   - L4 `Color get resolvedIconColor`
-  - L20 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
-- L25 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
-  - L27 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
-  - L50 `final Color surfaceContainerLow`
-  - L51 `final Color surfaceContainer`
-  - L52 `final Color surfaceContainerHigh`
-  - L53 `final Color surfaceContainerHighest`
-  - L54 `final Color primaryContainer`
-  - L55 `final Color onPrimaryContainer`
-  - L56 `final Color secondaryContainer`
-  - L57 `final Color onSecondaryContainer`
-  - L58 `final Color tertiaryContainer`
-  - L59 `final Color onTertiaryContainer`
-  - L60 `final Color outline`
-  - L61 `final Color outlineVariant`
-  - L62 `final Color onSurfaceVariant`
-  - L63 `final Color success`
-  - L64 `final Color onSuccess`
-  - L65 `final Color successContainer`
-  - L66 `final Color onSuccessContainer`
-  - L67 `final Color warning`
-  - L68 `final Color warningContainer`
-  - L69 `final Color onWarningContainer`
-  - L72 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
-  - L120 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
-- L168 `extension MaterialYouTokensX on ThemeData`
-  - L171 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
+  - L16 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
+- L24 `@immutable class MaterialYouTokens extends ThemeExtension<MaterialYouTokens>`  — Material You extension tokens that aren't exposed on the default
+  - L26 `const MaterialYouTokens({ required this.surfaceContainerLow, required this.surfaceContainer, required this.surfaceContainerHigh, required this.surfaceContainerHighest, required this.primaryContainer, required this.onPrimaryContainer, required this.secondaryContainer, required this.onSecondaryContainer, required this.tertiaryContainer, required this.onTertiaryContainer, required this.outline, required this.outlineVariant, required this.onSurfaceVariant, required this.success, required this.onSuccess, required this.successContainer, required this.onSuccessContainer, required this.warning, required this.warningContainer, required this.onWarningContainer, })`
+  - L49 `final Color surfaceContainerLow`
+  - L50 `final Color surfaceContainer`
+  - L51 `final Color surfaceContainerHigh`
+  - L52 `final Color surfaceContainerHighest`
+  - L53 `final Color primaryContainer`
+  - L54 `final Color onPrimaryContainer`
+  - L55 `final Color secondaryContainer`
+  - L56 `final Color onSecondaryContainer`
+  - L57 `final Color tertiaryContainer`
+  - L58 `final Color onTertiaryContainer`
+  - L59 `final Color outline`
+  - L60 `final Color outlineVariant`
+  - L61 `final Color onSurfaceVariant`
+  - L62 `final Color success`
+  - L63 `final Color onSuccess`
+  - L64 `final Color successContainer`
+  - L65 `final Color onSuccessContainer`
+  - L66 `final Color warning`
+  - L67 `final Color warningContainer`
+  - L68 `final Color onWarningContainer`
+  - L71 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
+  - L119 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
+- L167 `extension MaterialYouTokensX on ThemeData`
+  - L170 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
 
 ## lib/utils/token_estimator.dart  (58 Z.)
-
 - L3 `class TokenEstimator`
   - L4 `const TokenEstimator._()`
   - L6 `static const int _perMessageOverhead = 8`
@@ -495,7 +454,6 @@
   - L18 `static int estimatePromptTokens({ required List<Map<String, dynamic>> history, required String currentMessage, String? systemPrompt, })`
 
 ## lib/utils/tool_detail_format.dart  (91 Z.)
-
 - L15 `enum ToolBodyKind`  — How a tool-detail body should be shown.
   - L17 `text`
   - L20 `json`
@@ -509,24 +467,21 @@
 - L75 `String? prettyJsonOrNull(String raw)`  — [raw] indented, or null when it is not a JSON object or array.
 
 ## lib/utils/tool_helpers.dart  (21 Z.)
-
 - L2 `double toDouble(dynamic v)`  — Safely parse a coordinate value that may be num or String.
 - L9 `String formatDuration(int ms)`  — Format milliseconds duration as mm:ss string.
 - L17 `String truncate(String text, int maxLength)`  — Truncate text with ellipsis if it exceeds maxLength.
 
 ## lib/utils/tool_history_formatter.dart  (100 Z.)
-
 - L8 `_maxResultChars = 4000`
 - L9 `_maxTotalChars = 16000`
 - L16 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally
 - L51 `String _buildPreviousToolResultsBlock(String? toolCallsJson)`
 
 ## lib/utils/tool_parser.dart  (774 Z.)
-
 - L5 `toolCallStart = '<tool_call>'`
 - L6 `toolCallEnd = '</tool_call>'`
 - L8 `_xmlToolCallBlockPattern = RegExp( r'<tool_call>[\s\S]*?</tool_call>', caseSensitive: false, )`
-- L12 `_xmlDirectToolTagBlockPattern = RegExp( r'<([a-zA-Z][a-zA-Z0-9_]*_[a-zA-Z0-9_]+)>\s*([\s\S]*?)\s*</\1>', caseSensitive:`
+- L12 `_xmlDirectToolTagBlockPattern = RegExp( r'<([a-zA-Z][a-zA-Z0-9_]*_[a-zA-Z0-9_]+)>\s*([\s\S]*?)\s*</\1>', caseSensitive: `
 - L16 `_xmlToolCallStartPattern = RegExp( r'<tool_call>', caseSensitive: false, )`
 - L23 `_kimiToolCallStartPattern = RegExp( r'<\|tool_calls?(?:_section)?_begin', caseSensitive: false, )`
 - L35 `_previousToolResultsBlockPattern = RegExp( r'<+\s*previous_tool_results\s*>[\s\S]*?<\s*/\s*previous_tool_results\s*>', c`
@@ -535,7 +490,7 @@
 - L69 `_foreignToolTagNamespace = r'(?:[a-zA-Z][a-zA-Z0-9_.-]*\s*:\s*)?'`
 - L74 `_notCanonicalToolCallTag = r'(?!tool_call\b)(?!toolcall\b)'`
 - L79 `_foreignToolProtocolBlockPattern = RegExp( '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace' '($_foreignToolTagN`
-- L95 `_invokeToolCallPattern = RegExp( '<\\s*$_foreignToolTagNamespace' //`\b`before`name`: without it the non-greedy scan`
+- L95 `_invokeToolCallPattern = RegExp( '<\\s*$_foreignToolTagNamespace' // `\b` before `name`: without it the non-greedy scan `
 - L106 `_invokeParameterPattern = RegExp( '<\\s*$_foreignToolTagNamespace' r'''parameter\b[^>]*?\bname\s*=\s*["']([^"']+)["'][^>`
 - L118 `_foreignToolProtocolStartPattern = RegExp( '<\\s*$_notCanonicalToolCallTag$_foreignToolTagNamespace' '$_foreignToolTagNa`
 - L126 `_knownDirectXmlToolNames = <String>{ 'ask_user', 'web_search', 'web_crawl', 'generate_image', 'fetch_image', 'view_chat_`
@@ -562,11 +517,9 @@
 - L762 `int _earliestDirectXmlToolStart(String content)`
 
 ## lib/utils/tool_sanitizer.dart  (45 Z.)
-
 - L6 `String sanitizeResultForModel(String result)`  — Strip large binary/base64 data from tool results before sending to the
 
 ## lib/utils/upload_rate_limiter.dart  (95 Z.)
-
 - L2 `class UploadRateLimiter`  — Upload rate limiter to prevent DoS attacks via excessive file uploads.
   - L3 `UploadRateLimiter._()`
   - L5 `static final UploadRateLimiter _instance = UploadRateLimiter._()`
@@ -582,5 +535,4 @@
   - L91 `void clearAllHistory()`  — Clear all upload history (useful for testing).
 
 ## lib/utils/url_launcher_helper.dart  (22 Z.)
-
 - L12 `Future<void> launchExternalUrl(String url)`  — Opens [url] in the system browser.

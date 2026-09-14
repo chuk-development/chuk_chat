@@ -1,7 +1,6 @@
-# lib/platform_specific/chat/handlers · Signatures
+# lib/platform_specific/chat/handlers · Signaturen
 
 ## lib/platform_specific/chat/handlers/audio_recording_handler.dart  (517 Z.)
-
 - L16 `enum AudioRecordingChange`
   - L16 `started`
   - L16 `stopped`
@@ -47,7 +46,6 @@
   - L510 `TranscriptionResult({ required this.success, this.text, this.error, this.requiresLogout = false, })`
 
 ## lib/platform_specific/chat/handlers/chat_persistence_handler.dart  (447 Z.)
-
 - L15 `@visibleForTesting bool keepsMoreThanPatch(String? stored, String? patch)`  — Handles chat persistence and storage
 - L22 `class ChatPersistenceHandler`
   - L23 `static const Duration _backgroundUpdateDebounce = Duration(milliseconds: 700)`
@@ -81,7 +79,6 @@
   - L445 `String? status`
 
 ## lib/platform_specific/chat/handlers/desktop_clipboard_handler.dart  (265 Z.)
-
 - L20 `class DesktopClipboardHandler`  — Handles desktop-specific clipboard operations and context menus.
   - L23 `static const int kLongPasteThreshold = 3000`  — Threshold (characters) above which pasted text is auto-converted to an
   - L26 `static const Duration kPasteTempRetention = Duration(hours: 24)`  — How long paste temp directories are kept before cleanup removes them.
@@ -95,7 +92,6 @@
   - L230 `Future<void> cleanupOldPasteTempDirectories()`  — Removes paste temp directories older than [kPasteTempRetention].
 
 ## lib/platform_specific/chat/handlers/desktop_file_handler.dart  (439 Z.)
-
 - L17 `class ValidatedFile`  — Temporary container for validated files before upload.
   - L18 `ValidatedFile({ required this.file, required this.fileName, required this.fileSize, required this.isImage, })`
   - L25 `final File file`
@@ -127,7 +123,6 @@
   - L426 `void clearAll()`  — Clear all attachments.
 
 ## lib/platform_specific/chat/handlers/file_attachment_handler.dart  (429 Z.)
-
 - L18 `class FileAttachmentHandler`  — Handles file and image attachments
   - L19 `final List<AttachedFile> _attachedFiles = []`
   - L20 `final Uuid _uuid = const Uuid()`
@@ -153,7 +148,6 @@
   - L425 `List<AttachedFile> getUploadedFiles()`  — Get files with markdown content (successfully uploaded)
 
 ## lib/platform_specific/chat/handlers/message_actions_handler.dart  (196 Z.)
-
 - L12 `class MessageActionsHandler`  — Handles message-related actions (copy, edit, resend)
   - L14 `Function(String)? onShowSnackBar`
   - L15 `Function(int, String)? onSubmitEdit`
@@ -171,7 +165,6 @@
   - L156 `List<MessageBubbleAction> buildUserMessageActions({ required int index, required String messageText, required Function(int) onEdit, required Function(int) onResendMessage, })`  — Build actions for user messages (shown in long-press popup).
 
 ## lib/platform_specific/chat/handlers/mobile_workspace_handler.dart  (155 Z.)
-
 - L12 `class MobileWorkspaceHandler`  — Handles mobile-specific workspace selection UI and workspace–chat linking.
   - L13 `const MobileWorkspaceHandler._()`
   - L24 `static Future<void> createNewProject({ required BuildContext context, required ValueChanged<String> onShowSnackBar, required void Function(String workspaceId) onOpenWorkspaceManagement, })`  — Shows a dialog that lets the user create a new workspace.
@@ -180,12 +173,10 @@
   - L137 `static void openProjectManagement({ required BuildContext context, required String workspaceId, required void Function(String? workspaceId) onStartNewChat, })`  — Pushes the [WorkspaceManagementPage] for the given [workspaceId].
 
 ## lib/platform_specific/chat/handlers/scanned_pdf_pages.dart  (89 Z.)
-
 - L20 `Future<void> replaceWithScannedPages({ required List<String> dataUrls, required String fileId, required String fileName, required String? note, required List<AttachedFile> attachedFiles, void Function()? onUpdate, void Function(String message)? onError, })`  — Replaces a scanned PDF in [attachedFiles] with its rendered pages.
 - L82 `void discardScannedPages(List<String> paths)`  — Deletes pages that were uploaded before the replacement failed, so a
 
 ## lib/platform_specific/chat/handlers/streaming_message_handler.dart  (1571 Z.)
-
 - L25 `class StreamingMessageHandler`  — Handles message streaming and sending
   - L26 `StreamingMessageHandler()`
   - L33 `final StreamingManager _streamingManager = StreamingManager()`

@@ -1,7 +1,6 @@
-# lib/platform_specific/chat · Signatures
+# lib/platform_specific/chat · Signaturen
 
 ## lib/platform_specific/chat/chat_api_service.dart  (400 Z.)
-
 - L16 `class ChatApiService`  — A service for handling chat-related API interactions,
   - L19 `static String get _apiBaseUrl`  — Gets the API base URL from the configuration service.
   - L24 `final void Function( String fileId, String? markdownContent, bool isUploading, String? snackBarMessage, { List<String>? pageImages, })? onUploadStatusUpdate`
@@ -22,7 +21,6 @@
   - L393 `String toString()`
 
 ## lib/platform_specific/chat/chat_debug_snapshot.dart  (56 Z.)
-
 - L10 `abstract class ChatDebugSnapshot`  — What the "copy debug chat" action reads out of a running chat screen.
   - L11 `List<Map<String, String>> get debugMessages`
   - L12 `String get debugModelId`
@@ -33,7 +31,6 @@
 - L24 `Map<String, String> chatDebugContext( ChatDebugSnapshot? state, { required String platform, })`  — The context block that rides along with a copied debug chat.
 
 ## lib/platform_specific/chat/chat_message_edit_mixin.dart  (343 Z.)
-
 - L33 `mixin ChatMessageEditMixin<W extends StatefulWidget> on State<W>, ChatScrollMixin<W>`
   - L35 `static const Uuid _uuid = Uuid()`
   - L40 `List<Map<String, String>> get messages`  — The visible message list.
@@ -67,7 +64,6 @@
   - L300 `void updateAiMessage( int index, String content, String reasoning, String? chatId, )`  — Write the latest streamed [content]/[reasoning] into the message at
 
 ## lib/platform_specific/chat/chat_model_selection_mixin.dart  (322 Z.)
-
 - L30 `mixin ChatModelSelectionMixin<W extends StatefulWidget> on State<W>, ModelProviderResolutionMixin<W>`
   - L34 `String selectedModelId = ''`  — The model the next send uses. Empty until the mode config is restored.
   - L38 `String? selectedProviderSlug`  — The provider pinned for [selectedModelId], or null while unresolved.
@@ -91,7 +87,6 @@
   - L312 `Future<void> loadSavedModelPreference()`  — Load the user's saved model preference.
 
 ## lib/platform_specific/chat/chat_scroll_mixin.dart  (289 Z.)
-
 - L17 `mixin ChatScrollMixin<T extends StatefulWidget> on State<T>`  — Shared message-list scroll behaviour for the desktop and mobile chat UIs.
   - L19 `static const double showScrollButtonDistance = 260.0`  — Show the scroll-to-bottom FAB once the user is this far from the bottom.
   - L22 `static const double hideScrollButtonDistance = 140.0`  — Hide the FAB again once back within this distance of the bottom.
@@ -110,8 +105,7 @@
   - L227 `void scrollChatToBottom({bool animate = true, bool force = false})`
   - L271 `void settleScrollToBottom({double lastExtent = -1, int attempt = 0})`  — Jump to the bottom, then keep re-jumping on subsequent frames until the
 
-## lib/platform_specific/chat/chat_ui_desktop.dart  (2644 Z.)
-
+## lib/platform_specific/chat/chat_ui_desktop.dart  (2657 Z.)
 - part 'desktop_send_logic.dart'
 - L80 `class ChukChatUIDesktop extends StatefulWidget`
   - L82 `final VoidCallback onToggleSidebar`
@@ -235,22 +229,21 @@
   - L1629 `void _persistChatWithId(String chatId)`  — Persist chat with a specific chatId (for background streaming to correct chat)
   - L1641 `void _persistChatWithIdAndMessages( String chatId, List<Map<String, dynamic>> messages, )`  — Persist specific messages to a specific chat (for background streaming)
   - L1656 `Widget build(BuildContext context)`
-  - L2059 `Widget _buildSearchBar({required bool isCompactMode})`
-  - L2454 `Widget _buildModelControlPill({required bool isCompactMode})`  — The model selector, merged with the reasoning toggle into a single
-  - L2505 `Future<void> presentModelScreen()`  — Prefer the redesigned settings modal (model section) so "More models"
-  - L2513 `Widget _buildIconBtn({ IconData? icon, String? svgAssetPath, double iconSize = 20, required VoidCallback onTap, required bool isActive, String? debugLabel, })`
-- L2590 `class _DesktopRecordingDot extends StatefulWidget`
-  - L2591 `const _DesktopRecordingDot()`
-  - L2594 `State<_DesktopRecordingDot> createState()`
-- L2597 `class _DesktopRecordingDotState extends State<_DesktopRecordingDot> with SingleTickerProviderStateMixin`
-  - L2599 `late final AnimationController _pulseController`
-  - L2600 `late final Animation<double> _animation`
-  - L2603 `void initState()`
-  - L2615 `void dispose()`
-  - L2621 `Widget build(BuildContext context)`
+  - L2068 `Widget _buildSearchBar({required bool isCompactMode})`
+  - L2467 `Widget _buildModelControlPill({required bool isCompactMode})`  — The model selector, merged with the reasoning toggle into a single
+  - L2518 `Future<void> presentModelScreen()`  — Prefer the redesigned settings modal (model section) so "More models"
+  - L2526 `Widget _buildIconBtn({ IconData? icon, String? svgAssetPath, double iconSize = 20, required VoidCallback onTap, required bool isActive, String? debugLabel, })`
+- L2603 `class _DesktopRecordingDot extends StatefulWidget`
+  - L2604 `const _DesktopRecordingDot()`
+  - L2607 `State<_DesktopRecordingDot> createState()`
+- L2610 `class _DesktopRecordingDotState extends State<_DesktopRecordingDot> with SingleTickerProviderStateMixin`
+  - L2612 `late final AnimationController _pulseController`
+  - L2613 `late final Animation<double> _animation`
+  - L2616 `void initState()`
+  - L2628 `void dispose()`
+  - L2634 `Widget build(BuildContext context)`
 
-## lib/platform_specific/chat/chat_ui_helpers.dart  (1219 Z.)
-
+## lib/platform_specific/chat/chat_ui_helpers.dart  (1221 Z.)
 - L31 `class MessageRenderData`  — Data class holding pre-parsed render information for a single chat message.
   - L32 `const MessageRenderData({ required this.sender, required this.displayText, required this.reasoning, required this.isReasoningStreaming, this.modelLabel, this.modelProvider, this.tps, this.images, this.imageMetas, this.imageCostEur, this.imageGeneratedAt, this.attachments, this.toolCalls, this.contentBlocks, this.isStreamingMessage = false, this.turnStartedAt, this.workedFor, this.status, this.queueId, this.lastError, this.variantIndex = 0, this.variantCount = 0, })`
   - L57 `final String sender`
@@ -333,8 +326,7 @@
   - L1036 `static String detectImageMimeType(Uint8List bytes)`  — Detect image MIME type from byte header.
   - L1081 `static MessageRenderData buildMessageRenderData({ required Map<String, String> raw, required int index, required int messageCount, required bool isStreaming, required Map<String, List<String>?> imagesCache, required Map<String, List<DocumentAttachment>?> attachmentsCache, required Map<String, List<ToolCall>?> toolCallsCache, required Map<String, List<ContentBlock>?> contentBlocksCache, })`  — Build a [MessageRenderData] from a raw message map, using decode caches.
 
-## lib/platform_specific/chat/chat_ui_mobile.dart  (3661 Z.)
-
+## lib/platform_specific/chat/chat_ui_mobile.dart  (3670 Z.)
 - L66 `enum _AttachChoice`  — What the plus menu can start.
   - L66 `camera`
   - L66 `photos`
@@ -471,12 +463,11 @@
   - L2978 `Future<StoredChat?> persistChat({bool waitForCompletion = false})`
   - L2990 `Widget build(BuildContext context)`
   - L3026 `Widget _buildChatContent({ required BuildContext context, required double bottomPadding, required ThemeData theme, required Color iconFg, required double expandedInputWidth, required double effectiveHorizontalPadding, required bool isCompactModeForModelDropdown, })`
-  - L3303 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
-  - L3374 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
-  - L3610 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
+  - L3312 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
+  - L3383 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
+  - L3619 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
 
 ## lib/platform_specific/chat/desktop_send_logic.dart  (2490 Z.)
-
 - part of 'chat_ui_desktop.dart'
 - L35 `extension DesktopSendLogic on ChukChatUIDesktopState`  — Extension on [ChukChatUIDesktopState] containing the large send/streaming
   - L36 `Future<void> _submitEditedMessage( int index, String newText, { bool removeFollowingAssistant = true, bool clearMessagesBelow = false, List<AttachedFile>? attachedFilesOverride, bool isRegenerate = false, })`
@@ -504,7 +495,6 @@
   - L2438 `Future<bool> _enqueueOfflineSend({ required String chatId, required int userMsgIndex, required int placeholderIndex, required String messageText, required String displayText, required String providerSlug, String? systemPrompt, String? imagesJson, required int maxTokens, String? reasoningEffort, })`  — Enqueue an in-flight send (offline or network-error) and reflect the
 
 ## lib/platform_specific/chat/model_provider_resolution_mixin.dart  (120 Z.)
-
 - L13 `mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T>`  — Shared model → provider-slug resolution for the desktop and mobile chat UIs.
   - L15 `String get selectedModelId`  — The currently selected model id (host-provided).
   - L18 `String? get selectedProviderSlug`  — The resolved provider slug for the current model (host-provided storage).
@@ -514,7 +504,6 @@
   - L69 `Future<String?> ensureProviderSlugForCurrentModel()`  — Resolve the provider slug to actually send with, falling back through the
 
 ## lib/platform_specific/chat/regen_variant_seed.dart  (150 Z.)
-
 - L24 `mixin RegenVariantSeedMixin<W extends StatefulWidget> on State<W>`
   - L29 `List<Map<String, dynamic>>? _pendingVariantSeed`  — Archived previous answer(s) for the CURRENTLY VISIBLE chat's in-flight
   - L30 `String? _pendingVariantMessageId`

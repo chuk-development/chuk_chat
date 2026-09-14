@@ -1,7 +1,6 @@
-# test/platform_specific · Signatures
+# test/platform_specific · Signaturen
 
-## test/platform_specific/sidebar_blocks_test.dart  (467 Z.)
-
+## test/platform_specific/sidebar_blocks_test.dart  (529 Z.)
 - L21 `DateTime _localMidnight()`  — Midnight at the start of the current local day — the anchor every seeded
 - L28 `void _seedChats()`  — Seeds the store the sidebars read from. Returns nothing — the sidebars
 - L49 `StoredChat _seedChat({ required String id, required DateTime at, required String title, bool starred = false, })`

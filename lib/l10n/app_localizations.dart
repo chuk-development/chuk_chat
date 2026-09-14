@@ -63,6 +63,9 @@ class AppLocalizations {
   String get skillsYours => _get('skillsYours');
   String get skillsYoursEmpty => _get('skillsYoursEmpty');
   String get skillsBuiltin => _get('skillsBuiltin');
+  String get skillsSearchHint => _get('skillsSearchHint');
+  String skillsNoMatches(String query) =>
+      _get('skillsNoMatches').replaceAll('{query}', query);
   String get skillNew => _get('skillNew');
   String get skillEdit => _get('skillEdit');
   String get skillDeleteTitle => _get('skillDeleteTitle');

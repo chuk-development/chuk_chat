@@ -145,8 +145,11 @@ void main() {
       );
       await tester.pump();
 
+      // New chat leads, on the row the collapsed rail keeps it on.
+      // Workspaces is off, so the block is three cards, not four.
       expect(find.byType(SbNavCard), findsNWidgets(3));
-      expect(find.text('Workspaces'), findsOneWidget);
+      expect(find.text('New chat'), findsOneWidget);
+      expect(find.text('Workspaces'), findsNothing);
       expect(find.text('Media'), findsOneWidget);
       expect(find.text('Search'), findsOneWidget);
 
@@ -191,7 +194,7 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('bottom bar carries the search field and both actions', (
+    testWidgets('the chrome carries the account line and both actions', (
       tester,
     ) async {
       _tallWindow(tester);
@@ -213,14 +216,22 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(SbSearchField), findsOneWidget);
+      // The account moved out of the list and into the bottom bar, and the
+      // search field only exists once the Search row is tapped.
+      expect(find.byType(SbAccountLine), findsOneWidget);
+      expect(find.byType(SbSearchField), findsNothing);
+
       await tester.tap(find.byTooltip('Settings'));
-      await tester.tap(find.byTooltip('New chat'));
+      await tester.tap(find.text('New chat'));
       await tester.pump();
       expect(settings, 1);
       expect(newChat, 1);
 
-      // Typing filters the list without any second field appearing.
+      // The Search row becomes the field, and typing filters the list
+      // without any second field appearing.
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SbSearchField), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Beta');
       await tester.pump();
       expect(find.text('Alpha chat'), findsNothing);
@@ -237,32 +248,10 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('the collapse button reports back, and hides without a host', (
+    testWidgets('carries no collapse button — the hamburger is the one', (
       tester,
     ) async {
       _tallWindow(tester);
-      var collapsed = 0;
-      await tester.pumpWidget(
-        _host(
-          SidebarDesktop(
-            onChatSelected: (_) {},
-            onSettingsTapped: () {},
-            onWorkspacesTapped: () {},
-            onMediaTapped: () {},
-            onNewChatTapped: () {},
-            onCollapseTapped: () => collapsed++,
-            selectedChatId: null,
-            isCompactMode: false,
-            showWorkspacesButton: true,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      await tester.tap(find.byTooltip('Hide sidebar'));
-      await tester.pump();
-      expect(collapsed, 1);
-
       await tester.pumpWidget(
         _host(
           SidebarDesktop(
@@ -278,6 +267,9 @@ void main() {
         ),
       );
       await tester.pump();
+
+      // The host draws the hamburger over the panel's own head bar, so a
+      // second control beside it would fold the sidebar twice.
       expect(find.byTooltip('Hide sidebar'), findsNothing);
 
       await _settleStartupWork(tester);
@@ -304,7 +296,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Workspaces'), findsNothing);
-      expect(find.byType(SbNavCard), findsNWidgets(2));
+      expect(find.byType(SbNavCard), findsNWidgets(3));
 
       await _settleStartupWork(tester);
     });
@@ -409,6 +401,7 @@ void main() {
       await tester.pump();
 
       expect(find.byType(SbNavCard), findsNWidgets(3));
+      expect(find.text('New chat'), findsOneWidget);
       // The account moved out of the list and into the bottom bar, and the
       // search field only exists once the Search row is tapped — the bar
       // below carries no second one.
@@ -419,7 +412,7 @@ void main() {
       expect(find.text('Alpha chat'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Settings'));
-      await tester.tap(find.byTooltip('New chat'));
+      await tester.tap(find.text('New chat'));
       await tester.tap(find.byTooltip('Hide sidebar'));
       await tester.pump();
       expect(settings, 1);

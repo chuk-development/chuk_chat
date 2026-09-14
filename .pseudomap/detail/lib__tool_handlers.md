@@ -1,7 +1,6 @@
-# lib/tool_handlers · Signatures
+# lib/tool_handlers · Signaturen
 
 ## lib/tool_handlers/artifact_tools.dart  (204 Z.)
-
 - L18 `_requestTimeout = Duration(seconds: 45)`
 - L21 `String _formatSuccess(Map<String, dynamic> data)`  — Builds the human/model-readable success string from a service response.
 - L51 `String _formatError(int statusCode, String body)`  — Maps a non-200 status code to a clear, actionable message.
@@ -11,7 +10,6 @@
 - L152 `Future<String> executeUpdateArtifact({ required Map<String, String> serverHeaders, required Map<String, dynamic> args, })`  — Replace the HTML of a previously created artifact. Returns its public URL.
 
 ## lib/tool_handlers/calculate_handler.dart  (317 Z.)
-
 - L12 `String executeCalculate(Map<String, dynamic> args)`  — Calculator tool with full expression parsing.
 - L74 `String _evalExpression(String raw)`  — Evaluate a math expression using a simple recursive descent parser.
 - L136 `class _ExprParser`  — Simple recursive descent parser for math expressions.
@@ -31,7 +29,6 @@
 - L313 `num _toNum(dynamic v)`  — Safely convert dynamic to num.
 
 ## lib/tool_handlers/chat_search_tools.dart  (807 Z.)
-
 - L15 `_defaultChatLimit = 10`
 - L16 `_maxChatLimit = 50`
 - L17 `_defaultMessageLimit = 8`
@@ -114,14 +111,12 @@
   - L805 `final String text`
 
 ## lib/tool_handlers/find_tools_handler.dart  (343 Z.)
-
 - L6 `companions = <String, List<String>>{ 'web_search': ['web_crawl'], 'web_crawl': ['web_search'], 'generate_image': ['web_s`  — Companion tools that are always bundled together.
 - L21 `void _appendToolDefinition( StringBuffer buf, ClientTool tool, String Function(String) getDescription, )`
 - L53 `String executeFindTools({ required Map<String, dynamic> args, required Map<String, ClientTool> tools, required String Function(String) getDescription, required bool Function(String) isAvailable, List<McpCatalogueEntry> unconnectedMcpServers = const [], })`  — Find tools by keyword/query. Returns full tool definitions for matching
 - L316 `String _mcpConnectHints( List<String> queryWords, List<McpCatalogueEntry> unconnected, )`  — Lines describing not-connected catalogue servers whose id / name / category
 
 ## lib/tool_handlers/image_tools.dart  (253 Z.)
-
 - L11 `Future<String> _generateImageRequest({ required String? serverHttpUrl, required String? accessToken, required String endpoint, required Map<String, String> fields, required String muxTool, required String modelName, })`  — Shared helper: send a multipart POST to an image generation endpoint
 - L99 `imageModelDisplayNames = { 'turbo': 'Z-Image Turbo', 'hunyuan': 'Hunyuan Image 3', 'flux': 'FLUX 2 Klein 9B', 'ideogram'`  — Human-readable display names per generator key. Adding a model = one entry
 - L109 `Future<String> executeGenerateImage({ required String? serverHttpUrl, required String? accessToken, required Map<String, dynamic> args, })`  — Single image generation/editing tool. `args['model']` selects the
@@ -130,7 +125,6 @@
 - L233 `String _detectMimeType({required String contentType, required String url})`
 
 ## lib/tool_handlers/map_tools.dart  (660 Z.)
-
 - L12 `_networkTimeout = Duration(seconds: 20)`  — These endpoints are called straight from the device, so a stalled
 - L14 `_nominatimBaseUrl = 'https://nominatim.openstreetmap.org'`
 - L15 `_osrmBaseUrl = 'https://router.workspace-osrm.org'`
@@ -161,7 +155,6 @@
 - L649 `String _asString(dynamic value)`  — Coerce a JSON-decoded value to a String. Server tools normally hand back
 
 ## lib/tool_handlers/notes_tools.dart  (923 Z.)
-
 - L14 `_notesPrefsKey = 'tool_notes'`
 - L15 `_memoryPrefsKey = 'identity_memory'`
 - L16 `_soulPrefsKey = 'identity_soul'`
@@ -225,11 +218,9 @@
 - L918 `Future<String> _clearNotes()`
 
 ## lib/tool_handlers/platform_tools.dart  (7 Z.)
-
-- conditional export: 'platform_tools_stub.dart' if (dart.library.io) 'platform_tools_native.dart'
+- reicht weiter: 'platform_tools_stub.dart' if (dart.library.io) 'platform_tools_native.dart'
 
 ## lib/tool_handlers/platform_tools_native.dart  (766 Z.)
-
 - L12 `_bashSandbox = BashSandbox()`  — Singleton service instances for native platforms.
 - L13 `_gitHubOAuth = GitHubOAuth()`
 - L14 `_slackOAuth = SlackOAuth()`
@@ -254,7 +245,6 @@
 - L763 `Future<String> executeDraftEmail(Map<String, dynamic> args)`
 
 ## lib/tool_handlers/platform_tools_stub.dart  (58 Z.)
-
 - L8 `Future<void> setBashSandboxFolder(String path)`  — The local bash sandbox is desktop-only; on web there is no folder.
 - L10 `Future<void> clearBashSandboxFolder()`
 - L12 `Future<String> executeBash(Map<String, dynamic> args)`
@@ -272,11 +262,9 @@
 - L57 `Future<void> disconnectPlatformService(String service)`  — Disconnect a service (no-op on web).
 
 ## lib/tool_handlers/qr_tools.dart  (61 Z.)
-
 - L9 `Future<String> executeGenerateQr(Map<String, dynamic> args)`  — Generate a QR code locally using pretty_qr_code — no network call, fully
 
 ## lib/tool_handlers/sandbox_tools.dart  (575 Z.)
-
 - L15 `_stdStreamCap = 8000`
 - L16 `_textFileCap = 16000`
 - L17 `_textInlineByteLimit = 64 * 1024`
@@ -302,7 +290,6 @@
 - L488 `Future<ToolExecutionResult> executeSandboxSendFileToUser({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
 
 ## lib/tool_handlers/typst_tools.dart  (281 Z.)
-
 - L14 `class TypstCompileResult`  — Result of a Typst compile: the rendered bytes plus optional layout
   - L15 `const TypstCompileResult({required this.bytes, this.layout})`
   - L16 `final Uint8List bytes`
@@ -324,7 +311,6 @@
 - L271 `String _compileErrorGuidance(String compilerError)`  — Wraps a Typst compile error so the AI sees both the compiler output
 
 ## lib/tool_handlers/weather_tools.dart  (359 Z.)
-
 - L14 `Future<String> executeWeather({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Weather via server-side Brave Rich Callback proxy.
 - L111 `String _buildQuery({ required String location, double? latitude, double? longitude, required String action, int? days, int? hours, })`
 - L138 `String _formatWeather({ required String locationLabel, required String action, required String vertical, required Map<String, dynamic> payload, })`
@@ -336,7 +322,6 @@
 - L341 `String? _pickString(Map<String, dynamic> src, List<String> keys)`
 
 ## lib/tool_handlers/web_tools.dart  (715 Z.)
-
 - L12 `_defaultSearchCount = 8`
 - L13 `_maxSearchCount = 10`
 - L14 `_defaultAutoCrawlCount = 4`

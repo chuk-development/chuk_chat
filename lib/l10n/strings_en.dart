@@ -22,6 +22,8 @@ const Map<String, String> stringsEn = {
       'follow — a format to output, a checklist to work through, house rules '
       'for a recurring task.',
   'skillsBuiltin': 'Built in',
+  'skillsSearchHint': 'Search skills...',
+  'skillsNoMatches': 'No skill matches "{query}".',
   'skillNew': 'New skill',
   'skillEdit': 'Edit skill',
   'skillDeleteTitle': 'Delete skill?',
@@ -191,7 +193,7 @@ const Map<String, String> stringsEn = {
   'searchWorkspacesHint': 'Search workspaces...',
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
-  'aiDisclaimer': 'You\'re chatting with an AI — it can be wrong. Check key info.',
+  'aiDisclaimer': 'You\'re chatting with an AI/LLM — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────

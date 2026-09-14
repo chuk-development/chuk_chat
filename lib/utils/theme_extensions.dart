@@ -6,18 +6,17 @@ extension ThemeDataIconColorX on ThemeData {
   /// The glyph colour for a button that is filled with the accent — the send
   /// button, the new-chat button, every round accent circle.
   ///
-  /// It is the reader's own icon colour, unchanged. Not a black or white
-  /// picked for contrast, and not a lightened version either: the icons in
-  /// the sidebar and in settings carry a little of the chosen accent, and
-  /// these buttons have to be *the same colour*, not a near relative. A
-  /// lightened one is still visibly whiter than the rest and reads as a
-  /// different thing.
+  /// Black or white, whichever the fill can carry. It used to be the reader's
+  /// own icon colour, on the argument that these buttons should match the
+  /// icons around them; on a mid orange that put a near-white glyph at a
+  /// contrast of about 1.2, and the phone's send and new-chat buttons read as
+  /// washed out next to the desktop's, which had always used black.
   ///
-  /// This is a deliberate trade against contrast. The shipped defaults put a
-  /// muted tan on a mid orange, which is a contrast of about 1.2 — legible
-  /// at glyph weight against a flat fill, but nothing more. Keep this as the
-  /// one place that decides, so the trade can be revisited in one edit.
-  Color accentButtonForeground(Color fill) => resolvedIconColor;
+  /// One place decides for both platforms, so they cannot drift apart again.
+  Color accentButtonForeground(Color fill) =>
+      ThemeData.estimateBrightnessForColor(fill) == Brightness.dark
+          ? Colors.white
+          : Colors.black;
 }
 
 /// Material You extension tokens that aren't exposed on the default

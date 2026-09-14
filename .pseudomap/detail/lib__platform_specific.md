@@ -1,49 +1,45 @@
-# lib/platform_specific · Signatures
+# lib/platform_specific · Signaturen
 
 ## lib/platform_specific/root_wrapper.dart  (5 Z.)
+- reicht weiter: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-- conditional export: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
-
-## lib/platform_specific/root_wrapper_desktop.dart  (781 Z.)
-
-- L33 `class RootWrapperDesktop extends StatefulWidget`
-  - L34 `final AppShellConfig config`
-  - L36 `const RootWrapperDesktop({super.key, required this.config})`
-  - L39 `State<RootWrapperDesktop> createState()`
-- L42 `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
-  - L43 `bool _isSidebarExpanded = false`
-  - L44 `bool _hasOpenedSidebar = false`
-  - L46 `String? _activeProjectId`
-  - L47 `String? _activePanel`
-  - L48 `ArtifactDocument? _activeArtifact`
-  - L49 `bool _panelOpen = true`
-  - L52 `double? _userArtifactPanelWidth`  — User-preferred artifact panel width. Null = default 50%.
-  - L54 `final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey()`
-  - L57 `void initState()`
-  - L115 `void dispose()`
-  - L133 `void _onArtifactChanged()`
-  - L145 `void _onPanelOpenChanged()`
-  - L152 `void _onArtifactOpenRequested()`
-  - L159 `void _closeArtifactPanel()`
-  - L166 `void _openSourceChatForArtifact(String chatId)`
-  - L180 `void _openSettingsPage()`
-  - L187 `void _openWorkspacesPage()`
-  - L197 `void _openWorkspace(String workspaceId)`
-  - L217 `void _startWorkspaceChat(String workspaceId)`
-  - L228 `void _exitProject()`
-  - L234 `void _closePanel()`
-  - L240 `void _openMediaPage()`
-  - L251 `void _handleChatSelected(String? chatId)`
-  - L319 `void _toggleSidebar()`
-  - L329 `void _copyDebugChat()`
-  - L347 `List<Widget> _buildMiniRail(Color iconFg, AppLocalizations l)`
-  - L411 `void _onTrayNewChat()`
-  - L416 `void _handleNewChatFromSidebar()`
-  - L437 `Future<void> _handleChatDeleted(String deletedChatId)`
-  - L454 `Widget build(BuildContext context)`
+## lib/platform_specific/root_wrapper_desktop.dart  (717 Z.)
+- L34 `class RootWrapperDesktop extends StatefulWidget`
+  - L35 `final AppShellConfig config`
+  - L37 `const RootWrapperDesktop({super.key, required this.config})`
+  - L40 `State<RootWrapperDesktop> createState()`
+- L43 `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
+  - L44 `bool _isSidebarExpanded = false`
+  - L45 `bool _hasOpenedSidebar = false`
+  - L47 `String? _activeProjectId`
+  - L49 `String? _activePanel`  — 'workspaces' for the full-page workspace list, or null.
+  - L50 `ArtifactDocument? _activeArtifact`
+  - L51 `bool _panelOpen = true`
+  - L54 `double? _userArtifactPanelWidth`  — User-preferred artifact panel width. Null = default 50%.
+  - L56 `final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey()`
+  - L59 `void initState()`
+  - L117 `void dispose()`
+  - L135 `void _onArtifactChanged()`
+  - L147 `void _onPanelOpenChanged()`
+  - L154 `void _onArtifactOpenRequested()`
+  - L161 `void _closeArtifactPanel()`
+  - L168 `void _openSourceChatForArtifact(String chatId)`
+  - L182 `void _openSettingsPage()`
+  - L189 `void _openWorkspacesPage()`
+  - L199 `void _openWorkspace(String workspaceId)`
+  - L219 `void _startWorkspaceChat(String workspaceId)`
+  - L230 `void _exitProject()`
+  - L239 `void _openMediaPage()`
+  - L243 `void _handleChatSelected(String? chatId)`
+  - L311 `void _toggleSidebar()`
+  - L321 `void _copyDebugChat()`
+  - L342 `List<Widget> _buildMiniRail(AppLocalizations l)`
+  - L401 `void _onTrayNewChat()`
+  - L406 `void _handleNewChatFromSidebar()`
+  - L427 `Future<void> _handleChatDeleted(String deletedChatId)`
+  - L444 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_io.dart  (76 Z.)
-
 - L30 `class RootWrapper extends StatelessWidget`
   - L31 `final AppShellConfig config`
   - L33 `const RootWrapper({super.key, required this.config})`
@@ -51,7 +47,6 @@
   - L57 `bool _isMobilePhone(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_mobile.dart  (769 Z.)
-
 - L37 `class RootWrapperMobile extends StatefulWidget`
   - L38 `final AppShellConfig config`
   - L40 `const RootWrapperMobile({super.key, required this.config})`
@@ -89,88 +84,87 @@
   - L609 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_stub.dart  (19 Z.)
-
 - L8 `class RootWrapper extends StatelessWidget`  — Web wrapper - renders desktop UI since web is a desktop-like environment
   - L9 `final AppShellConfig config`
   - L11 `const RootWrapper({super.key, required this.config})`
   - L14 `Widget build(BuildContext context)`
 
-## lib/platform_specific/sidebar_desktop.dart  (520 Z.)
-
-- L30 `class SidebarDesktop extends StatefulWidget`
-  - L31 `final Function(String? chatId) onChatSelected`
-  - L32 `final Function() onSettingsTapped`
-  - L33 `final Function() onWorkspacesTapped`
-  - L34 `final Function() onMediaTapped`
-  - L35 `final Function() onNewChatTapped`
-  - L36 `final Future<void> Function(String chatId)? onChatDeleted`
-  - L40 `final VoidCallback? onCollapseTapped`  — Folds the sidebar back to the mini rail. Null hides the profile card's
-  - L41 `final String? selectedChatId`
-  - L42 `final bool isCompactMode`
-  - L43 `final bool showWorkspacesButton`
-  - L45 `const SidebarDesktop({ super.key, required this.onChatSelected, required this.onSettingsTapped, required this.onWorkspacesTapped, required this.onMediaTapped, required this.onNewChatTapped, this.onChatDeleted, this.onCollapseTapped, required this.selectedChatId, required this.isCompactMode, required this.showWorkspacesButton, })`
-  - L60 `State<SidebarDesktop> createState()`
-- L63 `class _SidebarDesktopState extends State<SidebarDesktop> with SidebarStateCommon<SidebarDesktop>`
+## lib/platform_specific/sidebar_desktop.dart  (586 Z.)
+- L31 `class SidebarDesktop extends StatefulWidget`
+  - L32 `final Function(String? chatId) onChatSelected`
+  - L33 `final Function() onSettingsTapped`
+  - L34 `final Function() onWorkspacesTapped`
+  - L35 `final Function() onMediaTapped`
+  - L36 `final Function() onNewChatTapped`
+  - L37 `final Future<void> Function(String chatId)? onChatDeleted`
+  - L39 `final String? selectedChatId`
+  - L40 `final bool isCompactMode`
+  - L41 `final bool showWorkspacesButton`
+  - L43 `const SidebarDesktop({ super.key, required this.onChatSelected, required this.onSettingsTapped, required this.onWorkspacesTapped, required this.onMediaTapped, required this.onNewChatTapped, this.onChatDeleted, required this.selectedChatId, required this.isCompactMode, required this.showWorkspacesButton, })`
+  - L57 `State<SidebarDesktop> createState()`
+- L60 `class _SidebarDesktopState extends State<SidebarDesktop> with SidebarStateCommon<SidebarDesktop>`
+  - L63 `bool _searchActive = false`  — True while the Search row shows the field instead of the nav card.
   - L66 `Future<void> Function(String chatId)? get onChatDeletedCallback`
   - L70 `Future<void> applyChatFilter()`
   - L76 `void initState()`
-  - L85 `void dispose()`
-  - L93 `void _focusDesktopSearch()`
-  - L97 `void _onDesktopSearchChanged()`
-  - L105 `void _clearDesktopSearch()`
-  - L113 `Future<void> _refreshDesktopChats()`
-  - L124 `void _filterDesktopChats()`
-  - L144 `void didUpdateWidget(covariant SidebarDesktop oldWidget)`
-  - L152 `Widget build(BuildContext context)`
-  - L210 `List<Widget> _buildDesktopSlivers(Color iconFg, Color accent)`
-  - L284 `void _selectDesktopChat(StoredChat storedChat)`
-  - L299 `Widget _buildDesktopChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, required Color iconFgColor, })`
-  - L384 `void _openChatActionsMenu( BuildContext btnContext, StoredChat chat, { required Color accentColor, required Color iconFgColor, VoidCallback? onDelete, })`
-  - L421 `void _handleMenuSelection( String value, StoredChat chat, VoidCallback? onDelete, )`
-  - L440 `List<PopupMenuEntry<String>> _buildMenuItems( StoredChat chat, { required Color accentColor, required Color iconFgColor, })`
-  - L492 `void _showChatContextMenu( BuildContext context, Offset position, StoredChat chat, { required Color accentColor, required Color iconFgColor, VoidCallback? onDelete, })`
+  - L86 `void dispose()`
+  - L96 `void _focusDesktopSearch()`  — Opens the search row and puts the caret in it. The row folds back into
+  - L103 `void _onSearchFocusChanged()`
+  - L110 `void _onDesktopSearchChanged()`
+  - L118 `void _clearDesktopSearch()`
+  - L126 `Future<void> _refreshDesktopChats()`
+  - L137 `void _filterDesktopChats()`
+  - L157 `void didUpdateWidget(covariant SidebarDesktop oldWidget)`
+  - L165 `Widget build(BuildContext context)`
+  - L308 `List<Widget> _buildDesktopSlivers(Color iconFg, Color accent)`
+  - L347 `List<Widget> _buildDesktopNavigationCards()`  — The navigation block. The Search row is the field itself once it is
+  - L379 `void _selectDesktopChat(StoredChat storedChat)`
+  - L394 `Widget _buildDesktopChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, required Color iconFgColor, })`
+  - L477 `void _openChatActionsMenu( BuildContext btnContext, StoredChat chat, { required Color iconFgColor, VoidCallback? onDelete, })`
+  - L509 `void _handleMenuSelection( String value, StoredChat chat, VoidCallback? onDelete, )`
+  - L528 `List<PopupMenuEntry<String>> _buildMenuItems({required Color iconFgColor})`
+  - L563 `void _showChatContextMenu( BuildContext context, Offset position, StoredChat chat, { required Color iconFgColor, VoidCallback? onDelete, })`
 
-## lib/platform_specific/sidebar_mobile.dart  (694 Z.)
-
-- L29 `class SidebarMobile extends StatefulWidget`
-  - L30 `final Function(String? chatId) onChatSelected`
-  - L31 `final Function() onSettingsTapped`
-  - L32 `final Function() onWorkspacesTapped`
-  - L33 `final Function() onMediaTapped`
-  - L34 `final Function() onNewChatTapped`
-  - L35 `final Future<void> Function(String chatId)? onChatDeleted`
-  - L38 `final VoidCallback? onCollapseTapped`  — Slides the drawer shut. Null hides the profile card's collapse button.
-  - L39 `final String? selectedChatId`
-  - L40 `final bool isCompactMode`
-  - L42 `const SidebarMobile({ super.key, required this.onChatSelected, required this.onSettingsTapped, required this.onWorkspacesTapped, required this.onMediaTapped, required this.onNewChatTapped, this.onChatDeleted, this.onCollapseTapped, required this.selectedChatId, required this.isCompactMode, })`
-  - L56 `State<SidebarMobile> createState()`
-- L59 `class _SidebarMobileState extends State<SidebarMobile> with SidebarStateCommon<SidebarMobile>`
-  - L61 `static const Duration _searchDebounceDuration = Duration(milliseconds: 300)`
-  - L62 `static const int _searchMessageLimit = 50`
-  - L63 `Future<void>? _refreshInFlight`
-  - L64 `bool _refreshPending = false`
-  - L65 `Timer? _searchDebounce`
-  - L66 `int _filterGeneration = 0`
-  - L69 `bool _searchActive = false`  — True while the search row shows the field instead of the nav card.
-  - L72 `Future<void> Function(String chatId)? get onChatDeletedCallback`
-  - L76 `Future<void> applyChatFilter()`
-  - L79 `void initState()`
-  - L89 `void dispose()`
-  - L102 `void _focusMobileSearch()`  — Opens the search row and puts the caret in it. The row folds back into
-  - L109 `void _onSearchFocusChanged()`
-  - L116 `void _onMobileSearchChanged()`
-  - L128 `void _clearMobileSearch()`
-  - L141 `Future<void> _refreshMobileChatsFromGesture()`
-  - L145 `Future<void> _refreshChats()`
-  - L163 `Future<void> _performRefresh()`
-  - L184 `Future<void> _filterMobileChats()`
-  - L269 `List<StoredChat> _filterChatsLocally( List<StoredChat> chats, String lowerQuery, )`
-  - L289 `void didUpdateWidget(covariant SidebarMobile oldWidget)`
-  - L297 `Widget build(BuildContext context)`
-  - L429 `List<Widget> _buildMobileSlivers(Color accent)`
-  - L471 `List<Widget> _buildMobileNavigationCards()`
-  - L500 `void _selectMobileChat(StoredChat storedChat)`
-  - L509 `Widget _buildMobileChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, })`
-  - L573 `void _showChatOptionsMenu( StoredChat chat, { Offset? at, VoidCallback? onDelete, required Color accentColor, required Color iconColor, })`  — The chat menu, opened where the finger was.
-  - L627 `Widget _chatOptionRow({ required IconData icon, required Color iconColor, required String label, required VoidCallback onTap, Color? labelColor, })`  — One row of the chat menu. A plain [InkWell] — the tile around it carries
-- L661 `List<String> _filterChatsIsolate(Map<String, dynamic> params)`
+## lib/platform_specific/sidebar_mobile.dart  (704 Z.)
+- L28 `class SidebarMobile extends StatefulWidget`
+  - L29 `final Function(String? chatId) onChatSelected`
+  - L30 `final Function() onSettingsTapped`
+  - L31 `final Function() onWorkspacesTapped`
+  - L32 `final Function() onMediaTapped`
+  - L33 `final Function() onNewChatTapped`
+  - L34 `final Future<void> Function(String chatId)? onChatDeleted`
+  - L37 `final VoidCallback? onCollapseTapped`  — Slides the drawer shut. Null hides the profile card's collapse button.
+  - L38 `final String? selectedChatId`
+  - L39 `final bool isCompactMode`
+  - L41 `const SidebarMobile({ super.key, required this.onChatSelected, required this.onSettingsTapped, required this.onWorkspacesTapped, required this.onMediaTapped, required this.onNewChatTapped, this.onChatDeleted, this.onCollapseTapped, required this.selectedChatId, required this.isCompactMode, })`
+  - L55 `State<SidebarMobile> createState()`
+- L58 `class _SidebarMobileState extends State<SidebarMobile> with SidebarStateCommon<SidebarMobile>`
+  - L60 `static const Duration _searchDebounceDuration = Duration(milliseconds: 300)`
+  - L61 `static const int _searchMessageLimit = 50`
+  - L62 `Future<void>? _refreshInFlight`
+  - L63 `bool _refreshPending = false`
+  - L64 `Timer? _searchDebounce`
+  - L65 `int _filterGeneration = 0`
+  - L68 `bool _searchActive = false`  — True while the search row shows the field instead of the nav card.
+  - L71 `Future<void> Function(String chatId)? get onChatDeletedCallback`
+  - L75 `Future<void> applyChatFilter()`
+  - L78 `void initState()`
+  - L88 `void dispose()`
+  - L101 `void _focusMobileSearch()`  — Opens the search row and puts the caret in it. The row folds back into
+  - L108 `void _onSearchFocusChanged()`
+  - L115 `void _onMobileSearchChanged()`
+  - L127 `void _clearMobileSearch()`
+  - L140 `Future<void> _refreshMobileChatsFromGesture()`
+  - L144 `Future<void> _refreshChats()`
+  - L162 `Future<void> _performRefresh()`
+  - L183 `Future<void> _filterMobileChats()`
+  - L268 `List<StoredChat> _filterChatsLocally( List<StoredChat> chats, String lowerQuery, )`
+  - L288 `void didUpdateWidget(covariant SidebarMobile oldWidget)`
+  - L296 `Widget build(BuildContext context)`
+  - L439 `List<Widget> _buildMobileSlivers(Color accent)`
+  - L478 `List<Widget> _buildMobileNavigationCards()`
+  - L510 `void _selectMobileChat(StoredChat storedChat)`
+  - L519 `Widget _buildMobileChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, })`
+  - L583 `void _showChatOptionsMenu( StoredChat chat, { Offset? at, VoidCallback? onDelete, required Color accentColor, required Color iconColor, })`  — The chat menu, opened where the finger was.
+  - L637 `Widget _chatOptionRow({ required IconData icon, required Color iconColor, required String label, required VoidCallback onTap, Color? labelColor, })`  — One row of the chat menu. A plain [InkWell] — the tile around it carries
+- L671 `List<String> _filterChatsIsolate(Map<String, dynamic> params)`

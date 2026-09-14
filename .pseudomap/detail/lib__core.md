@@ -1,7 +1,6 @@
-# lib/core · Signatures
+# lib/core · Signaturen
 
 ## lib/core/model_selection_events.dart  (32 Z.)
-
 - L5 `class ModelSelectionEventBus`  — Event bus for model selection changes to decouple services from UI widgets.
   - L6 `static final ModelSelectionEventBus _instance = ModelSelectionEventBus._internal()`
   - L8 `factory ModelSelectionEventBus()`

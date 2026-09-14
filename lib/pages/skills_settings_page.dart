@@ -7,6 +7,7 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_search_bar.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/skill.dart';
@@ -30,9 +31,26 @@ class SkillsSettingsPage extends StatefulWidget {
 }
 
 class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
+  final TextEditingController _search = TextEditingController();
   List<Skill> _userSkills = const [];
   bool _loading = true;
   String? _error;
+
+  /// The query, lowercased. Matched against a skill's name and its
+  /// description — the description is what says when a skill fires, so it is
+  /// how a reader finds the one they half remember.
+  String _query = '';
+
+  List<Skill> _match(List<Skill> skills) {
+    if (_query.isEmpty) return skills;
+    return skills
+        .where(
+          (skill) =>
+              skill.name.toLowerCase().contains(_query) ||
+              skill.description.toLowerCase().contains(_query),
+        )
+        .toList(growable: false);
+  }
 
   @override
   void initState() {
@@ -45,6 +63,12 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
         Future<void>.delayed(const Duration(milliseconds: 250), _reload),
       );
     });
+  }
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
   }
 
   Future<void> _reload({bool forceRefresh = false}) async {
@@ -111,13 +135,20 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context)!;
-    final builtins = SkillRegistry.bySource(SkillSource.builtin);
+    final builtins = _match(SkillRegistry.bySource(SkillSource.builtin));
+    final userSkills = _match(_userSkills);
 
     return Scaffold(
       // The list runs underneath the floating header.
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: Text(l.skills),
+        bottom: PinnedSettingsSearchBar(
+          controller: _search,
+          hintText: l.skillsSearchHint,
+          onChanged: (value) =>
+              setState(() => _query = value.trim().toLowerCase()),
+        ),
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openEditor(),
@@ -125,9 +156,10 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
         label: Text(l.skillNew),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+        extraHeaderInset: kSettingsSearchBarHeight,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
         children: [
-          ExpressiveInfoCard(text: l.skillsExplainer),
+          if (_query.isEmpty) ExpressiveInfoCard(text: l.skillsExplainer),
           if (_error != null) ...[
             const SizedBox(height: 12),
             ExpressiveInfoCard(
@@ -142,12 +174,14 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             )
-          else if (_userSkills.isEmpty)
-            _SkillsEmptyState(onCreate: () => _openEditor())
+          else if (userSkills.isEmpty)
+            _query.isEmpty
+                ? _SkillsEmptyState(onCreate: () => _openEditor())
+                : _NoSkillMatches(query: _query)
           else
             ExpressiveGroup(
               children: [
-                for (final skill in _userSkills)
+                for (final skill in userSkills)
                   _SkillRow(
                     skill: skill,
                     onTap: () => _openEditor(skill: skill),
@@ -156,9 +190,12 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
               ],
             ),
           ExpressiveSectionHeader(l.skillsBuiltin),
-          ExpressiveGroup(
-            children: [for (final skill in builtins) _SkillRow(skill: skill)],
-          ),
+          if (builtins.isEmpty)
+            _NoSkillMatches(query: _query)
+          else
+            ExpressiveGroup(
+              children: [for (final skill in builtins) _SkillRow(skill: skill)],
+            ),
         ],
       ),
     );
@@ -435,6 +472,27 @@ class _SkillsEmptyState extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// What a section shows when the query matched nothing in it.
+class _NoSkillMatches extends StatelessWidget {
+  const _NoSkillMatches({required this.query});
+
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: Text(
+        AppLocalizations.of(context)!.skillsNoMatches(query),
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.m3.onSurfaceVariant,
+        ),
       ),
     );
   }

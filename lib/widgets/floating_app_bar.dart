@@ -45,10 +45,15 @@ const double _kTitleRadius = 18;
 /// down there. Each source is therefore right in one place and wrong in the
 /// other — and the wrong one is always the smaller. So take whichever is
 /// larger, and both places land on the same number.
-EdgeInsets floatingHeaderInset(BuildContext context) {
+/// [extra] is the height of anything the bar carries under itself — a pinned
+/// search field, a tab bar. The Scaffold counts it in `padding.top`; the
+/// computed figure has to add it too, or the two sources disagree and the
+/// page either hides its first row under the field or leaves a second, empty
+/// field's worth of space below it.
+EdgeInsets floatingHeaderInset(BuildContext context, {double extra = 0}) {
   final MediaQueryData mq = MediaQuery.of(context);
   final double fromScaffold = mq.padding.top;
-  final double computed = kFloatingAppBarHeight + mq.viewPadding.top;
+  final double computed = kFloatingAppBarHeight + extra + mq.viewPadding.top;
   return EdgeInsets.only(
     top: fromScaffold > computed ? fromScaffold : computed,
   );
