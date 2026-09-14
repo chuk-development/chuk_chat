@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
+import 'package:chuk_chat/widgets/agent_activity/turn_status.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class AgentActivityTimeline extends StatefulWidget {
@@ -85,6 +86,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
   Timer? _ticker;
 
+  /// What the live counter showed when the turn settled. Used only when the
+  /// turn's length was never recorded.
+  Duration? _settledDuration;
+
   /// Diameter of the icon badge sitting on the rail.
   static const double _badgeSize = 26;
 
@@ -101,6 +106,16 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
   @override
   void didUpdateWidget(AgentActivityTimeline oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.isRunning && !widget.isRunning) {
+      // The moment the turn settles, keep the number the counter last
+      // showed. A turn whose length was never written down would otherwise
+      // drop from "Thought for 12s" to a bare "Thought" the instant it
+      // finished — the reader watched it count, then saw it vanish.
+      final startedAt = oldWidget.startedAt ?? widget.startedAt;
+      if (startedAt != null) {
+        _settledDuration = _nonNegative(_now.difference(startedAt));
+      }
+    }
     if (oldWidget.isRunning != widget.isRunning) {
       _syncTicker();
     }
@@ -143,29 +158,36 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final entries = steps == null
         ? buildAgentActivityEntries(widget.toolCalls)
         : buildAgentActivityEntriesFromSteps(steps);
-    // A round with neither a step nor a model line has nothing to show.
-    if (entries.isEmpty && widget.footer == null) {
+    // A settled round with neither a step nor a model line has nothing to
+    // show. A RUNNING one still does: the header is what tells the reader
+    // the turn is alive and how long it has been waiting, and at that point
+    // there is usually nothing else on screen yet.
+    if (entries.isEmpty && widget.footer == null && !widget.isRunning) {
       return const SizedBox.shrink();
     }
-    // Three sources, in order of trust: the number measured when the turn
-    // ended, the clock running from the moment the request went out, and —
-    // for messages written before either was recorded — the old guess from
-    // the tool-call stamps.
-    final duration =
-        widget.finalDuration ??
-        (widget.startedAt != null
-            ? _nonNegative(_now.difference(widget.startedAt!))
-            : agentActivityDuration(
-                widget.toolCalls,
-                now: _now,
-                running: widget.isRunning,
-              ));
+    final status = TurnStatus(
+      isRunning: widget.isRunning,
+      hasToolCalls: widget.toolCalls.isNotEmpty,
+      hasSteps: entries.isNotEmpty,
+      phase: widget.phase,
+      runningToolLabel: hasRunningToolCall(widget.toolCalls)
+          ? runningActivityLabel(widget.toolCalls)
+          : null,
+      elapsed: resolveTurnElapsed(
+        finalDuration: widget.finalDuration,
+        startedAt: widget.startedAt,
+        now: _now,
+        isRunning: widget.isRunning,
+        lastLiveDuration: _settledDuration,
+        toolCalls: widget.toolCalls,
+      ),
+    );
 
     return SelectionContainer.disabled(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(theme, muted, duration),
+          _buildHeader(theme, muted, status),
           if (_isExpanded) ...[
             const SizedBox(height: 4),
             for (int i = 0; i < entries.length; i++)
@@ -191,35 +213,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
   static Duration _nonNegative(Duration d) => d.isNegative ? Duration.zero : d;
 
-  Widget _buildHeader(ThemeData theme, Color muted, Duration? duration) {
-    // A running turn is named by what it is doing; a finished one by what
-    // it did. A tool that is still going outranks the stream's own phase —
-    // the model is waiting on the tool, whatever it last sent.
-    final bool toolRunning = widget.toolCalls.any(
-      (t) =>
-          t.status == ToolCallStatus.running ||
-          t.status == ToolCallStatus.pending,
-    );
-    final String verb;
-    if (widget.isRunning) {
-      verb = toolRunning
-          // Name the tool the model is waiting on ("Searching the web",
-          // "Compiling document") so a long run says what it is doing, not a
-          // bare "Working". Falls back to "Working" if the tool is unknown.
-          ? (runningActivityLabel(widget.toolCalls) ?? StreamPhase.working.label)
-          : (widget.phase?.label ??
-                (widget.toolCalls.isEmpty ? 'Thinking' : 'Working'));
-    } else {
-      verb = widget.toolCalls.isEmpty ? 'Thought' : 'Worked';
-    }
-    // A finished turn that took under a second has no duration worth
-    // printing: "Thought for 0s" is noise, and it is the most common case of
-    // all — a one-word answer. Name what happened and stop there.
-    final bool hasDuration =
-        duration != null && (widget.isRunning || duration.inSeconds >= 1);
-    final label = !hasDuration
-        ? verb
-        : '$verb for ${widget.isRunning ? formatAgentDurationLive(duration) : formatAgentDuration(duration)}';
+  Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status) {
+    // The wording is decided in one place for every platform and every
+    // layout branch — see turn_status.dart.
+    final label = status.label;
 
     return Semantics(
       button: true,

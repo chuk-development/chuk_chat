@@ -325,8 +325,11 @@ abstract class StreamingManagerBase {
     if (activeStream == null || !activeStream.isActive) return;
 
     activeStream.phase = switch (event) {
-      ReasoningEvent() => StreamPhase.thinking,
-      ContentEvent() => StreamPhase.writing,
+      // An empty delta is not a token: some servers send one to keep the
+      // connection open, and calling that "thinking" or "writing" would name
+      // a phase the model has not reached.
+      ReasoningEvent(:final text) when text.isNotEmpty => StreamPhase.thinking,
+      ContentEvent(:final text) when text.isNotEmpty => StreamPhase.writing,
       // A frame that carries no token says only that the connection stands.
       _ =>
         activeStream.phase == StreamPhase.connecting

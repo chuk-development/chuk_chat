@@ -69,6 +69,17 @@ class ChatMessageListItem extends StatelessWidget {
         index == messages.length - 1 || nextIsUser != data.isUser;
     final String uiKey = ChatUiHelpers.stableUiKey(messages[index], uuid);
 
+    // True from the moment Send is pressed, not only once the server stream
+    // is registered. The status header has to be on screen for the whole
+    // wait, including the stretch where the request is still going out.
+    final ChatRuntime? liveRuntime = activeChatId == null
+        ? null
+        : ChatRuntimeRegistry.instance.lookup(activeChatId!);
+    final bool isLastAiMessage =
+        !data.isUser && index == messages.length - 1;
+    final bool forceLive =
+        isLastAiMessage && (liveRuntime?.isSending.value ?? false);
+
     MessageBubble buildBubble(String text, String? reasoning) => MessageBubble(
       key: ValueKey<String>(uiKey),
       message: text,
@@ -77,14 +88,15 @@ class ChatMessageListItem extends StatelessWidget {
       startsNewGroup: startsNewGroup,
       endsGroup: endsGroup,
       maxWidth: data.isUser ? maxWidth * 0.8 : maxWidth,
-      isReasoningStreaming: data.isReasoningStreaming,
+      isReasoningStreaming: data.isReasoningStreaming || forceLive,
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,
       tps: data.tps,
       toolCalls: data.toolCalls,
       showToolCalls: showToolCalls,
       contentBlocks: data.contentBlocks,
-      isStreamingMessage: data.isStreamingMessage,
+      isStreamingMessage: data.isStreamingMessage || forceLive,
+      chatId: activeChatId,
       turnStartedAt: data.turnStartedAt,
       workedFor: data.workedFor,
       images: data.images,
@@ -120,13 +132,10 @@ class ChatMessageListItem extends StatelessWidget {
       onContinueGeneration: onContinueGeneration,
     );
 
-    final ChatRuntime? runtime = activeChatId == null
-        ? null
-        : ChatRuntimeRegistry.instance.lookup(activeChatId!);
+    final ChatRuntime? runtime = liveRuntime;
     final bool wrapForStream =
         runtime != null &&
-        !data.isUser &&
-        index == messages.length - 1 &&
+        isLastAiMessage &&
         (data.isStreamingMessage || runtime.isSending.value);
     if (wrapForStream) {
       return RepaintBoundary(

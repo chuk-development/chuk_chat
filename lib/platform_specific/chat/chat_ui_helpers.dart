@@ -1094,7 +1094,6 @@ class ChatUiHelpers {
     final bool isAiMessage = sender != 'user';
     final bool isStreamingMessage =
         isStreaming && index == messageCount - 1 && isAiMessage;
-    final bool hasReasoning = reasoning.isNotEmpty;
     // The turn's own clock. `startedAt` is stamped on the placeholder and
     // `generationMs` when the answer is saved, so a running turn counts up
     // from the first and a finished one shows the second unchanged.
@@ -1191,8 +1190,11 @@ class ChatUiHelpers {
       sender: sender,
       displayText: displayText,
       reasoning: reasoning,
-      isReasoningStreaming:
-          isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+      // The status header belongs to the whole running turn, not only to the
+      // part of it that produced reasoning tokens: while the request is still
+      // travelling there is neither reasoning nor text, and that is exactly
+      // the wait the reader most needs named.
+      isReasoningStreaming: isStreamingMessage,
       modelLabel: modelLabel,
       modelProvider: modelProvider,
       tps: tps,
