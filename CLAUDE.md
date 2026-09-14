@@ -479,6 +479,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 | `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
+| `docs/SCREENSHOTS.md` | **Read before recapturing any screenshot** — the seven gallery shots, the store frames, the painted backdrop, the traps |
 
 
 ## Fastlane / Play Store / F-Droid
