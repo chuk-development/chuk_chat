@@ -27,6 +27,7 @@ class SettingsListView extends StatefulWidget {
     this.scrollbarMargin = 8,
     this.crossAxisAlignment = CrossAxisAlignment.stretch,
     this.headerInset = true,
+    this.extraHeaderInset = 0,
   });
 
   final List<Widget> children;
@@ -42,6 +43,10 @@ class SettingsListView extends StatefulWidget {
   /// True for a page, false inside a dialog or a sheet, which has no header
   /// of its own and would open on a band of empty space.
   final bool headerInset;
+
+  /// Height of whatever the floating header carries under itself — a pinned
+  /// search field, say. Counted into the room left at the top.
+  final double extraHeaderInset;
   final CrossAxisAlignment crossAxisAlignment;
 
   @override
@@ -63,7 +68,9 @@ class _SettingsListViewState extends State<SettingsListView> {
     BuildContext context,
     EdgeInsetsGeometry? padding,
   ) => widget.headerInset
-      ? (padding ?? EdgeInsets.zero).add(floatingHeaderInset(context))
+      ? (padding ?? EdgeInsets.zero).add(
+          floatingHeaderInset(context, extra: widget.extraHeaderInset),
+        )
       : (padding ?? EdgeInsets.zero);
 
   @override

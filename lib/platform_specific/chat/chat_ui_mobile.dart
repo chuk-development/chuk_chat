@@ -21,6 +21,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
@@ -53,7 +54,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
-import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
+import 'package:chuk_chat/widgets/fullscreen_text_editor.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
@@ -3264,15 +3265,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   theme: theme,
                                   iconFg: iconFg,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  AppLocalizations.of(context)!.aiDisclaimer,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.7),
-                                    fontSize: 11,
+                                // Gone while the keyboard is up: with half
+                                // the screen taken by keys, the line is one
+                                // more thing between the field and the
+                                // conversation, and it has already been read.
+                                if (MediaQuery.viewInsetsOf(context).bottom <
+                                    80) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    AppLocalizations.of(context)!.aiDisclaimer,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: iconFg.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ),

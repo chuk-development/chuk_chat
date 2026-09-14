@@ -450,7 +450,7 @@ const Map<String, String> stringsPt = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
-  'aiDisclaimer': 'Você está conversando com uma IA — ela pode errar. Confira o importante.',
+  'aiDisclaimer': 'Você está conversando com uma IA/LLM — ela pode errar. Confira o importante.',
   'queuedLabel': 'Na fila',
   'editYourMessage': 'Edite sua mensagem...',
   'addMessageOrDocs': 'Adicione uma mensagem ou envie documentos',

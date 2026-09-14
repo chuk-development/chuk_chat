@@ -276,10 +276,11 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-              // Fix C: the standalone GitHub entry was removed and the
-              // GitHub connection now lives inside SandboxManagementPage —
+              // The GitHub connection lives inside SandboxManagementPage —
               // the GitHub token is only ever used by `git`/`gh` inside the
-              // sandbox, so the entry point belongs there.
+              // sandbox, so the entry point belongs there. Both are hidden
+              // with the sandbox itself.
+              if (kFeatureSandboxes)
               _SettingsRow(
                 icon: Icons.developer_board,
                 title: 'Sandboxes',

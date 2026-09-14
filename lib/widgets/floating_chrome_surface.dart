@@ -22,6 +22,7 @@ class FloatingChromeSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.radius = 26,
+    this.borderRadius,
     this.padding,
     this.shape,
     this.baseColor,
@@ -32,8 +33,13 @@ class FloatingChromeSurface extends StatelessWidget {
 
   final Widget child;
 
-  /// Corner radius. Ignored when [shape] is a circle.
+  /// Corner radius. Ignored when [shape] is a circle, or when
+  /// [borderRadius] gives the corners individually.
   final double radius;
+
+  /// Per-corner shape, for a bar that joins whatever sits under it. Null
+  /// takes [radius] on all four.
+  final BorderRadius? borderRadius;
   final EdgeInsetsGeometry? padding;
 
   /// A circle for the round chips; null takes the rounded rectangle.
@@ -59,7 +65,9 @@ class FloatingChromeSurface extends StatelessWidget {
       decoration: BoxDecoration(
         color: fillOf(context, baseColor: baseColor),
         shape: circular ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: circular ? null : BorderRadius.circular(radius),
+        borderRadius: circular
+            ? null
+            : (borderRadius ?? BorderRadius.circular(radius)),
       ),
       child: child,
     );

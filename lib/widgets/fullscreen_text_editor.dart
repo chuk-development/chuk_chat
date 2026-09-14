@@ -1,6 +1,11 @@
-// lib/platform_specific/chat/widgets/fullscreen_composer.dart
+// lib/widgets/fullscreen_text_editor.dart
 //
-// A whole screen for one long message.
+// A whole screen for one long piece of text.
+//
+// The chat composer opens it for a long message; the identity page opens it
+// for the soul, the user profile, the memory and the raw system prompt —
+// fields that are read and rewritten far more often than a chat message and
+// were being edited through a six-line window.
 //
 // This used to be a bottom sheet of a fixed 75% height, padded up by the
 // keyboard. With the keyboard open that is more than the screen holds: the
@@ -26,19 +31,39 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 Future<String?> showFullscreenComposer(
   BuildContext context, {
   required String initialText,
+  String title = 'Compose',
+  String? hintText,
+  String? closeTooltip,
 }) {
   return Navigator.of(context).push<String>(
     MaterialPageRoute<String>(
       fullscreenDialog: true,
-      builder: (_) => _FullscreenComposerPage(initialText: initialText),
+      builder: (_) => _FullscreenComposerPage(
+        initialText: initialText,
+        title: title,
+        hintText: hintText,
+        closeTooltip: closeTooltip,
+      ),
     ),
   );
 }
 
 class _FullscreenComposerPage extends StatefulWidget {
-  const _FullscreenComposerPage({required this.initialText});
+  const _FullscreenComposerPage({
+    required this.initialText,
+    required this.title,
+    this.hintText,
+    this.closeTooltip,
+  });
 
   final String initialText;
+
+  /// What is being written — the app bar's title.
+  final String title;
+
+  /// Null takes the chat composer's own hint.
+  final String? hintText;
+  final String? closeTooltip;
 
   @override
   State<_FullscreenComposerPage> createState() =>
@@ -87,10 +112,10 @@ class _FullscreenComposerPageState extends State<_FullscreenComposerPage> {
         appBar: AppBar(
           leading: IconButton(
             icon: const AppIcon(Icons.close_fullscreen_rounded),
-            tooltip: 'Back to the chat',
+            tooltip: widget.closeTooltip ?? 'Back to the chat',
             onPressed: _close,
           ),
-          title: const Text('Compose'),
+          title: Text(widget.title),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 12),
@@ -126,7 +151,8 @@ class _FullscreenComposerPageState extends State<_FullscreenComposerPage> {
                   height: 1.4,
                 ),
                 decoration: InputDecoration(
-                  hintText: 'Type your message here...',
+                  hintText:
+                      widget.hintText ?? 'Type your message here...',
                   hintStyle: TextStyle(
                     color: m3.onSurfaceVariant,
                     fontSize: 15,

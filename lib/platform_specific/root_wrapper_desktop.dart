@@ -16,7 +16,8 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
 import 'package:chuk_chat/platform_specific/sidebar_desktop.dart';
 import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
-import 'package:chuk_chat/pages/media_manager_page.dart';
+import 'package:chuk_chat/pages/desktop_media_modal.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -44,7 +45,8 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   bool _hasOpenedSidebar = false;
 
   String? _activeProjectId;
-  String? _activePanel; // 'projects', 'media', or null
+  /// 'workspaces' for the full-page workspace list, or null.
+  String? _activePanel;
   ArtifactDocument? _activeArtifact;
   bool _panelOpen = true;
 
@@ -231,21 +233,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     });
   }
 
-  void _closePanel() {
-    setState(() {
-      _activePanel = null;
-    });
-  }
-
+  // The media library opens as its own floating panel over the app, not as a
+  // third column: a wall of thumbnails in a 320 px slot was never a library,
+  // and it took its width off the chat for as long as it stayed open.
   void _openMediaPage() {
-    // Toggle media panel - don't close sidebar
-    setState(() {
-      if (_activePanel == 'media') {
-        _activePanel = null;
-      } else {
-        _activePanel = 'media';
-      }
-    });
+    unawaited(showDesktopMediaModal(context));
   }
 
   void _handleChatSelected(String? chatId) {
@@ -340,11 +332,14 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     Clipboard.setData(ClipboardData(text: text));AppNotifications.show(context, 'Copied ${messages.length} messages (debug, images redacted)', duration: Duration(seconds: 2));
   }
 
-  // Mini-rail icons. Visible only when sidebar is collapsed. Each row is
-  // kButtonVisualHeight tall and sits flush under the brand area so the
-  // icon centres line up perfectly with the SbRailRow icons inside the
-  // expanded sidebar.
-  List<Widget> _buildMiniRail(Color iconFg, AppLocalizations l) {
+  // Mini-rail icons. Visible only when the sidebar is folded.
+  //
+  // Each one is the SAME tonal tile the matching navigation card carries,
+  // at the SAME position: `sbNavRowTop` gives both the row, and the tile's
+  // left edge is the card's own. Folding the panel therefore takes the card
+  // and the label away and leaves the icon exactly where it was — nothing
+  // the reader is aiming at moves.
+  List<Widget> _buildMiniRail(AppLocalizations l) {
     final List<Widget> items = [];
     int rowIndex = 0;
     Widget railIcon({
@@ -352,27 +347,22 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       required String tooltip,
       required VoidCallback onPressed,
     }) {
-      final double top =
-          kTopInitialSpacing +
-          kMenuButtonHeight +
-          rowIndex * kButtonVisualHeight;
+      final double top = sbNavRowTop(rowIndex) + kSbNavIconTop;
       rowIndex++;
       return Positioned(
         top: top,
-        left: kFixedLeftPadding,
-        child: SizedBox(
-          width: kMenuButtonHeight,
-          height: kButtonVisualHeight,
-          child: IconButton(
-            icon: AppIcon(icon, color: iconFg, size: 24),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.standard,
-            constraints: BoxConstraints.tightFor(
-              width: kMenuButtonHeight,
-              height: kButtonVisualHeight,
+        left: kSbNavIconLeft,
+        child: Tooltip(
+          message: tooltip,
+          child: Material(
+            type: MaterialType.transparency,
+            shape: const CircleBorder(),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: onPressed,
+              child: SbNavIcon(icon: icon, size: kSbNavIconTile),
             ),
-            tooltip: tooltip,
-            onPressed: onPressed,
           ),
         ),
       );
@@ -538,10 +528,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final double panelWidth = availableForPanel >= minPanelWidth
         ? math.min(maxPanelWidth, availableForPanel)
         : 0;
-    // Assistants is full-page, not a side panel
-    final String? effectivePanel = _activePanel == 'workspaces'
-        ? null
-        : (_activePanel ?? (hasArtifact ? 'artifact' : null));
+    // The workspace list is full-page and the media library is a modal, so
+    // the side slot only ever carries an artifact.
+    final String? effectivePanel = hasArtifact ? 'artifact' : null;
     final bool showPanel =
         effectivePanel != null && !isCompactMode && panelWidth > 0;
 
@@ -598,66 +587,15 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
                   ),
                 ),
-                child: effectivePanel == 'artifact'
-                    // Artifacts use ArtifactPanel's own header (with copy/download).
-                    ? ArtifactPanel(
-                        artifact: _activeArtifact!,
-                        showHeader: true,
-                        onClose: _closeArtifactPanel,
-                        onOpenSourceChat: _openSourceChatForArtifact,
-                      )
-                    : Column(
-                        children: [
-                          // Panel header with close button
-                          Container(
-                            height: 56,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              border: Border(
-                                bottom: BorderSide(
-                                  color: iconFg.withValues(alpha: 0.1),
-                                ),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                AppIcon(
-                                  effectivePanel == 'projects'
-                                      ? Icons.folder_open
-                                      : Icons.photo_library_outlined,
-                                  color: iconFg,
-                                ),
-                                const SizedBox(width: 12),
-                                Text(
-                                  effectivePanel == 'projects'
-                                      ? l.workspaces
-                                      : l.media,
-                                  style: TextStyle(
-                                    color: iconFg,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                                const Spacer(),
-                                IconButton(
-                                  icon: AppIcon(Icons.close, color: iconFg),
-                                  onPressed: _closePanel,
-                                  tooltip: 'Close',
-                                ),
-                              ],
-                            ),
-                          ),
-                          // Panel content
-                          Expanded(
-                            child: effectivePanel == 'projects'
-                                ? WorkspacesPage(
-                                    onOpenWorkspace: _openWorkspace,
-                                    embedded: true,
-                                  )
-                                : const MediaManagerPage(embedded: true),
-                          ),
-                        ],
-                      ),
+                // Artifacts are the only side panel left: the media
+                // library and the workspace list each open as their own
+                // screen now, so nothing else competes for this slot.
+                child: ArtifactPanel(
+                  artifact: _activeArtifact!,
+                  showHeader: true,
+                  onClose: _closeArtifactPanel,
+                  onOpenSourceChat: _openSourceChatForArtifact,
+                ),
               ),
             ),
 
@@ -712,10 +650,6 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     onMediaTapped: _openMediaPage,
                     onNewChatTapped: _handleNewChatFromSidebar,
                     onChatDeleted: _handleChatDeleted,
-                    // Same action as the hamburger above it — the
-                    // profile card carries a second, in-panel way to
-                    // fold back to the mini rail.
-                    onCollapseTapped: _toggleSidebar,
                     selectedChatId: ChatStorageService.selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
@@ -735,7 +669,9 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             top:
                 kTopInitialSpacing +
                 (kMenuButtonHeight - kButtonVisualHeight) / 2,
-            left: kFixedLeftPadding,
+            // Centred on the same line as the icons below it, not inset from
+            // the panel edge: its box is wider than theirs.
+            left: kSbNavIconCentre - kMenuButtonHeight / 2,
             child: KeyedSubtree(
               key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
               child: SizedBox(
@@ -760,7 +696,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // the expanded sidebar: brand row is kMenuButtonHeight (48) tall,
           // then nav rows are kButtonVisualHeight (40) tall. Search is NOT
           // in the mini-rail — only New chat, Workspaces, Media.
-          if (!_isSidebarExpanded) ..._buildMiniRail(iconFg, l),
+          if (!_isSidebarExpanded) ..._buildMiniRail(l),
 
           // Copy full chat button (top-right of chat area)
           if (showContent && _activeProjectId == null)

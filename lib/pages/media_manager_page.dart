@@ -1,5 +1,7 @@
 // lib/pages/media_manager_page.dart
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -39,18 +41,26 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   bool _isLoadingArtifacts = true;
   _MediaFilter _filter = _MediaFilter.images;
 
-  // Cache for loaded image thumbnails. `_thumbnailCache` holds decoded bytes
-  // once a download succeeds; `_thumbnailFutures` memoizes the in-flight
-  // download so every rebuild (and the preview/export paths) share ONE future
-  // per path instead of spawning a fresh one each build.
-  final Map<String, Uint8List> _thumbnailCache = {};
-  final Map<String, Future<Uint8List?>> _thumbnailFutures = {};
+  // One notifier per image path, holding that thumbnail's whole state:
+  // loading, the decoded bytes, or the reason it failed. The tile listens to
+  // its own notifier, so a slow image repaints itself instead of the grid,
+  // and a failed one can say why and be retried on its own.
+  final Map<String, ValueNotifier<_ThumbState>> _thumbs = {};
 
   @override
   void initState() {
     super.initState();
     _loadImages();
     _loadArtifacts();
+  }
+
+  @override
+  void dispose() {
+    for (final notifier in _thumbs.values) {
+      notifier.dispose();
+    }
+    _thumbs.clear();
+    super.dispose();
   }
 
   Future<void> _loadArtifacts() async {
@@ -104,33 +114,57 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     }
   }
 
-  Future<Uint8List?> _loadThumbnail(String path) {
-    final cached = _thumbnailCache[path];
-    if (cached != null) {
-      return Future.value(cached);
-    }
-    // Reuse the in-flight download if one already started for this path. This
-    // is the fix for thumbnails that only appeared after scrolling away and
-    // back: previously each rebuild created a new future and a concurrent
-    // rebuild got a future that resolved to null (the old loading guard),
-    // detaching the FutureBuilder from the real download so its completion
-    // never triggered a repaint.
-    return _thumbnailFutures[path] ??= _downloadThumbnail(path);
+  /// The notifier for [path], starting the download the first time it is
+  /// asked for. Never started twice for one path: the notifier itself is the
+  /// record that work is under way.
+  ValueNotifier<_ThumbState> _thumb(String path) {
+    final existing = _thumbs[path];
+    if (existing != null) return existing;
+    final notifier = ValueNotifier<_ThumbState>(const _ThumbState.loading());
+    _thumbs[path] = notifier;
+    unawaited(_downloadThumbnail(path, notifier));
+    return notifier;
   }
 
-  Future<Uint8List?> _downloadThumbnail(String path) async {
+  Future<void> _downloadThumbnail(
+    String path,
+    ValueNotifier<_ThumbState> notifier,
+  ) async {
     try {
       final bytes = await ImageStorageService.downloadAndDecryptImage(path);
-      _thumbnailCache[path] = bytes;
-      return bytes;
-    } catch (e) {
-      return null;
-    } finally {
-      // Drop the completed future so a later refresh / re-add can retry; the
-      // decoded bytes stay in _thumbnailCache so successful loads don't redo
-      // the download.
-      _thumbnailFutures.remove(path);
+      if (_thumbs[path] != notifier) return;
+      notifier.value = _ThumbState.ready(bytes);
+    } catch (error) {
+      if (_thumbs[path] != notifier) return;
+      // Say what went wrong. An image that silently turns into a broken-image
+      // glyph looks like data loss; "the key is not available" or "not found"
+      // tells the reader whether to worry and whether retrying can help.
+      notifier.value = _ThumbState.failed(_thumbErrorLabel(error));
     }
+  }
+
+  /// Retries one failed thumbnail, bypassing the service's own cache.
+  void _retryThumbnail(String path) {
+    final notifier = _thumbs[path];
+    if (notifier == null) return;
+    notifier.value = const _ThumbState.loading();
+    unawaited(_downloadThumbnail(path, notifier));
+  }
+
+  /// A short reason for a failed download, in the reader's terms.
+  static String _thumbErrorLabel(Object error) {
+    final String text = error.toString().toLowerCase();
+    if (text.contains('encryption key')) return 'Locked - key missing';
+    if (text.contains('not found') || text.contains('404')) return 'Not found';
+    if (text.contains('authenticated')) return 'Signed out';
+    if (text.contains('socket') ||
+        text.contains('network') ||
+        text.contains('timeout') ||
+        text.contains('connection')) {
+      return 'No connection';
+    }
+    if (text.contains('decrypt')) return 'Cannot decrypt';
+    return 'Failed to load';
   }
 
   Future<void> _deleteImage(StoredImage image) async {
@@ -247,7 +281,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     try {
       await ImageStorageService.deleteEncryptedImage(image.path);
-      _thumbnailCache.remove(image.path);
+      _thumbs.remove(image.path)?.dispose();
       setState(() {
         _images.removeWhere((i) => i.path == image.path);
         _selectedImages.remove(image.path);
@@ -353,7 +387,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     for (final path in _selectedImages.toList()) {
       try {
         await ImageStorageService.deleteEncryptedImage(path);
-        _thumbnailCache.remove(path);
+        _thumbs.remove(path)?.dispose();
         _images.removeWhere((i) => i.path == path);
         deletedCount++;
       } catch (e) {
@@ -404,8 +438,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
   Future<void> _downloadImage(StoredImage image) async {
     try {
-      final bytes = await _loadThumbnail(image.path);
-      if (bytes == null) throw Exception('Failed to load image');
+      final bytes = await ImageStorageService.downloadAndDecryptImage(
+        image.path,
+      );
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final result = await FileSaveService.save(
         bytes: bytes,
@@ -437,11 +472,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
     for (final path in _selectedImages.toList()) {
       try {
-        final bytes = await _loadThumbnail(path);
-        if (bytes == null) {
-          failedCount++;
-          continue;
-        }
+        final bytes = await ImageStorageService.downloadAndDecryptImage(path);
         final timestamp = DateTime.now().millisecondsSinceEpoch;
         final result = await FileSaveService.save(
           bytes: bytes,
@@ -490,55 +521,12 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     final iconFg = Theme.of(context).resolvedIconColor;
     final isMobile = MediaQuery.of(context).size.width < 800;
 
-    // In embedded mode, show simplified UI without Scaffold
+    // Embedded: the host (the desktop media modal) draws the title and the
+    // close button, so the page adds only its own toolbar and the library.
     if (widget.embedded) {
       return Column(
         children: [
-          // Toolbar for embedded mode
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: Row(
-              children: [
-                if (_isSelectionMode) ...[
-                  Text(
-                    '${_selectedImages.length} selected',
-                    style: TextStyle(
-                      color: iconFg,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (!kIsWeb)
-                    IconButton(
-                      icon: AppIcon(Icons.download, color: iconFg),
-                      onPressed: _downloadSelectedImages,
-                      tooltip: l.downloadSelected,
-                    ),
-                  IconButton(
-                    icon: const AppIcon(Icons.delete, color: Colors.red),
-                    onPressed: _deleteSelectedImages,
-                    tooltip: l.deleteSelected,
-                  ),
-                  IconButton(
-                    icon: AppIcon(Icons.close, color: iconFg),
-                    onPressed: _exitSelectionMode,
-                    tooltip: l.cancel,
-                  ),
-                ] else ...[
-                  Text(
-                    '${_images.length} image${_images.length == 1 ? '' : 's'}',
-                    style: TextStyle(color: iconFg.withValues(alpha: 0.7)),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: AppIcon(Icons.refresh, color: iconFg),
-                    onPressed: _loadImages,
-                    tooltip: l.refresh,
-                  ),
-                ],
-              ],
-            ),
-          ),
+          _buildToolbar(l, iconFg),
           Expanded(child: _buildBody(isMobile, iconFg, l)),
         ],
       );
@@ -587,6 +575,71 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     );
   }
 
+  /// The one row of controls above the library: what is selected and what
+  /// can be done with it, or — with nothing selected — the count and refresh.
+  Widget _buildToolbar(AppLocalizations l, Color iconFg) {
+    final ThemeData theme = Theme.of(context);
+    final m3 = theme.m3;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 12, 4),
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            if (_isSelectionMode) ...[
+              Text(
+                '${_selectedImages.length} selected',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+              const Spacer(),
+              if (!kIsWeb)
+                IconButton(
+                  icon: AppIcon(Icons.download_rounded, color: iconFg),
+                  onPressed: _downloadSelectedImages,
+                  tooltip: l.downloadSelected,
+                ),
+              IconButton(
+                icon: AppIcon(
+                  Icons.delete_outline_rounded,
+                  color: theme.colorScheme.error,
+                ),
+                onPressed: _deleteSelectedImages,
+                tooltip: l.deleteSelected,
+              ),
+              IconButton(
+                icon: AppIcon(Icons.close_rounded, color: iconFg),
+                onPressed: _exitSelectionMode,
+                tooltip: l.cancel,
+              ),
+            ] else ...[
+              Text(
+                _filter == _MediaFilter.images
+                    ? '${_images.length} image${_images.length == 1 ? '' : 's'}'
+                    : '${_artifacts.length} artifact'
+                          '${_artifacts.length == 1 ? '' : 's'}',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: m3.onSurfaceVariant,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                icon: AppIcon(Icons.refresh_rounded, color: iconFg),
+                onPressed: () {
+                  _loadImages();
+                  _loadArtifacts();
+                },
+                tooltip: l.refresh,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody(bool isMobile, Color iconFg, AppLocalizations l) {
     if (_isLoading && _isLoadingArtifacts) {
       return const Center(child: CircularProgressIndicator());
@@ -618,27 +671,15 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Filter chips: Images / Artifacts
+          // One segmented track, the same control the model list uses for
+          // All / Active / Inactive — two shapes for one job is one too many.
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
-              children: [
-                _MediaFilterChip(
-                  label: 'Images',
-                  count: _images.length,
-                  selected: _filter == _MediaFilter.images,
-                  onTap: () =>
-                      setState(() => _filter = _MediaFilter.images),
-                ),
-                const SizedBox(width: 8),
-                _MediaFilterChip(
-                  label: 'Artifacts',
-                  count: _artifacts.length,
-                  selected: _filter == _MediaFilter.artifacts,
-                  onTap: () =>
-                      setState(() => _filter = _MediaFilter.artifacts),
-                ),
-              ],
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+            child: _MediaFilterBar(
+              value: _filter,
+              imageCount: _images.length,
+              artifactCount: _artifacts.length,
+              onChanged: (next) => setState(() => _filter = next),
             ),
           ),
           Expanded(
@@ -747,11 +788,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
   Widget _buildDesktopGrid(Color iconFg) {
     return GridView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-        maxCrossAxisExtent: 200,
-        mainAxisSpacing: 12,
-        crossAxisSpacing: 12,
+        maxCrossAxisExtent: 220,
+        mainAxisSpacing: 14,
+        crossAxisSpacing: 14,
         childAspectRatio: 1,
       ),
       itemCount: _images.length,
@@ -761,11 +802,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 
   Widget _buildMobileList(Color iconFg) {
     return GridView.builder(
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        mainAxisSpacing: 4,
-        crossAxisSpacing: 4,
+        mainAxisSpacing: 6,
+        crossAxisSpacing: 6,
         childAspectRatio: 1,
       ),
       itemCount: _images.length,
@@ -779,10 +820,14 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     Color iconFg, {
     bool compact = false,
   }) {
-    final isSelected = _selectedImages.contains(image.path);
-    final accentColor = Theme.of(context).colorScheme.primary;
-
-    return GestureDetector(
+    return _ImageTile(
+      image: image,
+      thumb: _thumb(image.path),
+      selected: _selectedImages.contains(image.path),
+      selectionMode: _isSelectionMode,
+      compact: compact,
+      dateLine: image.createdAt == null ? null : _formatDate(image.createdAt),
+      sizeLine: image.size == null ? null : _formatFileSize(image.size),
       onTap: () {
         if (_isSelectionMode) {
           _toggleSelection(image.path);
@@ -791,173 +836,11 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
         }
       },
       onLongPress: () {
-        if (!_isSelectionMode) {
-          _enterSelectionMode(image.path);
-        }
+        if (!_isSelectionMode) _enterSelectionMode(image.path);
       },
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Image thumbnail
-          Card(
-            clipBehavior: Clip.antiAlias,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: isSelected
-                  ? BorderSide(color: accentColor, width: 3)
-                  : BorderSide.none,
-            ),
-            child: FutureBuilder<Uint8List?>(
-              future: _loadThumbnail(image.path),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting &&
-                    !_thumbnailCache.containsKey(image.path)) {
-                  return Container(
-                    color: iconFg.withValues(alpha: 0.1),
-                    child: const Center(
-                      child: SizedBox(
-                        width: 24,
-                        height: 24,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  );
-                }
-
-                final bytes = _thumbnailCache[image.path];
-                if (bytes == null) {
-                  return Container(
-                    color: iconFg.withValues(alpha: 0.1),
-                    child: AppIcon(
-                      Icons.broken_image,
-                      color: iconFg.withValues(alpha: 0.3),
-                    ),
-                  );
-                }
-
-                return Image.memory(
-                  bytes,
-                  fit: BoxFit.cover,
-                  cacheWidth: 400, // 200px grid cell × 2 for retina
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: iconFg.withValues(alpha: 0.1),
-                    child: AppIcon(
-                      Icons.broken_image,
-                      color: iconFg.withValues(alpha: 0.3),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-
-          // Selection checkbox
-          if (_isSelectionMode)
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isSelected ? accentColor : Colors.black54,
-                  shape: BoxShape.circle,
-                ),
-                child: AppIcon(
-                  isSelected ? Icons.check_circle : Icons.circle_outlined,
-                  color: Colors.white,
-                  size: 24,
-                ),
-              ),
-            ),
-
-          // Action buttons (non-selection mode, desktop only)
-          if (!_isSelectionMode && !compact)
-            Positioned(
-              top: 4,
-              right: 4,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (!kIsWeb)
-                    IconButton(
-                      icon: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const AppIcon(
-                          Icons.download,
-                          color: Colors.white,
-                          size: 18,
-                        ),
-                      ),
-                      onPressed: () => _downloadImage(image),
-                      tooltip: AppLocalizations.of(context)!.download,
-                    ),
-                  IconButton(
-                    icon: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const AppIcon(
-                        Icons.delete,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                    onPressed: () => _deleteImage(image),
-                    tooltip: AppLocalizations.of(context)!.delete,
-                  ),
-                ],
-              ),
-            ),
-
-          // Info overlay (desktop only)
-          if (!compact)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter,
-                    end: Alignment.topCenter,
-                    colors: [
-                      Colors.black.withValues(alpha: 0.7),
-                      Colors.transparent,
-                    ],
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (image.createdAt != null)
-                      Text(
-                        _formatDate(image.createdAt),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                    if (image.size != null)
-                      Text(
-                        _formatFileSize(image.size),
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 11,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
+      onRetry: () => _retryThumbnail(image.path),
+      onDownload: kIsWeb ? null : () => _downloadImage(image),
+      onDelete: () => _deleteImage(image),
     );
   }
 
@@ -982,58 +865,410 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   }
 }
 
-class _MediaFilterChip extends StatelessWidget {
-  final String label;
-  final int count;
-  final bool selected;
-  final VoidCallback onTap;
+/// What one thumbnail knows about itself.
+class _ThumbState {
+  const _ThumbState.loading() : bytes = null, error = null;
+  const _ThumbState.ready(Uint8List this.bytes) : error = null;
+  const _ThumbState.failed(String this.error) : bytes = null;
 
-  const _MediaFilterChip({
-    required this.label,
-    required this.count,
+  final Uint8List? bytes;
+
+  /// A short reason, in the reader's terms, or null while it is fine.
+  final String? error;
+
+  bool get isLoading => bytes == null && error == null;
+}
+
+/// One image in the grid: the picture, what it costs to keep, and — on hover
+/// — the two actions that apply to it.
+///
+/// The actions live under the pointer rather than permanently on top of the
+/// picture: a grid of thumbnails each wearing two black buttons reads as a
+/// toolbar, not as a photo library.
+class _ImageTile extends StatefulWidget {
+  const _ImageTile({
+    required this.image,
+    required this.thumb,
     required this.selected,
+    required this.selectionMode,
+    required this.compact,
     required this.onTap,
+    required this.onLongPress,
+    required this.onRetry,
+    required this.onDelete,
+    this.onDownload,
+    this.dateLine,
+    this.sizeLine,
   });
+
+  final StoredImage image;
+  final ValueNotifier<_ThumbState> thumb;
+  final bool selected;
+  final bool selectionMode;
+
+  /// The phone grid: three across, no room for anything but the picture.
+  final bool compact;
+
+  final VoidCallback onTap;
+  final VoidCallback onLongPress;
+  final VoidCallback onRetry;
+  final VoidCallback onDelete;
+
+  /// Null on the web, which cannot save a file to disk.
+  final VoidCallback? onDownload;
+
+  final String? dateLine;
+  final String? sizeLine;
+
+  @override
+  State<_ImageTile> createState() => _ImageTileState();
+}
+
+class _ImageTileState extends State<_ImageTile> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final m3 = theme.m3;
+    final Color accent = theme.colorScheme.primary;
+    final double radius = widget.compact ? 14 : 18;
+    final bool showChrome =
+        !widget.compact && (_hovered || widget.selectionMode);
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        onLongPress: widget.onLongPress,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 140),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: m3.surfaceContainerHigh,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(
+              color: widget.selected ? accent : Colors.transparent,
+              width: 2,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              ValueListenableBuilder<_ThumbState>(
+                valueListenable: widget.thumb,
+                builder: (context, state, _) => _buildPicture(state),
+              ),
+
+              // A tile under the pointer lifts its picture out of the
+              // background a touch, so the grid answers the mouse.
+              if (_hovered && !widget.selectionMode)
+                IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.12),
+                    ),
+                  ),
+                ),
+
+              if (widget.selectionMode)
+                Positioned(
+                  top: 8,
+                  left: 8,
+                  child: _Glass(
+                    circle: true,
+                    child: AppIcon(
+                      widget.selected
+                          ? Icons.check_circle_rounded
+                          : Icons.circle_outlined,
+                      color: widget.selected ? accent : Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+
+              if (showChrome && !widget.selectionMode)
+                Positioned(
+                  top: 6,
+                  right: 6,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (widget.onDownload != null)
+                        _TileAction(
+                          icon: Icons.download_rounded,
+                          tooltip: AppLocalizations.of(context)!.download,
+                          onTap: widget.onDownload!,
+                        ),
+                      const SizedBox(width: 6),
+                      _TileAction(
+                        icon: Icons.delete_outline_rounded,
+                        tooltip: AppLocalizations.of(context)!.delete,
+                        tone: theme.colorScheme.error,
+                        onTap: widget.onDelete,
+                      ),
+                    ],
+                  ),
+                ),
+
+              // The two numbers only while the pointer is on the tile: a
+              // permanent gradient band across every picture is the thing
+              // that made the grid look busy.
+              if (showChrome && (widget.dateLine != null ||
+                  widget.sizeLine != null))
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.fromLTRB(10, 14, 10, 8),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.bottomCenter,
+                        end: Alignment.topCenter,
+                        colors: [
+                          Colors.black.withValues(alpha: 0.66),
+                          Colors.transparent,
+                        ],
+                      ),
+                    ),
+                    child: Text(
+                      [
+                        if (widget.dateLine != null) widget.dateLine!,
+                        if (widget.sizeLine != null) widget.sizeLine!,
+                      ].join(' · '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPicture(_ThumbState state) {
+    if (state.isLoading) {
+      return const Center(
+        child: SizedBox(
+          width: 22,
+          height: 22,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    final Uint8List? bytes = state.bytes;
+    if (bytes == null) {
+      return _ThumbError(
+        label: state.error ?? 'Failed to load',
+        compact: widget.compact,
+        onRetry: widget.onRetry,
+      );
+    }
+
+    return Image.memory(
+      bytes,
+      fit: BoxFit.cover,
+      // Decode to the cell, not to the file: a 4K generation decoded at full
+      // size for a 200 px tile is what made a grid of them stutter.
+      cacheWidth: widget.compact ? 280 : 420,
+      filterQuality: FilterQuality.medium,
+      errorBuilder: (context, error, stackTrace) => _ThumbError(
+        label: 'Broken file',
+        compact: widget.compact,
+        onRetry: widget.onRetry,
+      ),
+    );
+  }
+}
+
+/// What a tile shows instead of a picture, with the reason and a way back.
+class _ThumbError extends StatelessWidget {
+  const _ThumbError({
+    required this.label,
+    required this.compact,
+    required this.onRetry,
+  });
+
+  final String label;
+  final bool compact;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final bg = selected ? cs.primaryContainer : m3.surfaceContainerHigh;
-    final fg = selected ? cs.onPrimaryContainer : m3.onSurfaceVariant;
-    return Material(
-      color: bg,
-      borderRadius: BorderRadius.circular(999),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
+    final Color muted = theme.m3.onSurfaceVariant;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AppIcon(Icons.image_not_supported_outlined, size: 22, color: muted),
+            if (!compact) ...[
+              const SizedBox(height: 6),
               Text(
                 label,
-                style: theme.textTheme.labelMedium?.copyWith(
-                  color: fg,
-                  fontWeight: FontWeight.w600,
-                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(color: muted),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: fg.withValues(alpha: 0.18),
-                  borderRadius: BorderRadius.circular(999),
+              const SizedBox(height: 2),
+              TextButton(
+                onPressed: onRetry,
+                style: TextButton.styleFrom(
+                  visualDensity: VisualDensity.compact,
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
                 ),
-                child: Text(
-                  '$count',
-                  style: theme.textTheme.labelSmall?.copyWith(color: fg),
-                ),
+                child: Text(AppLocalizations.of(context)!.retry),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A dark round pad behind a glyph drawn on top of a picture.
+class _Glass extends StatelessWidget {
+  const _Glass({required this.child, this.circle = false});
+
+  final Widget child;
+  final bool circle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.45),
+        shape: circle ? BoxShape.circle : BoxShape.rectangle,
+        borderRadius: circle ? null : BorderRadius.circular(12),
+      ),
+      child: child,
+    );
+  }
+}
+
+/// One hover action on a tile.
+class _TileAction extends StatelessWidget {
+  const _TileAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.tone,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+
+  /// Null keeps the plain white glyph; a colour marks the destructive one.
+  final Color? tone;
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.black.withValues(alpha: 0.5),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 30,
+            height: 30,
+            child: AppIcon(icon, size: 17, color: tone ?? Colors.white),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Images / Artifacts, as one segmented track with the count in the label.
+class _MediaFilterBar extends StatelessWidget {
+  const _MediaFilterBar({
+    required this.value,
+    required this.imageCount,
+    required this.artifactCount,
+    required this.onChanged,
+  });
+
+  final _MediaFilter value;
+  final int imageCount;
+  final int artifactCount;
+  final ValueChanged<_MediaFilter> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final m3 = Theme.of(context).m3;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: m3.surfaceContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: _segment(context, _MediaFilter.images, 'Images', imageCount),
+          ),
+          Expanded(
+            child: _segment(
+              context,
+              _MediaFilter.artifacts,
+              'Artifacts',
+              artifactCount,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _segment(
+    BuildContext context,
+    _MediaFilter filter,
+    String label,
+    int count,
+  ) {
+    final theme = Theme.of(context);
+    final m3 = theme.m3;
+    final bool selected = filter == value;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(filter),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutCubic,
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? theme.colorScheme.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          count == 0 ? label : '$label  $count',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.labelLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: selected ? theme.colorScheme.onPrimary : m3.onSurfaceVariant,
           ),
         ),
       ),

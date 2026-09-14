@@ -13,6 +13,8 @@
 // language instead of English.
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/constants.dart';
+
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
@@ -46,8 +48,54 @@ const double kSbCardRadius = 20.0;
 /// joints tighten, not because a frame is drawn around them.
 const double kSbCardJointRadius = 6.0;
 
-/// Height of a navigation card.
-const double kSbNavCardHeight = 46.0;
+/// Height of a navigation card. Short enough that the block reads as one
+/// run of rows rather than as three separate buttons.
+const double kSbNavCardHeight = 42.0;
+
+/// One row of the navigation block, card plus the gap under it. The rhythm
+/// the whole left edge is measured in.
+const double kSbNavRowStep = kSbNavCardHeight + kSbCardGap;
+
+/// The hamburger's centre line. It is the row above the block — folded, it is
+/// the first thing in the same column of icons — so the block is spaced off
+/// it rather than off the bottom of the head bar.
+const double _kSbMenuCentre = kTopInitialSpacing + kMenuButtonHeight / 2;
+
+/// Where the first navigation card starts.
+///
+/// Placed so that its icon's centre is exactly one row below the hamburger's:
+/// folded, the menu glyph and the icons under it sit on one evenly spaced
+/// column, with the same gap between every pair.
+const double kSbNavBlockTop =
+    _kSbMenuCentre + kSbNavRowStep - kSbNavCardHeight / 2;
+
+/// Top of row [index] of the navigation block — the cards when the panel is
+/// open, the rail icons when it is folded.
+///
+/// Both read the same figure, so the icon a reader is aiming at does not move
+/// by a pixel when the panel folds: the label and the card fade, the icon
+/// stays put.
+double sbNavRowTop(int index) => kSbNavBlockTop + index * kSbNavRowStep;
+
+/// Left edge of the icon inside a navigation card: the block's inset, then
+/// the card's own padding. The card's ring is painted in front of its
+/// content now, so it takes no room and must not be counted here — the 1.5 px
+/// it used to add is exactly how far the icon jumped when the panel folded.
+const double kSbNavIconLeft = kSbBlockInset + 8;
+
+/// Side of the tonal square an icon sits in, in a card and in the rail.
+const double kSbNavIconTile = 30.0;
+
+/// Top of the icon tile within its row.
+const double kSbNavIconTop = (kSbNavCardHeight - kSbNavIconTile) / 2;
+
+/// The vertical line every icon on the left edge stands on: the card icons,
+/// the rail icons, and the hamburger above them.
+///
+/// The hamburger sits in a box of its own size, so it has to be placed from
+/// this centre rather than from the panel's edge — measured from the edge the
+/// two land a pixel apart, which is visible in a column of three.
+const double kSbNavIconCentre = kSbNavIconLeft + kSbNavIconTile / 2;
 
 class SidebarTokens {
   final Color iconFg;
@@ -153,6 +201,10 @@ class _SbCardState extends State<SbCard> {
             ? m3.surfaceContainerHigh
             : m3.surfaceContainer);
 
+    final BorderRadius shape = widget.radius != null
+        ? BorderRadius.circular(widget.radius!)
+        : SbCardShape.of(context) ?? BorderRadius.circular(kSbCardRadius);
+
     Widget card = AnimatedScale(
       scale: _pressed ? 0.985 : 1,
       duration: const Duration(milliseconds: 130),
@@ -163,24 +215,23 @@ class _SbCardState extends State<SbCard> {
         constraints: widget.minHeight == null
             ? null
             : BoxConstraints(minHeight: widget.minHeight!),
-        decoration: BoxDecoration(
-          color: fill,
-          borderRadius: widget.radius != null
-              ? BorderRadius.circular(widget.radius!)
-              : SbCardShape.of(context) ??
-                  BorderRadius.circular(kSbCardRadius),
-          // The border is always reserved, transparent unless the card asks
-          // for it, so a state change only alters colour and never size.
-          // A selected chat is the accent fill alone — a ring around it as
-          // well made the row read as a control instead of as the chat the
-          // user is in.
-          border: Border.all(
-            color: widget.outlined
-                ? accent.withValues(alpha: 0.55)
-                : Colors.transparent,
-            width: 1.5,
-          ),
-        ),
+        decoration: BoxDecoration(color: fill, borderRadius: shape),
+        // The ring goes in front of the content, not behind it: a border in
+        // the background decoration is painted under the clip, which eats
+        // half its width on the tight corners of a block joint and leaves
+        // the stroke looking uneven from corner to corner.
+        // A selected chat is the accent fill alone — a ring around it as
+        // well made the row read as a control instead of as the chat the
+        // user is in.
+        foregroundDecoration: widget.outlined
+            ? BoxDecoration(
+                borderRadius: shape,
+                border: Border.all(
+                  color: accent.withValues(alpha: 0.55),
+                  width: 1.5,
+                ),
+              )
+            : null,
         clipBehavior: Clip.antiAlias,
         child: Material(
           type: MaterialType.transparency,
@@ -255,10 +306,15 @@ class SbBlock extends StatelessWidget {
     super.key,
     required this.children,
     this.inset = kSbBlockInset,
+    this.joinTop = false,
   });
 
   final List<Widget> children;
   final double inset;
+
+  /// The block continues the card above it — the sidebar's head bar — so its
+  /// first card tightens its top corners instead of rounding them.
+  final bool joinTop;
 
   @override
   Widget build(BuildContext context) {
@@ -267,7 +323,11 @@ class SbBlock extends StatelessWidget {
       if (i > 0) rows.add(const SizedBox(height: kSbCardGap));
       rows.add(
         SbCardShape(
-          radius: sbBlockRadiusFor(index: i, length: children.length),
+          radius: sbBlockRadiusFor(
+            index: i,
+            length: children.length,
+            joinTop: joinTop,
+          ),
           child: children[i],
         ),
       );
@@ -284,10 +344,24 @@ class SbBlock extends StatelessWidget {
 
 /// The corners of the card at [index] in a block of [length] cards: outward
 /// corners stay round, the joints between neighbours tighten.
-BorderRadius sbBlockRadiusFor({required int index, required int length}) {
-  if (length <= 1) return BorderRadius.circular(kSbCardRadius);
+BorderRadius sbBlockRadiusFor({
+  required int index,
+  required int length,
+  bool joinTop = false,
+}) {
   const outer = Radius.circular(kSbCardRadius);
   const joint = Radius.circular(kSbCardJointRadius);
+  // The block continues something above it, so its first card meets that
+  // the way two cards of one block meet: tight corners, not round ones.
+  if (joinTop && index == 0) {
+    return BorderRadius.only(
+      topLeft: joint,
+      topRight: joint,
+      bottomLeft: length <= 1 ? outer : joint,
+      bottomRight: length <= 1 ? outer : joint,
+    );
+  }
+  if (length <= 1) return BorderRadius.circular(kSbCardRadius);
   if (index == 0) {
     return const BorderRadius.only(
       topLeft: outer,
@@ -324,46 +398,41 @@ class SbCardShape extends InheritedWidget {
   bool updateShouldNotify(SbCardShape old) => radius != old.radius;
 }
 
-/// The rounded square an icon sits in, matching `ExpressiveIconTile` but
-/// sized for the narrower sidebar.
-class SbIconTile extends StatelessWidget {
-  const SbIconTile({
+/// The glyph of a navigation entry: the bare icon in the accent colour, in a
+/// box of [kSbNavIconTile] so the card and the folded rail place it
+/// identically.
+///
+/// No plate behind it. A filled square around every icon turned a short list
+/// of destinations into a row of buttons; the colour alone marks them.
+class SbNavIcon extends StatelessWidget {
+  const SbNavIcon({
     super.key,
     required this.icon,
     this.tone,
-    this.size = 30,
+    this.size = kSbNavIconTile,
   });
 
   final IconData icon;
+
+  /// Null takes the theme's accent.
   final Color? tone;
+
+  /// Side of the box the glyph is centred in.
   final double size;
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final Color background = tone ?? cs.primaryContainer;
-    return Container(
+    final Color color = tone ?? Theme.of(context).colorScheme.primary;
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(size * 0.38),
-      ),
-      child: AppIcon(
-        icon,
-        size: size * 0.52,
-        color: tone == null
-            ? cs.onPrimaryContainer
-            : ThemeData.estimateBrightnessForColor(background) ==
-                    Brightness.dark
-                ? Colors.white
-                : Colors.black,
-      ),
+      child: Center(child: AppIcon(icon, size: size * 0.8, color: color)),
     );
   }
 }
 
-/// One navigation entry: a full-width card with a tonal icon and a bold label.
+/// One navigation entry: a full-width card with a coloured icon and a bold
+/// label.
 class SbNavCard extends StatelessWidget {
   const SbNavCard({
     super.key,
@@ -389,7 +458,7 @@ class SbNavCard extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
       child: Row(
         children: [
-          SbIconTile(icon: icon, tone: tone),
+          SbNavIcon(icon: icon, tone: tone),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -409,120 +478,8 @@ class SbNavCard extends StatelessWidget {
   }
 }
 
-/// The account card at the top: avatar, name, and the balance under it, with
-/// a round action on the right that folds the sidebar away.
-class SbProfileCard extends StatelessWidget {
-  const SbProfileCard({
-    super.key,
-    required this.name,
-    this.subtitle,
-    this.onTap,
-    this.onCollapse,
-    this.collapseTooltip,
-  });
-
-  final String name;
-
-  /// The quiet second line — the plan or the remaining balance.
-  final Widget? subtitle;
-  final VoidCallback? onTap;
-
-  /// Null hides the round button entirely, for a host that has no way to
-  /// collapse the panel.
-  final VoidCallback? onCollapse;
-
-  /// Null takes the localized default.
-  final String? collapseTooltip;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SbCard(
-      onTap: onTap,
-      padding: const EdgeInsets.fromLTRB(10, 9, 9, 9),
-      child: Row(
-        children: [
-          SbAvatar(name: name),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
-                  ),
-                ),
-                if (subtitle != null) ...[
-                  const SizedBox(height: 1),
-                  DefaultTextStyle.merge(
-                    style: theme.textTheme.bodySmall!.copyWith(
-                      color: theme.m3.onSurfaceVariant,
-                    ),
-                    child: subtitle!,
-                  ),
-                ],
-              ],
-            ),
-          ),
-          if (onCollapse != null) ...[
-            const SizedBox(width: 6),
-            SbRoundAction(
-              icon: Icons.keyboard_double_arrow_left_rounded,
-              tooltip: collapseTooltip ??
-                  AppLocalizations.of(context)?.hideSidebar ??
-                  'Hide sidebar',
-              onTap: onCollapse!,
-              diameter: 36,
-              iconSize: 20,
-              fill: theme.m3.surfaceContainerHighest,
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-/// Round avatar carrying the first letter of the display name.
-class SbAvatar extends StatelessWidget {
-  const SbAvatar({super.key, required this.name, this.diameter = 40});
-
-  final String name;
-  final double diameter;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final String trimmed = name.trim();
-    final String initial =
-        trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
-    return Container(
-      width: diameter,
-      height: diameter,
-      alignment: Alignment.center,
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primaryContainer,
-        shape: BoxShape.circle,
-      ),
-      child: Text(
-        initial,
-        style: theme.textTheme.titleMedium?.copyWith(
-          fontWeight: FontWeight.w800,
-          color: theme.colorScheme.onPrimaryContainer,
-        ),
-      ),
-    );
-  }
-}
-
-/// A round icon button on the card fill — the shape the bottom bar and the
-/// profile card use for their actions.
+/// A round icon button on the card fill — the shape the head bar and the
+/// account line use for their actions.
 class SbRoundAction extends StatelessWidget {
   const SbRoundAction({
     super.key,
@@ -741,6 +698,9 @@ class _SbSearchFieldState extends State<SbSearchField> {
         focusNode: widget.focusNode,
         style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14),
         cursorColor: theme.colorScheme.primary,
+        // Centred in the pill rather than padded down from the top — the
+        // padded version sits high whenever the pill is taller than the line.
+        textAlignVertical: TextAlignVertical.center,
         decoration: InputDecoration(
           hintText: widget.hintText ??
               AppLocalizations.of(context)?.searchChatsHint ??
@@ -749,8 +709,12 @@ class _SbSearchFieldState extends State<SbSearchField> {
           prefixIcon: AppIcon(Icons.search_rounded, size: 19, color: muted),
           prefixIconConstraints:
               const BoxConstraints(minWidth: 40, minHeight: 44),
+          // The app theme fills every field and rounds it to kRadiusField.
+          // Left on, that fill is painted OVER the pill below it, which
+          // is why the bar kept looking square however round the box was.
+          filled: false,
           isDense: true,
-          contentPadding: const EdgeInsets.symmetric(vertical: 13),
+          contentPadding: EdgeInsets.zero,
           // Every state, not just the resting one: `border` alone leaves the
           // theme's focused outline in place, and the field then grows a
           // coloured ring the cards around it do not have.
@@ -775,66 +739,6 @@ class _SbSearchFieldState extends State<SbSearchField> {
           suffixIconConstraints:
               const BoxConstraints(minWidth: 32, minHeight: 32),
         ),
-      ),
-    );
-  }
-}
-
-/// The bar at the foot of the sidebar: the search pill, then the two round
-/// actions.
-class SbBottomBar extends StatelessWidget {
-  const SbBottomBar({
-    super.key,
-    required this.leading,
-    required this.onSettings,
-    this.onNewChat,
-    this.settingsTooltip,
-    this.newChatTooltip,
-    this.padding =
-        const EdgeInsets.fromLTRB(kSbBlockInset, 6, kSbBlockInset, 10),
-  });
-
-  /// Whatever the platform puts on the left of the bar — the account row on a
-  /// phone, the search field on the desktop.
-  final Widget leading;
-  final VoidCallback onSettings;
-
-  /// Null leaves the new-chat button out, for a layout that has one elsewhere.
-  final VoidCallback? onNewChat;
-
-  /// Null on either takes the localized default.
-  final String? settingsTooltip;
-  final String? newChatTooltip;
-  final EdgeInsets padding;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: padding,
-      child: Row(
-        children: [
-          Expanded(child: leading),
-          const SizedBox(width: 6),
-          SbRoundAction(
-            icon: Icons.settings_rounded,
-            tooltip: settingsTooltip ??
-                AppLocalizations.of(context)?.settings ??
-                'Settings',
-            onTap: onSettings,
-          ),
-          if (onNewChat != null) ...[
-            const SizedBox(width: 6),
-            SbRoundAction(
-              icon: Icons.edit_square,
-              tooltip: newChatTooltip ??
-                  AppLocalizations.of(context)?.newChat ??
-                  'New chat',
-              onTap: onNewChat!,
-              fill: theme.colorScheme.primary,
-            ),
-          ],
-        ],
       ),
     );
   }
@@ -1231,14 +1135,19 @@ class SbOfflineNotice extends StatelessWidget {
 /// the app name. Anything that draws an edge — a border, a shadow, a fill
 /// of a different colour — turns it back into a box.
 class SbFloatingBar extends StatelessWidget {
-  const SbFloatingBar({super.key, required this.child});
+  const SbFloatingBar({super.key, required this.child, this.borderRadius});
 
   final Widget child;
+
+  /// Per-corner shape. A bar that the block below it joins tightens the
+  /// corners on that side, the way two cards of one block do.
+  final BorderRadius? borderRadius;
 
   @override
   Widget build(BuildContext context) {
     return FloatingChromeSurface(
       radius: kSbCardRadius,
+      borderRadius: borderRadius,
       baseColor: Theme.of(context).scaffoldBackgroundColor,
       child: Material(type: MaterialType.transparency, child: child),
     );

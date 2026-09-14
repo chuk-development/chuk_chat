@@ -3,6 +3,7 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureArtifactHosting,
+        kFeatureSandboxes,
         kFeatureServerTools,
         kPlatformDesktop,
         kPlatformMobile;
@@ -17,6 +18,18 @@ const Set<String> _serverBackedToolNames = {
   // Sandbox tools — proxy through the api_server to the chuk-chat-sandbox
   // upstream. Gating them with kFeatureServerTools keeps offline /
   // server-free builds from advertising tools they cannot fulfil.
+  'code_run',
+  'sandbox_list',
+  'sandbox_read',
+  'sandbox_write',
+  'sandbox_reset',
+  'send_file_to_user',
+};
+
+/// The tools the remote code sandbox serves. Gated behind [kFeatureSandboxes].
+/// `bash` is not here: on the desktop it runs locally and works without the
+/// sandbox service.
+const Set<String> _sandboxToolNames = {
   'code_run',
   'sandbox_list',
   'sandbox_read',
@@ -100,7 +113,7 @@ const Map<String, String> discoveryCatalog = {
     'Productivity / Produktivität':
         'Gmail, Slack, GitHub, Google Calendar / '
         'Gmail, Slack, GitHub, Google Kalender',
-  if (kFeatureServerTools)
+  if (kFeatureServerTools && kFeatureSandboxes)
     'Sandbox / Code':
         'Run Python or bash code in an isolated sandbox, read/write files in /home/sandbox / '
         'Python- oder Shell-Code in einer isolierten Sandbox ausführen, Dateien in /home/sandbox lesen/schreiben',
@@ -2009,6 +2022,11 @@ void registerBuiltinTools(ToolExecutor executor) {
 
   for (final tool in builtinTools) {
     if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
+      continue;
+    }
+    // The sandbox is off: a registered tool is an offered tool, and the model
+    // will spend a round calling one that cannot work.
+    if (!kFeatureSandboxes && _sandboxToolNames.contains(tool.name)) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {

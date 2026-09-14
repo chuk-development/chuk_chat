@@ -30,6 +30,7 @@ import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
+import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubbleAction;
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
@@ -1536,82 +1537,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
-  Widget _buildAudioVisualizer({required Color accent, required Color iconFg}) {
-    final levels = _audioHandler.audioLevels;
-    // Match bar count to buffer so newest sample lands at the right edge and
-    // the bars fill the row edge-to-edge instead of clustering in the middle.
-    final int barCount = levels.length;
 
-    return SizedBox(
-      key: const ValueKey<String>('audio-visualizer'),
-      height: 32,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: List.generate(barCount, (index) {
-          // Newest sample at right edge: index N-1 maps to last level.
-          final int levelIndex = index;
-          final double rawLevel = levels[levelIndex];
-
-          // sqrt scaling — boosts quiet speech for visible response.
-          final double boosted = rawLevel < 0.01 ? 0.0 : math.sqrt(rawLevel);
-
-          // Bar height: 3px idle → 28px loud.
-          final double barHeight = (boosted * 25 + 3).clamp(3.0, 28.0);
-          final double opacity = (0.55 + boosted * 0.45).clamp(0.55, 1.0);
-
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 1.2),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 80),
-                curve: Curves.easeOutCubic,
-                height: barHeight,
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      Colors.red.withValues(alpha: opacity),
-                      Colors.redAccent.shade200.withValues(
-                        alpha: opacity * 0.7,
-                      ),
-                    ],
-                  ),
-                  borderRadius: BorderRadius.circular(3),
-                  boxShadow: boosted > 0.3
-                      ? [
-                          BoxShadow(
-                            color: Colors.red.withValues(alpha: 0.45),
-                            blurRadius: 5,
-                            spreadRadius: 0.6,
-                          ),
-                        ]
-                      : null,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-
-  Widget _buildRecordingPill({required Color iconFg}) {
-    return SizedBox(
-      key: const ValueKey<String>('recording-pill'),
-      height: 36,
-      child: Row(
-        children: [
-          const SizedBox(width: 4),
-          const _DesktopRecordingDot(),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _buildAudioVisualizer(accent: Colors.red, iconFg: iconFg),
-          ),
-        ],
-      ),
-    );
-  }
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
 
@@ -2067,8 +1993,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // NEW: Extracted Attachment Bar Widget
   Widget _buildSearchBar({required bool isCompactMode}) {
     const btnH = 36.0, btnW = 44.0;
-    const containerRadius = 23.0;
-    const buttonRadius = 18.0;
+    // Rounder than it was (23): the composer is the one box the reader looks
+    // at all day, and the phone's is 26. The send button follows it up so the
+    // two corners still belong to each other.
+    const containerRadius = 30.0;
+    const buttonRadius = 20.0;
     final Color bg = Theme.of(context).scaffoldBackgroundColor;
     final Color accent = Theme.of(context).colorScheme.primary;
     final Color iconFg = Theme.of(context).resolvedIconColor;
@@ -2181,10 +2110,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                     ],
                   ),
                 ),
-              // Text field with right padding to avoid send button overlap
+              // Text field with right padding to avoid send button overlap.
+              // While the microphone is open the live waveform is drawn over
+              // it, the phone's arrangement: the field keeps its slot, so the
+              // composer is exactly as tall recording as at rest.
               Padding(
                 padding: EdgeInsets.only(right: btnW + 8),
-                child: ConstrainedBox(
+                child: ComposerInputRow(
+                  isRecording: _audioHandler.isMicActive,
+                  audioLevels: _audioHandler.audioLevels,
+                  accentColor: Colors.red,
+                  timeColor: iconFg.withValues(alpha: 0.7),
+                  child: ConstrainedBox(
                   // Raised so the composer grows to a comfortable ~10 lines
                   // before it starts scrolling, and the internal scrollbar is
                   // hidden (scrollbars: false) since it reads as clutter.
@@ -2246,6 +2183,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       ),
                     ),
                   ),
+                  ),
                 ),
               ),
               // Extra breathing room between text field and toolbar when attachments push content down
@@ -2258,7 +2196,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
                       child: _audioHandler.isMicActive
-                          ? _buildRecordingPill(iconFg: iconFg)
+                          ? const SizedBox.shrink(
+                              key: ValueKey<String>('recording-controls'),
+                            )
                           : Row(
                               key: const ValueKey<String>(
                                 'default-mic-controls',
@@ -2406,11 +2346,21 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         sendOrSubmitEdit();
                       }
                     },
-              child: Container(
+              child: Builder(
+                builder: (context) {
+                  final Color fill = (_isStreaming || _isSending)
+                      ? Colors.red
+                      : accent;
+                  // The same decision the phone's send button makes, from the
+                  // same place, so the two cannot end up different colours.
+                  final Color on = Theme.of(
+                    context,
+                  ).accentButtonForeground(fill);
+                  return Container(
                 width: btnW,
                 height: btnH,
                 decoration: BoxDecoration(
-                  color: (_isStreaming || _isSending) ? Colors.red : accent,
+                  color: fill,
                   borderRadius: BorderRadius.circular(buttonRadius),
                 ),
                 child: _audioHandler.isTranscribingAudio
@@ -2420,30 +2370,24 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                           height: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              Colors.black,
-                            ),
-                            backgroundColor: Colors.black.withValues(
-                              alpha: 0.2,
-                            ),
+                            valueColor: AlwaysStoppedAnimation<Color>(on),
+                            backgroundColor: on.withValues(alpha: 0.2),
                           ),
                         ),
                       )
                     : (_isStreaming || _isSending)
-                    ? const AppIcon(
-                        Icons.stop_rounded,
-                        color: Colors.black,
-                        size: 22,
-                      )
+                    ? AppIcon(Icons.stop_rounded, color: on, size: 22)
                     : Transform(
                         transform: Matrix4.diagonal3Values(1, 0.95, 1),
                         alignment: Alignment.center,
-                        child: const AppIcon(
+                        child: AppIcon(
                           Icons.arrow_upward_rounded,
-                          color: Colors.black,
+                          color: on,
                           size: 26,
                         ),
                       ),
+                  );
+                },
               ),
             ),
           ),
@@ -2592,61 +2536,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           },
         ),
       ),
-    );
-  }
-}
-
-class _DesktopRecordingDot extends StatefulWidget {
-  const _DesktopRecordingDot();
-
-  @override
-  State<_DesktopRecordingDot> createState() => _DesktopRecordingDotState();
-}
-
-class _DesktopRecordingDotState extends State<_DesktopRecordingDot>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseController;
-  late final Animation<double> _animation;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    )..repeat(reverse: true);
-    _animation = Tween<double>(begin: 0.4, end: 1.0).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void dispose() {
-    _pulseController.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, _) {
-        return Container(
-          width: 10,
-          height: 10,
-          decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: _animation.value),
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.red.withValues(alpha: _animation.value * 0.6),
-                blurRadius: 6,
-                spreadRadius: 1,
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 }

@@ -23,6 +23,8 @@ const Map<String, String> stringsDe = {
       'beizubringen — ein Ausgabeformat, eine Checkliste, feste Regeln für '
       'eine wiederkehrende Aufgabe.',
   'skillsBuiltin': 'Eingebaut',
+  'skillsSearchHint': 'Skills suchen...',
+  'skillsNoMatches': 'Kein Skill passt zu "{query}".',
   'skillNew': 'Neuer Skill',
   'skillEdit': 'Skill bearbeiten',
   'skillDeleteTitle': 'Skill löschen?',
@@ -185,7 +187,7 @@ const Map<String, String> stringsDe = {
   'searchWorkspacesHint': 'Arbeitsbereiche suchen...',
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
-  'aiDisclaimer': 'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
+  'aiDisclaimer': 'Du chattest mit einer KI/LLM — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
