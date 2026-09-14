@@ -157,7 +157,7 @@ class _SkillsSettingsPageState extends State<SkillsSettingsPage> {
       ),
       body: SettingsListView(
         extraHeaderInset: kSettingsSearchBarHeight,
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 96),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 96),
         children: [
           if (_query.isEmpty) ExpressiveInfoCard(text: l.skillsExplainer),
           if (_error != null) ...[

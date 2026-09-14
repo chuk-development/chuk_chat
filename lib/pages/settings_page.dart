@@ -134,7 +134,7 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(l.settings, style: titleTextStyle),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
           ExpressiveSectionHeader('Account'),
           ExpressiveGroup(
@@ -217,7 +217,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.build_circle_outlined,
                 title: l.toolCalling,
                 subtitle: l.toolCallingSubtitle,
-                trailing: const _Badge('On', tone: BadgeTone.success),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -262,10 +261,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   child: _SettingsRow(
                     icon: Icons.graphic_eq_rounded,
-                    title: 'Assistent',
-                    subtitle:
-                        'Chuk Chat als Assistent des Geräts: über jeder App, '
-                        'sieht den Bildschirm, startet Navigation',
+                    title: l.assistantSurface,
+                    subtitle: l.assistantSurfaceSubtitle,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -755,7 +752,6 @@ class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Widget? trailing;
   final VoidCallback onTap;
 
   const _SettingsRow({
@@ -763,7 +759,6 @@ class _SettingsRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
-    this.trailing,
   });
 
   @override
@@ -771,7 +766,6 @@ class _SettingsRow extends StatelessWidget {
     icon: icon,
     title: title,
     subtitle: subtitle,
-    trailing: trailing,
     onTap: onTap,
   );
 }

@@ -278,11 +278,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _initializeListeners();
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
+    // The disclaimer under the composer steps aside while the field has the
+    // caret, so the focus change has to repaint it.
+    composerFocusNode.addListener(_onComposerFocusChanged);
     // Mode + its config (model, provider, reasoning) restore once, via
     // loadSavedModelPreference in _loadInitialData's post-frame pass — the
     // single entry point, so startup writes and picked-model refreshes run
     // only once.
     _loadInitialData();
+  }
+
+  void _onComposerFocusChanged() {
+    if (mounted) setState(() {});
   }
 
   void _initializeHandlers() {
@@ -785,6 +792,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
+    composerFocusNode.removeListener(_onComposerFocusChanged);
     composerFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -3188,8 +3196,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           ),
                         )
                       : SizedBox.expand(
+                          // Dead centre of the screen. Not offset upwards by
+                          // a guess (-0.3), and not centred in what is left
+                          // above the composer either: the mark belongs in
+                          // the middle of the window, which is where the eye
+                          // looks for it.
                           child: Align(
-                            alignment: const Alignment(0.0, -0.3),
+                            alignment: Alignment.center,
                             // The alpha lives in the tint colour instead of
                             // an Opacity widget: Opacity pushes an offscreen
                             // save layer on every paint, and cacheWidth stops
@@ -3264,8 +3277,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // the screen taken by keys, the line is one
                                 // more thing between the field and the
                                 // conversation, and it has already been read.
-                                if (MediaQuery.viewInsetsOf(context).bottom <
-                                    80) ...[
+                                //
+                                // The focus decides, not the view insets: by
+                                // the time the composer is built, a parent
+                                // has already taken the keyboard out of the
+                                // insets, so reading them here always said
+                                // "no keyboard".
+                                if (!composerFocusNode.hasFocus &&
+                                    MediaQuery.viewInsetsOf(context).bottom <
+                                        80) ...[
                                   const SizedBox(height: 8),
                                   Text(
                                     AppLocalizations.of(context)!.aiDisclaimer,
@@ -3474,6 +3494,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                     child: TextField(
                       controller: composerController,
                       focusNode: composerFocusNode,
+                      selectionControls: ComposerSelectionControls.instance,
                       autofocus: false,
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,

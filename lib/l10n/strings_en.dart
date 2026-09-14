@@ -36,6 +36,10 @@ const Map<String, String> stringsEn = {
       'description. Keep the description short — it is charged to every '
       'message. Optional: allowed-tools, license, compatibility, metadata.',
   'skillSaveFailed': 'Could not save the skill',
+  'assistantSurface': 'Assistant',
+  'assistantSurfaceSubtitle':
+      'Chuk Chat as the device assistant: over any app, reads the screen, '
+      'starts navigation',
   'developerOptions': 'Developer Options',
   'developerOptionsSubtitle': 'Diagnostics logs and debug tools',
   'modelSelection': 'Model Selection',
@@ -202,9 +206,10 @@ const Map<String, String> stringsEn = {
   'enableToolCallingSubtitle':
       'Allow the assistant to discover and execute built-in tools',
   'behavior': 'Behavior',
-  'requireDiscoveryFirst': 'Require discovery first',
+  'requireDiscoveryFirst': 'Compact tool catalogue',
   'requireDiscoverySubtitle':
-      'Force find_tools before other tools are allowed in a turn',
+      'Send a short catalogue plus find_tools instead of every tool schema. '
+      'Fewer tokens per turn; tools still work on first call either way',
   'display': 'Display',
   'showToolActivity': 'Show tool activity in chat',
   'showToolActivitySubtitle':

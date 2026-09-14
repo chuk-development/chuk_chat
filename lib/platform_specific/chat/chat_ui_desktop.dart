@@ -2133,6 +2133,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         child: TextField(
                           controller: composerController,
                           focusNode: composerFocusNode,
+                          selectionControls: ComposerSelectionControls.instance,
                           contextMenuBuilder: _buildComposerContextMenu,
                           autofocus: true,
                           showCursor: true,

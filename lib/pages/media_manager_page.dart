@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/models/artifact.dart';
@@ -18,6 +19,10 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 enum _MediaFilter { images, artifacts }
+
+/// Height of the floating Images / Artifacts track, so the library below it
+/// can start exactly where the track ends.
+const double kMediaFilterBarHeight = 52;
 
 class MediaManagerPage extends StatefulWidget {
   final bool embedded;
@@ -46,6 +51,13 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
   // its own notifier, so a slow image repaints itself instead of the grid,
   // and a failed one can say why and be retried on its own.
   final Map<String, ValueNotifier<_ThumbState>> _thumbs = {};
+
+  // Downloading every visible thumbnail at once is what killed the grid on
+  // the phone: each image spawns a utf8-decode isolate and a decrypt isolate,
+  // so a library of 99 put ~200 isolates in flight and the spinners never
+  // came back. Four at a time keeps the pictures arriving steadily and the
+  // phone responsive.
+  final _ThumbGate _thumbGate = _ThumbGate(maxInFlight: 4);
 
   @override
   void initState() {
@@ -131,9 +143,31 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     ValueNotifier<_ThumbState> notifier,
   ) async {
     try {
-      final bytes = await ImageStorageService.downloadAndDecryptImage(path);
+      final bytes = await _thumbGate
+          .run(() {
+            // The page may be gone, or this thumbnail replaced, while the
+            // request sat in the queue. Do not start work nobody waits for.
+            if (!mounted || _thumbs[path] != notifier) {
+              throw StateError('thumbnail cancelled');
+            }
+            return ImageStorageService.downloadAndDecryptImage(path);
+          })
+          // Outside the gate on purpose: a slow download keeps its slot
+          // until it really ends, so repeated timeouts cannot push the
+          // number of downloads in flight past the bound.
+          .timeout(const Duration(seconds: 45));
       if (_thumbs[path] != notifier) return;
+      // Flutter's decoder handles PNG/JPEG/GIF/WebP/BMP and nothing else. A
+      // HEIC or AVIF file downloads and decrypts perfectly and then renders
+      // as a broken glyph, which reads as data loss. Name the format instead.
+      final String? unsupported = _unsupportedImageLabel(bytes);
+      if (unsupported != null) {
+        notifier.value = _ThumbState.failed(unsupported);
+        return;
+      }
       notifier.value = _ThumbState.ready(bytes);
+    } on StateError {
+      return;
     } catch (error) {
       if (_thumbs[path] != notifier) return;
       // Say what went wrong. An image that silently turns into a broken-image
@@ -151,12 +185,45 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     unawaited(_downloadThumbnail(path, notifier));
   }
 
+  /// The format name when [bytes] hold a picture Flutter cannot decode, and
+  /// null when the file is one of the supported formats.
+  static String? _unsupportedImageLabel(Uint8List bytes) {
+    if (bytes.length < 16) return 'Empty file';
+    String ascii(int start, int end) =>
+        String.fromCharCodes(bytes.sublist(start, end)).toLowerCase();
+
+    // ISO base media container: the brand at offset 8 says which one.
+    if (ascii(4, 8) == 'ftyp') {
+      final String brand = ascii(8, 12);
+      if (brand.startsWith('avif') || brand.startsWith('avis')) {
+        return 'AVIF - not supported';
+      }
+      if (brand.startsWith('heic') ||
+          brand.startsWith('heix') ||
+          brand.startsWith('hevc') ||
+          brand.startsWith('mif1') ||
+          brand.startsWith('msf1')) {
+        return 'HEIC - not supported';
+      }
+      if (brand.startsWith('jxl')) return 'JPEG XL - not supported';
+    }
+    if (ascii(0, 4) == '%pdf') return 'PDF - not a picture';
+    final String head = ascii(0, 5);
+    if (head.startsWith('<?xml') || head.startsWith('<svg')) {
+      return 'SVG - not supported';
+    }
+    return null;
+  }
+
   /// A short reason for a failed download, in the reader's terms.
   static String _thumbErrorLabel(Object error) {
     final String text = error.toString().toLowerCase();
     if (text.contains('encryption key')) return 'Locked - key missing';
     if (text.contains('not found') || text.contains('404')) return 'Not found';
     if (text.contains('authenticated')) return 'Signed out';
+    if (error is TimeoutException || text.contains('timeoutexception')) {
+      return 'Timed out';
+    }
     if (text.contains('socket') ||
         text.contains('network') ||
         text.contains('timeout') ||
@@ -664,31 +731,43 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
     }
 
+    // The page runs behind the floating header, and so does the filter
+    // track: both stay put and the library passes underneath them, the way
+    // the chat list does. Only the scrollables carry the inset.
+    final double headerTop = widget.embedded
+        ? 0
+        : floatingHeaderInset(context).top;
+    const double filterBarHeight = kMediaFilterBarHeight;
+    final double contentTop = headerTop + filterBarHeight + 8;
+
     return RefreshIndicator(
       onRefresh: () async {
         await Future.wait([_loadImages(), _loadArtifacts()]);
       },
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Stack(
         children: [
+          Positioned.fill(
+            child: switch (_filter) {
+              _MediaFilter.images =>
+                _images.isEmpty ? _buildImagesEmpty(iconFg, l) :
+                (isMobile
+                    ? _buildMobileList(iconFg, contentTop)
+                    : _buildDesktopGrid(iconFg, contentTop)),
+              _MediaFilter.artifacts => _buildArtifactsView(iconFg, contentTop),
+            },
+          ),
           // One segmented track, the same control the model list uses for
           // All / Active / Inactive — two shapes for one job is one too many.
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 10),
+          Positioned(
+            top: headerTop,
+            left: 12,
+            right: 12,
             child: _MediaFilterBar(
               value: _filter,
               imageCount: _images.length,
               artifactCount: _artifacts.length,
               onChanged: (next) => setState(() => _filter = next),
             ),
-          ),
-          Expanded(
-            child: switch (_filter) {
-              _MediaFilter.images =>
-                _images.isEmpty ? _buildImagesEmpty(iconFg, l) :
-                (isMobile ? _buildMobileList(iconFg) : _buildDesktopGrid(iconFg)),
-              _MediaFilter.artifacts => _buildArtifactsView(iconFg),
-            },
           ),
         ],
       ),
@@ -723,7 +802,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     );
   }
 
-  Widget _buildArtifactsView(Color iconFg) {
+  Widget _buildArtifactsView(Color iconFg, double topPad) {
     if (_isLoadingArtifacts) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -756,12 +835,7 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(
-        16,
-        8,
-        16,
-        16,
-      ).add(floatingHeaderInset(context)),
+      padding: EdgeInsets.fromLTRB(16, topPad, 16, 16),
       itemCount: _artifacts.length,
       separatorBuilder: (_, i) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
@@ -786,9 +860,9 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     );
   }
 
-  Widget _buildDesktopGrid(Color iconFg) {
+  Widget _buildDesktopGrid(Color iconFg, double topPad) {
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: EdgeInsets.fromLTRB(20, topPad, 20, 20),
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 220,
         mainAxisSpacing: 14,
@@ -800,13 +874,15 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
     );
   }
 
-  Widget _buildMobileList(Color iconFg) {
+  Widget _buildMobileList(Color iconFg, double topPad) {
     return GridView.builder(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 20),
+      // Edge to edge: the pictures are the page, so no margin is left at
+      // the screen edges and the gaps between them are hairlines.
+      padding: EdgeInsets.fromLTRB(0, topPad, 0, 20),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
         crossAxisCount: 3,
-        mainAxisSpacing: 6,
-        crossAxisSpacing: 6,
+        mainAxisSpacing: 2,
+        crossAxisSpacing: 2,
         childAspectRatio: 1,
       ),
       itemCount: _images.length,
@@ -866,6 +942,31 @@ class _MediaManagerPageState extends State<MediaManagerPage> {
 }
 
 /// What one thumbnail knows about itself.
+/// Runs at most [maxInFlight] thumbnail downloads at a time, queueing the
+/// rest in the order they were asked for.
+class _ThumbGate {
+  _ThumbGate({required this.maxInFlight});
+
+  final int maxInFlight;
+  int _running = 0;
+  final List<Completer<void>> _waiting = <Completer<void>>[];
+
+  Future<T> run<T>(Future<T> Function() task) async {
+    if (_running >= maxInFlight) {
+      final turn = Completer<void>();
+      _waiting.add(turn);
+      await turn.future;
+    }
+    _running++;
+    try {
+      return await task();
+    } finally {
+      _running--;
+      if (_waiting.isNotEmpty) _waiting.removeAt(0).complete();
+    }
+  }
+}
+
 class _ThumbState {
   const _ThumbState.loading() : bytes = null, error = null;
   const _ThumbState.ready(Uint8List this.bytes) : error = null;
@@ -932,7 +1033,9 @@ class _ImageTileState extends State<_ImageTile> {
     final ThemeData theme = Theme.of(context);
     final m3 = theme.m3;
     final Color accent = theme.colorScheme.primary;
-    final double radius = widget.compact ? 14 : 18;
+    // Edge-to-edge tiles: a big radius on a 2 px grid would show the page
+    // through four corners of every picture.
+    final double radius = widget.compact ? 6 : 18;
     final bool showChrome =
         !widget.compact && (_hovered || widget.selectionMode);
 
@@ -1108,13 +1211,33 @@ class _ThumbError extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final Color muted = theme.m3.onSurfaceVariant;
-    return Center(
+    // A compact tile has no room for a label and a button, so the tile
+    // itself is the retry target.
+    return GestureDetector(
+      onTap: compact ? onRetry : null,
+      child: Center(
       child: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            AppIcon(Icons.image_not_supported_outlined, size: 22, color: muted),
+            AppIcon(
+              Icons.image_not_supported_outlined,
+              size: compact ? 18 : 22,
+              color: muted,
+            ),
+            if (compact) ...[
+              const SizedBox(height: 4),
+              // Even a thumb-sized tile says why it is empty — a bare glyph
+              // reads as lost data.
+              Text(
+                label,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 9, height: 1.2, color: muted),
+              ),
+            ],
             if (!compact) ...[
               const SizedBox(height: 6),
               Text(
@@ -1136,6 +1259,7 @@ class _ThumbError extends StatelessWidget {
             ],
           ],
         ),
+      ),
       ),
     );
   }
@@ -1216,13 +1340,14 @@ class _MediaFilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final m3 = Theme.of(context).m3;
-    return Container(
+    // The library scrolls underneath this track, so it takes the same
+    // near-opaque floating fill as the rest of the chrome. A translucent
+    // track lets the pictures show through and reads as a rendering fault.
+    return FloatingChromeSurface(
+      radius: 999,
       padding: const EdgeInsets.all(4),
-      decoration: BoxDecoration(
-        color: m3.surfaceContainer,
-        borderRadius: BorderRadius.circular(999),
-      ),
+      child: SizedBox(
+      height: kMediaFilterBarHeight - 8,
       child: Row(
         children: [
           Expanded(
@@ -1237,6 +1362,7 @@ class _MediaFilterBar extends StatelessWidget {
             ),
           ),
         ],
+      ),
       ),
     );
   }

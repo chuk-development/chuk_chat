@@ -242,6 +242,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 subtitle: l.languageSubtitle,
                 trailing: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
+                    icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
                     value: _selectedLocale,
                     dropdownColor: m3.surfaceContainerHigh,
                     borderRadius: kBorderRadiusMenu,
@@ -394,6 +395,7 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     ExpressiveField(
                       child: DropdownButtonHideUnderline(
                         child: DropdownButton<String>(
+                          icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
                           value: _selectedChatFontFamily,
                           isExpanded: true,
                           dropdownColor: m3.surfaceContainerHigh,

@@ -153,3 +153,31 @@ class _RecordingWaveformBarState extends State<RecordingWaveformBar> {
     );
   }
 }
+
+/// Selection controls for the composer that leave out the collapsed cursor
+/// handle — the accent teardrop Android parks under the caret.
+///
+/// The handle stays on screen after a message is sent, because the field is
+/// still focused with an empty value, and it then sits on top of the buttons
+/// in the row below. Real selection handles are untouched, so selecting and
+/// dragging over text works exactly as before.
+class ComposerSelectionControls extends MaterialTextSelectionControls {
+  ComposerSelectionControls._();
+
+  static final ComposerSelectionControls instance =
+      ComposerSelectionControls._();
+
+  @override
+  Widget buildHandle(
+    BuildContext context,
+    TextSelectionHandleType type,
+    double textHeight, [
+    VoidCallback? onTap,
+  ]) {
+    if (type == TextSelectionHandleType.collapsed) {
+      return const SizedBox.shrink();
+    }
+    return super.buildHandle(context, type, textHeight, onTap);
+  }
+
+}

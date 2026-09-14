@@ -400,8 +400,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.byType(SbNavCard), findsNWidgets(3));
-      expect(find.text('New chat'), findsOneWidget);
+      // Media and Search. The phone keeps its one new-chat action in the
+      // head bar, so the list does not repeat it as a row.
+      expect(find.byType(SbNavCard), findsNWidgets(2));
+      expect(find.text('New chat'), findsNothing);
       // The account moved out of the list and into the bottom bar, and the
       // search field only exists once the Search row is tapped — the bar
       // below carries no second one.
@@ -412,7 +414,7 @@ void main() {
       expect(find.text('Alpha chat'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Settings'));
-      await tester.tap(find.text('New chat'));
+      await tester.tap(find.byTooltip('New chat'));
       await tester.tap(find.byTooltip('Hide sidebar'));
       await tester.pump();
       expect(settings, 1);

@@ -371,7 +371,7 @@ class _SidebarMobileState extends State<SidebarMobile>
                           child: BrandWordmark(color: theme.resolvedIconColor),
                         ),
                       ),
-                      if (widget.onCollapseTapped != null)
+                      if (widget.onCollapseTapped != null) ...[
                         SbRoundAction(
                           icon: Icons.keyboard_double_arrow_left_rounded,
                           tooltip:
@@ -381,6 +381,19 @@ class _SidebarMobileState extends State<SidebarMobile>
                           iconSize: 22,
                           onTap: widget.onCollapseTapped!,
                         ),
+                        const SizedBox(width: 6),
+                      ],
+                      // The one accent action of the panel sits at the very
+                      // right, the outermost thing in the bar.
+                      SbRoundAction(
+                        icon: Icons.edit_square,
+                        tooltip:
+                            AppLocalizations.of(context)?.newChat ?? 'New chat',
+                        diameter: 42,
+                        iconSize: 22,
+                        fill: theme.colorScheme.primary,
+                        onTap: widget.onNewChatTapped,
+                      ),
                     ],
                   ),
                 ),
@@ -503,6 +516,7 @@ class _SidebarMobileState extends State<SidebarMobile>
       onWorkspacesTapped: widget.onWorkspacesTapped,
       onMediaTapped: widget.onMediaTapped,
       onNewChatTapped: widget.onNewChatTapped,
+      showNewChat: false,
       searchEntry: searchEntry,
     );
   }

@@ -343,6 +343,16 @@ ThemeData buildAppTheme({
       iconTheme: IconThemeData(color: iconFg),
       titleTextStyle: TextStyle(color: iconFg, fontSize: 20),
     ),
+    // Every floating action button carries the accent fill, with the glyph
+    // colour picked for contrast. The Material default is a muted container
+    // that reads as a disabled button next to the app's other actions.
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: accent,
+      foregroundColor:
+          ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+          ? const Color(0xFFFFFFFF)
+          : const Color(0xFF000000),
+    ),
     cardTheme: CardThemeData(
       color: surface,
       elevation: 0,
