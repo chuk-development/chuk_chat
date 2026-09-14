@@ -1338,11 +1338,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     if (!mounted || result == null) return;
 
-    if (result.requiresLogout) {
-      await SupabaseService.signOut();
-      if (!mounted) return;
-    }
-
     if (!result.success) {
       if (!sessionLookupFailed) {
         showSnackBar(
