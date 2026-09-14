@@ -151,6 +151,11 @@ flutter test               # Run tests
 flutter analyze            # Static analysis
 ```
 
+**Showing an image to the user: open it in qimgv on their display**, do not
+only hand over the file path or send the file. One command, detached:
+`(DISPLAY=:1 setsid qimgv <file> >/dev/null 2>&1 </dev/null &)`. The arrow keys
+then walk the whole folder, which is what makes a set of screenshots judgeable.
+
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no
 `--dart-define`, so Supabase creds are missing and feature flags fall back to

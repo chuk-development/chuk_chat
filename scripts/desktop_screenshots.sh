@@ -36,6 +36,20 @@ OUT_DIR="assets/screenshots"
 # failure cleanup signal those processes only — never another capture session
 # and never an app the user started by hand.
 PID_FILE="_scratch/desktop_screenshots${DISP//[^0-9]/}.pids"
+# The README gallery puts the window on a painting, the same one the ad shots
+# use. A bare capture is a grey rectangle on a page; the painting gives it an
+# edge and a size. Set SCREENSHOT_BACKDROP=none for the bare capture.
+BACKDROP="${SCREENSHOT_BACKDROP:-scripts/backdrops/debat-ponsan.jpg}"
+# How much of the canvas the window covers. The rest is painting, on all four
+# sides.
+BODY_SCALE="${SCREENSHOT_BODY_SCALE:-0.875}"
+# GTK renders the app at this scale factor. Without it a 3840x2160 capture
+# draws the interface at one device pixel per logical pixel, and the result is
+# a wall of unreadably small controls — the window is 4K, the buttons are not.
+# 2 gives a 1920x1080 logical window drawn at full 4K sharpness.
+UI_SCALE="${SCREENSHOT_UI_SCALE:-2}"
+# "lossless", or a cwebp quality number.
+WEBP_QUALITY="${SCREENSHOT_WEBP_QUALITY:-lossless}"
 
 need() {
   command -v "$1" >/dev/null 2>&1 || { echo "missing tool: $1" >&2; exit 1; }
@@ -151,7 +165,7 @@ start() {
     exit 1
   }
 
-  DISPLAY="$DISP" nohup "$BUNDLE" >/dev/null 2>&1 &
+  DISPLAY="$DISP" GDK_SCALE="$UI_SCALE" nohup "$BUNDLE" >/dev/null 2>&1 &
   remember_pid "$!"
   wait_for "the app window" 60 window_is_up
   sleep 6
@@ -184,8 +198,42 @@ shot() {
   echo "wrote $RAW_DIR/$name.png"
 }
 
+# Put one capture on the painting: rounded corners, a soft shadow, centred.
+# The canvas keeps the capture's own size, so the gallery images stay 2400x1350
+# and only the window inside them gets smaller.
+on_backdrop() {
+  local src="$1" dst="$2" tmp w h body_w body_h
+  w="$(identify -format '%w' "$src")"
+  h="$(identify -format '%h' "$src")"
+  body_w="$(awk -v w="$w" -v s="$BODY_SCALE" 'BEGIN{printf "%d", w * s}')"
+  body_h="$(awk -v h="$h" -v s="$BODY_SCALE" 'BEGIN{printf "%d", h * s}')"
+
+  tmp="$(mktemp -d)"
+  convert "$BACKDROP" -resize "${w}x${h}^" -gravity center -extent "${w}x${h}" \
+    "$tmp/bg.png"
+  convert "$src" -filter Lanczos -resize "${body_w}x${body_h}" \
+    \( +clone -alpha extract \
+       -draw 'fill black polygon 0,0 12,0 0,12 fill white circle 12,12 12,0' \
+       \( +clone -flip \) -compose Multiply -composite \
+       \( +clone -flop \) -compose Multiply -composite \) \
+    -alpha off -compose CopyOpacity -composite "$tmp/body.png"
+  convert "$tmp/body.png" \( +clone -background black -shadow 70x30+0+0 \) \
+    +swap -background none -layers merge +repage "$tmp/shadowed.png"
+  convert "$tmp/bg.png" "$tmp/shadowed.png" -gravity center -composite "$dst"
+  rm -rf "$tmp"
+}
+
 to_webp() {
   need cwebp
+  if [ "$BACKDROP" != "none" ]; then
+    need convert
+    need identify
+    [ -f "$BACKDROP" ] || {
+      # Silence would ship a gallery of bare captures that nobody asked for.
+      echo "backdrop not found: $BACKDROP" >&2
+      return 1
+    }
+  fi
   mkdir -p "$OUT_DIR"
   local captures=()
   shopt -s nullglob
@@ -196,12 +244,29 @@ to_webp() {
     echo "no PNG captures in $RAW_DIR" >&2
     return 1
   fi
+  local staged
+  staged="$(mktemp -d)"
   for src in "${captures[@]}"; do
-    local name
+    local name input
     name="$(basename "$src" .png)"
-    cwebp -quiet -q 82 "$src" -o "$OUT_DIR/screenshot_$name.webp"
+    input="$src"
+    if [ "$BACKDROP" != "none" ]; then
+      on_backdrop "$src" "$staged/$name.png"
+      input="$staged/$name.png"
+    fi
+    # Lossless by default. A lossy webp puts banding into the flat dark panels
+    # and mud into the painted grass, and the gallery is the first thing a
+    # visitor sees. Lossless webp holds the exact pixels of the capture and is
+    # still about a third smaller than the PNG. Set SCREENSHOT_WEBP_QUALITY to
+    # a number for a lossy file.
+    if [ "$WEBP_QUALITY" = "lossless" ]; then
+      cwebp -quiet -lossless -z 9 "$input" -o "$OUT_DIR/screenshot_$name.webp"
+    else
+      cwebp -quiet -q "$WEBP_QUALITY" "$input" -o "$OUT_DIR/screenshot_$name.webp"
+    fi
     echo "wrote $OUT_DIR/screenshot_$name.webp"
   done
+  rm -rf "$staged"
 }
 
 case "${1:-}" in

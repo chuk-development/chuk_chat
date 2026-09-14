@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Put raw phone captures on a branded background, inside a rounded device body.
+# Put raw phone captures on a painted background.
 #
 # The capture is never scaled: the canvas grows to fit it, so the listing image
 # keeps every pixel the phone produced. A 1440x3120 capture becomes a
@@ -23,11 +23,13 @@
 
 set -euo pipefail
 
-BG_TOP="#111318"       # kDefaultBgColor
+BG_TOP="#111318"       # kDefaultBgColor, the fallback when no backdrop is set
 BG_BOTTOM="#1D2433"    # a touch lighter, so the background is not flat
 ACCENT="#A8C7FA"       # kDefaultAccentColor
-MARGIN=88              # space between the canvas edge and the device body
-RADIUS=64              # corner radius of the device body
+# The painting the desktop gallery uses, so the store listing and the README
+# tell the same story. SCREENSHOT_BACKDROP=none goes back to the gradient.
+BACKDROP="${SCREENSHOT_BACKDROP:-scripts/backdrops/debat-ponsan.jpg}"
+MARGIN=140             # space between the canvas edge and the device body
 MAX_SIDE=3840          # Play rejects anything larger
 
 command -v convert >/dev/null 2>&1 || {
@@ -39,7 +41,7 @@ frame_one() {
   local src="$1" dst="$2" tmp
   tmp="$(mktemp -d)"
 
-  # The device body is the capture at its own resolution, with rounded corners.
+  # The capture goes on at its own resolution.
   local w h
   w=$(identify -format '%w' "$src")
   h=$(identify -format '%h' "$src")
@@ -66,25 +68,25 @@ frame_one() {
     out_h=$(( (out_w + 1) / 2 ))
   fi
 
-  convert -size "${w}x${h}" xc:black -fill white \
-    -draw "roundrectangle 0,0 $((w-1)),$((h-1)) $RADIUS,$RADIUS" \
-    "$tmp/mask.png"
-  convert "$tmp/shot.png" "$tmp/mask.png" \
-    -alpha Set -compose DstIn -composite "$tmp/rounded.png"
+  # The capture keeps its own shape. A rounded body and a drawn device edge
+  # only fight the rounded corners the phone already has in the capture, and
+  # the double outline is what made the corners look wrong.
+  cp "$tmp/shot.png" "$tmp/rounded.png"
 
-  # The background: a vertical brand gradient with a soft accent glow.
-  convert -size "${out_w}x${out_h}" \
-    "gradient:${BG_TOP}-${BG_BOTTOM}" "$tmp/bg.png"
-  convert "$tmp/bg.png" \
-    -fill "$ACCENT" -colorize 6% "$tmp/bg_tinted.png"
+  # The background: the painting, cropped to fill the canvas. Without one, a
+  # vertical brand gradient with a soft accent glow.
+  if [ "$BACKDROP" != "none" ]; then
+    convert "$BACKDROP" -resize "${out_w}x${out_h}^" -gravity center \
+      -extent "${out_w}x${out_h}" "$tmp/bg_tinted.png"
+  else
+    convert -size "${out_w}x${out_h}" \
+      "gradient:${BG_TOP}-${BG_BOTTOM}" "$tmp/bg.png"
+    convert "$tmp/bg.png" \
+      -fill "$ACCENT" -colorize 6% "$tmp/bg_tinted.png"
+  fi
 
-  # A thin accent hairline around the body reads as the device edge, and a
-  # soft shadow lifts it off the background.
+  # A soft shadow lifts the capture off the painting. No drawn edge.
   convert "$tmp/rounded.png" \
-    -fill none -stroke "$ACCENT" -strokewidth 3 \
-    -draw "roundrectangle 1,1 $((w-2)),$((h-2)) $RADIUS,$RADIUS" \
-    "$tmp/edged.png"
-  convert "$tmp/edged.png" \
     \( +clone -background black -shadow 55x24+0+12 \) \
     +swap -background none -layers merge +repage "$tmp/body.png"
 
