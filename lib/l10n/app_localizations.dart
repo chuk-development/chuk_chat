@@ -73,6 +73,8 @@ class AppLocalizations {
       _get('skillDeleteBody').replaceAll('{name}', name);
   String get skillEditorHint => _get('skillEditorHint');
   String get skillSaveFailed => _get('skillSaveFailed');
+  String get assistantSurface => _get('assistantSurface');
+  String get assistantSurfaceSubtitle => _get('assistantSurfaceSubtitle');
   String get developerOptions => _get('developerOptions');
   String get developerOptionsSubtitle => _get('developerOptionsSubtitle');
   String get modelSelection => _get('modelSelection');

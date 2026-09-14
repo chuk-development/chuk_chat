@@ -758,6 +758,8 @@ class SbAccountLine extends StatelessWidget {
     this.onTap,
     this.onSettings,
     this.settingsTooltip,
+    this.onNewChat,
+    this.newChatTooltip,
   });
 
   final String name;
@@ -767,6 +769,10 @@ class SbAccountLine extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onSettings;
   final String? settingsTooltip;
+
+  /// The one accent action of the panel. Null leaves it out.
+  final VoidCallback? onNewChat;
+  final String? newChatTooltip;
 
   @override
   Widget build(BuildContext context) {
@@ -793,7 +799,21 @@ class SbAccountLine extends StatelessWidget {
               ),
               if (balance != null) ...[
                 const SizedBox(width: 10),
-                balance!,
+                // The credit is its own reading: a filled chip, one step
+                // lighter than the bar it sits in, separates the number from
+                // the name beside it. A ring would add a third outline to a
+                // row that already has none.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.m3.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: balance!,
+                ),
               ],
               if (onSettings != null)
                 IconButton(
@@ -808,6 +828,17 @@ class SbAccountLine extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   splashRadius: 22,
                 ),
+              if (onNewChat != null) ...[
+                const SizedBox(width: 2),
+                SbRoundAction(
+                  icon: Icons.edit_square,
+                  tooltip: newChatTooltip ??
+                      AppLocalizations.of(context)?.newChat ??
+                      'New chat',
+                  onTap: onNewChat!,
+                  fill: theme.colorScheme.primary,
+                ),
+              ],
             ],
           ),
         ),
@@ -1149,6 +1180,9 @@ class SbFloatingBar extends StatelessWidget {
       radius: kSbCardRadius,
       borderRadius: borderRadius,
       baseColor: Theme.of(context).scaffoldBackgroundColor,
+      // Solid: the chat list passes right under these bars, and a chat title
+      // ghosting through the account row reads as a rendering fault.
+      fillAlpha: 1,
       child: Material(type: MaterialType.transparency, child: child),
     );
   }

@@ -434,7 +434,7 @@ class ExpressiveSectionHeader extends StatelessWidget {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 26, 6, 10),
+      padding: const EdgeInsets.fromLTRB(6, 16, 6, 8),
       child: trailing == null
           ? title
           : Row(

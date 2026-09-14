@@ -212,7 +212,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
         onRefresh: _refreshStatus,
         child: SettingsListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [
             _intro(scheme),
             const SizedBox(height: 20),

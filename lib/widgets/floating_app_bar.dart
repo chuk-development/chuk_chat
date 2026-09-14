@@ -182,7 +182,34 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
               )
             : null);
 
+    final Color pageColor = theme.scaffoldBackgroundColor;
+
     return AppBar(
+      // The bar draws no box, but it does hold the page down behind it: a
+      // scrim that is the page colour at the status bar and nothing at all
+      // by the bottom edge. Without it a list scrolling up runs its own
+      // headings straight across the title pill, which reads as a fault.
+      flexibleSpace: IgnorePointer(
+        // SizedBox.expand, because a childless DecoratedBox takes the
+        // smallest size the (loose) constraints allow — that is zero, and
+        // the scrim then paints nothing at all.
+        child: SizedBox.expand(
+          child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                pageColor,
+                pageColor,
+                pageColor.withValues(alpha: 0),
+              ],
+              stops: const [0.0, 0.72, 1.0],
+            ),
+          ),
+          ),
+        ),
+      ),
       // Nothing of the bar itself is drawn: no fill, no shadow, and no
       // tinted "scrolled under" state. What shows behind the chips is the
       // page.

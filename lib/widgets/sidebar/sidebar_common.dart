@@ -78,14 +78,19 @@ List<Widget> buildSidebarNavigationCards({
   required VoidCallback onMediaTapped,
   required VoidCallback onNewChatTapped,
   required Widget searchEntry,
+  /// The phone keeps its one new-chat action in the head bar, so the list
+  /// there starts at Media. The desktop keeps the row because its collapsed
+  /// rail is built from these same rows.
+  bool showNewChat = true,
 }) {
   final l = AppLocalizations.of(context);
   return <Widget>[
-    SbNavCard(
-      icon: Icons.edit_square,
-      label: l?.newChat ?? 'New chat',
-      onTap: onNewChatTapped,
-    ),
+    if (showNewChat)
+      SbNavCard(
+        icon: Icons.edit_square,
+        label: l?.newChat ?? 'New chat',
+        onTap: onNewChatTapped,
+      ),
     if (kFeatureWorkspaces && showWorkspaces)
       SbNavCard(
         icon: Icons.folder_rounded,

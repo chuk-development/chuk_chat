@@ -968,6 +968,13 @@ class _PresetPicker extends StatelessWidget {
                 dropdownColor: m3.surfaceContainerHigh,
                 borderRadius: kBorderRadiusMenu,
                 focusColor: Colors.transparent,
+                // The chevron every other picker in the app uses. The
+                // Material default is a filled triangle, which is the one
+                // arrow shape that appears nowhere else.
+                icon: AppIcon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: m3.onSurfaceVariant,
+                ),
                 hint: Text(
                   customLabel,
                   style: TextStyle(color: m3.onSurfaceVariant),
@@ -1089,6 +1096,10 @@ class _FontCard extends StatelessWidget {
                 dropdownColor: m3.surfaceContainerHigh,
                 borderRadius: kBorderRadiusMenu,
                 focusColor: Colors.transparent,
+                icon: AppIcon(
+                  Icons.keyboard_arrow_down_rounded,
+                  color: m3.onSurfaceVariant,
+                ),
                 items: options
                     .map(
                       (id) => DropdownMenuItem<String>(

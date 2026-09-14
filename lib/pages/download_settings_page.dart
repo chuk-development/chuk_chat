@@ -81,7 +81,7 @@ class _DownloadSettingsPageState extends State<DownloadSettingsPage> {
         title: Text(l.downloads),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
           const ExpressiveSectionHeader('Behavior'),
           ExpressiveGroup(

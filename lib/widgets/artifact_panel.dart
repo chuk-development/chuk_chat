@@ -492,6 +492,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: DropdownButton<int>(
+                    icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
                     focusColor: Colors.transparent,
                     value: _versions.any((v) => v.version == _selectedVersion)
                         ? _selectedVersion
@@ -737,6 +738,7 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
                             borderRadius: BorderRadius.circular(4),
                           ),
                           child: DropdownButton<int>(
+                            icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
                             focusColor: Colors.transparent,
                             value:
                                 _versions.any(

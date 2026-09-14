@@ -26,6 +26,7 @@ class FloatingChromeSurface extends StatelessWidget {
     this.padding,
     this.shape,
     this.baseColor,
+    this.fillAlpha = _fillAlpha,
   });
 
   /// Alpha of the background fill. The composer's value.
@@ -54,8 +55,15 @@ class FloatingChromeSurface extends StatelessWidget {
   /// step goes the other way, down to the page background.
   final Color? baseColor;
 
-  static Color fillOf(BuildContext context, {Color? baseColor}) =>
-      (baseColor ?? floatingChromeBase(context)).withValues(alpha: _fillAlpha);
+  /// How opaque the fill is. The sidebar's bars pass 1: the chat list runs
+  /// directly under them, and at anything less the titles ghost through.
+  final double fillAlpha;
+
+  static Color fillOf(
+    BuildContext context, {
+    Color? baseColor,
+    double alpha = _fillAlpha,
+  }) => (baseColor ?? floatingChromeBase(context)).withValues(alpha: alpha);
 
   @override
   Widget build(BuildContext context) {
@@ -63,7 +71,7 @@ class FloatingChromeSurface extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: fillOf(context, baseColor: baseColor),
+        color: fillOf(context, baseColor: baseColor, alpha: fillAlpha),
         shape: circular ? BoxShape.circle : BoxShape.rectangle,
         borderRadius: circular
             ? null

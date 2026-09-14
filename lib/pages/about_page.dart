@@ -130,7 +130,7 @@ class _AboutPageState extends State<AboutPage> {
               : null;
 
           return SettingsListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
             children: [
               // Hero header — the icon, the name, the version.
               Padding(
@@ -518,7 +518,15 @@ class _LicenseDetailPage extends StatelessWidget {
         title: Text(package.name),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        // Plain scroll view, not a SettingsListView: the header inset is not
+        // added for it, so it is added here or the licence text starts under
+        // the floating header.
+        padding: const EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          24,
+        ).add(floatingHeaderInset(context)),
         child: ExpressiveCard(
           child: SelectableText(
             package.license,
