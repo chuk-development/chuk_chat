@@ -30,8 +30,6 @@
 
 ## Screenshots
 
-Captured from the real Linux build with `scripts/desktop_screenshots.sh`.
-
 <p align="center">
   <img src="assets/screenshots/screenshot_home_ui.webp" width="90%" alt="Clean chat interface">
 </p>
@@ -49,9 +47,6 @@ Captured from the real Linux build with `scripts/desktop_screenshots.sh`.
 </p>
 
 ### Mobile
-
-Captured on a real device with `scripts/device_screenshots.sh`, then framed by
-`scripts/frame_screenshots.sh`.
 
 <p align="center">
   <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_chat.png" width="18%" alt="Chat with formatted output">
