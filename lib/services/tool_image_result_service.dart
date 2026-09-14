@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart' show sha256;
@@ -5,7 +6,9 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
+import 'package:chuk_chat/services/supabase_service.dart';
 
 class ToolImageUpdateResult {
   const ToolImageUpdateResult({
@@ -41,6 +44,19 @@ class ToolImageResultService {
   const ToolImageResultService._();
 
   static final Map<String, Future<String?>> _inFlightUploads = {};
+
+  /// Source (URL or data hash) -> storage path, for sources already stored in
+  /// this session.
+  ///
+  /// The same tool call is handed to the image step more than once: once when
+  /// its pass ends, once when the whole turn ends, and the two carry separate
+  /// clones of the payload. Without this the bytes were fetched and uploaded
+  /// twice, which put the same picture in the library twice — and with the
+  /// API's one-shot image links the second fetch is a 404, not a duplicate.
+  static final Map<String, String> _storedSources = <String, String>{};
+
+  /// Keeps [_storedSources] from growing for the life of the process.
+  static const int _storedSourcesLimit = 128;
 
   static Future<ToolImageUpdateResult> processToolCalls(
     List<ToolCall> toolCalls,
@@ -174,9 +190,14 @@ class ToolImageResultService {
         );
       }
 
-      // Upload failed — fall back to the data URI directly so the image
-      // still renders in the message bubble without encrypted storage.
-      return _ExtractionResult(storagePath: dataUri, updatedPayload: null);
+      // Upload failed. The bytes are in hand and the API's image links are
+      // one-shot, so dropping them here loses the picture for good — the
+      // data URI rides along in the message instead. Only while it is small:
+      // a multi-megabyte URI is carried by every load of that chat.
+      if (dataUri.length <= 2 * 1024 * 1024) {
+        return _ExtractionResult(storagePath: dataUri, updatedPayload: null);
+      }
+      return const _ExtractionResult(storagePath: null, updatedPayload: null);
     }
 
     final url =
@@ -223,7 +244,7 @@ class ToolImageResultService {
           return null;
         }
 
-        return ImageStorageService.uploadEncryptedImage(
+        return await ImageStorageService.uploadEncryptedImage(
           Uint8List.fromList(bytes),
         );
       } catch (error) {
@@ -276,13 +297,7 @@ class ToolImageResultService {
     return _cacheUpload(sourceKey, () async {
       try {
         final response = await http
-            .get(
-              uri,
-              headers: const {
-                'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)',
-                'Accept': 'image/*,*/*;q=0.8',
-              },
-            )
+            .get(uri, headers: _downloadHeaders(uri))
             .timeout(const Duration(seconds: 30));
 
         if (response.statusCode != 200) {
@@ -308,7 +323,7 @@ class ToolImageResultService {
           return null;
         }
 
-        return ImageStorageService.uploadEncryptedImage(bytes);
+        return await ImageStorageService.uploadEncryptedImage(bytes);
       } catch (error) {
         if (kDebugMode) {
           debugPrint('Failed to upload tool image from URL ($url): $error');
@@ -318,10 +333,48 @@ class ToolImageResultService {
     });
   }
 
+  /// The signed-in user, or null before the client exists (tests, and the
+  /// window before `initialize()` completes).
+  static String? _currentUserId() => SupabaseService.isInitialized
+      ? SupabaseService.auth.currentUser?.id
+      : null;
+
+  /// The headers one image download carries.
+  ///
+  /// The API hands out one-shot vault links for generated images: the bytes
+  /// are served once, bound to the user who paid for them, and the entry is
+  /// dropped in the same breath. Those need the session token — and only
+  /// those: the header never travels to a third-party host.
+  static Map<String, String> _downloadHeaders(Uri uri) {
+    final headers = <String, String>{
+      'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)',
+      'Accept': 'image/*,*/*;q=0.8',
+    };
+    final Uri api = Uri.parse(ApiConfigService.apiBaseUrl);
+    final bool sameOrigin =
+        uri.scheme == api.scheme && uri.host == api.host && uri.port == api.port;
+    if (!sameOrigin) return headers;
+    final String? token = SupabaseService.isInitialized
+        ? SupabaseService.auth.currentSession?.accessToken
+        : null;
+    if (token != null && token.isNotEmpty) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    return headers;
+  }
+
   static Future<String?> _cacheUpload(
-    String sourceKey,
+    String rawSourceKey,
     Future<String?> Function() upload,
   ) {
+    // Stored paths start with the user id, so a cache shared across an
+    // account switch would hand the new user the previous user's path.
+    final String sourceKey = '${_currentUserId() ?? "anon"}|$rawSourceKey';
+    final stored = _storedSources[sourceKey];
+    if (stored != null) {
+      return Future<String?>.value(stored);
+    }
+
     final existing = _inFlightUploads[sourceKey];
     if (existing != null) {
       return existing;
@@ -329,6 +382,17 @@ class ToolImageResultService {
 
     final future = upload();
     _inFlightUploads[sourceKey] = future;
+    unawaited(
+      future
+          .then((path) {
+            if (path == null) return;
+            if (_storedSources.length >= _storedSourcesLimit) {
+              _storedSources.remove(_storedSources.keys.first);
+            }
+            _storedSources[sourceKey] = path;
+          })
+          .catchError((_) {}),
+    );
     future.whenComplete(() => _inFlightUploads.remove(sourceKey));
     return future;
   }

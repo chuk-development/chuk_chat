@@ -241,11 +241,28 @@ class ImageStorageService {
     }
 
     try {
-      final List<FileObject> files = await SupabaseService.client.storage
-          .from(bucketName)
-          .list(path: user.id);
+      // Storage.list() returns at most 100 entries per call, newest last.
+      // Without paging the library silently stopped at 100 files, so every
+      // image generated after that never appeared — the file was there, the
+      // listing just never reached it.
+      const int pageSize = 100;
+      final List<FileObject> files = <FileObject>[];
+      for (int offset = 0; ; offset += pageSize) {
+        final List<FileObject> page = await SupabaseService.client.storage
+            .from(bucketName)
+            .list(
+              path: user.id,
+              searchOptions: SearchOptions(
+                limit: pageSize,
+                offset: offset,
+                sortBy: const SortBy(column: 'created_at', order: 'desc'),
+              ),
+            );
+        files.addAll(page);
+        if (page.length < pageSize) break;
+      }
 
-      return files
+      final List<StoredImage> images = files
           .where((file) => file.name.endsWith('.enc'))
           .map(
             (file) => StoredImage(
@@ -258,6 +275,18 @@ class ImageStorageService {
             ),
           )
           .toList();
+
+      // Newest first, whatever the storage backend decides to sort by: a
+      // freshly generated image has to be the first tile in the grid.
+      images.sort((a, b) {
+        final DateTime? left = a.createdAt;
+        final DateTime? right = b.createdAt;
+        if (left == null && right == null) return 0;
+        if (left == null) return 1;
+        if (right == null) return -1;
+        return right.compareTo(left);
+      });
+      return images;
     } catch (e) {
       if (kDebugMode) {
         debugPrint('Failed to list user images: $e');

@@ -570,6 +570,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     );
                   }
 
+                  // Persist this pass's images before the loop moves on:
+                  // the next pass builds its own tool-call list, so an image
+                  // generated here would otherwise never reach storage.
+                  await _processToolImages(
+                    loopResult.toolCalls,
+                    placeholderIndex,
+                    chatIdForStream,
+                  );
+
                   final next = loopResult.nextStep!;
                   await Future<void>.delayed(Duration.zero);
                   await startStreamPass(
@@ -1783,6 +1792,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         },
                       );
                     }
+
+                    // Same as the pass above: images are written to
+                    // storage per pass, not only at the end of the turn.
+                    await _processToolImages(
+                      loopResult.toolCalls,
+                      placeholderIndex,
+                      chatIdForStream,
+                    );
 
                     final next = loopResult.nextStep!;
                     await Future<void>.delayed(Duration.zero);
