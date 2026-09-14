@@ -129,6 +129,14 @@ void main() {
 
         for (final File shot in shots) {
           final ({int width, int height}) size = _pngSize(shot);
+          // Play also caps the shape: the long side may be at most twice the
+          // short one, or the upload is rejected.
+          final int longSide =
+              size.width > size.height ? size.width : size.height;
+          final int shortSide =
+              size.width > size.height ? size.height : size.width;
+          expect(longSide, lessThanOrEqualTo(shortSide * 2),
+              reason: '${shot.path} is ${size.width}x${size.height}');
           for (final int side in <int>[size.width, size.height]) {
             expect(side, greaterThanOrEqualTo(_minScreenshotSide),
                 reason: '${shot.path} is ${size.width}x${size.height}');

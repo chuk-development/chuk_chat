@@ -188,12 +188,14 @@ capture that one for each locale before running it.
 metadata tree, so re-framing always starts from the original and neither
 `supply` nor F-Droid sees two copies of every image.
 `scripts/frame_screenshots.sh` puts each capture in a rounded body with the
-accent hairline on the brand gradient; `scripts/feature_graphic.sh` builds the
+accent hairline on the brand gradient, at the capture's own resolution — a
+1440x3120 phone capture becomes a 1648x3296 listing image, with no downscaling — the canvas widens where it has to, because Play wants the long side at most twice the short one; `scripts/feature_graphic.sh` builds the
 feature graphic out of the wordmark, the slogan and the first capture.
 
 The README screenshots of the desktop app come from
 `scripts/desktop_screenshots.sh`, which launches the prebuilt Linux release
-bundle on an Xvfb display. An X11 capture of the real desktop returns black while the monitor is
+bundle on an Xvfb display at 2400x1350 and captures the window, so no title
+bar and no other window can reach the image. An X11 capture of the real desktop returns black while the monitor is
 asleep, and it would also catch the user's own windows.
 
 ### Generated (fallback, no hardware)

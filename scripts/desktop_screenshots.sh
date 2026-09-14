@@ -12,7 +12,7 @@
 # out of the account pages, which show the name and the e-mail address.
 #
 # Usage:
-#   ./scripts/desktop_screenshots.sh start        # launch the release build, maximise
+#   ./scripts/desktop_screenshots.sh start        # launch the release build at 2400x1350
 #   ./scripts/desktop_screenshots.sh shot <name>  # write _scratch/desktop_raw/<name>.png
 #   ./scripts/desktop_screenshots.sh type "text"  # type into the app
 #   ./scripts/desktop_screenshots.sh key Return
@@ -22,7 +22,13 @@
 set -euo pipefail
 
 DISP="${SCREENSHOT_DISPLAY:-:99}"
-GEOMETRY="${SCREENSHOT_GEOMETRY:-1600x1000x24}"
+# The README images are 2400x1350. The virtual screen is a little larger so the
+# window manager has room for the frame it draws; the capture takes the window
+# itself, so no title bar and no desktop ever reach the image.
+WIN_W="${SCREENSHOT_WIDTH:-2400}"
+WIN_H="${SCREENSHOT_HEIGHT:-1350}"
+TITLEBAR="${SCREENSHOT_TITLEBAR:-37}"   # metacity's frame, measured once
+GEOMETRY="${SCREENSHOT_GEOMETRY:-${WIN_W}x$((WIN_H + TITLEBAR))x24}"
 BUNDLE="build/linux/x64/release/bundle/chuk_chat"
 RAW_DIR="_scratch/desktop_raw"
 OUT_DIR="assets/screenshots"
@@ -52,6 +58,27 @@ wait_for() {
 
 window_is_up() {
   DISPLAY="$DISP" wmctrl -l | grep -q "Chuk Chat"
+}
+
+app_window() {
+  DISPLAY="$DISP" xdotool search --onlyvisible --name "Chuk Chat" | head -n1
+}
+
+# Clicks are given in the coordinates of the captured image, which is the
+# window itself. The window manager places the window somewhere on the virtual
+# screen, so its origin has to be added or every click lands in the wrong spot.
+click_in_window() {
+  local x="$1" y="$2" id geom win_x win_y
+  id="$(app_window)"
+  [ -n "$id" ] || { echo "no Chuk Chat window on $DISP" >&2; return 1; }
+  # xwininfo, not `xdotool getwindowgeometry`: xdotool adds the window
+  # manager's frame height a second time, which puts every click one title bar
+  # too low.
+  geom="$(DISPLAY="$DISP" xwininfo -id "$id")"
+  win_x="$(printf '%s\n' "$geom" | sed -n 's/.*Absolute upper-left X: *//p')"
+  win_y="$(printf '%s\n' "$geom" | sed -n 's/.*Absolute upper-left Y: *//p')"
+  DISPLAY="$DISP" xdotool windowactivate --sync "$id"
+  DISPLAY="$DISP" xdotool mousemove $(( win_x + x )) $(( win_y + y )) click 1
 }
 
 # Anything this run started is torn down again when the run fails. Processes
@@ -86,7 +113,7 @@ cleanup_on_failure() {
 }
 
 start() {
-  need Xvfb; need xdpyinfo; need xdotool; need import; need wmctrl
+  need Xvfb; need xdpyinfo; need xdotool; need import; need wmctrl; need xwininfo
   need metacity
   if [ -e "$PID_FILE" ]; then
     # A second session on the same display would orphan the first one's
@@ -128,6 +155,11 @@ start() {
   remember_pid "$!"
   wait_for "the app window" 60 window_is_up
   sleep 6
+  # Maximise, and let the virtual screen decide the size: the screen is exactly
+  # the target size plus the window manager's title bar, so the client area —
+  # which is what gets captured — comes out at WIN_W x WIN_H. Resizing the
+  # window after the engine has started leaves Flutter's hit testing on the old
+  # size, and every click then lands in the wrong place.
   DISPLAY="$DISP" wmctrl -r "Chuk Chat" -b add,maximized_vert,maximized_horz
   sleep 2
   # The session survives on purpose — `shot`, `type` and `key` run against it
@@ -175,10 +207,12 @@ to_webp() {
 case "${1:-}" in
   start) start ;;
   shot)  shift; shot "$@" ;;
-  type)  shift; DISPLAY="$DISP" xdotool search --name "Chuk Chat" windowactivate --sync
-         DISPLAY="$DISP" xdotool type --delay 20 "$*" ;;
+  # No windowactivate here: re-activating the window takes the focus away from
+  # the text field that was just clicked, and the keystrokes go nowhere. Click
+  # into the field first, then type.
+  type)  shift; DISPLAY="$DISP" xdotool type --delay 25 "$*" ;;
   key)   shift; DISPLAY="$DISP" xdotool key "$@" ;;
-  click) shift; DISPLAY="$DISP" xdotool mousemove "$1" "$2" click 1 ;;
+  click) shift; click_in_window "$1" "$2" ;;
   webp)  to_webp ;;
   stop)  kill_remembered
          echo "stopped" ;;
