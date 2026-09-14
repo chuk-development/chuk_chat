@@ -30,6 +30,8 @@
 
 ## Screenshots
 
+Captured from the real Linux build with `scripts/desktop_screenshots.sh`.
+
 <p align="center">
   <img src="assets/screenshots/screenshot_home_ui.webp" width="90%" alt="Clean chat interface">
 </p>
@@ -48,14 +50,15 @@
 
 ### Mobile
 
-Regenerated from the app's own widgets on every UI change
-(`.github/workflows/screenshots.yml`), so they never drift from the build.
+Captured on a real device with `scripts/device_screenshots.sh`, then framed by
+`scripts/frame_screenshots.sh`.
 
 <p align="center">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_chat.png" width="23%" alt="Chat with formatted output">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_tools.png" width="23%" alt="Web research with sources">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_reasoning.png" width="23%" alt="Visible reasoning">
-  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_theme.png" width="23%" alt="Theme settings">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/01_chat.png" width="18%" alt="Chat with formatted output">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/02_tools.png" width="18%" alt="Web research with sources">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/03_models.png" width="18%" alt="Model selection">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/04_connectors.png" width="18%" alt="MCP connectors">
+  <img src="fastlane/metadata/android/en-US/images/phoneScreenshots/05_theme.png" width="18%" alt="Theme settings">
 </p>
 
 ## Why Chuk Chat?
