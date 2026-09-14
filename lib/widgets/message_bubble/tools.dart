@@ -12,13 +12,45 @@ extension _MessageBubbleTools on _MessageBubbleState {
   /// Renders a reasoning content block as an expandable card. Renders
   /// NO external margin — callers control the gap below the card via
   /// SizedBox (typically `_kCardStackGap` or `_kBlockGap`).
-  Widget _buildBlockReasoning(String text, Color accentColor) {
+  Widget _buildBlockReasoning(
+    String text,
+    Color accentColor, {
+    bool live = false,
+    bool carriesTurnStatus = false,
+  }) {
     // The same timeline the tool rounds use — one thinking step on the
     // rail, opened by a tap. There is no second design for reasoning.
+    //
+    // A reasoning round that is the turn's last one also carries the turn's
+    // clock and its model line, exactly like the tool rounds do: without it
+    // the interleaved layout showed a bare "Thought" with no time at all.
+    final bool isRunning = widget.isStreamingMessage && live;
     return AgentActivityTimeline(
       toolCalls: const <ToolCall>[],
       steps: <AgentActivityStep>[AgentActivityStep.reasoning(text)],
-      isRunning: false,
+      isRunning: isRunning,
+      phase: _currentPhase(isRunning),
+      startedAt: carriesTurnStatus && isRunning ? widget.turnStartedAt : null,
+      finalDuration: carriesTurnStatus && !isRunning ? widget.workedFor : null,
+      footer: carriesTurnStatus && _hasModelInfo ? _buildMetaFooter() : null,
+    );
+  }
+
+  /// The turn's status with no step to hang it on: the header alone, while
+  /// the request is still travelling or the server is reading the prompt and
+  /// there is nothing else on screen yet.
+  Widget _buildTurnStatusOnly() {
+    // A settled turn with no step to show is the quiet meta line — how long
+    // it took, and the model when the reader asked for it. Only a running
+    // turn needs the counting header.
+    if (!widget.isStreamingMessage) return _buildMetaFooter();
+    return AgentActivityTimeline(
+      toolCalls: const <ToolCall>[],
+      steps: const <AgentActivityStep>[],
+      isRunning: true,
+      phase: _currentPhase(true),
+      startedAt: widget.turnStartedAt,
+      footer: _hasModelInfo ? _buildMetaFooter() : null,
     );
   }
 
@@ -62,7 +94,11 @@ extension _MessageBubbleTools on _MessageBubbleState {
   /// one currently running.
   StreamPhase? _currentPhase(bool isRunning) {
     if (!isRunning) return null;
-    final chatId = ArtifactStorageService.activeChatId;
+    // The chat this bubble belongs to, passed down by the list. The old code
+    // read `ArtifactStorageService.activeChatId`, which only the mobile root
+    // wrapper ever sets — on desktop the lookup always missed, so the header
+    // never said anything but "Thinking".
+    final chatId = widget.chatId ?? ArtifactStorageService.activeChatId;
     if (chatId == null || chatId.isEmpty) return null;
     return StreamingManager().phaseOf(chatId);
   }
@@ -77,9 +113,10 @@ extension _MessageBubbleTools on _MessageBubbleState {
     final theme = Theme.of(context);
     final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
     final Duration? worked = widget.workedFor;
-    // Under a second is not worth a line — see the timeline header, which
-    // drops its own duration for the same reason.
-    final bool hasDuration = worked != null && worked.inSeconds >= 1;
+    // How long the answer took is always printed when it is known, including
+    // a turn that took under a second: the reader asked for the time, not for
+    // the time when it happens to be round.
+    final bool hasDuration = worked != null;
 
     final parts = <String>[
       if (hasDuration) formatAgentDuration(worked),
@@ -256,6 +293,7 @@ extension _MessageBubbleTools on _MessageBubbleState {
     List<ToolCall> toolCalls, {
     List<_ToolTimelineEntry>? contentBlockTimeline,
     bool live = false,
+    bool carriesTurnStatus = true,
   }) {
     // The live round keeps counting while the message streams — including
     // the stretch after its last tool, where the model is writing and the
@@ -284,8 +322,13 @@ extension _MessageBubbleTools on _MessageBubbleState {
       steps: steps,
       isRunning: isRunning,
       phase: _currentPhase(isRunning),
-      startedAt: isRunning ? widget.turnStartedAt : null,
-      finalDuration: isRunning ? null : widget.workedFor,
+      // Only ONE round per message carries the turn's own clock and its
+      // model line. An earlier round falls back to its own tool stamps, so
+      // a message with three rounds does not print the whole turn's length
+      // three times over.
+      startedAt: carriesTurnStatus && isRunning ? widget.turnStartedAt : null,
+      finalDuration: carriesTurnStatus && !isRunning ? widget.workedFor : null,
+      footer: carriesTurnStatus && _hasModelInfo ? _buildMetaFooter() : null,
       onStepTap: _showToolCallDetails,
       onSourceTap: _openSourceUrl,
     );

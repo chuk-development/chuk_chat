@@ -242,6 +242,22 @@ class AgentActivityStep {
   final ToolCall? toolCall;
 }
 
+/// The line and the body for one stretch of reasoning.
+///
+/// The line is the first sentence, clipped; the body is the whole of it —
+/// but ONLY when there is more to read than the line already shows. A model
+/// that thought one short sentence used to have it printed twice: once as
+/// the line, and again underneath as the "opened" body.
+AgentActivityEntry reasoningEntry(String text) {
+  final trimmed = text.trim();
+  final label = _clip(_firstSentence(trimmed), _maxThinkingChars);
+  return AgentActivityEntry(
+    kind: AgentActivityKind.thinking,
+    label: label,
+    body: label == trimmed ? null : trimmed,
+  );
+}
+
 /// Build the timeline lines for an ordered mix of reasoning and calls.
 ///
 /// This is the general form: reasoning recorded between two calls keeps
@@ -270,13 +286,7 @@ List<AgentActivityEntry> buildAgentActivityEntriesFromSteps(
     final reasoning = step.reasoning?.trim();
     if (reasoning != null && reasoning.isNotEmpty) {
       flushCalls();
-      entries.add(
-        AgentActivityEntry(
-          kind: AgentActivityKind.thinking,
-          label: _clip(_firstSentence(reasoning), _maxThinkingChars),
-          body: reasoning,
-        ),
-      );
+      entries.add(reasoningEntry(reasoning));
       continue;
     }
 
@@ -303,13 +313,7 @@ List<AgentActivityEntry> buildAgentActivityEntries(
   for (final call in calls) {
     final thinking = includeRoundThinking ? call.roundThinking?.trim() : null;
     if (thinking != null && thinking.isNotEmpty) {
-      entries.add(
-        AgentActivityEntry(
-          kind: AgentActivityKind.thinking,
-          label: _clip(_firstSentence(thinking), _maxThinkingChars),
-          body: thinking,
-        ),
-      );
+      entries.add(reasoningEntry(thinking));
     }
     entries.add(_entryFor(call));
   }
@@ -437,6 +441,11 @@ String formatAgentDurationLive(Duration duration) {
 
 String formatAgentDuration(Duration duration) {
   final totalSeconds = duration.inSeconds;
+  // Under a second still gets a number rather than a bare "0s": a fast turn
+  // took a real amount of time and the reader asked to see it.
+  if (totalSeconds < 1) {
+    return '${(duration.inMilliseconds / 1000).toStringAsFixed(1)}s';
+  }
   if (totalSeconds < 60) return '${totalSeconds}s';
 
   if (duration.inMinutes < 60) {

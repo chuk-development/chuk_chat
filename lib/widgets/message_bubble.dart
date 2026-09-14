@@ -168,6 +168,7 @@ class MessageBubble extends StatefulWidget {
     this.showToolCalls = true,
     this.contentBlocks,
     this.isStreamingMessage = false,
+    this.chatId,
     this.turnStartedAt,
     this.workedFor,
     this.images,
@@ -220,6 +221,11 @@ class MessageBubble extends StatefulWidget {
   /// Whether this message is currently being streamed. Used with
   /// [contentBlocks] to show trailing text from the active streaming pass.
   final bool isStreamingMessage;
+
+  /// The chat this message belongs to. The status header looks the live
+  /// stream phase up by it, so the wording is read from the stream that is
+  /// actually running rather than guessed from a global "active chat".
+  final String? chatId;
 
   /// When the request behind this answer went out, so the activity header
   /// can count real seconds from the send rather than from the first tool
