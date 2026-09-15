@@ -357,6 +357,7 @@ class ExpressiveIconButton extends StatelessWidget {
     this.color,
     this.onColor,
     this.size = 48,
+    this.width,
     this.tooltip,
     this.semanticsId,
     this.parked = false,
@@ -374,6 +375,12 @@ class ExpressiveIconButton extends StatelessWidget {
   final Color? color;
   final Color? onColor;
   final double size;
+
+  /// The painted width. Null keeps the square target; a wider value makes the
+  /// oval the home bar uses, and the oval then carries fully round ends so it
+  /// reads as a shorter sibling of the pill beside it.
+  final double? width;
+
   final String? tooltip;
   final String? semanticsId;
 
@@ -387,17 +394,28 @@ class ExpressiveIconButton extends StatelessWidget {
     final bool enabled = onTap != null && !parked;
     final Color fill = color ?? scheme.surfaceContainerHighest;
     final Color glyph = onColor ?? scheme.onSurfaceVariant;
+    final double boxWidth = width ?? size;
+    final bool oval = boxWidth != size;
     Widget button = MorphTap(
       onTap: onTap,
       pressedScale: parked ? 0.98 : 0.93,
       color: enabled ? fill : fill.withValues(alpha: 0.5),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(size * 0.34),
+      // An oval stays an oval while the finger is down, the way the connected
+      // group does; only the square target squares off further.
+      shape: oval
+          ? const StadiumBorder()
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(size * 0.34),
+            ),
+      pressedShape: oval
+          ? const StadiumBorder()
+          : RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(size * 0.20),
+            ),
+      padding: EdgeInsets.symmetric(
+        horizontal: (boxWidth - 22) / 2,
+        vertical: (size - 22) / 2,
       ),
-      pressedShape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(size * 0.20),
-      ),
-      padding: EdgeInsets.all((size - 22) / 2),
       child: hugeIcon != null
           ? HugeIcon(
               hugeIcon!,
