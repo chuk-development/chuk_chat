@@ -153,6 +153,20 @@ class MobileAgentList extends StatefulWidget {
 class _MobileAgentListState extends State<MobileAgentList> {
   static const List<String> _filters = <String>['All', 'Unread'];
 
+  /// The home bar runs taller than [MobileLayout.controlHeight] and its two
+  /// targets are ovals, not squares. Three controls of one width packed the
+  /// row edge to edge and read as squeezed; a taller row with wider, rounder
+  /// targets gives the switch in the middle less width and the whole bar more
+  /// air, which is what the row is supposed to show.
+  static const double _barControlHeight = 56;
+
+  /// Width of the search and add targets. Wider than they are tall, so both
+  /// end in half circles like the switch between them.
+  static const double _barControlWidth = 74;
+
+  /// What the row takes, its own breathing room included.
+  static const double _barHeight = 68;
+
   final TextEditingController _query = TextEditingController();
   final FocusNode _searchFocus = FocusNode();
 
@@ -380,7 +394,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.search01,
           onTap: _openSearch,
-          size: MobileLayout.controlHeight,
+          size: _barControlHeight,
+          width: _barControlWidth,
           color: scheme.surfaceContainerHighest,
           tooltip: 'Search coworkers',
           semanticsId: 'mobile_home_search',
@@ -394,7 +409,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
             selected: _filter,
             badges: <int, int>{1: unread},
             margin: EdgeInsets.zero,
-            height: MobileLayout.controlHeight,
+            height: _barControlHeight,
             onSelected: (int i) => setState(() {
               _reverse = i < _filter;
               _filter = i;
@@ -412,7 +427,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
               onTap: widget.onAddAgent != null && widget.onCreateRoom != null
                   ? () => _openAddMenu(anchor)
                   : (widget.onAddAgent ?? widget.onCreateRoom),
-              size: MobileLayout.controlHeight,
+              size: _barControlHeight,
+              width: _barControlWidth,
               color: scheme.primary,
               onColor: scheme.onPrimary,
               tooltip: widget.onAddAgent != null && widget.onCreateRoom != null
@@ -435,7 +451,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
         ExpressiveIconButton(
           hugeIcon: HugeIcons.arrowLeft02,
           onTap: _closeSearch,
-          size: MobileLayout.controlHeight,
+          size: _barControlHeight,
+          width: _barControlWidth,
           tooltip: 'Close search',
           semanticsId: 'mobile_home_search_close',
         ),
@@ -444,6 +461,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
           child: _SearchField(
             controller: _query,
             focusNode: _searchFocus,
+            height: _barControlHeight,
             onClear: () => setState(_query.clear),
           ),
         ),
@@ -451,9 +469,9 @@ class _MobileAgentListState extends State<MobileAgentList> {
     );
 
     final Widget header = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
       child: SizedBox(
-        height: 58,
+        height: _barHeight,
         child: PageTransitionSwitcher(
           duration: const Duration(milliseconds: 280),
           transitionBuilder:
@@ -475,7 +493,8 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // Status bar + the header row: what the list has to clear before its
     // first row is readable. The switch rides inside that row now, so there is
     // no second row to make room for.
-    final double headerSpace = MediaQuery.paddingOf(context).top + 58 + 12;
+    final double headerSpace =
+        MediaQuery.paddingOf(context).top + _barHeight + 12;
 
     return Stack(
       children: <Widget>[
@@ -602,20 +621,24 @@ class _MobileAgentListState extends State<MobileAgentList> {
 ///
 /// It is a field and it looks like one. A bare [TextField] on the header's
 /// background had no shape at all, so the row simply lost its title and gained
-/// a caret. It takes [MobileLayout.controlHeight], the height of the switch it
-/// replaces
-/// and of the target beside it, and its corner is that switch's corner — a
-/// field that grew taller than the button next to it was the one thing in the
-/// row that looked borrowed from another screen.
+/// a caret. It takes the height of the switch it replaces and of the target
+/// beside it, and its corner is that switch's corner — a field that grew
+/// taller than the button next to it was the one thing in the row that looked
+/// borrowed from another screen.
 class _SearchField extends StatelessWidget {
   const _SearchField({
     required this.controller,
     required this.focusNode,
+    required this.height,
     required this.onClear,
   });
 
   final TextEditingController controller;
   final FocusNode focusNode;
+
+  /// The height of the row's other controls, so the field is their sibling.
+  final double height;
+
   final VoidCallback onClear;
 
   @override
@@ -624,10 +647,10 @@ class _SearchField extends StatelessWidget {
     final TextTheme text = Theme.of(context).textTheme;
     final bool hasText = controller.text.isNotEmpty;
     return Container(
-      height: MobileLayout.controlHeight,
+      height: height,
       decoration: BoxDecoration(
         color: scheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(MobileLayout.controlHeight / 2),
+        borderRadius: BorderRadius.circular(height / 2),
       ),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 7, 0),
