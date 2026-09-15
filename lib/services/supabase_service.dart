@@ -69,12 +69,42 @@ class SupabaseService {
       ValueNotifier<bool>(false);
 
 
-  static Future<Session?> refreshSession() async {
+  /// How much life an access token must have left to be handed back untouched.
+  ///
+  /// The chuk-verbatim callers (the send path, the 401 handlers, the credit
+  /// display) ask for a session, not for a new one. Every real refresh spends
+  /// the single-use refresh token that this app SHARES with the paired host
+  /// (bead cowork-2n1), and a spent token turns into a logout the moment the
+  /// access token lapses. So a token with life left is the answer, and only
+  /// [SessionRefreshScheduler] and [SupabaseAccountSession] — which refresh at
+  /// 60 s left — actually reach the network.
+  static const Duration _kRefreshLeeway = Duration(minutes: 10);
+
+  /// Whether [session] is close enough to expiry that it must be renewed.
+  @visibleForTesting
+  static bool sessionNeedsRefresh(Session session) {
+    if (session.isExpired) return true;
+    final int? expiresAt = session.expiresAt;
+    if (expiresAt == null) return true;
+    final DateTime expiry = DateTime.fromMillisecondsSinceEpoch(
+      expiresAt * 1000,
+    );
+    return expiry.difference(DateTime.now()) <= _kRefreshLeeway;
+  }
+
+  /// Returns a session whose access token is usable right now.
+  ///
+  /// Set [force] to spend the refresh token even when the current one still
+  /// has life left.
+  static Future<Session?> refreshSession({bool force = false}) async {
     final DateTime now = DateTime.now();
     if (_inFlightRefresh != null) {
       return await _inFlightRefresh!;
     }
     final Session? current = auth.currentSession;
+    if (current != null && !force && !sessionNeedsRefresh(current)) {
+      return current;
+    }
     // If the cached session is already expired, bypass the throttle — we MUST
     // refresh, otherwise callers receive an expired token and hit 401s.
     final bool sessionExpired = current != null && current.isExpired;
