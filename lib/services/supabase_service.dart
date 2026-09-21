@@ -12,6 +12,17 @@ class SupabaseService {
   static Future<Session?>? _inFlightRefresh;
   static const Duration _kMinRefreshInterval = Duration(seconds: 30);
 
+  /// How much life an access token must have left to be handed out as is.
+  ///
+  /// Every real refresh rotates the refresh token. If the response is lost —
+  /// a dropped mobile connection, a killed app — the server has already
+  /// retired the old token while this device still holds it, and the next
+  /// refresh fails with `refresh_token_already_used`. Once the access token
+  /// expires, gotrue then signs the user out. Callers want a usable token,
+  /// not a fresh one, so a session with time left is returned untouched and
+  /// the rotation count drops from one every 30 s to roughly one per hour.
+  static const Duration _kRefreshLeeway = Duration(minutes: 10);
+
   static SupabaseClient get client {
     if (!_initialized) {
       throw StateError(
@@ -61,16 +72,41 @@ class SupabaseService {
       ValueNotifier<bool>(false);
 
 
-  static Future<Session?> refreshSession() async {
+  /// Whether [session] is close enough to expiry that it must be renewed.
+  @visibleForTesting
+  static bool sessionNeedsRefresh(Session session) {
+    if (session.isExpired) return true;
+    final int? expiresAt = session.expiresAt;
+    if (expiresAt == null) return true;
+    final DateTime expiry = DateTime.fromMillisecondsSinceEpoch(
+      expiresAt * 1000,
+    );
+    return expiry.difference(DateTime.now()) <= _kRefreshLeeway;
+  }
+
+  /// Returns a session whose access token is usable right now.
+  ///
+  /// Set [force] to rotate the token even when the current one still has
+  /// life left — only a caller that must prove the session is still valid
+  /// server-side needs that.
+  static Future<Session?> refreshSession({bool force = false}) async {
     final DateTime now = DateTime.now();
     if (_inFlightRefresh != null) {
       return await _inFlightRefresh!;
     }
     final Session? current = auth.currentSession;
+    if (current == null) return null;
+    // A token with time left is handed back as is: refreshing it buys
+    // nothing and costs one rotation.
+    if (!force && !sessionNeedsRefresh(current)) {
+      return current;
+    }
     // If the cached session is already expired, bypass the throttle — we MUST
     // refresh, otherwise callers receive an expired token and hit 401s.
-    final bool sessionExpired = current != null && current.isExpired;
-    if (!sessionExpired &&
+    // A forced refresh must reach the server: that is the whole point of
+    // asking for one.
+    final bool bypassThrottle = force || current.isExpired;
+    if (!bypassThrottle &&
         _lastRefreshTime != null &&
         now.difference(_lastRefreshTime!) < _kMinRefreshInterval) {
       return current;
