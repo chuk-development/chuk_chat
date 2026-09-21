@@ -137,6 +137,9 @@ class ChukTable extends StatefulWidget {
   State<ChukTable> createState() => _ChukTableState();
 }
 
+/// Height kept free under the table body for the horizontal scrollbar.
+const double _kScrollbarLane = 12;
+
 class _ChukTableState extends State<ChukTable> {
   bool _copied = false;
 
@@ -272,7 +275,13 @@ class _ChukTableState extends State<ChukTable> {
                   child: SingleChildScrollView(
                     controller: _hCtrl,
                     scrollDirection: Axis.horizontal,
-                    child: card,
+                    // The scrollbar is drawn over the bottom edge of the
+                    // viewport, so the table keeps a lane free below itself.
+                    // Without it the thumb lies across the last row.
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: _kScrollbarLane),
+                      child: card,
+                    ),
                   ),
                 ),
               );
