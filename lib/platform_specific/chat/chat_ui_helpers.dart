@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 
 import 'package:uuid/uuid.dart';
@@ -200,20 +201,41 @@ class ChatUiHelpers {
     }
 
     final message = messages[messageIndex];
-    final priorText = (message['text'] ?? '').trim();
-    final priorContentBlocksJson = message['contentBlocks'];
+    // A transport error is stored in the body, so it would otherwise be
+    // continued as if the model had written it.
+    final String rawText = message['text'] ?? '';
+    final String? rawBlocks = message['contentBlocks'];
+    final bool carriedNotice = rawText.contains(kConnectionErrorNotice) ||
+        (rawBlocks?.contains(kConnectionErrorNotice) ?? false);
+    final priorText = stripStreamErrorNotice(rawText.trim());
+    final priorContentBlocksJson = stripStreamErrorNoticeFromBlocksJson(
+      rawBlocks,
+    );
     if (priorText.isEmpty &&
         (priorContentBlocksJson == null ||
             priorContentBlocksJson.trim().isEmpty)) {
       return null;
     }
 
+    // The same row goes into the history the next pass is built from, so it
+    // is cleaned there too — otherwise the notice is sent to the model.
+    final List<Map<String, String>> history = messages
+        .sublist(0, messageIndex + 1)
+        .map(Map<String, String>.from)
+        .toList();
+    if (carriedNotice) {
+      final Map<String, String> lastRow = history.last;
+      lastRow['text'] = priorText;
+      if (priorContentBlocksJson == null) {
+        lastRow.remove('contentBlocks');
+      } else {
+        lastRow['contentBlocks'] = priorContentBlocksJson;
+      }
+    }
+
     return ChatContinuationRequest(
       messageIndex: messageIndex,
-      historyMessages: messages
-          .sublist(0, messageIndex + 1)
-          .map(Map<String, String>.from)
-          .toList(growable: false),
+      historyMessages: List<Map<String, String>>.unmodifiable(history),
       priorText: priorText,
       priorContentBlocksJson: priorContentBlocksJson,
       modelId: message['modelId']?.trim().isNotEmpty == true
