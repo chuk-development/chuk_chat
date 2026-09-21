@@ -473,14 +473,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   ? displayContent
                   : '$prefix$displayContent';
 
+              // updateAiMessage already pins to the bottom, so pinning again
+              // here jumped the list twice per chunk.
               updateAiMessage(
                 placeholderIndex,
                 fullDisplay,
                 reasoning,
                 activeChatId,
               );
-              // Follow the answer as it streams in, but only while pinned.
-              pinToBottomDuringStream();
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
@@ -2387,7 +2387,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
 
     if (mounted) {
-      scrollChatToBottom();
+      settleScrollToBottomIfSticky();
       Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
       unawaited(persistChat());
 
