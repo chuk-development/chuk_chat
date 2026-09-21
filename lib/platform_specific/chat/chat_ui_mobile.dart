@@ -1828,7 +1828,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         _messages[index] = message;
       });
 
-      scrollChatToBottom();
+      settleScrollToBottomIfSticky();
       unawaited(persistChat());
       if (_isAppInBackground) {
         unawaited(
@@ -3099,7 +3099,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               maxWidth: expandedInputWidth,
                             ),
                             child: SelectionCopyArea(
-                              child: ListView.builder(
+                              // Layout can change the metrics without a user
+                              // scroll — a finishing answer shrinks
+                              // maxScrollExtent, an image sizes itself. A plain
+                              // controller listener stays silent then, so the
+                              // follow and the scroll-to-bottom button hold a
+                              // stale state. Desktop already listens; mobile
+                              // needs it more, because it recycles bubbles.
+                              child: NotificationListener<ScrollMetricsNotification>(
+                                onNotification: (_) {
+                                  WidgetsBinding.instance.addPostFrameCallback((
+                                    _,
+                                  ) {
+                                    if (mounted) onScrollChanged();
+                                  });
+                                  return false;
+                                },
+                                child: ListView.builder(
                                 controller: scrollController,
                                 padding: listPadding,
                                 itemCount: _messages.length,
@@ -3191,6 +3207,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                         : null,
                                   );
                                 },
+                              ),
                               ),
                             ),
                           ),
