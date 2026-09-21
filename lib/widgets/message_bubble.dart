@@ -20,6 +20,7 @@ import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stream_phase.dart';

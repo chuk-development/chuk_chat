@@ -11,6 +11,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/turn_status.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -462,17 +463,12 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ClipOval(
-            child: Image.network(
-              'https://www.google.com/s2/favicons?domain=${source.host}&sz=32',
-              width: 16,
-              height: 16,
-              errorBuilder: (_, _, _) => AppIcon(
-                Icons.public,
-                size: 14,
-                color: onSurface.withValues(alpha: 0.5),
-              ),
-            ),
+          FaviconImage(
+            host: source.host,
+            size: 16,
+            fallbackColor: onSurface.withValues(alpha: 0.5),
+            borderRadius: 8,
+            fallbackIcon: Icons.public,
           ),
           const SizedBox(width: 6),
           Text(
