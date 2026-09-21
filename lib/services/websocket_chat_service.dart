@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 
 /// Service for handling streaming chat responses.
 ///
@@ -54,10 +55,7 @@ class WebSocketChatService {
           '❌ [WebSocketChatService] multiplex connection unavailable',
         );
       }
-      yield const ChatStreamEvent.error(
-        'Could not establish a connection to the server. '
-        'Please check your internet connection and try again.',
-      );
+      yield const ChatStreamEvent.error(kConnectionErrorNotice);
       yield const ChatStreamEvent.done();
       return;
     }
