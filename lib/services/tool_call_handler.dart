@@ -328,6 +328,10 @@ class ToolTurnSignals {
   }
 }
 
+/// Marks a call whose arguments did not parse, so the executor can report
+/// that instead of running the tool with nothing.
+const String _kMalformedArgumentsKey = '__malformed_arguments__';
+
 class ToolCallHandler {
   ToolCallHandler._internal() {
     registerBuiltinTools(_toolExecutor);
@@ -1126,6 +1130,10 @@ class ToolCallHandler {
           (call) => _readOnlyToolNames.contains(call.name),
         )) {
       for (final call in enforceResult.validCalls) {
+        // A call whose arguments did not parse is reported below instead of
+        // being run, so starting it here would execute it anyway and leave
+        // an unawaited future behind.
+        if (call.arguments.containsKey(_kMalformedArgumentsKey)) continue;
         inFlight[call.callId] = _toolExecutor.execute(
           call.name,
           call.arguments,
@@ -1145,7 +1153,16 @@ class ToolCallHandler {
       // non-retryable result so the model finishes with what it already has
       // instead of looping until it trips the tool-call safety limit.
       final isSandboxTool = sandbox_tools.isSandboxBackedTool(call.name);
-      if (isSandboxTool &&
+      if (call.arguments.containsKey(_kMalformedArgumentsKey)) {
+        // The provider's argument stream did not arrive as valid JSON. Saying
+        // so beats running the tool with nothing, which answers "No URL
+        // provided" and reads to the model like a correct call.
+        rawResult =
+            'Error: the arguments of this call were not valid JSON, so it '
+            'was not run. Send the call again with complete arguments. '
+            'Received: ${call.arguments[_kMalformedArgumentsKey]}';
+        isError = true;
+      } else if (isSandboxTool &&
           session.consecutiveSandboxInfraFailures >=
               _kMaxConsecutiveSandboxInfraFailures) {
         rawResult = sandbox_tools.kSandboxUnavailableThisTurnMessage;
@@ -1365,9 +1382,25 @@ class ToolCallHandler {
             args = decoded;
           } else if (decoded is Map) {
             args = decoded.map((k, v) => MapEntry(k.toString(), v));
+          } else {
+            // Valid JSON, wrong shape: a list, a bare string, null. The tool
+            // would run with nothing, exactly as with unparseable input.
+            args = <String, dynamic>{
+              _kMalformedArgumentsKey: raw.length > 200
+                  ? '${raw.substring(0, 200)}…'
+                  : raw,
+            };
           }
-        } catch (_) {
-          // Malformed argument JSON — keep empty args.
+        } on FormatException {
+          // Malformed argument JSON. Running with empty args makes the tool
+          // answer "No URL provided", which reads to the model as if it had
+          // called correctly, so it repeats the same call. Say what went
+          // wrong instead; the retry then carries real arguments.
+          args = <String, dynamic>{
+            _kMalformedArgumentsKey: raw.length > 200
+                ? '${raw.substring(0, 200)}…'
+                : raw,
+          };
         }
       }
       return <String, dynamic>{
