@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1
 # Stage 1: Build Flutter web
 FROM ubuntu:24.04 AS build
 
@@ -16,7 +17,8 @@ RUN flutter doctor -v
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
 COPY vendor/ ./vendor/
-RUN flutter pub get
+# The pub cache survives between builds, so an unchanged lock resolves offline.
+RUN --mount=type=cache,target=/root/.pub-cache flutter pub get
 
 COPY . .
 
@@ -27,13 +29,13 @@ ARG BUILD_TIMESTAMP=""
 # Generate web environment config (dart-define can be unreliable with dart2js)
 RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
     echo "const String webSupabaseUrl = '${SUPABASE_URL}';" >> lib/web_env.dart && \
-    echo "const String webSupabaseAnonKey = '${SUPABASE_ANON_KEY}';" >> lib/web_env.dart && \
-    cat lib/web_env.dart
+    echo "const String webSupabaseAnonKey = '${SUPABASE_ANON_KEY}';" >> lib/web_env.dart
 
-RUN flutter build web --release \
+# FEATURE_PROJECTS and FEATURE_IMAGE_GEN were removed: nothing in lib/ reads
+# them. --no-wasm-dry-run skips a compatibility scan this build does not use.
+RUN --mount=type=cache,target=/root/.pub-cache flutter build web --release \
+    --no-wasm-dry-run \
     --dart-define=BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
-    --dart-define=FEATURE_PROJECTS=false \
-    --dart-define=FEATURE_IMAGE_GEN=false \
     --dart-define=FEATURE_VOICE_MODE=false
 
 # Stage 2: Serve with nginx

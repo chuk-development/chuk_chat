@@ -1,0 +1,86 @@
+name: Web image
+
+# chat.chuk.chat is built by Dokploy from Dockerfile.web on every push to
+# master. A failed build there leaves the previous container running, so the
+# site keeps serving the old app and nothing reports it. This workflow builds
+# the same image on the runner, so a broken web build fails visibly here first.
+
+# Read-only: this workflow builds, it never publishes.
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'Dockerfile.web'
+      - '.dockerignore'
+      - 'nginx.web.conf'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'vendor/**'
+      - '.github/workflows/web-image.yml'
+      # Every file the pin check reads, so a drifting pin cannot slip in.
+      - 'scripts/check_flutter_pins.sh'
+      - 'dev.chuk.chat.yml'
+      - '.github/workflows/release-windows.yml'
+      - '.github/workflows/release-macos.yml'
+      - '.github/workflows/build-cross-platform.yml'
+  pull_request:
+    # The same list as above: a pull request that changes any of it can break
+    # the image just as well.
+    paths:
+      - 'Dockerfile.web'
+      - '.dockerignore'
+      - 'nginx.web.conf'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - 'lib/**'
+      - 'web/**'
+      - 'assets/**'
+      - 'vendor/**'
+      - '.github/workflows/web-image.yml'
+      - 'scripts/check_flutter_pins.sh'
+      - 'dev.chuk.chat.yml'
+      - '.github/workflows/release-windows.yml'
+      - '.github/workflows/release-macos.yml'
+      - '.github/workflows/build-cross-platform.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: web-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pins:
+    name: Flutter pins agree
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - run: ./scripts/check_flutter_pins.sh
+
+  build:
+    name: Build the web image
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f  # v3
+      - name: Build (no push)
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8  # v6
+        with:
+          context: .
+          file: Dockerfile.web
+          push: false
+          build-args: |
+            SUPABASE_URL=https://example.invalid
+            SUPABASE_ANON_KEY=ci-placeholder
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
