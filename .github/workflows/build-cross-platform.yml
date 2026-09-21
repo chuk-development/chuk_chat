@@ -107,7 +107,7 @@ jobs:
       build_timestamp: ${{ steps.bump.outputs.build_timestamp }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           # Full history + tags: scripts/release_notes.py builds the changelog
@@ -288,7 +288,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - uses: actions/setup-java@v5
@@ -371,7 +371,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - name: Install Linux dependencies
@@ -599,7 +599,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - name: Install Linux dependencies
@@ -789,7 +789,7 @@ jobs:
     timeout-minutes: 60
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - name: Install Linux dependencies
@@ -1000,7 +1000,7 @@ jobs:
     timeout-minutes: 90
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - name: Install Linux dependencies
@@ -1167,7 +1167,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
@@ -1335,7 +1335,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
@@ -1409,7 +1409,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7.0.1
         with: { ref: master }
 
       - uses: subosito/flutter-action@v2
