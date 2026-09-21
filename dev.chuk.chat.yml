@@ -40,8 +40,8 @@ modules:
       - /app/flutter/bin/flutter precache --linux
     sources:
       - type: archive
-        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.38.7-stable.tar.xz
-        sha256: 2d72de31119ccba1421391aa9ab53891a3e4905987a13f8272766ad78e3bbf93
+        url: https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.47.0-stable.tar.xz
+        sha256: 26cd99d3d94b1367e6b50535a18aeef0282c10a535bbe3ec493534dcdab75296
         dest-filename: flutter-linux.tar.xz
     cleanup:
       - /flutter/.pub-cache
