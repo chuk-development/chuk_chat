@@ -153,23 +153,27 @@ class _PaneResizeHandleState extends State<PaneResizeHandle> {
         cursor: SystemMouseCursors.resizeColumn,
         onEnter: (_) => setState(() => _active = true),
         onExit: (_) => setState(() => _active = false),
-        child: GestureDetector(
+        // Raw pointer moves, not a drag recogniser: the border follows the
+        // pointer from the first pixel, with no slop to swallow the start.
+        child: Listener(
           behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: (DragUpdateDetails d) =>
-              widget.onDrag(d.delta.dx),
-          onHorizontalDragEnd: (_) => widget.onDragEnd?.call(),
-          onDoubleTap: widget.onDoubleTap,
-          child: SizedBox(
-            width: widget.hitWidth,
-            child: Center(
-              // While the pointer is on it the border thickens a little, so
-              // the reader sees what they are about to drag.
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 120),
-                width: _active ? 3 : 0,
-                color: _active
-                    ? scheme.outline.withValues(alpha: 0.6)
-                    : Colors.transparent,
+          onPointerMove: (PointerMoveEvent e) => widget.onDrag(e.delta.dx),
+          onPointerUp: (_) => widget.onDragEnd?.call(),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onDoubleTap: widget.onDoubleTap,
+            child: SizedBox(
+              width: widget.hitWidth,
+              child: Center(
+                // While the pointer is on it the border thickens a little, so
+                // the reader sees what they are about to drag.
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 120),
+                  width: _active ? 3 : 0,
+                  color: _active
+                      ? scheme.outline.withValues(alpha: 0.6)
+                      : Colors.transparent,
+                ),
               ),
             ),
           ),

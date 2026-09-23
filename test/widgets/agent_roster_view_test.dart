@@ -15,6 +15,7 @@ import 'package:chuk_chat/widgets/agent_avatar.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
@@ -34,9 +35,9 @@ void main() {
         ),
       ),
     );
-    final brand = tester.widget<SbBrand>(find.byType(SbBrand));
-    expect(brand.label, 'Chuk Chat');
-    expect(brand.showLogo, isFalse);
+    // The frozen wordmark, no separate C logo next to it.
+    expect(find.byType(BrandWordmark), findsOneWidget);
+    expect(find.byType(SbBrand), findsNothing);
   });
 
   Future<List<(String, String)>> pumpRoster(

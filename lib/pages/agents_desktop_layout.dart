@@ -410,10 +410,12 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             child: PaneResizeHandle(
               semanticLabel: 'Resize the agent list',
               onDrag: (double dx) => setState(
-                () => _deskRosterWidth = (rosterFull + dx).clamp(
-                  kDeskRosterMin,
-                  kDeskRosterMax,
-                ),
+                // From the current width, not the one this frame was built
+                // with: several moves can land between two frames.
+                () => _deskRosterWidth =
+                    (_deskRosterWidth.clamp(kDeskRosterMin, kDeskRosterMax) +
+                            dx)
+                        .clamp(kDeskRosterMin, kDeskRosterMax),
               ),
               onDragEnd: _deskScheduleSave,
               onDoubleTap: () {
@@ -431,10 +433,10 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             child: PaneResizeHandle(
               semanticLabel: 'Resize the details pane',
               onDrag: (double dx) => setState(
-                () => _deskDetailsWidth = (rightW - dx).clamp(
-                  kDeskDetailsMin,
-                  kDeskDetailsMax,
-                ),
+                () => _deskDetailsWidth =
+                    (_deskDetailsWidth.clamp(kDeskDetailsMin, kDeskDetailsMax) -
+                            dx)
+                        .clamp(kDeskDetailsMin, kDeskDetailsMax),
               ),
               onDragEnd: _deskScheduleSave,
               onDoubleTap: () {
