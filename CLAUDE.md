@@ -127,16 +127,17 @@ When asked to "update everything", run `flutter pub upgrade --major-versions`,
 then fix the fallout and only hold a dep back when you have **verified** it breaks
 (analyze/test error, or `cd android && ./gradlew :app:tasks` fails). Do not trust a
 stale "capped because X" comment — check whether X is still true first. The full
-per-dep reasoning lives in the `pubspec.yaml` header block. Four deps are held for
-real reasons, all gated on an AGP 9 / Gradle 9 / compileSdk 37 toolchain jump:
-`dynamic_color <2` (material_ui ColorScheme split), `flutter_secure_storage <11`
-and `permission_handler <13` (their `_android` majors hardcode compileSdk 37),
-`app_links <7.2` (AGP-9 plugins-DSL the 3.47 loader mis-orders). Everything else
-is at its latest resolvable version.
+per-dep reasoning lives in the `pubspec.yaml` header block. No direct dep is
+held back any more (verified 2026-09-23: `flutter pub outdated` shows every
+direct dep at latest). The old caps on `dynamic_color`, `flutter_secure_storage`,
+`permission_handler` and `app_links` are gone (`compileSdk = 37`). What is left
+behind are transitive deps capped by their parents, listed in the header.
+The vendored `vendor/markdraw/pubspec.yaml` carries its own constraints (e.g.
+`file_picker <14`) — widen them there when a major lands.
 
-**Windows caveat:** the whole lock now needs Dart ≥3.12, so every CI job
-(Windows included) must stay on Flutter ≥3.44 — reverting the Windows job to
-3.41.4 would fail to resolve. Flutter's Windows renderer can show a black window
+**Windows caveat:** the whole lock now needs Dart ≥3.13 (`tray_manager` 0.7 /
+`nativeapi` 0.3; `environment.sdk` says so), so every CI job (Windows included)
+must stay on Flutter ≥3.47 — an older job would fail to resolve. Flutter's Windows renderer can show a black window
 on GPUs/VMs limited to D3D11 feature level 9_3 (ANGLE fallback, a cross-version
 issue). Test the Windows artifact on such hardware before publishing a release.
 

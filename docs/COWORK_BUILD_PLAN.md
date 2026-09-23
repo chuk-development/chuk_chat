@@ -70,12 +70,12 @@ Latency cost of the extra relay hop is +20–80 ms — irrelevant for a command/
 **Keep chuk_chat's hardened `SystemTrayService` (`tray_manager` + `window_manager`, hide-not-close, Linux retry/backoff) unchanged; layer daemon behavior on top.** The Dart isolate/event loop already survives window close, so the agent loop keeps running when hidden — no new mechanism needed for "alive while backgrounded."
 
 **New/changed:**
-- Bump `tray_manager ^0.5.1→^0.5.3` (fixes tray-icon-vanishes-after-`explorer.exe`-restart — a long-lived-daemon issue) and `window_manager ^0.5.1→^0.5.2`.
+- Done: `tray_manager` is at ^0.7.0 (nativeapi). `SystemTrayService` uses the native `TrayIcon`/`Menu` API, not `legacy.dart`. `window_manager ^0.5.1→^0.5.2`.
 - Add `launch_at_startup ^0.5.1` — login-item on Win (Run key) / macOS (LaunchAgent/`SMAppService`) / Linux (XDG `~/.config/autostart/`). Register with `args:['--hidden']`.
 - Add `flutter_single_instance ^1.7.0` (built on `window_manager`) — call **before** `runApp`; prevents two daemons racing the same sandbox/tool state after login-launch + manual double-click.
 - **Start-hidden-into-tray:** branch on `args.contains('--hidden')` before the first `windowManager.show()` (use `waitUntilReadyToShow` so no window ever flashes on login).
 - **Turn on the already-wired-but-disabled desktop notifications:** in `notification_service_io.dart`, remove the `if (!Platform.isAndroid && !Platform.isIOS) return;` gate, add `WindowsInitializationSettings` (AUMID + icon), widen `main.dart`'s notification-init gate to desktop when `FEATURE_COWORK`, and add an `agent_needs_input` category alongside `ai_completion`.
-- **Linux packaging gap:** add `libayatana-appindicator3-1` (Ubuntu ≥22.04; `libappindicator3-1` elsewhere) as a runtime dependency in the Flatpak manifest, DEB control, RPM spec — CoWork defaults tray **on**, so it will bite minimal installs otherwise.
+- ~~**Linux packaging gap:** add `libayatana-appindicator3-1` as a runtime dependency.~~ Obsolete since `tray_manager` 0.7 (nativeapi): the Linux tray icon is a StatusNotifierItem over D-Bus and links no appindicator library. GNOME still needs the AppIndicator extension to show it.
 - **macOS LSUIElement** (menu-bar-only, no Dock/Cmd-Tab) is an Info.plist, build-time switch read before Dart runs → **separate build target/scheme** (`Runner-CoWork`), not a runtime flag. Decision below.
 - **App Nap (macOS):** verify empirically once the hidden daemon does network I/O; an open socket usually prevents it, else a small `NSProcessInfo.beginActivity` native shim.
 
@@ -288,7 +288,7 @@ Effort: S ≈ 2–3 d, M ≈ 4–6 d, L ≈ 1–2 w. **MVP = M0–M4.**
 | **M2** | Laptop-native tools + approval gate | M | `Process.start`, tool_registry/executor, `ApprovalCallback` shape, streaming machinery, `flutter_local_notifications` | `laptop_system_tools.dart` (`run_command`/`read_file`/`write_file`/`list_directory`/`process_exec`), allow/deny/ask classifier, cwd jail, credential denylist, phone approval round-trip w/ timeout→deny, `<shell>`/`<tasklist>` tags |
 | **M3** | Push + cross-device + draft-then-gate | M | Supabase task sync (`chat_storage_service`), `notes` memory, `notification_service_io` | FCM/APNs (`firebase_messaging`+`firebase-admin`, incl. Firebase project/APNs ops), draft-then-gate for email/calendar/message, plan-mode tool filter, task-list persistence |
 | **M4** | OS sandbox Tier-1 + worktree Tier-2 | L | E2B as Tier-3, `CLAUDE.md` worktree protocol | `SandboxBackend` interface, `bwrap`/srt (Linux/WSL2), `sandbox-exec`+`.sbpl` (macOS), Windows ask-only (disclosed), local network-egress proxy, resource limits, git-worktree workspace + merge-back UX |
-| **M5** | Distribution hardening | L | CI skeleton, Fastlane lanes, `msix_config` | macOS notarization + Windows signing enabled, `desktop_updater`, Linux zsync/Flathub, update banner, `libayatana-appindicator` in packaging |
+| **M5** | Distribution hardening | L | CI skeleton, Fastlane lanes, `msix_config` | macOS notarization + Windows signing enabled, `desktop_updater`, Linux zsync/Flathub, update banner |
 | **M6** | MCP + subagents | L | `ClientTool`/discovery/`find_tools` compaction | `mcp_dart` bridge, `ToolType.mcp`, bounded subagents (own tool subset, no recursion), hooks-equivalent policy layer |
 | **M7** | Advanced hardening | L | audit SQLite infra, kill switches | per-device signed-envelope full rollout, hash-chained `0600` audit, time-boxed capability grants, browser/computer-use (CDP, separately gated), optional Ollama local model + eval, per-request ZDR audit |
 
