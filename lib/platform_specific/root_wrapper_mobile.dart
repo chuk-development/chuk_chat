@@ -285,7 +285,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   void _toggleSidebar() {
     // Hide keyboard when opening sidebar
     if (!_isSidebarExpanded) {
-      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
     }
     setState(() {
       _isSidebarExpanded = !_isSidebarExpanded;
@@ -383,7 +383,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
       );
     }
     // Hide keyboard when switching chats
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
 
     // Update chat ID and close sidebar in a single setState to guarantee
     // the widget tree rebuilds with the new selectedChatId.
@@ -404,7 +404,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   Future<void> _handleChatDeleted(String deletedChatId) async {
     // Prevent keyboard from opening when sidebar is visible
     if (_isSidebarExpanded) {
-      FocusScope.of(context).unfocus();
+      FocusManager.instance.primaryFocus?.unfocus();
     }
     // deleteChat() clears selectedChatId when the active chat is deleted.
     // If selectedChatId is null here, reset the chat UI to a fresh state.
@@ -421,7 +421,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   void _newChatFromAppBar() {
     // Hide keyboard when creating new chat
-    FocusScope.of(context).unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     _chatUIMobileKey.currentState?.newChat();
     if (kFeatureArtifacts) {
       unawaited(ArtifactStorageService.setActiveChat(null, forceRefresh: true));

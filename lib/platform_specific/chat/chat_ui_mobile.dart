@@ -869,6 +869,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void didUpdateWidget(covariant ChukChatUIMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // While the sidebar covers the chat the composer must not hold or take
+    // focus. Otherwise a menu, dialog or page that closes over the sidebar
+    // hands focus back to the composer and the keyboard pops up unasked.
+    // The composer TextField also refuses focus while the sidebar is open.
+    if (widget.isSidebarExpanded && !oldWidget.isSidebarExpanded) {
+      composerFocusNode.unfocus();
+    }
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
       if (_messengerListening) _loadReactions();
@@ -3519,7 +3526,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             builder: (context) => GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
-                FocusScope.of(context).unfocus();
+                // Unfocus the node itself, not the scope: a scope unfocus
+                // keeps the composer in the route's focus history, and the
+                // next closing menu or dialog gives it focus back.
+                FocusManager.instance.primaryFocus?.unfocus();
               },
               child: Stack(
                 children: [
@@ -3908,6 +3918,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                     child: TextField(
                       controller: composerController,
                       focusNode: composerFocusNode,
+                      // No focus while the sidebar covers the chat. Set here,
+                      // not on the node: TextField writes this value back to
+                      // its node on every rebuild.
+                      canRequestFocus: !widget.isSidebarExpanded,
                       selectionControls: ComposerSelectionControls.instance,
                       autofocus: false,
                       keyboardType: TextInputType.multiline,
