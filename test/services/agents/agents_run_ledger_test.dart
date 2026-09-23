@@ -17,6 +17,12 @@ void main() {
   setUp(() {
     ledger.reset();
     ImageStorageService.clearCache();
+    // Hermetic: the file bytes land in the local blob store, never Supabase.
+    AgentsRunLedger.storeFileBytes = ImageStorageService.uploadLocalBlob;
+  });
+
+  tearDown(() {
+    AgentsRunLedger.storeFileBytes = ImageStorageService.uploadEncryptedImage;
   });
 
   test('a scripted run folds into the tool calls the renderer draws', () {

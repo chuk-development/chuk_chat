@@ -393,6 +393,14 @@ class AgentsRunLedger extends ChangeNotifier {
   /// within a second; the thread must not keep spinning if it is not.
   static Duration stopGrace = const Duration(seconds: 10);
 
+  /// Where a relayed file's bytes are written before the block that points at
+  /// them exists — ONE writer for the live ledger and the replay loader. The
+  /// default is the app's image store (the encrypted bucket when signed in, a
+  /// local blob otherwise); tests swap in [ImageStorageService.uploadLocalBlob]
+  /// so they never reach Supabase.
+  static Future<String> Function(Uint8List bytes) storeFileBytes =
+      ImageStorageService.uploadEncryptedImage;
+
   /// A run this client started that the host has not confirmed yet is left
   /// alone by an idle `run_state` header for this long — the header may have
   /// been computed before the task reached the host (see [reconcileIdle]).
@@ -833,7 +841,7 @@ class AgentsRunLedger extends ChangeNotifier {
     final run = _live(sessionKey);
     final String storagePath;
     try {
-      storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
+      storagePath = await storeFileBytes(bytes);
     } catch (error) {
       if (kDebugMode) debugPrint('[agents-ledger] blob write failed: $error');
       return null;

@@ -12,6 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
+import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
 const Color kAccent = Color(0xFF1565C0);
@@ -501,7 +502,9 @@ final x = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     await tester.pumpWidget(buildUpstreamMarkdown(text));
 
     // Cell text stays literal — no dollar pair swallowed into a math span.
-    expect(find.byType(Table), findsOneWidget);
+    // The table is drawn by ChukTable, which lays its rows out itself rather
+    // than through a Flutter [Table].
+    expect(find.byType(ChukTable), findsOneWidget);
     expect(
       find.textContaining(r'$29/month, $149/year', findRichText: true),
       findsOne,

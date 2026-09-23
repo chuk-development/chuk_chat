@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/image_storage_service.dart';
 
 import '../../support/fake_relay_controller.dart';
 
@@ -33,6 +34,9 @@ void main() {
     loader.reset();
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
+    // Hermetic: replayed file bytes land in the local blob store, never
+    // Supabase.
+    AgentsRunLedger.storeFileBytes = ImageStorageService.uploadLocalBlob;
     await ChatStorageService.reset();
     controller = FakeRelayController();
     AgentsRelayLink.instance.bind(controller);
@@ -44,6 +48,7 @@ void main() {
     loader.reset();
     AgentsRelayLink.instance.reset();
     AgentsRunLedger.instance.reset();
+    AgentsRunLedger.storeFileBytes = ImageStorageService.uploadEncryptedImage;
     await ChatStorageService.reset();
   });
 
