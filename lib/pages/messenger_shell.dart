@@ -46,6 +46,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -378,8 +379,11 @@ class _MessengerShellState extends State<MessengerShell>
     // restore from moving the selection out from under them.
     _rememberSelection(agentId, threadKey);
     // Opening a thread is reading it: the unread dot clears here, not when the
-    // next frame happens to arrive.
-    unawaited(_readMarks.markRead(threadKey));
+    // next frame happens to arrive. A thread with nothing unread keeps its
+    // mark: moving it forward changes no dot and costs a preference write.
+    if (_readMarks.isThreadUnread(agent, agent.threads.first)) {
+      unawaited(_readMarks.markRead(threadKey));
+    }
     setState(() {
       // The row this selection came from, if it came from one. Claimed here so
       // every other way in clears it (see [_pendingOpenFrom]).

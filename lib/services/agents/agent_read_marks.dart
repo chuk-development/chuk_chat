@@ -61,6 +61,15 @@ class AgentReadMarks extends ChangeNotifier {
     return false;
   }
 
+  /// True when something happened in [thread] of [agent] after the user last
+  /// had it open — the per-thread half of [isUnread].
+  bool isThreadUnread(AgentsAgent agent, AgentsThreadInfo thread) {
+    final DateTime? activity = thread.lastActivity ?? agent.lastActivity;
+    if (activity == null) return false;
+    final DateTime? read = _marks[thread.key];
+    return read == null || activity.isAfter(read);
+  }
+
   /// How many of [agents] are unread.
   int unreadCount(Iterable<AgentsAgent> agents) =>
       agents.where(isUnread).length;

@@ -1633,6 +1633,47 @@ void main() {
     );
   });
 
+  testWidgets('the one-key pick wins over the two old keys, and a switch '
+      'writes it once the reader stops clicking', (tester) async {
+    final roster = LocalAgentRosterSource()
+      ..addAgent(name: 'amber')
+      ..addAgent(name: 'cobalt');
+    final amber = roster.agents.first;
+    final cobalt = roster.agents.last;
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      'cowork.last_agent_id': amber.id,
+      'cowork.last_thread_key': amber.threads.single.key,
+      'cowork.last_pick_v2': jsonEncode(<String>[
+        cobalt.id,
+        cobalt.threads.single.key,
+      ]),
+    });
+
+    await pumpShellOver(tester, roster);
+    expect(
+      tester.widget<AgentsThreadView>(threadView).threadKey,
+      cobalt.threads.single.key,
+    );
+
+    await tester.tap(findIcon(Icons.menu_rounded));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('amber'));
+    await tester.pumpAndSettle();
+    final prefs = await SharedPreferences.getInstance();
+    // Not on the switch itself: the write waits for the reader to settle.
+    expect(
+      prefs.getString('cowork.last_pick_v2'),
+      jsonEncode(<String>[cobalt.id, cobalt.threads.single.key]),
+    );
+    await tester.pump(const Duration(seconds: 2));
+    expect(
+      prefs.getString('cowork.last_pick_v2'),
+      jsonEncode(<String>[amber.id, amber.threads.single.key]),
+    );
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 1));
+  });
+
   testWidgets('with nothing remembered the app opens the top coworker', (
     tester,
   ) async {
