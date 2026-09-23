@@ -14,6 +14,7 @@ import 'package:chuk_chat/services/agents/agents_device_keys.dart';
 import 'package:chuk_chat/services/agents/agents_frame.dart';
 import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
+import 'package:chuk_chat/services/agents/agents_host_session.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
@@ -227,6 +228,7 @@ void main() {
     Stream<AuthState>? authChanges,
     Future<AccountSession?> Function(String)? sessionAdopter,
     SessionRefreshScheduler? scheduler,
+    AgentsHostSessionMinter? hostSessionMinter,
   }) async {
     final socket = FakeRelaySocket();
     final host = FakeExecutorHost(
@@ -250,6 +252,7 @@ void main() {
       authChanges: authChanges,
       sessionAdopter: sessionAdopter,
       scheduler: scheduler,
+      hostSessionMinter: hostSessionMinter,
     );
 
     await client.connect(
@@ -309,7 +312,8 @@ void main() {
     await settle();
     final frames = authFrames(host);
     expect(frames.map((p) => p['access_token']), ['access-1', 'access-2']);
-    expect(frames.last['refresh_token'], 'refresh-2');
+    // The app's refresh token never leaves the app (the host has its own).
+    expect(frames.last.containsKey('refresh_token'), isFalse);
     expect(frames.last['user_id'], 'user-1');
     // `expires_at` comes from the JWT's exp claim; a fake token has none, so
     // the field is simply absent here (the reprovision test covers it).
@@ -353,7 +357,7 @@ void main() {
 
     final frames = authFrames(host);
     expect(frames.map((p) => p['access_token']), ['access-1', 'access-3']);
-    expect(frames.last['refresh_token'], 'refresh-3');
+    expect(frames.last.containsKey('refresh_token'), isFalse);
     expect(frames.last['expires_at'], 1800000000);
     expect(source.refreshCalls, 1);
     // Never surfaced to the UI: nothing for the user to decide.
@@ -420,7 +424,7 @@ void main() {
     expect(adoptedWith, ['refresh-host']);
     final frames = authFrames(host);
     expect(frames.map((p) => p['access_token']), ['access-1', 'access-live']);
-    expect(frames.last['refresh_token'], 'refresh-live');
+    expect(frames.last.containsKey('refresh_token'), isFalse);
     await client.dispose();
   });
 
@@ -485,7 +489,7 @@ void main() {
 
     final last = authFrames(host).last;
     expect(last['access_token'], 'access-host');
-    expect(last['refresh_token'], 'refresh-host');
+    expect(last.containsKey('refresh_token'), isFalse);
     expect(last['expires_at'], 1800000000);
     await client.dispose();
   });
@@ -508,6 +512,75 @@ void main() {
     // Silence, not a frame with `user_id: ""` (docs/WIRE_CONTRACT.md: the
     // user id must not change).
     expect(authFrames(host), isEmpty);
+    await client.dispose();
+  });
+
+  test('a host_session_request is answered with a session minted for the '
+      'host alone, once per burst', () async {
+    final minted = <String>[];
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    final (client, host, _) = await paired(
+      sessionSource: source,
+      hostSessionMinter: (session) async {
+        minted.add(session.accessToken);
+        return const AgentsHostSession(
+          accessToken: 'host-access',
+          refreshToken: 'host-refresh',
+          userId: 'user-1',
+          expiresAt: 1800003600,
+        );
+      },
+    );
+    await client.provisionAccount(source.current()!);
+    await settle();
+
+    await host.emit(<String, dynamic>{
+      'type': 'host_session_request',
+      'reason': 'provisioned_without_own_session',
+    });
+    await host.emit(<String, dynamic>{'type': 'host_session_request'});
+    await settle();
+
+    // Minted with the app's own bearer, once for the burst.
+    expect(minted, ['access-1']);
+    final hostFrames = authFrames(host)
+        .where((p) => p['session_kind'] == 'host')
+        .toList();
+    expect(hostFrames, hasLength(1));
+    expect(hostFrames.single['refresh_token'], 'host-refresh');
+    expect(hostFrames.single['access_token'], 'host-access');
+    expect(hostFrames.single['expires_at'], 1800003600);
+    // The app's own refresh token went nowhere.
+    expect(
+      authFrames(host).any((p) => p['refresh_token'] == 'refresh-1'),
+      isFalse,
+    );
+    await client.dispose();
+  });
+
+  test('a host session that cannot be minted sends nothing', () async {
+    final source = _SessionSource(
+      current: const AccountSession(
+        accessToken: 'access-1',
+        refreshToken: 'refresh-1',
+        userId: 'user-1',
+      ),
+    );
+    final (client, host, _) = await paired(
+      sessionSource: source,
+      hostSessionMinter: (_) async => null,
+    );
+    await client.provisionAccount(source.current()!);
+    await settle();
+    await host.emit(<String, dynamic>{'type': 'host_session_request'});
+    await settle();
+    expect(authFrames(host).where((p) => p['session_kind'] == 'host'), isEmpty);
     await client.dispose();
   });
 
@@ -578,7 +651,7 @@ void main() {
       (m) => m['type'] == 'account_authentication',
     );
     expect(auth['access_token'], 'access-xyz');
-    expect(auth['refresh_token'], 'refresh-xyz');
+    expect(auth.containsKey('refresh_token'), isFalse);
     expect(auth['user_id'], 'user-1');
 
     await client.dispose();

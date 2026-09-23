@@ -93,7 +93,16 @@ TOOL_CALL_CAPABLE_MODELS = (
 
 
 class SupabaseAuthError(Exception):
-    """A GoTrue login or refresh failed."""
+    """A GoTrue login or refresh failed.
+
+    ``status`` is GoTrue's HTTP status when it answered at all. A 400/401/403 on
+    a refresh means the refresh token is dead for good; the host reads it to
+    tell a dead credential from a network blip.
+    """
+
+    def __init__(self, message: str = "", *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class BackendModelError(Exception):
@@ -168,7 +177,9 @@ def _gotrue(
         if http_client is None:
             client.close()
     if resp.status_code != 200:
-        raise SupabaseAuthError(f"gotrue {grant_type} failed: {resp.status_code}")
+        raise SupabaseAuthError(
+            f"gotrue {grant_type} failed: {resp.status_code}", status=resp.status_code
+        )
     return resp.json()
 
 
@@ -224,6 +235,12 @@ class SupabaseSession:
         default=None, repr=False, compare=False
     )
     on_self_refreshed: Callable[["SupabaseSession"], None] | None = field(
+        default=None, repr=False, compare=False
+    )
+    #: Called with the error when a self-refresh against GoTrue fails, before
+    #: it is raised. The host uses it to notice a dead refresh token at once,
+    #: whoever triggered the refresh (a model call, the relay dial).
+    on_refresh_failed: Callable[[Exception], None] | None = field(
         default=None, repr=False, compare=False
     )
     #: How long a refresh waits for the app's ``account_authentication`` frame
@@ -296,13 +313,21 @@ class SupabaseSession:
                 # Nobody attached (or standalone): the host is on its own. This
                 # ROTATES the pair — GoTrue refresh tokens are single-use — so
                 # the app's copy is now dead; report the new pair back to it.
-                data = _gotrue(
-                    self.supabase_url,
-                    self.anon_key,
-                    "refresh_token",
-                    {"refresh_token": self.refresh_token},
-                    self.http_client,
-                )
+                try:
+                    data = _gotrue(
+                        self.supabase_url,
+                        self.anon_key,
+                        "refresh_token",
+                        {"refresh_token": self.refresh_token},
+                        self.http_client,
+                    )
+                except Exception as exc:
+                    if self.on_refresh_failed is not None:
+                        try:
+                            self.on_refresh_failed(exc)
+                        except Exception:  # noqa: BLE001 — a listener must not mask the error
+                            pass
+                    raise
                 self._absorb(data)
                 with self._cond:
                     self._generation += 1

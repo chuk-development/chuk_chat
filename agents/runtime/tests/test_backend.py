@@ -913,3 +913,40 @@ def test_session_without_a_readable_token_still_assumes_valid():
     """An opaque token carries no deadline, and guessing one would refresh in a
     loop. The ``auth_error`` frame stays the backstop there."""
     assert _session(token="not-a-jwt").is_expired() is False
+
+
+# -- a refused refresh names its status (the host heals on it) -----------------
+
+
+def _refusing_gotrue(status: int) -> httpx.Client:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(status, json={"error": "invalid_grant"})
+
+    return httpx.Client(transport=httpx.MockTransport(handler))
+
+
+@pytest.mark.parametrize("status", [400, 503])
+def test_a_refused_refresh_carries_gotrues_status_and_is_reported(status):
+    from chuk_agents_runtime.backend import SupabaseAuthError
+
+    seen: list[Exception] = []
+    session = _session(token="expired", http_client=_refusing_gotrue(status))
+    session.on_refresh_failed = seen.append
+    with pytest.raises(SupabaseAuthError) as info:
+        session.refresh(reason="token_expired")
+    assert info.value.status == status
+    assert seen == [info.value]
+    # Nothing changed: the caller decides what a refusal means.
+    assert session.access_token == "expired" and session.refresh_token == "refresh-1"
+
+
+def test_a_failing_listener_does_not_mask_the_refusal():
+    from chuk_agents_runtime.backend import SupabaseAuthError
+
+    def boom(_exc):
+        raise RuntimeError("listener bug")
+
+    session = _session(token="expired", http_client=_refusing_gotrue(400))
+    session.on_refresh_failed = boom
+    with pytest.raises(SupabaseAuthError):
+        session.refresh()
