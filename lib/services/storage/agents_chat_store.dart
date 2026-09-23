@@ -37,12 +37,31 @@
 /// by an older cloud picture and never thrown away before it was uploaded.
 ///
 /// Only Agents threads come here ([ChatOrigin.isAgentsThread]); a chuk_chat
-/// chat keeps upstream's INSERT/UPDATE of `encrypted_chats`. Reads go through
-/// the verbatim chuk_chat modules: [ChatStorageService.loadFullChat] is
-/// cache-first, with the same payload shape
-/// (`{"v": kChatPayloadVersion, "messages": [...]}`) and the same cache row
-/// builder. The cloud sync reads `encrypted_chats` only, so it never sees a
-/// row this store writes to [kAgentsChatsTable].
+/// chat keeps upstream's INSERT/UPDATE of `encrypted_chats`.
+///
+/// ## Reads (the cloud half)
+///
+/// chuk_chat's sync, sidebar and preload read `encrypted_chats` only, so they
+/// never see a row this store writes to [kAgentsChatsTable]. This store reads
+/// its own table, as the standalone Agents app did:
+///
+/// * [loadThread] is memory, then the SQLite row, then the `cowork_chats` row
+///   (decrypted, then cached). A new device paints a thread from the cloud
+///   without waiting for a host replay.
+/// * [pullFromCloud] is the Agents half of chuk_chat's 30 s poll: it compares
+///   `updated_at` per thread and brings every newer cloud copy into SQLite
+///   (and into memory when the thread is there). A dirty thread, a thread
+///   with a write in flight and a thread just deleted are never overwritten.
+///
+/// The payload shape is chuk_chat's (`{"v": kChatPayloadVersion,
+/// "messages": [...]}`) and the cache row builder is chuk_chat's.
+///
+/// ## Delete and password change
+///
+/// [deleteThread] removes the `cowork_chats` row (not `encrypted_chats`), the
+/// SQLite row and the outbox entry. [snapshotCloudThreads] and
+/// [reencryptCloudThreads] let a password change re-seal every
+/// `cowork_chats` row with the new key, beside chuk_chat's `reencryptChats`.
 library;
 
 import 'dart:async';
@@ -88,11 +107,36 @@ const String kLastCacheUserKey = 'cowork.last_user_id';
 /// Signature of the cloud upsert. Injectable so the store is testable with no
 /// Supabase client. Returns the row as the server stored it (`created_at`,
 /// `updated_at`), or null when the write could not be made.
-typedef AgentsCloudUpsert =
-    Future<Map<String, dynamic>?> Function(
-      String userId,
-      Map<String, dynamic> row,
-    );
+typedef AgentsCloudUpsert = Future<Map<String, dynamic>?> Function(
+  String userId,
+  Map<String, dynamic> row,
+);
+
+/// Signature of a cloud read of [kAgentsChatsTable]. [ids] null reads every
+/// row of the user. [columns] is the Supabase select list.
+typedef AgentsCloudSelect = Future<List<Map<String, dynamic>>> Function(
+  String userId, {
+  List<String>? ids,
+  required String columns,
+});
+
+/// The columns of a full `cowork_chats` row.
+const String _kFullColumns =
+    'id, encrypted_payload, encrypted_title, created_at, is_starred, updated_at';
+
+/// One Agents thread of the cloud, decrypted: what a password change re-seals.
+@immutable
+class AgentsCloudThread {
+  const AgentsCloudThread({
+    required this.id,
+    required this.payloadJson,
+    this.title,
+  });
+
+  final String id;
+  final String payloadJson;
+  final String? title;
+}
 
 class AgentsChatStore {
   AgentsChatStore._();
@@ -138,6 +182,24 @@ class AgentsChatStore {
   static Future<void> Function(String key, String value)? outboxWrite;
   @visibleForTesting
   static Future<void> Function(String key)? outboxDelete;
+  @visibleForTesting
+  static AgentsCloudSelect? cloudSelect;
+  @visibleForTesting
+  static Future<void> Function(
+    String userId,
+    String id,
+    Map<String, dynamic> values,
+  )?
+  cloudUpdate;
+  @visibleForTesting
+  static Future<void> Function(String userId, String id)? cloudDelete;
+  @visibleForTesting
+  static Future<String> Function(String ciphertext)? decryptor;
+  @visibleForTesting
+  static Future<List<Map<String, dynamic>>> Function(String userId)?
+  localMetaReader;
+  @visibleForTesting
+  static Future<void> Function(String userId, String id)? localCacheDeleter;
 
   // ---------------------------------------------------------------------------
   // Public API
@@ -386,28 +448,427 @@ class AgentsChatStore {
     }
   }
 
-  /// Reads a thread: memory when it is fully loaded there, else chuk_chat's
-  /// cache-first `loadFullChat` (SQLite, then the cloud) when a session is
-  /// live — and the SQLite row alone when the session is not back yet but
-  /// this device remembers whose rows these are. With no id at all (a widget
-  /// test, a never-signed-in app) memory is all there is, so that is what
-  /// comes back — upstream would throw before its own memory check.
+  /// Reads a thread: memory when it is fully loaded there, else the SQLite
+  /// row, else — with a live session — the `cowork_chats` row. The SQLite row
+  /// alone is read when the session is not back yet but this device
+  /// remembers whose rows these are. With no id at all (a widget test, a
+  /// never-signed-in app) memory is all there is, so that is what comes back
+  /// — upstream would throw before its own memory check.
+  ///
+  /// The cloud step reads [kAgentsChatsTable], never `encrypted_chats`:
+  /// chuk_chat's `loadFullChat` would look for the thread in the wrong table
+  /// and a new device would only get it back through a host replay.
   static Future<StoredChat?> loadThread(String chatId) async {
     final existing = ChatStorageState.chatsById[chatId];
     if (existing != null && existing.isFullyLoaded) return existing;
     final userId = await resolveCacheUserId();
     if (userId == null) return existing;
-    if (_currentUserId() == null) {
-      // No live session: the cloud half of `loadFullChat` would throw before
-      // it read anything. Read the row this device already holds.
-      return await _loadFromLocalCache(userId, chatId, existing) ?? existing;
+    final cached = await _loadFromLocalCache(userId, chatId, existing);
+    if (cached != null) return cached;
+    if (_currentUserId() != userId) return existing;
+    return await _loadFromCloud(userId, chatId, existing) ?? existing;
+  }
+
+  /// The cloud half of [loadThread]: one `cowork_chats` row, decrypted, put
+  /// in memory and in the SQLite cache. Null when there is no readable row.
+  static Future<StoredChat?> _loadFromCloud(
+    String userId,
+    String chatId,
+    StoredChat? existing,
+  ) async {
+    if (!cloudAvailable) return null;
+    if (ChatStorageState.wasRecentlyDeleted(chatId)) return null;
+    try {
+      if (!await _ensureKey()) return null;
+      final rows = await _select(
+        userId,
+        ids: <String>[chatId],
+        columns: _kFullColumns,
+      );
+      if (rows.isEmpty) return null;
+      final decoded = await _decodeCloudRow(rows.first);
+      if (decoded == null) return null;
+      // A replay may have written the thread while the row was in flight.
+      // That copy is the newer one; keep it.
+      final current = ChatStorageState.chatsById[chatId];
+      if (current != null && current.isFullyLoaded) return current;
+      if (isDirty(chatId) || _chains.containsKey(chatId)) return current;
+      // Deleted while the row was in flight: do not bring it back.
+      if (ChatStorageState.wasRecentlyDeleted(chatId)) return null;
+      final chat = decoded.chat(existing);
+      ChatStorageState.chatsById[chatId] = chat;
+      ChatStorageState.notifyChanges(chatId);
+      _owned.add(chatId);
+      _watchRemovals();
+      await _writeLocalCache(userId, chat, decoded.payloadJson);
+      return chat;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-chat-store] cloud load failed: $error');
+      }
+      return null;
+    }
+  }
+
+  /// Brings every Agents thread whose `cowork_chats` row is newer than this
+  /// device's copy into the SQLite cache — and into memory when the thread is
+  /// there already, so an open thread repaints. The Agents half of
+  /// chuk_chat's 30 s poll, which reads `encrypted_chats` only.
+  ///
+  /// Never overwrites local data that is newer: a dirty thread (its local
+  /// copy has not reached the cloud), a thread with a write in flight and a
+  /// thread deleted a moment ago are skipped. Needs a signed-in user and the
+  /// key; without them it returns at once. Never throws. Returns the ids it
+  /// brought in.
+  static Future<List<String>> pullFromCloud() async {
+    if (!ChatOrigin.agentsEnabled) return const <String>[];
+    final userId = _currentUserId();
+    if (userId == null || !cloudAvailable) return const <String>[];
+    try {
+      if (!await _ensureKey()) return const <String>[];
+      await _loadOutbox(userId);
+      final listed = await _select(userId, columns: 'id, updated_at');
+      if (listed.isEmpty) return const <String>[];
+
+      final local = await _localTimestamps(userId);
+      final wanted = <String>[];
+      for (final row in listed) {
+        final id = row['id'];
+        if (id is! String || id.isEmpty) continue;
+        if (_skipPull(id)) continue;
+        final cloudAt = DateTime.tryParse('${row['updated_at']}');
+        final localAt = local[id];
+        if (localAt == null || (cloudAt != null && cloudAt.isAfter(localAt))) {
+          wanted.add(id);
+        }
+      }
+      if (wanted.isEmpty) return const <String>[];
+
+      final pulled = <String>[];
+      for (final row in await _selectBatched(userId, wanted)) {
+        final decoded = await _decodeCloudRow(row);
+        if (decoded == null) continue;
+        final id = decoded.id;
+        // Checked again: a replay may have written the thread meanwhile.
+        if (_skipPull(id)) continue;
+        final existing = ChatStorageState.chatsById[id];
+        final chat = decoded.chat(existing);
+        if (existing != null) {
+          ChatStorageState.chatsById[id] = chat;
+          ChatStorageState.notifyChanges(id);
+          _owned.add(id);
+          _watchRemovals();
+        }
+        await _writeLocalCache(userId, chat, decoded.payloadJson);
+        pulled.add(id);
+      }
+      return pulled;
+    } catch (error) {
+      if (kDebugMode) debugPrint('[agents-chat-store] pull failed: $error');
+      return const <String>[];
+    }
+  }
+
+  static bool _skipPull(String id) =>
+      !ChatOrigin.isAgentsThread(id) ||
+      isDirty(id) ||
+      _chains.containsKey(id) ||
+      ChatStorageState.wasRecentlyDeleted(id);
+
+  /// The newest `updated_at` this device holds per thread: the SQLite row,
+  /// or memory when that is newer.
+  static Future<Map<String, DateTime>> _localTimestamps(String userId) async {
+    final out = <String, DateTime>{};
+    try {
+      final read = localMetaReader ?? LocalChatCacheService.loadMeta;
+      for (final row in await read(userId)) {
+        final id = row['id'];
+        if (id is! String) continue;
+        final at =
+            DateTime.tryParse('${row['updated_at']}') ??
+            DateTime.tryParse('${row['created_at']}');
+        if (at != null) out[id] = at;
+      }
+    } catch (_) {
+      // No SQLite (a widget test): memory is all this device holds.
+    }
+    for (final chat in ChatStorageState.chatsById.values) {
+      if (!chat.isFullyLoaded) continue;
+      final at = chat.updatedAt ?? chat.createdAt;
+      final known = out[chat.id];
+      if (known == null || at.isAfter(known)) out[chat.id] = at;
+    }
+    return out;
+  }
+
+  /// Decrypts one full `cowork_chats` row. Null when it cannot be read.
+  static Future<_CloudRow?> _decodeCloudRow(Map<String, dynamic> row) async {
+    final id = row['id'];
+    final cipher = row['encrypted_payload'];
+    if (id is! String || cipher is! String || cipher.isEmpty) return null;
+    try {
+      final decrypt = decryptor ?? EncryptionService.decryptInBackground;
+      final payloadJson = await decrypt(cipher);
+      final decoded = deserializePayloadIsolate(payloadJson);
+      final messages = <ChatMessage>[
+        for (final m in decoded.messages) ChatMessage.fromJson(m),
+      ];
+      if (messages.isEmpty) return null;
+      return _CloudRow(
+        id: id,
+        row: row,
+        payloadJson: payloadJson,
+        messages: messages,
+        customName: _normalized(decoded.customName),
+      );
+    } catch (error) {
+      if (kDebugMode) {
+        // The type only: a parse error quotes the decrypted input.
+        debugPrint(
+          '[agents-chat-store] cannot read cloud row $id: '
+          '${error.runtimeType}',
+        );
+      }
+      return null;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delete
+  // ---------------------------------------------------------------------------
+
+  /// Deletes an Agents thread: its `cowork_chats` row, its SQLite row, its
+  /// outbox entry and its memory copy. The chuk_chat counterpart
+  /// (`ChatStorageCrud.deleteChat`) deletes from `encrypted_chats`, which
+  /// never holds the thread, and left the cloud row behind.
+  ///
+  /// As upstream: the cloud row goes first, and a failed cloud delete throws
+  /// before anything local is touched. With no signed-in user (or no Supabase
+  /// at all) there is no cloud row to delete, and memory is all there is.
+  static Future<void> deleteThread(String sessionKey) async {
+    final userId = _currentUserId();
+    if (userId != null && cloudAvailable) {
+      // A write in flight would upsert the row again after the delete.
+      await pending(sessionKey);
+      final delete = cloudDelete ?? _supabaseDelete;
+      // On the outbox chain: a flush that already read this thread's local
+      // copy would otherwise upsert the row again after the delete. The
+      // error still reaches the caller, so a failed delete keeps the thread.
+      final done = Completer<void>();
+      unawaited(
+        _runOnOutbox(() async {
+          try {
+            await delete(userId, sessionKey);
+            done.complete();
+          } catch (error, stack) {
+            done.completeError(error, stack);
+          }
+        }),
+      );
+      await done.future;
+    }
+
+    ChatStorageState.markDeleted(sessionKey);
+    ChatStorageState.chatsById.remove(sessionKey);
+    ChatStorageState.savingChats.remove(sessionKey);
+    ChatStorageState.pendingSaves.remove(sessionKey);
+    if (ChatStorageState.selectedChatId == sessionKey) {
+      ChatStorageState.selectedChatId = null;
+    }
+    ChatStorageState.notifyChanges(sessionKey);
+
+    if (userId == null) {
+      _dirty.remove(sessionKey);
+      return;
+    }
+    await _runOnOutbox(() async {
+      await _loadOutbox(userId);
+      if (_dirty.remove(sessionKey) != null) await _persistOutbox(userId);
+    });
+    try {
+      final deleteLocal = localCacheDeleter ?? LocalChatCacheService.delete;
+      await deleteLocal(userId, sessionKey);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-chat-store] cache delete failed: $error');
+      }
+    }
+    unawaited(_saveTitles(userId));
+  }
+
+  static Future<void> _supabaseDelete(String userId, String id) async {
+    await SupabaseService.client
+        .from(kAgentsChatsTable)
+        .delete()
+        .eq('user_id', userId)
+        .eq('id', id)
+        .timeout(const Duration(seconds: 10));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Password change
+  // ---------------------------------------------------------------------------
+
+  /// Every `cowork_chats` row of the signed-in user, decrypted with the key
+  /// that is loaded NOW. Taken before a password change rotates the key; the
+  /// rotation then re-seals it with [reencryptCloudThreads]. A row the
+  /// current key cannot open is left out: it cannot be re-sealed either.
+  ///
+  /// Throws when the table cannot be read: a password change that went on
+  /// would leave every Agents cloud copy sealed with a key nobody has.
+  static Future<List<AgentsCloudThread>> snapshotCloudThreads() async {
+    final userId = _currentUserId();
+    if (userId == null || !cloudAvailable) return const <AgentsCloudThread>[];
+    // The ids first (small), then the full rows in batches: one request for
+    // every payload can outgrow the timeout and block the password change.
+    final listed = await _select(userId, columns: 'id, updated_at');
+    final ids = <String>[
+      for (final row in listed)
+        if (row['id'] is String) row['id'] as String,
+    ];
+    final rows = await _selectBatched(userId, ids, strict: true);
+    final decrypt = decryptor ?? EncryptionService.decryptInBackground;
+    final out = <AgentsCloudThread>[];
+    for (final row in rows) {
+      final id = row['id'];
+      final cipher = row['encrypted_payload'];
+      if (id is! String || cipher is! String || cipher.isEmpty) continue;
+      try {
+        final payloadJson = await decrypt(cipher);
+        String? title;
+        final titleCipher = row['encrypted_title'];
+        if (titleCipher is String && titleCipher.isNotEmpty) {
+          try {
+            title = await decrypt(titleCipher);
+          } catch (_) {
+            title = null;
+          }
+        }
+        out.add(
+          AgentsCloudThread(id: id, payloadJson: payloadJson, title: title),
+        );
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint('[agents-chat-store] snapshot skips $id: $error');
+        }
+      }
+    }
+    return out;
+  }
+
+  /// Seals every thread of [snapshot] with the key that is loaded NOW and
+  /// writes it back to `cowork_chats`. Called by the password change inside
+  /// the key rotation (with the new key), and on rollback (with the old
+  /// one). Throws on the first failed write, so the rotation rolls back.
+  static Future<void> reencryptCloudThreads(
+    List<AgentsCloudThread> snapshot,
+  ) async {
+    if (snapshot.isEmpty) return;
+    final userId = _currentUserId();
+    if (userId == null) return;
+    final encrypt = encryptor ?? EncryptionService.encrypt;
+    final update = cloudUpdate ?? _supabaseUpdate;
+    for (final thread in snapshot) {
+      final values = <String, dynamic>{
+        'encrypted_payload': await encrypt(thread.payloadJson),
+      };
+      final title = thread.title;
+      if (title != null && title.isNotEmpty) {
+        values['encrypted_title'] = await encrypt(title);
+      }
+      await update(userId, thread.id, values);
+    }
+  }
+
+  static Future<void> _supabaseUpdate(
+    String userId,
+    String id,
+    Map<String, dynamic> values,
+  ) async {
+    await SupabaseService.client
+        .from(kAgentsChatsTable)
+        .update(values)
+        .eq('user_id', userId)
+        .eq('id', id)
+        .timeout(const Duration(seconds: 15));
+  }
+
+  /// How many full rows one cloud read asks for.
+  static const int _kFetchBatch = 50;
+
+  /// Full rows for [ids], [_kFetchBatch] at a time, so one large request
+  /// can neither outgrow the URL nor the timeout. A failed batch is skipped
+  /// (the next pull asks again); with [strict] it throws instead.
+  static Future<List<Map<String, dynamic>>> _selectBatched(
+    String userId,
+    List<String> ids, {
+    bool strict = false,
+  }) async {
+    final out = <Map<String, dynamic>>[];
+    for (var i = 0; i < ids.length; i += _kFetchBatch) {
+      final end = i + _kFetchBatch > ids.length ? ids.length : i + _kFetchBatch;
+      try {
+        out.addAll(
+          await _select(
+            userId,
+            ids: ids.sublist(i, end),
+            columns: _kFullColumns,
+          ),
+        );
+      } catch (error) {
+        if (strict) rethrow;
+        if (kDebugMode) {
+          debugPrint('[agents-chat-store] fetch batch failed: $error');
+        }
+      }
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Pausing cloud writes (password change)
+  // ---------------------------------------------------------------------------
+
+  static bool _cloudWritesPaused = false;
+
+  /// Stops every cloud write until [resumeCloudWrites]. A thread written
+  /// meanwhile stays dirty in the outbox. Waits for the writes in flight, so
+  /// nothing lands between a password change's snapshot and its re-encrypt:
+  /// no newer row is overwritten by the older snapshot, and no row is sealed
+  /// with the old key after the re-encrypt.
+  static Future<void> pauseCloudWrites() async {
+    _cloudWritesPaused = true;
+    for (final chain in _chains.values.toList()) {
+      try {
+        await chain;
+      } catch (_) {}
     }
     try {
-      return await ChatStorageCrud.loadFullChat(chatId) ?? existing;
-    } catch (error) {
-      if (kDebugMode) debugPrint('[agents-chat-store] load failed: $error');
-      return existing;
-    }
+      await _outboxChain;
+    } catch (_) {}
+  }
+
+  /// Lets cloud writes run again and flushes what waited, sealed with the key
+  /// that is loaded now.
+  static Future<void> resumeCloudWrites() async {
+    _cloudWritesPaused = false;
+    await flushOutbox();
+  }
+
+  static Future<List<Map<String, dynamic>>> _select(
+    String userId, {
+    List<String>? ids,
+    required String columns,
+  }) async {
+    final hook = cloudSelect;
+    if (hook != null) return hook(userId, ids: ids, columns: columns);
+    var query = SupabaseService.client
+        .from(kAgentsChatsTable)
+        .select(columns)
+        .eq('user_id', userId);
+    if (ids != null) query = query.inFilter('id', ids);
+    final rows = await query.timeout(const Duration(seconds: 30));
+    return rows.cast<Map<String, dynamic>>();
   }
 
   /// The offline half of [loadThread]: the plaintext SQLite row, decoded into
@@ -525,6 +986,7 @@ class AgentsChatStore {
     _dirtyUser = null;
     _outboxLoad = null;
     _outboxChain = Future<void>.value();
+    _cloudWritesPaused = false;
     await _removalWatch?.cancel();
     _removalWatch = null;
     userIdProvider = null;
@@ -536,6 +998,12 @@ class AgentsChatStore {
     outboxRead = null;
     outboxWrite = null;
     outboxDelete = null;
+    cloudSelect = null;
+    cloudUpdate = null;
+    cloudDelete = null;
+    decryptor = null;
+    localMetaReader = null;
+    localCacheDeleter = null;
     _rememberedUserId = null;
     _rememberedLoaded = false;
   }
@@ -600,6 +1068,8 @@ class AgentsChatStore {
     required String title,
     required DateTime updatedAt,
   }) async {
+    // A password change is rotating the key: stay dirty, flushed on resume.
+    if (_cloudWritesPaused) return false;
     if (!await _ensureKey()) {
       if (kDebugMode) {
         debugPrint('[agents-chat-store] no encryption key; $id stays local');
@@ -761,7 +1231,9 @@ class AgentsChatStore {
       // clear the flag itself; pushing here too could only be older.
       if (_chains.containsKey(id)) continue;
 
-      final copy = await _localCopy(userId, id);
+      final copy = ChatStorageState.wasRecentlyDeleted(id)
+          ? null
+          : await _localCopy(userId, id);
       if (copy == null) {
         // Nothing local to upload: the thread is gone on this device. The
         // flag would otherwise shield a ghost forever.
@@ -916,4 +1388,35 @@ class _LocalCopy {
   final String payloadJson;
   final String title;
   final DateTime updatedAt;
+}
+
+/// One decrypted `cowork_chats` row.
+class _CloudRow {
+  const _CloudRow({
+    required this.id,
+    required this.row,
+    required this.payloadJson,
+    required this.messages,
+    required this.customName,
+  });
+
+  final String id;
+  final Map<String, dynamic> row;
+  final String payloadJson;
+  final List<ChatMessage> messages;
+  final String? customName;
+
+  StoredChat chat(StoredChat? existing) {
+    final title =
+        customName ??
+        existing?.title ??
+        ChatStorageCrud.extractTitleFromMessages(messages);
+    return StoredChat.fromRow(
+      row,
+      messages,
+      customName: customName,
+      title: title.isNotEmpty ? title : null,
+      assistantId: existing?.assistantId,
+    );
+  }
 }
