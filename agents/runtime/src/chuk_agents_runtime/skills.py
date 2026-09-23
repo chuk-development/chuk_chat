@@ -47,6 +47,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .registry import ToolRegistry
+from .sqlite_tuning import tune_connection
 
 MAX_DESCRIPTION_CHARS = 1024
 MAX_CATALOG_DESCRIPTION_CHARS = 300
@@ -357,7 +358,7 @@ class SkillSettingsStore:
             )
 
     def _connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self._path, timeout=5.0)
+        conn = tune_connection(sqlite3.connect(self._path, timeout=5.0))
         conn.execute("PRAGMA busy_timeout=5000;")
         return conn
 

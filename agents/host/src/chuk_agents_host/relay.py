@@ -11,6 +11,15 @@ publishes its ``commit`` before the *joiner* has connected (that is the whole
 point of a pairing code — it is shown, then typed later). Messages for a peer
 that has not joined yet are held and flushed the instant it does. The relay still
 never looks inside them.
+
+That buffer is only for a role that has **not been on the channel yet**. Once a
+connection of a role has left, anything still addressed to that role belongs to
+the session that just ended (a reconnect hello minted a moment before the
+socket closed, a late result frame) and is dropped, not held for whoever takes
+the role next. Held, it was flushed into the next connection ahead of that
+connection's own handshake: the app answered the stale ``reconnect-hello``, the
+host checked the answer against its fresh one, and the reconnect died with a bad
+signature. The next connection gets its own session from its own ``join``.
 """
 
 from __future__ import annotations
@@ -65,6 +74,9 @@ class LocalRelay:
         self._tokens: dict[str, dict[str, int]] = {}
         # channel_id -> {target_role -> [raw messages held until it joins]}
         self._buffers: dict[str, dict[str, list[Any]]] = {}
+        # channel_id -> roles whose connection left and has not been replaced:
+        # messages for them are dropped, never held (see the module docstring).
+        self._departed: dict[str, set[str]] = {}
 
     # -- lifecycle -------------------------------------------------------
 
@@ -95,6 +107,7 @@ class LocalRelay:
             self._channels.clear()
             self._tokens.clear()
             self._buffers.clear()
+            self._departed.clear()
 
     def current_peer_token(self, channel: str, role: str) -> int | None:
         """The token of the connection currently holding ``role`` on ``channel``,
@@ -134,6 +147,11 @@ class LocalRelay:
             token = next(self._conn_ids)
             self._channels.setdefault(channel, {})[role] = ws
             self._tokens.setdefault(channel, {})[role] = token
+            departed = self._departed.get(channel)
+            if departed is not None:
+                departed.discard(role)
+                if not departed:
+                    del self._departed[channel]
             buffered = self._buffers.get(channel, {}).pop(role, [])
         # Flush outside the lock: sending can block.
         for message in buffered:
@@ -164,6 +182,9 @@ class LocalRelay:
                 role_buffers.pop(role, None)
                 if not role_buffers:
                     del self._buffers[channel]
+            # ...and so must anything sent to it from now on, until a new
+            # connection takes the role.
+            self._departed.setdefault(channel, set()).add(role)
             return True
 
     def _emit(self, channel: str, role: str, event: str, token: int) -> None:
@@ -182,6 +203,8 @@ class LocalRelay:
         with self._lock:
             peer = self._channels.get(channel, {}).get(peer_role)
             if peer is None:
+                if peer_role in self._departed.get(channel, ()):
+                    return  # for a session that ended; never for the next one
                 self._buffers.setdefault(channel, {}).setdefault(
                     peer_role, []
                 ).append(message)

@@ -21,8 +21,9 @@ container names, the shell scripts and the service unit for nothing.
 | Dart package prefix | `package:agents` | `package:chuk_chat` (the app absorbs it) |
 | Python namespace | `chuk_agents_runtime`, `chuk_agents_executor`, `chuk_agents_host`, `chuk_agents_manager`, `chuk_agents_sandbox`, `chuk_agents_crypto`, `chuk_agents_config` | `chuk_agents.runtime`, `.executor`, `.host`, `.manager`, `.sandbox`, `.crypto`, `.config` |
 | Environment prefix | `AGENTS_*` | `AGENTS_*` |
-| State directory | `~/.agents` | `~/.agents` |
-| Config file | `~/.agents/config.toml` | `~/.agents/config.toml` |
+| State directory | `~/.local/share/chuk-agents` (`$XDG_DATA_HOME/chuk-agents`; never `~/.agents`, which other tools share) | same |
+| Config file | `~/.local/share/chuk-agents/config.toml` | same |
+| Host CLI | `agents-host` (alias `cowork-host`) | `agents-host` |
 | Images | `agents-base`, `agents-browser` | `ghcr.io/chuk-development/agents-base`, `…/agents-browser` |
 | Service unit | `agents-manager.service` | `agents-manager.service` |
 | Container prefix | `agents-<agent id>` | `agents-<agent id>` |
@@ -48,9 +49,14 @@ rewriting them would break every one of those references to buy nothing.
   `AGENTS_*` first and fall back to `AGENTS_*` with a deprecation note for one
   release, because the systemd unit, the compose files and any shell a user
   wrote still say `AGENTS_*`.
-- **State directory**: on start, if `~/.agents` is absent and `~/.agents` exists,
-  move it and leave a symlink behind. The directory holds the device seed, the
-  account token and the secret vault; losing track of it means re-pairing every
-  device.
+- **State directory**: the first rename used `~/.agents` and moved `~/.cowork`
+  only when `~/.agents` did not exist. The `skills` CLI already keeps
+  `~/.agents/skills`, so on real machines the move never ran and the host came
+  up unpaired. Now the state lives in `~/.local/share/chuk-agents`, and on start
+  the host moves a legacy state from `~/.cowork` (symlink left) or from the top
+  level of `~/.agents` (only known host files; a note is left). The directory
+  holds the device seed, the account token and the secret vault; losing track
+  of it means re-pairing every device. See
+  `agents/common/chuk_agents_config/src/chuk_agents_config/state_home.py`.
 - **Images**: the old local tags keep working because the image is resolved by
   configuration, not by a constant.

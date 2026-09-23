@@ -70,6 +70,7 @@ __all__ = [
     "RelayConfig",
     "SandboxConfig",
     "SkillsConfig",
+    "TraceConfig",
     "VncConfig",
 ]
 
@@ -96,12 +97,13 @@ class PathsConfig:
     """Where Agents keeps its own state on this machine."""
 
     home: str = setting(
-        "~/.agents",
+        "~/.local/share/chuk-agents",
         env="AGENTS_HOME",
         doc=(
             "The host state directory: the agent workspaces, the logs, the "
             "account store, the encrypted vault and this configuration file "
-            "itself. A leading ``~`` is expanded. The file's own location is "
+            "itself. The default follows ``$XDG_DATA_HOME``; it is not "
+            "``~/.agents``, which other tools share. A leading ``~`` is expanded. The file's own location is "
             "settled before the file is read, so setting this key inside the "
             "file moves the state directory for everything else but not the "
             "file that said so; move the file with ``$AGENTS_HOME`` or an "
@@ -683,6 +685,54 @@ class LimitsConfig:
         env="AGENTS_JOB_TIMEOUT_SECONDS",
         doc="The fallback cap on one background job started from the shell tools.",
     )
+    heartbeat_seconds: float = setting(
+        10.0,
+        env="AGENTS_HEARTBEAT_SECONDS",
+        doc=(
+            "How often a running turn sends a ``heartbeat`` event to the app, "
+            "so a long silent tool call is not mistaken for a dead stream. "
+            "``0`` turns the heartbeat off."
+        ),
+    )
+
+
+@dataclass(frozen=True)
+class TraceConfig:
+    """The run trace: a developer switch that says which segment of a slow
+    turn was slow (us, the transport or the provider). Off by default."""
+
+    enabled: bool = setting(
+        False,
+        env="AGENTS_TRACE",
+        doc=(
+            "Write a JSONL run trace. Structure only (timings, sizes, ids), "
+            "never message text. Same as ``agents-host run --trace``."
+        ),
+    )
+    content: bool = setting(
+        False,
+        env="AGENTS_TRACE_CONTENT",
+        doc=(
+            "Also trace message content, scrubbed. Implies ``enabled``. A "
+            "second, deliberate switch, because structure is always safe and "
+            "text is not."
+        ),
+    )
+    directory: str = setting(
+        "",
+        env="AGENTS_TRACE_DIR",
+        doc="Where the trace goes. Empty means ``<state directory>/trace``.",
+    )
+    max_bytes: int = setting(
+        16 * 1024 * 1024,
+        env="AGENTS_TRACE_MAX_BYTES",
+        doc="The size at which the trace file rolls over.",
+    )
+    backups: int = setting(
+        3,
+        env="AGENTS_TRACE_BACKUPS",
+        doc="How many rolled-over trace files are kept beside the live one.",
+    )
 
 
 @dataclass(frozen=True)
@@ -789,6 +839,7 @@ class AgentsConfig:
     skills: SkillsConfig = field(default_factory=SkillsConfig)
     relay: RelayConfig = field(default_factory=RelayConfig)
     limits: LimitsConfig = field(default_factory=LimitsConfig)
+    trace: TraceConfig = field(default_factory=TraceConfig)
     automation: AutomationConfig = field(default_factory=AutomationConfig)
     emulator: EmulatorConfig = field(default_factory=EmulatorConfig)
 

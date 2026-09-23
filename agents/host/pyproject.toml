@@ -20,6 +20,8 @@ dependencies = [
 ]
 
 [project.scripts]
+agents-host = "chuk_agents_host.cli:main"
+# The pre-rename name. Kept so old units, scripts and muscle memory still work.
 cowork-host = "chuk_agents_host.cli:main"
 
 [dependency-groups]

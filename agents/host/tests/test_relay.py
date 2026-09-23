@@ -168,3 +168,31 @@ def test_buffer_is_cleared_when_the_target_leaves(relay):
             ctrl_b.send(json.dumps(join_message("chan-buf", "controller")))
             with pytest.raises(TimeoutError):
                 ctrl_b.recv(timeout=1)
+
+
+def test_a_message_for_a_departed_peer_is_dropped_not_held(relay):
+    """The reconnect race (test_local_run, flaky): the host minted a
+    ``reconnect-hello`` for a controller that closed a moment later. Held, it
+    was flushed into the NEXT controller ahead of that controller's own hello,
+    so the app answered the stale one and the reconnect died."""
+    with connect(_url(relay)) as exec_ws:
+        exec_ws.send(json.dumps(join_message("chan-dep", "executor")))
+        with connect(_url(relay)) as ctrl_a:
+            ctrl_a.send(json.dumps(join_message("chan-dep", "controller")))
+            exec_ws.send(json.dumps(frame_envelope("for-a")))
+            assert json.loads(ctrl_a.recv(timeout=3))["frame"] == "for-a"
+        assert _wait_for(lambda: relay.current_peer_token("chan-dep", "controller") is None)
+
+        # Sent after A left: it belongs to A's session.
+        exec_ws.send(json.dumps(frame_envelope("stale-hello-for-a")))
+
+        with connect(_url(relay)) as ctrl_b:
+            ctrl_b.send(json.dumps(join_message("chan-dep", "controller")))
+            assert _wait_for(
+                lambda: relay.current_peer_token("chan-dep", "controller") is not None
+            )
+            exec_ws.send(json.dumps(frame_envelope("fresh-hello-for-b")))
+            # B sees only its own session, first.
+            assert json.loads(ctrl_b.recv(timeout=3))["frame"] == "fresh-hello-for-b"
+            with pytest.raises(TimeoutError):
+                ctrl_b.recv(timeout=1)
