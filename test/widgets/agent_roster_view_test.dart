@@ -5,7 +5,6 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../support/icon_finder.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
