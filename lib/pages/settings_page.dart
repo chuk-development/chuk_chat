@@ -634,6 +634,9 @@ class _AccountRowState extends State<_AccountRow> {
   }
 
   Future<void> _loadProfile() async {
+    // No client yet (a cold start still initialising, or a widget test): the
+    // row falls back to metadata, as it does for a signed-out user.
+    if (!SupabaseService.isInitialized) return;
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
     try {

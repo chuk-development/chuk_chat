@@ -94,16 +94,26 @@ void main() {
 
   testWidgets('Account, Theme, here.now, Embedding and About each open',
       (tester) async {
-    Future<void> open(String label, Type page) async {
+    Future<void> open(String label, Type page, {String? rowText}) async {
       await pumpSettings(tester);
-      await tester.scrollUntilVisible(find.text(label).first, 200);
-      await tester.tap(find.text(label).last);
-      await tester.pumpAndSettle();
+      final row = find.text(rowText ?? label);
+      // A row already on screen stays put: scrolling aligns it to the top,
+      // which is under the floating header.
+      if (row.hitTestable().evaluate().isEmpty) {
+        await tester.scrollUntilVisible(row.first, 200);
+      }
+      await tester.tap(row.last);
+      // Fixed frames, not pumpAndSettle: the account page shows a spinner
+      // while it waits for a profile that a unit test never delivers.
+      await tester.pump();
+      await tester.pump(const Duration(seconds: 1));
       expect(find.byType(page), findsOneWidget, reason: '$label did not open');
       await closeSettings(tester);
     }
 
-    await open('Account', AccountSettingsPage);
+    // chuk's hub shows the account as the signed-in identity, not as a row
+    // titled "Account"; with no session it reads "User".
+    await open('Account', AccountSettingsPage, rowText: 'User');
     await open('Theme Settings', ThemePage);
     await open('here.now', HereNowSettingsPage);
     await open('Embedding', EmbeddingSettingsPage);

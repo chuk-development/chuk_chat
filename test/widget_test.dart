@@ -278,8 +278,11 @@ void main() {
       await tester.pumpAndSettle();
 
       // The chat surface, not a dashboard.
-      expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
-      expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('agents-add-computer')),
+        findsOneWidget,
+      );
+      expect(find.text('Add your computer to start chatting.'), findsOneWidget);
       // The old account-models list is gone.
       expect(find.text('Account models'), findsNothing);
       // No app bar: chuk has none. Settings is the gear in the sidebar's

@@ -37,6 +37,7 @@ import 'package:chuk_chat/widgets/agents_thread_view.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 
 import '../support/test_app.dart';
 import '../platform_specific/mobile/mobile_support.dart' show findId;
@@ -346,7 +347,7 @@ void main() {
       expect(find.byType(AgentRosterView), findsOneWidget);
       expect(find.byType(AgentsThreadView), findsOneWidget);
       expect(threadOffstage(tester), isFalse);
-      expect(find.text('Chuk Chat'), findsOneWidget);
+      expect(find.byType(BrandWordmark), findsOneWidget);
       expect(find.text('No agents yet.'), findsOneWidget);
       // chuk's chrome, not an app bar: the hamburger at the top left and the
       // floating row at the top right.
@@ -394,14 +395,14 @@ void main() {
     final (controller, _) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
-    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
+    expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
 
     await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
 
     // The roster is off screen; chuk's mini rail carries the two slots. The
     // browser has no rail slot and no button yet: nothing is open.
-    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
+    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
     expect(find.byTooltip('New agent'), findsOneWidget);
     expect(
       find.byTooltip('Control Rooms'),
@@ -412,7 +413,7 @@ void main() {
 
     await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
+    expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
     expect(find.byTooltip('New agent'), findsNothing);
   });
 
@@ -1040,17 +1041,17 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
+    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
     expect(threadView, findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     expect(find.byType(AppBar), findsNothing);
     await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Chuk Chat').hitTestable(), findsOneWidget);
+    expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     await tester.tap(findIcon(Icons.menu_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Chuk Chat').hitTestable(), findsNothing);
+    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
     expect(threadOffstage(tester), isFalse);
   });
 
