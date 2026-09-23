@@ -500,6 +500,9 @@ const Map<String, String> stringsFr = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Posez-moi n\'importe quelle question !',
   'aiDisclaimer': 'Vous discutez avec une IA/LLM — elle peut se tromper. Vérifiez l\'essentiel.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
   'queuedLabel': 'En file d\'attente',
   'queuedMessagesCount': '{count} messages en file d\'attente',
   'editYourMessage': 'Modifier votre message...',

@@ -218,6 +218,7 @@ class AppLocalizations {
   String get newWorkspace => _get('newWorkspace');
   String editedAt(String date) => _get('editedAt').replaceAll('{date}', date);
   String get aiDisclaimer => _get('aiDisclaimer');
+  String get agentsAiDisclaimer => _get('agentsAiDisclaimer');
   String get archive => _get('archive');
 
   // ── Tool calling page ──────────────────────────────────────

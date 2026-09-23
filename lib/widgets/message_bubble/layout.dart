@@ -846,7 +846,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           width: double.infinity,
           child: _buildInfoStatusBar(iconFgColor, accentColor),
         ),
-        const SizedBox(height: _kInfoBarGap),
+        // Agents keeps the original app's card-stack air under the bar.
+        SizedBox(height: agentsChatCore ? _kCardStackGap : _kInfoBarGap),
       ],
       if (renderImagesInBubble && !placeQrImageAboveResponse) ...[
         _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),

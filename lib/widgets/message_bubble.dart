@@ -22,6 +22,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';

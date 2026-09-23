@@ -496,6 +496,9 @@ const Map<String, String> stringsEs = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': '¡Pregúntame lo que quieras!',
   'aiDisclaimer': 'Estás chateando con una IA/LLM: puede equivocarse. Verifica lo importante.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'Estás chateando con una IA: puede equivocarse. Verifica lo importante.',
   'queuedLabel': 'En cola',
   'queuedMessagesCount': '{count} mensajes en cola',
   'editYourMessage': 'Edita tu mensaje...',
