@@ -130,11 +130,7 @@ extension _MessageBubbleImages on _MessageBubbleState {
         }
         for (int i = 0; i < loaderCount; i++) {
           cells.add(
-            _loaderTile(
-              width: tileWidth,
-              height: tileWidth,
-              borderRadius: 10,
-            ),
+            _loaderTile(width: tileWidth, height: tileWidth, borderRadius: 10),
           );
         }
 

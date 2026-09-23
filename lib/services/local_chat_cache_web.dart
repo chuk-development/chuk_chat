@@ -29,6 +29,13 @@ class LocalChatCacheService {
     await prefs.setString('kv_$key', value);
   }
 
+  static Future<bool> kvSetIfAbsent(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('kv_$key')) return false;
+    await prefs.setString('kv_$key', value);
+    return true;
+  }
+
   static Future<void> kvDelete(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('kv_$key');
@@ -178,11 +185,13 @@ class LocalChatCacheService {
   /// keeps startup off the platform-channel size limit.
   static Future<List<Map<String, dynamic>>> loadMeta(String userId) async {
     final chats = await _loadChats(userId);
-    return chats.map((chat) {
-      final meta = Map<String, dynamic>.from(chat);
-      meta.remove('payload');
-      return meta;
-    }).toList(growable: false);
+    return chats
+        .map((chat) {
+          final meta = Map<String, dynamic>.from(chat);
+          meta.remove('payload');
+          return meta;
+        })
+        .toList(growable: false);
   }
 
   /// Count cached chats for one user.

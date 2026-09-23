@@ -1,4 +1,9 @@
 // lib/services/artifact_storage_service.dart
+// MERGE NOTE: the Agents build carried a stub of this file (reads empty, writes
+// throw) because the Agents host delivered files as sandbox artifacts into the
+// local blob store and had no artifact database. Upstream's Supabase-backed
+// artifact store is kept; drop it again deliberately if Agents threads must
+// stop writing artifact rows.
 import 'dart:async';
 import 'dart:convert';
 

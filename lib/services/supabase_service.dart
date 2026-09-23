@@ -1,7 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
+import 'package:chuk_chat/services/auth_trace.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/session_refresh_scheduler.dart';
 import 'package:chuk_chat/supabase_config.dart';
 
 class SupabaseService {
@@ -21,6 +24,11 @@ class SupabaseService {
   /// expires, gotrue then signs the user out. Callers want a usable token,
   /// not a fresh one, so a session with time left is returned untouched and
   /// the rotation count drops from one every 30 s to roughly one per hour.
+  ///
+  /// With Agents the refresh token is also SHARED with the paired host (bead
+  /// cowork-2n1), so a spent token logs out two devices. Only
+  /// [SessionRefreshScheduler] and [SupabaseAccountSession], which refresh at
+  /// 60 s left, reach the network on their own.
   static const Duration _kRefreshLeeway = Duration(minutes: 10);
 
   static SupabaseClient get client {
@@ -51,11 +59,18 @@ class SupabaseService {
       publishableKey: SupabaseConfig.supabaseAnonKey,
       authOptions: const FlutterAuthClientOptions(
         authFlowType: AuthFlowType.pkce,
+        // Agents-only (bead cowork-2n1): the app's refresh must respect the
+        // paired host, which shares the single-use refresh token. gotrue's
+        // own timer cannot know about the host; SessionRefreshScheduler does,
+        // and it refreshes on its own when no relay is in use. Without
+        // Agents there is no host, and gotrue refreshes as in chuk_chat.
+        autoRefreshToken: !kFeatureAgents,
       ),
     );
 
     _initialized = true;
     initializedListenable.value = true;
+    if (kFeatureAgents) SessionRefreshScheduler.instance.start();
   }
 
   static GoTrueClient get auth => client.auth;
@@ -157,7 +172,54 @@ class SupabaseService {
     }
   }
 
+  /// Force-refresh the session, bypassing the throttle.
+  /// Returns null if the refresh token has been revoked (auth error).
+  /// Throws on network errors so caller can distinguish.
+  static Future<Session?> forceRefreshSession() async {
+    if (_inFlightRefresh != null) {
+      return await _inFlightRefresh!;
+    }
+    // Bypass throttle by not checking _lastRefreshTime
+    Future<Session?> performForceRefresh() async {
+      try {
+        final current = auth.currentSession;
+        if (current == null) return null;
+        final response = await auth.refreshSession();
+        _lastRefreshTime = DateTime.now();
+        return response.session ?? auth.currentSession;
+      } on AuthException catch (error) {
+        _lastRefreshTime = DateTime.now();
+        if (NetworkStatusService.isNetworkError(error)) {
+          rethrow; // Let caller know it's a network issue
+        }
+        // Token revoked or invalid
+        return null;
+      }
+    }
+
+    try {
+      _inFlightRefresh = performForceRefresh();
+      return await _inFlightRefresh;
+    } finally {
+      _inFlightRefresh = null;
+    }
+  }
+
+  /// Signs the user out. Every caller is a deliberate sign-out — the app has
+  /// no other reason to call it — so it is traced: a sign-out the user did not
+  /// ask for has to be attributable to the line that made it.
   static Future<void> signOut() async {
+    AuthTrace.note(
+      'app-signout',
+      detail: <String, Object?>{
+        'by': StackTrace.current
+            .toString()
+            .split('\n')
+            .skip(1)
+            .take(2)
+            .join(' | '),
+      },
+    );
     try {
       await auth.signOut();
     } on AuthException catch (error) {

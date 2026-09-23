@@ -11,6 +11,10 @@ import 'package:chuk_chat/utils/secure_token_handler.dart';
 import 'package:chuk_chat/utils/api_rate_limiter.dart';
 import 'package:chuk_chat/utils/certificate_pinning.dart';
 
+// MERGE NOTE: the Agents build carried a stub of this file (every entry point
+// returned {'success': false, 'error': 'File conversion runs on the Agents host'})
+// because the Agents host read files itself. Upstream's real converter is kept;
+// reinstate the host-side path deliberately if the client must stop converting.
 /// Service for converting files to markdown using the /v1/ai/convert-file endpoint.
 /// Supports documents, images (with EXIF/OCR), audio (with transcription),
 /// archives, e-books, and email files.
@@ -417,7 +421,4 @@ class FileConversionService {
       };
     }
   }
-
-
-
 }

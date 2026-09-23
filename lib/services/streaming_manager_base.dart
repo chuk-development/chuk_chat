@@ -40,6 +40,8 @@ abstract class StreamingManagerBase {
 
   /// Arm the idle timer for a stream that has just been created, before it is
   /// registered in [activeStreams]. No-op where there is no idle handling.
+  /// In an Agents build the io manager arms a log-only silence watch here
+  /// instead (see `StreamingManager.idleTimeoutEnabled`).
   @protected
   void armIdleTimer({
     required String chatId,
@@ -337,6 +339,10 @@ abstract class StreamingManagerBase {
             : activeStream.phase,
     };
 
+    // Diagnostics for the silence log. Nothing branches on them.
+    activeStream.lastEventAt = DateTime.now();
+    activeStream.eventCount++;
+
     // First-event stamp, idle-timer reset and TTFT measurement (io only).
     onEventBookkeeping(
       chatId: chatId,
@@ -361,6 +367,12 @@ abstract class StreamingManagerBase {
       activeStream.nativeToolCalls.addAll(event.calls);
     } else if (event is MetaEvent) {
       activeStream.latestMeta = Map<String, dynamic>.from(event.meta);
+    } else if (event is HeartbeatEvent) {
+      // Agents: proof of life and nothing else. It has already reset the idle
+      // timer (where there is one) and moved `connecting` to `processing`.
+      // There is no content to buffer and nothing to finish.
+      activeStream.heartbeatCount++;
+      activeStream.lastHeartbeatSeq = event.seq;
     } else if (event is ErrorEvent) {
       // Handle error events from the stream (e.g., API errors)
       if (kDebugMode) {
@@ -639,6 +651,23 @@ class ActiveStream {
   // considered dead and will be cleaned up with an error.
   Timer? idleTimer;
 
+  /// Agents: the log-only silence watch that replaces [idleTimer] there (see
+  /// `StreamingManager.idleTimeoutEnabled`). It reports gaps; it has no power
+  /// to end the stream.
+  Timer? silenceTimer;
+
+  /// When the last event of any kind arrived, null while none has.
+  DateTime? lastEventAt;
+
+  /// How many events of any kind this stream has seen, and how many of those
+  /// were heartbeats. Diagnostics only — nothing branches on them.
+  int eventCount = 0;
+  int heartbeatCount = 0;
+
+  /// The `seq` of the last heartbeat, so a gap in the host's sequence shows up
+  /// in the log.
+  int lastHeartbeatSeq = 0;
+
   // UI-update coalescing: holds the timer that flushes the latest buffer to
   // the UI at most once per the platform's UI-update interval, plus whether a
   // token has arrived since the last flush.
@@ -660,6 +689,8 @@ class ActiveStream {
   void cancelIdleTimer() {
     idleTimer?.cancel();
     idleTimer = null;
+    silenceTimer?.cancel();
+    silenceTimer = null;
   }
 
   void cancelUiThrottle() {

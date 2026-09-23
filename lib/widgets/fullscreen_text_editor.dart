@@ -18,6 +18,9 @@
 
 import 'package:flutter/material.dart';
 
+// Agents also imported ui/expressive/icon_map.dart here. That file is a byte
+// copy of widgets/icons/icon_map.dart below, so importing both would make
+// AppIcon ambiguous; constants.dart went with the old bottom-sheet body.
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -101,6 +104,9 @@ class _FullscreenComposerPageState extends State<_FullscreenComposerPage> {
     final cs = theme.colorScheme;
     final m3 = theme.m3;
 
+    // Agents still had the 75%-height bottom sheet this file's header
+    // describes; upstream replaced it with this route. Dropped with it: the
+    // sheet's own mini header row. The route's app bar does that job.
     return PopScope<Object?>(
       // Back never throws the edits away — it closes the screen the same way
       // the button does.

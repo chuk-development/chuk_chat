@@ -8,5 +8,4 @@
 // no manifest entry and no plugin — which is why it works the same on
 // Android, Linux, Windows and macOS.
 
-export 'mcp_redirect_stub.dart'
-    if (dart.library.io) 'mcp_redirect_io.dart';
+export 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart';

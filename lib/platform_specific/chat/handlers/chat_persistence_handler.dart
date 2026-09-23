@@ -340,15 +340,14 @@ class ChatPersistenceHandler {
         return;
       }
 
-      final chatIndex = ChatStorageService.savedChats.indexWhere(
-        (chat) => chat.id == pending.chatId,
-      );
-      if (chatIndex == -1) {
+      // Looked up by id, not in `savedChats`: that list leaves Agents threads
+      // out, and a patch for one would otherwise retry until it is dropped.
+      final chat = ChatStorageService.getChatById(pending.chatId);
+      if (chat == null) {
         retry();
         return;
       }
 
-      final chat = ChatStorageService.savedChats[chatIndex];
       if (!chat.isFullyLoaded) {
         final loaded = await ChatStorageService.loadFullChat(pending.chatId);
         if (loaded == null || !loaded.isFullyLoaded) {

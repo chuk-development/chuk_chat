@@ -27,6 +27,7 @@ class ThemeSettings {
   final Color accentColor;
   final Color iconColor;
   final Color backgroundColor;
+
   /// Null when the row predates these columns: the user has a look stored, but
   /// never these three values. The caller keeps its local ones in that case
   /// instead of being reset to the defaults.
@@ -62,9 +63,12 @@ class ThemeSettings {
       'accent_color': accentColor.toHexString(),
       'icon_color': iconColor.toHexString(),
       'background_color': backgroundColor.toHexString(),
-      'contrast': contrast,
-      'ui_font': uiFont,
-      'dynamic_color': dynamicColor,
+      // A null look field is left out rather than written as NULL, so a
+      // device that keeps it local (the Agents build) never clears the value
+      // another device stored.
+      if (contrast != null) 'contrast': contrast,
+      if (uiFont != null) 'ui_font': uiFont,
+      if (dynamicColor != null) 'dynamic_color': dynamicColor,
     };
   }
 

@@ -11,9 +11,13 @@
 
 import 'package:flutter/material.dart';
 
+
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ChatModeSelector extends StatelessWidget {
@@ -31,9 +35,18 @@ class ChatModeSelector extends StatelessWidget {
     this.reasoningEffort = ChatModeService.reasoningOff,
     this.reasoningLevels = const <String>[ChatModeService.reasoningOff],
     this.onReasoningEffortChanged,
-    this.height = 40,
+    this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
+    this.agentsMenus = false,
   });
+
+  /// The Agents thread's menus: the original app's filled tiles at the menu
+  /// radius, with no frame. Off, upstream's framed picker is kept.
+  final bool agentsMenus;
+
+  /// Menu rows one touch target high: the Agents build. chuk_chat keeps
+  /// upstream's 40 dp rows and 30 dp section headers.
+  bool get _agentsLook => agentsMenus || agentsChatCore;
 
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
@@ -154,8 +167,8 @@ class ChatModeSelector extends StatelessWidget {
     // rather than the bare word "Custom".
     final String pillLabel = mode == ChatMode.custom
         ? (modelLabel == null || modelLabel!.isEmpty
-            ? labelFor(mode)
-            : stripLabPrefix(modelLabel!))
+              ? labelFor(mode)
+              : stripLabPrefix(modelLabel!))
         : labelFor(mode);
     final IconData pillIcon = iconFor(mode);
 
@@ -380,7 +393,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: 30,
+      height: _agentsLook ? MobileLayout.minTouchTarget : 30,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         label.toUpperCase(),
@@ -394,7 +407,8 @@ class ChatModeSelector extends StatelessWidget {
     );
   }
 
-  /// One row, matching the model dropdown: 40 high, 16 of side padding,
+  /// One row, matching the model dropdown: one touch target high, 16 of side
+  /// padding,
   /// bold label, a tick on the right when it is the current choice.
   PopupMenuItem<T> _menuRow<T>({
     required T value,
@@ -406,7 +420,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       value: value,
-      height: 40,
+      height: _agentsLook ? MobileLayout.minTouchTarget : 40,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,
@@ -472,8 +486,10 @@ class ChatModeSelector extends StatelessWidget {
       alignRight: alignRight,
       besideAnchor: besideAnchor,
       // This is the model picker, a list being read against the chat behind
-      // it — it keeps the frame that says where the list ends.
-      outlined: true,
+      // it — it keeps the frame that says where the list ends. Not in the
+      // Agents thread, see [agentsMenus].
+      outlined: !agentsMenus,
+      borderRadius: agentsMenus ? kMenuOuterRadius : 18,
     );
   }
 

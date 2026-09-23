@@ -87,7 +87,9 @@ String _buildPreviousToolResultsBlock(String? toolCallsJson) {
 
     totalChars += line.length;
     if (totalChars > _maxTotalChars) {
-      lines.add('... [further tool results omitted to stay within size limits]');
+      lines.add(
+        '... [further tool results omitted to stay within size limits]',
+      );
       break;
     }
     lines.add(line);

@@ -111,6 +111,7 @@ void main() {
     test('switch on all event types', () {
       final events = <ChatStreamEvent>[
         const ContentEvent('text'),
+        const FinalContentEvent('final'),
         const ReasoningEvent('reason'),
         const UsageEvent({'tokens': 1}),
         const MetaEvent({'key': 'val'}),
@@ -118,6 +119,7 @@ void main() {
         const ToolCallsEvent([
           NativeToolCall(id: 'call_1', name: 'get_time', arguments: '{}'),
         ]),
+        const HeartbeatEvent(seq: 1),
         const ErrorEvent('err'),
         const DoneEvent(),
       ];
@@ -127,6 +129,8 @@ void main() {
         switch (event) {
           case ContentEvent():
             types.add('content');
+          case FinalContentEvent():
+            types.add('final_content');
           case ReasoningEvent():
             types.add('reasoning');
           case UsageEvent():
@@ -137,6 +141,8 @@ void main() {
             types.add('tps');
           case ToolCallsEvent():
             types.add('tool_calls');
+          case HeartbeatEvent():
+            types.add('heartbeat');
           case ErrorEvent():
             types.add('error');
           case DoneEvent():
@@ -148,11 +154,13 @@ void main() {
         types,
         equals([
           'content',
+          'final_content',
           'reasoning',
           'usage',
           'meta',
           'tps',
           'tool_calls',
+          'heartbeat',
           'error',
           'done',
         ]),

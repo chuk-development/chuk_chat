@@ -39,9 +39,7 @@ class MobileWorkspaceHandler {
             TextField(
               controller: nameController,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Workspace Name',
-              ),
+              decoration: const InputDecoration(labelText: 'Workspace Name'),
             ),
             const SizedBox(height: 16),
             TextField(

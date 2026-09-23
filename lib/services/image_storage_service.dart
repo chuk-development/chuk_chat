@@ -1,4 +1,10 @@
 // lib/services/image_storage_service.dart
+// MERGE NOTE: upstream's Supabase bucket and the Agents local blob store both
+// live here now. A path that starts with [scheme] (`cowork://blob/`) is a file
+// under the app-support directory — that is where the relay lands host files —
+// and every read/delete dispatches on it. Uploads still go to Supabase whenever
+// there is a signed-in user and a key; without one they fall back to the blob
+// store instead of throwing, which is what keeps the relay working offline.
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -7,6 +13,9 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_compression_service.dart';
 import 'package:chuk_chat/utils/lru_byte_cache.dart';
+import 'package:chuk_chat/utils/io_helper.dart' show Directory, File;
+import 'package:chuk_chat/utils/path_provider_stub.dart'
+    if (dart.library.io) 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 /// Represents a stored image with metadata
@@ -40,6 +49,14 @@ class ImageStorageService {
   const ImageStorageService._();
 
   static const String bucketName = 'images';
+
+  /// The scheme of a locally stored blob. Files delivered by the Agents relay
+  /// never reach the Supabase bucket: they are written under the app-support
+  /// directory and addressed `cowork://blob/<id>`.
+  static const String scheme = 'cowork://blob/';
+
+  static bool _isLocalBlob(String storagePath) =>
+      storagePath.startsWith(scheme);
   static const Uuid _uuid = Uuid();
 
   /// Stream controller for notifying when images are deleted
@@ -81,15 +98,12 @@ class ImageStorageService {
   /// 3. Upload encrypted data to storage bucket
   /// 4. Return the storage path
   static Future<String> uploadEncryptedImage(Uint8List imageBytes) async {
-    // Ensure user is authenticated
     final user = SupabaseService.auth.currentUser;
-    if (user == null) {
-      throw Exception('User must be authenticated to upload images');
-    }
-
-    // Ensure encryption key is available
-    if (!EncryptionService.hasKey) {
-      throw Exception('Encryption key not available');
+    // No signed-in user or no key: write a local blob instead of throwing.
+    // This is the Agents path — the relay delivers host files while the app may
+    // never have talked to Supabase at all.
+    if (user == null || !EncryptionService.hasKey) {
+      return uploadLocalBlob(imageBytes);
     }
 
     // Step 1: Compress image
@@ -142,6 +156,9 @@ class ImageStorageService {
     String storagePath, {
     bool bypassCache = false,
   }) async {
+    if (_isLocalBlob(storagePath)) {
+      return _readLocalBlob(storagePath, bypassCache: bypassCache);
+    }
     // Check cache first (unless bypassing)
     if (!bypassCache) {
       final cached = _imageCache.get(storagePath);
@@ -212,6 +229,9 @@ class ImageStorageService {
   /// Deletes an encrypted image from Supabase Storage
   /// Also clears cache and notifies listeners
   static Future<void> deleteEncryptedImage(String storagePath) async {
+    if (_isLocalBlob(storagePath)) {
+      return _deleteLocalBlob(storagePath);
+    }
     try {
       await SupabaseService.client.storage.from(bucketName).remove([
         storagePath,
@@ -230,7 +250,6 @@ class ImageStorageService {
       throw Exception('Failed to delete encrypted image: $e');
     }
   }
-
 
   /// Lists all images stored by the current user
   /// Returns a list of StoredImage objects with metadata
@@ -363,5 +382,94 @@ class ImageStorageService {
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // The local blob store (Agents). One file per blob under the app-support
+  // directory, addressed `cowork://blob/<id>`. No network, no encryption at
+  // rest beyond what the filesystem gives.
+  // ---------------------------------------------------------------------------
 
+  /// Writes [imageBytes] to the local blob store and returns its
+  /// `cowork://blob/<id>` path.
+  static Future<String> uploadLocalBlob(Uint8List imageBytes) async {
+    final id = _uuid.v4();
+    final storagePath = '$scheme$id';
+    final dir = await _blobDir();
+    if (dir != null) {
+      await File('${dir.path}/$id').writeAsBytes(imageBytes, flush: true);
+    }
+    _imageCache.put(storagePath, imageBytes);
+    return storagePath;
+  }
+
+  static Future<Uint8List> _readLocalBlob(
+    String storagePath, {
+    bool bypassCache = false,
+  }) async {
+    if (!bypassCache) {
+      final cached = _imageCache.get(storagePath);
+      if (cached != null) return cached;
+    }
+    final file = await _fileFor(storagePath);
+    if (file == null || !await file.exists()) {
+      throw Exception('Blob not found: $storagePath');
+    }
+    final bytes = await file.readAsBytes();
+    _imageCache.put(storagePath, bytes);
+    return bytes;
+  }
+
+  static Future<void> _deleteLocalBlob(String storagePath) async {
+    _imageCache.remove(storagePath);
+    final file = await _fileFor(storagePath);
+    if (file != null && await file.exists()) {
+      await file.delete();
+    }
+    if (!_deletedImagesController.isClosed) {
+      _deletedImagesController.add(storagePath);
+    }
+  }
+
+  /// Size of a stored image. Exact for a local blob; for a bucket path it
+  /// answers from the cache only, because the bucket has no cheap stat.
+  static Future<int> getImageSize(String storagePath) async {
+    final cached = _imageCache.get(storagePath);
+    if (cached != null) return cached.length;
+    if (!_isLocalBlob(storagePath)) return 0;
+    final file = await _fileFor(storagePath);
+    if (file == null || !await file.exists()) return 0;
+    return file.length();
+  }
+
+  /// Whether the bytes behind [storagePath] are here. Exact for a local blob;
+  /// for a bucket path it answers from the cache only.
+  static Future<bool> imageExists(String storagePath) async {
+    if (_imageCache.get(storagePath) != null) return true;
+    if (!_isLocalBlob(storagePath)) return false;
+    final file = await _fileFor(storagePath);
+    if (file == null) return false;
+    return file.exists();
+  }
+
+  static String _idOf(String storagePath) => storagePath.startsWith(scheme)
+      ? storagePath.substring(scheme.length)
+      : storagePath.replaceAll('/', '_');
+
+  static Future<Directory?> _blobDir() async {
+    try {
+      final support = await getApplicationSupportDirectory();
+      final dir = Directory('${support.path}/blobs');
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return dir;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  static Future<File?> _fileFor(String storagePath) async {
+    final dir = await _blobDir();
+    if (dir == null) return null;
+    return File('${dir.path}/${_idOf(storagePath)}');
+  }
 }

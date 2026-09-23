@@ -279,6 +279,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': modelIdToUse,
           'provider': providerToUse ?? '',
           'messageId': assistantMessageId,
+          'sentAt': DateTime.now().toIso8601String(),
           // The turn's clock starts here — at the request, not at the first
           // token. The wait before the first token is the one the reader
           // feels most, and it used to be counted as nothing.
@@ -447,6 +448,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
           tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+          // A retry REPLACES the last answer, so the host drops the turn being
+          // retried instead of storing the same question again. Only the first
+          // pass says so: the later passes of the same turn are continuations,
+          // and telling the host to drop again would eat the turn this retry
+          // just started.
+          regenerate: isRegenerate && currentPass == 0,
         );
 
         await _streamingManager.startStream(
@@ -951,6 +958,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       if (kDebugMode) {
         debugPrint('Cancelling stream for chat $_activeChatId...');
       }
+      // The user pressed Stop. The transport sends the `stop` frame on this
+      // declared intent only — a subscription that is merely cancelled (a page
+      // teardown, a reconnect, the next stream replacing this one) must leave
+      // the host's run alone (bead cowork-gnr8).
+      WebSocketChatService.declareStopIntent(_activeChatId!);
       await _streamingManager.cancelStream(_activeChatId!);
 
       if (!mounted) return;
@@ -1437,6 +1449,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'reasoning': '',
           'modelId': modelIdForSend,
           'provider': providerSlug,
+          // The wall time the reader sent it, so the bubble can carry a clock.
+          'sentAt': DateTime.now().toIso8601String(),
+          'startedAt': DateTime.now().toIso8601String(),
         };
 
         // Store images as JSON-encoded string if present
@@ -1497,6 +1512,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           'modelId': modelIdForSend,
           'provider': providerSlug,
           'startedAt': DateTime.now().toIso8601String(),
+          'sentAt': DateTime.now().toIso8601String(),
         });
         placeholderIndex = _messages.length - 1;
       });

@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 class AuthService {
   const AuthService();
@@ -153,6 +154,10 @@ class AuthService {
         await PasswordRevisionService.clearCachedRevision(userId: userId);
       }
       await SupabaseService.auth.signOut();
+      // The parsed message texts (plaintext) kept for fast rebuilds belong
+      // to the user who just left. Cleared first, so a failing teardown
+      // below cannot leave them behind.
+      MarkdownMessage.clearCaches();
       // Tear down the multiplexed /v2/ws connection so the new user (or
       // re-auth) gets a fresh socket with their token. Best-effort —
       // never blocks signOut on a hung socket teardown.

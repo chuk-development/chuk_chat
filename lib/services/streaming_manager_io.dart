@@ -5,6 +5,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/streaming_manager_base.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
@@ -33,8 +35,29 @@ class StreamingManager extends StreamingManagerBase {
   /// hanging forever when the server silently drops the connection.
   static const _idleTimeout = Duration(seconds: 60);
 
+  /// Whether silence ends a stream.
+  ///
+  /// chuk_chat (`FEATURE_AGENTS` off): yes — the [_idleTimeout] watchdog below.
+  ///
+  /// Agents (`FEATURE_AGENTS` on): no. A run on the user's own host can be
+  /// silent far longer than a minute while working perfectly: turns carrying
+  /// 170k–290k prompt tokens run 405 s to 1851 s end to end, and a provider
+  /// sends nothing at all until the prefill is done. There the idle timer is
+  /// replaced by a log-only silence watch ([silenceReportInterval]); a real
+  /// failure (socket drop, `error` frame, failed run, user stop) still ends
+  /// the stream at once, because those are events, not silence.
+  ///
+  /// Tests reach the Agents side through `debugAgentsChatCoreOverride`.
+  static bool get idleTimeoutEnabled => !agentsChatCore;
+
+  /// Agents: how often the silence watch checks for a gap worth logging.
+  /// Not `const`: a test drives the clock through it instead of waiting.
+  @visibleForTesting
+  static Duration silenceReportInterval = const Duration(seconds: 60);
+
   /// Start the idle timer — if no events arrive within [_idleTimeout],
-  /// treat the stream as dead and clean up.
+  /// treat the stream as dead and clean up. In an Agents build this arms the
+  /// log-only silence watch instead (see [idleTimeoutEnabled]).
   @override
   void armIdleTimer({
     required String chatId,
@@ -43,6 +66,10 @@ class StreamingManager extends StreamingManagerBase {
     onComplete,
     required StreamErrorCallback onError,
   }) {
+    if (!idleTimeoutEnabled) {
+      _armSilenceWatch(stream);
+      return;
+    }
     stream.idleTimer = _startIdleTimer(
       chatId: chatId,
       stream: stream,
@@ -90,8 +117,75 @@ class StreamingManager extends StreamingManagerBase {
       } else {
         onComplete(content, stream.reasoningBuffer.toString(), stream.tps);
       }
+      // Close the connection as completeStream does. cleanupStream only drops
+      // the map entry, so a late event of this dead stream would otherwise
+      // land in the next stream of the same chat.
+      unawaited(stream.subscription.cancel());
       cleanupStream(chatId);
     });
+  }
+
+  /// Agents: arms the log-only silence watch for [stream].
+  ///
+  /// Fires every [silenceReportInterval] for as long as the stream is active
+  /// and writes one line when nothing has arrived for at least that long. It
+  /// never touches the stream: no teardown, no error, no completion, and the
+  /// buffered content is not read for anything but its length.
+  void _armSilenceWatch(ActiveStream stream) {
+    stream.cancelIdleTimer();
+    stream.silenceTimer = Timer.periodic(silenceReportInterval, (timer) {
+      if (!stream.isActive) {
+        timer.cancel();
+        return;
+      }
+      final since = stream.lastEventAt ?? stream.startedAt;
+      final gap = DateTime.now().difference(since);
+      if (gap < silenceReportInterval) return;
+      _reportSilence(stream, gap);
+    });
+  }
+
+  /// One log line about an observed gap: which phase it happened in, how long
+  /// it actually was, how many events had arrived (and how many of those were
+  /// heartbeats), and whether any content was already buffered.
+  ///
+  /// "waiting for the first event" and "mid-stream" are different failures —
+  /// the first is a request that never got picked up, the second a run that
+  /// went quiet after it started — so the line names which one it is.
+  void _reportSilence(ActiveStream stream, Duration gap) {
+    final waiting = stream.eventCount == 0;
+    final phase = waiting ? 'waiting for the first event' : 'mid-stream';
+    final buffered = stream.contentBuffer.length;
+    final beats = stream.heartbeatCount;
+    if (kDebugMode) {
+      debugPrint(
+        '[StreamingManager] chat ${stream.chatId} quiet for ${gap.inSeconds}s '
+        '($phase, phase=${stream.phase.name}, events=${stream.eventCount}, '
+        'heartbeats=$beats${beats > 0 ? ' (last seq ${stream.lastHeartbeatSeq})' : ''}, '
+        'buffered=$buffered chars). Not an error: the run may still be working '
+        'on the host.',
+      );
+    }
+    // Also to the app's own opt-in logger, because that one survives a release
+    // build — a debug-only line cannot diagnose a stuck run on the phone. Only
+    // metadata goes in: how long, how many, how big. Never the text itself.
+    unawaited(
+      DiagnosticsLogService.info(
+        'streaming',
+        'stream quiet',
+        data: <String, Object?>{
+          'chat_id': stream.chatId,
+          'gap_seconds': gap.inSeconds,
+          'waiting_for_first_event': waiting,
+          'phase': stream.phase.name,
+          'events': stream.eventCount,
+          'heartbeats': beats,
+          'last_heartbeat_seq': stream.lastHeartbeatSeq,
+          'buffered_chars': buffered,
+          'reasoning_chars': stream.reasoningBuffer.length,
+        },
+      ).catchError((Object _) {}),
+    );
   }
 
   @override
@@ -107,17 +201,20 @@ class StreamingManager extends StreamingManagerBase {
     // that the server is there. Everything before it was still connecting.
     stream.firstEventAt ??= DateTime.now();
 
-    // Reset idle timer on every event — connection is still alive
-    stream.cancelIdleTimer();
-    stream.idleTimer = _startIdleTimer(
-      chatId: chatId,
-      stream: stream,
-      emptyMessage:
-          'Response timed out — the server stopped responding. '
-          'Please try again.',
-      onComplete: onComplete,
-      onError: onError,
-    );
+    // Reset idle timer on every event — connection is still alive. The
+    // Agents silence watch is not reset: it measures from `lastEventAt`.
+    if (idleTimeoutEnabled) {
+      stream.cancelIdleTimer();
+      stream.idleTimer = _startIdleTimer(
+        chatId: chatId,
+        stream: stream,
+        emptyMessage:
+            'Response timed out — the server stopped responding. '
+            'Please try again.',
+        onComplete: onComplete,
+        onError: onError,
+      );
+    }
 
     // Record time-to-first-token on the first real delta (content or reasoning).
     if ((event is ContentEvent || event is ReasoningEvent) &&
@@ -268,5 +365,38 @@ class StreamingManager extends StreamingManagerBase {
       }
     }
     return Platform.isAndroid || Platform.isIOS;
+  }
+
+  /// Agents: the host's canonical final answer (`FinalContentEvent`, emitted by
+  /// `agents_chat_transport.dart`). It REPLACES the streamed deltas instead of
+  /// appending to them, and it is published at once — the coalesced delta flush
+  /// may not have fired yet and completion clears the live notifier right after,
+  /// so a throttled update would lose the answer. Upstream's base has no branch
+  /// for this event; keep this override with it.
+  @override
+  Future<void> handleStreamEvent({
+    required String chatId,
+    required ChatStreamEvent event,
+    required Function(String content, String reasoning) onUpdate,
+    required Function(String content, String reasoning, double? tps) onComplete,
+    required StreamErrorCallback onError,
+  }) async {
+    if (event is FinalContentEvent) {
+      final stream = activeStreams[chatId];
+      if (stream != null && stream.isActive) {
+        stream.contentBuffer
+          ..clear()
+          ..write(event.text);
+        stream.cancelUiThrottle();
+        onUpdate(event.text, stream.reasoningBuffer.toString());
+      }
+    }
+    return super.handleStreamEvent(
+      chatId: chatId,
+      event: event,
+      onUpdate: onUpdate,
+      onComplete: onComplete,
+      onError: onError,
+    );
   }
 }

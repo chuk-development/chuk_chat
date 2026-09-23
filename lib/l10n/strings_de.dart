@@ -52,6 +52,7 @@ const Map<String, String> stringsDe = {
   'about': 'Über',
   'aboutSubtitle': 'Versionsinformationen und Open-Source-Lizenzen',
   'logout': 'Abmelden',
+  'logoutFailed': 'Abmelden fehlgeschlagen. Bitte erneut versuchen.',
   'noChatsToExport': 'Keine Chats zum Exportieren',
   'copiedToClipboard': 'In die Zwischenablage kopiert',
   'savedToPath': 'Gespeichert unter {path}',
@@ -188,6 +189,9 @@ const Map<String, String> stringsDe = {
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
   'aiDisclaimer': 'Du chattest mit einer KI/LLM — Fehler möglich, Wichtiges prüfen.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -443,9 +447,12 @@ const Map<String, String> stringsDe = {
   'resendCodeIn': 'Erneut senden in {seconds}s',
   'codeResent': 'Ein neuer Code wurde gesendet.',
   'enterVerificationCode': 'Gib den 6-stelligen Code ein.',
-  'invalidCode': 'Dieser Code ist ungültig oder abgelaufen. Fordere einen neuen an.',
-  'tooManyAttempts': 'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
-  'otpVerificationFailed': 'Bestätigung fehlgeschlagen. Bitte versuche es erneut.',
+  'invalidCode':
+      'Dieser Code ist ungültig oder abgelaufen. Fordere einen neuen an.',
+  'tooManyAttempts':
+      'Zu viele Versuche. Bitte warte einen Moment und versuche es erneut.',
+  'otpVerificationFailed':
+      'Bestätigung fehlgeschlagen. Bitte versuche es erneut.',
   'changeEmailAddress': 'Andere E-Mail verwenden',
 
   // ── Recover chats page ─────────────────────────────────────
@@ -570,6 +577,7 @@ const Map<String, String> stringsDe = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Frag mich alles!',
   'queuedLabel': 'In Warteschlange',
+  'queuedMessagesCount': '{count} Nachrichten in der Warteschlange',
   'editYourMessage': 'Nachricht bearbeiten...',
   'addMessageOrDocs': 'Nachricht oder Dokumente senden',
   'micAccessFailed': 'Mikrofonzugriff fehlgeschlagen',

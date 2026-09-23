@@ -5,6 +5,7 @@
 
 import 'dart:async';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -62,6 +63,9 @@ class ChatPreloadService {
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.
   static Future<void> startBackgroundPreload() async {
+    // The Agents build lists no chuk_chat chats, so it does not copy all of
+    // them into SQLite either (see `ChatSyncService._performAgentsSync`).
+    if (agentsChatCore) return;
     // Already complete or in progress
     if (_isPreloadComplete || _isPreloading) {
       if (kDebugMode) {
@@ -249,6 +253,11 @@ class ChatPreloadService {
   ) async {
     try {
       final rows = await SupabaseService.client
+          // MERGE NOTE: scripts/import_chat_ui.sh rewrote this table name to
+          // 'cowork_chats' for the standalone Agents build. Reverted: a
+          // chuk_chat chat lives in 'encrypted_chats'. Agents threads keep
+          // their own table through kAgentsChatsTable in
+          // services/storage/agents_chat_store.dart.
           .from('encrypted_chats')
           .select(
             'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',

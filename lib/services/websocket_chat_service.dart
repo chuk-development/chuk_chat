@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
@@ -17,7 +19,24 @@ import 'package:chuk_chat/utils/stream_error_notice.dart';
 /// and no legacy `/v1/ai/chat/ws` fallback in this client: one socket per
 /// session carries everything, multiplexed by `req_id`. (The backend keeps
 /// `/v1/ai/chat/ws` only so older app builds still work.)
+///
+/// An Agents build (`FEATURE_AGENTS`) does not talk to the hosted API at all:
+/// [sendStreamingChat] hands every send to [AgentsChatTransport], which relays
+/// it to the paired host. The stop-intent calls exist only for that transport
+/// and do nothing in a chuk_chat build.
 class WebSocketChatService {
+  /// Declares that the user asked to stop [sessionKey]'s run. Agents only; see
+  /// [AgentsChatTransport.declareStopIntent].
+  static void declareStopIntent(String sessionKey) {
+    if (agentsChatCore) AgentsChatTransport.declareStopIntent(sessionKey);
+  }
+
+  /// Takes back a declared stop. Agents only; see
+  /// [AgentsChatTransport.withdrawStopIntent].
+  static void withdrawStopIntent([String? sessionKey]) {
+    if (agentsChatCore) AgentsChatTransport.withdrawStopIntent(sessionKey);
+  }
+
   /// Sends a streaming chat request and yields chunks as they arrive.
   ///
   /// Ensures the shared multiplex connection is open (establishing it on
@@ -29,8 +48,60 @@ class WebSocketChatService {
   /// [accessToken] is accepted for API stability; authentication now flows
   /// through the multiplex handshake (which fetches the token itself), so
   /// it is not used to build the request payload.
+  ///
+  /// [regenerate] and [modelSelectionCaptured] are Agents-only send flags and
+  /// are ignored on this path.
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
+    required String message,
+    required String modelId,
+    required String providerSlug,
+    List<Map<String, dynamic>>? history,
+    String? systemPrompt,
+    int maxTokens = 512,
+    double temperature = 0.7,
+    List<String>? images,
+    String? reasoningEffort,
+    String? chatId,
+    List<Map<String, dynamic>>? tools,
+    bool regenerate = false,
+    bool modelSelectionCaptured = false,
+  }) {
+    if (agentsChatCore) {
+      return AgentsChatTransport.sendStreamingChat(
+        accessToken: accessToken,
+        message: message,
+        modelId: modelId,
+        providerSlug: providerSlug,
+        history: history,
+        systemPrompt: systemPrompt,
+        maxTokens: maxTokens,
+        temperature: temperature,
+        images: images,
+        reasoningEffort: reasoningEffort,
+        chatId: chatId,
+        tools: tools,
+        regenerate: regenerate,
+        modelSelectionCaptured: modelSelectionCaptured,
+      );
+    }
+    return _sendHosted(
+      message: message,
+      modelId: modelId,
+      providerSlug: providerSlug,
+      history: history,
+      systemPrompt: systemPrompt,
+      maxTokens: maxTokens,
+      temperature: temperature,
+      images: images,
+      reasoningEffort: reasoningEffort,
+      chatId: chatId,
+      tools: tools,
+    );
+  }
+
+  /// Upstream chuk_chat's send: the shared multiplex connection.
+  static Stream<ChatStreamEvent> _sendHosted({
     required String message,
     required String modelId,
     required String providerSlug,

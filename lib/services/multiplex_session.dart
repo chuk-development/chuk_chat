@@ -20,8 +20,10 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
+import 'package:chuk_chat/services/session_refresh_scheduler.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// Default grace period before tearing down the WS after the last chat
@@ -444,10 +446,20 @@ class MultiplexSession {
   /// Returns null when no token can be obtained. That is not an auth
   /// failure — the caller keeps the session and retries later. This method
   /// never signs anyone out.
+  ///
+  /// With Agents the Supabase refresh token is single-use and SHARED with the
+  /// paired host, so whether a new token is minted stays the
+  /// [SessionRefreshScheduler]'s decision: this asks it, it does not force.
+  /// The server's ask is a hint, and the request that carried it was served.
+  /// The auth bridge below hands the socket whatever the scheduler mints.
   static Future<String?> _freshTokenProvider() async {
     try {
-      final session = await SupabaseService.refreshSession();
-      if (session != null) return session.accessToken;
+      if (kFeatureAgents) {
+        await SessionRefreshScheduler.instance.refreshIfDue();
+      } else {
+        final session = await SupabaseService.refreshSession();
+        if (session != null) return session.accessToken;
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [MultiplexSession] fresh token refresh failed: $e');

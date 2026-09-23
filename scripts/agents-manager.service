@@ -1,0 +1,54 @@
+# Agents Manager — systemd **user** service template (§5).
+#
+# Installed by scripts/install.sh, which substitutes the @PLACEHOLDERS@ and
+# writes the result to ~/.config/systemd/user/agents-manager.service.
+#
+# A user service, not a system one: everything on the host belongs to one user
+# (§5), the container runtime is reached through that user's docker access, and a
+# user unit needs no root. Pairing is done once with `agents-host connect`; from
+# then on this unit keeps the host up and reconnects with no code.
+#
+# Survives a reboot: `WantedBy=default.target` starts it with the user manager,
+# and `loginctl enable-linger <user>` starts that manager at boot, before any
+# login. `Restart=always` brings the host back whatever made it stop.
+#
+# No secret is in this file. The host reads the Supabase URL and anon key from
+# the account token the app provisions (it is in the state directory). Optional
+# overrides, for example AGENTS_RELAY_URL, go into ~/.config/chuk-agents/host.env.
+#
+# The state directory is not named here unless install.sh was given one: the
+# host resolves the default ($XDG_DATA_HOME/chuk-agents) itself and moves a
+# legacy ~/.cowork (or host files at the top of ~/.agents) into it once.
+#
+# Placeholders: @EXEC@ @WORKSPACE_ARG@ @IMAGE@ @SANDBOX_KIND@
+
+[Unit]
+Description=Agents Manager (agent roster, per-agent sandboxes, local relay)
+Documentation=https://github.com/chuk-development/agents
+After=network-online.target
+Wants=network-online.target
+# Never give up: a host that crash-loops while the network comes up at boot
+# must keep trying, not be parked in "failed" by the start rate limit.
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+ExecStart=@EXEC@ run --no-qr @WORKSPACE_ARG@--sandbox @SANDBOX_KIND@
+WorkingDirectory=%h
+EnvironmentFile=-%h/.config/chuk-agents/host.env
+Environment=AGENTS_SANDBOX_KIND=@SANDBOX_KIND@
+Environment=AGENTS_SANDBOX_IMAGE=@IMAGE@
+# The host must always be up for the phone to reach it: restart it after a
+# crash AND after a clean exit (for example a host that stopped itself).
+Restart=always
+RestartSec=5
+# Stopping must not leave a half-torn-down container behind: the process gets
+# time to run its teardown, then the whole control group is killed.
+TimeoutStopSec=45
+KillMode=mixed
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chuk-agents-manager
+
+[Install]
+WantedBy=default.target

@@ -7,6 +7,7 @@ list(APPEND FLUTTER_PLUGIN_LIST
   desktop_drop
   dynamic_color
   file_selector_windows
+  firebase_core
   flutter_inappwebview_windows
   flutter_secure_storage_windows
   geolocator_windows

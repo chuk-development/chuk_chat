@@ -85,14 +85,21 @@ class MessageBubbleAction {
 }
 
 class _RenderSegment {
-  _RenderSegment._({this.text})
-      : toolCalls = <ToolCall>[],
-        timeline = <_ToolTimelineEntry>[];
+  _RenderSegment._({this.text, this.sandboxArtifact})
+    : toolCalls = <ToolCall>[],
+      timeline = <_ToolTimelineEntry>[];
 
   _RenderSegment.text(String t) : this._(text: t);
   _RenderSegment.round() : this._();
+  _RenderSegment.sandboxArtifact(SandboxArtifactPayload p)
+    : this._(sandboxArtifact: p);
 
   final String? text;
+
+  /// Set for sandbox-artifact segments — the inline downloadable file the
+  /// AI handed to the user via send_file_to_user. Rendered as its own
+  /// widget (image / pdf / text preview / file chip) between text blocks.
+  final SandboxArtifactPayload? sandboxArtifact;
 
   final List<ToolCall> toolCalls;
 
@@ -112,6 +119,7 @@ class _RenderSegment {
       timeline.where((e) => e.isReasoning).map((e) => e.reasoning!).toList();
 
   bool get isText => text != null;
+  bool get isSandboxArtifact => sandboxArtifact != null;
   bool get hasContent => timeline.isNotEmpty;
 }
 

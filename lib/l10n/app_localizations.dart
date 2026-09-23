@@ -89,6 +89,7 @@ class AppLocalizations {
   String get about => _get('about');
   String get aboutSubtitle => _get('aboutSubtitle');
   String get logout => _get('logout');
+  String get logoutFailed => _get('logoutFailed');
   String get noChatsToExport => _get('noChatsToExport');
   String get copiedToClipboard => _get('copiedToClipboard');
   String savedToPath(String path) =>
@@ -218,6 +219,7 @@ class AppLocalizations {
   String get newWorkspace => _get('newWorkspace');
   String editedAt(String date) => _get('editedAt').replaceAll('{date}', date);
   String get aiDisclaimer => _get('aiDisclaimer');
+  String get agentsAiDisclaimer => _get('agentsAiDisclaimer');
   String get archive => _get('archive');
 
   // ── Tool calling page ──────────────────────────────────────
@@ -572,6 +574,8 @@ class AppLocalizations {
   // ── Chat UI ────────────────────────────────────────────────
   String get askMeAnything => _get('askMeAnything');
   String get queuedLabel => _get('queuedLabel');
+  String queuedMessagesCount(String count) =>
+      _get('queuedMessagesCount').replaceAll('{count}', count);
   String get editYourMessage => _get('editYourMessage');
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');

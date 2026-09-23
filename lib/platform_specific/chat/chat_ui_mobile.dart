@@ -1,13 +1,44 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
+//
+// MERGE NOTE (Agents into chuk_chat) — this screen took upstream's side, whole.
+//
+// Both sides had refactored the same 3.5k-line State and the two
+// decompositions are mutually exclusive: upstream split it into the shared
+// chat_*_mixin family (ChatModelSelectionMixin, ChatMessageEditMixin,
+// RegenVariantSeedMixin, ChatMessageListItem, MessageRenderCache,
+// ChatDebugSnapshot) that the desktop screen also uses, while Agents split it
+// into its own mobile_*_mixin family. Upstream's won.
+//
+// Agents's messenger features are back on top of upstream's structure, all
+// behind `widget.messengerMode`, which only agents_thread_view sets. With it
+// off, nothing below runs and the screen is upstream's:
+//   * the host typing bubble (`host-run-typing`, from `widget.hostRunActive`),
+//   * reactions and reply-to on the bubbles (ChatMessageListItem passes them
+//     through), with the reply preview above the composer,
+//   * the composer outbox: several queued messages instead of one slot,
+//   * the per-chat model and provider (`modelSelectionChatId`).
+// Deliberately not brought back, because upstream has the same thing:
+//   * the per-payload MessageDecodeCache (upstream's MessageRenderCache),
+//   * the payment-required dialog (upstream's `_showPaymentRequiredDialog`).
+// Kept from Agents as well: the day divider in the message list, the "never
+// grab the keyboard on a phone" rule and the keyboard re-pin observer.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+
 import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/models/chat_reply.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/chat_reaction_service.dart';
+import 'package:chuk_chat/widgets/chat_reply_preview.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
@@ -33,6 +64,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -41,6 +73,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'dart:async';
 
 // Import new handlers
@@ -61,6 +94,9 @@ import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
+import 'package:chuk_chat/ui/expressive/day_divider.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// What the plus menu can start.
@@ -75,6 +111,13 @@ class _WorkspaceChoice {
   final String? workspaceId;
   final bool create;
 }
+
+/// The text a cancelled queue puts back into the composer: the pending
+/// message first, then every queued follow-up in the order it was typed,
+/// separated by a blank line. With no follow-ups it is [pending] unchanged.
+@visibleForTesting
+String queuedMessagesForComposer(String pending, List<String> followUps) =>
+    followUps.isEmpty ? pending : <String>[pending, ...followUps].join('\n\n');
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -107,6 +150,16 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
 
+  /// Agents's messenger presentation: the host typing bubble, reactions,
+  /// reply-to, the multi-message outbox and the per-chat model. Only
+  /// `agents_thread_view.dart` sets it; with it off this screen is upstream's.
+  final bool messengerMode;
+
+  /// Host activity survives the lifetime of a local streaming subscription.
+  /// Only set from an observed live run, never inferred from offline history.
+  /// Agents's; see [messengerMode].
+  final bool hostRunActive;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -130,6 +183,8 @@ class ChukChatUIMobile extends StatefulWidget {
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
+    this.messengerMode = false,
+    this.hostRunActive = false,
   });
 
   @override
@@ -226,6 +281,43 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Null when nothing is pinned. See [ChatScrollMixin.pinMessageToTop].
   String? _pinnedUiKey;
 
+  /// Agents's, kept: keeps the newest message above the composer when the
+  /// soft keyboard resizes the chat.
+  ///
+  /// The keyboard does not pad this subtree, it SHRINKS it (the hosting
+  /// Scaffold runs `resizeToAvoidBottomInset: false`). A top-anchored list
+  /// keeps its offset when its viewport shrinks, so without this the newest
+  /// message walks down behind the composer the moment the keyboard opens.
+  /// The pin bails out by itself when the reader has scrolled up into the
+  /// history.
+  late final ChatMetricsObserver _viewInsetRepin = ChatMetricsObserver(
+    pinToBottomDuringStream,
+  );
+
+  /// Agents's, kept: may this screen take the composer's focus itself when it
+  /// loads a chat?
+  ///
+  /// Not on a phone. The Agents shell keeps this screen mounted BEHIND the
+  /// coworker list, because it owns the relay socket
+  /// (`messenger_shell.dart`), so a focus grab on mount opens the soft
+  /// keyboard while the list is what the reader is looking at. And a
+  /// messenger does not open the keyboard just because a thread was opened
+  /// either: the keyboard belongs to the tap on the composer. With a hardware
+  /// keyboard (a desktop window narrow enough for this layout) the focus
+  /// costs nothing and stays.
+  bool get _mayAutoFocusComposer =>
+      !kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.android &&
+      defaultTargetPlatform != TargetPlatform.iOS;
+
+  /// [_mayAutoFocusComposer] for the Agents thread only. Upstream's chat
+  /// (messenger mode off) keeps its own focus rule unchanged.
+  bool get _mayFocusOnLoad => !widget.messengerMode || _mayAutoFocusComposer;
+
+  /// Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
+  /// but the Agents composer offers them, as the original app did.
+  bool get _workspacesEnabled => kFeatureWorkspaces || widget.messengerMode;
+
   late final VoidCallback _modelSelectionListener;
 
   // Stream subscriptions
@@ -237,6 +329,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
+
+  /// Messenger mode only: messages queued behind [_pendingMessageText],
+  /// oldest first. A burst typed while the coworker works goes out in order;
+  /// the single slot alone lost the first of two messages.
+  final List<String> _queuedFollowUps = <String>[];
+
+  /// Messenger mode only: the message the next send quotes, per chat.
+  final Map<String, ChatReply> _replyDrafts = <String, ChatReply>{};
+
+  /// Whether the messenger listeners were attached in [initState].
+  bool _messengerListening = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
@@ -248,6 +351,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   bool get _isCurrentChatStreaming =>
       _activeChatId != null &&
       _streamingHandler.isChatStreaming(_activeChatId!);
+
+  // Messenger mode: the thread opens at its bottom (see ChatScrollMixin).
+  @override
+  bool get anchoredTranscript => widget.messengerMode;
+
+  @override
+  List<Map<String, String>> get transcriptRows => _messages;
+
+  @override
+  bool get transcriptStreaming => _isCurrentChatStreaming || _isSendingMessage;
+
+  @override
+  double get transcriptPxPerChar => 0.6;
 
   /// Per-chat send-in-flight flag, backed by the ChatRuntime for the
   /// currently visible chat. Reads return false for chats with no runtime
@@ -281,6 +397,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // The disclaimer under the composer steps aside while the field has the
     // caret, so the focus change has to repaint it.
     composerFocusNode.addListener(_onComposerFocusChanged);
+    if (widget.messengerMode) {
+      _messengerListening = true;
+      ChatReactionService.instance.addListener(_onMessengerStoreChanged);
+      ChatModelSelectionService.instance.addListener(_onChatModelChanged);
+      _loadReactions();
+    }
     // Mode + its config (model, provider, reasoning) restore once, via
     // loadSavedModelPreference in _loadInitialData's post-frame pass — the
     // single entry point, so startup writes and picked-model refreshes run
@@ -290,6 +412,110 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   void _onComposerFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  // --- Messenger mode (Agents) ---------------------------------------------
+  //
+  // Everything below runs only with [ChukChatUIMobile.messengerMode] on.
+
+  /// The chat the reply drafts and reactions are stored under.
+  String get _messengerChatKey =>
+      widget.selectedChatId ?? _activeChatId ?? 'default';
+
+  void _onMessengerStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _loadReactions() {
+    unawaited(
+      ChatReactionService.instance
+          .load(_messengerChatKey)
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// The reaction key of message [index]. Undated legacy messages with the
+  /// same content count their occurrence, so each keeps its own reaction
+  /// without depending on absolute list positions.
+  String _reactionKeyAt(int index) {
+    final key = ChatReactionService.messageKey(_messages[index]);
+    if (!key.startsWith('legacy:') ||
+        (_messages[index]['sentAt']?.isNotEmpty ?? false) ||
+        (_messages[index]['startedAt']?.isNotEmpty ?? false)) {
+      return key;
+    }
+    var occurrence = 0;
+    for (var i = 0; i < index; i++) {
+      if (ChatReactionService.messageKey(_messages[i]) == key) occurrence++;
+    }
+    return '$key:$occurrence';
+  }
+
+  Future<void> _toggleReaction(String messageId, String emoji) async {
+    try {
+      await ChatReactionService.instance.toggle(
+        _messengerChatKey,
+        messageId,
+        emoji,
+      );
+    } catch (_) {
+      if (mounted) showSnackBar('Could not save reaction. Please try again.');
+    }
+  }
+
+  /// Quote message [index] in the composer. The quote travels as ordinary
+  /// text ([ChatReply.compose]), so the host and replay keep it.
+  void _replyToMessage(int index) {
+    if (index < 0 || index >= _messages.length) return;
+    final message = _messages[index];
+    final text = (message['text'] ?? '').trim();
+    if (text.isEmpty) return;
+    setState(() {
+      messageActionsHandler.cancelEdit();
+      _replyDrafts[_messengerChatKey] = ChatReply(
+        author: message['sender'] == 'user' ? 'You' : 'AI',
+        text: text,
+      );
+    });
+    composerFocusNode.requestFocus();
+  }
+
+  /// Agents keeps one model per chat. Upstream's composer keeps one per
+  /// mode, account-wide; with messenger mode off this returns null and the
+  /// resolution mixin keeps that behaviour.
+  @override
+  String? get modelSelectionChatId =>
+      widget.messengerMode ? (widget.selectedChatId ?? _activeChatId) : null;
+
+  void _onChatModelChanged() {
+    if (mounted) unawaited(_hydrateChatModel().catchError((Object _) {}));
+  }
+
+  /// Put this chat's own model and provider into the composer, if it has one.
+  Future<void> _hydrateChatModel() async {
+    final chatId = modelSelectionChatId;
+    if (chatId == null) return;
+    final choice = await ChatModelSelectionService.instance.load(chatId);
+    if (!mounted || modelSelectionChatId != chatId || choice == null) return;
+    if (selectedModelId == choice.modelId &&
+        selectedProviderSlug == choice.providerSlug) {
+      return;
+    }
+    setState(() {
+      selectedModelId = choice.modelId;
+      selectedProviderSlug = choice.providerSlug;
+    });
+    unawaited(refreshSelectedModelName(choice.modelId));
+  }
+
+  /// The chat's own pair goes in first, so it never waits behind the mode
+  /// restore's catalogue work, and again after it, because that restore
+  /// writes the mode's account-wide model into the same fields.
+  @override
+  Future<void> restoreChatMode() async {
+    if (widget.messengerMode) await _hydrateChatModel();
+    await super.restoreChatMode();
+    if (widget.messengerMode) await _hydrateChatModel();
   }
 
   void _initializeHandlers() {
@@ -547,17 +773,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Scroll listener for scroll-to-bottom button
     scrollController.addListener(onScrollChanged);
 
+    // Agents's, kept: re-pin the newest message when the keyboard resizes the
+    // chat. See [_viewInsetRepin].
+    WidgetsBinding.instance.addObserver(_viewInsetRepin);
+
     // Text field focus listener — collapse mic & model buttons while typing
 
     // Text controller listener
     composerController.addListener(_onControllerChanged);
 
-    // Request focus if sidebar closed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!widget.isSidebarExpanded) {
-        composerFocusNode.requestFocus();
-      }
-    });
+    // Request focus if sidebar closed — never on a phone, see
+    // [_mayAutoFocusComposer] in the Agents thread. Agents's rule, kept.
+    if (_mayFocusOnLoad) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!widget.isSidebarExpanded) {
+          composerFocusNode.requestFocus();
+        }
+      });
+    }
 
     // Model selection listener
     _modelSelectionListener = () {
@@ -627,7 +860,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       unawaited(_loadSystemPrompt());
       unawaited(NetworkStatusService.quickCheck());
       // Load projects for workspace selection feature
-      if (kFeatureWorkspaces) {
+      if (_workspacesEnabled) {
         unawaited(WorkspaceStorageService.loadFromCache());
       }
     });
@@ -645,6 +878,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
+      if (_messengerListening) _loadReactions();
       if (kDebugMode) {
         debugPrint('');
       }
@@ -751,6 +985,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         _fileHandler.clearAll();
         composerController.clear();
         messageActionsHandler.cancelEdit();
+        if (widget.messengerMode) _resetThreadTransientState();
       });
 
       if (kDebugMode) {
@@ -777,6 +1012,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     if (_activeChatId != null) {
@@ -800,6 +1036,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.dispose();
     _composerScrollController.dispose();
     composerFocusNode.removeListener(_onComposerFocusChanged);
+    if (_messengerListening) {
+      ChatReactionService.instance.removeListener(_onMessengerStoreChanged);
+      ChatModelSelectionService.instance.removeListener(_onChatModelChanged);
+    }
     composerFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -1019,7 +1259,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Opening an existing chat should *start* at the bottom, not animate.
     scrollChatToBottom(force: true, animate: false);
     // Use captured sidebar state to prevent focus when sidebar was open
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -1047,7 +1287,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         showScrollToBottom = false;
       });
       scrollChatToBottom(force: true, animate: false);
-      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+      if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
         composerFocusNode.requestFocus();
       }
       return;
@@ -1128,7 +1368,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       showScrollToBottom = false;
     });
     scrollChatToBottom(force: true, animate: false);
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -1356,7 +1596,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           icon: Icons.attach_file,
           label: l10n.files,
         ),
-        if (kFeatureWorkspaces)
+        if (_workspacesEnabled)
           _composerMenuRow(
             value: _AttachChoice.workspace,
             iconFg: iconFg,
@@ -1429,17 +1669,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
-  /// One size for every target in the composer action row: the plus, the
-  /// mode pill, the microphone and send. The row reads as one family only if
-  /// they share a number — a 36 here and a 38 there is visible, and the
-  /// microphone turning into the stop target must not resize anything.
-  /// Change this one constant, never a single call site.
-  static const double _composerTargetSize = 38;
-
-  /// The gap between two targets of that row. One number, so the spacing is
-  /// even from the plus to send.
-  static const double _composerTargetGap = 6;
-
   /// Open a menu anchored to a composer button. It leaves the focus and
   /// so the keyboard alone.
   Future<T?> _showAnchoredComposerMenu<T>({
@@ -1454,8 +1683,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       // The attach and workspace menus are read against the chat behind
       // them, the same as the model picker, so they keep the frame that says
-      // where the list ends.
-      outlined: true,
+      // where the list ends. The Agents thread keeps the original app's
+      // menu instead: filled tiles, no frame, the menu radius.
+      outlined: !widget.messengerMode,
+      borderRadius: widget.messengerMode ? kMenuOuterRadius : 18,
     );
   }
 
@@ -1932,19 +2163,44 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
+  /// Agents only: the state that belongs to the thread being left, dropped
+  /// on a thread switch. The Agents screen is no longer remounted per thread,
+  /// so without this a queued follow-up would go out into the NEXT thread and
+  /// the fly-in / edit bookkeeping would point at rows that are not there.
+  /// The original app remounted, which dropped all of it. Reply drafts stay:
+  /// they are keyed by chat and cannot leak.
+  void _resetThreadTransientState() {
+    _pendingMessageText = null;
+    _queuedFollowUps.clear();
+    restoredAttachmentIds.clear();
+    _flyInKey = null;
+  }
+
   /// Cancel a queued follow-up message and restore its text to the composer so
   /// the user can edit or discard it instead of losing it silently.
   void _cancelPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    final bool restore = composerController.text.trim().isEmpty;
+    // Messenger mode queues more than one message: all of them go back,
+    // in the order they were typed, as one text. Without a queue this is
+    // the pending message alone, as upstream.
+    // A draft typed meanwhile is kept as upstream does; but a queue of
+    // several messages must not be lost to it, so with follow-ups the queued
+    // text goes after the draft.
+    final String draft = composerController.text;
+    final bool hadQueue = _queuedFollowUps.isNotEmpty;
+    final queued = queuedMessagesForComposer(pending, _queuedFollowUps);
+    _queuedFollowUps.clear();
+    final String? restored = draft.trim().isEmpty
+        ? queued
+        : (hadQueue ? '$draft\n\n$queued' : null);
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
-        if (restore) {
-          composerController.text = pending;
+        if (restored != null) {
+          composerController.text = restored;
           composerController.selection = TextSelection.collapsed(
-            offset: pending.length,
+            offset: restored.length,
           );
         }
       });
@@ -1966,7 +2222,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     setState(() {
-      _pendingMessageText = null;
+      _pendingMessageText = _queuedFollowUps.isEmpty
+          ? null
+          : _queuedFollowUps.removeAt(0);
       composerController.text = pending;
       composerController.selection = TextSelection.collapsed(
         offset: pending.length,
@@ -1991,12 +2249,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       // AI is still streaming — queue the message instead of cancelling.
       final text = composerController.text.trim();
       if (text.isNotEmpty) {
-        if (mounted) {
-          setState(() {
+        void queue() {
+          if (widget.messengerMode && _pendingMessageText != null) {
+            _queuedFollowUps.add(text);
+          } else {
             _pendingMessageText = text;
-          });
+          }
+        }
+
+        if (mounted) {
+          setState(queue);
         } else {
-          _pendingMessageText = text;
+          queue();
         }
         composerController.clear();
         if (kDebugMode) {
@@ -2055,8 +2319,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Credit/free message checks are handled server-side (API returns 402)
 
-    final String originalUserInput = composerController.text.trim();
+    final String typedInput = composerController.text.trim();
     final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;
+    final ChatReply? replyForSend = widget.messengerMode
+        ? _replyDrafts[_messengerChatKey]
+        : null;
+    final String originalUserInput =
+        replyForSend != null && (typedInput.isNotEmpty || hasAttachments)
+        ? replyForSend.compose(typedInput)
+        : typedInput;
 
     if (originalUserInput.isEmpty && !hasAttachments) {
       _isSendingMessage = false;
@@ -2135,6 +2406,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Add user message
     setState(() {
+      if (replyForSend != null) _replyDrafts.remove(_messengerChatKey);
       // Store message with images and attachments (if any)
       final userMessage = {
         'sender': 'user',
@@ -2142,6 +2414,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': selectedModelId,
         'provider': selectedProviderSlug ?? '',
+        // Messenger bubbles carry the time the reader sent it.
+        if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
       };
 
       // Store images as JSON-encoded string if present
@@ -2474,7 +2748,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     var resolvedPrompt = basePrompt;
 
     // If a workspace is active, prepend workspace context
-    if (_selectedWorkspaceId != null && kFeatureWorkspaces) {
+    if (_selectedWorkspaceId != null && _workspacesEnabled) {
       try {
         final projectContext =
             await WorkspaceMessageService.buildProjectSystemMessage(
@@ -2562,6 +2836,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   Future<void> _cancelCurrentOperation() async {
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
+    _queuedFollowUps.clear();
 
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
@@ -2968,7 +3243,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   Future<void> _loadSystemPrompt() async {
     try {
-      final systemPrompt = await UserPreferencesService.loadSystemPrompt();
+      final systemPrompt =
+          await UserPreferencesService.loadSystemPromptForMount();
       if (!mounted) return;
       setState(() {
         _systemPrompt = systemPrompt;
@@ -2992,6 +3268,152 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
       isOffline: _isOffline,
+    );
+  }
+
+  /// The message list. Upstream: the plain [ListView]. Messenger mode: the
+  /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
+  /// which opens a thread at its bottom without laying out the rows above.
+  Widget _buildMessageList({
+    required EdgeInsets padding,
+    required double expandedInputWidth,
+    required bool showHostTyping,
+  }) {
+    // 1000 px built roughly two extra tall bubbles off each end of the
+    // viewport, and the viewport resizes while the keyboard animates.
+    const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
+    final int itemCount = _messages.length + (showHostTyping ? 1 : 0);
+    Widget itemBuilder(BuildContext _, int i) {
+      if (i == _messages.length) {
+        return const Padding(
+          key: ValueKey<String>('host-run-typing'),
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: MessengerTypingIndicator(),
+          ),
+        );
+      }
+      final data = _messageRenderCache.build(
+        messages: _messages,
+        index: i,
+        isStreaming: _isCurrentChatStreaming,
+      );
+      final actions = messageActionsHandler.buildActionsForMessage(
+        index: i,
+        messageText: data.displayText,
+        isUser: data.isUser,
+        isStreaming: data.isStreamingMessage,
+        onEdit: editMessageAt,
+        onResendMessage: resendMessageAt,
+        onBranch: branchFromIndex,
+      );
+      final userActions = data.isUser
+          ? messageActionsHandler.buildUserMessageActions(
+              index: i,
+              messageText: data.displayText,
+              onEdit: editMessageAt,
+              onResendMessage: resendMessageAt,
+            )
+          : const <MessageBubbleAction>[];
+      // The message the reader just sent carries
+      // the pin key, so the scroll mixin can put
+      // it at the top and hold it there while the
+      // answer arrives underneath.
+      final bool isPinned =
+          hasTopPin &&
+          _pinnedUiKey != null &&
+          ChatUiHelpers.stableUiKey(_messages[i], _uuid) == _pinnedUiKey;
+      // Agents's day break, kept: one date chip
+      // where the day changes, like a messenger.
+      // A row with no timestamp gets none. The
+      // rules live in chat_ui_helpers.
+      // The bubble RUN breaks on the same rules
+      // (ChatMessageListItem.agentsRuns).
+      final DateTime? rowDay = messageRowTime(_messages[i]);
+      // Agents only: upstream's chat draws no
+      // day chips.
+      final bool opensDay =
+          widget.messengerMode &&
+          messageOpensDay(i == 0 ? null : _messages[i - 1], _messages[i]);
+      final Widget row = ChatMessageListItem(
+        key: isPinned ? pinnedTopKey : null,
+        messages: _messages,
+        index: i,
+        data: data,
+        uuid: _uuid,
+        maxWidth: expandedInputWidth,
+        activeChatId: _activeChatId,
+        flyInKey: _flyInKey,
+        showToolCalls: widget.showToolCalls,
+        showReasoningTokens: widget.showReasoningTokens,
+        showModelInfo: widget.showModelInfo,
+        showTps: widget.showTps,
+        isEditing: messageActionsHandler.editingMessageIndex == i,
+        actions: actions,
+        userMessageActions: userActions,
+        onAskUserAnswer: _askUserCallbackForMessage(i, data),
+        onConnectMcpServer: _connectMcpCallbackForMessage(i, data),
+        onSwitchVariant: (variant) => switchVariantAt(i, variant),
+        onContinueGeneration:
+            !data.isUser &&
+                i == _messages.length - 1 &&
+                data.status == ChatMessageStatus.interrupted &&
+                !_isCurrentChatStreaming &&
+                !_isSendingMessage
+            ? () => _continueGenerationAt(i)
+            : null,
+        messengerMode: widget.messengerMode,
+        agentsRuns: widget.messengerMode,
+        reaction: widget.messengerMode
+            ? ChatReactionService.instance.peek(
+                _messengerChatKey,
+                _reactionKeyAt(i),
+              )
+            : null,
+        onReaction: widget.messengerMode && !data.isStreamingMessage
+            ? (emoji) => unawaited(_toggleReaction(_reactionKeyAt(i), emoji))
+            : null,
+        onReply: widget.messengerMode && data.displayText.trim().isNotEmpty
+            ? () => _replyToMessage(i)
+            : null,
+        onEditRequested:
+            widget.messengerMode && data.isUser && !_isCurrentChatStreaming
+            ? () => editMessageAt(i)
+            : null,
+      );
+      if (!opensDay || rowDay == null) return row;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ChatDayDivider(when: rowDay.toLocal()),
+          row,
+        ],
+      );
+    }
+
+    if (widget.messengerMode) {
+      // The pin room comes and goes; the bottom of the thread does not.
+      transcriptBottomInset = padding.bottom - pinnedExtraSpace;
+      return buildAnchoredTranscript(
+        split: resolveTranscriptSplit(),
+        itemCount: itemCount,
+        padding: padding,
+        itemBuilder: itemBuilder,
+        scrollCacheExtent: cacheExtent,
+        addAutomaticKeepAlives: false,
+      );
+    }
+    return ListView.builder(
+      controller: scrollController,
+      padding: padding,
+      itemCount: itemCount,
+      addAutomaticKeepAlives: false,
+      // Each item already wraps itself in a RepaintBoundary below; letting
+      // the list add a second one around it doubled the layers for no gain.
+      addRepaintBoundaries: false,
+      scrollCacheExtent: cacheExtent,
+      itemBuilder: itemBuilder,
     );
   }
 
@@ -3045,6 +3467,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }) {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
+    // Messenger mode: the coworker's run on the host outlives this screen's
+    // own stream (a remount, a reconnect), so its typing bubble follows
+    // [ChukChatUIMobile.hostRunActive] — unless the local stream already
+    // shows the answer being written.
+    final bool hasLocalTypingBubble =
+        hasMessages &&
+        _messages.last['sender'] != 'user' &&
+        (_isCurrentChatStreaming || _isSendingMessage);
+    final bool showHostTyping =
+        widget.messengerMode && widget.hostRunActive && !hasLocalTypingBubble;
     // Fallback estimate, used only for the first frame before MeasureSize
     // reports the composer's real height. Kept close to the real value so
     // there's no visible jump when the measured height lands.
@@ -3101,7 +3533,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               },
               child: Stack(
                 children: [
-                  hasMessages
+                  (hasMessages || showHostTyping)
                       ? Align(
                           alignment: Alignment.center,
                           child: Container(
@@ -3116,109 +3548,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               // follow and the scroll-to-bottom button hold a
                               // stale state. Desktop already listens; mobile
                               // needs it more, because it recycles bubbles.
-                              child: NotificationListener<ScrollMetricsNotification>(
-                                onNotification: (_) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (mounted) onScrollChanged();
-                                  });
-                                  return false;
-                                },
-                                child: ListView.builder(
-                                controller: scrollController,
-                                padding: listPadding,
-                                itemCount: _messages.length,
-                                addAutomaticKeepAlives: false,
-                                // Each item already wraps itself in a
-                                // RepaintBoundary below; letting the list add
-                                // a second one around it doubled the layers
-                                // for no gain.
-                                addRepaintBoundaries: false,
-                                // 1000 px built roughly two extra tall
-                                // bubbles off each end of the viewport, and
-                                // the viewport resizes while the keyboard
-                                // animates.
-                                scrollCacheExtent:
-                                    const ScrollCacheExtent.pixels(400.0),
-                                itemBuilder: (_, int i) {
-                                  final data = _messageRenderCache.build(
-                                    messages: _messages,
-                                    index: i,
-                                    isStreaming: _isCurrentChatStreaming,
-                                  );
-                                  final actions = messageActionsHandler
-                                      .buildActionsForMessage(
-                                        index: i,
-                                        messageText: data.displayText,
-                                        isUser: data.isUser,
-                                        isStreaming: data.isStreamingMessage,
-                                        onEdit: editMessageAt,
-                                        onResendMessage: resendMessageAt,
-                                        onBranch: branchFromIndex,
-                                      );
-                                  final userActions = data.isUser
-                                      ? messageActionsHandler
-                                            .buildUserMessageActions(
-                                              index: i,
-                                              messageText: data.displayText,
-                                              onEdit: editMessageAt,
-                                              onResendMessage: resendMessageAt,
-                                            )
-                                      : const <MessageBubbleAction>[];
-                                  // The message the reader just sent carries
-                                  // the pin key, so the scroll mixin can put
-                                  // it at the top and hold it there while the
-                                  // answer arrives underneath.
-                                  final bool isPinned =
-                                      hasTopPin &&
-                                      _pinnedUiKey != null &&
-                                      ChatUiHelpers.stableUiKey(
-                                            _messages[i],
-                                            _uuid,
-                                          ) ==
-                                          _pinnedUiKey;
-                                  return ChatMessageListItem(
-                                    key: isPinned ? pinnedTopKey : null,
-                                    messages: _messages,
-                                    index: i,
-                                    data: data,
-                                    uuid: _uuid,
-                                    maxWidth: expandedInputWidth,
-                                    activeChatId: _activeChatId,
-                                    flyInKey: _flyInKey,
-                                    showToolCalls: widget.showToolCalls,
-                                    showReasoningTokens:
-                                        widget.showReasoningTokens,
-                                    showModelInfo: widget.showModelInfo,
-                                    showTps: widget.showTps,
-                                    isEditing:
-                                        messageActionsHandler
-                                            .editingMessageIndex ==
-                                        i,
-                                    actions: actions,
-                                    userMessageActions: userActions,
-                                    onAskUserAnswer: _askUserCallbackForMessage(
-                                      i,
-                                      data,
+                              child:
+                                  NotificationListener<
+                                    ScrollMetricsNotification
+                                  >(
+                                    onNotification: (_) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (mounted) onScrollChanged();
+                                          });
+                                      return false;
+                                    },
+                                    child: _buildMessageList(
+                                      padding: listPadding,
+                                      expandedInputWidth: expandedInputWidth,
+                                      showHostTyping: showHostTyping,
                                     ),
-                                    onConnectMcpServer:
-                                        _connectMcpCallbackForMessage(i, data),
-                                    onSwitchVariant: (variant) =>
-                                        switchVariantAt(i, variant),
-                                    onContinueGeneration:
-                                        !data.isUser &&
-                                            i == _messages.length - 1 &&
-                                            data.status ==
-                                                ChatMessageStatus.interrupted &&
-                                            !_isCurrentChatStreaming &&
-                                            !_isSendingMessage
-                                        ? () => _continueGenerationAt(i)
-                                        : null,
-                                  );
-                                },
-                              ),
-                              ),
+                                  ),
                             ),
                           ),
                         )
@@ -3228,8 +3574,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           // above the composer either: the mark belongs in
                           // the middle of the window, which is where the eye
                           // looks for it.
+                          // The Agents thread keeps the original app's
+                          // placement, a little above centre.
                           child: Align(
-                            alignment: Alignment.center,
+                            alignment: widget.messengerMode
+                                ? const Alignment(0.0, -0.3)
+                                : Alignment.center,
                             // The alpha lives in the tint colour instead of
                             // an Opacity widget: Opacity pushes an offscreen
                             // save layer on every paint, and cacheWidth stops
@@ -3310,7 +3660,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // has already taken the keyboard out of the
                                 // insets, so reading them here always said
                                 // "no keyboard".
-                                if (!composerFocusNode.hasFocus &&
+                                // The Agents thread keeps the original app's
+                                // line: its wording, and it folds away with
+                                // the focus instead of popping.
+                                if (widget.messengerMode)
+                                  _buildMessengerDisclaimer(iconFg)
+                                else if (!composerFocusNode.hasFocus &&
                                     MediaQuery.viewInsetsOf(context).bottom <
                                         80) ...[
                                   const SizedBox(height: 8),
@@ -3352,6 +3707,33 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  /// The AI notice under the Agents composer, as in the original app.
+  ///
+  /// It is for the reader who is looking at the thread, not for the one who
+  /// is typing: with the keyboard up it eats a line of the little room that
+  /// is left, so it goes with the focus and comes back with it. Focus, not
+  /// viewInsets: the hosting Scaffold strips viewInsets from this subtree.
+  Widget _buildMessengerDisclaimer(Color iconFg) {
+    return AnimatedSize(
+      duration: kExpressiveShort,
+      curve: kExpressiveDecelerate,
+      alignment: Alignment.topCenter,
+      child: composerFocusNode.hasFocus
+          ? const SizedBox(width: double.infinity, height: 0)
+          : Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                AppLocalizations.of(context)!.agentsAiDisclaimer,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: iconFg.withValues(alpha: 0.7),
+                  fontSize: 11,
+                ),
+              ),
+            ),
+    );
+  }
+
   /// The composer's mode control: Fast or Thinking.
   ///
   /// The model list is one level deeper, inside the mode sheet. A reader
@@ -3375,7 +3757,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           showLabel: false,
           // The same height as the round buttons beside it in the composer
           // row; a pill that stands two pixels taller reads as a mistake.
-          height: _composerTargetSize,
+          height: ComposerMetrics.targetSize,
           selectedModelId: selectedModelId,
           modelLabel:
               selectedModelName ??
@@ -3402,6 +3784,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
           onOpenModelScreen: openModelScreen,
+          agentsMenus: widget.messengerMode,
         ),
       ),
     );
@@ -3438,7 +3821,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
+    // The Agents thread never turns send into a red stop: working is said by
+    // the typing line in the thread, and a send while it works is queued.
+    // That is the original app's composer.
+    final bool showStopAction =
+        !widget.messengerMode && (_isCurrentChatStreaming || _isSendingMessage);
     final bool hasTypedText = composerController.text.trim().isNotEmpty;
     final bool hasText = hasTypedText || hasAttachments;
     final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
@@ -3474,7 +3861,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 onRemove: removeComposerAttachment,
               ),
             ),
-          if (messageActionsHandler.isEditing)
+          if (messageActionsHandler.isEditing && widget.messengerMode)
+            ChatEditNotice(onCancel: cancelEditMessage)
+          else if (messageActionsHandler.isEditing)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.edit,
@@ -3482,13 +3871,22 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               actionLabel: 'Cancel',
               onAction: cancelEditMessage,
             ),
+          if (widget.messengerMode)
+            if (_replyDrafts[_messengerChatKey] case final reply?)
+              ChatReplyPreview(
+                reply: reply,
+                onCancel: () =>
+                    setState(() => _replyDrafts.remove(_messengerChatKey)),
+              ),
           if (_pendingMessageText != null)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.schedule,
-              label:
-                  '${AppLocalizations.of(context)!.queuedLabel}: '
-                  '"${_pendingMessageText!}"',
+              label: _queuedFollowUps.isNotEmpty
+                  ? AppLocalizations.of(context)!
+                        .queuedMessagesCount('${_queuedFollowUps.length + 1}')
+                  : '${AppLocalizations.of(context)!.queuedLabel}: '
+                        '"${_pendingMessageText!}"',
               actionLabel: AppLocalizations.of(context)!.cancel,
               onAction: _cancelPendingMessage,
             ),
@@ -3513,9 +3911,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 // Hidden composer scrollbar (reads as clutter); the field grows
                 // to ~8 lines before it scrolls.
                 child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
                   child: Semantics(
                     identifier: 'message_input',
                     child: TextField(
@@ -3558,6 +3955,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           right: 6,
                         ),
                         isDense: true,
+                        // The Agents thread keeps the original app's small
+                        // expand glyph inside the field; upstream's sits in
+                        // the microphone's slot below.
+                        suffixIcon:
+                            widget.messengerMode && _showFullscreenButton
+                            ? GestureDetector(
+                                onTap: _openFullscreenEditor,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: AppIcon(
+                                    Icons.open_in_full_rounded,
+                                    size: 14,
+                                    color: iconFg.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              )
+                            : null,
+                        suffixIconConstraints: widget.messengerMode
+                            ? const BoxConstraints(minWidth: 24, minHeight: 24)
+                            : null,
                       ),
                       cursorColor: accent,
                       cursorWidth: 1.5,
@@ -3582,20 +3999,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   builder: (anchorContext) => buildTinyIconButton(
                     icon: Icons.add_rounded,
                     iconSize: 22,
-                    buttonSize: _composerTargetSize,
+                    buttonSize: ComposerMetrics.targetSize,
                     // Round, so the tap ink is a circle and not a square
                     // patch behind a round icon.
-                    cornerRadius: _composerTargetSize / 2,
+                    cornerRadius: ComposerMetrics.targetSize / 2,
                     onTap: () => _handleAddAttachmentTap(anchorContext),
                     isActive: hasAttachments,
                     color: iconFg,
                   ),
                 ),
               ),
-              const SizedBox(width: _composerTargetGap),
+              const SizedBox(width: ComposerMetrics.targetGap),
               _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
-              if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
-                const SizedBox(width: _composerTargetGap),
+              if (_workspacesEnabled && _selectedWorkspaceId != null) ...[
+                const SizedBox(width: ComposerMetrics.targetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
@@ -3603,27 +4020,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
                   iconSize: 20,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _handleMicTap,
                   isActive: true,
                   color: Colors.red,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
               ] else if (!hasTypedText && !showStopAction) ...[
                 buildTinyIconButton(
                   icon: Icons.mic,
                   iconSize: 20,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _handleMicTap,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
-              ] else if (_showFullscreenButton && !showStopAction) ...[
+                const SizedBox(width: ComposerMetrics.targetGap),
+              ] else if (!widget.messengerMode &&
+                  _showFullscreenButton &&
+                  !showStopAction) ...[
                 // Takes the microphone's slot: the microphone only shows with
                 // an empty field and this only with a long one, so the two
                 // never want the place at the same time. Out here instead of
@@ -3631,14 +4050,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.open_in_full_rounded,
                   iconSize: 18,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _openFullscreenEditor,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'fullscreen_composer_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
               ],
               buildTinyActionButton(
                 icon: isRecording
@@ -3648,7 +4067,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           : (showVoiceModeAction
                                 ? Icons.graphic_eq_rounded
                                 : Icons.north_rounded)),
-                buttonSize: _composerTargetSize,
+                buttonSize: ComposerMetrics.targetSize,
                 iconSize: 18,
                 onTap: isRecording
                     ? _handleAudioSend

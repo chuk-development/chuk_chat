@@ -57,10 +57,7 @@ String _modeToString(ModelPromptMode mode) {
 /// Per-model system prompt configuration.
 @immutable
 class ModelPromptConfig {
-  const ModelPromptConfig({
-    required this.prompt,
-    required this.mode,
-  });
+  const ModelPromptConfig({required this.prompt, required this.mode});
 
   final String prompt;
   final ModelPromptMode mode;
@@ -451,8 +448,8 @@ class PerModelSystemPromptService {
       final Map<String, dynamic> prefsMap = raw is Map<String, dynamic>
           ? Map<String, dynamic>.from(raw)
           : (raw is Map
-              ? raw.map((k, v) => MapEntry(k.toString(), v))
-              : <String, dynamic>{});
+                ? raw.map((k, v) => MapEntry(k.toString(), v))
+                : <String, dynamic>{});
 
       final encryptedEntries = <String, Map<String, dynamic>>{};
       for (final entry in cache.entries) {

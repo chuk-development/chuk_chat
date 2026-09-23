@@ -11,6 +11,7 @@ sealed class ChatStreamEvent {
   const ChatStreamEvent();
 
   const factory ChatStreamEvent.content(String text) = ContentEvent;
+  const factory ChatStreamEvent.finalContent(String text) = FinalContentEvent;
   const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent;
   const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
   const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
@@ -19,6 +20,8 @@ sealed class ChatStreamEvent {
       ToolCallsEvent;
   const factory ChatStreamEvent.error(String message, {String? code}) =
       ErrorEvent;
+  const factory ChatStreamEvent.heartbeat({int seq, double? elapsedSeconds}) =
+      HeartbeatEvent;
   const factory ChatStreamEvent.done() = DoneEvent;
 }
 
@@ -60,6 +63,13 @@ class ToolCallsEvent extends ChatStreamEvent {
 class ContentEvent extends ChatStreamEvent {
   final String text;
   const ContentEvent(this.text);
+}
+
+/// Authoritative completed answer. Replaces streamed provisional content;
+/// it is not a delta and must never be appended to an existing answer.
+class FinalContentEvent extends ChatStreamEvent {
+  final String text;
+  const FinalContentEvent(this.text);
 }
 
 /// Event containing reasoning/thinking process text.
@@ -104,6 +114,24 @@ class ErrorEvent extends ChatStreamEvent {
   const ErrorEvent(this.message, {this.code});
 }
 
+/// Proof of life: the host says the run behind this stream is still running.
+///
+/// It carries no content and finishes nothing. A model reading a 290k-token
+/// prompt sends no token until the prefill is done, and a shell command sends
+/// none while it works, so a healthy run can be silent for minutes — this is
+/// the only frame that tells that silence apart from a host that is gone.
+///
+/// [seq] counts up from 1 per run, so a gap in the sequence is visible in the
+/// log; [elapsedSeconds] is how long the host says the run has been going.
+/// Both are diagnostics — nothing branches on them. A host that never sends a
+/// heartbeat is not broken: the app must treat it as an addition, never as a
+/// requirement.
+class HeartbeatEvent extends ChatStreamEvent {
+  final int seq;
+  final double? elapsedSeconds;
+  const HeartbeatEvent({this.seq = 0, this.elapsedSeconds});
+}
+
 /// Event indicating the stream has completed.
 class DoneEvent extends ChatStreamEvent {
   const DoneEvent();
@@ -137,7 +165,12 @@ abstract final class StreamErrorCodes {
   /// The WebSocket died with the request in flight.
   static const String connectionLost = 'connection_lost';
 
-  /// No event arrived within the client's idle window.
+  /// No event arrived within an idle window.
+  ///
+  /// Raised by `StreamingManager`'s 60-second idle timer in a chuk_chat build.
+  /// An Agents build has no such timer — a run reading a 290k-token prompt is
+  /// silent for longer than that while working perfectly — but a server that
+  /// really did time out may still send this code, and it is worth retrying.
   static const String idleTimeout = 'idle_timeout';
 
   /// The event stream itself raised.

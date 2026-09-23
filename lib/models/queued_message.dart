@@ -19,9 +19,7 @@ class QueuedMessage {
     Map<String, dynamic> payload;
     if (raw is String && raw.isNotEmpty) {
       final decoded = jsonDecode(raw);
-      payload = decoded is Map<String, dynamic>
-          ? decoded
-          : <String, dynamic>{};
+      payload = decoded is Map<String, dynamic> ? decoded : <String, dynamic>{};
     } else {
       payload = <String, dynamic>{};
     }
