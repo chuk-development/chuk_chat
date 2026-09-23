@@ -10,6 +10,7 @@ import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
@@ -282,7 +283,8 @@ void main() {
         find.byKey(const ValueKey<String>('agents-add-computer')),
         findsOneWidget,
       );
-      expect(find.text('Add your computer to start chatting.'), findsOneWidget);
+      // No thread and no computer: the status panel, not an empty area.
+      expect(find.byType(AgentsStatusPanel), findsOneWidget);
       // The old account-models list is gone.
       expect(find.text('Account models'), findsNothing);
       // No app bar: chuk has none. Settings is the gear in the sidebar's

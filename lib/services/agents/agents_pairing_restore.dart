@@ -32,8 +32,48 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/supabase_pairing_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+
+/// Why the last restore pass ended the way it did. The shell reads it to say
+/// the right thing: "Looking for your computer…" while a restore can still
+/// succeed, "Add your computer" once it is clear there is nothing to restore.
+enum AgentsPairingRestoreReason {
+  /// No pass has finished yet.
+  checking,
+
+  /// This device holds a pairing (it was here, or it was just restored).
+  paired,
+
+  /// No signed-in session yet, so the mirror cannot be read.
+  noSession,
+
+  /// The account key is not unlocked yet, so the mirror cannot be opened.
+  keyLocked,
+
+  /// The mirror could not be reached (offline, timeout, server error).
+  network,
+
+  /// The local trust store could not be read (a locked keystore).
+  localStoreFailed,
+
+  /// The account has no computer on record.
+  noCloudRecord,
+
+  /// A record exists but this device cannot decrypt or parse it.
+  decryptFailed,
+
+  /// A record exists but names no computer this device can dial.
+  noCloudRoute;
+
+  /// True while a later pass can still restore a pairing without the user.
+  /// False means the user has to add a computer.
+  bool get mayStillRestore => switch (this) {
+    checking || noSession || keyLocked || network || localStoreFailed => true,
+    paired || noCloudRecord || decryptFailed || noCloudRoute => false,
+  };
+}
 
 /// Restores the account's pairing onto this device, and keeps trying until it
 /// can.
@@ -80,6 +120,14 @@ class AgentsPairingRestore {
   final List<Duration> _backoff;
   final Duration _heartbeat;
 
+  /// Why the last pass ended as it did. Starts at
+  /// [AgentsPairingRestoreReason.checking]; the shell listens.
+  ValueListenable<AgentsPairingRestoreReason> get reason => _reason;
+  final ValueNotifier<AgentsPairingRestoreReason> _reason =
+      ValueNotifier<AgentsPairingRestoreReason>(
+        AgentsPairingRestoreReason.checking,
+      );
+
   StreamSubscription<AuthState>? _authSub;
   Completer<void>? _wake;
   bool _running = false;
@@ -117,6 +165,18 @@ class AgentsPairingRestore {
     nudge();
     await _authSub?.cancel();
     _authSub = null;
+    _reason.dispose();
+  }
+
+  /// Records why this pass ended, and logs it in a debug build. The reason is
+  /// an enum name: no id, no address, no key material.
+  bool _end(AgentsPairingRestoreReason reason, {required bool settled}) {
+    if (_disposed) return settled;
+    if (kDebugMode && _reason.value != reason) {
+      debugPrint('[agents-restore] ${reason.name} (attempt $_attempts)');
+    }
+    _reason.value = reason;
+    return settled;
   }
 
   void _listenForAuth() {
@@ -161,7 +221,7 @@ class AgentsPairingRestore {
             await _store.savePairing(cloud);
             if (!_disposed) await _onRestored();
           }
-          return true;
+          return _end(AgentsPairingRestoreReason.paired, settled: true);
         }
         if (account != null &&
             AgentsCloudRelayAddress.tryParse(
@@ -175,33 +235,55 @@ class AgentsPairingRestore {
             _published = fingerprint;
           }
         }
-        return true;
+        return _end(AgentsPairingRestoreReason.paired, settled: true);
       }
     } catch (_) {
       // A locked keystore is a "not yet", not a "never".
-      return false;
+      return _end(AgentsPairingRestoreReason.localStoreFailed, settled: false);
     }
 
     // The mirror is keyed to the account and encrypted with the account's key.
     // Both must be there; both arrive on their own schedule during a cold
     // start, which is exactly why this retries.
-    if (_sessionSource.current() == null) return false;
+    if (_sessionSource.current() == null) {
+      return _end(AgentsPairingRestoreReason.noSession, settled: false);
+    }
     if (!_hasEncryptionKey()) {
+      bool loaded;
       try {
-        if (!await _loadEncryptionKey()) return false;
+        loaded = await _loadEncryptionKey();
       } catch (_) {
-        return false;
+        loaded = false;
+      }
+      if (!loaded) {
+        return _end(AgentsPairingRestoreReason.keyLocked, settled: false);
       }
     }
 
-    AgentsStoredPairing? restored;
+    AgentsCloudPairingRead read;
     try {
-      restored = await _store.loadPairingFromCloud();
+      read = await _store.readPairingFromCloud();
     } catch (_) {
-      return false;
+      return _end(AgentsPairingRestoreReason.network, settled: false);
     }
-    if (restored == null || _disposed || !_hasCloudRoute(restored)) {
-      return false;
+    final AgentsStoredPairing? restored = read.pairing;
+    if (_disposed) return false;
+    if (restored == null) {
+      return _end(switch (read.outcome) {
+        AgentsCloudPairingOutcome.noSession =>
+          AgentsPairingRestoreReason.noSession,
+        AgentsCloudPairingOutcome.keyLocked =>
+          AgentsPairingRestoreReason.keyLocked,
+        AgentsCloudPairingOutcome.network => AgentsPairingRestoreReason.network,
+        AgentsCloudPairingOutcome.decryptFailed =>
+          AgentsPairingRestoreReason.decryptFailed,
+        AgentsCloudPairingOutcome.noRecord ||
+        AgentsCloudPairingOutcome.found =>
+          AgentsPairingRestoreReason.noCloudRecord,
+      }, settled: false);
+    }
+    if (!_hasCloudRoute(restored)) {
+      return _end(AgentsPairingRestoreReason.noCloudRoute, settled: false);
     }
 
     // The mirror was written by another device. Its address may be that
@@ -229,7 +311,7 @@ class AgentsPairingRestore {
     }
     if (_disposed) return true;
     await _onRestored();
-    return true;
+    return _end(AgentsPairingRestoreReason.paired, settled: true);
   }
 
   Future<void> _waitBeforeRetry() async {

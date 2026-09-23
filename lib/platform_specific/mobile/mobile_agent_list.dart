@@ -88,9 +88,15 @@ class MobileAgentList extends StatefulWidget {
     this.rooms,
     this.onOpenRoom,
     this.onCreateRoom,
+    this.emptyState,
   });
 
   final AgentRosterSource source;
+
+  /// Shown instead of the plain "No agents yet" when the list is empty and
+  /// neither a search nor a filter is narrowing it — the shell's status panel
+  /// (no computer, connecting, offline, no agents).
+  final Widget? emptyState;
 
   /// The group rooms, listed above the coworkers in the same list. Null (or an
   /// empty source) leaves the list exactly as it was.
@@ -519,7 +525,14 @@ class _MobileAgentListState extends State<MobileAgentList> {
             child: KeyedSubtree(
               key: ValueKey<int>(_filter),
               child: agents.isEmpty && rooms.isEmpty
-                  ? _EmptyState(
+                  ? (widget.emptyState != null &&
+                            _filter == 0 &&
+                            _query.text.trim().isEmpty)
+                        ? Padding(
+                            padding: EdgeInsets.only(top: headerSpace),
+                            child: widget.emptyState,
+                          )
+                        : _EmptyState(
                       filter: _filters[_filter],
                       query: _query.text.trim(),
                       onAddAgent: widget.onAddAgent,
