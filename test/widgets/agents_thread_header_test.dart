@@ -193,4 +193,27 @@ void main() {
       greaterThanOrEqualTo(60),
     );
   });
+
+  testWidgets('a floating bar sits on the top veil, not on a solid band', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(const AgentsThreadHeader(title: 'Marta', floating: true)),
+    );
+
+    final Finder veil = find.descendant(
+      of: find.byType(AgentsThreadHeader),
+      matching: find.byWidgetPredicate(
+        (Widget w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            (w.decoration as BoxDecoration).gradient != null,
+      ),
+    );
+    expect(veil, findsOneWidget);
+    expect(
+      tester.getSize(find.byType(AgentsThreadHeader)).height,
+      AgentsThreadHeader.barHeight + AgentsThreadHeader.veilFade,
+    );
+  });
 }

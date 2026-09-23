@@ -102,4 +102,20 @@ void main() {
     expect(read.uiFont, kDefaultUiFontFamily);
     expect(read.dynamicColor, isTrue);
   });
+
+  test('a look field left null is not written, so it never clears the '
+      'value another device stored', () {
+    final Map<String, dynamic> map = ThemeSettings(
+      userId: userId,
+      themeMode: Brightness.dark,
+      accentColor: const Color(0xFFD97757),
+      iconColor: const Color(0xFFE8E4D8),
+      backgroundColor: const Color(0xFF262624),
+    ).toMap();
+
+    expect(map.containsKey('contrast'), isFalse);
+    expect(map.containsKey('ui_font'), isFalse);
+    expect(map.containsKey('dynamic_color'), isFalse);
+    expect(map['accent_color'], isNotNull);
+  });
 }

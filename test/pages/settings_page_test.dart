@@ -8,18 +8,22 @@ import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../support/shell_config.dart';
 import '../support/test_app.dart';
 
-/// The settings hub is chuk_chat's, with Agents's section map applied
-/// (docs/HANDOVER_2026-09-04_FLUTTER_ALIGN.md). These tests hold that map in
-/// place: what must be reachable, and what must stay hidden because the host
-/// owns it or Agents has no hosted account behind it.
+/// With Agents on, the settings hub is the Agents app's own hub: its entries,
+/// its order, its large headline. These tests hold that list in place: what
+/// must be reachable, and what must stay hidden because the host owns it or
+/// Agents has no hosted account behind it. With Agents off the hub is
+/// upstream chuk_chat's, and the last test holds that.
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
+    debugAgentsChatCoreOverride = true;
   });
+  tearDown(() => debugAgentsChatCoreOverride = null);
 
   Future<void> pumpSettings(WidgetTester tester) async {
     tester.view.physicalSize = const Size(900, 1400);
@@ -71,8 +75,13 @@ void main() {
     // here again means someone re-imported chuk's list over the map.
     for (final gone in <String>[
       'Pricing & Plans',
+      'Pricing Plans',
       'Sandboxes',
       'Export chats',
+      'AI Identity & Memory',
+      'Tool Calling',
+      'GitHub',
+      'Free plan',
     ]) {
       expect(find.text(gone), findsNothing, reason: '$gone should be hidden');
     }
@@ -111,12 +120,24 @@ void main() {
       await closeSettings(tester);
     }
 
-    // chuk's hub shows the account as the signed-in identity, not as a row
-    // titled "Account"; with no session it reads "User".
-    await open('Account', AccountSettingsPage, rowText: 'User');
+    // The Agents hub has one plain row titled "Account" under the section
+    // of the same name, so the row is the last match.
+    await open('Account', AccountSettingsPage);
     await open('Theme Settings', ThemePage);
     await open('here.now', HereNowSettingsPage);
     await open('Embedding', EmbeddingSettingsPage);
     await open('About', AboutPage);
+  });
+
+  testWidgets('with Agents off the hub is upstream chuk_chat, without the '
+      'Agents section', (tester) async {
+    debugAgentsChatCoreOverride = false;
+    await pumpSettings(tester);
+
+    expect(find.text('Agents'), findsNothing);
+    expect(find.text('here.now'), findsNothing);
+    await tester.scrollUntilVisible(find.text('Pricing Plans').first, 200);
+    expect(find.text('Pricing Plans'), findsOneWidget);
+    await closeSettings(tester);
   });
 }
