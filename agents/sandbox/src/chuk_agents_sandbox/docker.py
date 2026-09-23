@@ -194,6 +194,7 @@ class DockerEnvironment(BaseEnvironment):
         max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
         extra_run_args: tuple[str, ...] = (),
         cli: DockerCli | None = None,
+        owner: str | None = None,
     ) -> None:
         self._image = resolve_image(image)
         self._agent_id = agent_id
@@ -207,6 +208,9 @@ class DockerEnvironment(BaseEnvironment):
         self._user_resolved = user is not None
         self._extra_run_args = tuple(extra_run_args)
         self._cli = cli or DockerCli()
+        # The host that owns this container (``cowork.owner``). Only that
+        # host's orphan reaper may remove it (bead chuk_chat-6mg).
+        self._owner = owner or None
         self._container: str | None = None
         self._reused = False
         # The exec client this environment is blocked on, so ``cancel`` (§7.1)
@@ -287,6 +291,7 @@ class DockerEnvironment(BaseEnvironment):
             session_id=self._session_id,
             workspace=self._workspace,
             image=self._image,
+            owner=self._owner,
         )
 
     # ------------------------------------------------------------------ #
