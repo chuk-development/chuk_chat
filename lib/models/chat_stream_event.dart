@@ -167,12 +167,10 @@ abstract final class StreamErrorCodes {
 
   /// No event arrived within an idle window.
   ///
-  /// The client no longer raises this one. It used to: `StreamingManager` had a
-  /// flat 60-second idle timer that declared a silent stream dead, and a run
-  /// reading a 290k-token prompt is silent for longer than that while working
-  /// perfectly. Silence is not evidence, so the timer is gone. The code stays
-  /// because a server that really did time out may still send it, and it is
-  /// worth retrying when it does.
+  /// Raised by `StreamingManager`'s 60-second idle timer in a chuk_chat build.
+  /// An Agents build has no such timer — a run reading a 290k-token prompt is
+  /// silent for longer than that while working perfectly — but a server that
+  /// really did time out may still send this code, and it is worth retrying.
   static const String idleTimeout = 'idle_timeout';
 
   /// The event stream itself raised.

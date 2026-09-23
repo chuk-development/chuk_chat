@@ -12,7 +12,7 @@ import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
-import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -106,7 +106,7 @@ void main() {
     bool cancelEarly = false,
   }) async {
     final seen = <ChatStreamEvent>[];
-    final stream = WebSocketChatService.sendStreamingChat(
+    final stream = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -183,7 +183,7 @@ void main() {
       const ChatModelSelection(modelId: 'model-a', providerSlug: 'provider-a'),
     );
     AgentsRelayLink.instance.sessionKey.value = 'a';
-    final stream = WebSocketChatService.sendStreamingChat(
+    final stream = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'test',
       modelId: 'global',
@@ -214,7 +214,7 @@ void main() {
           providerSlug: 'new-provider',
         ),
       );
-      final stream = WebSocketChatService.sendStreamingChat(
+      final stream = AgentsChatTransport.sendStreamingChat(
         accessToken: 'token',
         message: 'test',
         chatId: 'a',
@@ -552,7 +552,7 @@ void main() {
   /// A live run, listened to, one token in. The caller then decides how the
   /// subscription goes away.
   Future<StreamSubscription<ChatStreamEvent>> openRun() async {
-    final stream = WebSocketChatService.sendStreamingChat(
+    final stream = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -585,22 +585,22 @@ void main() {
   test('the user pressing Stop sends exactly one stop frame', () async {
     final sub = await openRun();
     // What the composer's stop target declares before it cancels.
-    WebSocketChatService.declareStopIntent(sessionKey);
+    AgentsChatTransport.declareStopIntent(sessionKey);
     await sub.cancel();
     await _drain();
 
     expect(controller.stopCalls, 1);
     expect(controller.stopSessionKeys, <String>[sessionKey]);
-    expect(WebSocketChatService.hasStopIntent(sessionKey), isFalse);
+    expect(AgentsChatTransport.hasStopIntent(sessionKey), isFalse);
   });
 
   test('a withdrawn intent is a page teardown, not a stop', () async {
     final sub = await openRun();
     // The chat screen's dispose: it cancels its stream and then disposes the
     // streaming handler in the same synchronous block.
-    WebSocketChatService.declareStopIntent(sessionKey);
+    AgentsChatTransport.declareStopIntent(sessionKey);
     final cancelled = sub.cancel();
-    WebSocketChatService.withdrawStopIntent();
+    AgentsChatTransport.withdrawStopIntent();
     await cancelled;
     await _drain();
 
@@ -609,12 +609,12 @@ void main() {
 
   test('a stop declared for another thread never stops this one', () async {
     final sub = await openRun();
-    WebSocketChatService.declareStopIntent('some-other-thread');
+    AgentsChatTransport.declareStopIntent('some-other-thread');
     await sub.cancel();
     await _drain();
 
     expect(controller.stopCalls, 0);
-    WebSocketChatService.withdrawStopIntent();
+    AgentsChatTransport.withdrawStopIntent();
   });
 
   test('a run that finished on its own is never stopped', () async {
@@ -625,7 +625,7 @@ void main() {
   test('no transport at all is a clean error, not a hang', () async {
     AgentsRelayLink.instance.unbind();
     final seen = <ChatStreamEvent>[];
-    final sub = WebSocketChatService.sendStreamingChat(
+    final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -643,7 +643,7 @@ void main() {
   test('a send that never leaves reports it and closes the stream', () async {
     controller.taskError = StateError('Not paired');
     final seen = <ChatStreamEvent>[];
-    final sub = WebSocketChatService.sendStreamingChat(
+    final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -688,7 +688,7 @@ void main() {
 
     Future<void> sendWithNoHost() async {
       AgentsRelayLink.instance.unbind();
-      final sub = WebSocketChatService.sendStreamingChat(
+      final sub = AgentsChatTransport.sendStreamingChat(
         accessToken: 'token',
         message: 'do the thing',
         modelId: 'gpt-5',

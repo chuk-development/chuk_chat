@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../support/fake_relay_controller.dart';
 
@@ -50,6 +51,10 @@ Widget _app(Widget child) => MaterialApp(
 /// app thinks is going on (bead cowork-gnr8). The thread's working dots read
 /// `AgentsRunLedger.isRunning`, so that is what these assert.
 void main() {
+  // The Agents chat core (host-run tools, relay transport), selected for this
+  // flag-off test process.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
   const threadKey = 'host:cowork-host';
   final ledger = AgentsRunLedger.instance;
 
