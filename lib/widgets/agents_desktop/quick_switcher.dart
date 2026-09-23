@@ -163,7 +163,10 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
         padding: const EdgeInsets.all(24),
         child: Material(
           color: scheme.surfaceContainerHigh,
-          borderRadius: BorderRadius.circular(kDeskMenuRadius),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(kDeskMenuRadius),
+            side: BorderSide(color: scheme.outlineVariant),
+          ),
           clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
@@ -199,6 +202,8 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
                       ),
                       prefixIconConstraints: const BoxConstraints(minWidth: 40),
                       border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
                       filled: false,
                       contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),

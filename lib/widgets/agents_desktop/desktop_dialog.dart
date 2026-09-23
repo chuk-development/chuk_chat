@@ -3,7 +3,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
@@ -48,8 +47,10 @@ class AgentsDesktopDialog extends StatelessWidget {
       backgroundColor: scheme.surfaceContainerHigh,
       elevation: 0,
       insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      // The desktop dialog corner (docs/DESIGN.md §14.6), the same one the
+      // name dialog takes on a desktop window.
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kRadiusDialog),
+        borderRadius: BorderRadius.circular(kDeskDialogRadius),
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(

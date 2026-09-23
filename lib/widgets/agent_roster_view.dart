@@ -342,6 +342,7 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     String? shortcut,
   }) => PopupMenuItem<VoidCallback>(
     value: onTap,
+    height: kMenuDenseRowHeight,
     padding: EdgeInsets.zero,
     child: MenuActionRow(
       icon: icon,

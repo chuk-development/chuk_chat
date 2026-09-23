@@ -17,6 +17,8 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
 /// Asks for a coworker's name. Returns the trimmed text, or null on Cancel.
 ///
@@ -71,27 +73,37 @@ class _CoworkerNameDialogState extends State<CoworkerNameDialog> {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
     final TextTheme text = theme.textTheme;
+    // A desktop window gets the desktop dialog (docs/DESIGN.md §14.6): the
+    // same surface, sized for a mouse — a smaller title, a 44 px field and
+    // 36 px buttons. The phone keeps its thumb-sized one.
+    final bool desk = isAgentsDesktop(context);
     return Dialog(
       backgroundColor: scheme.surfaceContainerHigh,
       elevation: 0,
       insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(kRadiusDialog),
+        borderRadius: BorderRadius.circular(
+          desk ? kDeskDialogRadius : kRadiusDialog,
+        ),
       ),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 420),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 20),
+          padding: desk
+              ? const EdgeInsets.fromLTRB(22, 20, 22, 18)
+              : const EdgeInsets.fromLTRB(24, 24, 24, 20),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
                 widget.title,
-                style: text.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: -0.5,
-                ),
+                style: desk
+                    ? text.titleLarge?.copyWith(fontWeight: FontWeight.w700)
+                    : text.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
               ),
               const SizedBox(height: 6),
               Text(
@@ -110,7 +122,9 @@ class _CoworkerNameDialogState extends State<CoworkerNameDialog> {
                 textCapitalization: TextCapitalization.words,
                 textInputAction: TextInputAction.done,
                 cursorColor: scheme.primary,
-                style: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                style: (desk ? text.bodyLarge : text.titleMedium)?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
                 decoration: InputDecoration(
                   filled: true,
                   fillColor: scheme.surfaceContainerHighest,
@@ -119,10 +133,12 @@ class _CoworkerNameDialogState extends State<CoworkerNameDialog> {
                     color: scheme.onSurfaceVariant,
                     fontWeight: FontWeight.w500,
                   ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 16,
-                  ),
+                  contentPadding: desk
+                      ? const EdgeInsets.symmetric(horizontal: 14, vertical: 12)
+                      : const EdgeInsets.symmetric(
+                          horizontal: 18,
+                          vertical: 16,
+                        ),
                   border: _fieldBorder,
                   enabledBorder: _fieldBorder,
                   focusedBorder: _fieldBorder,
@@ -137,10 +153,15 @@ class _CoworkerNameDialogState extends State<CoworkerNameDialog> {
                     label: 'Cancel',
                     color: scheme.surfaceContainerHighest,
                     onColor: scheme.onSurfaceVariant,
+                    dense: desk,
                     onTap: () => Navigator.of(context).pop(),
                   ),
                   const SizedBox(width: 10),
-                  ExpressiveButton(label: widget.submitLabel, onTap: _submit),
+                  ExpressiveButton(
+                    label: widget.submitLabel,
+                    dense: desk,
+                    onTap: _submit,
+                  ),
                 ],
               ),
             ],
