@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,8 @@ import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
+
+import '../../support/mcp_memory_list.dart';
 
 /// In-memory secure backend so secrets round-trip with no platform channel.
 class _MemorySecrets implements AgentsSecureKeyValueStore {
@@ -57,10 +60,7 @@ void main() {
     final kv = <String, String>{};
     final store = McpStore(
       secrets: secrets,
-      list: McpListBackend(
-        read: (k) async => kv[k],
-        write: (k, v) async => kv[k] = v,
-      ),
+      list: memoryMcpList(kv),
     );
 
     await store.upsert(
@@ -91,7 +91,7 @@ void main() {
 
   test('a full record round-trips in chuk_chat’s shape', () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
 
     await store.setSecrets(
       'n',
@@ -122,7 +122,7 @@ void main() {
       () async {
     final secrets = _MemorySecrets()
       ..map[McpStore.secretKey('old')] = 'legacy-bearer';
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
 
     expect(await store.tokenFor('old'), 'legacy-bearer');
     final record = (await store.secretsFor('old'))!;
@@ -136,7 +136,7 @@ void main() {
 
   test('setToken keeps the refresh material already recorded', () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.setSecrets('n', _record());
 
     await store.setToken('n', 'at-2');
@@ -149,7 +149,7 @@ void main() {
 
   test('remove drops both the config and the secret', () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.upsert(
       const McpConnection(id: 'a', name: 'A', url: 'https://a/mcp'),
       accessToken: 'secret-a',
@@ -164,7 +164,7 @@ void main() {
   test('forwardPayloads resolves the oauth token and omits it for account auth',
       () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.upsert(
       const McpConnection(
         id: 'oauth1',
@@ -202,7 +202,7 @@ void main() {
   test('forwardPayloads carries the oauth block when a record has a refresh '
       'token', () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.upsert(
       const McpConnection(
         id: 'n',
@@ -248,6 +248,7 @@ void main() {
     final store = McpStore(
       secrets: secrets,
       oauth: McpOAuth(httpClient: client),
+      list: memoryMcpList(),
     );
 
     await store.upsert(
@@ -282,6 +283,7 @@ void main() {
     final store = McpStore(
       secrets: secrets,
       oauth: McpOAuth(httpClient: client),
+      list: memoryMcpList(),
     );
 
     await store.upsert(
@@ -307,7 +309,7 @@ void main() {
 
   test('upsert with a null token leaves an existing secret intact', () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.upsert(
       const McpConnection(id: 'k', name: 'K', url: 'https://k/mcp'),
       accessToken: 'keep-me',
@@ -331,7 +333,7 @@ void main() {
         .cast<Map<String, dynamic>>();
 
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
 
     await store.upsert(
       const McpConnection(
@@ -407,7 +409,11 @@ void main() {
         headers: const {'content-type': 'application/json'},
       );
     });
-    final store = McpStore(secrets: secrets, oauth: McpOAuth(httpClient: client));
+    final store = McpStore(
+      secrets: secrets,
+      oauth: McpOAuth(httpClient: client),
+      list: memoryMcpList(),
+    );
     await store.upsert(
       const McpConnection(
         id: 'n',
@@ -449,7 +455,11 @@ void main() {
         headers: const {'content-type': 'application/json'},
       );
     });
-    final store = McpStore(secrets: secrets, oauth: McpOAuth(httpClient: client));
+    final store = McpStore(
+      secrets: secrets,
+      oauth: McpOAuth(httpClient: client),
+      list: memoryMcpList(),
+    );
     await store.upsert(
       const McpConnection(
         id: 'n',
@@ -479,7 +489,7 @@ void main() {
     // "Make the next call re-authenticate" must not mean "forget this server":
     // the host can still mint a bearer from the refresh token.
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     await store.setSecrets('n', _record());
 
     await store.setToken('n', '');
@@ -496,7 +506,7 @@ void main() {
     // zone, so a device elsewhere would read the expiry hours out and either
     // refresh a live token or trust a dead one.
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final store = McpStore(secrets: secrets, list: memoryMcpList());
     final local = DateTime.now().add(const Duration(hours: 1));
 
     await store.setSecrets('n', _record(expiresAt: local));
@@ -505,5 +515,49 @@ void main() {
     final written = (stored['tokens'] as Map)['expires_at'] as String;
     expect(written, endsWith('Z'));
     expect(DateTime.parse(written).toUtc(), local.toUtc());
+  });
+
+  test('a startup migration never writes an older list over an upsert',
+      () async {
+    const McpConnection old = McpConnection(
+      id: 'old',
+      name: 'Old',
+      url: 'https://old.example/mcp',
+    );
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      McpStore.prefsKey: jsonEncode(<Map<String, dynamic>>[old.toJson()]),
+    });
+    final kv = <String, String>{};
+    final gate = Completer<void>();
+    var writes = 0;
+    // The migration's kv write (the first) is held until the upsert had its
+    // chance, so without one queue the upsert's newer list lands first and
+    // the migration then writes the older one over it.
+    final list = McpListBackend(
+      read: (k) async => kv[k],
+      write: (k, v) async {
+        if (writes++ == 0) await gate.future;
+        kv[k] = v;
+      },
+    );
+    final store = McpStore(secrets: _MemorySecrets(), list: list);
+
+    final migration = McpStore.migrateLegacyPrefs(list: list);
+    final upsert = store.upsert(
+      const McpConnection(id: 'new', name: 'New', url: 'https://new.example/mcp'),
+    );
+    await Future.any(<Future<void>>[
+      upsert,
+      Future<void>.delayed(const Duration(milliseconds: 200)),
+    ]);
+    // One queue: the upsert has not touched the list while the migration's
+    // write is in flight.
+    expect(writes, 1);
+    gate.complete();
+    await Future.wait(<Future<void>>[migration, upsert]);
+
+    expect((await store.load()).map((c) => c.id), <String>['old', 'new']);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.containsKey(McpStore.prefsKey), isFalse);
   });
 }

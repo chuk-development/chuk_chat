@@ -147,6 +147,14 @@ class _MdParseCache {
     _nodes.clear();
   }
 
+  /// Drops every kept parse. Sign-out calls this, so the plaintext does not
+  /// wait in memory for the next user to be noticed by [_syncOwner].
+  static void clear() {
+    _segments.clear();
+    _nodes.clear();
+    _owner = null;
+  }
+
   static void _put<V>(Map<String, V> map, String key, V value) {
     if (map.length >= _max) map.remove(map.keys.first);
     map[key] = value;
@@ -163,15 +171,22 @@ class _MdParseCache {
     return built;
   }
 
-  /// The same parse `MarkdownGenerator.buildWidgets` runs, with the one
-  /// inline syntax [_MarkdownMessageState] adds.
-  static List<m.Node> nodesFor(String data, {required bool keep}) {
+  /// The same parse `MarkdownGenerator.buildWidgets` runs, with the
+  /// generator's own syntaxes. The cache is keyed by text alone, so every
+  /// caller must hand in the same syntaxes; there is one generator setup.
+  static List<m.Node> nodesFor(
+    String data, {
+    required bool keep,
+    required MarkdownGenerator generator,
+  }) {
+    _syncOwner();
     final List<m.Node>? hit = _nodes[data];
     if (hit != null) return hit;
     final m.Document document = m.Document(
-      extensionSet: m.ExtensionSet.gitHubFlavored,
+      extensionSet: generator.extensionSet ?? m.ExtensionSet.gitHubFlavored,
       encodeHtml: false,
-      inlineSyntaxes: <m.InlineSyntax>[LatexSyntax()],
+      inlineSyntaxes: generator.inlineSyntaxList,
+      blockSyntaxes: generator.blockSyntaxList,
     );
     final List<m.Node> parsed = List<m.Node>.unmodifiable(
       document.parseLines(data.split(WidgetVisitor.defaultSplitRegExp)),
@@ -198,7 +213,7 @@ List<Widget> _buildMarkdownWidgets(
     splitRegExp: WidgetVisitor.defaultSplitRegExp,
   );
   final List<SpanNode> spans = visitor.visit(
-    _MdParseCache.nodesFor(data, keep: keepParse),
+    _MdParseCache.nodesFor(data, keep: keepParse, generator: generator),
   );
   return <Widget>[
     for (final SpanNode span in spans)
@@ -278,6 +293,24 @@ class MarkdownMessage extends StatefulWidget {
     this.paragraphHeight,
     this.fontFamily,
   });
+
+  /// Empties the shared parse and highlight caches. They hold one account's
+  /// decrypted text, so sign-out drops them instead of leaving them in
+  /// memory until the next user is noticed.
+  static void clearCaches() {
+    _MdParseCache.clear();
+    _AsyncCodeBlockState.clearParsed();
+  }
+
+  /// How many markdown parses are kept, for tests.
+  @visibleForTesting
+  static int get debugCachedParseCount =>
+      _MdParseCache._segments.length + _MdParseCache._nodes.length;
+
+  /// How many code highlights are kept, for tests.
+  @visibleForTesting
+  static int get debugCachedHighlightCount =>
+      _AsyncCodeBlockState._parsedNodes.length;
 
   final String text;
   final Color textColor;
@@ -1161,11 +1194,24 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   static const int _parsedNodesMax = 300;
   static String? _parsedNodesOwner;
 
+  /// Bumped whenever [_parsedNodes] is emptied. A highlight that started
+  /// before the bump belongs to the text of the user who left, so it must
+  /// not be kept (see [_highlightCode]).
+  static int _parsedGeneration = 0;
+
   static void _syncParsedOwner() {
     final String? user = CurrentUser.id;
     if (user == _parsedNodesOwner) return;
     _parsedNodesOwner = user;
     _parsedNodes.clear();
+    _parsedGeneration++;
+  }
+
+  /// Drops every kept highlight. See [MarkdownMessage.clearCaches].
+  static void clearParsed() {
+    _parsedNodes.clear();
+    _parsedNodesOwner = null;
+    _parsedGeneration++;
   }
 
   /// False once the code changed under this block (a stream in progress).
@@ -1195,9 +1241,15 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
     return true;
   }
 
-  static void _keepParsed(String code, String? language, List<hi.Node> nodes) {
+  static void _keepParsed(
+    String code,
+    String? language,
+    List<hi.Node> nodes, {
+    required int generation,
+  }) {
     if (nodes.isEmpty) return;
     _syncParsedOwner();
+    if (generation != _parsedGeneration) return;
     if (_parsedNodes.length >= _parsedNodesMax) {
       _parsedNodes.remove(_parsedNodes.keys.first);
     }
@@ -1279,6 +1331,8 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
 
   Future<void> _highlightCode() async {
     if (!mounted) return;
+    _syncParsedOwner();
+    final int generation = _parsedGeneration;
 
     final String code = _codeForDisplay();
     final String? language = widget.language;
@@ -1329,7 +1383,9 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
             },
           );
 
-      if (_keepHighlight) _keepParsed(code, language, nodes);
+      if (_keepHighlight) {
+        _keepParsed(code, language, nodes, generation: generation);
+      }
       if (!mounted) return;
 
       // Convert nodes to TextSpans on the main thread (fast)

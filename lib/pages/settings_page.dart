@@ -413,9 +413,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     navigator.pop();
                   }
                 } on AuthServiceException catch (error) {
-        AppNotifications.showOn(messenger, error.message, duration: Duration(seconds: 2));
+                  AppNotifications.showOn(
+                    messenger,
+                    error.message,
+                    kind: AppNotificationKind.error,
+                  );
                 } catch (error) {
-        AppNotifications.showOn(messenger, 'Error: $error', duration: Duration(seconds: 2));
+                  if (kDebugMode) debugPrint('Sign-out failed: $error');
+                  AppNotifications.showOn(
+                    messenger,
+                    l.logoutFailed,
+                    kind: AppNotificationKind.error,
+                  );
                 }
               },
               child: Text(
@@ -796,50 +805,17 @@ class _SettingsPageState extends State<SettingsPage> {
                     navigator.pop();
                   }
                 } on AuthServiceException catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        error.message,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
+                  AppNotifications.showOn(
+                    messenger,
+                    error.message,
+                    kind: AppNotificationKind.error,
                   );
                 } catch (error) {
-                  messenger.showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Error: $error',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      behavior: SnackBarBehavior.floating,
-                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      duration: const Duration(seconds: 2),
-                      dismissDirection: DismissDirection.horizontal,
-                    ),
+                  if (kDebugMode) debugPrint('Sign-out failed: $error');
+                  AppNotifications.showOn(
+                    messenger,
+                    l.logoutFailed,
+                    kind: AppNotificationKind.error,
                   );
                 }
               },

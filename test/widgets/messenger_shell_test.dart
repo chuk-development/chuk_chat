@@ -21,6 +21,7 @@ import 'package:chuk_chat/widgets/room_create_sheet.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/browser_presence.dart';
@@ -1822,4 +1823,65 @@ void main() {
       moreOrLessEquals(composerBefore, epsilon: 1),
     );
   });
+
+  testWidgets('pending read marks and roster activity are written when the '
+      'app goes to the background and when the shell closes', (tester) async {
+    final marks = _CountingReadMarks();
+    final roster = _CountingRoster();
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: MessengerShell(
+          relayControllerBuilder: () async => _FakeRelayController(),
+          sessionSource: const _FakeSessionSource(),
+          pairingStore: AgentsPairingStore(backend: _MemoryStore()),
+          rosterSource: roster,
+          readMarks: marks,
+          onSignOut: () {},
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(marks.flushes, 0);
+    expect(roster.flushes, 0);
+
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    expect(marks.flushes, 1);
+    expect(roster.flushes, 1);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    expect(marks.flushes, 2);
+    expect(roster.flushes, 2);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.hidden);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+
+    final int marksBefore = marks.flushes;
+    final int rosterBefore = roster.flushes;
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(marks.flushes, marksBefore + 1);
+    expect(roster.flushes, rosterBefore + 1);
+  });
+}
+
+class _CountingReadMarks extends AgentReadMarks {
+  int flushes = 0;
+
+  @override
+  Future<void> flush() {
+    flushes++;
+    return super.flush();
+  }
+}
+
+class _CountingRoster extends LocalAgentRosterSource {
+  int flushes = 0;
+
+  @override
+  void flushPendingPersist() {
+    flushes++;
+    super.flushPendingPersist();
+  }
 }

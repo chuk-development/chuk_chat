@@ -192,6 +192,10 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   void _hostInit() {
     _hostLifecycle = AppLifecycleListener(
+      // A backgrounded app may be killed without another callback: write what
+      // is still waiting on a debounce timer now.
+      onPause: _flushPendingWrites,
+      onHide: _flushPendingWrites,
       onResume: () {
         _pairingRestore?.nudge();
         final controller = _controller.value;
@@ -345,6 +349,11 @@ mixin AgentsShellHost on State<MessengerShell> {
     return null;
   }
 
+  void _flushPendingWrites() {
+    unawaited(_readMarks.flush());
+    _roster.flushPendingPersist();
+  }
+
   void _onRosterChanged() {
     if (!mounted) return;
     _seedActivityFromHistory();
@@ -352,6 +361,11 @@ mixin AgentsShellHost on State<MessengerShell> {
   }
 
   StreamSubscription<String?>? _historySub;
+
+  /// True while [_seedActivityFromHistory] scans. Each seeded time notifies
+  /// the roster synchronously, and the roster listener seeds again; without
+  /// this every seeded thread started a nested scan of the whole roster.
+  bool _seedingActivity = false;
 
   /// Fills in "last active" from the history the app already holds, for every
   /// thread that has no time yet. Before, the roster only learned a time from a
@@ -361,20 +375,25 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// never marked read gets its read mark at the same time, so seeding does
   /// not light up every coworker as unread.
   void _seedActivityFromHistory([String? onlyKey]) {
-    if (!mounted) return;
-    for (final AgentsAgent agent in _roster.agents) {
-      for (final AgentsThreadInfo thread in agent.threads) {
-        if (onlyKey != null && thread.key != onlyKey) continue;
-        if (thread.lastActivity != null) continue;
-        final when = newestMessageTime(
-          ChatStorageState.chatsById[thread.key]?.messagesOrNull,
-        );
-        if (when == null) continue;
-        if (_readMarks.lastRead(thread.key) == null) {
-          unawaited(_readMarks.markRead(thread.key, when: when));
+    if (!mounted || _seedingActivity) return;
+    _seedingActivity = true;
+    try {
+      for (final AgentsAgent agent in _roster.agents) {
+        for (final AgentsThreadInfo thread in agent.threads) {
+          if (onlyKey != null && thread.key != onlyKey) continue;
+          if (thread.lastActivity != null) continue;
+          final when = newestMessageTime(
+            ChatStorageState.chatsById[thread.key]?.messagesOrNull,
+          );
+          if (when == null) continue;
+          if (_readMarks.lastRead(thread.key) == null) {
+            unawaited(_readMarks.markRead(thread.key, when: when));
+          }
+          _roster.markActivity(agent.id, thread.key, when);
         }
-        _roster.markActivity(agent.id, thread.key, when);
       }
+    } finally {
+      _seedingActivity = false;
     }
   }
 
@@ -424,6 +443,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       unawaited(_writeRememberedSelection());
     }
     _hostLifecycle?.dispose();
+    _flushPendingWrites();
     _roster.removeListener(_onRosterChanged);
     _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);

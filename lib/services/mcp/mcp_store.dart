@@ -25,6 +25,7 @@
 // `[{name, url, auth, access_token?, oauth?}]` — refreshing a token that is
 // about to lapse first, so a live app always hands the host a fresh one.
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -179,13 +180,40 @@ class McpStore {
   static final Map<String, Future<McpSecrets?>> _refreshes =
       <String, Future<McpSecrets?>>{};
 
+  /// One queue for every read-modify-write of the connection list: the
+  /// legacy move ([migrateLegacyPrefs], and the one [load] does on the way),
+  /// [upsert] and [remove]. Without it a startup migration that read the old
+  /// prefs copy could land after an [upsert] and write the older list over
+  /// it, or drop the prefs copy a failed kv write had just fallen back to.
+  /// Static because callers hold their own [McpStore] instances.
+  static Future<void> _listChain = Future<void>.value();
+  static int _listPending = 0;
+
+  static Future<T> _serialized<T>(Future<T> Function() op) {
+    final Future<void> previous = _listChain;
+    final Completer<void> done = Completer<void>();
+    _listChain = done.future;
+    // With nothing queued, run at once rather than chain onto a finished
+    // future: that future's zone may be gone (a test's fake-async zone), and
+    // a callback scheduled there would never run.
+    final Future<T> result = _listPending++ == 0
+        ? Future<T>.sync(op)
+        : previous.then((_) => op());
+    return result.whenComplete(() {
+      _listPending--;
+      done.complete();
+    });
+  }
+
   static String secretKey(String id) => '$secretPrefix$id';
 
   static String apiCredsKey(String id) => '$apiCredsPrefix$id';
 
   /// Every stored connection, in saved order. Never throws — a corrupt record
   /// reads as an empty list rather than a crash.
-  Future<List<McpConnection>> load() async {
+  Future<List<McpConnection>> load() => _serialized(_loadUnlocked);
+
+  Future<List<McpConnection>> _loadUnlocked() async {
     try {
       return _decode(await _readRaw());
     } catch (e) {
@@ -252,7 +280,7 @@ class McpStore {
   /// Returns true when a prefs copy was moved. Never throws.
   static Future<bool> migrateLegacyPrefs({
     McpListBackend list = const McpListBackend(),
-  }) async {
+  }) => _serialized(() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final legacy = prefs.getString(prefsKey);
@@ -262,7 +290,7 @@ class McpStore {
       if (kDebugMode) debugPrint('⚠️ [Mcp] Legacy connections move failed: $e');
       return false;
     }
-  }
+  });
 
   /// Persist the whole list (config only; secrets are written separately).
   ///
@@ -293,14 +321,16 @@ class McpStore {
   /// [accessToken] in secure storage. A null token leaves any stored one
   /// alone; an empty token clears the record.
   Future<void> upsert(McpConnection connection, {String? accessToken}) async {
-    final current = List<McpConnection>.of(await load());
-    final index = current.indexWhere((c) => c.id == connection.id);
-    if (index >= 0) {
-      current[index] = connection;
-    } else {
-      current.add(connection);
-    }
-    await _saveAll(current);
+    await _serialized(() async {
+      final current = List<McpConnection>.of(await _loadUnlocked());
+      final index = current.indexWhere((c) => c.id == connection.id);
+      if (index >= 0) {
+        current[index] = connection;
+      } else {
+        current.add(connection);
+      }
+      await _saveAll(current);
+    });
     if (accessToken != null) {
       await setToken(connection.id, accessToken);
     }
@@ -308,9 +338,11 @@ class McpStore {
 
   /// Remove a connection and its stored secrets.
   Future<void> remove(String id) async {
-    final current = List<McpConnection>.of(await load())
-      ..removeWhere((c) => c.id == id);
-    await _saveAll(current);
+    await _serialized(() async {
+      final current = List<McpConnection>.of(await _loadUnlocked())
+        ..removeWhere((c) => c.id == id);
+      await _saveAll(current);
+    });
     await _secrets.delete(secretKey(id));
     await _secrets.delete(apiCredsKey(id));
   }

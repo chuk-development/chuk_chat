@@ -29,6 +29,7 @@ const Map<String, String> stringsFr = {
   'about': 'À propos',
   'aboutSubtitle': 'Détails de version et licences open source',
   'logout': 'Déconnexion',
+  'logoutFailed': 'Impossible de se déconnecter. Réessayez.',
   'noChatsToExport': 'Aucune conversation à exporter',
   'copiedToClipboard': 'Copié dans le presse-papiers',
   'savedToPath': 'Enregistré dans {path}',

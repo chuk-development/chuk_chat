@@ -3,6 +3,7 @@
 // wholesale by an `agent_list`, and a deleted coworker must never come back.
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_roster_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart'
@@ -156,6 +157,67 @@ void main() {
     final restored = second.byId(created.id)!;
     expect(restored.lastActivity?.toUtc(), when);
     expect(restored.threads.first.lastActivity?.toUtc(), when);
+  });
+
+  group('activity writes are debounced', () {
+    tearDown(() => AgentReadMarks.persistDelay = Duration.zero);
+
+    Future<DateTime?> storedActivity(String id) async {
+      final AgentRosterSnapshot snap = await nextLaunch().load();
+      for (final AgentsAgent a in snap.agents) {
+        if (a.id == id) return a.lastActivity?.toUtc();
+      }
+      return null;
+    }
+
+    test('a burst of activity is one write, after the quiet period', () async {
+      final store = nextLaunch();
+      final source = LocalAgentRosterSource(store: store);
+      await source.load();
+      final created = source.addAgent(name: 'amber-otter');
+      await store.flush();
+
+      AgentReadMarks.persistDelay = const Duration(milliseconds: 50);
+      final key = created.threads.first.key;
+      final DateTime last = DateTime.utc(2026, 9, 23, 10, 3);
+      source.markActivity(created.id, key, DateTime.utc(2026, 9, 23, 10, 1));
+      source.markActivity(created.id, key, DateTime.utc(2026, 9, 23, 10, 2));
+      source.markActivity(created.id, key, last);
+      await store.flush();
+      expect(await storedActivity(created.id), isNull);
+
+      await Future<void>.delayed(const Duration(milliseconds: 120));
+      await store.flush();
+      expect(await storedActivity(created.id), last);
+    });
+
+    test('a flush writes the waiting activity at once', () async {
+      final store = nextLaunch();
+      final source = LocalAgentRosterSource(store: store);
+      await source.load();
+      final created = source.addAgent(name: 'amber-otter');
+      AgentReadMarks.persistDelay = const Duration(hours: 1);
+      final when = DateTime.utc(2026, 9, 23, 11);
+      source.markActivity(created.id, created.threads.first.key, when);
+
+      source.flushPendingPersist();
+      await store.flush();
+      expect(await storedActivity(created.id), when);
+    });
+
+    test('a structural change still writes at once, activity included', () async {
+      final store = nextLaunch();
+      final source = LocalAgentRosterSource(store: store);
+      await source.load();
+      final created = source.addAgent(name: 'amber-otter');
+      AgentReadMarks.persistDelay = const Duration(hours: 1);
+      final when = DateTime.utc(2026, 9, 23, 12);
+      source.markActivity(created.id, created.threads.first.key, when);
+      source.hideAgent(created.id);
+      await store.flush();
+      expect(await storedActivity(created.id), when);
+      source.dispose();
+    });
   });
 
   test('a stored time fills in an agent already in memory, never overrides '

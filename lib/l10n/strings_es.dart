@@ -30,6 +30,7 @@ const Map<String, String> stringsEs = {
   'about': 'Acerca de',
   'aboutSubtitle': 'Detalles de versión y licencias de código abierto',
   'logout': 'Cerrar sesión',
+  'logoutFailed': 'No se pudo cerrar sesión. Inténtalo de nuevo.',
   'noChatsToExport': 'No hay chats para exportar',
   'copiedToClipboard': 'Copiado al portapapeles',
   'savedToPath': 'Guardado en {path}',
