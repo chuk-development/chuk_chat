@@ -4,11 +4,17 @@
 // MCP server that is available but not connected. Mirrors AskUserCard: it
 // lives at the bottom of the message bubble, connects the server on tap, and
 // calls back so the same conversation resumes once its tools are live.
+//
+// Ported verbatim from chuk_chat. The wiring points at Agents's McpService, so
+// "connect" records the server for the paired local backend; the host signs in
+// and discovers the tools when the task resumes. Not yet mounted into the
+// thread view (that lives in a file this port does not own) — kept so the
+// widget matches chuk_chat and can be dropped in when the thread view adopts it.
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/pages/mcp_connectors_page.dart'
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
     show McpConnectorIcon, showMcpCredentialDialog;
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
@@ -157,7 +163,9 @@ class _McpConnectCardState extends State<McpConnectCard> {
               child: FilledButton(
                 style: FilledButton.styleFrom(shape: const StadiumBorder()),
                 onPressed: null,
-                child: const Text('Open the Chuk Chat app to connect this server'),
+                child: const Text(
+                  'Open the Chuk Chat app to connect this server',
+                ),
               ),
             )
           else

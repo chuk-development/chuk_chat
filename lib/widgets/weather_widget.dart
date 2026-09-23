@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
+
 /// Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
 ///
 /// Expected JSON schema:
@@ -104,11 +105,7 @@ class WeatherBlockWidget extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              AppIcon(
-                _iconForCode(code),
-                size: 64,
-                color: Colors.white,
-              ),
+              AppIcon(_iconForCode(code), size: 64, color: Colors.white),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
@@ -197,10 +194,7 @@ class WeatherBlockWidget extends StatelessWidget {
             ),
             Text(
               label,
-              style: const TextStyle(
-                fontSize: 10,
-                color: Colors.white70,
-              ),
+              style: const TextStyle(fontSize: 10, color: Colors.white70),
             ),
           ],
         ),
@@ -295,9 +289,7 @@ class WeatherBlockWidget extends StatelessWidget {
       ),
       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 14),
       child: Column(
-        children: [
-          for (final d in daily) _buildDailyRow(_asMap(d)),
-        ],
+        children: [for (final d in daily) _buildDailyRow(_asMap(d))],
       ),
     );
   }
@@ -350,10 +342,7 @@ class WeatherBlockWidget extends StatelessWidget {
           if (tempMin != null)
             Text(
               '${_fmtNum(tempMin)}°',
-              style: const TextStyle(
-                fontSize: 13,
-                color: Colors.white70,
-              ),
+              style: const TextStyle(fontSize: 13, color: Colors.white70),
             ),
           const SizedBox(width: 10),
           if (tempMax != null)

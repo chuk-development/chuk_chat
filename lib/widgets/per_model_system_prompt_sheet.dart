@@ -27,9 +27,7 @@ Future<bool?> showPerModelSystemPromptSheet({
       borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
     ),
     builder: (ctx) => Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(ctx).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
       child: _PerModelSystemPromptEditor(
         modelId: modelId,
         modelName: modelName,
@@ -79,14 +77,14 @@ class _PerModelSystemPromptEditorState
     setState(() => _saving = true);
     // Capture localized failure message and the messenger BEFORE the await
     // so we don't reach for `context` after an async gap.
-    final failureMessage =
-        AppLocalizations.of(context)!.perModelPromptSaveFailed;
+    final failureMessage = AppLocalizations.of(
+      context,
+    )!.perModelPromptSaveFailed;
     final messenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
     final text = _ctrl.text;
     final config = ModelPromptConfig(prompt: text, mode: _mode);
-    final ok =
-        await PerModelSystemPromptService.save(widget.modelId, config);
+    final ok = await PerModelSystemPromptService.save(widget.modelId, config);
     if (!mounted) return;
     setState(() => _saving = false);
     if (ok) {
@@ -171,10 +169,7 @@ class _PerModelSystemPromptEditorState
               ),
             ),
             const SizedBox(height: 16),
-            Text(
-              l.perModelPromptModeLabel,
-              style: theme.textTheme.labelLarge,
-            ),
+            Text(l.perModelPromptModeLabel, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             _ModeChips(
               mode: _mode,

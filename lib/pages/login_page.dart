@@ -1,3 +1,7 @@
+// Merge note: Agents replaced this screen with a 210-line email + password
+// form. Upstream's full sign-in/sign-up screen is the shipped one and stays.
+// Kept from Agents: the injectable `auth` parameter, which its widget tests
+// construct the page with.
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
@@ -16,7 +20,12 @@ import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class LoginPage extends StatefulWidget {
-  const LoginPage({super.key});
+  const LoginPage({super.key, this.auth = const AuthService()});
+
+  /// The auth service used to sign in. Injectable so widget tests can supply
+  /// a fake that fails without a real Supabase backend — Agents's own
+  /// `LoginPage(auth: …)` call sites keep working against upstream's screen.
+  final AuthService auth;
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -29,7 +38,7 @@ class _LoginPageState extends State<LoginPage> {
   final _confirmPasswordCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
 
-  final AuthService _authService = const AuthService();
+  AuthService get _authService => widget.auth;
 
   bool _isSubmitting = false;
   bool _isSignInMode = true;

@@ -11,6 +11,7 @@ sealed class ChatStreamEvent {
   const ChatStreamEvent();
 
   const factory ChatStreamEvent.content(String text) = ContentEvent;
+  const factory ChatStreamEvent.finalContent(String text) = FinalContentEvent;
   const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent;
   const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent;
   const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent;
@@ -60,6 +61,13 @@ class ToolCallsEvent extends ChatStreamEvent {
 class ContentEvent extends ChatStreamEvent {
   final String text;
   const ContentEvent(this.text);
+}
+
+/// Authoritative completed answer. Replaces streamed provisional content;
+/// it is not a delta and must never be appended to an existing answer.
+class FinalContentEvent extends ChatStreamEvent {
+  final String text;
+  const FinalContentEvent(this.text);
 }
 
 /// Event containing reasoning/thinking process text.

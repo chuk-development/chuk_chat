@@ -155,7 +155,8 @@ class ArtifactDocument {
       language: map['language'] as String?,
       content: decryptedContent,
       version: (map['version'] as num?)?.toInt() ?? 1,
-      attachmentPath: (map['attachment_path'] as String?)?.trim().isEmpty == true
+      attachmentPath:
+          (map['attachment_path'] as String?)?.trim().isEmpty == true
           ? null
           : map['attachment_path'] as String?,
       createdAt:
@@ -191,7 +192,8 @@ class ArtifactVersionSnapshot {
       artifactId: map['artifact_id'] as String,
       version: (map['version'] as num?)?.toInt() ?? 1,
       content: decryptedContent,
-      attachmentPath: (map['attachment_path'] as String?)?.trim().isEmpty == true
+      attachmentPath:
+          (map['attachment_path'] as String?)?.trim().isEmpty == true
           ? null
           : map['attachment_path'] as String?,
       createdAt:

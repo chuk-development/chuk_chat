@@ -3,12 +3,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
+// Used from the part file desktop_send_logic.dart, not from this one.
 import 'package:chuk_chat/widgets/app_notification.dart';
+// Agents imported ui/expressive/icon_map.dart here; it is a byte copy of
+// widgets/icons/icon_map.dart, which this file already imports below.
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
+import 'package:chuk_chat/ui/expressive/day_divider.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -200,6 +204,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   @override
   set activeChatId(String? value) => _activeChatId = value;
+  // Agents held the mode's reasoning level in a private `_reasoningEffort`
+  // field here. Upstream moved that state into ChatModelSelectionMixin as the
+  // public `reasoningEffort`, which this State mixes in, so the field is gone
+  // and every read below goes to the mixin.
 
   @override
   Function(String?) get onChatIdChanged => widget.onChatIdChanged;
@@ -1909,7 +1917,34 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   index: i,
                                                   isStreaming: _isStreaming,
                                                 );
-                                            return ChatMessageListItem(
+                                            // Agents's day break, kept: one
+                                            // date chip where the day changes,
+                                            // like a messenger. A row with no
+                                            // timestamp gets none. The rules
+                                            // live in chat_ui_helpers.
+                                            final DateTime? rowDay =
+                                                messageRowTime(_messages[i]);
+                                            final bool opensDay =
+                                                messageOpensDay(
+                                                  i == 0
+                                                      ? null
+                                                      : _messages[i - 1],
+                                                  _messages[i],
+                                                );
+                                            // Dropped with the switch to
+                                            // upstream's shared row widget:
+                                            // Agents also broke a bubble RUN on
+                                            // a day change and on a pause
+                                            // longer than kBubbleGroupPause
+                                            // (messageStartsRun / messageEndsRun,
+                                            // still in chat_ui_helpers).
+                                            // ChatMessageListItem derives
+                                            // startsNewGroup/endsGroup from the
+                                            // sender alone and takes no
+                                            // override, so reinstating it means
+                                            // giving that widget the two flags.
+                                            final Widget
+                                            row = ChatMessageListItem(
                                               messages: _messages,
                                               index: i,
                                               data: data,
@@ -1962,6 +1997,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                                   ? () =>
                                                         _continueGenerationAt(i)
                                                   : null,
+                                            );
+                                            if (!opensDay || rowDay == null) {
+                                              return row;
+                                            }
+                                            return Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: <Widget>[
+                                                ChatDayDivider(
+                                                  when: rowDay.toLocal(),
+                                                ),
+                                                row,
+                                              ],
                                             );
                                           },
                                         ),

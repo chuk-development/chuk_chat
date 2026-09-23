@@ -1,0 +1,54 @@
+/* The viewer page owns the whole WebView. Everything is black behind the
+   desktop, because the framebuffer is letterboxed and the letterbox must not
+   flash the host's own colour. */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #000;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* noVNC appends its own subtree here and autoscales it to this box. The box
+   is sized to the framebuffer's aspect, so noVNC's scale and ours agree and a
+   click keeps landing on the pixel it was aimed at. */
+#screen {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* The held frame sits under nothing and takes no input. It is only ever the
+   canvas subtree noVNC detached when the socket closed.
+
+   It is visibly drained of life. A frozen picture that looks exactly like a
+   live one is a lie the reader has to catch by reading the note over it; a
+   held frame that is duller than a live one says "this is not moving" before
+   any word is read. Only far enough to notice, never far enough to stop the
+   picture being useful. */
+#held {
+  position: absolute;
+  pointer-events: none;
+  display: none;
+  filter: grayscale(0.4) brightness(0.72);
+}
+
+/* Above noVNC's own capture proxy (z-index 10000), so a real touch always
+   reaches the trackpad first. */
+#trackpad {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  background: transparent;
+  touch-action: none;
+}
+
+[hidden] {
+  display: none !important;
+}

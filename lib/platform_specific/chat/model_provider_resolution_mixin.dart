@@ -4,6 +4,7 @@ import 'package:flutter/widgets.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 /// Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 ///
@@ -18,6 +19,9 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   String? get selectedProviderSlug;
   set selectedProviderSlug(String? value);
 
+  /// Optional chat override. Unscoped legacy hosts retain account defaults.
+  String? get modelSelectionChatId => null;
+
   bool get modelSupportsImageInput =>
       ChatUiHelpers.modelSupportsImageInput(selectedModelId);
 
@@ -29,6 +33,20 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     String modelId, {
     bool forceFromPrefs = false,
   }) async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      final choice = await ChatModelSelectionService.instance.load(chatId);
+      if (!mounted ||
+          modelSelectionChatId != chatId ||
+          selectedModelId != modelId)
+        return;
+      if (choice != null && choice.modelId == modelId) {
+        if (selectedProviderSlug != choice.providerSlug) {
+          setState(() => selectedProviderSlug = choice.providerSlug);
+        }
+        return;
+      }
+    }
     if (modelId.isEmpty) {
       if (selectedProviderSlug != null) {
         setState(() {
@@ -52,10 +70,12 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
       }
     }
 
-    final String? loadedSlug = await UserPreferencesService.loadSelectedProvider(
-      modelId,
-    );
-    if (!mounted) return;
+    final String? loadedSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
+    if (!mounted ||
+        modelSelectionChatId != chatId ||
+        selectedModelId != modelId)
+      return;
     if (selectedProviderSlug != loadedSlug) {
       setState(() {
         selectedProviderSlug = loadedSlug;
@@ -67,6 +87,12 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// cache, prefs, and the static in-memory providers list, and resolving the
   /// "auto cheapest" sentinel at send time. Returns null if nothing resolves.
   Future<String?> ensureProviderSlugForCurrentModel() async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      final choice = await ChatModelSelectionService.instance.load(chatId);
+      if (choice != null) return choice.providerSlug;
+      if (!mounted || modelSelectionChatId != chatId) return null;
+    }
     if (selectedModelId.isEmpty) return null;
 
     String? slug =

@@ -1,0 +1,122 @@
+# The two sandbox images, built here instead of on every machine that installs
+# Agents (§6, §9).
+#
+# Why this exists: `scripts/install.sh` used to build `agents/sandbox/docker/Dockerfile`
+# locally. That build is now ~1.4 GB and includes LibreOffice, so every fresh
+# server paid ten minutes and a full apt mirror for bytes that are identical
+# everywhere. A published image turns that into one pull.
+#
+# Two images, because the browser stack is several hundred MB that an agent
+# which never browses should not carry:
+#   ghcr.io/chuk-development/agents-base     — Debian, python, the document stack
+#   ghcr.io/chuk-development/agents-browser  — the same plus Chromium (FROM base)
+#
+# Tagging: every build publishes `<calendar version>` and moves `latest`. The
+# calendar tag is what `install.sh` writes into `[sandbox] image` with its
+# digest, so a host upgrades when someone decides to, not when a tag moves under
+# it.
+#
+# amd64 only by default. An arm64 build runs the LibreOffice apt install under
+# QEMU emulation and takes the better part of an hour; ask for it explicitly
+# with the `platforms` input when an arm64 host actually needs one.
+
+name: images
+
+on:
+  workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Target platforms"
+        default: linux/amd64
+        type: choice
+        options:
+          - linux/amd64
+          - linux/amd64,linux/arm64
+      browser:
+        description: "Also build the browser image"
+        default: true
+        type: boolean
+  push:
+    tags:
+      - "image-v*"
+
+env:
+  REGISTRY: ghcr.io
+  BASE_NAME: ${{ github.repository_owner }}/agents-base
+  BROWSER_NAME: ${{ github.repository_owner }}/agents-browser
+
+jobs:
+  images:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # The version both images carry. A tag push uses the tag (image-v2026.09.13
+      # -> 2026.09.13); a manual run uses today's date plus the short sha, so two
+      # runs on one day never collide.
+      - name: Version
+        id: version
+        run: |
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            version="${GITHUB_REF_NAME#image-v}"
+          else
+            version="$(date -u +%Y.%m.%d)-${GITHUB_SHA::7}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@v3
+        if: contains(inputs.platforms, 'arm64')
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Base image
+        id: base
+        uses: docker/build-push-action@v6
+        with:
+          context: agents/sandbox/docker
+          file: agents/sandbox/docker/Dockerfile
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BASE_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.BASE_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # FROM the digest, not from `:latest` — the tag may already have moved if
+      # two runs overlap, and the browser image must sit on the base this run
+      # produced.
+      - name: Browser image
+        if: inputs.browser != false
+        uses: docker/build-push-action@v6
+        with:
+          context: agents/sandbox/docker
+          file: agents/sandbox/docker/Dockerfile.browser
+          platforms: ${{ inputs.platforms || 'linux/amd64' }}
+          push: true
+          build-args: |
+            BASE_IMAGE=${{ env.REGISTRY }}/${{ env.BASE_NAME }}@${{ steps.base.outputs.digest }}
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BROWSER_NAME }}:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.BROWSER_NAME }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Summary
+        run: |
+          {
+            echo "### images ${{ steps.version.outputs.version }}"
+            echo ""
+            echo "- \`${{ env.REGISTRY }}/${{ env.BASE_NAME }}:${{ steps.version.outputs.version }}\`"
+            echo "  digest \`${{ steps.base.outputs.digest }}\`"
+            echo "- platforms: \`${{ inputs.platforms || 'linux/amd64' }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"

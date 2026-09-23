@@ -1,3 +1,6 @@
+// MERGE NOTE: the Agents build stubbed this whole file down to a no-op
+// syncIdentityFromSupabase(), because every tool ran on the Python host.
+// Upstream's device-side notes/identity handlers are kept whole.
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';

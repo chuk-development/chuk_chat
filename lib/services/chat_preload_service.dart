@@ -249,6 +249,11 @@ class ChatPreloadService {
   ) async {
     try {
       final rows = await SupabaseService.client
+          // MERGE NOTE: scripts/import_chat_ui.sh rewrote this table name to
+          // 'cowork_chats' for the standalone Agents build. Reverted: a
+          // chuk_chat chat lives in 'encrypted_chats'. Agents threads keep
+          // their own table through kAgentsChatsTable in
+          // services/storage/agents_chat_store.dart.
           .from('encrypted_chats')
           .select(
             'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',

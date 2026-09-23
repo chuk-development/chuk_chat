@@ -1,0 +1,21 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Agents</title>
+<link rel="stylesheet" href="panel.css" />
+<div id="app">
+  <header>
+    <span id="dot" class="dot"></span>
+    <span id="state">connecting…</span>
+    <button id="reconnect" type="button">retry</button>
+  </header>
+  <section id="context" hidden>
+    <div class="ctx-title" id="ctx-title"></div>
+    <div class="ctx-url" id="ctx-url"></div>
+  </section>
+  <main id="log"></main>
+  <form id="composer">
+    <textarea id="input" rows="3" placeholder="Ask your coworker about this page…"></textarea>
+    <button type="submit">Send</button>
+  </form>
+</div>
+<script type="module" src="panel.js"></script>

@@ -1,3 +1,8 @@
+// Merge note: upstream moved this page onto Scaffold + FloatingAppBar, Agents
+// onto ExpressiveScreen. Upstream's chrome is kept. Everything else Agents did
+// here is kept on top: the minimum tap target on a colour swatch, the preset
+// and font dropdowns replaced by the anchored menu, and the dialog shape left
+// to the theme.
 // lib/pages/theme_page.dart
 import 'dart:async';
 
@@ -15,7 +20,9 @@ import 'package:chuk_chat/theme/theme_presets.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ThemePage extends StatefulWidget {
@@ -688,7 +695,6 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
     final l = AppLocalizations.of(context)!;
     final color = _hsv.toColor();
     return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: m3.surfaceContainerHigh,
       title: Text(l.pickAColor),
       content: SizedBox(
@@ -889,27 +895,44 @@ class _Swatch extends StatelessWidget {
         ThemeData.estimateBrightnessForColor(color) == Brightness.dark
         ? Colors.white
         : Colors.black;
+    // The coloured circle stays as small as the grid wants it; the TAP square
+    // around it never falls under Material's minimum, so a swatch is still a
+    // swatch and a finger still lands on it.
+    final double target = size < kMinInteractiveDimension
+        ? kMinInteractiveDimension
+        : size;
     return InkWell(
       customBorder: const CircleBorder(),
       onTap: onTap,
-      child: Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color,
-          border: selected
-              ? Border.all(color: cs.onSurface, width: 2)
-              // The spacer ring must match the card the swatch sits in, not
-              // the scaffold surface, or the selected swatch shows a halo.
-              : Border.all(color: Colors.transparent, width: 2),
-          boxShadow: selected
-              ? [BoxShadow(color: theme.m3.surfaceContainer, spreadRadius: 3)]
-              : null,
+      child: SizedBox(
+        width: target,
+        height: target,
+        child: Center(
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color,
+              border: selected
+                  ? Border.all(color: cs.onSurface, width: 2)
+                  // The spacer ring must match the card the swatch sits in, not
+                  // the scaffold surface, or the selected swatch shows a halo.
+                  : Border.all(color: Colors.transparent, width: 2),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: theme.m3.surfaceContainer,
+                        spreadRadius: 3,
+                      ),
+                    ]
+                  : null,
+            ),
+            child: selected
+                ? AppIcon(Icons.check, size: size * 0.5, color: checkColor)
+                : null,
+          ),
         ),
-        child: selected
-            ? AppIcon(Icons.check, size: size * 0.5, color: checkColor)
-            : null,
       ),
     );
   }
@@ -961,47 +984,42 @@ class _PresetPicker extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<ThemePreset>(
-                value: selected,
-                isExpanded: true,
-                dropdownColor: m3.surfaceContainerHigh,
-                borderRadius: kBorderRadiusMenu,
-                focusColor: Colors.transparent,
-                hint: Text(
-                  customLabel,
-                  style: TextStyle(color: m3.onSurfaceVariant),
-                ),
-                items: presets
-                    .map(
-                      (p) => DropdownMenuItem<ThemePreset>(
-                        value: p,
-                        child: Row(
-                          children: [
-                            _PresetDots(preset: p, brightness: brightness),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                p.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(color: cs.onSurface),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (p) {
-                  if (p != null) onSelected(p);
-                },
-              ),
+            child: MenuAnchorButton(
+              label: selected?.name ?? customLabel,
+              expand: true,
+              leading: selected == null
+                  ? null
+                  : _PresetDots(preset: selected!, brightness: brightness),
+              labelStyle: selected == null
+                  ? TextStyle(color: m3.onSurfaceVariant)
+                  : TextStyle(color: cs.onSurface),
+              onTap: _pick,
             ),
           ),
         ],
       ),
     );
+  }
+
+  Future<void> _pick(BuildContext anchorContext) async {
+    final ThemePreset? picked = await showAnchoredMenu<ThemePreset>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<ThemePreset>>[
+        for (final ThemePreset p in presets)
+          PopupMenuItem<ThemePreset>(
+            padding: EdgeInsets.zero,
+            value: p,
+            child: MenuActionRow(
+              label: p.name,
+              leading: _PresetDots(preset: p, brightness: brightness),
+              selected: p == selected,
+            ),
+          ),
+      ],
+    );
+    if (picked != null) onSelected(picked);
   }
 }
 
@@ -1082,31 +1100,14 @@ class _FontCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: value,
-                isExpanded: true,
-                dropdownColor: m3.surfaceContainerHigh,
-                borderRadius: kBorderRadiusMenu,
-                focusColor: Colors.transparent,
-                items: options
-                    .map(
-                      (id) => DropdownMenuItem<String>(
-                        value: id,
-                        child: Text(
-                          labelFor(id),
-                          style: TextStyle(
-                            color: cs.onSurface,
-                            fontFamily: resolveChatFontFamily(id),
-                          ),
-                        ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (v) {
-                  if (v != null && v != value) onChanged(v);
-                },
+            child: MenuAnchorButton(
+              label: labelFor(value),
+              expand: true,
+              labelStyle: TextStyle(
+                color: cs.onSurface,
+                fontFamily: resolveChatFontFamily(value),
               ),
+              onTap: _pick,
             ),
           ),
           const SizedBox(height: 10),
@@ -1129,5 +1130,26 @@ class _FontCard extends StatelessWidget {
       ),
     );
   }
+
+  Future<void> _pick(BuildContext anchorContext) async {
+    final String? picked = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<String>>[
+        for (final String id in options)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: id,
+            child: MenuActionRow(label: labelFor(id), selected: id == value),
+          ),
+      ],
+    );
+    if (picked != null && picked != value) onChanged(picked);
+  }
 }
 
+/// The visible half of a dropdown: the current value and the arrow.
+///
+/// A tap opens the house menu ([showAnchoredMenu]) instead of the Material
+/// popup, so a settings picker reads like every other menu in the app.

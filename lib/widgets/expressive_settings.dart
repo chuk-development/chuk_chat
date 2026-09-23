@@ -10,14 +10,52 @@
 
 import 'package:flutter/material.dart';
 
+
+import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Corner radius at the outer edges of a group.
 const double kExpressiveOuterRadius = 26;
 
+/// Corner radius a tile morphs to while it is held.
+const double kExpressivePressedRadius = 18;
+
 /// Corner radius where two tiles meet.
 const double kExpressiveInnerRadius = 6;
+
+/// Picks the contrast colour of a tone from the scheme.
+extension ExpressiveOnColor on ColorScheme {
+  /// The colour that stays legible on top of the given fill.
+  ///
+  /// A tone handed to a tile, a badge or an info card is usually a scheme
+  /// colour, so the scheme already knows its partner. Only when the tone
+  /// comes from somewhere else does this fall back to a brightness test — and
+  /// even then it picks the scheme's own extremes, never pure white or black.
+  Color onColorFor(Color background) {
+    final List<(Color, Color)> pairs = <(Color, Color)>[
+      (primary, onPrimary),
+      (primaryContainer, onPrimaryContainer),
+      (secondary, onSecondary),
+      (secondaryContainer, onSecondaryContainer),
+      (tertiary, onTertiary),
+      (tertiaryContainer, onTertiaryContainer),
+      (error, onError),
+      (errorContainer, onErrorContainer),
+      (inverseSurface, onInverseSurface),
+      (surface, onSurface),
+    ];
+    for (final (Color fill, Color on) in pairs) {
+      if (fill == background) return on;
+    }
+    final bool darkBackground =
+        ThemeData.estimateBrightnessForColor(background) == Brightness.dark;
+    final bool onSurfaceIsLight =
+        ThemeData.estimateBrightnessForColor(onSurface) == Brightness.light;
+    if (darkBackground) return onSurfaceIsLight ? onSurface : surface;
+    return onSurfaceIsLight ? surface : onSurface;
+  }
+}
 
 /// Gap between the tiles of a group.
 const double kExpressiveTileGap = 3;
@@ -165,7 +203,7 @@ class _ExpressiveRowState extends State<ExpressiveRow> {
 /// The filled tile every row in a group sits in. Anything can go inside —
 /// a settings row, an account header, a connector — and it will carry the
 /// group's shape, its colour and its press feedback.
-class ExpressiveTile extends StatefulWidget {
+class ExpressiveTile extends StatelessWidget {
   const ExpressiveTile({
     super.key,
     required this.child,
@@ -178,46 +216,27 @@ class ExpressiveTile extends StatefulWidget {
   final EdgeInsets padding;
 
   @override
-  State<ExpressiveTile> createState() => _ExpressiveTileState();
-}
-
-class _ExpressiveTileState extends State<ExpressiveTile> {
-  bool _pressed = false;
-
-  @override
   Widget build(BuildContext context) {
     final m3 = Theme.of(context).m3;
     final BorderRadius resting = _ExpressiveTileShape.of(context);
-    final bool enabled = widget.onTap != null;
 
-    // The squeeze: pressing rounds every corner and shrinks the tile a
-    // little. It is the whole of the expressive feedback — no ripple is
-    // needed on top of it.
-    return AnimatedScale(
-      scale: _pressed ? 0.985 : 1,
-      duration: const Duration(milliseconds: 130),
-      curve: Curves.easeOutCubic,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 130),
-        curve: Curves.easeOutCubic,
-        decoration: BoxDecoration(
-          color: _pressed ? m3.surfaceContainerHigh : m3.surfaceContainer,
-          borderRadius: _pressed
-              ? BorderRadius.circular(kExpressiveOuterRadius)
-              : resting,
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Material(
-          type: MaterialType.transparency,
-          child: InkWell(
-            onTap: widget.onTap,
-            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
-            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-            onTapCancel: enabled ? () => setState(() => _pressed = false) : null,
-            child: Padding(padding: widget.padding, child: widget.child),
-          ),
+    // The squeeze: pressing shrinks the tile a little and squares its corners
+    // off, then a spring carries it back. It is the same [MorphTap] every
+    // chat control is built on, so a settings row answers a finger exactly
+    // the way the rest of the app does — no ripple is needed on top of it.
+    return MorphTap(
+      onTap: onTap,
+      color: m3.surfaceContainer,
+      pressedColor: m3.surfaceContainerHigh,
+      pressedScale: 0.985,
+      shape: RoundedRectangleBorder(borderRadius: resting),
+      pressedShape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.all(
+          Radius.circular(kExpressivePressedRadius),
         ),
       ),
+      padding: padding,
+      child: child,
     );
   }
 }
@@ -309,12 +328,9 @@ class ExpressiveInfoCard extends StatelessWidget {
     final theme = Theme.of(context);
     final m3 = theme.m3;
     final Color background = tone ?? m3.surfaceContainerLow;
-    final Color foreground =
-        tone == null
+    final Color foreground = tone == null
         ? m3.onSurfaceVariant
-        : ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
+        : theme.colorScheme.onColorFor(background);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
@@ -393,13 +409,12 @@ class ExpressiveIconTile extends StatelessWidget {
       ),
       child: AppIcon(
         icon,
-        size: size * 0.5,
-        color: tone == null
-            ? cs.onPrimaryContainer
-            : ThemeData.estimateBrightnessForColor(background) ==
-                  Brightness.dark
-            ? Colors.white
-            : Colors.black,
+        // The icon's own box, before [HugeIcon]'s optical inset trims it to
+        // about 0.86 of that. That lands a 42 px tile on a 25 px drawing —
+        // the 24-in-40 proportion a filled tile wants. The old 0.5 was set
+        // when the icon ignored it and filled the whole tile anyway.
+        size: size * 0.7,
+        color: tone == null ? cs.onPrimaryContainer : cs.onColorFor(background),
       ),
     );
   }
@@ -462,9 +477,7 @@ class ExpressiveBadge extends StatelessWidget {
     final Color background = tone ?? theme.m3.surfaceContainerHighest;
     final Color foreground = tone == null
         ? theme.colorScheme.onSurface
-        : ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-        ? Colors.white
-        : Colors.black;
+        : theme.colorScheme.onColorFor(background);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(

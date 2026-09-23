@@ -1,3 +1,10 @@
+// Merge note: upstream's destination list is kept whole — Agents had deleted
+// pricing, identity, tool calling, sandboxes, export chats and replay
+// onboarding because its product has none of them, and the merged app does.
+// Kept from Agents: its own 'Agents' group, and the minimum tap target on the
+// nav rows. Agents also pointed the connectors and developer rows at its own
+// pages under lib/pages/settings/; upstream's rows are kept, so those two
+// Agents pages are reachable only once someone routes them.
 // lib/pages/desktop_settings_modal.dart
 //
 // Desktop settings as a modal popup over the chat UI — a proper desktop
@@ -51,6 +58,10 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
+import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 
 /// Opens the desktop settings modal over the current chat UI.
 Future<void> showDesktopSettingsModal(
@@ -240,6 +251,46 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           label: 'Sandboxes',
           keywords: 'sandbox sandboxes code execution container docker runtime',
           builder: (_) => const SandboxManagementPage(),
+        ),
+      ]),
+      // Agents's own destinations: about the machine the agent runs on, which
+      // is what chuk_chat has no equivalent for.
+      _SettingsGroup('Agents', [
+        _SettingsDest(
+          id: 'herenow',
+          icon: Icons.place_outlined,
+          label: 'here.now',
+          keywords:
+              'herenow here now publish page site approval '
+              'veröffentlichen seite freigabe',
+          builder: (_) => const HereNowSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'embedding',
+          icon: Icons.memory_outlined,
+          label: 'Embedding',
+          keywords:
+              'embedding index vector memory model einbettung index '
+              'gedächtnis',
+          builder: (_) => const EmbeddingSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'apikeys',
+          icon: Icons.key_outlined,
+          label: 'API Keys',
+          keywords:
+              'api keys key secret secrets token password credentials '
+              'env environment schlüssel geheimnis zugangsdaten',
+          builder: (_) => const SecretsSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'automations',
+          icon: Icons.schedule_outlined,
+          label: 'Automations',
+          keywords:
+              'automations automation schedule cron watcher watch monitor '
+              'poll trigger remind zeitplan überwachen automatisierung',
+          builder: (_) => const AutomationsPage(),
         ),
       ]),
       _SettingsGroup('Appearance', [
@@ -624,7 +675,12 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         child: InkWell(
           borderRadius: BorderRadius.circular(kRadiusRow),
           onTap: () => _onSelect(dest),
-          child: Padding(
+          child: Container(
+            // A 20 dp icon inside 10 dp of padding is a 40 dp row: too small
+            // to hit, on the phone as much as under a mouse.
+            constraints: const BoxConstraints(
+              minHeight: kMinInteractiveDimension,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
@@ -671,7 +727,10 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         child: InkWell(
           borderRadius: BorderRadius.circular(kRadiusRow),
           onTap: _logout,
-          child: Padding(
+          child: Container(
+            constraints: const BoxConstraints(
+              minHeight: kMinInteractiveDimension,
+            ),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [

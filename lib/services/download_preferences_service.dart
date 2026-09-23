@@ -12,7 +12,9 @@ class DownloadPreferencesService {
 
   /// Notifier for the "always ask" toggle. Defaults to true so users are
   /// prompted by default and never get files written silently to disk.
-  static final ValueNotifier<bool> alwaysAskNotifier = ValueNotifier<bool>(true);
+  static final ValueNotifier<bool> alwaysAskNotifier = ValueNotifier<bool>(
+    true,
+  );
 
   /// Notifier for the configured default download folder, or null if unset.
   static final ValueNotifier<String?> defaultFolderNotifier =

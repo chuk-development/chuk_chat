@@ -571,6 +571,8 @@ class AppLocalizations {
   // ── Chat UI ────────────────────────────────────────────────
   String get askMeAnything => _get('askMeAnything');
   String get queuedLabel => _get('queuedLabel');
+  String queuedMessagesCount(String count) =>
+      _get('queuedMessagesCount').replaceAll('{count}', count);
   String get editYourMessage => _get('editYourMessage');
   String get addMessageOrDocs => _get('addMessageOrDocs');
   String get micAccessFailed => _get('micAccessFailed');
@@ -765,13 +767,8 @@ class _AppLocalizationsDelegate
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) => [
-    'en',
-    'de',
-    'es',
-    'fr',
-    'pt',
-  ].contains(locale.languageCode);
+  bool isSupported(Locale locale) =>
+      ['en', 'de', 'es', 'fr', 'pt'].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>

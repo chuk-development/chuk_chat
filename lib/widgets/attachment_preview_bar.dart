@@ -7,6 +7,7 @@ import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+
 import 'package:pdfx/pdfx.dart';
 
 import 'package:chuk_chat/constants/file_constants.dart';
@@ -14,9 +15,10 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/widgets/encrypted_image_widget.dart';
 import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/utils/format_bytes.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 typedef AttachmentRemoveCallback = void Function(String fileId);
 typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file);
@@ -126,8 +128,9 @@ class _ImageAttachmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final ColorScheme cs = theme.colorScheme;
     final bool isUploading = file.isUploading;
-    final accent = theme.colorScheme.primary;
+    final accent = cs.primary;
     const double innerSize = _kImageCardSize - _kImageCardBorderWidth * 2;
     final BorderRadius outerRadius = BorderRadius.circular(16);
     final BorderRadius innerRadius = BorderRadius.circular(14);
@@ -165,7 +168,7 @@ class _ImageAttachmentCard extends StatelessWidget {
                   // Upload progress overlay
                   if (isUploading)
                     Container(
-                      color: Colors.black.withValues(alpha: 0.5),
+                      color: cs.scrim.withValues(alpha: 0.5),
                       child: Center(
                         child: SizedBox(
                           width: 24,
@@ -189,14 +192,14 @@ class _ImageAttachmentCard extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.6),
+                          color: cs.scrim.withValues(alpha: 0.6),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           formatBytes(file.fileSizeBytes!),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 8,
+                          style: TextStyle(
+                            color: cs.onInverseSurface,
+                            fontSize: 10,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -209,8 +212,9 @@ class _ImageAttachmentCard extends StatelessWidget {
                     right: 3,
                     child: _RemoveButton(
                       onTap: isUploading ? null : () => onRemove(file.id),
-                      tooltip: AppLocalizations.of(context)!.removeFile(file.fileName),
-                      size: 18,
+                      tooltip: AppLocalizations.of(
+                        context,
+                      )!.removeFile(file.fileName),
                     ),
                   ),
                 ],
@@ -302,30 +306,29 @@ class _ImageAttachmentCard extends StatelessWidget {
 // Small circular remove button overlay
 // ---------------------------------------------------------------------------
 
+/// The remove target on an attachment card.
+///
+/// It is a full [MobileLayout.minTouchTarget] box built on
+/// [ExpressiveIconButton], so it springs and morphs like every other button in
+/// the app and it is never smaller than Material's minimum. The glyph stays
+/// small (22 dp, what the expressive button draws) so the thumbnail under the
+/// scrim is still readable.
 class _RemoveButton extends StatelessWidget {
-  const _RemoveButton({required this.onTap, this.tooltip, this.size = 22});
+  const _RemoveButton({required this.onTap, this.tooltip});
 
   final VoidCallback? onTap;
   final String? tooltip;
-  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.black.withValues(alpha: 0.55),
-      shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        borderRadius: kBorderRadiusRow,
-        onTap: onTap,
-        child: Tooltip(
-          message: tooltip ?? 'Remove',
-          child: Padding(
-            padding: EdgeInsets.all(size * 0.18),
-            child: AppIcon(Icons.close, size: size * 0.6, color: Colors.white),
-          ),
-        ),
-      ),
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    return ExpressiveIconButton(
+      icon: Icons.close,
+      onTap: onTap,
+      size: MobileLayout.minTouchTarget,
+      color: cs.scrim.withValues(alpha: 0.55),
+      onColor: cs.onInverseSurface,
+      tooltip: tooltip ?? 'Remove',
     );
   }
 }
@@ -355,6 +358,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
     final bool isUploading = file.isUploading;
     const double innerSize = _kImageCardSize - _kImageCardBorderWidth * 2;
     final BorderRadius outerRadius = BorderRadius.circular(16);
@@ -415,7 +419,7 @@ class _DocumentAttachmentTile extends StatelessWidget {
                     // Upload progress overlay
                     if (isUploading)
                       Container(
-                        color: Colors.black.withValues(alpha: 0.5),
+                        color: cs.scrim.withValues(alpha: 0.5),
                         child: Center(
                           child: SizedBox(
                             width: 24,
@@ -439,14 +443,14 @@ class _DocumentAttachmentTile extends StatelessWidget {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.6),
+                            color: cs.scrim.withValues(alpha: 0.6),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             formatBytes(file.fileSizeBytes!),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 8,
+                            style: TextStyle(
+                              color: cs.onInverseSurface,
+                              fontSize: 10,
                               fontWeight: FontWeight.w600,
                             ),
                           ),
@@ -459,8 +463,9 @@ class _DocumentAttachmentTile extends StatelessWidget {
                       right: 3,
                       child: _RemoveButton(
                         onTap: isUploading ? null : () => onRemove(file.id),
-                        tooltip: AppLocalizations.of(context)!.removeFile(file.fileName),
-                        size: 18,
+                        tooltip: AppLocalizations.of(
+                          context,
+                        )!.removeFile(file.fileName),
                       ),
                     ),
                   ],
@@ -486,7 +491,7 @@ void _showDocumentPreview(
 }) {
   showDialog<void>(
     context: context,
-    barrierColor: Colors.black.withValues(alpha: 0.7),
+    barrierColor: Theme.of(context).colorScheme.scrim.withValues(alpha: 0.7),
     builder: (context) =>
         _DocumentPreviewDialog(file: file, onContentChanged: onContentChanged),
   );
@@ -865,10 +870,12 @@ class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog> {
                       valueColor: AlwaysStoppedAnimation(accent),
                     ),
                   ),
-                  errorBuilder: (_, error) => Center(
+                  errorBuilder: (context, error) => Center(
                     child: Text(
                       'Error: $error',
-                      style: const TextStyle(color: Colors.red),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ),
                 ),

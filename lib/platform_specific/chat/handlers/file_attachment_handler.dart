@@ -102,9 +102,7 @@ class FileAttachmentHandler {
     _isPicking = true;
     final List<XFile> pickedImages;
     try {
-      pickedImages = await _imagePicker.pickMultiImage(
-        imageQuality: 90,
-      );
+      pickedImages = await _imagePicker.pickMultiImage(imageQuality: 90);
     } catch (error) {
       onError?.call('Unable to access photo library: $error');
       return;
@@ -400,6 +398,11 @@ class FileAttachmentHandler {
     }
   }
 
+  // Agents's private _replaceWithScannedPages/_discardPages lived here.
+  // Upstream extracted the identical code into
+  // handlers/scanned_pdf_pages.dart (replaceWithScannedPages /
+  // discardScannedPages); handleUploadStatusUpdate above calls that one, so
+  // the private copy was a duplicate and is gone. No behaviour was dropped.
   /// Remove an attached file.
   /// If the file was an uploaded image, silently deletes it from Supabase Storage.
   void removeFile(String fileId) {

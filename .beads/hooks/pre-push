@@ -11,6 +11,11 @@
 
 set -u
 
+# 0) Nur laufen, wenn der Push aus einer Claude-Code-Sitzung kommt.
+#    Claude Code setzt CLAUDECODE=1. Im normalen Terminal ist die Variable
+#    nicht gesetzt -> Hook macht nichts, Push laeuft ohne Review durch.
+[ "${CLAUDECODE:-}" = "1" ] || exit 0
+
 # 1) Ohne CLI oder ohne Login still durchlassen (Arbeits-/Fremd-Rechner).
 command -v cr >/dev/null 2>&1 || exit 0
 cr auth status >/dev/null 2>&1 || exit 0

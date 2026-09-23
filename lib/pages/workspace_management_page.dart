@@ -1,3 +1,6 @@
+// Agents stubbed this screen out (`ComingSoonPage(title: 'Projects')`) because
+// workspaces are a chuk_chat feature. The merged app keeps upstream's real
+// workspace management page; the stub is dropped.
 // lib/pages/workspace_management_page.dart
 import 'dart:async';
 

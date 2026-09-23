@@ -1,3 +1,9 @@
+// Merge note: Agents's copy of this page was an adaptation that removed what
+// its own pubspec lacked — package_info_plus, flutter_svg + assets/logo.svg,
+// and the update-check badge — and swapped the chrome for ExpressiveScreen.
+// The merged app has all three packages back, so that adaptation is dropped
+// whole and upstream's page stands. Kept from Agents: the minimum tap target
+// on the version line.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -173,11 +179,23 @@ class _AboutPageState extends State<AboutPage> {
                         if (versionText != null) ...[
                           const SizedBox(height: 4),
                           GestureDetector(
+                            behavior: HitTestBehavior.opaque,
                             onTap: _handleVersionTap,
-                            child: Text(
-                              l.versionText(versionText),
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: m3.onSurfaceVariant,
+                            // The version line is the tap target that unlocks
+                            // developer options, so it may not be thinner than
+                            // Material's minimum.
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                minHeight: kMinInteractiveDimension,
+                              ),
+                              child: Center(
+                                child: Text(
+                                  l.versionText(versionText),
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                    color: m3.onSurfaceVariant,
+                                  ),
+                                ),
                               ),
                             ),
                           ),

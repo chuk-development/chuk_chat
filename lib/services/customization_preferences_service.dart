@@ -188,7 +188,7 @@ class CustomizationPreferences {
           (map['include_reasoning_in_history'] as bool?) ?? false,
       includeToolResultsInHistory:
           (map['include_tool_results_in_history'] as bool?) ??
-              kDefaultIncludeToolResultsInHistory,
+          kDefaultIncludeToolResultsInHistory,
       toolCallingEnabled: (map['tool_calling_enabled'] as bool?) ?? true,
       toolDiscoveryMode: (map['tool_discovery_mode'] as bool?) ?? true,
       showToolCalls: (map['show_tool_calls'] as bool?) ?? true,

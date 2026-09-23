@@ -1,0 +1,39 @@
+# Agents Manager — systemd **user** service template (§5).
+#
+# Installed by scripts/install.sh, which substitutes the @PLACEHOLDERS@ and
+# writes the result to ~/.config/systemd/user/agents-manager.service.
+#
+# A user service, not a system one: everything on the host belongs to one user
+# (§5), the container runtime is reached through that user's docker access, and a
+# user unit needs no root. Pairing is done once with `cowork-host connect`; from
+# then on this unit keeps the host up and reconnects with no code.
+#
+# Placeholders: @EXEC@ @AGENTS_HOME@ @IMAGE@ @SANDBOX_KIND@
+
+[Unit]
+Description=Agents Manager (agent roster, per-agent sandboxes, local relay)
+Documentation=https://github.com/chuk-development/agents
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=@EXEC@ run --workspace @AGENTS_HOME@ --sandbox @SANDBOX_KIND@
+WorkingDirectory=@AGENTS_HOME@
+Environment=AGENTS_HOME=@AGENTS_HOME@
+Environment=AGENTS_SANDBOX_KIND=@SANDBOX_KIND@
+Environment=AGENTS_SANDBOX_IMAGE=@IMAGE@
+# The agent's container is the sandbox; a crashed Manager should come back
+# without dragging the user through a manual restart.
+Restart=on-failure
+RestartSec=5
+# Stopping must not leave a half-torn-down container behind: the process gets
+# time to run its teardown, then the whole control group is killed.
+TimeoutStopSec=45
+KillMode=mixed
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chuk-agents-manager
+
+[Install]
+WantedBy=default.target

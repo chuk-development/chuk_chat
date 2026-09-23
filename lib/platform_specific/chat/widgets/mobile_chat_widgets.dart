@@ -5,6 +5,9 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+// Agents imported ui/expressive/icon_map.dart and ui/expressive/waveform.dart
+// here. Both are byte copies of the widgets/ files below, so importing both
+// would make AppIcon and LiveWaveform ambiguous.
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';

@@ -215,6 +215,9 @@ class ChatStorageSidebar {
       }
 
       final rows = await SupabaseService.client
+          // MERGE NOTE: scripts/import_chat_ui.sh rewrote this table name to
+          // 'cowork_chats' for the standalone Agents build. Reverted: a
+          // chuk_chat chat lives in 'encrypted_chats'.
           .from('encrypted_chats')
           .select('id, encrypted_title, created_at, is_starred, updated_at')
           .eq('user_id', userId)

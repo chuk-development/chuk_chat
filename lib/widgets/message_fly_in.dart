@@ -61,10 +61,7 @@ class _MessageFlyInState extends State<MessageFlyIn>
         final double dy = (1 - v) * widget.rise;
         return Opacity(
           opacity: v.clamp(0.0, 1.0),
-          child: Transform.translate(
-            offset: Offset(0, dy),
-            child: child,
-          ),
+          child: Transform.translate(offset: Offset(0, dy), child: child),
         );
       },
     );

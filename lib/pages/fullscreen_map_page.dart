@@ -1,3 +1,8 @@
+// Merge note: upstream kept Scaffold + FloatingAppBar and lifted _hasPointSpread
+// into utils/map_geometry.dart; both stay. Agents's ExpressiveScreen + HugeIcon
+// header buttons are dropped as the same intent in the other chrome, but its
+// top inset on the info chip is kept — the header floats over the map either
+// way, so the chip needed it.
 import 'dart:async';
 import 'dart:convert';
 
@@ -741,7 +746,8 @@ class _FullscreenMapPageState extends State<FullscreenMapPage> {
     required String text,
   }) {
     return Positioned(
-      top: 14,
+      // The header floats over the map, so the chip starts below it.
+      top: MediaQuery.paddingOf(context).top + 14,
       right: 14,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),

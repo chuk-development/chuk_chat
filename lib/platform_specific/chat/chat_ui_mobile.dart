@@ -1,4 +1,37 @@
 // lib/platform_specific/chat/chat_ui_mobile.dart
+//
+// MERGE NOTE (Agents into chuk_chat) — this screen took upstream's side, whole.
+//
+// Both sides had refactored the same 3.5k-line State and the two
+// decompositions are mutually exclusive: upstream split it into the shared
+// chat_*_mixin family (ChatModelSelectionMixin, ChatMessageEditMixin,
+// RegenVariantSeedMixin, ChatMessageListItem, MessageRenderCache,
+// ChatDebugSnapshot) that the desktop screen also uses, while Agents split it
+// into its own mobile_*_mixin family and made the State's fields public for
+// them. The same members would be declared twice, so upstream's won. What the
+// Agents side had that is NOT here any more:
+//   * messenger mode and the host typing bubble. `widget.messengerMode` and
+//     `widget.hostRunActive` are still on the widget so agents_thread_view
+//     keeps compiling, but nothing reads them: upstream's shared
+//     ChatMessageListItem takes no messengerMode.
+//   * the reply preview (widgets/chat_reply_preview.dart) and the composer's
+//     reply-to draft per chat.
+//   * the composer outbox (composer_queue.dart, several queued messages)
+//     against upstream's single `_pendingMessageText`.
+//   * message reactions on this screen (ChatReactionService is still wired
+//     through the bubble; the long-press toggle and the legacy-key mapping
+//     were Agents's).
+//   * the per-payload MessageDecodeCache, replaced by upstream's
+//     MessageRenderCache.
+//   * the payment-required dialog from payment_required_dialog.dart
+//     (upstream has its own `_showPaymentRequiredDialog` in this file).
+// Kept from Agents: the day divider in the message list, the "never grab the
+// keyboard on a phone" rule, the keyboard re-pin observer, and the widget's
+// Agents-only API. Left unreferenced for the coordinator to delete or
+// reinstate deliberately: mobile_send_mixin, mobile_message_edit_mixin,
+// mobile_model_selection_mixin, mobile_attach_mixin, mobile_chat_loading_mixin,
+// mobile_recording_mixin, assistant_message_write_mixin, composer_queue,
+// composer_metrics, message_decode_cache, payment_required_dialog.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -60,6 +93,8 @@ import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
+import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
+import 'package:chuk_chat/ui/expressive/day_divider.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// What the plus menu can start.
@@ -106,6 +141,17 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
 
+  /// Messenger presentation only; does not change model or reasoning settings.
+  ///
+  /// Agents's. `agents_thread_view.dart` passes it, so the API stays; nothing
+  /// in this screen reads it any more (see the MERGE NOTE at the top).
+  final bool messengerMode;
+
+  /// Host activity survives the lifetime of a local streaming subscription.
+  /// Only set from an observed live run, never inferred from offline history.
+  /// Agents's; see [messengerMode].
+  final bool hostRunActive;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -129,6 +175,8 @@ class ChukChatUIMobile extends StatefulWidget {
     this.toolCallingEnabled = true,
     this.toolDiscoveryMode = true,
     this.showToolCalls = true,
+    this.messengerMode = false,
+    this.hostRunActive = false,
   });
 
   @override
@@ -224,6 +272,35 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// The stable ui key of the message pinned to the top of the viewport.
   /// Null when nothing is pinned. See [ChatScrollMixin.pinMessageToTop].
   String? _pinnedUiKey;
+
+  /// Agents's, kept: keeps the newest message above the composer when the
+  /// soft keyboard resizes the chat.
+  ///
+  /// The keyboard does not pad this subtree, it SHRINKS it (the hosting
+  /// Scaffold runs `resizeToAvoidBottomInset: false`). A top-anchored list
+  /// keeps its offset when its viewport shrinks, so without this the newest
+  /// message walks down behind the composer the moment the keyboard opens.
+  /// The pin bails out by itself when the reader has scrolled up into the
+  /// history.
+  late final ChatMetricsObserver _viewInsetRepin = ChatMetricsObserver(
+    pinToBottomDuringStream,
+  );
+
+  /// Agents's, kept: may this screen take the composer's focus itself when it
+  /// loads a chat?
+  ///
+  /// Not on a phone. The Agents shell keeps this screen mounted BEHIND the
+  /// coworker list, because it owns the relay socket
+  /// (`messenger_shell.dart`), so a focus grab on mount opens the soft
+  /// keyboard while the list is what the reader is looking at. And a
+  /// messenger does not open the keyboard just because a thread was opened
+  /// either: the keyboard belongs to the tap on the composer. With a hardware
+  /// keyboard (a desktop window narrow enough for this layout) the focus
+  /// costs nothing and stays.
+  bool get _mayAutoFocusComposer =>
+      !kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.android &&
+      defaultTargetPlatform != TargetPlatform.iOS;
 
   late final VoidCallback _modelSelectionListener;
 
@@ -539,17 +616,24 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Scroll listener for scroll-to-bottom button
     scrollController.addListener(onScrollChanged);
 
+    // Agents's, kept: re-pin the newest message when the keyboard resizes the
+    // chat. See [_viewInsetRepin].
+    WidgetsBinding.instance.addObserver(_viewInsetRepin);
+
     // Text field focus listener — collapse mic & model buttons while typing
 
     // Text controller listener
     composerController.addListener(_onControllerChanged);
 
-    // Request focus if sidebar closed
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!widget.isSidebarExpanded) {
-        composerFocusNode.requestFocus();
-      }
-    });
+    // Request focus if sidebar closed — never on a phone, see
+    // [_mayAutoFocusComposer]. Agents's rule, kept.
+    if (_mayAutoFocusComposer) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!widget.isSidebarExpanded) {
+          composerFocusNode.requestFocus();
+        }
+      });
+    }
 
     // Model selection listener
     _modelSelectionListener = () {
@@ -762,6 +846,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);
     if (_activeChatId != null) {
@@ -3148,7 +3233,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                             _uuid,
                                           ) ==
                                           _pinnedUiKey;
-                                  return ChatMessageListItem(
+                                  // Agents's day break, kept: one date chip
+                                  // where the day changes, like a messenger.
+                                  // A row with no timestamp gets none. The
+                                  // rules live in chat_ui_helpers.
+                                  //
+                                  // Dropped with the switch to upstream's
+                                  // shared row widget: Agents also broke a
+                                  // bubble RUN on a day change and on a pause
+                                  // longer than kBubbleGroupPause
+                                  // (messageStartsRun / messageEndsRun, still
+                                  // in chat_ui_helpers). ChatMessageListItem
+                                  // derives startsNewGroup/endsGroup from the
+                                  // sender alone and takes no override, so
+                                  // reinstating it means giving that widget
+                                  // the two flags.
+                                  final DateTime? rowDay = messageRowTime(
+                                    _messages[i],
+                                  );
+                                  final bool opensDay = messageOpensDay(
+                                    i == 0 ? null : _messages[i - 1],
+                                    _messages[i],
+                                  );
+                                  final Widget row = ChatMessageListItem(
                                     key: isPinned ? pinnedTopKey : null,
                                     messages: _messages,
                                     index: i,
@@ -3185,6 +3292,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                             !_isSendingMessage
                                         ? () => _continueGenerationAt(i)
                                         : null,
+                                  );
+                                  if (!opensDay || rowDay == null) return row;
+                                  return Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: <Widget>[
+                                      ChatDayDivider(when: rowDay.toLocal()),
+                                      row,
+                                    ],
                                   );
                                 },
                               ),

@@ -92,6 +92,12 @@ class OfflineSendExecutor {
             case ContentEvent(:final text):
               content.write(text);
               break;
+            case FinalContentEvent(:final text):
+              // The host's canonical answer replaces the streamed deltas.
+              content
+                ..clear()
+                ..write(text);
+              break;
             case ReasoningEvent(:final text):
               reasoning.write(text);
               break;

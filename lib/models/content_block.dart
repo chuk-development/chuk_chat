@@ -15,6 +15,7 @@ class SandboxArtifactPayload {
     required this.filename,
     required this.mime,
     required this.sizeBytes,
+    this.document,
   });
 
   /// Storage path returned by [PdfAttachmentService.upload]:
@@ -26,11 +27,16 @@ class SandboxArtifactPayload {
   final String mime;
   final int sizeBytes;
 
+  /// Full table/Markdown snapshot. Stored inside the encrypted chat payload,
+  /// so a new device can read it without this device's local blob cache.
+  final Map<String, dynamic>? document;
+
   Map<String, dynamic> toJson() => {
     'storagePath': storagePath,
     'filename': filename,
     'mime': mime,
     'sizeBytes': sizeBytes,
+    if (document != null) 'document': document,
   };
 
   factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j) =>
@@ -39,6 +45,9 @@ class SandboxArtifactPayload {
         filename: j['filename'] as String? ?? 'file',
         mime: j['mime'] as String? ?? 'application/octet-stream',
         sizeBytes: (j['sizeBytes'] as num?)?.toInt() ?? 0,
+        document: j['document'] is Map
+            ? Map<String, dynamic>.from(j['document'] as Map)
+            : null,
       );
 }
 

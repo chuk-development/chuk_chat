@@ -200,7 +200,7 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.search:
       return AgentActivityEntry(
         kind: kind,
-        label: 'Searched',
+        label: hasError ? 'Search failed' : 'Searched',
         detail: subject,
         hasError: hasError,
         toolCall: call,
@@ -209,7 +209,7 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.page:
       return AgentActivityEntry(
         kind: kind,
-        label: 'Opened page',
+        label: hasError ? 'Could not open page' : 'Opened page',
         detail: subject == null ? null : _shortenUrl(subject),
         hasError: hasError,
         toolCall: call,
@@ -219,7 +219,9 @@ AgentActivityEntry _entryFor(ToolCall call) {
     case AgentActivityKind.other:
       return AgentActivityEntry(
         kind: AgentActivityKind.other,
-        label: 'Ran ${_humanizeToolName(call.name)}',
+        label: hasError
+            ? 'Failed: ${_humanizeToolName(call.name)}'
+            : 'Ran ${_humanizeToolName(call.name)}',
         detail: subject,
         hasError: hasError,
         toolCall: call,
@@ -342,9 +344,7 @@ List<AgentActivitySource> extractSourcesFor(ToolCall call) {
       AgentActivitySource(
         url: trimmed,
         host: host.replaceFirst(RegExp(r'^www\.'), ''),
-        title: (title != null && title.trim().isNotEmpty)
-            ? title.trim()
-            : host,
+        title: (title != null && title.trim().isNotEmpty) ? title.trim() : host,
       ),
     );
   }
@@ -352,22 +352,22 @@ List<AgentActivitySource> extractSourcesFor(ToolCall call) {
   if (call.name == 'web_crawl') {
     final url = call.arguments['url'];
     if (url is String && url.isNotEmpty) {
-      add(url, result.split('\n').first.replaceFirst(
-        RegExp(r'^Content from\s+'),
-        '',
-      ));
+      add(
+        url,
+        result.split('\n').first.replaceFirst(RegExp(r'^Content from\s+'), ''),
+      );
     }
     return List<AgentActivitySource>.unmodifiable(sources);
   }
 
-  final titles = RegExp(r'^\d+\.\s+(.+)$', multiLine: true)
-      .allMatches(result)
-      .map((m) => m.group(1)!)
-      .toList(growable: false);
-  final urls = RegExp(r'^\s+(https?://\S+)', multiLine: true)
-      .allMatches(result)
-      .map((m) => m.group(1)!)
-      .toList(growable: false);
+  final titles = RegExp(
+    r'^\d+\.\s+(.+)$',
+    multiLine: true,
+  ).allMatches(result).map((m) => m.group(1)!).toList(growable: false);
+  final urls = RegExp(
+    r'^\s+(https?://\S+)',
+    multiLine: true,
+  ).allMatches(result).map((m) => m.group(1)!).toList(growable: false);
 
   if (urls.isNotEmpty) {
     for (int i = 0; i < urls.length; i++) {

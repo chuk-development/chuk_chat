@@ -3,9 +3,13 @@
 // Connector logos, fetched once.
 //
 // The logos come from favicon services, so without a cache the list asks
-// the network for the same sixteen images on every open — slow on a phone,
-// and blank squares whenever the connection is poor. They are kept on disk
-// under the app's own directory and read from memory after the first use.
+// the network for the same images on every open — slow on a phone, and blank
+// squares whenever the connection is poor. They are kept on disk under the
+// app's own directory and read from memory after the first use.
+//
+// Ported from chuk_chat, adapted to Agents's `utils/io_helper.dart` and its
+// own conditional support-directory helper so the web build stays free of
+// `dart:io` and path_provider.
 
 import 'dart:convert';
 
@@ -13,13 +17,8 @@ import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
-// Connectors are native-only, but this file is reached from the settings
-// tree that the web build also compiles — so no `dart:io` and no direct
-// `path_provider` here. On web both resolve to stubs and the disk half of
-// the cache turns into a no-op, leaving the memory cache.
+import 'package:chuk_chat/services/mcp/mcp_support_dir.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
-import 'package:chuk_chat/utils/path_provider_stub.dart'
-    if (dart.library.io) 'package:path_provider/path_provider.dart';
 
 class McpIconCache {
   McpIconCache._();
@@ -73,8 +72,7 @@ class McpIconCache {
           .get(Uri.parse(url))
           .timeout(const Duration(seconds: 12));
       if (response.statusCode != 200) return null;
-      if (response.bodyBytes.isEmpty ||
-          response.bodyBytes.length > _maxBytes) {
+      if (response.bodyBytes.isEmpty || response.bodyBytes.length > _maxBytes) {
         return null;
       }
       return response.bodyBytes;
@@ -89,6 +87,7 @@ class McpIconCache {
     if (kIsWeb) return null;
     try {
       final dir = _directory ??= await _openDirectory();
+      if (dir == null) return null;
       final name = sha1.convert(utf8.encode(url)).toString();
       return File('${dir.path}/$name');
     } catch (_) {
@@ -96,9 +95,10 @@ class McpIconCache {
     }
   }
 
-  static Future<Directory> _openDirectory() async {
-    final support = await getApplicationSupportDirectory();
-    final dir = Directory('${support.path}/mcp_icons');
+  static Future<Directory?> _openDirectory() async {
+    final supportPath = await mcpSupportDirPath();
+    if (supportPath == null) return null;
+    final dir = Directory('$supportPath/mcp_icons');
     if (!dir.existsSync()) await dir.create(recursive: true);
     return dir;
   }
@@ -109,7 +109,9 @@ class McpIconCache {
     final dir = _directory;
     if (dir != null && dir.existsSync()) {
       try {
-        await dir.delete(recursive: true);
+        // Native-only delete lives in the io helper, so the web bundle never
+        // sees `dart:io`'s `Directory.delete`.
+        await mcpDeleteDir(dir.path);
       } catch (_) {
         // Nothing to do — the cache is a convenience, not a store.
       }

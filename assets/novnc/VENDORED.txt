@@ -1,0 +1,15 @@
+noVNC — vendored, unmodified.
+
+Source:  https://github.com/novnc/noVNC
+Version: v1.6.0
+Files:   core/**, vendor/pako/** (the client library only; the noVNC app,
+         its HTML/CSS and its test suite are not shipped).
+License: MPL-2.0 for core/**, MIT for vendor/pako/**. See LICENSE.txt and
+         LICENSE.MPL-2.0 next to this file.
+
+Nothing here is edited. MPL-2.0 is a per-file copyleft: as long as these
+files stay unmodified the obligation is to keep the notices and to point at
+the upstream source, which this file does. Any future local change to a
+core/** file must be published under MPL-2.0.
+
+The viewer page that drives this library is ours and lives in assets/vnc/.

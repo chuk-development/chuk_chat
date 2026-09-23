@@ -3,6 +3,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
 import 'package:flutter_map/flutter_map.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
@@ -143,13 +144,21 @@ class _RouteMapWidgetState extends State<RouteMapWidget> {
             point: LatLng(widget.fromLat, widget.fromLon),
             width: 34,
             height: 34,
-            child: const AppIcon(Icons.trip_origin, color: Colors.green, size: 28),
+            child: const AppIcon(
+              Icons.trip_origin,
+              color: Colors.green,
+              size: 28,
+            ),
           ),
           Marker(
             point: LatLng(widget.toLat, widget.toLon),
             width: 34,
             height: 34,
-            child: const AppIcon(Icons.location_on, color: Colors.red, size: 32),
+            child: const AppIcon(
+              Icons.location_on,
+              color: Colors.red,
+              size: 32,
+            ),
           ),
         ],
       ),

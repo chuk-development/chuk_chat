@@ -156,8 +156,7 @@ class Workspace {
     if (avatarColor != null) {
       try {
         return Color(
-          int.parse(avatarColor!.replaceFirst('#', ''), radix: 16) |
-              0xFF000000,
+          int.parse(avatarColor!.replaceFirst('#', ''), radix: 16) | 0xFF000000,
         );
       } catch (_) {}
     }

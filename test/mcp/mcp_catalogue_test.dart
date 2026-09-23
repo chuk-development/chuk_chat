@@ -8,7 +8,6 @@ import 'package:http/http.dart' as http;
 import 'package:http/testing.dart';
 
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
-import 'package:chuk_chat/services/mcp/mcp_client.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 
 void main() {
