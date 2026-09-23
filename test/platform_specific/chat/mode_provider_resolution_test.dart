@@ -50,6 +50,7 @@ void main() {
       );
     });
     final host = await pumpHost(tester);
+    host.selectedModelId = _model;
     host.selectedProviderSlug = 'fireworks/serverless';
 
     await tester.runAsync(
@@ -77,6 +78,32 @@ void main() {
 
     expect(slug, _modeProvider);
     expect(host.selectedProviderSlug, _modeProvider);
+  });
+
+  testWidgets('a lookup made obsolete by a mode switch is dropped', (
+    tester,
+  ) async {
+    await tester.runAsync(() async {
+      await ChatModeService.setModelForMode(
+        ChatMode.fast,
+        modelId: _model,
+        providerSlug: _modeProvider,
+      );
+    });
+    final host = await pumpHost(tester);
+    host.selectedModelId = _model;
+    host.selectedProviderSlug = 'fireworks/serverless';
+
+    await tester.runAsync(() async {
+      final Future<void> lookup = host.loadProviderSlugForModel(
+        _model,
+        forceFromPrefs: true,
+      );
+      host.chatMode = ChatMode.thinking;
+      await lookup;
+    });
+
+    expect(host.selectedProviderSlug, 'fireworks/serverless');
   });
 
   testWidgets('the mode provider is ignored for another model', (

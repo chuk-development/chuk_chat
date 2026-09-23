@@ -47,6 +47,11 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     String modelId, {
     bool forceFromPrefs = false,
   }) async {
+    final ChatMode requestedMode = chatMode;
+    // A later mode or model switch makes this lookup obsolete; its result
+    // must not overwrite the provider of the newer selection.
+    bool isStale() =>
+        !mounted || chatMode != requestedMode || selectedModelId != modelId;
     if (modelId.isEmpty) {
       if (selectedProviderSlug != null) {
         setState(() {
@@ -57,7 +62,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     }
 
     final String? modeSlug = await modeProviderSlugFor(modelId);
-    if (!mounted) return;
+    if (isStale()) return;
     if (modeSlug != null) {
       if (selectedProviderSlug != modeSlug) {
         setState(() {
@@ -84,7 +89,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     final String? loadedSlug = await UserPreferencesService.loadSelectedProvider(
       modelId,
     );
-    if (!mounted) return;
+    if (isStale()) return;
     if (selectedProviderSlug != loadedSlug) {
       setState(() {
         selectedProviderSlug = loadedSlug;
