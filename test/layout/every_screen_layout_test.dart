@@ -31,17 +31,14 @@ import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
-import 'package:chuk_chat/pages/pricing_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
-import 'package:chuk_chat/pages/settings_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
-import 'package:chuk_chat/pages/workspace_management_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
@@ -86,6 +83,18 @@ const Map<String, String> _cannotMount = <String, String>{
       'mixin, which opens a Supabase realtime channel. Its reconnect timers '
       'outlive the widget tree, so the binding fails the test on pending '
       'timers whatever the layout does.',
+  // The three below were Agents stubs (a ComingSoonPage) when this sweep was
+  // written. The merge keeps upstream's real screens, which need a live
+  // backend to mount.
+  'settings_page': 'upstream\'s account row reads SupabaseService.auth in its '
+      'initState; without SupabaseService.initialize() that throws, and there '
+      'is no seam to hand it a session.',
+  'pricing_page': 'upstream\'s Stripe page mounts CreditDisplay, i.e. the '
+      'Supabase realtime mixin named above.',
+  'workspace_management_page': 'upstream\'s page loads the workspace from '
+      'WorkspaceStorageService in initState, which has no seam to seed one; '
+      'a missing workspace shows a notification and pops the route from '
+      'inside initState.',
 };
 
 /// Anything a screen made that has to be thrown away afterwards.
@@ -204,7 +213,6 @@ Future<void> _openSheet(WidgetTester tester) async {
 
 List<_Screen> _screens() => <_Screen>[
   // -- pages ---------------------------------------------------------------
-  _Screen('settings_page', (_) => SettingsPage(config: testShellConfig())),
   _Screen('theme_page', (_) => ThemePage(config: testShellConfig())),
   _Screen('customization_page',
       (_) => CustomizationPage(config: testShellConfig())),
@@ -220,10 +228,7 @@ List<_Screen> _screens() => <_Screen>[
         title: 'Workspaces',
         message: 'Not on the phone yet. The host still owns this one.',
       )),
-  _Screen('pricing_page', (_) => const PricingPage()),
   _Screen('usage_details_page', (_) => const UsageDetailsPage()),
-  _Screen('workspace_management_page',
-      (_) => const WorkspaceManagementPage(workspaceId: 'ws-1')),
   _Screen('desktop_settings_modal',
       (_) => Scaffold(body: DesktopSettingsModal(config: testShellConfig()))),
   _Screen('settings/developer_settings_page',

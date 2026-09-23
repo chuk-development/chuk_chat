@@ -13,9 +13,27 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/services/mcp/mcp_connection.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
+    show AgentsSecureKeyValueStore;
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
+
+/// In-memory secure storage, so the connect path's "is there already a
+/// usable sign-in?" check never reaches a platform channel.
+class _MemorySecrets implements AgentsSecureKeyValueStore {
+  final Map<String, String> map = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => map[key];
+
+  @override
+  Future<void> write(String key, String value) async => map[key] = value;
+
+  @override
+  Future<void> delete(String key) async => map.remove(key);
+}
 
 void main() {
   late HttpServer server;
@@ -71,15 +89,15 @@ void main() {
       await res.close();
     });
 
-    McpService.connections.value = const <McpConnection>[];
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    McpService.resetForTest(store: McpStore(secrets: _MemorySecrets()));
     // The browser "opens" but does nothing, so the redirect never arrives —
     // the wait can only end by cancel or by the timeout.
     McpService.launcher = (_) async => true;
   });
 
   tearDown(() async {
-    McpService.launcher = null;
-    McpService.connections.value = const <McpConnection>[];
+    McpService.resetForTest();
     await server.close(force: true);
   });
 

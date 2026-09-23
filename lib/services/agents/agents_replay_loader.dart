@@ -45,7 +45,6 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
-import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// Prefix of the per-session replay cursor key in SharedPreferences.
 const String kReplayCursorPrefix = 'cowork.replay_cursor.';
@@ -936,7 +935,7 @@ class AgentsReplayLoader extends ChangeNotifier {
     final bytes = file.bytes;
     if (bytes == null || !file.isValid) return null;
     try {
-      final storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
+      final storagePath = await AgentsRunLedger.storeFileBytes(bytes);
       // The SAME block the live ledger builds (bead cowork-266).
       return artifactBlockFromFile(storagePath, file);
     } catch (error) {

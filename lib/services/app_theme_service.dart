@@ -496,6 +496,10 @@ class AppThemeService extends ChangeNotifier {
   }
 
   Future<void> _syncThemeToSupabase() async {
+    // The debounce timer can fire when Supabase was never initialised (unit
+    // tests, an offline start). Reading `auth` then throws inside a bare timer
+    // callback, where nothing catches it; there is nobody to sync for anyway.
+    if (!SupabaseService.isInitialized) return;
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
 
@@ -519,6 +523,10 @@ class AppThemeService extends ChangeNotifier {
   }
 
   Future<void> _syncCustomizationToSupabase() async {
+    // The debounce timer can fire when Supabase was never initialised (unit
+    // tests, an offline start). Reading `auth` then throws inside a bare timer
+    // callback, where nothing catches it; there is nobody to sync for anyway.
+    if (!SupabaseService.isInitialized) return;
     final user = SupabaseService.auth.currentUser;
     if (user == null) return;
 
