@@ -534,13 +534,6 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           if (t.isEmpty) break;
           closeCurrentRound();
           segments.add(_RenderSegment.text(t));
-        case ContentBlockType.sandboxArtifact:
-          // Sandbox artifacts are first-class inline blocks. Close the
-          // current reasoning/tool round so the artifact appears between
-          // the round above it and any subsequent text, in source order.
-          closeCurrentRound();
-          final p = block.sandboxArtifact;
-          if (p != null) segments.add(_RenderSegment.sandboxArtifact(p));
       }
     }
 
@@ -675,7 +668,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     int statusRoundIndex = -1;
     for (int i = 0; i < segments.length; i++) {
       final s = segments[i];
-      if (s.isText || s.isSandboxArtifact || !s.hasContent) continue;
+      if (s.isText || !s.hasContent) continue;
       // A round the reader never sees cannot carry the status: with tool
       // calls switched off, a tools-only round renders nothing at all.
       final bool rendersSomething =
@@ -694,13 +687,6 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             bgColor: bgColor,
           ),
         );
-        hasRenderedMainContent = true;
-      } else if (seg.isSandboxArtifact) {
-        if (hasRenderedMainContent) {
-          children.add(const SizedBox(height: _kArtifactGap));
-        }
-        children.add(SandboxArtifactBlock(payload: seg.sandboxArtifact!));
-        children.add(const SizedBox(height: _kArtifactGap));
         hasRenderedMainContent = true;
       } else {
         renderRound(

@@ -69,16 +69,6 @@ const bool kFeatureServerTools = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Code sandboxes: `code_run` and the `sandbox_*` file tools, served by the
-/// api_server's sandbox upstream. Off — the capability was not worth what it
-/// cost to run, and a model that is offered the tools will reach for them.
-/// The tools are then never registered, so the model never sees them and the
-/// settings entries that manage containers stay hidden.
-const bool kFeatureSandboxes = bool.fromEnvironment(
-  'FEATURE_SANDBOXES',
-  defaultValue: false,
-);
-
 /// Remote MCP connectors: sign in to a server in the browser and its tools
 /// join the tool list. Native only — the sign-in needs a loopback port,
 /// which a web page cannot open.

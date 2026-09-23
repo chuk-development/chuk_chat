@@ -46,7 +46,6 @@ import 'package:chuk_chat/widgets/image_viewer.dart';
 import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
-import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
@@ -72,8 +71,8 @@ part 'message_bubble/cards.dart';
 
 // ─── Vertical rhythm ─────────────────────────────────────────────────────
 // Block widgets (the things the message body stacks vertically — text
-// paragraphs, tool-call bars, reasoning cards, artifact cards, sandbox
-// artifacts, info status bars, image grids, attachment chips, ask-user
+// paragraphs, tool-call bars, reasoning cards, artifact cards,
+// info status bars, image grids, attachment chips, ask-user
 // cards, etc.) MUST render with NO external margin. Callers (the layout
 // methods _buildClassicLayout / _buildContentBlocksLayout) own every gap
 // between sibling blocks via explicit SizedBox using one of the constants

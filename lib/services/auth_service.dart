@@ -5,7 +5,6 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
-import 'package:chuk_chat/services/sandbox_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 
@@ -158,11 +157,6 @@ class AuthService {
       // re-auth) gets a fresh socket with their token. Best-effort —
       // never blocks signOut on a hung socket teardown.
       await MultiplexSession.shutdown();
-      // Drop any sandbox session ids we cached for this user's chats —
-      // the next sign-in must not reuse them. Done BEFORE clearKey() so
-      // that if EncryptionService.clearKey() throws, the cache is still
-      // wiped (the user is already signed out at this point).
-      SandboxSessionCache.clearAll();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
       // Web: drop the local plaintext chat cache on logout. The next login

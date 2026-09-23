@@ -81,25 +81,15 @@ void main() {
       expect(msg, isNot(contains('simpler prompt')));
     });
 
-    test('reports a delivered file for send_file_to_user', () async {
-      final handler = ToolCallHandler();
-      final session = newSession(handler)
-        ..toolCalls.add(completed('send_file_to_user'));
-
-      final msg = await tripLimit(handler, session);
-      expect(msg, contains('file'));
-      expect(msg, isNot(contains('simpler prompt')));
-    });
-
     test('names multiple deliverables together', () async {
       final handler = ToolCallHandler();
       final session = newSession(handler)
         ..toolCalls.add(completed('typst_compile', const {}, typstOk))
-        ..toolCalls.add(completed('send_file_to_user'));
+        ..toolCalls.add(completed('generate_image'));
 
       final msg = await tripLimit(handler, session);
       expect(msg, contains('PDF'));
-      expect(msg, contains('file'));
+      expect(msg, contains('image'));
     });
 
     test('falls back to the retry message when nothing was produced', () async {

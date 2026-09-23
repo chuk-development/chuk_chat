@@ -533,7 +533,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   contentBlocks.addAll(roundResult.blocks);
 
                   // Append side-effect blocks produced by tools this round
-                  // (e.g. send_file_to_user -> sandboxArtifact).
+                  // (e.g. a places lookup -> `<map>` block).
                   if (loopResult.producedBlocks.isNotEmpty) {
                     contentBlocks.addAll(loopResult.producedBlocks);
                   }
@@ -687,7 +687,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   );
                 }
 
-                // Append side-effect blocks (e.g. sandboxArtifact) produced
+                // Append side-effect blocks (e.g. a `<map>` block) produced
                 // in the final-answer pass.
                 if (loopResult.producedBlocks.isNotEmpty) {
                   contentBlocks.addAll(loopResult.producedBlocks);
@@ -1755,7 +1755,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         );
                     contentBlocks2.addAll(roundResult.blocks);
 
-                    // Append side-effect blocks (e.g. sandboxArtifact)
+                    // Append side-effect blocks (e.g. a `<map>` block)
                     // produced by tools this round.
                     if (loopResult.producedBlocks.isNotEmpty) {
                       contentBlocks2.addAll(loopResult.producedBlocks);
@@ -1917,7 +1917,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     );
                   }
 
-                  // Append side-effect blocks (e.g. sandboxArtifact) produced
+                  // Append side-effect blocks (e.g. a `<map>` block) produced
                   // in the final-answer pass.
                   if (loopResult.producedBlocks.isNotEmpty) {
                     contentBlocks2.addAll(loopResult.producedBlocks);

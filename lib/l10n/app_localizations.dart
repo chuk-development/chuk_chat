@@ -234,8 +234,6 @@ class AppLocalizations {
   String get toolAlwaysOn => _get('toolAlwaysOn');
   String get toolArtifacts => _get('toolArtifacts');
   String get toolArtifactsSubtitle => _get('toolArtifactsSubtitle');
-  String get toolCodeSandbox => _get('toolCodeSandbox');
-  String get toolCodeSandboxSubtitle => _get('toolCodeSandboxSubtitle');
   String get toolGroupCodeArtifacts => _get('toolGroupCodeArtifacts');
   String get connectors => _get('connectors');
   String get loadingToolSettings => _get('loadingToolSettings');
@@ -248,7 +246,6 @@ class AppLocalizations {
   String get catGitHub => _get('catGitHub');
   String get catSlack => _get('catSlack');
   String get catGoogleCalGmail => _get('catGoogleCalGmail');
-  String get catSandbox => _get('catSandbox');
   String get catSearchWebDesc => _get('catSearchWebDesc');
   String get catUtilitiesDesc => _get('catUtilitiesDesc');
   String get catMapsLocationDesc => _get('catMapsLocationDesc');
@@ -257,7 +254,6 @@ class AppLocalizations {
   String get catGitHubDesc => _get('catGitHubDesc');
   String get catSlackDesc => _get('catSlackDesc');
   String get catGoogleCalGmailDesc => _get('catGoogleCalGmailDesc');
-  String get catSandboxDesc => _get('catSandboxDesc');
   String get connect => _get('connect');
   String get disconnect => _get('disconnect');
   String disconnectCategory(String label) =>

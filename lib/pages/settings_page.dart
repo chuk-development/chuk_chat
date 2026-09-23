@@ -21,7 +21,7 @@ import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
-import 'package:chuk_chat/pages/sandbox_management_page.dart';
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
@@ -273,21 +273,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-              // The GitHub connection lives inside SandboxManagementPage —
-              // the GitHub token is only ever used by `git`/`gh` inside the
-              // sandbox, so the entry point belongs there. Both are hidden
-              // with the sandbox itself.
-              if (kFeatureSandboxes)
+              // The GitHub token backs the GitHub MCP connector, so the
+              // entry point is shown together with the connectors.
+              if (kFeatureMcp)
               _SettingsRow(
-                icon: Icons.developer_board,
-                title: 'Sandboxes',
-                subtitle:
-                    'See and stop running code-execution containers (max 2)',
+                icon: Icons.code,
+                title: 'GitHub',
+                subtitle: 'Connect GitHub for the GitHub connector',
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const SandboxManagementPage(),
+                      builder: (_) => const GitHubConnectionPage(),
                     ),
                   );
                 },

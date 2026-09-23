@@ -3,7 +3,6 @@ import 'package:chuk_chat/platform_config.dart'
     show
         kFeatureArtifacts,
         kFeatureArtifactHosting,
-        kFeatureSandboxes,
         kFeatureServerTools,
         kPlatformDesktop,
         kPlatformMobile;
@@ -15,27 +14,6 @@ const Set<String> _serverBackedToolNames = {
   'slack',
   'google_calendar',
   'gmail',
-  // Sandbox tools — proxy through the api_server to the chuk-chat-sandbox
-  // upstream. Gating them with kFeatureServerTools keeps offline /
-  // server-free builds from advertising tools they cannot fulfil.
-  'code_run',
-  'sandbox_list',
-  'sandbox_read',
-  'sandbox_write',
-  'sandbox_reset',
-  'send_file_to_user',
-};
-
-/// The tools the remote code sandbox serves. Gated behind [kFeatureSandboxes].
-/// `bash` is not here: on the desktop it runs locally and works without the
-/// sandbox service.
-const Set<String> _sandboxToolNames = {
-  'code_run',
-  'sandbox_list',
-  'sandbox_read',
-  'sandbox_write',
-  'sandbox_reset',
-  'send_file_to_user',
 };
 
 /// Maps tool names to their ToolCategory for enable/disable filtering.
@@ -79,12 +57,6 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'update_artifact': ToolCategory.basic,
   'update_project': ToolCategory.basic,
   'typst_compile': ToolCategory.basic,
-  'code_run': ToolCategory.sandbox,
-  'sandbox_list': ToolCategory.sandbox,
-  'sandbox_read': ToolCategory.sandbox,
-  'sandbox_write': ToolCategory.sandbox,
-  'sandbox_reset': ToolCategory.sandbox,
-  'send_file_to_user': ToolCategory.sandbox,
 };
 
 /// Discovery catalog: category labels -> human-readable descriptions.
@@ -113,10 +85,6 @@ const Map<String, String> discoveryCatalog = {
     'Productivity / Produktivität':
         'Gmail, Slack, GitHub, Google Calendar / '
         'Gmail, Slack, GitHub, Google Kalender',
-  if (kFeatureServerTools && kFeatureSandboxes)
-    'Sandbox / Code':
-        'Run Python or bash code in an isolated sandbox, read/write files in /home/sandbox / '
-        'Python- oder Shell-Code in einer isolierten Sandbox ausführen, Dateien in /home/sandbox lesen/schreiben',
   'Device / Gerät':
       'Reminders, calendar events, alarms, timers, SMS drafts, GPS / '
       'Erinnerungen, Kalendereinträge, Wecker, Timer, SMS, GPS',
@@ -1698,8 +1666,8 @@ final List<ClientTool> builtinTools = [
         'rendered PDF is stored end-to-end encrypted in Supabase and the '
         'source is saved as the artifact. The PDF is shown to the user as a '
         'downloadable artifact card the moment this tool returns — that IS the '
-        'delivery: never call send_file_to_user and never use the sandbox to '
-        'send a Typst PDF, there is no file to send. If the same `artifact_id` '
+        'delivery: never try to send a Typst PDF with another tool, there is '
+        'no file to send. If the same `artifact_id` '
         'already exists, the call UPDATES it (new version + new PDF). '
         'Always use this tool — never artifact_manager — for typst '
         'artifacts, so the compile step validates the source. If compile '
@@ -1804,205 +1772,6 @@ final List<ClientTool> builtinTools = [
       'anweisungen',
     ],
   ),
-
-  // -- Sandbox: code execution in an isolated Docker container --
-  ClientTool(
-    name: 'code_run',
-    description:
-        'Run code in an isolated Docker sandbox on the server. Python by default; '
-        'pass language="bash" for shell commands. The sandbox has pandas, numpy, scipy, '
-        'scikit-learn, matplotlib, pillow, opencv, ffmpeg, yt-dlp, pypdf, typst, '
-        'pandoc and ~30 other common tools preinstalled. Files persist between '
-        'calls in /home/sandbox (read/write via sandbox_read / sandbox_write). '
-        'Network egress is restricted to an allowlist (github, pypi, wikipedia, '
-        'youtube, groq, etc) — arbitrary HTTP is BLOCKED. The sandbox is created '
-        'on first call and reused for the rest of this chat; files survive across '
-        'calls and a 3-day snapshot keeps them between sessions. '
-        'Prefer typst_compile for PDF/document generation, web_crawl for fetching '
-        'URLs, weather/search tools for their data, and the dedicated '
-        'image tools for image generation/editing — use code_run only when '
-        'computation, file manipulation, or library calls (pandas/numpy/'
-        'matplotlib/yt-dlp/pypdf) are required. '
-        'GitHub: if the user has connected their account via Settings → GitHub, '
-        '`git` and `gh` work without prompts. You can `git clone` private repos, '
-        'create branches, commit, push, and `gh pr create` — all under the '
-        'user\'s identity. If a git/gh command says "authentication required", '
-        'the user has not connected GitHub yet; ask them to do so before '
-        'retrying. Always confirm with the user before destructive actions: '
-        'force-push, branch deletion, closing PRs, repo deletion. '
-        'Exec timeout 5 min, 512MB RAM, 50%% of one CPU core. Returns stdout, '
-        'stderr, exit code and duration.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'code': {
-          'type': 'string',
-          'description': 'string (required: source code to execute)',
-        },
-        'language': {
-          'type': 'string',
-          'enum': ['python', 'bash'],
-          'description': 'string (optional: "python" (default) or "bash")',
-        },
-        'timeout': {
-          'type': 'integer',
-          'description':
-              'int (optional: per-execution seconds, 1..300; omit for the '
-              'server default — usually adequate).',
-        },
-      },
-      'required': ['code'],
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: [
-      // 'shell' kept as a discovery tag for legacy phrasing; 'bash'
-      // is now the canonical language name in code_run params.
-      'code', 'python', 'bash', 'shell', 'execute', 'run',
-      'sandbox', 'compute', 'script', 'data', 'analysis',
-      'plot', 'matplotlib', 'pandas', 'numpy', 'jupyter',
-    ],
-  ),
-  ClientTool(
-    name: 'sandbox_list',
-    description:
-        'List files in the sandbox at /home/sandbox (or a subdirectory). '
-        'Use after code_run to see what files were created.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'path': {
-          'type': 'string',
-          'description':
-              'string (optional: must be under /home/sandbox, defaults there)',
-        },
-      },
-      'required': <String>[],
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: ['sandbox', 'list', 'ls', 'files'],
-  ),
-  ClientTool(
-    name: 'sandbox_read',
-    description:
-        'Read a file from the sandbox /home/sandbox. Returns text inline for '
-        'small text files (<=64KB UTF-8); for binary files returns a metadata '
-        'line with a hint to have code_run base64-encode the bytes so you can '
-        'still inspect them. Use to look at output files created by code_run.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'path': {
-          'type': 'string',
-          'description': 'string (required: absolute path under /home/sandbox)',
-        },
-      },
-      'required': ['path'],
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: ['sandbox', 'read', 'cat', 'open', 'file'],
-  ),
-  ClientTool(
-    name: 'sandbox_write',
-    description:
-        'Write a file into the sandbox /home/sandbox. Use for seeding input '
-        'data before calling code_run. For text data (CSV, JSON, markdown, '
-        'source code, etc.) keep the default mode="text" and pass the raw '
-        'string as content. For BINARY data (images, parquet, sqlite, pickle, '
-        'pre-compiled bytes, etc.) set mode="base64" and pass the base64-'
-        'encoded payload as content — otherwise the bytes will be mangled by '
-        'UTF-8 encoding.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'path': {
-          'type': 'string',
-          'description': 'string (required: absolute path under /home/sandbox)',
-        },
-        'content': {
-          'type': 'string',
-          'description':
-              'string (required: file contents — raw text in mode="text", '
-              'base64-encoded bytes in mode="base64")',
-        },
-        'mode': {
-          'type': 'string',
-          'enum': ['text', 'base64'],
-          'description': 'string (optional: "text" (default) or "base64")',
-        },
-      },
-      'required': ['path', 'content'],
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: ['sandbox', 'write', 'save', 'file'],
-  ),
-  ClientTool(
-    name: 'sandbox_reset',
-    description:
-        'Destroy the current chat\'s sandbox. The next code_run will create a '
-        'fresh one (snapshot for this chat is still restored). Only call after '
-        'code_run has failed twice with the same error that points at '
-        'environment corruption (broken package, stuck process, weird state). '
-        'Do NOT call before a fresh code_run "to start clean" — that destroys '
-        'the persistent files in /home/sandbox unnecessarily.',
-    parameters: {
-      'type': 'object',
-      'properties': <String, dynamic>{},
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: ['sandbox', 'reset', 'destroy', 'clean'],
-  ),
-  ClientTool(
-    name: 'send_file_to_user',
-    description:
-        'Send a file from the sandbox directly to the user as a downloadable '
-        'attachment in the chat. Use this AFTER the user has explicitly asked '
-        'for a file you produced inside the sandbox (chart, PDF, CSV, image, '
-        'ZIP, etc.). The file is uploaded encrypted to the user\'s private '
-        'storage — only they can decrypt it; no public link is created. '
-        'When NOT to use: do not call this for every file you create. Only '
-        'call when the user has asked to receive the file. For very large or '
-        'non-renderable files (e.g. multi-hundred-MB videos generated via '
-        'ffmpeg), prefer using `code_run` with `curl` to upload to a '
-        'temporary file host (0x0.st, transfer.sh, file.io) and give the '
-        'user the temp link, since the chat UI cannot render those. '
-        'Path must be under /home/sandbox.',
-    parameters: {
-      'type': 'object',
-      'properties': {
-        'path': {
-          'type': 'string',
-          'description':
-              'string (required: absolute path of the file inside the sandbox, '
-              'e.g. /home/sandbox/report.pdf)',
-        },
-        'display_name': {
-          'type': 'string',
-          'description':
-              'string (optional: override filename shown to the user; '
-              'defaults to the last segment of `path`)',
-        },
-      },
-      'required': ['path'],
-      'additionalProperties': false,
-    },
-    type: ToolType.builtin,
-    tags: [
-      'sandbox',
-      'send',
-      'attach',
-      'attachment',
-      'download',
-      'share',
-      'file',
-      'deliver',
-      'artifact',
-    ],
-  ),
 ];
 
 /// Whether the current platform is a mobile device (Android/iOS).
@@ -2022,11 +1791,6 @@ void registerBuiltinTools(ToolExecutor executor) {
 
   for (final tool in builtinTools) {
     if (!kFeatureServerTools && _serverBackedToolNames.contains(tool.name)) {
-      continue;
-    }
-    // The sandbox is off: a registered tool is an offered tool, and the model
-    // will spend a round calling one that cannot work.
-    if (!kFeatureSandboxes && _sandboxToolNames.contains(tool.name)) {
       continue;
     }
     if (!kFeatureArtifacts && tool.name == 'artifact_manager') {

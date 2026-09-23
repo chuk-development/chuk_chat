@@ -255,7 +255,7 @@ const List<String> kMcpCategories = [
 /// MCP server takes an ordinary GitHub token but offers no dynamic client
 /// registration, and this app carries no pre-registered OAuth app, so it
 /// cannot be connected directly. It does not have to be: the device flow in
-/// Settings → Sandboxes → GitHub already left a token on our server, and
+/// Settings → GitHub already left a token on our server, and
 /// `/v1/mcp/github` uses that one. The token never reaches the device.
 List<McpCatalogueEntry> firstPartyConnectors() => <McpCatalogueEntry>[
   McpCatalogueEntry(
@@ -267,7 +267,7 @@ List<McpCatalogueEntry> firstPartyConnectors() => <McpCatalogueEntry>[
     category: 'Developer',
     description:
         'Issues, pull requests, code search and Actions on your own '
-        'repositories. Connect GitHub under Sandboxes first.',
+        'repositories. Connect GitHub in Settings first.',
     iconUrl: 'https://www.google.com/s2/favicons?domain=github.com&sz=128',
     auth: McpAuth.appSession,
   ),

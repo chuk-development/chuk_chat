@@ -180,12 +180,8 @@ String _runningVerbFor(String name) {
       return 'Compiling document';
     case 'generate_image':
       return 'Generating image';
-    case 'code_run':
-      return 'Running code';
     case 'bash':
       return 'Running a command';
-    case 'send_file_to_user':
-      return 'Sending a file';
     default:
       return 'Running ${_humanizeToolName(name)}';
   }
