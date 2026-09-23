@@ -463,6 +463,34 @@ class _ChukTableState extends State<ChukTable> {
   /// the width. A label the DOCUMENT wrote is never collapsed, at any width;
   /// that is the author talking.
   _Plan _plan(BuildContext context, double maxWidth) {
+    // The LayoutBuilder asks again on every relayout at the same width (a
+    // bubble above it grew, the thread scrolled a new row in). Same table,
+    // same width, same text scale: same plan.
+    final Object key = (
+      maxWidth,
+      MediaQuery.textScalerOf(context),
+      Directionality.of(context),
+      _bodyStyle(emphasis: true),
+      _headerStyle,
+    );
+    final _Plan? last = _lastPlan;
+    if (last != null &&
+        identical(_lastPlanTable, widget.table) &&
+        _lastPlanKey == key) {
+      return last;
+    }
+    final _Plan plan = _computePlan(context, maxWidth);
+    _lastPlan = plan;
+    _lastPlanTable = widget.table;
+    _lastPlanKey = key;
+    return plan;
+  }
+
+  _Plan? _lastPlan;
+  ParsedTable? _lastPlanTable;
+  Object? _lastPlanKey;
+
+  _Plan _computePlan(BuildContext context, double maxWidth) {
     final List<bool> collapsed = List<bool>.of(_collapsedLinkColumns);
     final _Plan plan = _measurePlan(context, maxWidth, collapsed);
     bool changed = false;
@@ -514,7 +542,10 @@ class _ChukTableState extends State<ChukTable> {
         // has no text to cut and nothing to gain from being squeezed. It is
         // still never narrower than its own header — the header is the only
         // thing on screen that says where the arrow goes.
-        final double w = headerWidth.clamp(_kActionGlyph, _kActionHeader * scale);
+        final double w = headerWidth.clamp(
+          _kActionGlyph,
+          _kActionHeader * scale,
+        );
         natural.add(w + pad);
         floors.add(w + pad);
         plainFloors.add(w + pad);
@@ -555,9 +586,7 @@ class _ChukTableState extends State<ChukTable> {
           text.clamp(0, c == _subjectColumn ? floorText * 1.35 : floorText) +
           pad;
       plainFloors.add(plain);
-      floors.add(
-        keepsItsWidth && text <= floorText * 2.8 ? text + pad : plain,
-      );
+      floors.add(keepsItsWidth && text <= floorText * 2.8 ? text + pad : plain);
     }
 
     double sum(List<double> v) =>
@@ -628,14 +657,36 @@ class _ChukTableState extends State<ChukTable> {
   }
 
   /// The painted height of one line in [style], under the reader's text scale.
+  /// Line heights already measured, per style, scaler and direction. Every
+  /// table in a thread asks for the same two styles, and a thread switch
+  /// builds all the visible ones again: one TextPainter layout each time was
+  /// the bulk of [_measurePlan].
+  static final Map<(TextStyle, TextScaler, TextDirection), double>
+  _lineHeights = <(TextStyle, TextScaler, TextDirection), double>{};
+
   double _measuredLine(BuildContext context, TextStyle style) {
+    final TextDirection direction = Directionality.of(context);
+    final TextScaler scaler = MediaQuery.textScalerOf(context);
+    final (TextStyle, TextScaler, TextDirection) key = (
+      style,
+      scaler,
+      direction,
+    );
+    final double? known = _lineHeights[key];
+    if (known != null) return known;
     final TextPainter painter = TextPainter(
       text: TextSpan(text: 'Hgjy', style: style),
-      textDirection: Directionality.of(context),
-      textScaler: MediaQuery.textScalerOf(context),
+      textDirection: direction,
+      textScaler: scaler,
       maxLines: 1,
     )..layout();
-    return painter.height;
+    final double height = painter.height;
+    painter.dispose();
+    // A handful of styles in practice; the cap only guards a theme that
+    // changes font size continuously.
+    if (_lineHeights.length >= 64) _lineHeights.clear();
+    _lineHeights[key] = height;
+    return height;
   }
 
   // ---------------------------------------------------------------- render
@@ -796,9 +847,7 @@ class _ChukTableState extends State<ChukTable> {
                   child: Align(
                     alignment: _boxAlign(_alignOf(plan, c)),
                     child: Text(
-                      chukVisibleText(
-                        c < t.header.length ? t.header[c] : '',
-                      ),
+                      chukVisibleText(c < t.header.length ? t.header[c] : ''),
                       style: _headerStyle,
                       textAlign: _alignOf(plan, c),
                       maxLines: 1,
