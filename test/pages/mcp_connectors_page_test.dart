@@ -11,6 +11,8 @@ import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
+import '../support/mcp_memory_list.dart';
+
 /// In-memory secure backend so secrets round-trip with no platform channel.
 class _MemorySecrets implements AgentsSecureKeyValueStore {
   final Map<String, String> map = <String, String>{};
@@ -40,7 +42,7 @@ void main() {
 
   testWidgets('adding a connector by URL stores it and shows it in the list',
       (tester) async {
-    final store = McpStore(secrets: _MemorySecrets());
+    final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
     McpService.resetForTest(store: store);
 
     await tester.pumpWidget(
@@ -78,7 +80,7 @@ void main() {
   });
 
   testWidgets('a bad URL is rejected and nothing is stored', (tester) async {
-    final store = McpStore(secrets: _MemorySecrets());
+    final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
     McpService.resetForTest(store: store);
 
     await tester.pumpWidget(
