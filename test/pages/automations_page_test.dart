@@ -80,6 +80,10 @@ void main() {
       await tester.tap(find.byTooltip('Resume'));
       expect(controller.controls.last, ('a2', 'resume'));
 
+      // The toggle sits below the two cards, past the bottom of the default
+      // 800x600 test surface: bring it on screen before tapping it.
+      await tester.ensureVisible(find.text('Show 1 finished'));
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Show 1 finished'));
       await tester.pump();
       expect(find.byType(AutomationCard), findsNWidgets(3));

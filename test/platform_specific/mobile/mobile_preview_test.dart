@@ -18,7 +18,8 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 
 import 'mobile_support.dart';
 
-const String _out = '../../../../docs/screenshots/c6';
+// Relative to this file: test/platform_specific/mobile/ -> repo root.
+const String _out = '../../../docs/screenshots/c6';
 
 void main() {
   setUpAll(loadRealFonts);

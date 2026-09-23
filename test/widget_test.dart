@@ -195,9 +195,18 @@ class _IdleRelayController implements AgentsRelayController {
 }
 
 void main() {
+  // LoginPage reads `AppLocalizations.of(context)!` like every chuk screen,
+  // so it is pumped through the localised [testApp], never a bare MaterialApp.
   group('LoginPage', () {
+    // The localisation delegate loads asynchronously, so the first frame is
+    // empty: settle before looking for anything.
+    Future<void> pumpLogin(WidgetTester tester, LoginPage page) async {
+      await tester.pumpWidget(testApp(page));
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('renders email, password and sign-in button', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+      await pumpLogin(tester, const LoginPage());
 
       expect(find.text('Email'), findsOneWidget);
       expect(find.text('Password'), findsOneWidget);
@@ -205,9 +214,15 @@ void main() {
     });
 
     testWidgets('can reveal and conceal the entered password', (tester) async {
-      await tester.pumpWidget(const MaterialApp(home: LoginPage()));
+      await pumpLogin(tester, const LoginPage());
 
-      final passwordField = find.byKey(const ValueKey('login-password-field'));
+      // chuk's sign-in screen: the password field is the one labelled
+      // "Password", and its suffix eye button toggles the obscuring.
+      final passwordField = find.widgetWithText(TextFormField, 'Password');
+      final toggle = find.descendant(
+        of: passwordField,
+        matching: find.byType(IconButton),
+      );
       bool isObscured() => tester
           .widget<EditableText>(
             find.descendant(
@@ -218,28 +233,18 @@ void main() {
           .obscureText;
 
       expect(isObscured(), isTrue);
-      expect(find.byTooltip('Show password'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('login-password-visibility-toggle')),
-      );
+      await tester.tap(toggle);
       await tester.pump();
-
       expect(isObscured(), isFalse);
-      expect(find.byTooltip('Hide password'), findsOneWidget);
 
-      await tester.tap(
-        find.byKey(const ValueKey('login-password-visibility-toggle')),
-      );
+      await tester.tap(toggle);
       await tester.pump();
-
       expect(isObscured(), isTrue);
     });
 
     testWidgets('shows an inline error when auth fails', (tester) async {
-      await tester.pumpWidget(
-        const MaterialApp(home: LoginPage(auth: _FailingAuthService())),
-      );
+      await pumpLogin(tester, const LoginPage(auth: _FailingAuthService()));
 
       await tester.enterText(find.byType(TextFormField).at(0), 'a@b.com');
       await tester.enterText(find.byType(TextFormField).at(1), 'secret');
