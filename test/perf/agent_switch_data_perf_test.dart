@@ -33,9 +33,10 @@ const int _switches = 9;
 
 /// The median data work of one switch must stay under this. Measured on the
 /// development machine (JIT, like `flutter test`): 9.6 ms before the caches,
-/// 1.7 ms after them. The ceiling leaves room for a slower machine and still
+/// 1.7 ms after them. The ceiling (under 9.6, ~4.7x the median) leaves room
+/// for a loaded CI runner and still
 /// catches the return of a full catalogue decode on every read.
-const double _dataCeilingMs = 6;
+const double _dataCeilingMs = 8;
 
 List<Map<String, dynamic>> _catalogue() => <Map<String, dynamic>>[
   for (int i = 0; i < 450; i++)
