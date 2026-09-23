@@ -153,4 +153,36 @@ void main() {
       );
     });
   });
+
+  group('ExpressiveTile with the Agents core off (upstream chuk_chat)', () {
+    setUp(() => debugAgentsChatCoreOverride = false);
+
+    testWidgets('is upstream\'s squeeze tile: it calls back and scales on '
+        'press, with no MorphTap', (WidgetTester tester) async {
+      var taps = 0;
+      await tester.pumpWidget(
+        _host(
+          child: ExpressiveTile(
+            onTap: () => taps++,
+            child: const Text('a row'),
+          ),
+        ),
+      );
+      expect(find.byType(MorphTap), findsNothing);
+      double scale() =>
+          tester.widget<AnimatedScale>(find.byType(AnimatedScale)).scale;
+      expect(scale(), 1);
+
+      final TestGesture gesture = await tester.startGesture(
+        tester.getCenter(find.text('a row')),
+      );
+      await tester.pump();
+      expect(scale(), lessThan(1));
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(scale(), 1);
+      expect(taps, 1);
+    });
+  });
 }

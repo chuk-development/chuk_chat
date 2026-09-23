@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 class AuthService {
   const AuthService();
@@ -159,6 +160,8 @@ class AuthService {
       await MultiplexSession.shutdown();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
+      // So do the parsed message texts (plaintext) kept for fast rebuilds.
+      MarkdownMessage.clearCaches();
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally

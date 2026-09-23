@@ -978,6 +978,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         _fileHandler.clearAll();
         composerController.clear();
         messageActionsHandler.cancelEdit();
+        if (widget.messengerMode) _resetThreadTransientState();
       });
 
       if (kDebugMode) {
@@ -2153,6 +2154,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     }
+  }
+
+  /// Agents only: the state that belongs to the thread being left, dropped
+  /// on a thread switch. The Agents screen is no longer remounted per thread,
+  /// so without this a queued follow-up would go out into the NEXT thread and
+  /// the fly-in / edit bookkeeping would point at rows that are not there.
+  /// The original app remounted, which dropped all of it. Reply drafts stay:
+  /// they are keyed by chat and cannot leak.
+  void _resetThreadTransientState() {
+    _pendingMessageText = null;
+    _queuedFollowUps.clear();
+    restoredAttachmentIds.clear();
+    _flyInKey = null;
   }
 
   /// Cancel a queued follow-up message and restore its text to the composer so

@@ -52,6 +52,7 @@ const Map<String, String> stringsDe = {
   'about': 'Über',
   'aboutSubtitle': 'Versionsinformationen und Open-Source-Lizenzen',
   'logout': 'Abmelden',
+  'logoutFailed': 'Abmelden fehlgeschlagen. Bitte erneut versuchen.',
   'noChatsToExport': 'Keine Chats zum Exportieren',
   'copiedToClipboard': 'In die Zwischenablage kopiert',
   'savedToPath': 'Gespeichert unter {path}',

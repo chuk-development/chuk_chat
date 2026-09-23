@@ -512,4 +512,52 @@ final x = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     expect(find.textContaining(r'$12.5/month', findRichText: true), findsOne);
     expect(find.byType(Math), findsNothing);
   });
+
+  group('the shared caches hold plaintext', () {
+    const String code = '```dart\nvoid main() { print(42); }\n```';
+
+    testWidgets('sign-out empties them', (tester) async {
+      MarkdownMessage.clearCaches();
+      await _pumpMarkdown(tester, 'Some **settled** text.\n\n$code');
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await tester.pump();
+      expect(MarkdownMessage.debugCachedParseCount, greaterThan(0));
+
+      MarkdownMessage.clearCaches();
+      expect(MarkdownMessage.debugCachedParseCount, 0);
+      expect(MarkdownMessage.debugCachedHighlightCount, 0);
+      await _settleCodeBlocks(tester);
+    });
+
+    testWidgets('a highlight that was running at sign-out is not kept', (
+      tester,
+    ) async {
+      MarkdownMessage.clearCaches();
+      await _pumpMarkdown(tester, code);
+      // The 50 ms debounce fires and the highlight starts.
+      await tester.pump(const Duration(milliseconds: 60));
+      MarkdownMessage.clearCaches();
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await tester.pump();
+      expect(MarkdownMessage.debugCachedHighlightCount, 0);
+      await _settleCodeBlocks(tester);
+    });
+
+    testWidgets('a highlight that finishes is kept (control)', (tester) async {
+      MarkdownMessage.clearCaches();
+      await _pumpMarkdown(tester, code);
+      await tester.pump(const Duration(milliseconds: 60));
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 500)),
+      );
+      await tester.pump();
+      expect(MarkdownMessage.debugCachedHighlightCount, 1);
+      await _settleCodeBlocks(tester);
+    });
+  });
 }
