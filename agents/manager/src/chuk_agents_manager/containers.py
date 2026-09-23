@@ -103,6 +103,8 @@ class ContainerSupervisor(AgentSupervisor):
         }
         if self.owner:
             kwargs["owner"] = self.owner
+            if self.legacy_workspace_roots:
+                kwargs["legacy_workspace_roots"] = self.legacy_workspace_roots
         return factory(**kwargs)
 
     def environment(self, agent_id: str) -> BaseEnvironment:

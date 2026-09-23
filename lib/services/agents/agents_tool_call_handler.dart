@@ -109,7 +109,13 @@ class AgentsToolCallHandler implements ToolCallHandler {
     final sessionKey = (session.discoveryContextKey?.isNotEmpty ?? false)
         ? session.discoveryContextKey!
         : AgentsRelayLink.instance.sessionKey.value;
-    final run = AgentsRunLedger.instance.take(sessionKey);
+    // A stream can end while the host still runs the turn: a run adopted
+    // from `run_state: running` closes its stream at once and leaves the run
+    // to the ledger. That run is read, never taken: taking it would drop the
+    // live run and stop its pending calls while the host still works.
+    final ledger = AgentsRunLedger.instance;
+    final active = ledger.isRunning(sessionKey);
+    final run = active ? ledger.runFor(sessionKey) : ledger.take(sessionKey);
 
     // Anything the ledger recorded is appended to whatever the session already
     // carried, so a caller that pre-seeded the session keeps its rows.
@@ -117,8 +123,9 @@ class AgentsToolCallHandler implements ToolCallHandler {
       session.toolCalls.addAll(run.toolCalls);
       session.producedBlocks.addAll(run.blocks);
     }
-    // Nothing may be left spinning after the turn is over.
-    finalizeStaleToolCalls(session.toolCalls);
+    // Nothing may be left spinning after the turn is over. A run that is
+    // still active is not over: its calls stay live.
+    if (!active) finalizeStaleToolCalls(session.toolCalls);
 
     if (session.toolCalls.isNotEmpty) {
       onToolCallsUpdated?.call(List<ToolCall>.unmodifiable(session.toolCalls));

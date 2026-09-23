@@ -185,9 +185,26 @@ def test_prefix_moves_the_state_directory(home):
     assert proc.returncode == 0, proc.stderr
     assert prefix.is_dir()
     assert not state_dir(home).exists()
-    assert f"run --no-qr --workspace {prefix} --sandbox" in unit_path(home).read_text(
+    assert f'run --no-qr --workspace "{prefix}" --sandbox' in unit_path(home).read_text(
         encoding="utf-8"
     )
+
+
+def test_a_prefix_with_special_characters_is_quoted_for_systemd(home):
+    """Spaces, sed's `&` and `|`, systemd's `%` and `$`, quote and backslash."""
+    prefix = home / 'my agents & co|x %h $HOME "q" back\\slash'
+    proc = run_install(home, "--prefix", str(prefix), *SAFE_FLAGS)
+    assert proc.returncode == 0, proc.stderr
+    assert prefix.is_dir()
+    unit = unit_path(home).read_text(encoding="utf-8")
+    escaped = (
+        str(prefix)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("%", "%%")
+        .replace("$", "$$")
+    )
+    assert f'run --no-qr --workspace "{escaped}" --sandbox' in unit
 
 
 def test_bin_dir_moves_the_launchers(home):

@@ -158,6 +158,8 @@ void main() {
       () async {
     ledger.begin(sessionKey);
     ledger.openTool(sessionKey, 'run_command', arguments: 'sleep 999');
+    // The run is over (a terminal that did not close the line itself).
+    ledger.runFor(sessionKey)!.running = false;
 
     final result = await handler.processAssistantResponse(
       session: sessionFor(sessionKey),
@@ -167,5 +169,35 @@ void main() {
 
     expect(result.toolCalls.single.status, ToolCallStatus.error);
     expect(result.toolCalls.single.completedAt, isNotNull);
+  });
+
+  test('a run the host still works on is read, not taken', () async {
+    // `run_state: running`: the stream closes at once, the run stays live.
+    ledger.adoptRunning(sessionKey, runId: 'run-1');
+    ledger.openTool(sessionKey, 'run_command', arguments: 'sleep 999');
+
+    final result = await handler.processAssistantResponse(
+      session: sessionFor(sessionKey),
+      content: '',
+      reasoning: '',
+    );
+
+    expect(result.toolCalls.single.name, 'run_command');
+    expect(result.toolCalls.single.status, ToolCallStatus.running);
+    expect(ledger.isRunning(sessionKey), isTrue);
+    expect(
+      ledger.runFor(sessionKey)!.toolCalls.single.status,
+      ToolCallStatus.running,
+    );
+
+    // Once the host finishes, the next fold takes it as usual.
+    ledger.finish(sessionKey, finalAnswer: 'done', reason: 'finished');
+    final later = await handler.processAssistantResponse(
+      session: sessionFor(sessionKey),
+      content: '',
+      reasoning: '',
+    );
+    expect(later.finalContent, 'done');
+    expect(ledger.runFor(sessionKey), isNull);
   });
 }
