@@ -260,6 +260,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// and throw away what the reader is looking at or typing.
   bool _mountedWithRows = false;
 
+  /// The loader revision the screen was mounted at for this thread. A thread
+  /// opened by a switch mounts at whatever revision an earlier replay left,
+  /// not at 0, so "no revision painted yet" is "still at this one".
+  int _revisionAtMount = 0;
+
   /// A here.now publish waiting on the user. The run is BLOCKED on the executor
   /// until it is answered, so it is a standing card, not a fleeting prompt.
   AgentsRelayApprovalRequest? _approval;
@@ -375,6 +380,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
     _revision = _loader.revisionFor(widget.threadKey);
+    _revisionAtMount = _revision;
     _storeSub = ChatStorageService.changes.listen(_onChatStoreChanged);
     // The Retry button in the imported bubble calls
     // `OfflineRetryManager.instance.retryNow()`. With no host on the other end
@@ -413,13 +419,32 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         ChatStorageService.selectedChatId = widget.threadKey;
       }
       _revision = _loader.revisionFor(widget.threadKey);
+      _revisionAtMount = _revision;
       _cacheRevision = 0;
       _mountedWithRows = _threadHasRows;
       _approval = null;
       _approvalDecision = null;
       _clearSecretRequest();
       _requestReplay();
+      if (!_mountedWithRows) unawaited(_readSwitchedThread(widget.threadKey));
     }
+  }
+
+  /// A switch to a thread with no rows in memory reads its local copy, the
+  /// way [_warmCache] does for the first thread. The rows land through the
+  /// store's change event and [_onChatStoreChanged] remounts the screen on
+  /// them; without this read a thread missing from memory stayed empty until
+  /// the host happened to send something new.
+  Future<void> _readSwitchedThread(String key) async {
+    try {
+      await ChatStorageService.loadFullChat(key);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[cowork-thread] thread cache read failed: $error');
+      }
+    }
+    if (!mounted || widget.threadKey != key) return;
+    _onChatStoreChanged(key);
   }
 
   @override
@@ -1500,7 +1525,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// painted no revision of them yet, which is exactly the mount-on-a-miss
   /// case the remount is for.
   bool get _screenIsEmpty =>
-      !_mountedWithRows && _revision == 0 && _cacheRevision == 0;
+      !_mountedWithRows &&
+      _revision == _revisionAtMount &&
+      _cacheRevision == 0;
 
   /// Adopt a new replay revision — but never while a run is in flight: the
   /// remount would throw away the answer streaming into the screen right now.

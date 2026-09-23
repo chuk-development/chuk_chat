@@ -269,6 +269,66 @@ void main() {
     await _releaseIdleTimers(tester);
   }, timeout: _guard);
 
+  testWidgets('switching to a thread that is gone from memory but was '
+      'replayed before reads it back from disk', (tester) async {
+    // The one-time repeat repair is a migration that re-replays and remounts
+    // every thread; this test is about the steady state.
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      kReplayRepeatRepairKey: true,
+    });
+    // Thread B was replayed earlier in this session: its rows reached memory
+    // and disk, and its loader revision moved past 0.
+    await tester.runAsync(() async {
+      disk.install();
+      AgentsChatStore.userIdProvider = () => 'cold-user';
+      final replaying = FakeRelayController();
+      AgentsRelayLink.instance.bind(replaying);
+      AgentsReplayLoader.instance.attach();
+      AgentsReplayLoader.instance.expect('local:b', afterId: 0);
+      replaying.emit(const AgentsRelayUser('hello b', mid: 1));
+      replaying.emit(
+        const AgentsRelayDelta('b answered', replay: true, mid: 2),
+      );
+      replaying.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      await _drainNotifyDebounce();
+      await AgentsChatStore.pending('local:b');
+      await _drainNotifyDebounce();
+    });
+    expect(AgentsReplayLoader.instance.revisionFor('local:b'), greaterThan(0));
+    expect(disk.rows.keys, contains('cold-user local:b'));
+
+    // The chuk_chat title sync used to drop an Agents thread from memory,
+    // since `encrypted_chats` has no row for it. Only the disk copy is left.
+    await tester.runAsync(() async {
+      ChatStorageState.chatsById.remove('local:b');
+      ChatStorageState.notifyChanges();
+      await _drainNotifyDebounce();
+    });
+
+    final controller = await pumpThread(tester, 'host:peer-1');
+    // Let A's own startup read finish, so nothing but the switch reads B.
+    await tester.runAsync(_drainNotifyDebounce);
+    await _settle(tester);
+    expect(ChatStorageState.chatsById['local:b'], isNull);
+    await tester.pumpWidget(
+      _app(
+        AgentsThreadView(
+          controllerBuilder: () async => controller,
+          sessionSource: const _FakeSessionSource(),
+          threadKey: 'local:b',
+          fileSaver: _NoopSaver(),
+        ),
+      ),
+    );
+    // The disk read hands its answer back through the real event loop.
+    await tester.runAsync(_drainNotifyDebounce);
+    await _settle(tester);
+
+    expect(find.text('hello b'), findsOneWidget);
+    expect(find.text('b answered'), findsOneWidget);
+    await _releaseIdleTimers(tester);
+  }, timeout: _guard);
+
   testWidgets('an empty thread key mounts no conversation at all', (
     tester,
   ) async {
