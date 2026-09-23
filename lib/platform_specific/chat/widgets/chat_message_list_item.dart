@@ -35,6 +35,11 @@ class ChatMessageListItem extends StatelessWidget {
     this.onAskUserAnswer,
     this.onConnectMcpServer,
     this.onContinueGeneration,
+    this.messengerMode = false,
+    this.reaction,
+    this.onReaction,
+    this.onReply,
+    this.onEditRequested,
   });
 
   final List<Map<String, String>> messages;
@@ -55,6 +60,23 @@ class ChatMessageListItem extends StatelessWidget {
   final ValueChanged<String>? onAskUserAnswer;
   final ValueChanged<String>? onConnectMcpServer;
   final VoidCallback? onContinueGeneration;
+
+  /// Agents's messenger presentation. Off everywhere upstream's chat builds
+  /// this row, so the fields below stay null there and the bubble is the
+  /// same as before.
+  final bool messengerMode;
+
+  /// The reader's own reaction on this message, if any.
+  final String? reaction;
+
+  /// Toggle a reaction. Null hides the reaction picker.
+  final ValueChanged<String>? onReaction;
+
+  /// Quote this message in the composer. Null hides "Reply".
+  final VoidCallback? onReply;
+
+  /// Edit this (user) message from the messenger menu.
+  final VoidCallback? onEditRequested;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +152,14 @@ class ChatMessageListItem extends StatelessWidget {
           ? () => OfflineRetryManager.instance.retryNow()
           : null,
       onContinueGeneration: onContinueGeneration,
+      messengerMode: messengerMode,
+      reaction: reaction,
+      onReaction: onReaction,
+      onReply: onReply,
+      onEditRequested: onEditRequested,
+      sentAt: messengerMode
+          ? DateTime.tryParse(messages[index]['sentAt'] ?? '')
+          : null,
     );
 
     final ChatRuntime? runtime = liveRuntime;

@@ -7,31 +7,21 @@
 // chat_*_mixin family (ChatModelSelectionMixin, ChatMessageEditMixin,
 // RegenVariantSeedMixin, ChatMessageListItem, MessageRenderCache,
 // ChatDebugSnapshot) that the desktop screen also uses, while Agents split it
-// into its own mobile_*_mixin family and made the State's fields public for
-// them. The same members would be declared twice, so upstream's won. What the
-// Agents side had that is NOT here any more:
-//   * messenger mode and the host typing bubble. `widget.messengerMode` and
-//     `widget.hostRunActive` are still on the widget so agents_thread_view
-//     keeps compiling, but nothing reads them: upstream's shared
-//     ChatMessageListItem takes no messengerMode.
-//   * the reply preview (widgets/chat_reply_preview.dart) and the composer's
-//     reply-to draft per chat.
-//   * the composer outbox (composer_queue.dart, several queued messages)
-//     against upstream's single `_pendingMessageText`.
-//   * message reactions on this screen (ChatReactionService is still wired
-//     through the bubble; the long-press toggle and the legacy-key mapping
-//     were Agents's).
-//   * the per-payload MessageDecodeCache, replaced by upstream's
-//     MessageRenderCache.
-//   * the payment-required dialog from payment_required_dialog.dart
-//     (upstream has its own `_showPaymentRequiredDialog` in this file).
-// Kept from Agents: the day divider in the message list, the "never grab the
-// keyboard on a phone" rule, the keyboard re-pin observer, and the widget's
-// Agents-only API. Left unreferenced for the coordinator to delete or
-// reinstate deliberately: mobile_send_mixin, mobile_message_edit_mixin,
-// mobile_model_selection_mixin, mobile_attach_mixin, mobile_chat_loading_mixin,
-// mobile_recording_mixin, assistant_message_write_mixin, composer_queue,
-// composer_metrics, message_decode_cache, payment_required_dialog.
+// into its own mobile_*_mixin family. Upstream's won.
+//
+// Agents's messenger features are back on top of upstream's structure, all
+// behind `widget.messengerMode`, which only agents_thread_view sets. With it
+// off, nothing below runs and the screen is upstream's:
+//   * the host typing bubble (`host-run-typing`, from `widget.hostRunActive`),
+//   * reactions and reply-to on the bubbles (ChatMessageListItem passes them
+//     through), with the reply preview above the composer,
+//   * the composer outbox: several queued messages instead of one slot,
+//   * the per-chat model and provider (`modelSelectionChatId`).
+// Deliberately not brought back, because upstream has the same thing:
+//   * the per-payload MessageDecodeCache (upstream's MessageRenderCache),
+//   * the payment-required dialog (upstream's `_showPaymentRequiredDialog`).
+// Kept from Agents as well: the day divider in the message list, the "never
+// grab the keyboard on a phone" rule and the keyboard re-pin observer.
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -41,6 +31,11 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/models/chat_reply.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/chat_reaction_service.dart';
+import 'package:chuk_chat/widgets/chat_reply_preview.dart';
+import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
@@ -142,10 +137,9 @@ class ChukChatUIMobile extends StatefulWidget {
   final bool toolDiscoveryMode;
   final bool showToolCalls;
 
-  /// Messenger presentation only; does not change model or reasoning settings.
-  ///
-  /// Agents's. `agents_thread_view.dart` passes it, so the API stays; nothing
-  /// in this screen reads it any more (see the MERGE NOTE at the top).
+  /// Agents's messenger presentation: the host typing bubble, reactions,
+  /// reply-to, the multi-message outbox and the per-chat model. Only
+  /// `agents_thread_view.dart` sets it; with it off this screen is upstream's.
   final bool messengerMode;
 
   /// Host activity survives the lifetime of a local streaming subscription.
@@ -314,6 +308,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// Queued message text — when the user sends while AI is still streaming,
   /// the text is parked here and dispatched after the current response ends.
   String? _pendingMessageText;
+
+  /// Messenger mode only: messages queued behind [_pendingMessageText],
+  /// oldest first. A burst typed while the coworker works goes out in order;
+  /// the single slot alone lost the first of two messages.
+  final List<String> _queuedFollowUps = <String>[];
+
+  /// Messenger mode only: the message the next send quotes, per chat.
+  final Map<String, ChatReply> _replyDrafts = <String, ChatReply>{};
+
+  /// Whether the messenger listeners were attached in [initState].
+  bool _messengerListening = false;
   bool _isLoadingChat = false; // Loading indicator for chat switching
   bool _isAppInBackground = false;
   late final VoidCallback _networkStatusListener;
@@ -358,6 +363,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // The disclaimer under the composer steps aside while the field has the
     // caret, so the focus change has to repaint it.
     composerFocusNode.addListener(_onComposerFocusChanged);
+    if (widget.messengerMode) {
+      _messengerListening = true;
+      ChatReactionService.instance.addListener(_onMessengerStoreChanged);
+      ChatModelSelectionService.instance.addListener(_onChatModelChanged);
+      _loadReactions();
+    }
     // Mode + its config (model, provider, reasoning) restore once, via
     // loadSavedModelPreference in _loadInitialData's post-frame pass — the
     // single entry point, so startup writes and picked-model refreshes run
@@ -367,6 +378,110 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   void _onComposerFocusChanged() {
     if (mounted) setState(() {});
+  }
+
+  // --- Messenger mode (Agents) ---------------------------------------------
+  //
+  // Everything below runs only with [ChukChatUIMobile.messengerMode] on.
+
+  /// The chat the reply drafts and reactions are stored under.
+  String get _messengerChatKey =>
+      widget.selectedChatId ?? _activeChatId ?? 'default';
+
+  void _onMessengerStoreChanged() {
+    if (mounted) setState(() {});
+  }
+
+  void _loadReactions() {
+    unawaited(
+      ChatReactionService.instance
+          .load(_messengerChatKey)
+          .catchError((Object _) {}),
+    );
+  }
+
+  /// The reaction key of message [index]. Undated legacy messages with the
+  /// same content count their occurrence, so each keeps its own reaction
+  /// without depending on absolute list positions.
+  String _reactionKeyAt(int index) {
+    final key = ChatReactionService.messageKey(_messages[index]);
+    if (!key.startsWith('legacy:') ||
+        (_messages[index]['sentAt']?.isNotEmpty ?? false) ||
+        (_messages[index]['startedAt']?.isNotEmpty ?? false)) {
+      return key;
+    }
+    var occurrence = 0;
+    for (var i = 0; i < index; i++) {
+      if (ChatReactionService.messageKey(_messages[i]) == key) occurrence++;
+    }
+    return '$key:$occurrence';
+  }
+
+  Future<void> _toggleReaction(String messageId, String emoji) async {
+    try {
+      await ChatReactionService.instance.toggle(
+        _messengerChatKey,
+        messageId,
+        emoji,
+      );
+    } catch (_) {
+      if (mounted) showSnackBar('Could not save reaction. Please try again.');
+    }
+  }
+
+  /// Quote message [index] in the composer. The quote travels as ordinary
+  /// text ([ChatReply.compose]), so the host and replay keep it.
+  void _replyToMessage(int index) {
+    if (index < 0 || index >= _messages.length) return;
+    final message = _messages[index];
+    final text = (message['text'] ?? '').trim();
+    if (text.isEmpty) return;
+    setState(() {
+      messageActionsHandler.cancelEdit();
+      _replyDrafts[_messengerChatKey] = ChatReply(
+        author: message['sender'] == 'user' ? 'You' : 'AI',
+        text: text,
+      );
+    });
+    composerFocusNode.requestFocus();
+  }
+
+  /// Agents keeps one model per chat. Upstream's composer keeps one per
+  /// mode, account-wide; with messenger mode off this returns null and the
+  /// resolution mixin keeps that behaviour.
+  @override
+  String? get modelSelectionChatId =>
+      widget.messengerMode ? (widget.selectedChatId ?? _activeChatId) : null;
+
+  void _onChatModelChanged() {
+    if (mounted) unawaited(_hydrateChatModel().catchError((Object _) {}));
+  }
+
+  /// Put this chat's own model and provider into the composer, if it has one.
+  Future<void> _hydrateChatModel() async {
+    final chatId = modelSelectionChatId;
+    if (chatId == null) return;
+    final choice = await ChatModelSelectionService.instance.load(chatId);
+    if (!mounted || modelSelectionChatId != chatId || choice == null) return;
+    if (selectedModelId == choice.modelId &&
+        selectedProviderSlug == choice.providerSlug) {
+      return;
+    }
+    setState(() {
+      selectedModelId = choice.modelId;
+      selectedProviderSlug = choice.providerSlug;
+    });
+    unawaited(refreshSelectedModelName(choice.modelId));
+  }
+
+  /// The chat's own pair goes in first, so it never waits behind the mode
+  /// restore's catalogue work, and again after it, because that restore
+  /// writes the mode's account-wide model into the same fields.
+  @override
+  Future<void> restoreChatMode() async {
+    if (widget.messengerMode) await _hydrateChatModel();
+    await super.restoreChatMode();
+    if (widget.messengerMode) await _hydrateChatModel();
   }
 
   void _initializeHandlers() {
@@ -722,6 +837,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     super.didUpdateWidget(oldWidget);
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
+      if (_messengerListening) _loadReactions();
       if (kDebugMode) {
         debugPrint('');
       }
@@ -878,6 +994,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     scrollController.dispose();
     _composerScrollController.dispose();
     composerFocusNode.removeListener(_onComposerFocusChanged);
+    if (_messengerListening) {
+      ChatReactionService.instance.removeListener(_onMessengerStoreChanged);
+      ChatModelSelectionService.instance.removeListener(_onChatModelChanged);
+    }
     composerFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -2015,7 +2135,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _cancelPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    final bool restore = composerController.text.trim().isEmpty;
+    // Several queued messages cannot all go back into one field; only a
+    // single one is restored.
+    final bool restore =
+        _queuedFollowUps.isEmpty && composerController.text.trim().isEmpty;
+    _queuedFollowUps.clear();
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
@@ -2044,7 +2168,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     setState(() {
-      _pendingMessageText = null;
+      _pendingMessageText = _queuedFollowUps.isEmpty
+          ? null
+          : _queuedFollowUps.removeAt(0);
       composerController.text = pending;
       composerController.selection = TextSelection.collapsed(
         offset: pending.length,
@@ -2069,12 +2195,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       // AI is still streaming — queue the message instead of cancelling.
       final text = composerController.text.trim();
       if (text.isNotEmpty) {
-        if (mounted) {
-          setState(() {
+        void queue() {
+          if (widget.messengerMode && _pendingMessageText != null) {
+            _queuedFollowUps.add(text);
+          } else {
             _pendingMessageText = text;
-          });
+          }
+        }
+
+        if (mounted) {
+          setState(queue);
         } else {
-          _pendingMessageText = text;
+          queue();
         }
         composerController.clear();
         if (kDebugMode) {
@@ -2133,8 +2265,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Credit/free message checks are handled server-side (API returns 402)
 
-    final String originalUserInput = composerController.text.trim();
+    final String typedInput = composerController.text.trim();
     final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;
+    final ChatReply? replyForSend = widget.messengerMode
+        ? _replyDrafts[_messengerChatKey]
+        : null;
+    final String originalUserInput =
+        replyForSend != null && (typedInput.isNotEmpty || hasAttachments)
+        ? replyForSend.compose(typedInput)
+        : typedInput;
 
     if (originalUserInput.isEmpty && !hasAttachments) {
       _isSendingMessage = false;
@@ -2213,6 +2352,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Add user message
     setState(() {
+      if (replyForSend != null) _replyDrafts.remove(_messengerChatKey);
       // Store message with images and attachments (if any)
       final userMessage = {
         'sender': 'user',
@@ -2220,6 +2360,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': selectedModelId,
         'provider': selectedProviderSlug ?? '',
+        // Messenger bubbles carry the time the reader sent it.
+        if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
       };
 
       // Store images as JSON-encoded string if present
@@ -2640,6 +2782,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   Future<void> _cancelCurrentOperation() async {
     // Explicit cancel discards any queued follow-up message too.
     _pendingMessageText = null;
+    _queuedFollowUps.clear();
 
     if (_isCurrentChatStreaming) {
       // Stream is active - cancel via handler
@@ -3123,6 +3266,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }) {
     final bool hasAttachments = _fileHandler.hasAttachments;
     final bool hasMessages = _messages.isNotEmpty;
+    // Messenger mode: the coworker's run on the host outlives this screen's
+    // own stream (a remount, a reconnect), so its typing bubble follows
+    // [ChukChatUIMobile.hostRunActive] — unless the local stream already
+    // shows the answer being written.
+    final bool hasLocalTypingBubble =
+        hasMessages &&
+        _messages.last['sender'] != 'user' &&
+        (_isCurrentChatStreaming || _isSendingMessage);
+    final bool showHostTyping =
+        widget.messengerMode && widget.hostRunActive && !hasLocalTypingBubble;
     // Fallback estimate, used only for the first frame before MeasureSize
     // reports the composer's real height. Kept close to the real value so
     // there's no visible jump when the measured height lands.
@@ -3176,7 +3329,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               },
               child: Stack(
                 children: [
-                  hasMessages
+                  (hasMessages || showHostTyping)
                       ? Align(
                           alignment: Alignment.center,
                           child: Container(
@@ -3203,7 +3356,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 child: ListView.builder(
                                 controller: scrollController,
                                 padding: listPadding,
-                                itemCount: _messages.length,
+                                itemCount:
+                                    _messages.length + (showHostTyping ? 1 : 0),
                                 addAutomaticKeepAlives: false,
                                 // Each item already wraps itself in a
                                 // RepaintBoundary below; letting the list add
@@ -3217,6 +3371,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 scrollCacheExtent:
                                     const ScrollCacheExtent.pixels(400.0),
                                 itemBuilder: (_, int i) {
+                                  if (i == _messages.length) {
+                                    return const Padding(
+                                      key: ValueKey<String>('host-run-typing'),
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 8,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: MessengerTypingIndicator(),
+                                      ),
+                                    );
+                                  }
                                   final data = _messageRenderCache.build(
                                     messages: _messages,
                                     index: i,
@@ -3311,6 +3477,34 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                             !_isCurrentChatStreaming &&
                                             !_isSendingMessage
                                         ? () => _continueGenerationAt(i)
+                                        : null,
+                                    messengerMode: widget.messengerMode,
+                                    reaction: widget.messengerMode
+                                        ? ChatReactionService.instance.peek(
+                                            _messengerChatKey,
+                                            _reactionKeyAt(i),
+                                          )
+                                        : null,
+                                    onReaction:
+                                        widget.messengerMode &&
+                                            !data.isStreamingMessage
+                                        ? (emoji) => unawaited(
+                                            _toggleReaction(
+                                              _reactionKeyAt(i),
+                                              emoji,
+                                            ),
+                                          )
+                                        : null,
+                                    onReply:
+                                        widget.messengerMode &&
+                                            data.displayText.trim().isNotEmpty
+                                        ? () => _replyToMessage(i)
+                                        : null,
+                                    onEditRequested:
+                                        widget.messengerMode &&
+                                            data.isUser &&
+                                            !_isCurrentChatStreaming
+                                        ? () => editMessageAt(i)
                                         : null,
                                   );
                                   if (!opensDay || rowDay == null) return row;
@@ -3588,13 +3782,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               actionLabel: 'Cancel',
               onAction: cancelEditMessage,
             ),
+          if (widget.messengerMode)
+            if (_replyDrafts[_messengerChatKey] case final reply?)
+              ChatReplyPreview(
+                reply: reply,
+                onCancel: () =>
+                    setState(() => _replyDrafts.remove(_messengerChatKey)),
+              ),
           if (_pendingMessageText != null)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.schedule,
-              label:
-                  '${AppLocalizations.of(context)!.queuedLabel}: '
-                  '"${_pendingMessageText!}"',
+              label: _queuedFollowUps.isNotEmpty
+                  ? AppLocalizations.of(
+                      context,
+                    )!.queuedMessagesCount('${_queuedFollowUps.length + 1}')
+                  : '${AppLocalizations.of(context)!.queuedLabel}: '
+                        '"${_pendingMessageText!}"',
               actionLabel: AppLocalizations.of(context)!.cancel,
               onAction: _cancelPendingMessage,
             ),
