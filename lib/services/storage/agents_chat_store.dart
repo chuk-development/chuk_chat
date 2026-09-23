@@ -817,13 +817,24 @@ class AgentsChatStore {
     for (var i = 0; i < ids.length; i += _kFetchBatch) {
       final end = i + _kFetchBatch > ids.length ? ids.length : i + _kFetchBatch;
       try {
-        out.addAll(
-          await _select(
+        // The server may cap a response below the batch size. Ask again for
+        // the ids that did not come back until none come back: those rows are
+        // gone (deleted meanwhile), not merely cut off.
+        var remaining = ids.sublist(i, end);
+        while (remaining.isNotEmpty) {
+          final page = await _select(
             userId,
-            ids: ids.sublist(i, end),
+            ids: remaining,
             columns: _kFullColumns,
-          ),
-        );
+          );
+          if (page.isEmpty) break;
+          out.addAll(page);
+          final got = <Object?>{for (final row in page) row['id']};
+          remaining = [
+            for (final id in remaining)
+              if (!got.contains(id)) id,
+          ];
+        }
       } catch (error) {
         if (strict) rethrow;
         if (kDebugMode) {
@@ -872,15 +883,19 @@ class AgentsChatStore {
   ) async {
     final out = <Map<String, dynamic>>[];
     final size = idPageSize;
-    for (var from = 0; ; from += size) {
+    // The server may cap a page below the size asked for, so a short page is
+    // not the end: advance by the rows that came back, and stop only on an
+    // empty page.
+    for (var from = 0; ;) {
       final page = await _select(
         userId,
         columns: 'id, updated_at',
         from: from,
         to: from + size - 1,
       );
+      if (page.isEmpty) return out;
       out.addAll(page);
-      if (page.length < size) return out;
+      from += page.length;
     }
   }
 

@@ -478,6 +478,27 @@ void main() {
       expect(cloud.selects.whereType<List<String>>().length, 3);
     });
 
+    test('a server cap below the page size does not skip rows', () async {
+      // The server returns at most 30 rows per request while the client asks
+      // for 50: a short page is not the end, and the next page starts after
+      // the rows that actually came back.
+      cloud.maxRows = 30;
+      AgentsChatStore.idPageSize = 50;
+      for (var i = 0; i < 120; i++) {
+        final id = 'c-${i.toString().padLeft(3, '0')}';
+        cloud.rows[id] = _cloudRow(
+          id,
+          _payload([
+            ['user', 'n$i'],
+          ]),
+        );
+      }
+
+      final snapshot = await AgentsChatStore.snapshotCloudThreads();
+      expect(snapshot.length, 120);
+      expect(snapshot.map((t) => t.id).toSet().length, 120);
+    });
+
     test('the id list is read in pages past the server row limit', () async {
       cloud.maxRows = 50;
       AgentsChatStore.idPageSize = 50;
@@ -492,12 +513,13 @@ void main() {
 
       final snapshot = await AgentsChatStore.snapshotCloudThreads();
       expect(snapshot.length, 120);
-      // Three id pages (50, 50, 20), then three full-row batches.
-      expect(cloud.selects.where((ids) => ids == null).length, 3);
+      // Id pages of 50, 50, 20 and an empty one that ends the list, then
+      // three full-row batches.
+      expect(cloud.selects.where((ids) => ids == null).length, 4);
 
       cloud.selects.clear();
       expect((await AgentsChatStore.pullFromCloud()).length, 120);
-      expect(cloud.selects.where((ids) => ids == null).length, 3);
+      expect(cloud.selects.where((ids) => ids == null).length, 4);
     });
 
     test('a failed write throws, so the key rotation rolls back', () async {
