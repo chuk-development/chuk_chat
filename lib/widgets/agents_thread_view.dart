@@ -16,6 +16,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_mobile.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/agents/agent_file_saver.dart';
@@ -318,6 +319,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   @override
   void initState() {
     super.initState();
+    // The embedded chat screen persists under this key; route it to the
+    // Agents store and queue whatever the key looks like.
+    ChatOrigin.claimAgentsThread(widget.threadKey);
     WidgetsBinding.instance.addObserver(this);
     _hostController = TextEditingController(text: widget.defaultHostUrl);
     // The link's fan-out outlives every controller, so this one subscription
@@ -365,6 +369,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void didUpdateWidget(AgentsThreadView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.threadKey != widget.threadKey) {
+      ChatOrigin.claimAgentsThread(widget.threadKey);
       _running = _ledger.isRunning(widget.threadKey);
       _reconcileOnOpen();
       // A different conversation. Point the link and the cache at it and ask

@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../support/fake_relay_controller.dart';
 import 'perf_support.dart';
@@ -57,6 +58,9 @@ const double _mountCeilingMs = 6000;
 const double _microCeilingMs = 400;
 
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late FakeDisk disk;

@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_cache_migration.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 class AgentsChatStorageBootstrap {
@@ -58,7 +59,13 @@ class AgentsChatStorageBootstrap {
 
   /// Idempotent. Safe to call before Supabase is initialised: it then does
   /// nothing until [start] is called again.
+  ///
+  /// A no-op with FEATURE_AGENTS off: upstream's `SessionManager` /
+  /// `AppInitializationService` already load the chats and run the sync, and
+  /// nothing Agents-only (outbox flush, cache migration, the remembered read
+  /// key) may run in that build.
   static void start() {
+    if (!ChatOrigin.agentsEnabled) return;
     if (_sub != null) return;
     final stream = authStream ?? _supabaseAuthStream();
     if (stream == null) return;
