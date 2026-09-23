@@ -196,7 +196,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : SettingsListView(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
               children: [
                 ExpressiveInfoCard(
                   text: 'Advanced options — mainly for debugging and support.',

@@ -6,6 +6,10 @@ import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 
+/// The synced look. A theme pack is the three colours *plus* the contrast and
+/// the app font, so all five travel together — otherwise a second device shows
+/// the pack's palette but cannot recognise the pack any more. Dynamic colour
+/// rides along because it overrides the palette.
 class ThemeSettings {
   const ThemeSettings({
     required this.userId,
@@ -13,6 +17,9 @@ class ThemeSettings {
     required this.accentColor,
     required this.iconColor,
     required this.backgroundColor,
+    this.contrast,
+    this.uiFont,
+    this.dynamicColor,
   });
 
   final String userId;
@@ -20,12 +27,21 @@ class ThemeSettings {
   final Color accentColor;
   final Color iconColor;
   final Color backgroundColor;
+  /// Null when the row predates these columns: the user has a look stored, but
+  /// never these three values. The caller keeps its local ones in that case
+  /// instead of being reset to the defaults.
+  final double? contrast;
+  final String? uiFont;
+  final bool? dynamicColor;
 
   ThemeSettings copyWith({
     Brightness? themeMode,
     Color? accentColor,
     Color? iconColor,
     Color? backgroundColor,
+    double? contrast,
+    String? uiFont,
+    bool? dynamicColor,
   }) {
     return ThemeSettings(
       userId: userId,
@@ -33,6 +49,9 @@ class ThemeSettings {
       accentColor: accentColor ?? this.accentColor,
       iconColor: iconColor ?? this.iconColor,
       backgroundColor: backgroundColor ?? this.backgroundColor,
+      contrast: contrast ?? this.contrast,
+      uiFont: uiFont ?? this.uiFont,
+      dynamicColor: dynamicColor ?? this.dynamicColor,
     );
   }
 
@@ -43,6 +62,9 @@ class ThemeSettings {
       'accent_color': accentColor.toHexString(),
       'icon_color': iconColor.toHexString(),
       'background_color': backgroundColor.toHexString(),
+      'contrast': contrast,
+      'ui_font': uiFont,
+      'dynamic_color': dynamicColor,
     };
   }
 
@@ -53,6 +75,9 @@ class ThemeSettings {
       accentColor: kDefaultAccentColor,
       iconColor: kDefaultIconFgColor,
       backgroundColor: kDefaultBgColor,
+      contrast: kDefaultContrast,
+      uiFont: kDefaultUiFontFamily,
+      dynamicColor: kDefaultDynamicColorEnabled,
     );
   }
 
@@ -73,8 +98,25 @@ class ThemeSettings {
         map['background_color'] as String?,
         fallback: kDefaultBgColor,
       ),
+      // A row written before these columns existed has no values for them.
+      contrast: _clampContrast(map['contrast']),
+      uiFont: _sanitizeUiFont(map['ui_font'] as String?),
+      dynamicColor: map['dynamic_color'] as bool?,
     );
   }
+}
+
+/// Null stays null — "never stored" is not the same as "stored as default".
+/// A stored value out of range is repaired.
+double? _clampContrast(Object? raw) {
+  final value = raw is num ? raw.toDouble() : null;
+  if (value == null) return null;
+  return value.clamp(kMinContrast, kMaxContrast).toDouble();
+}
+
+String? _sanitizeUiFont(String? raw) {
+  if (raw == null) return null;
+  return kSupportedUiFontFamilies.contains(raw) ? raw : kDefaultUiFontFamily;
 }
 
 class ThemeSettingsService {

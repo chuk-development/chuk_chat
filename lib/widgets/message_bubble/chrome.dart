@@ -203,18 +203,12 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   }
 
   Widget _buildFavicon(String host, ColorScheme colorScheme, double size) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(4),
-      child: Image.network(
-        'https://www.google.com/s2/favicons?domain=$host&sz=32',
-        width: size,
-        height: size,
-        errorBuilder: (context, error, stackTrace) => AppIcon(
-          Icons.public,
-          size: size,
-          color: colorScheme.onSurfaceVariant,
-        ),
-      ),
+    return FaviconImage(
+      host: host,
+      size: size,
+      fallbackColor: colorScheme.onSurfaceVariant,
+      borderRadius: 4,
+      fallbackIcon: Icons.public,
     );
   }
 

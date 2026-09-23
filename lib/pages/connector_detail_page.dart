@@ -86,7 +86,7 @@ class _ConnectorDetailPageState extends State<ConnectorDetailPage> {
         ),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
         children: [
           // --- Header: the tool, and its switch ---
           ExpressiveGroup(

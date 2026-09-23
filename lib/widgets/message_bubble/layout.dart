@@ -513,20 +513,18 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         widget.toolCalls != null &&
         widget.toolCalls!.isNotEmpty;
 
-    final bool isWaitingForFirstTokens =
-        widget.isReasoningStreaming &&
-        (widget.message == 'Thinking...' || widget.message.isEmpty);
     // The bar also carries the "took 4s" line on a turn with neither
     // reasoning nor a model line, which is why a known duration counts as a
-    // reason to build it.
-    final bool hasWorkedFor =
-        widget.workedFor != null && widget.workedFor!.inSeconds >= 1;
+    // reason to build it. A running turn always gets it: the header is what
+    // says the turn is alive, and it must not vanish the moment the first
+    // answer token replaces the placeholder.
+    final bool hasWorkedFor = widget.workedFor != null;
     final bool hasInfoStatusBar =
         !useContentBlocks &&
         (_hasReasoning ||
             _hasModelInfo ||
             hasWorkedFor ||
-            (isWaitingForFirstTokens && !widget.messengerMode)) &&
+            (widget.isReasoningStreaming && !widget.messengerMode)) &&
         !hasVisibleToolCalls;
 
     // A coworker's turn gets a real bubble now, and its colour says what the
@@ -1050,7 +1048,11 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // Render segments.
     var hasRenderedMainContent = false;
 
-    void renderRound(_RenderSegment seg, {bool live = false}) {
+    void renderRound(
+      _RenderSegment seg, {
+      bool live = false,
+      bool carriesTurnStatus = false,
+    }) {
       if (!seg.hasContent) return;
       // Reasoning-only round: standalone collapsible reasoning card.
       // _buildBlockReasoning has no margin, so the trailing gap below
@@ -1059,7 +1061,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       if (seg.toolCalls.isEmpty) {
         final reasoning = seg.reasoningTexts.join('\n\n');
         if (reasoning.isEmpty) return;
-        children.add(_buildBlockReasoning(reasoning, accentColor));
+        children.add(
+          _buildBlockReasoning(
+            reasoning,
+            accentColor,
+            live: live,
+            carriesTurnStatus: carriesTurnStatus,
+          ),
+        );
         children.add(const SizedBox(height: _kCardStackGap));
         hasRenderedMainContent = true;
         return;
@@ -1068,7 +1077,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       if (!widget.showToolCalls) {
         final reasoning = seg.reasoningTexts.join('\n\n');
         if (reasoning.isNotEmpty) {
-          children.add(_buildBlockReasoning(reasoning, accentColor));
+          children.add(
+            _buildBlockReasoning(
+              reasoning,
+              accentColor,
+              live: live,
+              carriesTurnStatus: carriesTurnStatus,
+            ),
+          );
           children.add(const SizedBox(height: _kCardStackGap));
           hasRenderedMainContent = true;
         }
@@ -1094,6 +1110,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           seg.toolCalls,
           contentBlockTimeline: timeline,
           live: live,
+          carriesTurnStatus: carriesTurnStatus,
         ),
       );
       // Match the gap above the bar (`_kBlockGap`) — only insert the
@@ -1145,12 +1162,20 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // between tool rounds and every tool reads `completed`. Only that round
     // keeps the live counter running; without this the ticker is cancelled
     // in each gap and "Worked for …" freezes until the next tool starts.
-    int lastRoundIndex = -1;
+    // The turn's clock and model line hang off exactly one round — the last
+    // one of any kind, reasoning included. Without this a message whose last
+    // round is pure reasoning showed a bare "Thought" with no time at all,
+    // and its counter stopped the moment the round stopped running tools.
+    int statusRoundIndex = -1;
     for (int i = 0; i < segments.length; i++) {
       final s = segments[i];
-      if (!s.isText && !s.isSandboxArtifact && s.toolCalls.isNotEmpty) {
-        lastRoundIndex = i;
-      }
+      if (s.isText || s.isSandboxArtifact || !s.hasContent) continue;
+      // A round the reader never sees cannot carry the status: with tool
+      // calls switched off, a tools-only round renders nothing at all.
+      final bool rendersSomething =
+          s.reasoningTexts.any((text) => text.trim().isNotEmpty) ||
+          (widget.showToolCalls && s.toolCalls.isNotEmpty);
+      if (rendersSomething) statusRoundIndex = i;
     }
 
     for (int i = 0; i < segments.length; i++) {
@@ -1173,7 +1198,8 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       } else {
         renderRound(
           seg,
-          live: widget.isStreamingMessage && i == lastRoundIndex,
+          live: widget.isStreamingMessage && i == statusRoundIndex,
+          carriesTurnStatus: i == statusRoundIndex,
         );
       }
     }
@@ -1181,6 +1207,21 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     if (hasImages && !insertedImage) {
       children.add(_buildImagesGrid(widget.images!));
       children.add(const SizedBox(height: _kBlockGap));
+    }
+
+    // A turn with no round of its own — a plain answer with no reasoning and
+    // no tool call — still owes the reader the status: the counting header
+    // while it runs, the quiet "12s · model" line once it is done.
+    // Messenger mode (Agents) carries that status in its own typing row and
+    // stamp, and an empty list there means "no bubble at all".
+    if (statusRoundIndex < 0 && !widget.messengerMode) {
+      final status = _buildTurnStatusOnly();
+      if (widget.isStreamingMessage) {
+        children.insert(0, status);
+        children.insert(1, const SizedBox(height: _kInfoBarGap));
+      } else {
+        children.add(status);
+      }
     }
 
     // ask_user interactive options.

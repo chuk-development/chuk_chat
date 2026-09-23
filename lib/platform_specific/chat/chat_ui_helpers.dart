@@ -6,6 +6,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/utils/stream_error_notice.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 
 import 'package:uuid/uuid.dart';
@@ -203,20 +204,41 @@ class ChatUiHelpers {
     }
 
     final message = messages[messageIndex];
-    final priorText = (message['text'] ?? '').trim();
-    final priorContentBlocksJson = message['contentBlocks'];
+    // A transport error is stored in the body, so it would otherwise be
+    // continued as if the model had written it.
+    final String rawText = message['text'] ?? '';
+    final String? rawBlocks = message['contentBlocks'];
+    final bool carriedNotice = rawText.contains(kConnectionErrorNotice) ||
+        (rawBlocks?.contains(kConnectionErrorNotice) ?? false);
+    final priorText = stripStreamErrorNotice(rawText.trim());
+    final priorContentBlocksJson = stripStreamErrorNoticeFromBlocksJson(
+      rawBlocks,
+    );
     if (priorText.isEmpty &&
         (priorContentBlocksJson == null ||
             priorContentBlocksJson.trim().isEmpty)) {
       return null;
     }
 
+    // The same row goes into the history the next pass is built from, so it
+    // is cleaned there too — otherwise the notice is sent to the model.
+    final List<Map<String, String>> history = messages
+        .sublist(0, messageIndex + 1)
+        .map(Map<String, String>.from)
+        .toList();
+    if (carriedNotice) {
+      final Map<String, String> lastRow = history.last;
+      lastRow['text'] = priorText;
+      if (priorContentBlocksJson == null) {
+        lastRow.remove('contentBlocks');
+      } else {
+        lastRow['contentBlocks'] = priorContentBlocksJson;
+      }
+    }
+
     return ChatContinuationRequest(
       messageIndex: messageIndex,
-      historyMessages: messages
-          .sublist(0, messageIndex + 1)
-          .map(Map<String, String>.from)
-          .toList(growable: false),
+      historyMessages: List<Map<String, String>>.unmodifiable(history),
       priorText: priorText,
       priorContentBlocksJson: priorContentBlocksJson,
       modelId: message['modelId']?.trim().isNotEmpty == true
@@ -1101,7 +1123,6 @@ class ChatUiHelpers {
     final bool isAiMessage = sender != 'user';
     final bool isStreamingMessage =
         isStreaming && index == messageCount - 1 && isAiMessage;
-    final bool hasReasoning = reasoning.isNotEmpty;
     // The turn's own clock. `startedAt` is stamped on the placeholder and
     // `generationMs` when the answer is saved, so a running turn counts up
     // from the first and a finished one shows the second unchanged. A user
@@ -1199,8 +1220,11 @@ class ChatUiHelpers {
       sender: sender,
       displayText: displayText,
       reasoning: reasoning,
-      isReasoningStreaming:
-          isStreamingMessage && (hasReasoning || displayText.isNotEmpty),
+      // The status header belongs to the whole running turn, not only to the
+      // part of it that produced reasoning tokens: while the request is still
+      // travelling there is neither reasoning nor text, and that is exactly
+      // the wait the reader most needs named.
+      isReasoningStreaming: isStreamingMessage,
       modelLabel: modelLabel,
       modelProvider: modelProvider,
       tps: tps,

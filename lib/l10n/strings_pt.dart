@@ -110,8 +110,6 @@ const Map<String, String> stringsPt = {
   'toolAlwaysOn': 'Sempre ativo',
   'toolArtifacts': 'Artefatos',
   'toolArtifactsSubtitle': 'Código, documentos e desenhos editáveis',
-  'toolCodeSandbox': 'Sandbox de código',
-  'toolCodeSandboxSubtitle': 'Executa código e gerencia arquivos em um sandbox',
   'toolGroupCodeArtifacts': 'Código e artefatos',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Carregando configurações de ferramentas...',
@@ -126,7 +124,6 @@ const Map<String, String> stringsPt = {
   'catGoogleCalGmail': 'Google (Agenda / Gmail)',
   'catEmailImapSmtp': 'Email (IMAP/SMTP)',
   'catNextcloud': 'Nextcloud',
-  'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
       'Pesquisar na web, buscar páginas, gerar imagens e consultar dados',
   'catUtilitiesDesc':
@@ -144,8 +141,6 @@ const Map<String, String> stringsPt = {
   'catEmailImapSmtpDesc': 'Enviar e receber email via IMAP e SMTP',
   'catNextcloudDesc':
       'Navegar por arquivos, calendário e contatos no Nextcloud',
-  'catSandboxDesc':
-      'Executar código Python ou shell em uma sandbox isolada e ler/escrever arquivos',
   'connect': 'Conectar',
   'disconnect': 'Desconectar',
   'disconnectCategory': 'Desconectar {label}?',
@@ -493,8 +488,7 @@ const Map<String, String> stringsPt = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Pergunte-me qualquer coisa!',
-  'aiDisclaimer':
-      'Você está conversando com uma IA — ela pode errar. Confira o importante.',
+  'aiDisclaimer': 'Você está conversando com uma IA/LLM — ela pode errar. Confira o importante.',
   'queuedLabel': 'Na fila',
   'queuedMessagesCount': '{count} mensagens na fila',
   'editYourMessage': 'Edite sua mensagem...',
@@ -513,6 +507,15 @@ const Map<String, String> stringsPt = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modelos',
   'searchModels': 'Pesquisar modelos...',
+  'modelProvider': 'Provedor',
+  'chooseProvider': 'Escolher',
+  'modelPromptCustom': 'Personalizado',
+  'fastMode': 'Modo rápido',
+  'thinkingMode': 'Modo de raciocínio',
+  'availableModelsOne': 'Disponíveis · {count} modelo',
+  'availableModelsMany': 'Disponíveis · {count} modelos',
+  'modelsFoundOne': '{count} modelo encontrado',
+  'modelsFoundMany': '{count} modelos encontrados',
   'modelError': 'Erro: {error}',
   'copyImage': 'Copiar imagem',
   'downloadImage': 'Baixar imagem',

@@ -1,4 +1,7 @@
+import 'package:flutter/foundation.dart' show visibleForTesting;
+
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
 
 /// The type of a content block within an AI response.
 enum ContentBlockType { text, toolCalls, reasoning, sandboxArtifact }
@@ -102,8 +105,25 @@ class ContentBlock {
     if (sandboxArtifact != null) 'sandboxArtifact': sandboxArtifact!.toJson(),
   };
 
+  /// Stored type name of file blocks. Chat used to write them from the
+  /// removed E2B code sandbox; Agents still writes them for every file the
+  /// host hands to the user.
+  static const String _legacySandboxArtifactType = 'sandboxArtifact';
+
+  /// Whether a stored file block decodes to a file card. With Agents on, it
+  /// does: Agents delivers files through this block. Without Agents the only
+  /// writer was the removed code sandbox, so an old block becomes a plain
+  /// note, exactly as in chuk_chat. Not `final` so a test can pick a side.
+  @visibleForTesting
+  static bool decodesFileBlocks = kFeatureAgents;
+
   factory ContentBlock.fromJson(Map<String, dynamic> json) {
     final typeName = json['type'] as String? ?? 'text';
+    // Old chats can still carry a file block from the removed code sandbox.
+    // It cannot be opened any more; show a plain note in its place.
+    if (typeName == _legacySandboxArtifactType && !decodesFileBlocks) {
+      return ContentBlock.text(legacySandboxArtifactNote(json));
+    }
     final type = ContentBlockType.values.firstWhere(
       (e) => e.name == typeName,
       orElse: () => ContentBlockType.text,
@@ -132,5 +152,16 @@ class ContentBlock {
       toolCalls: toolCalls,
       sandboxArtifact: sandboxArtifact,
     );
+  }
+
+  /// The note shown in place of a legacy code-sandbox file block.
+  static String legacySandboxArtifactNote(Map<String, dynamic> json) {
+    final raw = json['sandboxArtifact'];
+    final name = raw is Map ? raw['filename'] : null;
+    final label = name is String && name.trim().isNotEmpty
+        ? '"${name.trim()}"'
+        : 'A file';
+    return '_$label came from the code sandbox, which is no longer '
+        'available._';
   }
 }

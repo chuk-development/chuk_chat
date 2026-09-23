@@ -40,6 +40,9 @@ Future<String> _encryptWithKey(String plaintext, SecretKey key) async {
 }
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {

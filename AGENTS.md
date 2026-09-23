@@ -89,7 +89,7 @@ flutter build web --release --dart-define-from-file=.env
 
 **Release notes are mandatory for every new release** (no exceptions):
 
-- Always summarize **all commits since the previous release**, not just changes from the current session.
+- Always summarize **all commits since the previous release**, not just changes from the current session. Merge commits are the one exception — they carry no content of their own.
 - Scope must be: `last_release_tag..new_release_tag` (example: `v1.0.92..v1.0.93`).
 - Build notes from commit messages and group by category (for example: New Features, Bug Fixes, Performance, Refactors, Dependencies, Maintenance).
 - Keep notes as changelog text only (no download/install/platform instructions).
@@ -97,13 +97,35 @@ flutter build web --release --dart-define-from-file=.env
   - hash-linked commit list (`[abc1234](.../commit/<full_sha>)`)
   - compare link (`.../compare/<last_tag>...<new_tag>`) and explicit commit range hashes.
 - Update the release body directly with `gh release edit` after generating notes from the full tag range.
+- **Generate the notes with `scripts/release_notes.py`** — it reads the git
+  history, groups the commits by conventional-commit type, hash-links every
+  commit and appends the compare link:
+  ```bash
+  git fetch --tags
+  mkdir -p _scratch
+  python3 scripts/release_notes.py v1.0.110 > _scratch/notes.md   # previous tag detected
+  gh release edit v1.0.110 --notes-file _scratch/notes.md
+  gh release view v1.0.110 --json body --jq .body
+  ```
+  A stable tag compares against the previous stable tag; a `-pre.N` tag compares
+  against the tag right before it.
+- **A release without a changelog is a broken release.** CI writes the changelog
+  itself (`Generate release notes` step in `build-cross-platform.yml`, which
+  calls the same script), so never replace a release body with download or
+  install instructions. If a release body ever shows only the old "## Downloads"
+  boilerplate, regenerate it with the script and push it back with
+  `gh release edit`.
 - Preferred direct command pattern (no repo script required):
   ```bash
   gh release edit <new_tag> --notes-file <notes_file>
   gh release view <new_tag> --json body --jq .body
   ```
 
-**Important:** The `Cross-Platform Build & Release` workflow is triggered by `workflow_dispatch` only. Do not rely on git tags to trigger releases.
+**Important:** Cut a release with `workflow_dispatch` on the `Cross-Platform
+Build & Release` workflow — that path tags and builds in one go. The
+workflow also reacts to a pushed `v*` tag, and then takes the tag from the push
+instead of from `pubspec.yaml`, but pushing a tag by hand is not the normal way
+in.
 
 ### Mandatory Post-Task Workflow
 
@@ -288,12 +310,19 @@ Separate repo at `/home/user/git/api_server/`. FastAPI + Supabase + Stripe.
   `android/`.** That is the path F-Droid reads straight out of the git repo;
   `supply` is pointed at the same tree via `metadata_path`, and the README
   embeds the same PNGs. Do not move it back.
-- **Store screenshots are generated, not captured:** `flutter test
-  test_screenshots` renders the app's real widgets at 1080x1920. The harness
-  lives outside `test/` so the normal suite does not run it, and
-  `.github/workflows/screenshots.yml` regenerates + commits them on every push
-  to `master` that touches `lib/`. That workflow needs no secrets.
-  `scripts/device_screenshots.sh` is the `adb` path for a real device shot.
+- **Store screenshots are captured on a real device, by hand:**
+  capture into `fastlane/screenshots_raw/<locale>/`, then run
+  `./scripts/frame_screenshots.sh`, which frames every capture into
+  `fastlane/metadata/android/<locale>/images/phoneScreenshots/`.
+  `scripts/device_screenshots.sh --demo on` freezes the status bar first.
+  Recapture when the UI changes, before a release, and commit both trees.
+  **There is no screenshot workflow any more** — the old `screenshots.yml`
+  committed headlessly rendered widgets on every push to `master` and
+  overwrote every real capture. Do not bring it back.
+  Before capturing, put the status bar in demo mode (fixed clock, full
+  battery, no notification icons) and use an account with no private content —
+  see `docs/FASTLANE.md`. The headless harness (`flutter test test_screenshots`)
+  is only the fallback when no device is available.
 - **`build_aab` hardcodes `FEATURE_PAYMENTS_DIRECT=false`** — a Play build that
   ships the direct Stripe flow puts the listing at risk. `build_apk` (direct
   downloads) keeps it on. Do not merge the two flag sets.

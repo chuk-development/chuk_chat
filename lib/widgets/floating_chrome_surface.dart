@@ -22,9 +22,11 @@ class FloatingChromeSurface extends StatelessWidget {
     super.key,
     required this.child,
     this.radius = 26,
+    this.borderRadius,
     this.padding,
     this.shape,
     this.baseColor,
+    this.fillAlpha = _fillAlpha,
   });
 
   /// Alpha of the background fill. The composer's value.
@@ -32,8 +34,13 @@ class FloatingChromeSurface extends StatelessWidget {
 
   final Widget child;
 
-  /// Corner radius. Ignored when [shape] is a circle.
+  /// Corner radius. Ignored when [shape] is a circle, or when
+  /// [borderRadius] gives the corners individually.
   final double radius;
+
+  /// Per-corner shape, for a bar that joins whatever sits under it. Null
+  /// takes [radius] on all four.
+  final BorderRadius? borderRadius;
   final EdgeInsetsGeometry? padding;
 
   /// A circle for the round chips; null takes the rounded rectangle.
@@ -48,8 +55,15 @@ class FloatingChromeSurface extends StatelessWidget {
   /// step goes the other way, down to the page background.
   final Color? baseColor;
 
-  static Color fillOf(BuildContext context, {Color? baseColor}) =>
-      (baseColor ?? floatingChromeBase(context)).withValues(alpha: _fillAlpha);
+  /// How opaque the fill is. The sidebar's bars pass 1: the chat list runs
+  /// directly under them, and at anything less the titles ghost through.
+  final double fillAlpha;
+
+  static Color fillOf(
+    BuildContext context, {
+    Color? baseColor,
+    double alpha = _fillAlpha,
+  }) => (baseColor ?? floatingChromeBase(context)).withValues(alpha: alpha);
 
   @override
   Widget build(BuildContext context) {
@@ -57,9 +71,11 @@ class FloatingChromeSurface extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: fillOf(context, baseColor: baseColor),
+        color: fillOf(context, baseColor: baseColor, alpha: fillAlpha),
         shape: circular ? BoxShape.circle : BoxShape.rectangle,
-        borderRadius: circular ? null : BorderRadius.circular(radius),
+        borderRadius: circular
+            ? null
+            : (borderRadius ?? BorderRadius.circular(radius)),
       ),
       child: child,
     );

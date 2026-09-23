@@ -6,12 +6,14 @@
 # status bar, the actual font stack, real chat content.
 #
 # Usage:
+#   ./scripts/device_screenshots.sh --demo on          # freeze the status bar
 #   ./scripts/device_screenshots.sh 01_chat            # one shot, en-US
 #   ./scripts/device_screenshots.sh 02_tools de-DE     # one shot, German listing
 #   LOCALE=de-DE ./scripts/device_screenshots.sh 03_theme
 #
 # The phone must already show the screen you want. The file lands in
-# fastlane/metadata/android/<locale>/images/phoneScreenshots/.
+# fastlane/screenshots_raw/<locale>/; run scripts/frame_screenshots.sh
+# afterwards to write the framed listing images.
 
 set -euo pipefail
 
@@ -64,7 +66,38 @@ fi
 # Anchored to the repository root, so the shot lands in the supply tree no
 # matter which directory the script is called from.
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-OUT_DIR="$REPO_ROOT/fastlane/metadata/android/$LOCALE/images/phoneScreenshots"
+
+# The device is already resolved above, and adb honours ANDROID_SERIAL, so
+# every broadcast below reaches exactly one phone.
+# `--demo on` freezes the status bar before a capture: clock at 12:00, full
+# battery, no notification icons, full wifi. Nothing about the device, the
+# time or the owner leaks into a store listing. `--demo off` gives the real
+# status bar back.
+if [ "${1:-}" = "--demo" ]; then
+  MODE="${2:-on}"
+  if [ "$MODE" = "off" ]; then
+    "$ADB" shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null
+    echo "status bar: back to normal"
+  else
+    "$ADB" shell settings put global sysui_demo_allowed 1
+    for args in \
+      "-e command enter" \
+      "-e command clock -e hhmm 1200" \
+      "-e command battery -e level 100 -e plugged false" \
+      "-e command notifications -e visible false" \
+      "-e command network -e wifi show -e level 4 -e mobile false"; do
+      # shellcheck disable=SC2086
+      "$ADB" shell am broadcast -a com.android.systemui.demo $args >/dev/null
+    done
+    echo "status bar: demo mode (12:00, full battery, no notifications)"
+  fi
+  exit 0
+fi
+
+# Raw captures live outside the metadata tree. scripts/frame_screenshots.sh
+# turns them into the listing images, so re-framing always starts from the
+# original capture.
+OUT_DIR="$REPO_ROOT/fastlane/screenshots_raw/$LOCALE"
 mkdir -p "$OUT_DIR"
 OUT="$OUT_DIR/$NAME.png"
 
@@ -86,6 +119,7 @@ mv "$TMP" "$OUT"
 SIZE="$(file -b "$OUT" | grep -oE '[0-9]+ x [0-9]+' | head -1 || true)"
 SIZE="${SIZE:-size unknown}"
 echo "Wrote $OUT ($SIZE)"
+echo "Run ./scripts/frame_screenshots.sh to update the listing images."
 echo
 echo "Play wants 16:9 or 9:16, 320-3840 px per side. A phone screenshot at its"
 echo "native resolution is fine. Odd aspect ratios (foldables, tablets in"

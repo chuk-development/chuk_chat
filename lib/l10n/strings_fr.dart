@@ -115,9 +115,6 @@ const Map<String, String> stringsFr = {
   'toolAlwaysOn': 'Toujours actif',
   'toolArtifacts': 'Artéfacts',
   'toolArtifactsSubtitle': 'Code, documents et dessins modifiables',
-  'toolCodeSandbox': 'Bac à sable de code',
-  'toolCodeSandboxSubtitle':
-      'Exécute du code et gère des fichiers dans un bac à sable',
   'toolGroupCodeArtifacts': 'Code et artéfacts',
   'connectors': 'Connecteurs',
   'loadingToolSettings': 'Chargement des paramètres des outils...',
@@ -132,7 +129,6 @@ const Map<String, String> stringsFr = {
   'catGoogleCalGmail': 'Google (Agenda / Gmail)',
   'catEmailImapSmtp': 'E-mail (IMAP/SMTP)',
   'catNextcloud': 'Nextcloud',
-  'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Rechercher sur le web, récupérer des pages, générer des images et consulter des données',
   'catUtilitiesDesc':
@@ -151,8 +147,6 @@ const Map<String, String> stringsFr = {
   'catEmailImapSmtpDesc': 'Envoyer et recevoir des e-mails via IMAP et SMTP',
   'catNextcloudDesc':
       'Parcourir les fichiers, le calendrier et les contacts sur Nextcloud',
-  'catSandboxDesc':
-      'Exécuter du code Python ou shell dans un bac à sable isolé et lire/écrire des fichiers',
   'connect': 'Connecter',
   'disconnect': 'Déconnecter',
   'disconnectCategory': 'Déconnecter {label} ?',
@@ -505,8 +499,7 @@ const Map<String, String> stringsFr = {
 
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Posez-moi n\'importe quelle question !',
-  'aiDisclaimer':
-      'Vous discutez avec une IA — elle peut se tromper. Vérifiez l\'essentiel.',
+  'aiDisclaimer': 'Vous discutez avec une IA/LLM — elle peut se tromper. Vérifiez l\'essentiel.',
   'queuedLabel': 'En file d\'attente',
   'queuedMessagesCount': '{count} messages en file d\'attente',
   'editYourMessage': 'Modifier votre message...',
@@ -525,6 +518,15 @@ const Map<String, String> stringsFr = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modèles',
   'searchModels': 'Rechercher des modèles...',
+  'modelProvider': 'Fournisseur',
+  'chooseProvider': 'Choisir',
+  'modelPromptCustom': 'Personnalisé',
+  'fastMode': 'Mode rapide',
+  'thinkingMode': 'Mode réflexion',
+  'availableModelsOne': 'Disponibles · {count} modèle',
+  'availableModelsMany': 'Disponibles · {count} modèles',
+  'modelsFoundOne': '{count} modèle trouvé',
+  'modelsFoundMany': '{count} modèles trouvés',
   'modelError': 'Erreur : {error}',
   'copyImage': 'Copier l\'image',
   'downloadImage': 'Télécharger l\'image',

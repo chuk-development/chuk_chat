@@ -7,6 +7,9 @@ import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   final document = <String, dynamic>{
     'id': 'songs',
     'title': 'Songs',

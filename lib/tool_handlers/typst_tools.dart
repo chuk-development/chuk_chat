@@ -202,12 +202,12 @@ Future<String> executeTypstCompile({
 /// Appended to every successful compile result. The compiled PDF is shown to
 /// the user as a downloadable artifact card the moment this tool returns —
 /// the compile IS the delivery. Models otherwise try to "hand over" the file
-/// with send_file_to_user (which fails: the PDF is an artifact, not a sandbox
-/// file) and then thrash the sandbox looking for it. Say plainly it is done.
+/// with another tool and then go looking for a file that does not exist.
+/// Say plainly it is done.
 const String _deliveryNote =
     ' The PDF is now shown to the user as a downloadable artifact card — it is '
-    'delivered. Do NOT call send_file_to_user and do NOT use the sandbox to '
-    'send it; there is no file to send. Just tell the user it is ready.';
+    'delivered. Do NOT try to send it with another tool; there is no file to '
+    'send. Just tell the user it is ready.';
 
 /// Snapshot of a compiled Typst PDF's layout (page count + last-page
 /// fill %) reported by the server in response headers. Used to nudge

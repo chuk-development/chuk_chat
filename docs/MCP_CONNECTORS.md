@@ -85,7 +85,7 @@ call — it rotates, so a stored copy would be stale within the hour.
 
 **GitHub** is the one that exists today, at `/v1/mcp/github`:
 
-1. The reader connects GitHub once under Settings → Sandboxes → GitHub.
+1. The reader connects GitHub once under Settings → GitHub.
    That is the device flow (RFC 8628) that was already there for `git` and
    `gh` inside the sandbox; the token is encrypted and stored server-side.
 2. The Connectors screen offers GitHub like any other connector. Connect

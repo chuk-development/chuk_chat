@@ -450,8 +450,22 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     // [FloatingChromeSurface], so the floating chrome of the chat and of the
     // sidebar cannot drift apart.
     final String? title = _currentChatTitle();
+    final Color pageColor = Theme.of(context).scaffoldBackgroundColor;
 
-    return SafeArea(
+    return DecoratedBox(
+      // The chat runs on underneath this bar, so the bar holds the page down
+      // behind it: page colour at the status bar, nothing at all by its
+      // lower edge. Without it a table or a heading scrolls straight across
+      // the clock and the title pill.
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [pageColor, pageColor, pageColor.withValues(alpha: 0)],
+          stops: const [0.0, 0.62, 1.0],
+        ),
+      ),
+      child: SafeArea(
       bottom: false,
       child: Padding(
         padding: const EdgeInsets.fromLTRB(10, 8, 10, 6),
@@ -523,6 +537,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
             ],
           ),
         ),
+      ),
       ),
     );
   }

@@ -23,6 +23,8 @@ const Map<String, String> stringsDe = {
       'beizubringen — ein Ausgabeformat, eine Checkliste, feste Regeln für '
       'eine wiederkehrende Aufgabe.',
   'skillsBuiltin': 'Eingebaut',
+  'skillsSearchHint': 'Skills suchen...',
+  'skillsNoMatches': 'Kein Skill passt zu "{query}".',
   'skillNew': 'Neuer Skill',
   'skillEdit': 'Skill bearbeiten',
   'skillDeleteTitle': 'Skill löschen?',
@@ -185,8 +187,7 @@ const Map<String, String> stringsDe = {
   'searchWorkspacesHint': 'Arbeitsbereiche suchen...',
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
-  'aiDisclaimer':
-      'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
+  'aiDisclaimer': 'Du chattest mit einer KI/LLM — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -207,9 +208,6 @@ const Map<String, String> stringsDe = {
   'toolAlwaysOn': 'Immer an',
   'toolArtifacts': 'Artifacts',
   'toolArtifactsSubtitle': 'Bearbeitbarer Code, Dokumente und Zeichnungen',
-  'toolCodeSandbox': 'Code-Sandbox',
-  'toolCodeSandboxSubtitle':
-      'Code ausführen und Dateien in einer Sandbox verwalten',
   'toolGroupCodeArtifacts': 'Code & Artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
@@ -223,7 +221,6 @@ const Map<String, String> stringsDe = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Kalender / Gmail)',
-  'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Web durchsuchen, Seiten abrufen, Bilder generieren und Daten nachschlagen',
   'catUtilitiesDesc':
@@ -238,8 +235,6 @@ const Map<String, String> stringsDe = {
       'Nachrichten senden, Kanäle durchsuchen und Slack-Daten abrufen',
   'catGoogleCalGmailDesc':
       'Termine und E-Mails über Google Kalender und Gmail verwalten',
-  'catSandboxDesc':
-      'Python- oder Shell-Code in einer isolierten Sandbox ausführen und Dateien lesen/schreiben',
   'connect': 'Verbinden',
   'disconnect': 'Trennen',
   'disconnectCategory': '{label} trennen?',
@@ -593,6 +588,15 @@ const Map<String, String> stringsDe = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Modelle',
   'searchModels': 'Modelle suchen...',
+  'modelProvider': 'Anbieter',
+  'chooseProvider': 'Wählen',
+  'modelPromptCustom': 'Individuell',
+  'fastMode': 'Schneller Modus',
+  'thinkingMode': 'Denkmodus',
+  'availableModelsOne': 'Verfügbar · {count} Modell',
+  'availableModelsMany': 'Verfügbar · {count} Modelle',
+  'modelsFoundOne': '{count} Modell gefunden',
+  'modelsFoundMany': '{count} Modelle gefunden',
   'modelError': 'Fehler: {error}',
 
   // ── Message bubble extras ──────────────────────────────────

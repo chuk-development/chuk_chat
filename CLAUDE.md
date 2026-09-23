@@ -127,16 +127,17 @@ When asked to "update everything", run `flutter pub upgrade --major-versions`,
 then fix the fallout and only hold a dep back when you have **verified** it breaks
 (analyze/test error, or `cd android && ./gradlew :app:tasks` fails). Do not trust a
 stale "capped because X" comment — check whether X is still true first. The full
-per-dep reasoning lives in the `pubspec.yaml` header block. Four deps are held for
-real reasons, all gated on an AGP 9 / Gradle 9 / compileSdk 37 toolchain jump:
-`dynamic_color <2` (material_ui ColorScheme split), `flutter_secure_storage <11`
-and `permission_handler <13` (their `_android` majors hardcode compileSdk 37),
-`app_links <7.2` (AGP-9 plugins-DSL the 3.47 loader mis-orders). Everything else
-is at its latest resolvable version.
+per-dep reasoning lives in the `pubspec.yaml` header block. No direct dep is
+held back any more (verified 2026-09-23: `flutter pub outdated` shows every
+direct dep at latest). The old caps on `dynamic_color`, `flutter_secure_storage`,
+`permission_handler` and `app_links` are gone (`compileSdk = 37`). What is left
+behind are transitive deps capped by their parents, listed in the header.
+The vendored `vendor/markdraw/pubspec.yaml` carries its own constraints (e.g.
+`file_picker <14`) — widen them there when a major lands.
 
-**Windows caveat:** the whole lock now needs Dart ≥3.12, so every CI job
-(Windows included) must stay on Flutter ≥3.44 — reverting the Windows job to
-3.41.4 would fail to resolve. Flutter's Windows renderer can show a black window
+**Windows caveat:** the whole lock now needs Dart ≥3.13 (`tray_manager` 0.7 /
+`nativeapi` 0.3; `environment.sdk` says so), so every CI job (Windows included)
+must stay on Flutter ≥3.47 — an older job would fail to resolve. Flutter's Windows renderer can show a black window
 on GPUs/VMs limited to D3D11 feature level 9_3 (ANGLE fallback, a cross-version
 issue). Test the Windows artifact on such hardware before publishing a release.
 
@@ -150,6 +151,11 @@ cp .env.example .env       # First time: add Supabase credentials
 flutter test               # Run tests
 flutter analyze            # Static analysis
 ```
+
+**Showing an image to the user: open it in qimgv on their display**, do not
+only hand over the file path or send the file. One command, detached:
+`(DISPLAY=:1 setsid qimgv <file> >/dev/null 2>&1 </dev/null &)`. The arrow keys
+then walk the whole folder, which is what makes a set of screenshots judgeable.
 
 **Starting the app for live/hot-reload work: ALWAYS use `./run-hot.sh`**, never
 `flutter-hot start` bare. Bare `flutter-hot` runs `flutter run` with no
@@ -323,7 +329,7 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
 
 **Release notes are mandatory for every new release** (no exceptions):
 
-- Always summarize **all commits since the previous release**, not just changes from the current session.
+- Always summarize **all commits since the previous release**, not just changes from the current session. Merge commits are the one exception — they carry no content of their own.
 - Scope must be: `last_release_tag..new_release_tag` (example: `v1.0.92..v1.0.93`).
 - Build notes from commit messages and group by category (for example: New Features, Bug Fixes, Performance, Refactors, Dependencies, Maintenance).
 - Keep notes as changelog text only (no download/install/platform instructions).
@@ -331,13 +337,29 @@ Stale cache? Purge Cloudflare: Dashboard > chuk.chat > Caching > Purge Everythin
   - hash-linked commit list (`[abc1234](.../commit/<full_sha>)`)
   - compare link (`.../compare/<last_tag>...<new_tag>`) and explicit commit range hashes.
 - Update the release body directly with `gh release edit` after generating notes from the full tag range.
-- Preferred direct command pattern (no repo script required):
+- **Generate the notes with `scripts/release_notes.py`** — it reads the git
+  history, groups the commits by conventional-commit type, hash-links every
+  commit and appends the compare link:
   ```bash
-  gh release edit <new_tag> --notes-file <notes_file>
-  gh release view <new_tag> --json body --jq .body
+  git fetch --tags
+  mkdir -p _scratch
+  python3 scripts/release_notes.py v1.0.110 > _scratch/notes.md   # previous tag detected
+  gh release edit v1.0.110 --notes-file _scratch/notes.md
+  gh release view v1.0.110 --json body --jq .body
   ```
+  A stable tag compares against the previous stable tag; a `-pre.N` tag compares
+  against the tag right before it.
+- **A release without a changelog is a broken release.** CI writes the changelog
+  itself (`Generate release notes` step in `build-cross-platform.yml`, which
+  calls the same script), so never replace a release body with download or
+  install instructions. If a release body ever shows only the old "## Downloads"
+  boilerplate, regenerate it with the script and push it back with
+  `gh release edit`.
 
-**Note:** Do not rely on git tags to trigger releases. Use `workflow_dispatch` for `build-cross-platform.yml`.
+**Note:** Cut a release with `workflow_dispatch` on `build-cross-platform.yml`
+— that is the path that tags and builds in one go. The workflow does
+also react to a pushed `v*` tag, and then takes the tag from the push instead
+of from `pubspec.yaml`, but pushing a tag by hand is not the normal way in.
 
 ## Local Cache Architecture
 
@@ -458,6 +480,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 | `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |
+| `docs/SCREENSHOTS.md` | **Read before recapturing any screenshot** — the seven gallery shots, the store frames, the painted backdrop, the traps |
 
 
 ## Fastlane / Play Store / F-Droid
@@ -482,12 +505,19 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
   `android/`.** That is the path F-Droid reads straight out of the git repo;
   `supply` is pointed at the same tree via `metadata_path`, and the README
   embeds the same PNGs. Do not move it back.
-- **Store screenshots are generated, not captured:** `flutter test
-  test_screenshots` renders the app's real widgets at 1080x1920. The harness
-  lives outside `test/` so the normal suite does not run it, and
-  `.github/workflows/screenshots.yml` regenerates + commits them on every push
-  to `master` that touches `lib/`. That workflow needs no secrets.
-  `scripts/device_screenshots.sh` is the `adb` path for a real device shot.
+- **Store screenshots are captured on a real device, by hand:**
+  capture into `fastlane/screenshots_raw/<locale>/`, then run
+  `./scripts/frame_screenshots.sh`, which frames every capture into
+  `fastlane/metadata/android/<locale>/images/phoneScreenshots/`.
+  `scripts/device_screenshots.sh --demo on` freezes the status bar first.
+  Recapture when the UI changes, before a release, and commit both trees.
+  **There is no screenshot workflow any more** — the old `screenshots.yml`
+  committed headlessly rendered widgets on every push to `master` and
+  overwrote every real capture. Do not bring it back.
+  Before capturing, put the status bar in demo mode (fixed clock, full
+  battery, no notification icons) and use an account with no private content —
+  see `docs/FASTLANE.md`. The headless harness (`flutter test test_screenshots`)
+  is only the fallback when no device is available.
 - **`build_aab` hardcodes `FEATURE_PAYMENTS_DIRECT=false`** — a Play build that
   ships the direct Stripe flow puts the listing at risk. `build_apk` (direct
   downloads) keeps it on. Do not merge the two flag sets.

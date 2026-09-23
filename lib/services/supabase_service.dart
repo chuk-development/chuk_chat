@@ -14,6 +14,22 @@ class SupabaseService {
   static Future<Session?>? _inFlightRefresh;
   static const Duration _kMinRefreshInterval = Duration(seconds: 30);
 
+  /// How much life an access token must have left to be handed out as is.
+  ///
+  /// Every real refresh rotates the refresh token. If the response is lost —
+  /// a dropped mobile connection, a killed app — the server has already
+  /// retired the old token while this device still holds it, and the next
+  /// refresh fails with `refresh_token_already_used`. Once the access token
+  /// expires, gotrue then signs the user out. Callers want a usable token,
+  /// not a fresh one, so a session with time left is returned untouched and
+  /// the rotation count drops from one every 30 s to roughly one per hour.
+  ///
+  /// With Agents the refresh token is also SHARED with the paired host (bead
+  /// cowork-2n1), so a spent token logs out two devices. Only
+  /// [SessionRefreshScheduler] and [SupabaseAccountSession], which refresh at
+  /// 60 s left, reach the network on their own.
+  static const Duration _kRefreshLeeway = Duration(minutes: 10);
+
   static SupabaseClient get client {
     if (!_initialized) {
       throw StateError(
@@ -69,17 +85,6 @@ class SupabaseService {
       ValueNotifier<bool>(false);
 
 
-  /// How much life an access token must have left to be handed back untouched.
-  ///
-  /// The chuk-verbatim callers (the send path, the 401 handlers, the credit
-  /// display) ask for a session, not for a new one. Every real refresh spends
-  /// the single-use refresh token that this app SHARES with the paired host
-  /// (bead cowork-2n1), and a spent token turns into a logout the moment the
-  /// access token lapses. So a token with life left is the answer, and only
-  /// [SessionRefreshScheduler] and [SupabaseAccountSession] — which refresh at
-  /// 60 s left — actually reach the network.
-  static const Duration _kRefreshLeeway = Duration(minutes: 10);
-
   /// Whether [session] is close enough to expiry that it must be renewed.
   @visibleForTesting
   static bool sessionNeedsRefresh(Session session) {
@@ -94,21 +99,27 @@ class SupabaseService {
 
   /// Returns a session whose access token is usable right now.
   ///
-  /// Set [force] to spend the refresh token even when the current one still
-  /// has life left.
+  /// Set [force] to rotate the token even when the current one still has
+  /// life left — only a caller that must prove the session is still valid
+  /// server-side needs that.
   static Future<Session?> refreshSession({bool force = false}) async {
     final DateTime now = DateTime.now();
     if (_inFlightRefresh != null) {
       return await _inFlightRefresh!;
     }
     final Session? current = auth.currentSession;
-    if (current != null && !force && !sessionNeedsRefresh(current)) {
+    if (current == null) return null;
+    // A token with time left is handed back as is: refreshing it buys
+    // nothing and costs one rotation.
+    if (!force && !sessionNeedsRefresh(current)) {
       return current;
     }
     // If the cached session is already expired, bypass the throttle — we MUST
     // refresh, otherwise callers receive an expired token and hit 401s.
-    final bool sessionExpired = current != null && current.isExpired;
-    if (!sessionExpired &&
+    // A forced refresh must reach the server: that is the whole point of
+    // asking for one.
+    final bool bypassThrottle = force || current.isExpired;
+    if (!bypassThrottle &&
         _lastRefreshTime != null &&
         now.difference(_lastRefreshTime!) < _kMinRefreshInterval) {
       return current;

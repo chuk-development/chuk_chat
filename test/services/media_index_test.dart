@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/agents/media_index.dart';
+import 'package:chuk_chat/models/content_block.dart';
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   test('files and pictures are indexed out of the rows', () {
     final index = MediaIndex()
       ..noteRows('t1', <Map<String, dynamic>>[

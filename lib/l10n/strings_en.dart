@@ -22,6 +22,8 @@ const Map<String, String> stringsEn = {
       'follow — a format to output, a checklist to work through, house rules '
       'for a recurring task.',
   'skillsBuiltin': 'Built in',
+  'skillsSearchHint': 'Search skills...',
+  'skillsNoMatches': 'No skill matches "{query}".',
   'skillNew': 'New skill',
   'skillEdit': 'Edit skill',
   'skillDeleteTitle': 'Delete skill?',
@@ -34,6 +36,10 @@ const Map<String, String> stringsEn = {
       'description. Keep the description short — it is charged to every '
       'message. Optional: allowed-tools, license, compatibility, metadata.',
   'skillSaveFailed': 'Could not save the skill',
+  'assistantSurface': 'Assistant',
+  'assistantSurfaceSubtitle':
+      'Chuk Chat as the device assistant: over any app, reads the screen, '
+      'starts navigation',
   'developerOptions': 'Developer Options',
   'developerOptionsSubtitle': 'Diagnostics logs and debug tools',
   'modelSelection': 'Model Selection',
@@ -190,8 +196,7 @@ const Map<String, String> stringsEn = {
   'searchWorkspacesHint': 'Search workspaces...',
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
-  'aiDisclaimer':
-      'You\'re chatting with an AI — it can be wrong. Check key info.',
+  'aiDisclaimer': 'You\'re chatting with an AI/LLM — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -200,9 +205,10 @@ const Map<String, String> stringsEn = {
   'enableToolCallingSubtitle':
       'Allow the assistant to discover and execute built-in tools',
   'behavior': 'Behavior',
-  'requireDiscoveryFirst': 'Require discovery first',
+  'requireDiscoveryFirst': 'Compact tool catalogue',
   'requireDiscoverySubtitle':
-      'Force find_tools before other tools are allowed in a turn',
+      'Send a short catalogue plus find_tools instead of every tool schema. '
+      'Fewer tokens per turn; tools still work on first call either way',
   'display': 'Display',
   'showToolActivity': 'Show tool activity in chat',
   'showToolActivitySubtitle':
@@ -212,8 +218,6 @@ const Map<String, String> stringsEn = {
   'toolAlwaysOn': 'Always on',
   'toolArtifacts': 'Artifacts',
   'toolArtifactsSubtitle': 'Editable code, docs and drawings',
-  'toolCodeSandbox': 'Code sandbox',
-  'toolCodeSandboxSubtitle': 'Run code and manage files in a sandbox',
   'toolGroupCodeArtifacts': 'Code & artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Let the assistant use tools from other services',
@@ -227,7 +231,6 @@ const Map<String, String> stringsEn = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
-  'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Search the web, fetch pages, generate images, and look up data',
   'catUtilitiesDesc': 'Calculator, clock, notes, QR codes, and other utilities',
@@ -238,8 +241,6 @@ const Map<String, String> stringsEn = {
   'catSlackDesc': 'Send messages, search channels, and fetch Slack data',
   'catGoogleCalGmailDesc':
       'Manage your schedule and email via Google Calendar and Gmail',
-  'catSandboxDesc':
-      'Run Python or shell code in an isolated sandbox and read/write files',
   'connect': 'Connect',
   'disconnect': 'Disconnect',
   'disconnectCategory': 'Disconnect {label}?',
@@ -579,6 +580,15 @@ const Map<String, String> stringsEn = {
   // ── Model selector ─────────────────────────────────────────
   'models': 'Models',
   'searchModels': 'Search models...',
+  'modelProvider': 'Provider',
+  'chooseProvider': 'Choose',
+  'modelPromptCustom': 'Custom',
+  'fastMode': 'Fast mode',
+  'thinkingMode': 'Thinking mode',
+  'availableModelsOne': 'Available · {count} model',
+  'availableModelsMany': 'Available · {count} models',
+  'modelsFoundOne': '{count} model found',
+  'modelsFoundMany': '{count} models found',
   'modelError': 'Error: {error}',
 
   // ── Message bubble extras ──────────────────────────────────

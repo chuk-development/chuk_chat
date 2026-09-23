@@ -127,6 +127,7 @@ class OnboardingTourController {
   }
 
   void _finish({required bool markCompleted}) {
+    _inSettingsModal = false;
     _teardown(markCompleted: markCompleted);
   }
 
@@ -160,6 +161,50 @@ class OnboardingTourController {
   static const String _tourModelSelectorRoute = 'tour:model_selector';
   static const String _tourPricingRoute = 'tour:pricing';
   static const String _tourAiIdentityRoute = 'tour:ai_identity';
+
+  /// True once the tour has been driven by the desktop settings modal. The
+  /// modal never pushes a route per section, so nothing may pop on its
+  /// behalf either — a pop there closes the whole modal.
+  bool _inSettingsModal = false;
+
+  /// The desktop settings modal reports which section is open.
+  ///
+  /// On the phone every settings destination is a pushed route and the
+  /// navigator observer drives the tour. The desktop shows the same
+  /// destinations in one modal with an internal rail: nothing is pushed, so
+  /// without this the tour stopped dead at the Model Selection step.
+  void notifySettingsSection(String id) {
+    if (!_active) return;
+    _inSettingsModal = true;
+    switch (_step) {
+      case _Step.settingsPage:
+      case _Step.pointerSettingsModelSelection:
+        if (id == 'model') {
+          _goTo(_Step.pointerProviderPill);
+        } else if (id == 'pricing') {
+          _goTo(_Step.pointerSettingsAiIdentity);
+        }
+        break;
+      case _Step.pointerProviderPill:
+        if (id == 'pricing') {
+          _goTo(_Step.pointerSettingsAiIdentity);
+        } else if (id != 'model') {
+          _goTo(_Step.pointerSettingsPricing);
+        }
+        break;
+      case _Step.pointerSettingsPricing:
+        if (id == 'pricing') _goTo(_Step.pointerSettingsAiIdentity);
+        break;
+      case _Step.pointerSettingsAiIdentity:
+        if (id == 'identity') _goTo(_stepAfterAiIdentity);
+        break;
+      case _Step.pointerSettingsAssistant:
+        if (id == 'assistant') _goTo(_Step.finale);
+        break;
+      default:
+        break;
+    }
+  }
 
   void _handleRoutePushed(Route<dynamic> route, Route<dynamic>? previousRoute) {
     if (!_active) return;
@@ -294,10 +339,14 @@ class OnboardingTourController {
         break;
       case _Step.pointerProviderPill:
         // User pressed Continue on the model selector — pop back to
-        // Settings and resume the sub-tour from the Pricing tile.
-        final navigator = _navigator;
-        if (navigator != null && navigator.mounted && navigator.canPop()) {
-          navigator.pop();
+        // Settings and resume the sub-tour from the Pricing tile. Inside the
+        // desktop modal there is nothing to pop: the model list is a pane of
+        // the modal, and popping would shut the whole thing.
+        if (!_inSettingsModal) {
+          final navigator = _navigator;
+          if (navigator != null && navigator.mounted && navigator.canPop()) {
+            navigator.pop();
+          }
         }
         _goTo(_Step.pointerSettingsPricing);
         break;

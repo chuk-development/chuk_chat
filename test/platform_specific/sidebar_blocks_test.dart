@@ -90,6 +90,41 @@ void main() {
   tearDown(ChatStorageState.chatsById.clear);
 
   group('SidebarDesktop', () {
+    testWidgets('replaces a chat title after a single-chat update', (
+      tester,
+    ) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarDesktop(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: 'a',
+            isCompactMode: false,
+            showWorkspacesButton: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      ChatStorageState.chatsById['a'] = ChatStorageState.chatsById['a']!
+          .copyWith(
+            customName: 'Generated summary',
+            title: 'Generated summary',
+          );
+      ChatStorageState.notifyChanges('a');
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+
+      expect(find.text('Generated summary'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsNothing);
+      await _settleStartupWork(tester);
+    });
+
     testWidgets('navigation block holds one card per destination', (
       tester,
     ) async {
@@ -110,8 +145,11 @@ void main() {
       );
       await tester.pump();
 
+      // New chat leads, on the row the collapsed rail keeps it on.
+      // Workspaces is off, so the block is three cards, not four.
       expect(find.byType(SbNavCard), findsNWidgets(3));
-      expect(find.text('Workspaces'), findsOneWidget);
+      expect(find.text('New chat'), findsOneWidget);
+      expect(find.text('Workspaces'), findsNothing);
       expect(find.text('Media'), findsOneWidget);
       expect(find.text('Search'), findsOneWidget);
 
@@ -156,7 +194,7 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('bottom bar carries the search field and both actions', (
+    testWidgets('the chrome carries the account line and both actions', (
       tester,
     ) async {
       _tallWindow(tester);
@@ -178,14 +216,22 @@ void main() {
       );
       await tester.pump();
 
-      expect(find.byType(SbSearchField), findsOneWidget);
+      // The account moved out of the list and into the bottom bar, and the
+      // search field only exists once the Search row is tapped.
+      expect(find.byType(SbAccountLine), findsOneWidget);
+      expect(find.byType(SbSearchField), findsNothing);
+
       await tester.tap(find.byTooltip('Settings'));
-      await tester.tap(find.byTooltip('New chat'));
+      await tester.tap(find.text('New chat'));
       await tester.pump();
       expect(settings, 1);
       expect(newChat, 1);
 
-      // Typing filters the list without any second field appearing.
+      // The Search row becomes the field, and typing filters the list
+      // without any second field appearing.
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SbSearchField), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'Beta');
       await tester.pump();
       expect(find.text('Alpha chat'), findsNothing);
@@ -202,32 +248,10 @@ void main() {
       await _settleStartupWork(tester);
     });
 
-    testWidgets('the collapse button reports back, and hides without a host', (
+    testWidgets('carries no collapse button — the hamburger is the one', (
       tester,
     ) async {
       _tallWindow(tester);
-      var collapsed = 0;
-      await tester.pumpWidget(
-        _host(
-          SidebarDesktop(
-            onChatSelected: (_) {},
-            onSettingsTapped: () {},
-            onWorkspacesTapped: () {},
-            onMediaTapped: () {},
-            onNewChatTapped: () {},
-            onCollapseTapped: () => collapsed++,
-            selectedChatId: null,
-            isCompactMode: false,
-            showWorkspacesButton: true,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      await tester.tap(find.byTooltip('Hide sidebar'));
-      await tester.pump();
-      expect(collapsed, 1);
-
       await tester.pumpWidget(
         _host(
           SidebarDesktop(
@@ -243,6 +267,9 @@ void main() {
         ),
       );
       await tester.pump();
+
+      // The host draws the hamburger over the panel's own head bar, so a
+      // second control beside it would fold the sidebar twice.
       expect(find.byTooltip('Hide sidebar'), findsNothing);
 
       await _settleStartupWork(tester);
@@ -269,7 +296,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Workspaces'), findsNothing);
-      expect(find.byType(SbNavCard), findsNWidgets(2));
+      expect(find.byType(SbNavCard), findsNWidgets(3));
 
       await _settleStartupWork(tester);
     });
@@ -317,6 +344,40 @@ void main() {
   });
 
   group('SidebarMobile', () {
+    testWidgets('replaces a chat title after a single-chat update', (
+      tester,
+    ) async {
+      _tallWindow(tester);
+      await tester.pumpWidget(
+        _host(
+          SidebarMobile(
+            onChatSelected: (_) {},
+            onSettingsTapped: () {},
+            onWorkspacesTapped: () {},
+            onMediaTapped: () {},
+            onNewChatTapped: () {},
+            selectedChatId: 'a',
+            isCompactMode: true,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.text('Alpha chat'), findsOneWidget);
+
+      ChatStorageState.chatsById['a'] = ChatStorageState.chatsById['a']!
+          .copyWith(
+            customName: 'Generated summary',
+            title: 'Generated summary',
+          );
+      ChatStorageState.notifyChanges('a');
+      await tester.pump(const Duration(milliseconds: 150));
+      await tester.pump();
+
+      expect(find.text('Generated summary'), findsOneWidget);
+      expect(find.text('Alpha chat'), findsNothing);
+      await _settleStartupWork(tester);
+    });
+
     testWidgets('shows the same blocks as the desktop sidebar', (tester) async {
       _tallWindow(tester);
       var settings = 0;
@@ -339,7 +400,10 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      expect(find.byType(SbNavCard), findsNWidgets(3));
+      // Media and Search. The phone keeps its one new-chat action in the
+      // head bar, so the list does not repeat it as a row.
+      expect(find.byType(SbNavCard), findsNWidgets(2));
+      expect(find.text('New chat'), findsNothing);
       // The account moved out of the list and into the bottom bar, and the
       // search field only exists once the Search row is tapped — the bar
       // below carries no second one.

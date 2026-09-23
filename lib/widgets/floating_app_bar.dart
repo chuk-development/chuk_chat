@@ -45,10 +45,15 @@ const double _kTitleRadius = 18;
 /// down there. Each source is therefore right in one place and wrong in the
 /// other — and the wrong one is always the smaller. So take whichever is
 /// larger, and both places land on the same number.
-EdgeInsets floatingHeaderInset(BuildContext context) {
+/// [extra] is the height of anything the bar carries under itself — a pinned
+/// search field, a tab bar. The Scaffold counts it in `padding.top`; the
+/// computed figure has to add it too, or the two sources disagree and the
+/// page either hides its first row under the field or leaves a second, empty
+/// field's worth of space below it.
+EdgeInsets floatingHeaderInset(BuildContext context, {double extra = 0}) {
   final MediaQueryData mq = MediaQuery.of(context);
   final double fromScaffold = mq.padding.top;
-  final double computed = kFloatingAppBarHeight + mq.viewPadding.top;
+  final double computed = kFloatingAppBarHeight + extra + mq.viewPadding.top;
   return EdgeInsets.only(
     top: fromScaffold > computed ? fromScaffold : computed,
   );
@@ -177,7 +182,34 @@ class FloatingAppBar extends StatelessWidget implements PreferredSizeWidget {
               )
             : null);
 
+    final Color pageColor = theme.scaffoldBackgroundColor;
+
     return AppBar(
+      // The bar draws no box, but it does hold the page down behind it: a
+      // scrim that is the page colour at the status bar and nothing at all
+      // by the bottom edge. Without it a list scrolling up runs its own
+      // headings straight across the title pill, which reads as a fault.
+      flexibleSpace: IgnorePointer(
+        // SizedBox.expand, because a childless DecoratedBox takes the
+        // smallest size the (loose) constraints allow — that is zero, and
+        // the scrim then paints nothing at all.
+        child: SizedBox.expand(
+          child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                pageColor,
+                pageColor,
+                pageColor.withValues(alpha: 0),
+              ],
+              stops: const [0.0, 0.72, 1.0],
+            ),
+          ),
+          ),
+        ),
+      ),
       // Nothing of the bar itself is drawn: no fill, no shadow, and no
       // tinted "scrolled under" state. What shows behind the chips is the
       // page.

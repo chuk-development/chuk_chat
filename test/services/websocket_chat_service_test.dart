@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 import '../support/fake_relay_controller.dart';
+import 'package:chuk_chat/models/content_block.dart';
 
 /// Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
 /// invariant is asserted against the whole surface and not a lucky subset.
@@ -75,6 +76,9 @@ List<AgentsRelayInbound> _everyVariant() => <AgentsRelayInbound>[
 ];
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   const sessionKey = 'thread-1';
   late FakeRelayController controller;
 

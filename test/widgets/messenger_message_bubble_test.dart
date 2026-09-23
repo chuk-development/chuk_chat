@@ -29,6 +29,9 @@ Widget wrap(Widget child) => MaterialApp(
 );
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
   testWidgets('reference menu reacts and copies the original message', (

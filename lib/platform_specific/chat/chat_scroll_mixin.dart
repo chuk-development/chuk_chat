@@ -264,6 +264,19 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     });
   }
 
+  /// Settle at the bottom once an answer is finished, for a reader who
+  /// followed it there.
+  ///
+  /// The last token is not the last layout: code blocks measure themselves,
+  /// images arrive, the tool cards collapse. A single animated scroll aims at
+  /// the estimated extent of that moment and ends up short, which reads as
+  /// "it stopped just before the end". Settling re-jumps until the extent
+  /// stops growing.
+  void settleScrollToBottomIfSticky() {
+    if (!mounted || hasTopPin || !isStickyBottom) return;
+    settleScrollToBottom();
+  }
+
   /// Jump to the bottom, then keep re-jumping on subsequent frames until the
   /// scroll extent stabilises. ListView.builder grows its *estimated*
   /// maxScrollExtent as it lays out more items / async-sized content, so a

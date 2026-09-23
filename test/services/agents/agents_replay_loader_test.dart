@@ -15,6 +15,9 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import '../../support/fake_relay_controller.dart';
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const sessionKey = 'thread-1';

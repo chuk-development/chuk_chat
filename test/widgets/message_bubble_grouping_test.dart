@@ -83,6 +83,9 @@ BorderRadius radiusOf(WidgetTester tester, int index) {
 }
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
   testWidgets('a coworker run: small corners inside, full corners outside', (

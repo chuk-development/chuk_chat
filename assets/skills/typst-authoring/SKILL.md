@@ -22,11 +22,8 @@ file.
 
 So after a successful compile:
 
-- **Do NOT call `send_file_to_user`.** The PDF is not a sandbox file — it lives
-  as an artifact. `send_file_to_user` will fail with "path must be under
-  /home/sandbox" and send you chasing a file that does not exist.
-- **Do NOT use the sandbox** (`code_run`, `bash`, `sandbox_list`) to find,
-  copy, or send the PDF. It is not there.
+- **Do NOT use other tools** (for example `bash`) to find, copy, or send the
+  PDF. It is not a file on disk — it lives as an artifact.
 - **Do NOT** write the file anywhere or describe a path. Just tell the user in
   one line that the document is ready above, and stop.
 

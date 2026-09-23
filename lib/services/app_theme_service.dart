@@ -30,12 +30,12 @@ class AppThemeService extends ChangeNotifier {
   Color _bgColor = kDefaultBgColor;
   bool _dynamicColorEnabled = kDefaultDynamicColorEnabled;
 
-  // Surface/outline separation strength. Device-local (like [_uiScale] and
-  // [_dynamicColorEnabled]) — persisted to SharedPreferences, not Supabase.
+  // Surface/outline separation strength. Part of a theme pack, so it is
+  // persisted to SharedPreferences *and* synced to Supabase with the colours.
   double _contrast = kDefaultContrast;
 
-  // App-chrome font family identifier (whole UI outside the chat body).
-  // Device-local, prefs only.
+  // App-chrome font family identifier (whole UI outside the chat body). Part
+  // of a theme pack, so it syncs with the colours as well.
   String _uiFontFamily = kDefaultUiFontFamily;
 
   // Message display preferences
@@ -123,7 +123,8 @@ class AppThemeService extends ChangeNotifier {
 
   // Performance optimizations
   SharedPreferences? _cachedPrefs;
-  Timer? _syncDebounce;
+  Timer? _themeSyncDebounce;
+  Timer? _customizationSyncDebounce;
   ThemeData? _cachedThemeData;
   // The resolved colours the cached theme was built with. These differ from
   // _accentColor/_bgColor/_iconFgColor when Material You / dynamic colour is
@@ -323,6 +324,10 @@ class AppThemeService extends ChangeNotifier {
         _accentColor != settings.accentColor ||
         _iconFgColor != settings.iconColor ||
         _bgColor != settings.backgroundColor ||
+        (settings.contrast != null && _contrast != settings.contrast) ||
+        (settings.uiFont != null && _uiFontFamily != settings.uiFont) ||
+        (settings.dynamicColor != null &&
+            _dynamicColorEnabled != settings.dynamicColor) ||
         _showReasoningTokens != customizationPrefs.showReasoningTokens ||
         _showModelInfo != customizationPrefs.showModelInfo ||
         _showTps != customizationPrefs.showTps ||
@@ -353,6 +358,17 @@ class AppThemeService extends ChangeNotifier {
     _accentColor = settings.accentColor;
     _iconFgColor = settings.iconColor;
     _bgColor = settings.backgroundColor;
+    // Null means the account never stored these — a row written before the
+    // columns existed. Keeping the local values and pushing them up is the
+    // only way not to reset somebody's contrast and font on the first sync
+    // after the upgrade.
+    final bool lookIsIncomplete =
+        settings.contrast == null ||
+        settings.uiFont == null ||
+        settings.dynamicColor == null;
+    _contrast = settings.contrast ?? _contrast;
+    _uiFontFamily = settings.uiFont ?? _uiFontFamily;
+    _dynamicColorEnabled = settings.dynamicColor ?? _dynamicColorEnabled;
     _showReasoningTokens = customizationPrefs.showReasoningTokens;
     _showModelInfo = customizationPrefs.showModelInfo;
     _showTps = customizationPrefs.showTps;
@@ -386,6 +402,13 @@ class AppThemeService extends ChangeNotifier {
       // Persist to prefs in background only if state changed.
       unawaited(_persistToPrefs());
     }
+
+    if (lookIsIncomplete) {
+      // The stored row predates the contrast/font/dynamic columns. Push what
+      // this device has, so the next device to sign in gets the whole look
+      // instead of only the colours.
+      _debouncedSyncTheme();
+    }
   }
 
   /// Merges the per-user Supabase onboarding flag with the local cache.
@@ -418,6 +441,11 @@ class AppThemeService extends ChangeNotifier {
       prefs.setString(_kAccentColorKey, _accentColor.toHexString()),
       prefs.setString(_kIconFgColorKey, _iconFgColor.toHexString()),
       prefs.setString(_kBgColorKey, _bgColor.toHexString()),
+      // Part of the synced look, so a remote change has to survive a restart
+      // that happens offline.
+      prefs.setDouble(_kContrastKey, _contrast),
+      prefs.setString(_kUiFontFamilyKey, _uiFontFamily),
+      prefs.setBool(_kDynamicColorEnabledKey, _dynamicColorEnabled),
       prefs.setBool(_kShowReasoningTokensKey, _showReasoningTokens),
       prefs.setBool(_kShowModelInfoKey, _showModelInfo),
       prefs.setBool(_kShowTpsKey, _showTps),
@@ -451,16 +479,18 @@ class AppThemeService extends ChangeNotifier {
   }
 
   // Debounced sync to avoid excessive Supabase calls
+  // One timer per stream. A shared one let a customization change cancel a
+  // pending theme sync, and that theme change then never reached Supabase.
   void _debouncedSyncTheme() {
-    _syncDebounce?.cancel();
-    _syncDebounce = Timer(const Duration(milliseconds: 500), () {
+    _themeSyncDebounce?.cancel();
+    _themeSyncDebounce = Timer(const Duration(milliseconds: 500), () {
       unawaited(_syncThemeToSupabase());
     });
   }
 
   void _debouncedSyncCustomization() {
-    _syncDebounce?.cancel();
-    _syncDebounce = Timer(const Duration(milliseconds: 500), () {
+    _customizationSyncDebounce?.cancel();
+    _customizationSyncDebounce = Timer(const Duration(milliseconds: 500), () {
       unawaited(_syncCustomizationToSupabase());
     });
   }
@@ -475,6 +505,9 @@ class AppThemeService extends ChangeNotifier {
       accentColor: _accentColor,
       iconColor: _iconFgColor,
       backgroundColor: _bgColor,
+      contrast: _contrast,
+      uiFont: _uiFontFamily,
+      dynamicColor: _dynamicColorEnabled,
     );
 
     try {
@@ -553,9 +586,12 @@ class AppThemeService extends ChangeNotifier {
     _debouncedSyncTheme();
   }
 
-  /// Material You / dynamic colour is a per-device display preference (it
-  /// depends on the OS exposing a dynamic palette), so — like [setUiScale] —
-  /// it is persisted to SharedPreferences only and NOT synced to Supabase.
+  /// Material You overrides the explicit palette, so it is part of the look and
+  /// syncs with it: applying a theme pack turns it off, and that "off" has to
+  /// reach the other devices, or they keep overriding the pack's colours. A
+  /// platform that exposes no dynamic palette simply keeps the explicit
+  /// colours (see [_resolveDynamicScheme]), so the synced flag is harmless
+  /// there.
   Future<void> setDynamicColorEnabled(bool enabled) async {
     if (_dynamicColorEnabled == enabled) return;
     _dynamicColorEnabled = enabled;
@@ -563,6 +599,7 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setBool(_kDynamicColorEnabledKey, _dynamicColorEnabled);
+    _debouncedSyncTheme();
   }
 
   void setShowReasoningTokens(bool show) {
@@ -694,10 +731,11 @@ class AppThemeService extends ChangeNotifier {
     await prefs.setDouble(_kUiScaleKey, _uiScale);
   }
 
-  /// Contrast is a device-local display preference and is NOT synced to
-  /// Supabase (it scales derived surface/outline colours, not a stored
-  /// palette). Persists to SharedPreferences on each change and clears the
-  /// theme cache so the ladder is rebuilt.
+  /// Contrast belongs to the look, not to the device: a theme pack sets it
+  /// along with the colours, so it syncs with them. A device that kept its own
+  /// contrast would show the pack's palette while the theme page reported
+  /// "Custom". Persists to SharedPreferences too and clears the theme cache so
+  /// the ladder is rebuilt.
   Future<void> setContrast(double contrast) async {
     final clamped = _clampContrast(contrast);
     if (_contrast == clamped) return;
@@ -706,11 +744,13 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setDouble(_kContrastKey, _contrast);
+    _debouncedSyncTheme();
   }
 
-  /// The app-chrome font is a device-local display preference and is NOT
-  /// synced to Supabase (the bundled families differ per platform build).
-  /// Persists to SharedPreferences on each change and clears the theme cache.
+  /// The app-chrome font is part of a theme pack, so it syncs with the rest of
+  /// the look. Every platform build bundles the same families, and an unknown
+  /// id falls back to the default on read. Persists to SharedPreferences too
+  /// and clears the theme cache.
   Future<void> setUiFontFamily(String id) async {
     final sanitized = _sanitizeUiFontFamily(id);
     if (_uiFontFamily == sanitized) return;
@@ -719,6 +759,7 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setString(_kUiFontFamilyKey, _uiFontFamily);
+    _debouncedSyncTheme();
   }
 
   /// Onboarding completion is per-user: cached locally under a user-scoped
@@ -804,7 +845,8 @@ class AppThemeService extends ChangeNotifier {
 
   @override
   void dispose() {
-    _syncDebounce?.cancel();
+    _themeSyncDebounce?.cancel();
+    _customizationSyncDebounce?.cancel();
     super.dispose();
   }
 }

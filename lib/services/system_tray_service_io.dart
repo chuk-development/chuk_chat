@@ -14,14 +14,17 @@ import 'package:chuk_chat/services/tray_action_bus.dart';
 /// Desktop system tray integration for Linux, Windows, and macOS.
 ///
 /// Closing the window hides the app to tray instead of exiting.
-class SystemTrayService with TrayListener, WindowListener {
+class SystemTrayService with WindowListener {
   SystemTrayService._();
 
   static final SystemTrayService instance = SystemTrayService._();
 
-  static const String _kOpenWindowKey = 'open_window';
-  static const String _kNewChatKey = 'new_chat';
-  static const String _kQuitKey = 'quit';
+  // Native handles. A TrayIcon that is garbage-collected removes the icon, so
+  // every handle is held here until [dispose].
+  TrayIcon? _trayIcon;
+  Image? _iconImage;
+  Menu? _menu;
+  final List<MenuItem> _menuItems = <MenuItem>[];
 
   bool _isInitialized = false;
   bool _isInitializing = false;
@@ -62,13 +65,26 @@ class SystemTrayService with TrayListener, WindowListener {
       await windowManager.setPreventClose(true);
       windowManager.addListener(this);
 
-      final iconPath = await _setTrayIconWithFallback();
+      final trayIcon = TrayIcon.create();
+      if (trayIcon == null) {
+        throw StateError('Unable to create tray icon');
+      }
+      _trayIcon = trayIcon;
+
+      final iconPath = await _setTrayIconWithFallback(trayIcon);
 
       if (_supportsTooltip) {
-        await trayManager.setToolTip('Chuk Chat');
+        trayIcon.setTooltip('Chuk Chat');
       }
 
-      trayManager.addListener(this);
+      // Linux reports no tray icon clicks: the panel keeps them and opens the
+      // context menu itself. Elsewhere a left click toggles the window and a
+      // right click opens the menu.
+      if (defaultTargetPlatform != TargetPlatform.linux) {
+        trayIcon.setContextMenuTrigger(ContextMenuTrigger.rightClicked);
+      }
+      trayIcon.addListener(_onTrayIconEvent);
+      trayIcon.setVisible(true);
       _isInitialized = true;
       _linuxRetryAttempts = 0;
       _retryTimer?.cancel();
@@ -77,9 +93,9 @@ class SystemTrayService with TrayListener, WindowListener {
       await _syncWindowVisibility();
       // Install the same context menu on every desktop platform. The labels
       // are static (they do not depend on window visibility), so a single
-      // install works everywhere — including Linux appindicator, which shows
-      // the menu on click and does not deliver a separate activate event.
-      await _installMenu();
+      // install works everywhere — including the Linux StatusNotifierItem,
+      // whose panel opens the menu on click and reports no click event.
+      _installMenu(trayIcon);
 
       await DiagnosticsLogService.info(
         'tray',
@@ -123,25 +139,28 @@ class SystemTrayService with TrayListener, WindowListener {
     });
   }
 
-  Future<String> _setTrayIconWithFallback() async {
+  Future<String> _setTrayIconWithFallback(TrayIcon trayIcon) async {
     final candidates = await _resolveTrayIconCandidates();
-    Object? lastError;
 
     for (final iconPath in candidates) {
-      try {
-        await trayManager.setIcon(iconPath);
-        return iconPath;
-      } catch (error) {
-        lastError = error;
+      final image = Image.fromFile(iconPath);
+      if (image == null) {
         await DiagnosticsLogService.warning(
           'tray',
           'Tray icon candidate failed',
-          data: {'icon_path': iconPath, 'error': error.toString()},
+          data: {'icon_path': iconPath},
         );
+        continue;
       }
+      trayIcon.icon = image;
+      _iconImage?.dispose();
+      _iconImage = image;
+      return iconPath;
     }
 
-    throw StateError('Unable to set tray icon. Last error: $lastError');
+    throw StateError(
+      'Unable to set tray icon from ${candidates.length} candidates',
+    );
   }
 
   Future<List<String>> _resolveTrayIconCandidates() async {
@@ -157,9 +176,8 @@ class SystemTrayService with TrayListener, WindowListener {
         }
       }
 
-      // Last resort: use icon theme name so Linux can resolve from hicolor.
       if (candidates.isEmpty) {
-        return const <String>['chuk-chat', 'application-default-icon'];
+        throw StateError('No tray icon candidates available');
       }
       return candidates.toSet().toList(growable: false);
     }
@@ -229,17 +247,52 @@ class SystemTrayService with TrayListener, WindowListener {
     }
   }
 
-  Future<void> _installMenu() async {
-    final menu = Menu(
-      items: [
-        MenuItem(key: _kOpenWindowKey, label: 'Open Chuk Chat'),
-        MenuItem(key: _kNewChatKey, label: 'New Chat'),
-        MenuItem.separator(),
-        MenuItem(key: _kQuitKey, label: 'Quit Chuk Chat'),
-      ],
-    );
+  void _installMenu(TrayIcon trayIcon) {
+    final menu = Menu.create();
+    if (menu == null) {
+      throw StateError('Unable to create tray menu');
+    }
 
-    await trayManager.setContextMenu(menu);
+    void addItem(String label, Future<void> Function() onClick) {
+      final item = MenuItem.createWithLabelAndType(label, MenuItemType.normal);
+      if (item == null) {
+        throw StateError('Unable to create tray menu item "$label"');
+      }
+      item.addListener((event) {
+        if (event is MenuItemClickedEvent && _isInitialized) {
+          unawaited(onClick());
+        }
+      });
+      menu.addItem(item);
+      _menuItems.add(item);
+    }
+
+    addItem('Open Chuk Chat', showWindow);
+    addItem('New Chat', _startNewChat);
+    menu.addSeparator();
+    addItem('Quit Chuk Chat', _quitApplication);
+
+    trayIcon.setContextMenu(menu);
+    _menu = menu;
+  }
+
+  /// Releases every native tray handle. Safe to call when none exist.
+  void _destroyTray() {
+    final trayIcon = _trayIcon;
+    _trayIcon = null;
+    if (trayIcon != null) {
+      trayIcon.setVisible(false);
+      trayIcon.setContextMenu(null);
+      trayIcon.dispose();
+    }
+    for (final item in _menuItems) {
+      item.dispose();
+    }
+    _menuItems.clear();
+    _menu?.dispose();
+    _menu = null;
+    _iconImage?.dispose();
+    _iconImage = null;
   }
 
   Future<void> _toggleWindowVisibility() async {
@@ -305,8 +358,7 @@ class SystemTrayService with TrayListener, WindowListener {
     _retryTimer = null;
 
     try {
-      trayManager.removeListener(this);
-      await trayManager.destroy();
+      _destroyTray();
     } catch (_) {
       // Ignore rollback failures.
     }
@@ -322,34 +374,10 @@ class SystemTrayService with TrayListener, WindowListener {
     _isQuitting = false;
   }
 
-  @override
-  void onTrayIconMouseDown() {
+  void _onTrayIconEvent(TrayIconEvent event) {
     if (!_isInitialized) return;
-    unawaited(_toggleWindowVisibility());
-  }
-
-  @override
-  void onTrayIconRightMouseDown() {
-    if (!_isInitialized || defaultTargetPlatform == TargetPlatform.linux) {
-      return;
-    }
-    unawaited(trayManager.popUpContextMenu());
-  }
-
-  @override
-  void onTrayMenuItemClick(MenuItem menuItem) {
-    if (!_isInitialized) return;
-
-    switch (menuItem.key) {
-      case _kOpenWindowKey:
-        unawaited(showWindow());
-        break;
-      case _kNewChatKey:
-        unawaited(_startNewChat());
-        break;
-      case _kQuitKey:
-        unawaited(_quitApplication());
-        break;
+    if (event is TrayIconClickedEvent) {
+      unawaited(_toggleWindowVisibility());
     }
   }
 
@@ -366,8 +394,7 @@ class SystemTrayService with TrayListener, WindowListener {
     if (!_isInitialized) return;
 
     try {
-      trayManager.removeListener(this);
-      await trayManager.destroy();
+      _destroyTray();
     } catch (error) {
       if (kDebugMode) {
         debugPrint('[SystemTrayService] Error destroying tray: $error');

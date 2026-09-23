@@ -54,6 +54,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
+import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/measure_size.dart';
 import 'package:chuk_chat/widgets/selection_copy_area.dart';
@@ -86,7 +87,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/platform_specific/chat/regen_variant_seed.dart';
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/handlers/mobile_workspace_handler.dart';
-import 'package:chuk_chat/platform_specific/chat/widgets/fullscreen_composer.dart';
+import 'package:chuk_chat/widgets/fullscreen_text_editor.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
@@ -354,11 +355,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     _initializeListeners();
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
+    // The disclaimer under the composer steps aside while the field has the
+    // caret, so the focus change has to repaint it.
+    composerFocusNode.addListener(_onComposerFocusChanged);
     // Mode + its config (model, provider, reasoning) restore once, via
     // loadSavedModelPreference in _loadInitialData's post-frame pass — the
     // single entry point, so startup writes and picked-model refreshes run
     // only once.
     _loadInitialData();
+  }
+
+  void _onComposerFocusChanged() {
+    if (mounted) setState(() {});
   }
 
   void _initializeHandlers() {
@@ -869,6 +877,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     composerController.dispose();
     scrollController.dispose();
     _composerScrollController.dispose();
+    composerFocusNode.removeListener(_onComposerFocusChanged);
     composerFocusNode.dispose();
     _rawKeyboardListenerFocusNode.dispose();
     ModelSelectionDropdown.selectedModelListenable.removeListener(
@@ -1359,11 +1368,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
 
     if (!mounted || result == null) return;
-
-    if (result.requiresLogout) {
-      await SupabaseService.signOut();
-      if (!mounted) return;
-    }
 
     if (!result.success) {
       if (!sessionLookupFailed) {
@@ -1909,7 +1913,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         _messages[index] = message;
       });
 
-      scrollChatToBottom();
+      settleScrollToBottomIfSticky();
       unawaited(persistChat());
       if (_isAppInBackground) {
         unawaited(
@@ -3180,7 +3184,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               maxWidth: expandedInputWidth,
                             ),
                             child: SelectionCopyArea(
-                              child: ListView.builder(
+                              // Layout can change the metrics without a user
+                              // scroll — a finishing answer shrinks
+                              // maxScrollExtent, an image sizes itself. A plain
+                              // controller listener stays silent then, so the
+                              // follow and the scroll-to-bottom button hold a
+                              // stale state. Desktop already listens; mobile
+                              // needs it more, because it recycles bubbles.
+                              child: NotificationListener<ScrollMetricsNotification>(
+                                onNotification: (_) {
+                                  WidgetsBinding.instance.addPostFrameCallback((
+                                    _,
+                                  ) {
+                                    if (mounted) onScrollChanged();
+                                  });
+                                  return false;
+                                },
+                                child: ListView.builder(
                                 controller: scrollController,
                                 padding: listPadding,
                                 itemCount: _messages.length,
@@ -3304,12 +3324,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   );
                                 },
                               ),
+                              ),
                             ),
                           ),
                         )
                       : SizedBox.expand(
+                          // Dead centre of the screen. Not offset upwards by
+                          // a guess (-0.3), and not centred in what is left
+                          // above the composer either: the mark belongs in
+                          // the middle of the window, which is where the eye
+                          // looks for it.
                           child: Align(
-                            alignment: const Alignment(0.0, -0.3),
+                            alignment: Alignment.center,
                             // The alpha lives in the tint colour instead of
                             // an Opacity widget: Opacity pushes an offscreen
                             // save layer on every paint, and cacheWidth stops
@@ -3380,15 +3406,29 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   theme: theme,
                                   iconFg: iconFg,
                                 ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  AppLocalizations.of(context)!.aiDisclaimer,
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: iconFg.withValues(alpha: 0.7),
-                                    fontSize: 11,
+                                // Gone while the keyboard is up: with half
+                                // the screen taken by keys, the line is one
+                                // more thing between the field and the
+                                // conversation, and it has already been read.
+                                //
+                                // The focus decides, not the view insets: by
+                                // the time the composer is built, a parent
+                                // has already taken the keyboard out of the
+                                // insets, so reading them here always said
+                                // "no keyboard".
+                                if (!composerFocusNode.hasFocus &&
+                                    MediaQuery.viewInsetsOf(context).bottom <
+                                        80) ...[
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    AppLocalizations.of(context)!.aiDisclaimer,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: iconFg.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
                             ),
                           ),
@@ -3587,6 +3627,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                     child: TextField(
                       controller: composerController,
                       focusNode: composerFocusNode,
+                      selectionControls: ComposerSelectionControls.instance,
                       autofocus: false,
                       keyboardType: TextInputType.multiline,
                       textInputAction: TextInputAction.newline,
