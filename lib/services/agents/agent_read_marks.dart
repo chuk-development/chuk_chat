@@ -14,6 +14,7 @@
 /// is what the "Unread" filter counts.
 library;
 
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -30,6 +31,18 @@ class AgentReadMarks extends ChangeNotifier {
 
   final Map<String, DateTime> _marks = <String, DateTime>{};
   bool _loaded = false;
+
+  /// How long a new mark waits before it is written to disk. Marks arrive in
+  /// bursts — every thread switch, and every activity event of a live run on
+  /// the open thread — and on desktop Linux each preference write rewrites the
+  /// whole preferences file on the UI isolate. The in-memory mark (what the
+  /// unread dots read) changes at once; only the disk copy waits, so a burst
+  /// costs one write. [Duration.zero] writes at once (tests).
+  @visibleForTesting
+  static Duration persistDelay = const Duration(seconds: 1);
+
+  Timer? _persistTimer;
+  Completer<void>? _persistDone;
 
   bool get loaded => _loaded;
 
@@ -95,14 +108,40 @@ class AgentReadMarks extends ChangeNotifier {
     if (previous != null && !at.isAfter(previous)) return;
     _marks[threadKey] = at;
     notifyListeners();
-    await _persist();
+    await _schedulePersist();
   }
 
   /// Drops the mark of a thread whose coworker is gone.
   Future<void> forget(String threadKey) async {
     if (_marks.remove(threadKey) == null) return;
     notifyListeners();
+    await _schedulePersist();
+  }
+
+  /// Writes a pending mark now instead of after [persistDelay].
+  Future<void> flush() async {
+    final Timer? timer = _persistTimer;
+    if (timer == null) return;
+    timer.cancel();
+    await _runPersist();
+  }
+
+  /// One write per burst: the future completes when the write that covers
+  /// this change has landed.
+  Future<void> _schedulePersist() {
+    if (persistDelay == Duration.zero) return _persist();
+    _persistTimer?.cancel();
+    final Completer<void> done = _persistDone ??= Completer<void>();
+    _persistTimer = Timer(persistDelay, () => unawaited(_runPersist()));
+    return done.future;
+  }
+
+  Future<void> _runPersist() async {
+    _persistTimer = null;
+    final Completer<void>? done = _persistDone;
+    _persistDone = null;
     await _persist();
+    done?.complete();
   }
 
   Future<void> _persist() async {

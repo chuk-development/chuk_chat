@@ -245,7 +245,7 @@ void main() {
   ) async {
     await pumpThread(tester, 'busy-thread');
     expect(
-      find.byKey(const ValueKey<String>('agents-chat-busy-thread-0-0')),
+      find.byKey(const ValueKey<String>('agents-chat-0')),
       findsOneWidget,
     );
 
@@ -263,7 +263,7 @@ void main() {
 
     // Same key: the screen was not remounted while the run streams into it.
     expect(
-      find.byKey(const ValueKey<String>('agents-chat-busy-thread-0-0')),
+      find.byKey(const ValueKey<String>('agents-chat-0')),
       findsOneWidget,
     );
     await _releaseIdleTimers(tester);

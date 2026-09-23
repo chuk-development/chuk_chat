@@ -251,6 +251,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// empty transcript for the rest of the session (bead cowork-91pn).
   int _cacheRevision = 0;
 
+  /// The chat screen's identity. It moves ONLY when the screen has to read
+  /// its rows again for the thread it already shows — a replay that rewrote
+  /// the cache ([_revision]) or rows that arrived after an empty mount
+  /// ([_cacheRevision]). A thread switch does not move it: the screen stays
+  /// mounted and loads the new thread through its own `selectedChatId`
+  /// update, the way chuk_chat switches chats. Rebuilding the whole screen on
+  /// every switch (element tree, render tree, semantics) was the biggest
+  /// frame of an agent switch.
+  int _screenGeneration = 0;
+
   /// Watches the chat store for the late arrival described above.
   StreamSubscription<String?>? _storeSub;
 
@@ -1517,7 +1527,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final chat = ChatStorageService.getChatById(key);
     if (chat == null || !chat.isFullyLoaded || chat.messages.isEmpty) return;
     if (!_screenIsEmpty) return;
-    setState(() => _cacheRevision++);
+    setState(() {
+      _cacheRevision++;
+      _screenGeneration++;
+    });
   }
 
   /// Whether the screen on the tree is showing an empty transcript. The
@@ -1536,7 +1549,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final revision = _loader.revisionFor(widget.threadKey);
     if (revision == _revision) return;
     if (_ledger.isRunning(widget.threadKey)) return;
-    setState(() => _revision = revision);
+    setState(() {
+      _revision = revision;
+      _screenGeneration++;
+    });
   }
 
   // --- build -----------------------------------------------------------------
@@ -1731,12 +1747,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
     if (!_cacheReady) return const SizedBox.expand();
     final config = widget.shellConfig;
-    // The screen reads its rows once, on mount. A replay that rewrote the cache
-    // bumps the revision, which changes the key, which remounts it on fresh
-    // rows — the only way to repaint history without editing an imported file.
-    final key = ValueKey<String>(
-      'agents-chat-${widget.threadKey}-$_revision-$_cacheRevision',
-    );
+    // The screen reads its rows once, on mount (and on a `selectedChatId`
+    // change). A replay that rewrote the cache of the thread on screen bumps
+    // the generation, which changes the key, which remounts it on fresh rows.
+    // A thread switch keeps the key (see [_screenGeneration]).
+    final key = ValueKey<String>('agents-chat-$_screenGeneration');
     if (_useDesktopChat(context)) {
       return ChukChatUIDesktop(
         key: key,

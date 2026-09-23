@@ -1674,6 +1674,12 @@ void main() {
       tester.widget<AgentsThreadView>(threadView).threadKey,
       'remote:jade',
     );
+    // The switch reuses the mounted chat screen, which loads the new thread
+    // in place and hands the composer its focus on a zero-length timer once
+    // the load lands. Let that land before the tree is torn down.
+    await tester.pump(const Duration(milliseconds: 1));
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump(const Duration(milliseconds: 1));
   });
 
   testWidgets('a coworker the user picked survives the late host list', (

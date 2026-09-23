@@ -283,15 +283,40 @@ mixin AgentsShellHost on State<MessengerShell> {
     _selectionIsAuto = false;
     _restoredAgentId = agentId;
     _restoredThreadKey = threadKey;
-    unawaited(() async {
-      try {
-        final prefs = await SharedPreferences.getInstance();
+    // Written once the reader stops clicking, not on the switch itself: on
+    // desktop Linux every preference write rewrites the whole preferences
+    // file on the UI isolate, and a switch is exactly the frame that must not
+    // wait on it. Dispose writes a pick that is still pending.
+    _pendingPick = (agentId, threadKey);
+    _rememberTimer?.cancel();
+    _rememberTimer = Timer(
+      _kRememberDelay,
+      () => unawaited(_writeRememberedSelection()),
+    );
+  }
+
+  static const Duration _kRememberDelay = Duration(milliseconds: 1500);
+  Timer? _rememberTimer;
+  (String, String)? _pendingPick;
+
+  /// Writes the remembered pick, skipping a key that already holds it.
+  Future<void> _writeRememberedSelection() async {
+    _rememberTimer = null;
+    final pick = _pendingPick;
+    _pendingPick = null;
+    if (pick == null) return;
+    final (agentId, threadKey) = pick;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_kLastAgentKey) != agentId) {
         await prefs.setString(_kLastAgentKey, agentId);
-        await prefs.setString(_kLastThreadKey, threadKey);
-      } catch (_) {
-        // Losing the pointer costs the next launch its position, nothing more.
       }
-    }());
+      if (prefs.getString(_kLastThreadKey) != threadKey) {
+        await prefs.setString(_kLastThreadKey, threadKey);
+      }
+    } catch (_) {
+      // Losing the pointer costs the next launch its position, nothing more.
+    }
   }
 
   void _onRosterChanged() {
@@ -340,6 +365,10 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// The `dispose` half of the host. Called by the state before `super`.
   void _hostDispose() {
+    if (_rememberTimer != null) {
+      _rememberTimer!.cancel();
+      unawaited(_writeRememberedSelection());
+    }
     _hostLifecycle?.dispose();
     _roster.removeListener(_onRosterChanged);
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);

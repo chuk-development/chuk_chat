@@ -194,6 +194,11 @@ class ModelCacheService {
   ) async {
     final prefs = await SharedPreferences.getInstance();
     final Map<String, String> current = await loadProviderPreferences(userId);
+    // Every chat mount re-reads the provider from the cloud and lands here
+    // with the value that is already stored. On desktop Linux each preference
+    // write rewrites the whole preferences file on the UI isolate, so an
+    // unchanged value is not written again.
+    if (current[modelId] == providerSlug) return;
     current[modelId] = providerSlug;
     await prefs.setString(_providerPrefsKey(userId), jsonEncode(current));
   }
