@@ -141,4 +141,46 @@ void main() {
       hasLength(1),
     );
   });
+
+  test('last activity survives a restart, per coworker and per thread', () async {
+    final store = nextLaunch();
+    final first = LocalAgentRosterSource(store: store);
+    await first.load();
+    final created = first.addAgent(name: 'amber-otter');
+    final when = DateTime.utc(2026, 9, 23, 10, 30);
+    first.markActivity(created.id, created.threads.first.key, when);
+    await store.flush();
+
+    final second = LocalAgentRosterSource(store: nextLaunch());
+    await second.load();
+    final restored = second.byId(created.id)!;
+    expect(restored.lastActivity?.toUtc(), when);
+    expect(restored.threads.first.lastActivity?.toUtc(), when);
+  });
+
+  test('a stored time fills in an agent already in memory, never overrides '
+      'a newer one', () async {
+    final store = nextLaunch();
+    final first = LocalAgentRosterSource(store: store);
+    await first.load();
+    first.ensureHostAgent('peer-1');
+    final old = DateTime.utc(2026, 9, 20);
+    first.markActivity('host:peer-1', 'host:peer-1', old);
+    await store.flush();
+
+    // Next launch: the host agent exists in memory (pairing) before the cache
+    // loads, and knows no time yet.
+    final second = LocalAgentRosterSource(store: nextLaunch());
+    second.ensureHostAgent('peer-1');
+    await second.load();
+    expect(second.byId('host:peer-1')!.lastActivity?.toUtc(), old);
+
+    // A live time in memory wins over the stored one.
+    final third = LocalAgentRosterSource(store: nextLaunch());
+    third.ensureHostAgent('peer-1');
+    final live = DateTime.utc(2026, 9, 23);
+    third.markActivity('host:peer-1', 'host:peer-1', live);
+    await third.load();
+    expect(third.byId('host:peer-1')!.lastActivity?.toUtc(), live);
+  });
 }

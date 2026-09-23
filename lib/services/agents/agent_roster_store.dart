@@ -180,9 +180,20 @@ class AgentRosterStore {
               'id': agent.id,
               'name': agent.name,
               'onHost': agent.onHost,
+              // The last time the app saw this coworker do something. Kept so
+              // a cold start shows a real time instead of "no activity yet".
+              if (agent.lastActivity != null)
+                'lastActivity': agent.lastActivity!.toUtc().toIso8601String(),
               'threads': <Map<String, dynamic>>[
                 for (final AgentsThreadInfo thread in agent.threads)
-                  <String, dynamic>{'key': thread.key, 'title': thread.title},
+                  <String, dynamic>{
+                    'key': thread.key,
+                    'title': thread.title,
+                    if (thread.lastActivity != null)
+                      'lastActivity': thread.lastActivity!
+                          .toUtc()
+                          .toIso8601String(),
+                  },
               ],
               if (_hidden.contains(agent.id)) 'hidden': true,
             },
@@ -214,6 +225,7 @@ class AgentRosterStore {
             title: entry['title'] is String
                 ? entry['title'] as String
                 : 'General',
+            lastActivity: _readTime(entry['lastActivity']),
           ),
         );
       }
@@ -228,8 +240,12 @@ class AgentRosterStore {
       name: name is String && name.isNotEmpty ? name : id,
       onHost: row['onHost'] == true,
       threads: threads,
+      lastActivity: _readTime(row['lastActivity']),
     );
   }
+
+  static DateTime? _readTime(Object? value) =>
+      value is String ? DateTime.tryParse(value)?.toLocal() : null;
 
   static Set<String> _readIds(Object? value) {
     if (value is! List) return <String>{};
