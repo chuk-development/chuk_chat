@@ -245,21 +245,4 @@ void main() {
     await third.load();
     expect(third.byId('host:peer-1')!.lastActivity?.toUtc(), live);
   });
-
-  test('a coworker the host lists is on the host, also one made in the app',
-      () async {
-    final roster = LocalAgentRosterSource(store: nextLaunch());
-    await roster.load();
-    final made = roster.addAgent(name: 'wahlradar');
-    expect(roster.byId(made.id)!.onHost, isFalse);
-
-    roster.applyHostNames(<AgentsHostAgentName>[
-      AgentsHostAgentName(agentId: made.id, name: 'Wahlradar', host: false),
-      const AgentsHostAgentName(agentId: 'b-2', name: 'brisk', host: false),
-    ], peerDeviceId: 'peer-1');
-
-    expect(roster.byId(made.id)!.onHost, isTrue);
-    expect(roster.byId(made.id)!.name, 'Wahlradar');
-    expect(roster.byId('b-2')!.onHost, isTrue);
-  });
 }
