@@ -674,6 +674,30 @@ class EncryptionService {
     return await compute(_encryptBytesInBackground, params);
   }
 
+  /// Inputs up to this size are sealed on the calling isolate: below it the
+  /// isolate hop costs more than the cipher.
+  static const int _backgroundEncryptMinChars = 16 * 1024;
+
+  /// [encrypt] for a large string, run off the UI isolate.
+  ///
+  /// The cipher is pure Dart, so sealing a long chat payload on the UI isolate
+  /// stalls frames. The output has exactly the format of [encrypt]; a short
+  /// input simply goes through [encrypt].
+  static Future<String> encryptInBackground(String plaintext) async {
+    if (plaintext.length < _backgroundEncryptMinChars) {
+      return encrypt(plaintext);
+    }
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+    final params = _EncryptionParams(
+      bytes: utf8.encode(plaintext),
+      keyBytes: keyBytes,
+      payloadVersion: _payloadVersion,
+      keyVersion: _currentKeyVersion,
+    );
+    return compute(_encryptBytesInBackground, params);
+  }
+
   /// Decrypts binary data from encrypted JSON format
   /// Returns the original binary data as Uint8List
   static Future<Uint8List> decryptBytes(String encrypted) async {

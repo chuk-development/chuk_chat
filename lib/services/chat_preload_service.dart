@@ -5,6 +5,7 @@
 
 import 'dart:async';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -62,6 +63,9 @@ class ChatPreloadService {
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.
   static Future<void> startBackgroundPreload() async {
+    // The Agents build lists no chuk_chat chats, so it does not copy all of
+    // them into SQLite either (see `ChatSyncService._performAgentsSync`).
+    if (agentsChatCore) return;
     // Already complete or in progress
     if (_isPreloadComplete || _isPreloading) {
       if (kDebugMode) {
