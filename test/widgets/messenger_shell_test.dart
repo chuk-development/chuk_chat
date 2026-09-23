@@ -2,11 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
@@ -36,6 +38,8 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
@@ -281,7 +285,6 @@ void main() {
     Size size = const Size(1200, 800),
     AgentsPairingStore? store,
     AgentControlSource? controlSource,
-    bool openSidebar = true,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -308,10 +311,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    if (openSidebar && size.width >= 600) {
-      await tester.tap(findIcon(Icons.menu_rounded));
-      await tester.pumpAndSettle();
-    }
+    // The desktop roster is a docked pane now (docs/DESIGN.md §14.1): it is
+    // open from the first frame, there is no hamburger to open it with.
     return (controller, roster);
   }
 
@@ -330,6 +331,29 @@ void main() {
     return tester.widget<Offstage>(offstage.first).offstage;
   }
 
+  /// Presses the primary modifier with [key] (Ctrl here; the tests run on
+  /// Linux), optionally with Shift, and lets the layout settle.
+  Future<void> sendShortcut(
+    WidgetTester tester,
+    LogicalKeyboardKey key, {
+    bool shift = false,
+  }) async {
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    if (shift) await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(key);
+    if (shift) await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+  }
+
+  /// Picks [label] from the title bar's "…" menu.
+  Future<void> tapMoreAction(WidgetTester tester, String label) async {
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
+  }
+
   /// Resizes the window and lets the layout settle.
   Future<void> resize(WidgetTester tester, Size size) async {
     tester.view.physicalSize = size;
@@ -337,53 +361,83 @@ void main() {
   }
 
   testWidgets(
-    'a wide window starts collapsed like master; menu reveals roster',
+    'a wide window docks the roster beside the thread, with no floating chrome',
     (tester) async {
-      await pumpShell(tester, openSidebar: false);
-      expect(find.byType(AgentRosterView), findsNothing);
-      expect(find.byTooltip('New agent'), findsOneWidget);
-      expect(find.byType(AgentsThreadView), findsOneWidget);
-      await tester.tap(findIcon(Icons.menu_rounded));
-      await tester.pumpAndSettle();
+      await pumpShell(tester);
 
+      // Three panes, not a phone made wide (docs/DESIGN.md §14.1): the roster
+      // is docked from the first frame, there is no hamburger and no mini rail.
       expect(find.byType(AgentRosterView), findsOneWidget);
       expect(find.byType(AgentsThreadView), findsOneWidget);
       expect(threadOffstage(tester), isFalse);
       expect(find.byType(BrandWordmark), findsOneWidget);
       expect(find.text('No agents yet.'), findsOneWidget);
-      // chuk's chrome, not an app bar: the hamburger at the top left and the
-      // floating row at the top right.
+      expect(findIcon(Icons.menu_rounded), findsNothing);
       expect(find.byType(AppBar), findsNothing);
-      expect(findIcon(Icons.menu_rounded), findsOneWidget);
-      expect(find.byTooltip('Copy Debug Chat'), findsOneWidget);
+      // The roster sits left of the thread, side by side.
+      final Rect roster = tester.getRect(find.byType(AgentRosterView));
+      final Rect thread = tester.getRect(find.byType(AgentsThreadView));
+      expect(roster.width, kDeskRosterDefault);
+      expect(thread.left, greaterThan(roster.right));
+      expect(thread.right, 1200);
       // Nothing sits on top of the chat: the connection is not the user's job.
       expect(find.textContaining('Connected to'), findsNothing);
       expect(findIcon(Icons.link_off), findsNothing);
     },
   );
 
-  testWidgets('the four top-right actions sit in chuk\'s floating row', (
+  testWidgets('the title bar holds call, screen, files, details and more', (
     tester,
   ) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
 
-    // With a coworker selected three slots are live: Agent controls, Control
-    // Rooms, and Copy Debug Chat in chuk's own slot. Agent's browser waits for
-    // the agent to actually open a browser (cowork-vzm).
-    for (final tooltip in <String>[
-      'Agent controls',
-      'Control Rooms',
-      'Copy Debug Chat',
+    // §14.2: call, screen, files, the details toggle and the "…" menu, each
+    // a 32 px button with a tooltip.
+    for (final String tooltip in <String>[
+      'Voice call is not available yet',
+      'No screen open right now',
+      'Documents',
+      'Details (Ctrl+.)',
+      'More actions',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
+      expect(
+        tester.getSize(
+          find.descendant(
+            of: find.byTooltip(tooltip),
+            matching: find.byType(AnimatedContainer),
+          ),
+        ),
+        const Size(32, 32),
+        reason: tooltip,
+      );
     }
-    // The screen target sits in the header's video-call slot now and is parked
-    // until the coworker really has a screen open (cowork-vzm).
-    expect(find.byTooltip("Agent's screen"), findsNothing);
-    expect(find.byTooltip('No screen open right now'), findsOneWidget);
-    expect(find.byTooltip('Voice call is not available yet'), findsOneWidget);
+    // In that order, left to right.
+    final List<double> xs = <double>[
+      for (final String t in <String>[
+        'Voice call is not available yet',
+        'No screen open right now',
+        'Documents',
+        'Details (Ctrl+.)',
+        'More actions',
+      ])
+        tester.getCenter(find.byTooltip(t)).dx,
+    ];
+    expect(xs, orderedEquals(List<double>.of(xs)..sort()));
+    // The bar is 48 px and part of the frame.
+    expect(
+      tester.getSize(find.byType(AgentsThreadHeader)).height,
+      kDeskBarHeight,
+    );
+    // The rest is in the menu.
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    expect(find.text('Control Rooms'), findsOneWidget);
+    expect(find.text('Copy Debug Chat'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Rename'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
     // The composer's "More models" way out is wired.
     final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
@@ -391,32 +445,32 @@ void main() {
     expect(roster.agents.single.onHost, isTrue);
   });
 
-  testWidgets('the hamburger folds the roster to the mini rail and back', (
+  testWidgets('Ctrl+B folds the roster to the rail of faces and back', (
     tester,
   ) async {
-    final (controller, _) = await pumpShell(tester);
+    final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
+    final String agentId = roster.agents.single.id;
     expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
 
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
+    await sendShortcut(tester, LogicalKeyboardKey.keyB);
 
-    // The roster is off screen; chuk's mini rail carries the two slots. The
-    // browser has no rail slot and no button yet: nothing is open.
-    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
-    expect(find.byTooltip('New agent'), findsOneWidget);
-    expect(
-      find.byTooltip('Control Rooms'),
-      findsNWidgets(2),
-    ); // rail + top right
-    expect(find.byTooltip("Agent's screen"), findsNothing);
+    // The rail: 56 px of faces, no wordmark, the thread keeps its place.
+    expect(find.byType(BrandWordmark), findsNothing);
+    expect(tester.getSize(find.byType(AgentRosterView)).width, kDeskRailWidth);
+    expect(find.byKey(ValueKey<String>('rail-agent-$agentId')), findsOneWidget);
+    expect(find.byTooltip('Expand sidebar (Ctrl+B)'), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
 
-    await tester.tap(findIcon(Icons.menu_rounded));
+    // The rail's own button unfolds it again.
+    await tester.tap(find.byTooltip('Expand sidebar (Ctrl+B)'));
     await tester.pumpAndSettle();
     expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
-    expect(find.byTooltip('New agent'), findsNothing);
+    expect(
+      tester.getSize(find.byType(AgentRosterView)).width,
+      kDeskRosterDefault,
+    );
   });
 
   testWidgets(
@@ -544,19 +598,28 @@ void main() {
     expect(roster.byId(other.id)!.threads, hasLength(1));
   });
 
-  testWidgets('Control Rooms opens as the right panel and closes again', (
+  testWidgets('Control Rooms opens in the right pane and closes again', (
     tester,
   ) async {
     await pumpShell(tester);
 
-    await tester.tap(find.byTooltip('Control Rooms').first);
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Control Rooms'));
     await tester.pumpAndSettle();
 
     expect(find.byType(RoomListView), findsOneWidget);
     expect(find.byTooltip('Close'), findsOneWidget);
-    // The chat stays mounted next to the panel.
+    // The chat stays mounted next to the pane, which pushes it.
     expect(find.byType(AgentsThreadView), findsOneWidget);
     expect(threadOffstage(tester), isFalse);
+    final Rect pane = tester.getRect(
+      find.byKey(const ValueKey<String>('desk-right-pane')),
+    );
+    expect(
+      tester.getRect(find.byType(AgentsThreadView)).right,
+      lessThan(pane.left),
+    );
 
     await tester.tap(find.byTooltip('Close'));
     await tester.pumpAndSettle();
@@ -629,8 +692,7 @@ void main() {
       'tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
-    await tester.tap(findIcon(Icons.person_add_alt));
-    await tester.pumpAndSettle();
+    await sendShortcut(tester, LogicalKeyboardKey.keyN);
     // The app's own name dialog: one filled TextField, Cancel and Create.
     expect(find.byType(CoworkerNameDialog), findsOneWidget);
     final nameField = find.descendant(
@@ -665,8 +727,7 @@ void main() {
   testWidgets('Cancel in the New agent dialog adds nothing', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
-    await tester.tap(findIcon(Icons.person_add_alt));
-    await tester.pumpAndSettle();
+    await sendShortcut(tester, LogicalKeyboardKey.keyN);
     await tester.tap(find.widgetWithText(ExpressiveButton, 'Cancel'));
     await tester.pumpAndSettle();
 
@@ -682,11 +743,10 @@ void main() {
     final agent = roster.addAgent(name: 'amber');
     await tester.pumpAndSettle();
 
+    // A right click on the row opens its context menu (§14.3).
     await tester.tap(
-      find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-        matching: find.byTooltip('More'),
-      ),
+      find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+      buttons: kSecondaryButton,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Rename'));
@@ -754,13 +814,17 @@ void main() {
 
     // Delete through the row menu, so the shell records the id.
     await tester.tap(
-      find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${gone.id}')),
-        matching: find.byTooltip('More'),
-      ),
+      find.byKey(ValueKey<String>('agent-tile-${gone.id}')),
+      buttons: kSecondaryButton,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    // A delete asks first, in a centred dialog.
+    expect(roster.byId(gone.id), isNotNull);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('agents-confirm-button')),
+    );
     await tester.pumpAndSettle();
     expect(roster.byId(gone.id), isNull);
 
@@ -1000,7 +1064,16 @@ void main() {
     await tester.pump();
 
     expect(find.textContaining('working'), findsNothing);
-    expect(find.textContaining('ready for a task'), findsOneWidget);
+    // The row's time says when it last did something.
+    expect(
+      find.descendant(
+        of: find.byKey(
+          ValueKey<String>('agent-tile-${roster.agents.single.id}'),
+        ),
+        matching: find.text('now'),
+      ),
+      findsOneWidget,
+    );
     // Idle is still reachable: the header says so where a messenger would say
     // "Active now".
     expect(find.text('Active now'), findsOneWidget);
@@ -1008,15 +1081,27 @@ void main() {
   });
 
   testWidgets(
-    'the controls button opens the panel, which asks the host about this agent',
+    'the details toggle opens the docked pane, which asks the host about '
+    'this agent',
     (tester) async {
       final (controller, _) = await pumpShell(tester);
       controller.pair();
       await tester.pumpAndSettle();
 
-      await tester.tap(findIcon(Icons.tune));
+      await tester.tap(find.byTooltip('Details (Ctrl+.)'));
       await tester.pumpAndSettle();
 
+      // A docked pane, not an overlay drawer: it pushes the thread.
+      expect(find.byType(Drawer), findsNothing);
+      final Rect pane = tester.getRect(
+        find.byKey(const ValueKey<String>('desk-right-pane')),
+      );
+      expect(pane.width, kDeskDetailsDefault);
+      expect(pane.right, 1200);
+      expect(
+        tester.getRect(find.byType(AgentsThreadView)).right,
+        lessThan(pane.left),
+      );
       // Every block the host can fill has a heading; the schedule field and the
       // integrations list are gone, because nothing ever filled them.
       expect(find.text('MODEL'), findsOneWidget);
@@ -1029,31 +1114,34 @@ void main() {
       // Nothing is paired in this test, so the panel says so instead of
       // showing a figure it does not have.
       expect(find.text('Not paired with a host.'), findsNWidgets(5));
+
+      // Esc closes it again.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('desk-right-pane')),
+        findsNothing,
+      );
     },
   );
 
-  testWidgets('a 660px window keeps the desktop chat visible like master', (
+  testWidgets('a 660px window folds the roster to the rail on its own', (
     tester,
   ) async {
-    final (controller, _) = await pumpShell(
-      tester,
-      size: const Size(660, 900),
-      openSidebar: false,
-    );
+    final (controller, _) = await pumpShell(tester, size: const Size(660, 900));
     controller.pair();
     await tester.pumpAndSettle();
 
-    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
+    // Roster (264) and thread (at least 420) do not share 660 px: the roster
+    // is the rail, the thread keeps the rest, nothing is covered.
+    expect(find.byType(BrandWordmark), findsNothing);
+    expect(tester.getSize(find.byType(AgentRosterView)).width, kDeskRailWidth);
     expect(threadView, findsOneWidget);
     expect(threadOffstage(tester), isFalse);
     expect(find.byType(AppBar), findsNothing);
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
+    // A wider window gives the roster back, without the user asking.
+    await resize(tester, const Size(1200, 900));
     expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
-    expect(threadOffstage(tester), isFalse);
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
-    expect(find.byType(BrandWordmark).hitTestable(), findsNothing);
     expect(threadOffstage(tester), isFalse);
   });
 
@@ -1137,20 +1225,26 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms').first);
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Control Rooms');
 
     // The room list is the right panel (chuk's Workspaces slot); at 800 px
     // the sidebar folds to make room for it.
     expect(find.byType(RoomListView), findsOneWidget);
     expect(find.text('Rooms'), findsWidgets);
-    expect(find.text('launch'), findsOneWidget);
+    // Listed in the pane and in the roster.
+    expect(find.text('launch'), findsWidgets);
     expect(find.text('2 members'), findsOneWidget);
 
-    // Opening a room shows its thread as its own route, over the shell. The fake controller is live (the thread
-    // view handed it up), so the room streams over that same socket. The room
-    // renders a running spinner, so advance frames with pump, not pumpAndSettle.
-    await tester.tap(find.text('launch'));
+    // Opening a room shows it in the centre pane, the thread kept mounted
+    // behind it. The fake controller is live (the thread view handed it up),
+    // so the room streams over that same socket. The room renders a running
+    // spinner, so advance frames with pump, not pumpAndSettle.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(RoomListView),
+        matching: find.text('launch'),
+      ),
+    );
     await tester.pump(); // start the route
     await tester.pump(
       const Duration(milliseconds: 400),
@@ -1210,8 +1304,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms').first);
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Control Rooms');
     // Empty -> the New room button is offered.
     await tester.tap(find.widgetWithText(FilledButton, 'New room'));
     await tester.pumpAndSettle();
@@ -1240,8 +1333,14 @@ void main() {
     expect(rooms.rooms.single.name, 'planning');
     // The room was pushed to the host so a later message can drive it.
     expect(controller.createdRooms, [rooms.rooms.single.id]);
-    // Back on the rooms list, the new room shows.
-    expect(find.text('planning'), findsOneWidget);
+    // Back on the rooms list (and in the roster), the new room shows.
+    expect(
+      find.descendant(
+        of: find.byType(RoomListView),
+        matching: find.text('planning'),
+      ),
+      findsOneWidget,
+    );
   });
 
   testWidgets('the front page lists rooms beside the coworkers', (
@@ -1297,11 +1396,12 @@ void main() {
     // The desktop roster: same room, under its own quiet label, and Control
     // Rooms is still in the rail — this is a second way in, not a move.
     await pumpAt(const Size(1200, 800));
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
     expect(find.byType(AgentRosterView), findsOneWidget);
-    expect(find.byKey(ValueKey<String>('room-tile-${room.id}')), findsOneWidget);
-    expect(find.text('Control Rooms'), findsWidgets);
+    expect(
+      find.byKey(ValueKey<String>('room-tile-${room.id}')),
+      findsOneWidget,
+    );
+    expect(find.text('Rooms'), findsOneWidget);
   });
 
   testWidgets('deleting an agent syncs its rooms to the host', (tester) async {
@@ -1345,20 +1445,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
-
-    // Delete amber via its roster row menu. The row is scoped by the agent's
-    // own tile key: since the sidebar moved onto chuk's chrome the row is no
-    // longer a ListTile, but it is still exactly one tile per agent.
+    // Delete amber via its roster row's context menu (a right click), then
+    // confirm in the dialog.
     await tester.tap(
-      find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-$amberId')),
-        matching: findIcon(Icons.more_vert),
-      ),
+      find.byKey(ValueKey<String>('agent-tile-$amberId')),
+      buttons: kSecondaryButton,
     );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('agents-confirm-button')),
+    );
     await tester.pumpAndSettle();
 
     // Room B fell below two members -> deleted on the host; room A survived ->
@@ -1405,8 +1503,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Control Rooms').first);
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Control Rooms');
     await tester.tap(findIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Manage members'));
@@ -1458,7 +1555,9 @@ void main() {
       // pumps: the thread view animates while its transport is still pending,
       // and the panel sits next to it now instead of behind a route that muted
       // its ticker.
-      await tester.tap(find.byTooltip('Control Rooms').first);
+      await tester.tap(find.byTooltip('More actions'));
+      await settle(tester);
+      await tester.tap(find.text('Control Rooms').last);
       await settle(tester);
       await tester.tap(findIcon(Icons.more_vert));
       await settle(tester);
@@ -1475,7 +1574,7 @@ void main() {
     },
   );
 
-  testWidgets('the top-right "Copy Debug Chat" button exports the thread', (
+  testWidgets('"Copy Debug Chat" in the title bar menu exports the thread', (
     tester,
   ) async {
     final List<String> exported = <String>[];
@@ -1499,9 +1598,7 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.byTooltip('Copy Debug Chat'), findsOneWidget);
-    await tester.tap(find.byTooltip('Copy Debug Chat'));
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Copy Debug Chat');
 
     // Nothing is selected: no pairing, no stored roster, no remembered pick,
     // so this shell has no conversation. The export names no thread rather
@@ -1545,8 +1642,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tester.tap(find.byTooltip('Copy Debug Chat'));
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Copy Debug Chat');
 
     expect(clipboardText, isNotNull);
     final payload = jsonDecode(clipboardText!) as Map<String, dynamic>;
@@ -1577,8 +1673,7 @@ void main() {
     );
     await tester.pump();
 
-    await tester.tap(find.byTooltip('Copy Debug Chat'));
-    await tester.pumpAndSettle();
+    await tapMoreAction(tester, 'Copy Debug Chat');
 
     expect(find.text('could not copy the chat'), findsOneWidget);
   });
@@ -1656,8 +1751,6 @@ void main() {
       cobalt.threads.single.key,
     );
 
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('amber'));
     await tester.pumpAndSettle();
     final prefs = await SharedPreferences.getInstance();
@@ -1735,8 +1828,6 @@ void main() {
       ..addAgent(name: 'amber')
       ..addAgent(name: 'cobalt');
     await pumpShellOver(tester, roster);
-    await tester.tap(findIcon(Icons.menu_rounded));
-    await tester.pumpAndSettle();
     await tester.tap(find.text('cobalt'));
     await tester.pumpAndSettle();
     final picked = roster.agents.last.threads.single.key;

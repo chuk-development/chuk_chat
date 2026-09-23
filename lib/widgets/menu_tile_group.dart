@@ -27,6 +27,39 @@ const double kMenuTileGap = 3;
 /// Air instead of a divider, between two runs.
 const double kMenuGroupGap = 10;
 
+/// The desktop menu of the Agents desktop layout (docs/DESIGN.md §14.6): a menu
+/// that opens under a mouse pointer is smaller than one that opens under a
+/// thumb. Radius 12 instead of 26, rows of 32 px instead of 48.
+const double kMenuDenseOuterRadius = 12;
+const double kMenuDenseInnerRadius = 4;
+const double kMenuDenseTileGap = 2;
+const double kMenuDenseGroupGap = 6;
+const double kMenuDenseRowHeight = 32;
+
+/// Marks a subtree as the Agents desktop layout, so every menu opened from it
+/// ([MenuTileGroup], [MenuActionRow], the anchored menu) takes the dense
+/// desktop shape. Only the desktop shell puts it in the tree; without it — the
+/// phone, the upstream chat — nothing changes.
+///
+/// An [InheritedTheme], so a menu or dialog route pushed from inside the
+/// subtree captures it and still reads it in the overlay.
+class MenuDensity extends InheritedTheme {
+  const MenuDensity({super.key, this.dense = true, required super.child});
+
+  final bool dense;
+
+  /// Whether [context] sits in the dense desktop layout.
+  static bool isDense(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<MenuDensity>()?.dense ?? false;
+
+  @override
+  Widget wrap(BuildContext context, Widget child) =>
+      MenuDensity(dense: dense, child: child);
+
+  @override
+  bool updateShouldNotify(MenuDensity oldWidget) => dense != oldWidget.dense;
+}
+
 /// A menu drawn as a run of filled tiles instead of one boxed card.
 ///
 /// No frame, no elevation, no dividers: each row is its own filled tile, the
@@ -70,12 +103,24 @@ class MenuTileGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool dense = MenuDensity.isDense(context);
+    // The dense desktop menu: the phone's 26 would be half the menu's height.
+    final double outer = dense
+        ? (outerRadius < kMenuDenseOuterRadius
+              ? outerRadius
+              : kMenuDenseOuterRadius)
+        : outerRadius;
+    final double inner = dense ? kMenuDenseInnerRadius : kMenuInnerRadius;
     final List<Widget> out = <Widget>[];
     for (final List<Widget> run in groups) {
       if (run.isEmpty) continue;
-      if (out.isNotEmpty) out.add(const SizedBox(height: kMenuGroupGap));
+      if (out.isNotEmpty) {
+        out.add(SizedBox(height: dense ? kMenuDenseGroupGap : kMenuGroupGap));
+      }
       for (int i = 0; i < run.length; i++) {
-        if (i > 0) out.add(const SizedBox(height: kMenuTileGap));
+        if (i > 0) {
+          out.add(SizedBox(height: dense ? kMenuDenseTileGap : kMenuTileGap));
+        }
         out.add(
           Material(
             color: color,
@@ -83,10 +128,8 @@ class MenuTileGroup extends StatelessWidget {
             clipBehavior: Clip.antiAlias,
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.vertical(
-                top: Radius.circular(i == 0 ? outerRadius : kMenuInnerRadius),
-                bottom: Radius.circular(
-                  i == run.length - 1 ? outerRadius : kMenuInnerRadius,
-                ),
+                top: Radius.circular(i == 0 ? outer : inner),
+                bottom: Radius.circular(i == run.length - 1 ? outer : inner),
               ),
             ),
             child: run[i],
@@ -121,9 +164,14 @@ class MenuActionRow extends StatelessWidget {
     this.selected = false,
     this.enabled = true,
     this.maxLines,
+    this.shortcut,
   });
 
   final String label;
+
+  /// The keyboard shortcut for this row ("Ctrl+N"), printed on the right in
+  /// the quiet colour. Only the desktop menus pass one.
+  final String? shortcut;
   final IconData? icon;
 
   /// Replaces the icon — for an avatar or a badge.
@@ -152,51 +200,70 @@ class MenuActionRow extends StatelessWidget {
     final Color fg = (tone ?? scheme.onSurface).withValues(
       alpha: enabled ? 1 : 0.38,
     );
+    final bool dense = MenuDensity.isDense(context);
     return InkWell(
       onTap: enabled ? onTap : null,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: <Widget>[
-            if (leading != null)
-              leading!
-            else if (icon != null)
-              AppIcon(icon!, size: 20, color: fg),
-            if (leading != null || icon != null) const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Text(
-                    label,
-                    maxLines: maxLines,
-                    overflow: maxLines == null ? null : TextOverflow.ellipsis,
-                    style: text.bodyLarge?.copyWith(
-                      color: fg,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  if (subtitle != null)
+        padding: dense
+            ? EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: subtitle == null ? 0 : 5,
+              )
+            : const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minHeight: dense && subtitle == null ? kMenuDenseRowHeight : 0,
+          ),
+          child: Row(
+            children: <Widget>[
+              if (leading != null)
+                leading!
+              else if (icon != null)
+                AppIcon(icon!, size: dense ? 16 : 20, color: fg),
+              if (leading != null || icon != null)
+                SizedBox(width: dense ? 10 : 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
                     Text(
-                      subtitle!,
-                      style: text.bodySmall?.copyWith(
-                        color: scheme.onSurfaceVariant.withValues(
-                          alpha: enabled ? 1 : 0.5,
+                      label,
+                      maxLines: maxLines,
+                      overflow: maxLines == null ? null : TextOverflow.ellipsis,
+                      style: (dense ? text.bodyMedium : text.bodyLarge)
+                          ?.copyWith(color: fg, fontWeight: FontWeight.w500),
+                    ),
+                    if (subtitle != null)
+                      Text(
+                        subtitle!,
+                        style: text.bodySmall?.copyWith(
+                          color: scheme.onSurfaceVariant.withValues(
+                            alpha: enabled ? 1 : 0.5,
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
-            if (trailing != null) ...<Widget>[
-              const SizedBox(width: 12),
-              trailing!,
-            ] else if (selected) ...<Widget>[
-              const SizedBox(width: 12),
-              AppIcon(Icons.check, size: 18, color: scheme.primary),
+              if (trailing != null) ...<Widget>[
+                const SizedBox(width: 12),
+                trailing!,
+              ] else if (selected) ...<Widget>[
+                const SizedBox(width: 12),
+                AppIcon(Icons.check, size: 18, color: scheme.primary),
+              ],
+              if (shortcut != null) ...<Widget>[
+                const SizedBox(width: 16),
+                Text(
+                  shortcut!,
+                  style: text.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

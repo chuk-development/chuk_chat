@@ -91,6 +91,7 @@ class AgentsThreadView extends StatefulWidget {
     this.onOpenAgentProfile,
     this.onOpenAgentScreen,
     this.actions = const <AgentsThreadAction>[],
+    this.menuActions = const <AgentsThreadAction>[],
     this.leadingInset = 0,
     this.topInset = 0,
     this.phoneLayout = false,
@@ -181,6 +182,9 @@ class AgentsThreadView extends StatefulWidget {
   /// read as leftovers; the header groups them with the view's own Documents
   /// button and gives them one size and one spacing.
   final List<AgentsThreadAction> actions;
+
+  /// The desktop title bar's "…" menu (docs/DESIGN.md §14.2).
+  final List<AgentsThreadAction> menuActions;
 
   /// Left room the header keeps clear for chrome the shell paints OVER this
   /// view: the hamburger, and the mini rail under it while the sidebar is
@@ -1576,44 +1580,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             showAutomations &&
             !_automationsCollapsed &&
             (desktop || MobileChatPreferences.instance.showActivity);
-        // On a desktop window the header floats over the chat on the top veil
-        // and the messages scroll up behind it (docs/DESIGN.md §2–3). Only
-        // while a bar or the automation cards sit between the header and the
-        // chat does it stay a solid strip above them.
-        final bool floatHeader =
-            desktop &&
-            !showCards &&
-            !(connected && (approval != null || secretRequest != null));
-        final chat = _buildChat(
-          context,
-          desktopTopInset: floatHeader ? AgentsThreadHeader.barHeight : 0,
-        );
-        // Always a Stack on a desktop window, so the chat keeps its element
-        // (and its scroll position and draft) when the header switches
-        // between floating and solid.
-        final Widget body = desktop
-            ? Stack(
-                children: [
-                  Positioned.fill(child: chat),
-                  if (floatHeader)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      top: 0,
-                      child: _buildHeader(
-                        context,
-                        state,
-                        showAutomations ? automations : null,
-                        floating: true,
-                      ),
-                    ),
-                ],
-              )
-            : chat;
+        // The desktop title bar is part of the frame (docs/DESIGN.md §14.1):
+        // a solid 48 px bar with a hairline above the chat, never a veil the
+        // messages scroll behind.
+        final Widget body = _buildChat(context);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (desktop && !floatHeader)
+            if (desktop)
               _buildHeader(context, state, showAutomations ? automations : null)
             else if (!desktop && (approval != null || secretRequest != null))
               SizedBox(height: widget.topInset),
@@ -1696,6 +1670,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           ),
         ...widget.actions,
       ],
+      menuActions: dense ? const <AgentsThreadAction>[] : widget.menuActions,
       leadingInset: dense ? 0 : widget.leadingInset,
       topInset: dense ? widget.topInset : 0,
       dense: dense,
