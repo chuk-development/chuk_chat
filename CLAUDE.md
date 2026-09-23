@@ -19,19 +19,29 @@ The API server code lives at **`/home/user/git/api_server`** (deployed at
   (priced via orcarouter in `direct_prices.json`; fireworks direct catalog
   carries glm-5p2/5p1, i.e. GLM 5.2/5.1, not 5.3-flash).
 
-## ▶ Active plan: CoWork
+## Agents (= CoWork) — naming and shape
 
-**`docs/COWORK_EXECUTION_PLAN.md`** is the live, ordered build plan for CoWork
-(phone drives an agent running on the user's own laptop).
+**"CoWork" and "Agents" are the same product.** CoWork is the old name; when
+the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
 
-When the user says **"führe den CoWork-Plan aus"** — read that file, take the
-first milestone whose box is unchecked, and dispatch the subagents listed under
-it. It carries the verified state of the world, the per-milestone subagent
-breakdown, and the traps. **One milestone per session**, ending in green tests,
-a clean CodeRabbit and a commit — then tick the box.
-
-`docs/COWORK_BUILD_PLAN.md` stays the architectural reference (system diagram,
-threat model, decisions). The execution plan is the order of work.
+- **One repository.** The Agents platform lives here and nowhere else: the
+  Flutter controller is part of this app, the Python side (host, runtime,
+  executor, manager, sandbox, shared packages) is under `agents/`. The old
+  separate `cowork` repository and its `agents` branch are history only.
+- **One build flag:** `FEATURE_AGENTS` (`lib/platform_config.dart`,
+  `kFeatureAgents`). Off (default) = the app is plain chuk_chat, byte for
+  byte in behaviour. On = the app is Agents: `MessengerShell` replaces
+  `RootWrapper` (`lib/main.dart`). There is no runtime switch between the two.
+- **Pairing is automatic and happens once.** The trust record is mirrored,
+  encrypted, to Supabase; any install that signs in to the same account is
+  linked again with no code, no QR and no host address
+  (`lib/services/agents/agents_pairing_restore.dart`). The connection is the
+  blind cloud relay `wss://api.chuk.chat/v2/relay/ws` (api_server,
+  `routers/cowork/`). No user-visible host URL, port or "WebSocket" wording.
+- **Design:** Agents keeps its design (`docs/agents/DESIGN.md` if present,
+  otherwise the rules in the reference), fitted to chuk_chat's theme so the
+  two do not collide. No glow — no coloured `BoxShadow`, ever.
+- Run it: `FEATURE_AGENTS=true ./run-hot.sh linux`.
 
 ## Workflow Rules
 
@@ -163,8 +173,8 @@ then walk the whole folder, which is what makes a set of screenshots judgeable.
 the production defaults in `platform_config.dart` — which makes Voice mode
 visible again and drops the other run.sh flags. `run-hot.sh` reuses run.sh's
 exact defines (`PRINT_DEFINES=1 ./run.sh`) + `CHUK_MULTI_INSTANCE=1`. Voice mode
-is OFF by default in run.sh; CoWork was removed from this branch (developed
-elsewhere) — do not re-add it here.
+is OFF by default in run.sh; Agents (= CoWork) is OFF by default too — turn it
+on per run with `FEATURE_AGENTS=true ./run-hot.sh linux`.
 
 **Working from the `claudecode` host:** the agent runs there, the app runs on the
 laptop. Use `flutter-remote` instead of `flutter-hot` — same verbs, plus `sync`,
@@ -207,7 +217,7 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 `codemagic.yaml` and `AGENTS.md` still pass `--dart-define=FEATURE_PROJECTS=…`,
 which does nothing.
 
-`./run.sh` turns on everything that works (skills, cowork, voice, server tools,
+`./run.sh` turns on everything that works (skills, voice, server tools,
 tray) and deliberately leaves the three broken/costly ones off. Override any of
 them per-run: `FEATURE_SKILLS=false ./run.sh linux`.
 
