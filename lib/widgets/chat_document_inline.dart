@@ -26,7 +26,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/ui/expressive/bubble_kind.dart';
-import 'package:chuk_chat/ui/expressive/bubble_shape.dart' show kBubbleRadiusBig;
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
+    show kBubbleRadiusBig;
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -109,7 +110,8 @@ Map<String, Object?> documentChartJson(Map<String, dynamic> document) {
   final Object? raw = document['chart'];
   final Map<String, Object?> json = <String, Object?>{
     if (raw is Map)
-      for (final MapEntry<Object?, Object?> e in raw.entries) '${e.key}': e.value,
+      for (final MapEntry<Object?, Object?> e in raw.entries)
+        '${e.key}': e.value,
   };
   if (json['points'] == null && json['series'] == null) {
     json['points'] = documentChartRows(document);
@@ -184,6 +186,29 @@ DocumentChart documentChart(
   int? maxPoints,
   bool withSource = true,
 }) {
+  // A document is read many times per build (the block, its meta line, the
+  // "has content" check) and again on every thread switch; the parse is the
+  // same each time. Memoised per document object — a changed document is a
+  // new map.
+  final Map<Object, Object> memo = _documentMemo[document] ??=
+      <Object, Object>{};
+  return memo.putIfAbsent(
+    ('chart', maxPoints, withSource),
+    () =>
+        _documentChart(document, maxPoints: maxPoints, withSource: withSource),
+  ) as DocumentChart;
+}
+
+/// Per-document memo for [documentChart] and [documentParsedTable].
+final Expando<Map<Object, Object>> _documentMemo = Expando<Map<Object, Object>>(
+  'chat document memo',
+);
+
+DocumentChart _documentChart(
+  Map<String, dynamic> document, {
+  int? maxPoints,
+  bool withSource = true,
+}) {
   final Map<String, Object?> json = documentChartJson(document);
   if (!withSource) {
     json.remove('source');
@@ -193,7 +218,8 @@ DocumentChart documentChart(
   // saying the same thing to itself. A chart that carries a DIFFERENT title
   // keeps it — that one is information.
   final String title = '${json['title'] ?? ''}'.trim();
-  if (title.toLowerCase() == '${document['title'] ?? ''}'.trim().toLowerCase()) {
+  if (title.toLowerCase() ==
+      '${document['title'] ?? ''}'.trim().toLowerCase()) {
     json.remove('title');
   }
 
@@ -249,6 +275,18 @@ String documentCellText(Object? raw) {
 /// from EVERY row, not only the shown ones, so a column does not change side
 /// between the thread and the reader.
 ParsedTable documentParsedTable(Map<String, dynamic> document, {int? maxRows}) {
+  final Map<Object, Object> memo = _documentMemo[document] ??=
+      <Object, Object>{};
+  return memo.putIfAbsent((
+    'table',
+    maxRows,
+  ), () => _documentParsedTable(document, maxRows: maxRows)) as ParsedTable;
+}
+
+ParsedTable _documentParsedTable(
+  Map<String, dynamic> document, {
+  int? maxRows,
+}) {
   final List<String> columns = documentColumns(document);
   final List<Map> all = documentRows(document);
   final List<Map> shown = maxRows != null && all.length > maxRows
@@ -290,9 +328,8 @@ Future<void> openDocumentLink(BuildContext context, String href) async {
     mode: LaunchMode.externalApplication,
   );
   if (!opened && context.mounted) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Could not open link')));
   }
 }
 
@@ -406,10 +443,7 @@ class _InlineChatDocumentState extends State<InlineChatDocument> {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
-                child: _OpenAction(
-                  label: 'Open all $total rows',
-                  onTap: _open,
-                ),
+                child: _OpenAction(label: 'Open all $total rows', onTap: _open),
               ),
             ],
           ],

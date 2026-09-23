@@ -25,8 +25,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
+
 import 'dart:convert';
 import 'dart:math' as math;
+
 import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -71,6 +73,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/tool_history_formatter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'dart:async';
 
 // Import new handlers
@@ -348,6 +351,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   bool get _isCurrentChatStreaming =>
       _activeChatId != null &&
       _streamingHandler.isChatStreaming(_activeChatId!);
+
+  // Messenger mode: the thread opens at its bottom (see ChatScrollMixin).
+  @override
+  bool get anchoredTranscript => widget.messengerMode;
+
+  @override
+  List<Map<String, String>> get transcriptRows => _messages;
+
+  @override
+  bool get transcriptStreaming => _isCurrentChatStreaming || _isSendingMessage;
+
+  @override
+  double get transcriptPxPerChar => 0.6;
 
   /// Per-chat send-in-flight flag, backed by the ChatRuntime for the
   /// currently visible chat. Reads return false for chats with no runtime
@@ -1235,9 +1251,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Opening an existing chat should *start* at the bottom, not animate.
     scrollChatToBottom(force: true, animate: false);
     // Use captured sidebar state to prevent focus when sidebar was open
-    if (_mayFocusOnLoad &&
-        !sidebarWasExpanded &&
-        !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -1265,9 +1279,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         showScrollToBottom = false;
       });
       scrollChatToBottom(force: true, animate: false);
-      if (_mayFocusOnLoad &&
-          !sidebarWasExpanded &&
-          !widget.isSidebarExpanded) {
+      if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
         composerFocusNode.requestFocus();
       }
       return;
@@ -1348,9 +1360,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       showScrollToBottom = false;
     });
     scrollChatToBottom(force: true, animate: false);
-    if (_mayFocusOnLoad &&
-        !sidebarWasExpanded &&
-        !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad && !sidebarWasExpanded && !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -3240,6 +3250,152 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
+  /// The message list. Upstream: the plain [ListView]. Messenger mode: the
+  /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
+  /// which opens a thread at its bottom without laying out the rows above.
+  Widget _buildMessageList({
+    required EdgeInsets padding,
+    required double expandedInputWidth,
+    required bool showHostTyping,
+  }) {
+    // 1000 px built roughly two extra tall bubbles off each end of the
+    // viewport, and the viewport resizes while the keyboard animates.
+    const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
+    final int itemCount = _messages.length + (showHostTyping ? 1 : 0);
+    Widget itemBuilder(BuildContext _, int i) {
+      if (i == _messages.length) {
+        return const Padding(
+          key: ValueKey<String>('host-run-typing'),
+          padding: EdgeInsets.symmetric(vertical: 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: MessengerTypingIndicator(),
+          ),
+        );
+      }
+      final data = _messageRenderCache.build(
+        messages: _messages,
+        index: i,
+        isStreaming: _isCurrentChatStreaming,
+      );
+      final actions = messageActionsHandler.buildActionsForMessage(
+        index: i,
+        messageText: data.displayText,
+        isUser: data.isUser,
+        isStreaming: data.isStreamingMessage,
+        onEdit: editMessageAt,
+        onResendMessage: resendMessageAt,
+        onBranch: branchFromIndex,
+      );
+      final userActions = data.isUser
+          ? messageActionsHandler.buildUserMessageActions(
+              index: i,
+              messageText: data.displayText,
+              onEdit: editMessageAt,
+              onResendMessage: resendMessageAt,
+            )
+          : const <MessageBubbleAction>[];
+      // The message the reader just sent carries
+      // the pin key, so the scroll mixin can put
+      // it at the top and hold it there while the
+      // answer arrives underneath.
+      final bool isPinned =
+          hasTopPin &&
+          _pinnedUiKey != null &&
+          ChatUiHelpers.stableUiKey(_messages[i], _uuid) == _pinnedUiKey;
+      // Agents's day break, kept: one date chip
+      // where the day changes, like a messenger.
+      // A row with no timestamp gets none. The
+      // rules live in chat_ui_helpers.
+      // The bubble RUN breaks on the same rules
+      // (ChatMessageListItem.agentsRuns).
+      final DateTime? rowDay = messageRowTime(_messages[i]);
+      // Agents only: upstream's chat draws no
+      // day chips.
+      final bool opensDay =
+          widget.messengerMode &&
+          messageOpensDay(i == 0 ? null : _messages[i - 1], _messages[i]);
+      final Widget row = ChatMessageListItem(
+        key: isPinned ? pinnedTopKey : null,
+        messages: _messages,
+        index: i,
+        data: data,
+        uuid: _uuid,
+        maxWidth: expandedInputWidth,
+        activeChatId: _activeChatId,
+        flyInKey: _flyInKey,
+        showToolCalls: widget.showToolCalls,
+        showReasoningTokens: widget.showReasoningTokens,
+        showModelInfo: widget.showModelInfo,
+        showTps: widget.showTps,
+        isEditing: messageActionsHandler.editingMessageIndex == i,
+        actions: actions,
+        userMessageActions: userActions,
+        onAskUserAnswer: _askUserCallbackForMessage(i, data),
+        onConnectMcpServer: _connectMcpCallbackForMessage(i, data),
+        onSwitchVariant: (variant) => switchVariantAt(i, variant),
+        onContinueGeneration:
+            !data.isUser &&
+                i == _messages.length - 1 &&
+                data.status == ChatMessageStatus.interrupted &&
+                !_isCurrentChatStreaming &&
+                !_isSendingMessage
+            ? () => _continueGenerationAt(i)
+            : null,
+        messengerMode: widget.messengerMode,
+        agentsRuns: widget.messengerMode,
+        reaction: widget.messengerMode
+            ? ChatReactionService.instance.peek(
+                _messengerChatKey,
+                _reactionKeyAt(i),
+              )
+            : null,
+        onReaction: widget.messengerMode && !data.isStreamingMessage
+            ? (emoji) => unawaited(_toggleReaction(_reactionKeyAt(i), emoji))
+            : null,
+        onReply: widget.messengerMode && data.displayText.trim().isNotEmpty
+            ? () => _replyToMessage(i)
+            : null,
+        onEditRequested:
+            widget.messengerMode && data.isUser && !_isCurrentChatStreaming
+            ? () => editMessageAt(i)
+            : null,
+      );
+      if (!opensDay || rowDay == null) return row;
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ChatDayDivider(when: rowDay.toLocal()),
+          row,
+        ],
+      );
+    }
+
+    if (widget.messengerMode) {
+      // The pin room comes and goes; the bottom of the thread does not.
+      transcriptBottomInset = padding.bottom - pinnedExtraSpace;
+      return buildAnchoredTranscript(
+        split: resolveTranscriptSplit(),
+        itemCount: itemCount,
+        padding: padding,
+        itemBuilder: itemBuilder,
+        scrollCacheExtent: cacheExtent,
+        addAutomaticKeepAlives: false,
+      );
+    }
+    return ListView.builder(
+      controller: scrollController,
+      padding: padding,
+      itemCount: itemCount,
+      addAutomaticKeepAlives: false,
+      // Each item already wraps itself in a RepaintBoundary below; letting
+      // the list add a second one around it doubled the layers for no gain.
+      addRepaintBoundaries: false,
+      scrollCacheExtent: cacheExtent,
+      itemBuilder: itemBuilder,
+    );
+  }
+
   // --- BUILD METHOD ---
 
   @override
@@ -3368,177 +3524,23 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                               // follow and the scroll-to-bottom button hold a
                               // stale state. Desktop already listens; mobile
                               // needs it more, because it recycles bubbles.
-                              child: NotificationListener<ScrollMetricsNotification>(
-                                onNotification: (_) {
-                                  WidgetsBinding.instance.addPostFrameCallback((
-                                    _,
-                                  ) {
-                                    if (mounted) onScrollChanged();
-                                  });
-                                  return false;
-                                },
-                                child: ListView.builder(
-                                controller: scrollController,
-                                padding: listPadding,
-                                itemCount:
-                                    _messages.length + (showHostTyping ? 1 : 0),
-                                addAutomaticKeepAlives: false,
-                                // Each item already wraps itself in a
-                                // RepaintBoundary below; letting the list add
-                                // a second one around it doubled the layers
-                                // for no gain.
-                                addRepaintBoundaries: false,
-                                // 1000 px built roughly two extra tall
-                                // bubbles off each end of the viewport, and
-                                // the viewport resizes while the keyboard
-                                // animates.
-                                scrollCacheExtent:
-                                    const ScrollCacheExtent.pixels(400.0),
-                                itemBuilder: (_, int i) {
-                                  if (i == _messages.length) {
-                                    return const Padding(
-                                      key: ValueKey<String>('host-run-typing'),
-                                      padding: EdgeInsets.symmetric(
-                                        vertical: 8,
-                                      ),
-                                      child: Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: MessengerTypingIndicator(),
-                                      ),
-                                    );
-                                  }
-                                  final data = _messageRenderCache.build(
-                                    messages: _messages,
-                                    index: i,
-                                    isStreaming: _isCurrentChatStreaming,
-                                  );
-                                  final actions = messageActionsHandler
-                                      .buildActionsForMessage(
-                                        index: i,
-                                        messageText: data.displayText,
-                                        isUser: data.isUser,
-                                        isStreaming: data.isStreamingMessage,
-                                        onEdit: editMessageAt,
-                                        onResendMessage: resendMessageAt,
-                                        onBranch: branchFromIndex,
-                                      );
-                                  final userActions = data.isUser
-                                      ? messageActionsHandler
-                                            .buildUserMessageActions(
-                                              index: i,
-                                              messageText: data.displayText,
-                                              onEdit: editMessageAt,
-                                              onResendMessage: resendMessageAt,
-                                            )
-                                      : const <MessageBubbleAction>[];
-                                  // The message the reader just sent carries
-                                  // the pin key, so the scroll mixin can put
-                                  // it at the top and hold it there while the
-                                  // answer arrives underneath.
-                                  final bool isPinned =
-                                      hasTopPin &&
-                                      _pinnedUiKey != null &&
-                                      ChatUiHelpers.stableUiKey(
-                                            _messages[i],
-                                            _uuid,
-                                          ) ==
-                                          _pinnedUiKey;
-                                  // Agents's day break, kept: one date chip
-                                  // where the day changes, like a messenger.
-                                  // A row with no timestamp gets none. The
-                                  // rules live in chat_ui_helpers.
-                                  // The bubble RUN breaks on the same rules
-                                  // (ChatMessageListItem.agentsRuns).
-                                  final DateTime? rowDay = messageRowTime(
-                                    _messages[i],
-                                  );
-                                  // Agents only: upstream's chat draws no
-                                  // day chips.
-                                  final bool opensDay =
-                                      widget.messengerMode &&
-                                      messageOpensDay(
-                                        i == 0 ? null : _messages[i - 1],
-                                        _messages[i],
-                                      );
-                                  final Widget row = ChatMessageListItem(
-                                    key: isPinned ? pinnedTopKey : null,
-                                    messages: _messages,
-                                    index: i,
-                                    data: data,
-                                    uuid: _uuid,
-                                    maxWidth: expandedInputWidth,
-                                    activeChatId: _activeChatId,
-                                    flyInKey: _flyInKey,
-                                    showToolCalls: widget.showToolCalls,
-                                    showReasoningTokens:
-                                        widget.showReasoningTokens,
-                                    showModelInfo: widget.showModelInfo,
-                                    showTps: widget.showTps,
-                                    isEditing:
-                                        messageActionsHandler
-                                            .editingMessageIndex ==
-                                        i,
-                                    actions: actions,
-                                    userMessageActions: userActions,
-                                    onAskUserAnswer: _askUserCallbackForMessage(
-                                      i,
-                                      data,
+                              child:
+                                  NotificationListener<
+                                    ScrollMetricsNotification
+                                  >(
+                                    onNotification: (_) {
+                                      WidgetsBinding.instance
+                                          .addPostFrameCallback((_) {
+                                            if (mounted) onScrollChanged();
+                                          });
+                                      return false;
+                                    },
+                                    child: _buildMessageList(
+                                      padding: listPadding,
+                                      expandedInputWidth: expandedInputWidth,
+                                      showHostTyping: showHostTyping,
                                     ),
-                                    onConnectMcpServer:
-                                        _connectMcpCallbackForMessage(i, data),
-                                    onSwitchVariant: (variant) =>
-                                        switchVariantAt(i, variant),
-                                    onContinueGeneration:
-                                        !data.isUser &&
-                                            i == _messages.length - 1 &&
-                                            data.status ==
-                                                ChatMessageStatus.interrupted &&
-                                            !_isCurrentChatStreaming &&
-                                            !_isSendingMessage
-                                        ? () => _continueGenerationAt(i)
-                                        : null,
-                                    messengerMode: widget.messengerMode,
-                                    agentsRuns: widget.messengerMode,
-                                    reaction: widget.messengerMode
-                                        ? ChatReactionService.instance.peek(
-                                            _messengerChatKey,
-                                            _reactionKeyAt(i),
-                                          )
-                                        : null,
-                                    onReaction:
-                                        widget.messengerMode &&
-                                            !data.isStreamingMessage
-                                        ? (emoji) => unawaited(
-                                            _toggleReaction(
-                                              _reactionKeyAt(i),
-                                              emoji,
-                                            ),
-                                          )
-                                        : null,
-                                    onReply:
-                                        widget.messengerMode &&
-                                            data.displayText.trim().isNotEmpty
-                                        ? () => _replyToMessage(i)
-                                        : null,
-                                    onEditRequested:
-                                        widget.messengerMode &&
-                                            data.isUser &&
-                                            !_isCurrentChatStreaming
-                                        ? () => editMessageAt(i)
-                                        : null,
-                                  );
-                                  if (!opensDay || rowDay == null) return row;
-                                  return Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: <Widget>[
-                                      ChatDayDivider(when: rowDay.toLocal()),
-                                      row,
-                                    ],
-                                  );
-                                },
-                              ),
-                              ),
+                                  ),
                             ),
                           ),
                         )
@@ -3853,9 +3855,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               theme: theme,
               icon: Icons.schedule,
               label: _queuedFollowUps.isNotEmpty
-                  ? AppLocalizations.of(
-                      context,
-                    )!.queuedMessagesCount('${_queuedFollowUps.length + 1}')
+                  ? AppLocalizations.of(context)!
+                        .queuedMessagesCount('${_queuedFollowUps.length + 1}')
                   : '${AppLocalizations.of(context)!.queuedLabel}: '
                         '"${_pendingMessageText!}"',
               actionLabel: AppLocalizations.of(context)!.cancel,
@@ -3882,9 +3883,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 // Hidden composer scrollbar (reads as clutter); the field grows
                 // to ~8 lines before it scrolls.
                 child: ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(
-                    context,
-                  ).copyWith(scrollbars: false),
+                  behavior: ScrollConfiguration.of(context)
+                      .copyWith(scrollbars: false),
                   child: Semantics(
                     identifier: 'message_input',
                     child: TextField(

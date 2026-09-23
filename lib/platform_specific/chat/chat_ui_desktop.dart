@@ -9,9 +9,11 @@ import 'package:chuk_chat/widgets/app_notification.dart';
 // widgets/icons/icon_map.dart, which this file already imports below.
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+
 import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:chuk_chat/ui/expressive/day_divider.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -121,6 +123,7 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// original Agents app's look is kept: day chips and bubble runs in the
   /// list, its AI notice, its composer menus. Off, upstream's chat as is.
   final bool agentsThread;
+
   /// Room at the top of the message list for a bar that floats over it (the
   /// Agents thread header on its veil). The list scrolls behind the bar; only
   /// its first row starts below it. Zero for chuk_chat's own screen.
@@ -298,6 +301,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
       _activeChatId != null && _streamingManager.isStreaming(_activeChatId!);
+
+  // Agents: the thread opens at its bottom (see ChatScrollMixin).
+  @override
+  bool get anchoredTranscript => widget.agentsThread;
+
+  @override
+  List<Map<String, String>> get transcriptRows => _messages;
+
+  @override
+  bool get transcriptStreaming => _isStreaming || _isSending;
   Timer? _autoSaveTimer;
   Timer? _audioVisualizerTimer;
 
@@ -1552,8 +1565,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
-
-
   // In-memory cache for resolved Base64 images (storage path -> data URL)
 
   @override
@@ -1590,6 +1601,106 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         chatId: chatId,
         silent: true,
       ),
+    );
+  }
+
+  /// The message list. Upstream: the plain [ListView]. Agents: the
+  /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
+  /// which opens a thread at its bottom without laying out the rows above.
+  Widget _buildMessageList({
+    required double expandedInputWidth,
+    required double horizontalPadding,
+    required double bottomPadding,
+  }) {
+    final EdgeInsets padding = EdgeInsets.only(
+      left: horizontalPadding,
+      right: horizontalPadding,
+      top: 10 + widget.topInset,
+      bottom: bottomPadding,
+    );
+    // Smaller off-screen cache = fewer heavy bubbles built per scroll frame.
+    final ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(
+      _isLinuxDesktop ? 360.0 : 600.0,
+    );
+    Widget itemBuilder(BuildContext _, int i) {
+      final data = _messageRenderCache.build(
+        messages: _messages,
+        index: i,
+        isStreaming: _isStreaming,
+      );
+      // Agents's day break, kept: one
+      // date chip where the day changes,
+      // like a messenger. A row with no
+      // timestamp gets none. The rules
+      // live in chat_ui_helpers.
+      final DateTime? rowDay = messageRowTime(_messages[i]);
+      // Agents only: upstream's chat
+      // draws no day chips. The bubble
+      // RUN breaks on the same rules
+      // (ChatMessageListItem.agentsRuns).
+      final bool opensDay =
+          widget.agentsThread &&
+          messageOpensDay(i == 0 ? null : _messages[i - 1], _messages[i]);
+      final Widget row = ChatMessageListItem(
+        messages: _messages,
+        index: i,
+        data: data,
+        uuid: _uuid,
+        maxWidth: expandedInputWidth,
+        agentsRuns: widget.agentsThread,
+        activeChatId: _activeChatId,
+        flyInKey: _flyInKey,
+        showToolCalls: widget.showToolCalls,
+        showReasoningTokens: widget.showReasoningTokens,
+        showModelInfo: widget.showModelInfo,
+        showTps: widget.showTps,
+        isEditing: messageActionsHandler.editingMessageIndex == i,
+        actions: _buildMessageActionsForIndex(i, data),
+        userMessageActions: _buildUserMessageActionsForIndex(i, data),
+        onAskUserAnswer: _askUserCallbackForIndex(i, data),
+        onConnectMcpServer: _connectMcpCallbackForIndex(i, data),
+        onSwitchVariant: (variant) => switchVariantAt(i, variant),
+        onContinueGeneration:
+            !data.isUser &&
+                i == _messages.length - 1 &&
+                data.status == ChatMessageStatus.interrupted &&
+                !_isStreaming
+            ? () => _continueGenerationAt(i)
+            : null,
+      );
+      if (!opensDay || rowDay == null) {
+        return row;
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ChatDayDivider(when: rowDay.toLocal()),
+          row,
+        ],
+      );
+    }
+
+    if (widget.agentsThread) {
+      transcriptBottomInset = bottomPadding;
+      return buildAnchoredTranscript(
+        split: resolveTranscriptSplit(),
+        itemCount: _messages.length,
+        padding: padding,
+        itemBuilder: itemBuilder,
+        scrollCacheExtent: cacheExtent,
+        addAutomaticKeepAlives: true,
+      );
+    }
+    return ListView.builder(
+      controller: scrollController,
+      padding: padding,
+      itemCount: _messages.length,
+      addAutomaticKeepAlives: true, // Keep message widgets alive
+      // Each item already wraps its own RepaintBoundary below, so the
+      // builder's automatic one would just be a redundant layer on every row.
+      addRepaintBoundaries: false,
+      scrollCacheExtent: cacheExtent,
+      itemBuilder: itemBuilder,
     );
   }
 
@@ -1771,9 +1882,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             thickness: 6,
                             radius: const Radius.circular(8),
                             child: ScrollConfiguration(
-                              behavior: ScrollConfiguration.of(
-                                context,
-                              ).copyWith(scrollbars: false),
+                              behavior: ScrollConfiguration.of(context)
+                                  .copyWith(scrollbars: false),
                               child: Align(
                                 alignment: Alignment.center,
                                 child: Container(
@@ -1809,132 +1919,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                       // after a streaming message finalises).
                                       // Plain scroll listener doesn't fire in
                                       // that case and the button can get stuck.
-                                      child: NotificationListener<ScrollMetricsNotification>(
-                                        onNotification: (_) {
-                                          WidgetsBinding.instance
-                                              .addPostFrameCallback((_) {
-                                                if (mounted) onScrollChanged();
-                                              });
-                                          return false;
-                                        },
-                                        child: ListView.builder(
-                                          controller: scrollController,
-                                          padding: EdgeInsets.only(
-                                            left: effectiveHorizontalPadding,
-                                            right: effectiveHorizontalPadding,
-                                            top: 10 + widget.topInset,
-                                            bottom: messageListBottomPadding,
+                                      child:
+                                          NotificationListener<
+                                            ScrollMetricsNotification
+                                          >(
+                                            onNotification: (_) {
+                                              WidgetsBinding.instance
+                                                  .addPostFrameCallback((_) {
+                                                    if (mounted) {
+                                                      onScrollChanged();
+                                                    }
+                                                  });
+                                              return false;
+                                            },
+                                            child: _buildMessageList(
+                                              expandedInputWidth:
+                                                  expandedInputWidth,
+                                              horizontalPadding:
+                                                  effectiveHorizontalPadding,
+                                              bottomPadding:
+                                                  messageListBottomPadding,
+                                            ),
                                           ),
-                                          itemCount: _messages.length,
-                                          addAutomaticKeepAlives:
-                                              true, // Keep message widgets alive
-                                          // Each item already wraps its own
-                                          // RepaintBoundary below, so the builder's
-                                          // automatic one would just be a redundant
-                                          // layer on every row.
-                                          addRepaintBoundaries: false,
-                                          scrollCacheExtent:
-                                              ScrollCacheExtent.pixels(
-                                                _isLinuxDesktop ? 360.0 : 600.0,
-                                              ), // Smaller off-screen cache = fewer heavy bubbles built per scroll frame
-                                          itemBuilder: (_, int i) {
-                                            final data = _messageRenderCache
-                                                .build(
-                                                  messages: _messages,
-                                                  index: i,
-                                                  isStreaming: _isStreaming,
-                                                );
-                                            // Agents's day break, kept: one
-                                            // date chip where the day changes,
-                                            // like a messenger. A row with no
-                                            // timestamp gets none. The rules
-                                            // live in chat_ui_helpers.
-                                            final DateTime? rowDay =
-                                                messageRowTime(_messages[i]);
-                                            // Agents only: upstream's chat
-                                            // draws no day chips. The bubble
-                                            // RUN breaks on the same rules
-                                            // (ChatMessageListItem.agentsRuns).
-                                            final bool opensDay =
-                                                widget.agentsThread &&
-                                                messageOpensDay(
-                                                  i == 0
-                                                      ? null
-                                                      : _messages[i - 1],
-                                                  _messages[i],
-                                                );
-                                            final Widget
-                                            row = ChatMessageListItem(
-                                              messages: _messages,
-                                              index: i,
-                                              data: data,
-                                              uuid: _uuid,
-                                              maxWidth: expandedInputWidth,
-                                              agentsRuns: widget.agentsThread,
-                                              activeChatId: _activeChatId,
-                                              flyInKey: _flyInKey,
-                                              showToolCalls:
-                                                  widget.showToolCalls,
-                                              showReasoningTokens:
-                                                  widget.showReasoningTokens,
-                                              showModelInfo:
-                                                  widget.showModelInfo,
-                                              showTps: widget.showTps,
-                                              isEditing:
-                                                  messageActionsHandler
-                                                      .editingMessageIndex ==
-                                                  i,
-                                              actions:
-                                                  _buildMessageActionsForIndex(
-                                                    i,
-                                                    data,
-                                                  ),
-                                              userMessageActions:
-                                                  _buildUserMessageActionsForIndex(
-                                                    i,
-                                                    data,
-                                                  ),
-                                              onAskUserAnswer:
-                                                  _askUserCallbackForIndex(
-                                                    i,
-                                                    data,
-                                                  ),
-                                              onConnectMcpServer:
-                                                  _connectMcpCallbackForIndex(
-                                                    i,
-                                                    data,
-                                                  ),
-                                              onSwitchVariant: (variant) =>
-                                                  switchVariantAt(i, variant),
-                                              onContinueGeneration:
-                                                  !data.isUser &&
-                                                      i ==
-                                                          _messages.length -
-                                                              1 &&
-                                                      data.status ==
-                                                          ChatMessageStatus
-                                                              .interrupted &&
-                                                      !_isStreaming
-                                                  ? () =>
-                                                        _continueGenerationAt(i)
-                                                  : null,
-                                            );
-                                            if (!opensDay || rowDay == null) {
-                                              return row;
-                                            }
-                                            return Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.stretch,
-                                              children: <Widget>[
-                                                ChatDayDivider(
-                                                  when: rowDay.toLocal(),
-                                                ),
-                                                row,
-                                              ],
-                                            );
-                                          },
-                                        ),
-                                      ),
                                     ),
                                   ),
                                 ),
@@ -1994,8 +2000,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             child: MeasureSize(
                               onChange: onComposerHeightChanged,
                               child: Column(
-                                mainAxisSize: MainAxisSize
-                                    .min, // Crucial for column inside AnimatedPositioned/Center
+                                mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
                                 children: [
                                   // Search Bar (attachment bar is now inside)
                                   _buildSearchBar(
@@ -2004,12 +2009,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   const SizedBox(height: 8),
                                   Text(
                                     widget.agentsThread
-                                        ? AppLocalizations.of(
-                                            context,
-                                          )!.agentsAiDisclaimer
-                                        : AppLocalizations.of(
-                                            context,
-                                          )!.aiDisclaimer,
+                                        ? AppLocalizations.of(context)!
+                                              .agentsAiDisclaimer
+                                        : AppLocalizations.of(context)!
+                                              .aiDisclaimer,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: iconFg.withValues(alpha: 0.7),
@@ -2171,68 +2174,70 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                   accentColor: Colors.red,
                   timeColor: iconFg.withValues(alpha: 0.7),
                   child: ConstrainedBox(
-                  // Raised so the composer grows to a comfortable ~10 lines
-                  // before it starts scrolling, and the internal scrollbar is
-                  // hidden (scrollbars: false) since it reads as clutter.
-                  constraints: const BoxConstraints(maxHeight: 240),
-                  child: _wrapWithSmartPasteActions(
-                    ScrollConfiguration(
-                      behavior: ScrollConfiguration.of(
-                        context,
-                      ).copyWith(scrollbars: false),
-                      child: KeyedSubtree(
-                        key: TourKeyRegistry.instance.keyFor(
-                          TourSlots.chatInput,
-                        ),
-                        child: TextField(
-                          controller: composerController,
-                          focusNode: composerFocusNode,
-                          selectionControls: ComposerSelectionControls.instance,
-                          contextMenuBuilder: _buildComposerContextMenu,
-                          autofocus: true,
-                          showCursor: true,
-                          minLines: 1,
-                          maxLines: null,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.done,
-                          scrollController: _composerScrollController,
-                          textAlignVertical: TextAlignVertical.top,
-                          style: TextStyle(
-                            color: iconFg,
-                            fontWeight: FontWeight.w600,
-                            height: 1.4,
+                    // Raised so the composer grows to a comfortable ~10 lines
+                    // before it starts scrolling, and the internal scrollbar is
+                    // hidden (scrollbars: false) since it reads as clutter.
+                    constraints: const BoxConstraints(maxHeight: 240),
+                    child: _wrapWithSmartPasteActions(
+                      ScrollConfiguration(
+                        behavior: ScrollConfiguration.of(context)
+                            .copyWith(scrollbars: false),
+                        child: KeyedSubtree(
+                          key: TourKeyRegistry.instance.keyFor(
+                            TourSlots.chatInput,
                           ),
-                          decoration: InputDecoration(
-                            hintText: messageActionsHandler.isEditing
-                                ? AppLocalizations.of(context)!.editYourMessage
-                                : hasAttachments
-                                ? AppLocalizations.of(context)!.addMessageOrDocs
-                                : AppLocalizations.of(context)!.askMeAnything,
-                            hintStyle: TextStyle(
-                              color: iconFg.withValues(alpha: 0.8),
+                          child: TextField(
+                            controller: composerController,
+                            focusNode: composerFocusNode,
+                            selectionControls:
+                                ComposerSelectionControls.instance,
+                            contextMenuBuilder: _buildComposerContextMenu,
+                            autofocus: true,
+                            showCursor: true,
+                            minLines: 1,
+                            maxLines: null,
+                            keyboardType: TextInputType.multiline,
+                            textInputAction: TextInputAction.done,
+                            scrollController: _composerScrollController,
+                            textAlignVertical: TextAlignVertical.top,
+                            style: TextStyle(
+                              color: iconFg,
                               fontWeight: FontWeight.w600,
+                              height: 1.4,
                             ),
-                            border: InputBorder.none,
-                            enabledBorder: InputBorder.none,
-                            focusedBorder: InputBorder.none,
-                            errorBorder: InputBorder.none,
-                            focusedErrorBorder: InputBorder.none,
-                            disabledBorder: InputBorder.none,
-                            filled: false,
-                            fillColor: Colors.transparent,
-                            contentPadding: const EdgeInsets.symmetric(
-                              vertical: 8,
-                              horizontal: 0,
+                            decoration: InputDecoration(
+                              hintText: messageActionsHandler.isEditing
+                                  ? AppLocalizations.of(context)!
+                                        .editYourMessage
+                                  : hasAttachments
+                                  ? AppLocalizations.of(context)!
+                                        .addMessageOrDocs
+                                  : AppLocalizations.of(context)!.askMeAnything,
+                              hintStyle: TextStyle(
+                                color: iconFg.withValues(alpha: 0.8),
+                                fontWeight: FontWeight.w600,
+                              ),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              errorBorder: InputBorder.none,
+                              focusedErrorBorder: InputBorder.none,
+                              disabledBorder: InputBorder.none,
+                              filled: false,
+                              fillColor: Colors.transparent,
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 8,
+                                horizontal: 0,
+                              ),
+                              isDense: true,
                             ),
-                            isDense: true,
+                            cursorColor: accent,
+                            cursorWidth: 2,
+                            cursorRadius: const Radius.circular(1),
                           ),
-                          cursorColor: accent,
-                          cursorWidth: 2,
-                          cursorRadius: const Radius.circular(1),
                         ),
                       ),
                     ),
-                  ),
                   ),
                 ),
               ),
@@ -2403,39 +2408,38 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       : accent;
                   // The same decision the phone's send button makes, from the
                   // same place, so the two cannot end up different colours.
-                  final Color on = Theme.of(
-                    context,
-                  ).accentButtonForeground(fill);
+                  final Color on = Theme.of(context)
+                      .accentButtonForeground(fill);
                   return Container(
-                width: btnW,
-                height: btnH,
-                decoration: BoxDecoration(
-                  color: fill,
-                  borderRadius: BorderRadius.circular(buttonRadius),
-                ),
-                child: _audioHandler.isTranscribingAudio
-                    ? Center(
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.5,
-                            valueColor: AlwaysStoppedAnimation<Color>(on),
-                            backgroundColor: on.withValues(alpha: 0.2),
+                    width: btnW,
+                    height: btnH,
+                    decoration: BoxDecoration(
+                      color: fill,
+                      borderRadius: BorderRadius.circular(buttonRadius),
+                    ),
+                    child: _audioHandler.isTranscribingAudio
+                        ? Center(
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                valueColor: AlwaysStoppedAnimation<Color>(on),
+                                backgroundColor: on.withValues(alpha: 0.2),
+                              ),
+                            ),
+                          )
+                        : (_isStreaming || _isSending)
+                        ? AppIcon(Icons.stop_rounded, color: on, size: 22)
+                        : Transform(
+                            transform: Matrix4.diagonal3Values(1, 0.95, 1),
+                            alignment: Alignment.center,
+                            child: AppIcon(
+                              Icons.arrow_upward_rounded,
+                              color: on,
+                              size: 26,
+                            ),
                           ),
-                        ),
-                      )
-                    : (_isStreaming || _isSending)
-                    ? AppIcon(Icons.stop_rounded, color: on, size: 22)
-                    : Transform(
-                        transform: Matrix4.diagonal3Values(1, 0.95, 1),
-                        alignment: Alignment.center,
-                        child: AppIcon(
-                          Icons.arrow_upward_rounded,
-                          color: on,
-                          size: 26,
-                        ),
-                      ),
                   );
                 },
               ),

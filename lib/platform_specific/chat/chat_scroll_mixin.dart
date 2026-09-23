@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:math' as math;
 
-import 'package:flutter/rendering.dart' show ScrollDirection;
+import 'package:flutter/rendering.dart' show ScrollCacheExtent, ScrollDirection;
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
@@ -21,7 +23,203 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
   /// Hide the FAB again once back within this distance of the bottom.
   static const double hideScrollButtonDistance = 140.0;
 
-  final ScrollController scrollController = ScrollController();
+  /// The list's controller. Its initial offset follows
+  /// [transcriptInitialOffset], so a bottom-anchored transcript mounts at its
+  /// bottom instead of one composer height short of it.
+  late final ScrollController scrollController = _TranscriptScrollController(
+    () => transcriptInitialOffset,
+  );
+
+  // ---------------------------------------------------------------------------
+  // Bottom-anchored transcript (Agents only).
+  //
+  // A plain `ListView.builder` opens a thread at offset 0 — the TOP — and the
+  // jump to the bottom that follows has to lay out every row on the way down:
+  // a sliver list cannot place row 400 without first placing rows 0 to 399.
+  // For a long thread with tables and charts that was two frames of 100 and
+  // 200 ms on every switch, all of it rows nobody looks at.
+  //
+  // The anchored transcript splits the rows at the moment the thread opens.
+  // The rows that were there grow UPWARDS from a center line (the history
+  // sliver, row n-1 closest to the line); everything that arrives afterwards
+  // grows downwards below it, exactly like the old list. Offset 0 is the
+  // center line, so the thread opens at its bottom by construction and only
+  // the visible tail is ever built. New rows and a streaming answer still grow
+  // at the bottom end, so the follow, the reader who scrolled up, the pinned
+  // question and the jump button keep the old list's behaviour.
+  // ---------------------------------------------------------------------------
+
+  /// Host opt-in. Upstream chuk_chat (flag off) keeps the plain list.
+  bool get anchoredTranscript => false;
+
+  /// The host's message rows. Only their identity and `text` length are used.
+  List<Map<String, String>> get transcriptRows => const [];
+
+  /// Whether the last row is being written right now. A streaming row is kept
+  /// below the center line, where growth does not move the rows above it.
+  bool get transcriptStreaming => false;
+
+  /// Rough height one character of message text takes, in logical pixels, for
+  /// the short-thread estimate. Phones wrap sooner than the desktop column.
+  double get transcriptPxPerChar => 0.3;
+
+  /// The list's bottom padding without the pin room, written by the host's
+  /// build. The bottom of a freshly opened anchored thread sits here.
+  double transcriptBottomInset = 0;
+
+  /// Bumped on every thread open and every long jump to the bottom. It keys
+  /// the history sliver, so the next layout starts from the newest row instead
+  /// of walking there, row by row, from wherever the old children were.
+  int transcriptEpoch = 0;
+
+  int _transcriptSplit = 0;
+  List<Map<String, String>> _transcriptSnapshot = const [];
+
+  /// Offset a new scroll position starts at: the bottom of the history for an
+  /// anchored thread, the top otherwise.
+  double get transcriptInitialOffset =>
+      anchoredTranscript && _transcriptSplit > 0 ? transcriptBottomInset : 0;
+
+  /// How many rows grow upwards from the center line. Call from build.
+  ///
+  /// It only ever shrinks after an open. A row of the history that is no
+  /// longer the same object (an edit that cut the thread, a regenerate, a
+  /// "continue" that replaced it) moves below the line together with every
+  /// row after it, and so does a row that starts streaming.
+  int resolveTranscriptSplit() {
+    if (!anchoredTranscript) return 0;
+    int split = _transcriptSplit;
+    if (split == 0) return 0;
+    final List<Map<String, String>> rows = transcriptRows;
+    split = math.min(split, math.min(rows.length, _transcriptSnapshot.length));
+    if (transcriptStreaming && split >= rows.length) split = rows.length - 1;
+    while (split > 0 &&
+        !identical(rows[split - 1], _transcriptSnapshot[split - 1])) {
+      split--;
+    }
+    _transcriptSplit = math.max(0, split);
+    return _transcriptSplit;
+  }
+
+  /// Whether the rows about to be shown clearly need more than a screen. A
+  /// short thread keeps the plain top-aligned list: anchored, it would sit at
+  /// the bottom of an empty viewport.
+  bool _transcriptLooksLong(List<Map<String, String>> rows) {
+    final double viewport = scrollController.hasClients
+        ? scrollController.position.viewportDimension
+        : 800.0;
+    double estimate = 0;
+    for (final Map<String, String> row in rows) {
+      estimate += 48 + (row['text']?.length ?? 0) * transcriptPxPerChar;
+      if (estimate > viewport * 1.5) return true;
+    }
+    return false;
+  }
+
+  /// Open the current rows at their bottom (anchored hosts only).
+  void _anchorTranscriptAtBottom() {
+    final List<Map<String, String>> rows = transcriptRows;
+    int split = rows.length;
+    if (transcriptStreaming && split > 0) split--;
+    if (!_transcriptLooksLong(rows)) split = 0;
+    setState(() {
+      _transcriptSplit = split;
+      _transcriptSnapshot = List<Map<String, String>>.of(rows.take(split));
+      transcriptEpoch++;
+    });
+    if (scrollController.hasClients) {
+      final double target = transcriptInitialOffset;
+      if (SchedulerBinding.instance.schedulerPhase ==
+          SchedulerPhase.persistentCallbacks) {
+        // A thread switch arrives through didUpdateWidget, inside the build.
+        // A jump would dispatch scroll notifications from there; setting the
+        // offset quietly is enough, because the rebuild lays the list out
+        // again anyway. The settle below reports it after the frame.
+        scrollController.position.correctPixels(target);
+      } else {
+        scrollController.jumpTo(target);
+      }
+    }
+    settleScrollToBottom();
+    if (split > 0) _collapseShortTranscript();
+  }
+
+  /// The estimate said long and the rows fit after all: go back to the plain
+  /// top-aligned list. One cheap relayout of a short thread.
+  void _collapseShortTranscript() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) return;
+      if (_transcriptSplit == 0) return;
+      if (scrollController.position.minScrollExtent < 0) return;
+      setState(() {
+        _transcriptSplit = 0;
+        _transcriptSnapshot = const [];
+        transcriptEpoch++;
+      });
+      scrollController.jumpTo(0);
+      settleScrollToBottom();
+    });
+  }
+
+  /// The anchored transcript: history above the center line, new rows below.
+  ///
+  /// [itemCount] may exceed the rows (a trailing typing row); indices at and
+  /// above [split] always go below the line.
+  Widget buildAnchoredTranscript({
+    required int split,
+    required int itemCount,
+    required EdgeInsets padding,
+    required IndexedWidgetBuilder itemBuilder,
+    required ScrollCacheExtent scrollCacheExtent,
+    required bool addAutomaticKeepAlives,
+  }) {
+    return CustomScrollView(
+      controller: scrollController,
+      center: _kTranscriptCenterKey,
+      // With history above the line the line sits at the bottom edge; without
+      // any, it is the top of an ordinary list.
+      anchor: split > 0 ? 1.0 : 0.0,
+      scrollCacheExtent: scrollCacheExtent,
+      slivers: <Widget>[
+        SliverPadding(
+          key: ValueKey<String>('chat-transcript-history-$transcriptEpoch'),
+          // The far end of an upward sliver is the visual top.
+          padding: EdgeInsets.fromLTRB(
+            padding.left,
+            split > 0 ? padding.top : 0,
+            padding.right,
+            0,
+          ),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (BuildContext context, int j) =>
+                  itemBuilder(context, split - 1 - j),
+              childCount: split,
+              addAutomaticKeepAlives: addAutomaticKeepAlives,
+              addRepaintBoundaries: false,
+            ),
+          ),
+        ),
+        SliverPadding(
+          key: _kTranscriptCenterKey,
+          padding: EdgeInsets.fromLTRB(
+            padding.left,
+            split > 0 ? 0 : padding.top,
+            padding.right,
+            padding.bottom,
+          ),
+          sliver: SliverList(
+            delegate: SliverChildBuilderDelegate(
+              (BuildContext context, int j) => itemBuilder(context, split + j),
+              childCount: math.max(0, itemCount - split),
+              addAutomaticKeepAlives: addAutomaticKeepAlives,
+              addRepaintBoundaries: false,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Whether the scroll-to-bottom FAB is currently visible.
   bool showScrollToBottom = false;
@@ -108,7 +306,10 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     // chat whose maxScrollExtent briefly grows during layout (e.g. when an
     // AI message finishes streaming and the input shifts) can leave the
     // button stuck visible even though the user is already at the end.
-    final hasScrollableContent = position.maxScrollExtent > 0;
+    // `> minScrollExtent`, not `> 0`: an anchored transcript keeps its
+    // history at negative offsets. For the plain list the minimum is 0.
+    final hasScrollableContent =
+        position.maxScrollExtent > position.minScrollExtent;
 
     bool nextShowScrollButton = showScrollToBottom;
     if (!hasScrollableContent) {
@@ -237,8 +438,28 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
     // frames. A single post-frame jump lands short of the real bottom, so
     // settle across a few frames until the extent stops growing.
     if (force && !animate) {
+      if (anchoredTranscript) {
+        _anchorTranscriptAtBottom();
+        return;
+      }
       settleScrollToBottom();
       return;
+    }
+
+    // The jump button from far up an anchored history: jump, and restart the
+    // history sliver at its newest row. Animating (or jumping with the old
+    // children kept) would build every row between here and there.
+    if (force && anchoredTranscript && _transcriptSplit > 0) {
+      if (scrollController.hasClients) {
+        final ScrollPosition position = scrollController.position;
+        final double distance = position.maxScrollExtent - position.pixels;
+        if (distance > position.viewportDimension * 3) {
+          setState(() => transcriptEpoch++);
+          scrollController.jumpTo(position.maxScrollExtent);
+          settleScrollToBottom();
+          return;
+        }
+      }
     }
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -298,4 +519,19 @@ mixin ChatScrollMixin<T extends StatefulWidget> on State<T> {
       settleScrollToBottom(lastExtent: target, attempt: attempt + 1);
     });
   }
+}
+
+const ValueKey<String> _kTranscriptCenterKey = ValueKey<String>(
+  'chat-transcript-center',
+);
+
+/// A [ScrollController] whose initial offset is read when a position is
+/// created, not fixed at construction.
+class _TranscriptScrollController extends ScrollController {
+  _TranscriptScrollController(this._initialOffset);
+
+  final double Function() _initialOffset;
+
+  @override
+  double get initialScrollOffset => _initialOffset();
 }
