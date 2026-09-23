@@ -96,7 +96,7 @@ const Map<String, String> stringsEn = {
   'themeContrastStrength': 'Separation strength',
   'themeContrastSubtitle':
       'How strongly cards and outlines stand out from the background. '
-          'Higher is crisper.',
+      'Higher is crisper.',
   'themeFonts': 'Fonts',
   'interfaceFont': 'Interface font',
   'interfaceFontSubtitle': 'Menus, settings and buttons.',
@@ -179,8 +179,7 @@ const Map<String, String> stringsEn = {
   'dynamicColor': 'Material You',
   'dynamicColorSubtitle':
       'Use your system colors and follow theme changes automatically',
-  'colorDynamicNote':
-      'Set automatically by your system Material You palette.',
+  'colorDynamicNote': 'Set automatically by your system Material You palette.',
   'customHexColor': 'Custom Hex Color (#RRGGBB)',
   'pickCustomColor': 'Pick custom color',
   'pickAColor': 'Pick a color',
@@ -191,7 +190,8 @@ const Map<String, String> stringsEn = {
   'searchWorkspacesHint': 'Search workspaces...',
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
-  'aiDisclaimer': 'You\'re chatting with an AI — it can be wrong. Check key info.',
+  'aiDisclaimer':
+      'You\'re chatting with an AI — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -564,6 +564,7 @@ const Map<String, String> stringsEn = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Ask me anything !',
   'queuedLabel': 'Queued',
+  'queuedMessagesCount': '{count} messages queued',
   'editYourMessage': 'Edit your message...',
   'addMessageOrDocs': 'Add a message or send documents',
   'micAccessFailed': 'Mic access failed',

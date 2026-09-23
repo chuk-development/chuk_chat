@@ -1,4 +1,7 @@
 // lib/services/title_generation_service.dart
+// MERGE NOTE: the Agents build stubbed this file to a no-op (its sidebar listed
+// coworkers, not chats, so there was no title to generate). Upstream's real
+// generator is kept; an Agents thread now gets an auto-title like any chat.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -556,6 +559,12 @@ Rules:
         switch (event) {
           case ContentEvent(:final text):
             titleBuffer.write(text);
+          // The Agents relay ends a run with the host's canonical answer, which
+          // replaces the deltas rather than adding to them.
+          case FinalContentEvent(:final text):
+            titleBuffer
+              ..clear()
+              ..write(text);
           case ErrorEvent(:final message):
             if (kDebugMode) {
               debugPrint('📝 [TitleGen] Error: $message');

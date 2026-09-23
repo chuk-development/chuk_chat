@@ -20,6 +20,9 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
+    show kBubbleGroupPause;
+import 'package:chuk_chat/ui/expressive/day_divider.dart' show sameCalendarDay;
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -501,6 +504,9 @@ class ChatUiHelpers {
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
     }
+    if (message.sentAt != null && message.sentAt!.isNotEmpty) {
+      map['sentAt'] = message.sentAt!;
+    }
     // The turn's clock survives reload: without these two, a reloaded answer
     // loses the request timestamp and its recorded duration, so the header
     // falls back to the tool-call stamps for a turn that had already timed
@@ -559,6 +565,7 @@ class ChatUiHelpers {
   static const List<String> kVariantArchiveOnlyKeys = <String>[
     'messageId',
     'startedAt',
+    'sentAt',
   ];
 
   /// Build a variant snapshot of one assistant message's swappable content.
@@ -1097,10 +1104,11 @@ class ChatUiHelpers {
     final bool hasReasoning = reasoning.isNotEmpty;
     // The turn's own clock. `startedAt` is stamped on the placeholder and
     // `generationMs` when the answer is saved, so a running turn counts up
-    // from the first and a finished one shows the second unchanged.
-    final DateTime? turnStartedAt = isAiMessage
-        ? DateTime.tryParse(raw['startedAt'] ?? '')
-        : null;
+    // from the first and a finished one shows the second unchanged. A user
+    // message stamps it as it is created, which is what its bubble clock
+    // shows; only the assistant's copy also drives the live counter, and
+    // that reads it only while a turn streams.
+    final DateTime? turnStartedAt = DateTime.tryParse(raw['startedAt'] ?? '');
     final int? workedForMs = isAiMessage
         ? int.tryParse(raw['generationMs'] ?? '')
         : null;
@@ -1216,3 +1224,47 @@ class ChatUiHelpers {
     );
   }
 }
+
+/// Message grouping — the one place that decides which rows form a run.
+///
+/// A messenger draws a run of consecutive messages from one sender as ONE
+/// group: the touching corners go small, the gap inside the run goes tight.
+/// Both chat screens used to derive that from the sender alone, so a run kept
+/// running across a day divider and across a two-hour pause, and the divider
+/// ended up inside a connected group. The divider and the flags now read the
+/// same rules from here.
+///
+/// The clock of a row: what the day divider and the bubble stamp show. A row
+/// carries `sentAt` when the client wrote it and `startedAt` when the turn
+/// began; a replayed row can carry neither.
+DateTime? messageRowTime(Map<String, String> raw) =>
+    DateTime.tryParse(raw['sentAt'] ?? raw['startedAt'] ?? '');
+
+/// Whether a day divider is drawn above [row]. An undated row gets none — an
+/// undated message is no evidence of a day.
+bool messageOpensDay(Map<String, String>? previous, Map<String, String> row) {
+  final DateTime? day = messageRowTime(row);
+  if (day == null) return false;
+  final DateTime? before = previous == null ? null : messageRowTime(previous);
+  return before == null || !sameCalendarDay(before.toLocal(), day.toLocal());
+}
+
+/// Whether the row at [index] opens a new run: it is the first row, the sender
+/// changed, a day divider sits above it, or the sender paused for longer than
+/// [kBubbleGroupPause].
+bool messageStartsRun(List<Map<String, String>> messages, int index) {
+  if (index <= 0) return true;
+  final Map<String, String> previous = messages[index - 1];
+  final Map<String, String> row = messages[index];
+  if ((previous['sender'] ?? 'ai') != (row['sender'] ?? 'ai')) return true;
+  if (messageOpensDay(previous, row)) return true;
+  final DateTime? before = messageRowTime(previous);
+  final DateTime? now = messageRowTime(row);
+  if (before == null || now == null) return false;
+  return now.difference(before).abs() > kBubbleGroupPause;
+}
+
+/// Whether the row at [index] closes its run: the last row, or the next row
+/// opens a new one.
+bool messageEndsRun(List<Map<String, String>> messages, int index) =>
+    index >= messages.length - 1 || messageStartsRun(messages, index + 1);

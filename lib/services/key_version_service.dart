@@ -72,14 +72,12 @@ class KeyVersionService {
     // Don't add duplicate entries
     if (previousKeys.any((k) => k.version == currentVersion)) return null;
 
-    previousKeys.add(PreviousKeyInfo(
-      salt: currentSalt,
-      version: currentVersion,
-    ));
+    previousKeys.add(
+      PreviousKeyInfo(salt: currentSalt, version: currentVersion),
+    );
 
     return _updateMetadata(user, {
-      _metadataPreviousKeysKey:
-          previousKeys.map((k) => k.toJson()).toList(),
+      _metadataPreviousKeysKey: previousKeys.map((k) => k.toJson()).toList(),
     });
   }
 
@@ -89,8 +87,7 @@ class KeyVersionService {
     previousKeys.removeWhere((k) => k.version == version);
 
     return _updateMetadata(user, {
-      _metadataPreviousKeysKey:
-          previousKeys.map((k) => k.toJson()).toList(),
+      _metadataPreviousKeysKey: previousKeys.map((k) => k.toJson()).toList(),
     });
   }
 

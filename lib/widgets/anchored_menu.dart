@@ -25,6 +25,9 @@ const double _kEdgeMargin = 8;
 /// two-row scroller squeezed against the top edge.
 const double _kMinRoomAbove = 120;
 
+// The menu surface itself lives in [MenuTileGroup] — one look for every
+// dropdown and every action sheet.
+
 const Duration _kMenuDuration = Duration(milliseconds: 140);
 
 /// Show [items] as a dropdown anchored to the widget of [anchorContext].
@@ -34,8 +37,14 @@ Future<T?> showAnchoredMenu<T>(
   BuildContext anchorContext, {
   required List<Widget> items,
   required Color color,
-  required Color borderColor,
+  // Kept so the call sites read the same; the menu no longer draws a frame.
+  Color? borderColor,
   double minWidth = 200,
+  // Caps how wide a long row may push the menu; without it a very long
+  // model name makes the menu as wide as the screen.
+  double? maxWidth,
+  // Agents opened every menu at kMenuOuterRadius (26); upstream's own menus
+  // are tuned to 18, and every call site takes the default.
   double borderRadius = 18,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
@@ -99,6 +108,7 @@ Future<T?> showAnchoredMenu<T>(
       color: color,
       borderColor: borderColor,
       minWidth: minWidth,
+      maxWidth: maxWidth,
       borderRadius: borderRadius,
       preferAbove: preferAbove,
       alignRight: alignRight,
@@ -122,6 +132,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
     required this.color,
     required this.borderColor,
     required this.minWidth,
+    required this.maxWidth,
     required this.borderRadius,
     required this.preferAbove,
     required this.alignRight,
@@ -139,8 +150,12 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   final Rect anchor;
   final List<Widget> items;
   final Color color;
-  final Color borderColor;
+
+  /// The frame's border, when [outlined]. Null on the call sites that keep
+  /// the argument for readability but draw no frame.
+  final Color? borderColor;
   final double minWidth;
+  final double? maxWidth;
   final double borderRadius;
   final bool preferAbove;
   final bool? alignRight;
@@ -168,6 +183,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
       CustomSingleChildLayout(
         delegate: _AnchoredMenuLayout(
           anchor: anchor,
+          maxWidth: maxWidth,
           usableTop: usableTop,
           usableBottom: usableBottom,
           preferAbove: preferAbove,
@@ -211,14 +227,15 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
   /// behind it. Its radius clears the tiles by the padding, so the corners
   /// run parallel instead of cutting across them.
   Widget _frame(Widget child) {
-    if (!outlined) return child;
+    final Color? border = borderColor;
+    if (!outlined || border == null) return child;
     const double pad = 3;
     return Container(
       padding: const EdgeInsets.all(pad),
       decoration: BoxDecoration(
         color: color,
         borderRadius: BorderRadius.circular(borderRadius + pad),
-        border: Border.all(color: borderColor, width: 2),
+        border: Border.all(color: border, width: 2),
       ),
       child: child,
     );
@@ -250,6 +267,7 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
 class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   const _AnchoredMenuLayout({
     required this.anchor,
+    this.maxWidth,
     required this.usableTop,
     required this.usableBottom,
     this.preferAbove = false,
@@ -258,6 +276,10 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   });
 
   final Rect anchor;
+
+  /// Widest the menu may get, whatever its rows ask for.
+  final double? maxWidth;
+
   final double usableTop;
   final double usableBottom;
 
@@ -284,7 +306,10 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
   BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
     return BoxConstraints.loose(
       Size(
-        constraints.maxWidth - _kEdgeMargin * 2,
+        math.min(
+          constraints.maxWidth - _kEdgeMargin * 2,
+          maxWidth ?? double.infinity,
+        ),
         _forceAbove
             ? _roomAbove
             : math.max(48, math.max(_roomAbove, _roomBelow)),
@@ -294,17 +319,20 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
 
   @override
   Offset getPositionForChild(Size size, Size childSize) {
-    final double maxXAll =
-        math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    final double maxXAll = math.max(
+      _kEdgeMargin,
+      size.width - _kEdgeMargin - childSize.width,
+    );
     // Cascade: sit to the right of the anchor, or flip to the left when the
     // right side would run off screen. Top edges aligned.
     if (besideAnchor) {
       final double toRight = anchor.right + _kAnchorGap;
       final double toLeft = anchor.left - _kAnchorGap - childSize.width;
       final double x =
-          (toRight + childSize.width <= size.width - _kEdgeMargin || toLeft < _kEdgeMargin)
-              ? toRight
-              : toLeft;
+          (toRight + childSize.width <= size.width - _kEdgeMargin ||
+              toLeft < _kEdgeMargin)
+          ? toRight
+          : toLeft;
       return Offset(
         x.clamp(_kEdgeMargin, maxXAll),
         anchor.top.clamp(
@@ -314,7 +342,8 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       );
     }
 
-    final bool openDown = !_forceAbove &&
+    final bool openDown =
+        !_forceAbove &&
         (childSize.height <= _roomBelow || _roomBelow >= _roomAbove);
     final double y = openDown
         ? anchor.bottom + _kAnchorGap
@@ -324,11 +353,12 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
     // right side of the screen opens leftwards (right edges aligned) so the
     // menu never runs off toward the centre; one on the left opens rightwards
     // as before. Then clamp so it always stays on screen.
-    final double maxX = math.max(_kEdgeMargin, size.width - _kEdgeMargin - childSize.width);
+    final double maxX = math.max(
+      _kEdgeMargin,
+      size.width - _kEdgeMargin - childSize.width,
+    );
     final bool ar = alignRight ?? (anchor.right > size.width * 0.6);
-    final double x = ar
-        ? anchor.right - childSize.width
-        : anchor.left;
+    final double x = ar ? anchor.right - childSize.width : anchor.left;
     return Offset(
       x.clamp(_kEdgeMargin, maxX),
       y.clamp(usableTop, math.max(usableTop, usableBottom - childSize.height)),
@@ -340,6 +370,7 @@ class _AnchoredMenuLayout extends SingleChildLayoutDelegate {
       anchor != old.anchor ||
       usableTop != old.usableTop ||
       usableBottom != old.usableBottom ||
+      maxWidth != old.maxWidth ||
       preferAbove != old.preferAbove ||
       alignRight != old.alignRight ||
       besideAnchor != old.besideAnchor;

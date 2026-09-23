@@ -1,0 +1,44 @@
+[project]
+name = "chuk-agents-host"
+version = "0.1.0"
+description = "Agents local host: a blind localhost relay + pairing initiator that runs the whole Agents platform on one machine, no prod relay."
+readme = "README.md"
+authors = [
+    { name = "chukfinley", email = "chuk@chuk.dev" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "chuk-agents-runtime",
+    "chuk-agents-sandbox",
+    "chuk-agents-crypto",
+    "chuk-agents-config",
+    "chuk-agents-manager",
+    "chuk-agents-executor",
+    "websockets>=13",
+    "aiortc>=1.15.0",
+    "qrcode>=8",
+]
+
+[project.scripts]
+cowork-host = "chuk_agents_host.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv.sources]
+chuk-agents-runtime = { path = "../runtime", editable = true }
+chuk-agents-sandbox = { path = "../sandbox", editable = true }
+chuk-agents-crypto = { path = "../common/chuk_agents_crypto", editable = true }
+chuk-agents-config = { path = "../common/chuk_agents_config", editable = true }
+chuk-agents-manager = { path = "../manager", editable = true }
+chuk-agents-executor = { path = "../executor", editable = true }
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

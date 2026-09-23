@@ -14,6 +14,24 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     return _visualBlockStartRegex.hasMatch(content);
   }
 
+  /// Lenient JSON for a block a model wrote.
+  ///
+  /// `tryParseLenientJson` first, then one more repair it does not do.
+  /// That helper mends a trailing comma with
+  /// `replaceAll(RegExp(...), r'$1')`, and `replaceAll` takes its replacement
+  /// literally: it writes `$1` into the JSON, the decode fails, and the block
+  /// renders as an error card. `stripTrailingCommas` walks the text and skips
+  /// strings instead, so `{"caption": "A,}"}` survives. Teach
+  /// `json_helpers.dart` the same repair and this method can go.
+  dynamic _tryParseJson(String raw) {
+    try {
+      return tryParseLenientJson(raw);
+    } on FormatException {
+      // Fall through to the string-aware repair.
+    }
+    return jsonDecode(stripTrailingCommas(raw.trim()));
+  }
+
   /// Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
   /// / `<weather>` / `<news>` / `<image>` blocks. Returns ONE Column —
   /// no external margin. The `Padding(symmetric(vertical: 4))` on each
@@ -40,7 +58,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
               backgroundColor: bgColor,
               wrapWithSelectionArea: !widget.useSharedSelectionArea,
               fontFamily: _chatFontFamily,
-              paragraphFontSize: AppThemeService.instance.chatFontSize,
+              paragraphFontSize: _chatFontSize,
             ),
           ),
         );
@@ -51,7 +69,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
 
       try {
         if (blockType == 'diff') {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
@@ -59,31 +77,31 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
         } else if (blockType == 'map') {
           widgets.add(MapBlockWidget(jsonString: blockJson));
         } else if (blockType == 'email') {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildEmailBlock(parsed));
         } else if (blockType == 'weather') {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(WeatherBlockWidget(data: parsed));
         } else if (blockType == 'news') {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildNewsBlock(parsed));
         } else if (blockType == 'image') {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
           widgets.add(_buildImageBlock(parsed));
         } else {
-          final parsed = tryParseLenientJson(blockJson);
+          final parsed = _tryParseJson(blockJson);
           if (parsed is! Map<String, dynamic>) {
             throw const FormatException('Expected JSON object');
           }
@@ -125,7 +143,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             backgroundColor: bgColor,
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
-            paragraphFontSize: AppThemeService.instance.chatFontSize,
+            paragraphFontSize: _chatFontSize,
           ),
         ),
       );
@@ -141,7 +159,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
             backgroundColor: bgColor,
             wrapWithSelectionArea: !widget.useSharedSelectionArea,
             fontFamily: _chatFontFamily,
-            paragraphFontSize: AppThemeService.instance.chatFontSize,
+            paragraphFontSize: _chatFontSize,
           ),
         ),
       );
@@ -513,7 +531,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
         backgroundColor: bgColor,
         wrapWithSelectionArea: !widget.useSharedSelectionArea,
         fontFamily: _chatFontFamily,
-        paragraphFontSize: AppThemeService.instance.chatFontSize,
+        paragraphFontSize: _chatFontSize,
       ),
     );
   }
@@ -523,7 +541,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     required Color textColor,
     required Color bgColor,
   }) {
-    final String trimmed = text.trim();
+    final String trimmed = widget.messengerMode ? text : text.trim();
     if (trimmed.isEmpty) {
       return const <Widget>[];
     }

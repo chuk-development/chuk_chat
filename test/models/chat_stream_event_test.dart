@@ -111,6 +111,7 @@ void main() {
     test('switch on all event types', () {
       final events = <ChatStreamEvent>[
         const ContentEvent('text'),
+        const FinalContentEvent('final'),
         const ReasoningEvent('reason'),
         const UsageEvent({'tokens': 1}),
         const MetaEvent({'key': 'val'}),
@@ -127,6 +128,8 @@ void main() {
         switch (event) {
           case ContentEvent():
             types.add('content');
+          case FinalContentEvent():
+            types.add('final_content');
           case ReasoningEvent():
             types.add('reasoning');
           case UsageEvent():
@@ -148,6 +151,7 @@ void main() {
         types,
         equals([
           'content',
+          'final_content',
           'reasoning',
           'usage',
           'meta',

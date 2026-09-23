@@ -46,8 +46,9 @@ class PasswordResetService {
   static List<int> getRecoverableVersions() {
     final user = SupabaseService.auth.currentUser;
     if (user == null) return [];
-    final versions =
-        KeyVersionService.getPreviousKeys(user).map((k) => k.version).toList();
+    final versions = KeyVersionService.getPreviousKeys(
+      user,
+    ).map((k) => k.version).toList();
     versions.sort();
     return versions;
   }

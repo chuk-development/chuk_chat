@@ -1,3 +1,8 @@
+// Merge note: upstream's screen is the base — its ApiAvailabilityPolling mixin,
+// NiceSnackBar and FloatingAppBar chrome all stay. Kept from Agents: the
+// per-chat scoping (`chatId`, ChatModelSelectionService), which
+// messenger_shell and mobile_model_selection_mixin already call this page
+// with. Agents's ExpressiveScreen chrome is dropped as the same intent.
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -30,6 +35,7 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
 
@@ -153,7 +159,11 @@ enum _ModelListFilter {
 }
 
 class ModelSelectorPage extends StatefulWidget {
-  const ModelSelectorPage({super.key});
+  const ModelSelectorPage({super.key, this.chatId});
+
+  /// When set, picking a model/provider affects this chat only. The legacy
+  /// unscoped page remains the account-wide catalogue/preferences editor.
+  final String? chatId;
 
   @override
   State<ModelSelectorPage> createState() => _ModelSelectorPageState();
@@ -161,6 +171,8 @@ class ModelSelectorPage extends StatefulWidget {
 
 class _ModelSelectorPageState extends State<ModelSelectorPage>
     with ApiAvailabilityPolling<ModelSelectorPage> {
+  bool get _chatScoped => widget.chatId?.isNotEmpty == true;
+
   @override
   String get apiPollBaseUrl => _baseUrl;
 
@@ -215,6 +227,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   }
 
   Future<void> _loadModeConfigs() async {
+    if (_chatScoped) return;
     var fast = await ChatModeService.loadConfig(ChatMode.fast);
     final thinking = await ChatModeService.loadConfig(ChatMode.thinking);
 
@@ -463,8 +476,17 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       }
       final String accessToken = session.accessToken;
 
-      _lastSavedPreferences =
-          await UserPreferencesService.loadAllProviderPreferences();
+      if (_chatScoped) {
+        final choice = await ChatModelSelectionService.instance.load(
+          widget.chatId!,
+        );
+        _lastSavedPreferences = choice == null
+            ? {}
+            : {choice.modelId: choice.providerSlug};
+      } else {
+        _lastSavedPreferences =
+            await UserPreferencesService.loadAllProviderPreferences();
+      }
       final response = await http.get(
         Uri.parse('$_baseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
@@ -497,9 +519,11 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
               );
             } on StateError {
               selectedProvider = null;
-              cleanupFutures.add(
-                UserPreferencesService.clearSelectedProvider(model.id),
-              );
+              if (!_chatScoped) {
+                cleanupFutures.add(
+                  UserPreferencesService.clearSelectedProvider(model.id),
+                );
+              }
             }
           }
 
@@ -642,6 +666,23 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     String modelId,
     ModelProviderInfo? provider,
   ) async {
+    if (_chatScoped) {
+      if (provider == null) return;
+      final choice = ChatModelSelection(
+        modelId: modelId,
+        providerSlug: provider.slug,
+      );
+      try {
+        await ChatModelSelectionService.instance.save(widget.chatId!, choice);
+      } catch (_) {
+        if (mounted) {
+          _showSnackBar('Could not save this chat model. Please try again.');
+        }
+        return;
+      }
+      if (mounted) Navigator.of(context).pop(choice);
+      return;
+    }
     setState(() {
       _selectedProviders[modelId] = provider;
       _autoSelected.remove(modelId);
@@ -661,6 +702,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   Future<void> _onAutoSelect(CustomModelInfo model) async {
     final cheapest = _cheapestProvider(model);
     if (cheapest == null) return;
+    if (_chatScoped) {
+      await _onProviderSelect(model.id, cheapest);
+      return;
+    }
     setState(() {
       _selectedProviders[model.id] = cheapest;
       _autoSelected[model.id] = cheapest;
@@ -751,7 +796,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       // The page runs underneath the floating header.
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
-        title: Text(l.models),
+        title: Text(_chatScoped ? 'Model for this chat' : l.models),
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -817,6 +862,19 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                       );
                     }
                     if (index == 1) {
+                      // Chat-scoped: the mode picker sets the account-wide
+                      // fast/thinking pair, which this route may not touch.
+                      if (_chatScoped) {
+                        return Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                          child: Text(
+                            'Choose a model and provider for this chat.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: m3.onSurfaceVariant,
+                            ),
+                          ),
+                        );
+                      }
                       return Padding(
                         // No bottom gap here: the "Available" section header
                         // below carries its own top spacing, so 16 on top of

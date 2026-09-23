@@ -243,7 +243,9 @@ class _CachedImageThumbnailState extends State<_CachedImageThumbnail>
               mainAxisSize: MainAxisSize.min,
               children: [
                 AppIcon(
-                  _notFound ? Icons.image_not_supported_outlined : Icons.broken_image,
+                  _notFound
+                      ? Icons.image_not_supported_outlined
+                      : Icons.broken_image,
                   size: 32,
                   color: fg,
                 ),

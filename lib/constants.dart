@@ -101,11 +101,11 @@ double contrastFactor(double contrast) {
    surfaces. Anything a pointer can hover, focus or press must round its
    ink to one of these — a square highlight inside a rounded card is the
    single most visible inconsistency in the app. */
-const double kRadiusCard = 20.0;
-const double kRadiusField = 16.0;
-const double kRadiusMenu = 16.0;
-const double kRadiusRow = 14.0;
-const double kRadiusDialog = 28.0;
+const double kRadiusCard = 28.0;
+const double kRadiusField = 20.0;
+const double kRadiusMenu = 20.0;
+const double kRadiusRow = 20.0;
+const double kRadiusDialog = 32.0;
 
 /// Stadium radius for every button. Buttons are pills app-wide.
 const double kRadiusPill = 999.0;
@@ -278,7 +278,7 @@ ThemeData buildAppTheme({
   // textTheme; the chat body keeps its own resolved font on top of this.
   final String? uiFontFamily = resolveUiFontFamily(uiFont);
 
-  return ThemeData(
+  final ThemeData base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
     fontFamily: uiFontFamily,
@@ -484,7 +484,9 @@ ThemeData buildAppTheme({
       backgroundColor: surfaceLow,
       elevation: 0,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(kRadiusDialog)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(kRadiusDialog),
+        ),
       ),
     ),
     tooltipTheme: TooltipThemeData(
@@ -533,7 +535,46 @@ ThemeData buildAppTheme({
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
   );
+
+  // The expressive layer on top: heavier weights and tighter tracking on the
+  // large sizes, and the expressive FAB corner. Colours, surfaces and every
+  // component shape above are unchanged — this is emphasis, not a repaint.
+  return base.copyWith(
+    textTheme: _emphasizedTextTheme(base.textTheme),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      backgroundColor: accent,
+      foregroundColor: colorScheme.onPrimary,
+      elevation: 3,
+      focusElevation: 3,
+      hoverElevation: 4,
+      highlightElevation: 3,
+      extendedTextStyle: const TextStyle(
+        fontWeight: FontWeight.w700,
+        fontSize: 15,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+  );
 }
+
+/// Material 3 Expressive emphasis: the display and headline sizes carry real
+/// weight, titles and labels are a step heavier, body text is untouched (it is
+/// what people read for minutes at a time).
+TextTheme _emphasizedTextTheme(TextTheme t) => t.copyWith(
+  displaySmall: t.displaySmall?.copyWith(
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+  ),
+  headlineLarge: t.headlineLarge?.copyWith(
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.5,
+  ),
+  headlineMedium: t.headlineMedium?.copyWith(fontWeight: FontWeight.w700),
+  headlineSmall: t.headlineSmall?.copyWith(fontWeight: FontWeight.w700),
+  titleLarge: t.titleLarge?.copyWith(fontWeight: FontWeight.w700),
+  titleMedium: t.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+  labelLarge: t.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+);
 
 Color _shiftHue(Color c, double degrees) {
   final hsl = HSLColor.fromColor(c);

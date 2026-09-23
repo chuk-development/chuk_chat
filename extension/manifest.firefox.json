@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "Agents",
+  "version": "0.1.0",
+  "description": "Agents in your browser: talk about the page, or let your coworker drive its own tab.",
+  "icons": {
+    "128": "icons/icon-128.png"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "agents@chuk.dev",
+      "strict_min_version": "128.0"
+    }
+  },
+  "background": {
+    "scripts": [
+      "src/background.js"
+    ],
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open Agents"
+  },
+  "options_ui": {
+    "page": "src/options.html",
+    "open_in_tab": true
+  },
+  "sidebar_action": {
+    "default_panel": "src/panel.html",
+    "default_title": "Agents",
+    "default_icon": "icons/icon-128.png"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "contextMenus",
+    "nativeMessaging",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  },
+  "web_accessible_resources": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "resources": [
+        "src/snapshot.js",
+        "src/indicator.js"
+      ]
+    }
+  ]
+}

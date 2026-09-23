@@ -1,0 +1,182 @@
+# tools/chat_ui_manifest.txt
+# The chuk_chat files that Agents imports VERBATIM (package prefix rewritten).
+# One path per line, relative to <chuk_chat>/lib and <agents>/app/lib.
+# Re-sync with: scripts/import_chat_ui.sh   (then review `git diff`)
+# See docs/CHAT_UI_IMPORT.md for the stub inventory and the deliberate exclusions.
+#
+# upstream pinned at: chuk_chat 4d2ff4af9110a120ac2dd399d8aae45595019dd8
+# upstream HEAD today: 2d25937e54cad420def85ea47ea040c6867946c1
+#
+# WARNING: the widget entries below are NO LONGER byte-identical to
+# upstream. Running scripts/import_chat_ui.sh would overwrite about two
+# thousand lines of Agents rendering work. Read the 'Allowed divergences'
+# section of docs/CHAT_UI_IMPORT.md first (bead cowork-r6jy).
+
+# --- Chat screens, mixins and handlers (platform_specific/chat) ---
+platform_specific/chat/chat_api_service.dart
+platform_specific/chat/chat_scroll_mixin.dart
+# ^ lokal vor ueber d31526a: Scroll-Fix cowork-ejc, in chuk_chat uncommitted.
+#   Der Pin im Header bleibt bis der User in chuk_chat committet.
+platform_specific/chat/chat_ui_desktop.dart
+platform_specific/chat/chat_ui_helpers.dart
+platform_specific/chat/chat_ui_mobile.dart
+platform_specific/chat/desktop_send_logic.dart
+platform_specific/chat/handlers/audio_recording_handler.dart
+platform_specific/chat/handlers/chat_persistence_handler.dart
+platform_specific/chat/handlers/desktop_clipboard_handler.dart
+platform_specific/chat/handlers/desktop_file_handler.dart
+platform_specific/chat/handlers/file_attachment_handler.dart
+platform_specific/chat/handlers/message_actions_handler.dart
+platform_specific/chat/handlers/mobile_workspace_handler.dart
+platform_specific/chat/handlers/streaming_message_handler.dart
+platform_specific/chat/model_provider_resolution_mixin.dart
+platform_specific/chat/regen_variant_seed.dart
+platform_specific/chat/widgets/desktop_chat_widgets.dart
+platform_specific/chat/widgets/fullscreen_composer.dart
+platform_specific/chat/widgets/mobile_chat_widgets.dart
+
+# --- Message renderer and supporting widgets ---
+widgets/agent_activity/agent_activity_model.dart
+widgets/agent_activity/agent_activity_timeline.dart
+widgets/ask_user_card.dart
+widgets/attachment_preview_bar.dart
+widgets/chart_widget.dart
+widgets/chuk_table.dart
+widgets/diff_widget.dart
+widgets/document_viewer.dart
+widgets/encrypted_image_widget.dart
+widgets/image_viewer.dart
+widgets/map_block_renderer.dart
+widgets/markdown_message.dart
+widgets/measure_size.dart
+widgets/message_bubble.dart
+widgets/message_bubble/cards.dart
+widgets/message_bubble/chrome.dart
+widgets/message_bubble/images.dart
+widgets/message_bubble/layout.dart
+widgets/message_bubble/models.dart
+widgets/message_bubble/rich_blocks.dart
+widgets/message_bubble/tools.dart
+widgets/message_bubble/web_search_sources.dart
+widgets/message_fly_in.dart
+widgets/model_selection_dropdown.dart
+widgets/nice_snackbar.dart
+widgets/per_model_system_prompt_sheet.dart
+widgets/route_map_widget.dart
+widgets/sandbox_artifact_block.dart
+widgets/selection_copy_area.dart
+widgets/weather_widget.dart
+
+# --- Models ---
+models/artifact.dart
+models/chat_message.dart
+models/content_block.dart
+models/queued_message.dart
+models/stored_chat.dart
+models/stream_phase.dart
+models/tool_call.dart
+models/workspace_model.dart
+
+# --- Streaming core and services ---
+services/app_lifecycle_service.dart
+services/artifact_tag_processor.dart
+services/chat_history_builder.dart
+services/chat_runtime.dart
+services/chat_runtime_registry.dart
+services/chat_storage_state.dart
+services/download_preferences_service.dart
+services/file_save_service.dart
+services/image_compression_service.dart
+services/message_composition_service.dart
+services/model_prefetch_service.dart
+services/per_model_system_prompt_service.dart
+services/round_content_block_service.dart
+services/streaming_manager.dart
+services/streaming_manager_io.dart
+services/streaming_manager_stub.dart
+services/tool_image_result_service.dart
+
+# --- Utils ---
+utils/artifact_tag_parser.dart
+utils/clipboard_text_sanitizer.dart
+utils/debug_chat_formatter.dart
+utils/desktop_drop_stub.dart
+utils/file_upload_validator.dart
+utils/highlight_registry.dart
+utils/image_clipboard_service.dart
+utils/input_validator.dart
+utils/io_helper_stub.dart
+utils/path_provider_stub.dart
+utils/permission_handler_stub.dart
+utils/phone_linkify.dart
+utils/shift_key_tracker.dart
+utils/shift_key_tracker_native.dart
+utils/shift_key_tracker_web.dart
+utils/stream_error_sanitizer.dart
+utils/token_estimator.dart
+utils/tool_detail_format.dart
+utils/tool_history_formatter.dart
+utils/tool_parser.dart
+utils/tool_sanitizer.dart
+
+# --- Pages and top-level screens ---
+model_selector_page.dart
+pages/coming_soon_page.dart
+pages/fullscreen_map_page.dart
+
+# --- Chat storage (bead cowork-sha): local SQLite cache + Supabase sync -----
+# Verbatim chuk_chat storage. The import script rewrites the table name
+# 'encrypted_chats' -> 'cowork_chats' (see docs/SUPABASE_SCHEMA.md): a Agents
+# session key is not a UUID, and the two apps share one Supabase project.
+# NOT here: services/chat_storage_service.dart — the facade is a recorded
+# Agents adaptation (saveChat/updateChat -> AgentsChatStore); re-sync by hand.
+services/chat_storage_crud.dart
+services/chat_storage_sync.dart
+services/chat_storage_mutations.dart
+services/chat_storage_sidebar.dart
+services/chat_preload_service.dart
+services/chat_sync_service.dart
+services/local_chat_cache_service.dart
+services/local_chat_cache_native.dart
+services/local_chat_cache_web.dart
+
+# --- Misc ---
+constants/file_constants.dart
+platform_config.dart
+
+# --- Model selection (P4) ---
+# Byte-identical to upstream but previously unmanaged: a re-sync used to walk
+# past them, so an upstream change to the mode/model layer would be lost.
+core/model_selection_events.dart
+services/chat_mode_service.dart
+services/model_cache_service.dart
+services/model_capabilities_service.dart
+widgets/chat_mode_selector.dart
+
+# --- already byte-identical to upstream before the import (tracked so a re-sync
+# --- covers them; api_config_base/_io/_stub deliberately differ and are NOT here)
+lib/services/user_preferences_service.dart
+lib/services/api_status_service.dart
+lib/services/network_status_service.dart
+lib/services/supabase_service.dart
+# ^ lokal abweichend (cowork-2n1): autoRefreshToken:false + SessionRefreshScheduler, weil chuk keinen Host hat, der den Refresh-Token teilt.
+lib/services/tour_key_registry.dart
+lib/services/api_config_service.dart
+lib/utils/theme_extensions.dart
+lib/widgets/anchored_menu.dart
+lib/widgets/expressive_settings.dart
+
+# --- Account settings + credits (bead cowork-4ih, session cowork-af) ---
+# chuk's account page and footer BalanceBadge verbatim; the credits come from
+# chuk's hosted account API (ApiConfigService -> api.chuk.chat), the same call
+# chuk makes. credit_display.dart was a stub before; it is the original now.
+pages/account_settings_page.dart
+pages/recover_chats_page.dart
+services/profile_service.dart
+services/password_change_service.dart
+services/password_reset_service.dart
+services/password_revision_service.dart
+services/key_version_service.dart
+services/user_status_service.dart
+utils/client_platform.dart
+widgets/credit_display.dart

@@ -15,6 +15,23 @@
         </trust-anchors>
     </base-config>
 
+    <!--
+      Loopback exception. Android blocks cleartext HTTP from targetSdk 28 on,
+      and the WebView obeys that policy. The agent's-screen viewer is served by
+      a loopback server inside this very process (lib/widgets/vnc_local_server.dart),
+      so its page load and its RFB WebSocket are plain http:// and ws:// to
+      127.0.0.1. Without this the WebView shows a blank page and the socket
+      never opens.
+
+      The exception is as narrow as it can be: loopback only, so nothing leaves
+      the device in the clear. Every other destination keeps the base config
+      above, which refuses cleartext.
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">localhost</domain>
+    </domain-config>
+
     <!-- Debug builds: Allow user-installed certificates for testing -->
     <debug-overrides>
         <trust-anchors>

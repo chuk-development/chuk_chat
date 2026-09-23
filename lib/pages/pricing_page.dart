@@ -1,3 +1,6 @@
+// Agents stubbed this screen out (`ComingSoonPage(title: 'Plans')`) because a
+// self-hosted agent has no subscription. The merged app keeps upstream's real
+// Stripe pricing page; the stub is dropped.
 import 'dart:convert';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';

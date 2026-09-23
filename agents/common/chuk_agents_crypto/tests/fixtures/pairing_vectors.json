@@ -1,0 +1,76 @@
+{
+  "_comment": "Cross-language pairing vector (\u00a715). The Dart pairing twin, fed these inputs, MUST reproduce every 'expected' value: commitment, K_raw, channel_key, transcript, SAS, MAC_d/MAC_c and both device-key messages. Labels: SAS over K_raw with info=SAS_LABEL||T||PC; confirm MAC over K_raw with info=CONFIRM_?_LABEL||T||PC (PC folded in so the one-way-typed pairing code authenticates the channel); device MAC info=LBL||T||ed_pub||device_id||PC; transcript T=A||B (initiator public first); channel_key=HKDF(K_raw, info=chuk.cowork.channel-key.v1).",
+  "labels": {
+    "sas": "cowork/pairing/sas",
+    "confirm_d": "cowork/pairing/confirm-d",
+    "confirm_c": "cowork/pairing/confirm-c",
+    "device_d": "cowork/pairing/device-d",
+    "device_c": "cowork/pairing/device-c",
+    "device_proof": "cowork/pairing/device-proof",
+    "commit": "cowork/pairing/commit-v1",
+    "channel_key_info": "chuk.cowork.channel-key.v1"
+  },
+  "inputs": {
+    "initiator_x25519_seed_b64": "EBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8=",
+    "joiner_x25519_seed_b64": "YGFiY2RlZmdoaWprbG1ub3BxcnN0dXZ3eHl6e3x9fn8=",
+    "initiator_x25519_public_b64": "2J47rXlDfb7Z+ENBgwT0YP8Fx/6B/kqVd6gEy5Nn/2Y=",
+    "joiner_x25519_public_b64": "Z13VdO13iTELPS52gfN5C0ZsdzsVIf7PNld5WDcepS8=",
+    "initiator_ed25519_seed_b64": "gIGCg4SFhoeIiYqLjI2Oj5CRkpOUlZaXmJmam5ydnp8=",
+    "joiner_ed25519_seed_b64": "wMHCw8TFxsfIycrLzM3Oz9DR0tPU1dbX2Nna29zd3t8=",
+    "initiator_ed25519_public_b64": "zRSzf5VulTGU/3+3Oz2B3MVh1hp1OAlLfD4aZD7l86o=",
+    "joiner_ed25519_public_b64": "3eO8zsfzpmoRFfRdcg9NwTXDrnxOItyjj9se/WpJX/g=",
+    "initiator_device_id": "client-python-01",
+    "joiner_device_id": "desktop-flutter-01",
+    "channel_id": "cowork00deadbeef",
+    "digits": "428913",
+    "sas_digits": 6,
+    "pairing_code": "cowork00deadbeef-428913",
+    "expires_at": 1723478520000
+  },
+  "expected": {
+    "commitment_b64": "OH8Qnl2J5rINWLSjTs8rKrGk/USqjDuV5cwD694Jaao=",
+    "k_raw_b64": "hxdtc+gIh14rAv3hIgLkZuHOE7MNj/EXslQrcRYr7Q8=",
+    "channel_key_b64": "/Ihf7pJtZfyoKEWfijkj7Hk2VxxDSQWJEMqRxVOgh/c=",
+    "transcript_b64": "2J47rXlDfb7Z+ENBgwT0YP8Fx/6B/kqVd6gEy5Nn/2ZnXdV07XeJMQs9LnaB83kLRmx3OxUh/s82V3lYNx6lLw==",
+    "sas": "698274",
+    "mac_d_b64": "PiLSdm9ifwNFG7YXZ763VYxMPkOmFNpmjPbEnGaCe10=",
+    "mac_c_b64": "gZ38JVkahQ4Y/4UOngDTHVcS7sjHvy/5OMb45ViPEto=",
+    "commit_msg": {
+      "type": "commit",
+      "channel_id": "cowork00deadbeef",
+      "commitment": "OH8Qnl2J5rINWLSjTs8rKrGk/USqjDuV5cwD694Jaao=",
+      "expires_at": 1723478520000,
+      "sas_digits": 6
+    },
+    "pubkey_msg": {
+      "type": "pubkey",
+      "pubkey": "Z13VdO13iTELPS52gfN5C0ZsdzsVIf7PNld5WDcepS8="
+    },
+    "reveal_msg": {
+      "type": "reveal",
+      "pubkey": "2J47rXlDfb7Z+ENBgwT0YP8Fx/6B/kqVd6gEy5Nn/2Y="
+    },
+    "confirm_d_msg": {
+      "type": "confirm-d",
+      "mac": "PiLSdm9ifwNFG7YXZ763VYxMPkOmFNpmjPbEnGaCe10="
+    },
+    "confirm_c_msg": {
+      "type": "confirm-c",
+      "mac": "gZ38JVkahQ4Y/4UOngDTHVcS7sjHvy/5OMb45ViPEto="
+    },
+    "device_key_from_joiner": {
+      "type": "device-key",
+      "device_id": "desktop-flutter-01",
+      "ed25519_pub": "3eO8zsfzpmoRFfRdcg9NwTXDrnxOItyjj9se/WpJX/g=",
+      "proof": "Yl3XDevdA8XpeXVmlQYjINpwjForFqCHYQypiy3MHyL7w4GNFgYE8b9LftVsEd9+kbHe+CoB0nq7ltjLiWR4CA==",
+      "mac": "6GntpbGngCmo1NadRYY4iOejuk2sDSrzbsMo1F0jxX4="
+    },
+    "device_key_from_initiator": {
+      "type": "device-key",
+      "device_id": "client-python-01",
+      "ed25519_pub": "zRSzf5VulTGU/3+3Oz2B3MVh1hp1OAlLfD4aZD7l86o=",
+      "proof": "TQM73YljIvIZb5jGqMROCFsDK2u/LTFsQQ/L/B6Jtlx69PK2XjYokzBk8rzSXaosz2FjyuNljJJ01JzbCetcDA==",
+      "mac": "G4WoGrPxEytlo4ofL2TUoxtfBpN//oGdZAQj55ZHaeI="
+    }
+  }
+}

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/ui/expressive/staggered.dart';
 
 /// Scroll container for settings-style pages with a bounded set of rows.
 ///
@@ -13,6 +14,9 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 /// The scrollbar track is inset by [scrollbarMargin] at both ends so it does not
 /// run past the content into empty space; only the scrollbar is inset, the page
 /// padding is untouched.
+///
+/// Every row enters on the app's [StaggeredItem] cascade, so a settings page
+/// arrives the way the rest of the app does. Reduced motion drops the cascade.
 ///
 /// Use ONLY for pages with a finite, bounded list of rows (settings, detail,
 /// about). Do NOT use for long, data-driven lists (chat lists, file lists) —
@@ -91,7 +95,13 @@ class _SettingsListViewState extends State<SettingsListView> {
           physics: widget.physics,
           child: Column(
             crossAxisAlignment: widget.crossAxisAlignment,
-            children: widget.children,
+            // Every row cascades in, one after the other. The rows are
+            // bounded and all built up front, so the whole page can carry the
+            // entrance the rest of the app has.
+            children: <Widget>[
+              for (var i = 0; i < widget.children.length; i++)
+                StaggeredItem(index: i, child: widget.children[i]),
+            ],
           ),
         ),
       ),

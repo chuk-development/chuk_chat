@@ -1,3 +1,8 @@
+// Merge note: upstream's full settings list is kept — Agents had deleted most
+// of the hosted rows, and the merged app has them. Kept from Agents: its own
+// 'Agents' section (here.now, Embedding, API Keys, Automations). Agents also
+// pointed the connectors and developer rows at its own pages under
+// lib/pages/settings/; upstream's rows are kept, so those stay unrouted.
 // lib/pages/settings_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -45,6 +50,10 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
+import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -291,6 +300,65 @@ class _SettingsPageState extends State<SettingsPage> {
                     MaterialPageRoute(
                       builder: (_) => const SandboxManagementPage(),
                     ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          // Agents's own destinations. They have no chuk counterpart because
+          // they are about the machine the agent runs on, not about a hosted
+          // chat account.
+          ExpressiveSectionHeader('Agents'),
+          ExpressiveGroup(
+            children: [
+              _SettingsRow(
+                icon: Icons.place_outlined,
+                title: 'here.now',
+                subtitle: 'Let a coworker publish a page on your behalf',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const HereNowSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.memory_outlined,
+                title: 'Embedding',
+                subtitle: 'The model that indexes what the agent reads',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EmbeddingSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.key_outlined,
+                title: 'API Keys',
+                subtitle: 'Keys the agent can use but never read',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SecretsSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.schedule_outlined,
+                title: 'Automations',
+                subtitle: 'Schedules and watchers your coworkers set up',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AutomationsPage()),
                   );
                 },
               ),

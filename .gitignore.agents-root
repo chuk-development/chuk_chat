@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+build/
+
+# Flutter / Dart
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/pubspec.lock
+.env
+.env.live
+
+# SQLite runtime
+*.db
+*.db-wal
+*.db-shm
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+
+# Local verification scratch (host workspaces, trust files)
+_scratch/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+.beads-credential-key
+.beads/proxieddb/
+
+# Claude Code session id files (never commit)
+session.txt
+**/session.txt
+.playwright-mcp/
+
+# P4 holding pen: the chuk settings pages a subagent copied verbatim before it
+# died mid-adaptation. It lives OUTSIDE app/ on purpose: inside the Dart package
+# `flutter analyze` would still walk it (the analyzer does not read .gitignore)
+# and report its ~65 unresolved references. The P4-rest work adapts them from
+# here into app/lib/pages/. Delete the folder and this rule when it is empty.
+_p4_pending/
+
+# Host boot log written by host/ on every start; not source. `.prev` is the
+# previous boot, rotated by the same writer.
+.hostlive
+.hostlive.prev
+
+# Loose verification scratch a session dropped in the root instead of in
+# `_scratch/`. Same rule, same reason: it is a log, not source.
+_scratch_*

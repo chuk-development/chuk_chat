@@ -178,11 +178,13 @@ class LocalChatCacheService {
   /// keeps startup off the platform-channel size limit.
   static Future<List<Map<String, dynamic>>> loadMeta(String userId) async {
     final chats = await _loadChats(userId);
-    return chats.map((chat) {
-      final meta = Map<String, dynamic>.from(chat);
-      meta.remove('payload');
-      return meta;
-    }).toList(growable: false);
+    return chats
+        .map((chat) {
+          final meta = Map<String, dynamic>.from(chat);
+          meta.remove('payload');
+          return meta;
+        })
+        .toList(growable: false);
   }
 
   /// Count cached chats for one user.

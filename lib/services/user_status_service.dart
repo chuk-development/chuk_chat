@@ -64,8 +64,7 @@ class UserStatusService {
     }
 
     final DateTime? last = _lastFetchAt;
-    if (last == null ||
-        DateTime.now().difference(last) > _minRefreshInterval) {
+    if (last == null || DateTime.now().difference(last) > _minRefreshInterval) {
       unawaited(refresh());
     }
     return status.value;
@@ -99,7 +98,8 @@ class UserStatusService {
     try {
       String? token;
       try {
-        final session = await SupabaseService.refreshSession() ??
+        final session =
+            await SupabaseService.refreshSession() ??
             SupabaseService.auth.currentSession;
         token = session?.accessToken;
       } catch (_) {

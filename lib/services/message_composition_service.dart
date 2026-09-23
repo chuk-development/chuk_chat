@@ -250,7 +250,6 @@ class MessageCompositionService {
         }
       }
 
-
       // Add documents with markdown content
       if (documentFiles.isNotEmpty) {
         final markdownSections = documentFiles

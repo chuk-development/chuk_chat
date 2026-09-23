@@ -109,6 +109,11 @@ class StreamingMessageHandler {
   // stops the loop instead of firing one more streaming pass once the tool
   // resolves. Reset at the start of each sendMessage().
   bool _cancelRequested = false;
+
+  /// The chat whose stop this handler declared last. Only that one is taken
+  /// back when the page goes away — another thread's stop is not this page's
+  /// to withdraw.
+  String? _stopIntentChatId;
   bool _hasForegroundKeepAliveLock = false;
   Future<void>? _activeToolLoopFuture;
 
@@ -152,6 +157,8 @@ class StreamingMessageHandler {
     String? reasoningEffort,
     String? continuePriorText,
     String? continuePriorContentBlocksJson,
+    bool regenerate = false,
+    bool modelSelectionCaptured = false,
   }) async {
     if (_isDisposed) return;
 
@@ -542,6 +549,7 @@ class StreamingMessageHandler {
       }
 
       final stream = WebSocketChatService.sendStreamingChat(
+        modelSelectionCaptured: modelSelectionCaptured,
         accessToken: accessToken,
         message: message,
         modelId: selectedModelId,
@@ -558,6 +566,11 @@ class StreamingMessageHandler {
         // Native tool calling: the enabled tools as OpenAI function defs. Sent
         // on every pass; empty (prompt-based) when native mode is off.
         tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+        // A retry REPLACES the last answer, so the host drops the turn being
+        // retried instead of storing the same question again. Only the first
+        // pass says so: later passes of the same turn are continuations, and
+        // telling the host to drop again would eat the turn this retry started.
+        regenerate: regenerate && currentPass == 0,
       );
 
       await _streamingManager.startStream(
@@ -573,8 +586,9 @@ class StreamingMessageHandler {
           // on completion. A plain round with no tool calls streams live.
           final isWorkingRound =
               contentBlocks.isNotEmpty || hasToolCallStartMarker(content);
-          final displayContent =
-              isWorkingRound ? '' : stripToolCallBlocksForDisplay(content);
+          final displayContent = isWorkingRound
+              ? ''
+              : stripToolCallBlocksForDisplay(content);
           final prefix = accumulatedText.toString();
           final fullDisplay = prefix.isEmpty
               ? displayContent
@@ -616,25 +630,20 @@ class StreamingMessageHandler {
                 _streamingManager.getLatestMeta(chatId),
               );
 
-              final loopResult = await _toolCallHandler
-                  .processAssistantResponse(
-                    session: toolSession,
-                    content: finalContent,
-                    reasoning: finalReasoning,
-                    turnSignals: turnSignals,
-                    // Native tool calls assembled server-side this pass. When
-                    // non-empty the loop drives a native assistant(tool_calls) +
-                    // tool round-trip; empty means a plain text turn (or the
-                    // prompt-based fallback), handled by text parsing.
-                    nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
-                    onToolCallsUpdated: (toolCalls) {
-                      onToolCallsUpdate?.call(
-                        placeholderIndex,
-                        toolCalls,
-                        chatId,
-                      );
-                    },
-                  );
+              final loopResult = await _toolCallHandler.processAssistantResponse(
+                session: toolSession,
+                content: finalContent,
+                reasoning: finalReasoning,
+                turnSignals: turnSignals,
+                // Native tool calls assembled server-side this pass. When
+                // non-empty the loop drives a native assistant(tool_calls) +
+                // tool round-trip; empty means a plain text turn (or the
+                // prompt-based fallback), handled by text parsing.
+                nativeToolCalls: _streamingManager.getNativeToolCalls(chatId),
+                onToolCallsUpdated: (toolCalls) {
+                  onToolCallsUpdate?.call(placeholderIndex, toolCalls, chatId);
+                },
+              );
 
               if (_isDisposed) return;
 
@@ -703,8 +712,7 @@ class StreamingMessageHandler {
                 }
 
                 // Fire content blocks update so the UI can render them.
-                if (appendedBlocks.isNotEmpty ||
-                    producedThisRound.isNotEmpty) {
+                if (appendedBlocks.isNotEmpty || producedThisRound.isNotEmpty) {
                   onContentBlocksUpdate?.call(
                     placeholderIndex,
                     encodeBlocks(),
@@ -716,7 +724,8 @@ class StreamingMessageHandler {
                   _recordSnapshot(
                     chatId: chatId,
                     index: placeholderIndex,
-                    content: _currentSnapshot?.content ?? accumulatedText.toString(),
+                    content:
+                        _currentSnapshot?.content ?? accumulatedText.toString(),
                     reasoning: _currentSnapshot?.reasoning ?? '',
                     contentBlocksJson: encodeBlocks(),
                   );
@@ -1191,6 +1200,14 @@ class StreamingMessageHandler {
       if (kDebugMode) {
         debugPrint('Cancelling stream for chat $chatId...');
       }
+      // The user asked for this one — the composer's stop target is the only
+      // caller that is not a teardown. It is declared provisionally, because
+      // the chat screen's `dispose()` calls this too and then disposes this
+      // handler in the same synchronous block; [dispose] withdraws it there.
+      // The transport sends the `stop` frame on this intent and on nothing
+      // else: a cancelled subscription is not a stop (bead cowork-gnr8).
+      WebSocketChatService.declareStopIntent(chatId);
+      _stopIntentChatId = chatId;
       _cancelRequested = true;
       await _streamingManager.cancelStream(chatId);
 
@@ -1391,8 +1408,6 @@ class StreamingMessageHandler {
     includeToolResults: includeToolResults,
   );
 
-
-
   /// Get session safely with network error handling
   Future<dynamic> getSessionSafely() async {
     try {
@@ -1464,7 +1479,8 @@ class StreamingMessageHandler {
       index: index,
       content: content,
       reasoning: reasoning,
-      contentBlocksJson: contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
+      contentBlocksJson:
+          contentBlocksJson ?? _currentSnapshot?.contentBlocksJson,
     );
     _snapshotTimer ??= Timer.periodic(_snapshotInterval, (_) {
       _flushSnapshot();
@@ -1539,6 +1555,12 @@ class StreamingMessageHandler {
   /// Dispose resources
   void dispose() {
     _isDisposed = true;
+    // The chat screen cancels its stream and disposes this handler in one
+    // synchronous block when the page goes away (a thread switch, a rebuild of
+    // the subtree, a route pop). That cancel is NOT the user pressing stop, so
+    // the intent declared a moment ago in [cancelStream] is taken back before
+    // the transport can act on it. The run stays alive on the host.
+    WebSocketChatService.withdrawStopIntent(_stopIntentChatId);
     // Best-effort: flush in-flight snapshot before tearing down so we don't
     // lose the tail of an actively streaming response.
     if (_isStreaming && !_streamFinalized) {

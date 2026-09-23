@@ -11,6 +11,8 @@
 
 import 'package:flutter/material.dart';
 
+
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
@@ -31,7 +33,7 @@ class ChatModeSelector extends StatelessWidget {
     this.reasoningEffort = ChatModeService.reasoningOff,
     this.reasoningLevels = const <String>[ChatModeService.reasoningOff],
     this.onReasoningEffortChanged,
-    this.height = 40,
+    this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
   });
 
@@ -154,8 +156,8 @@ class ChatModeSelector extends StatelessWidget {
     // rather than the bare word "Custom".
     final String pillLabel = mode == ChatMode.custom
         ? (modelLabel == null || modelLabel!.isEmpty
-            ? labelFor(mode)
-            : stripLabPrefix(modelLabel!))
+              ? labelFor(mode)
+              : stripLabPrefix(modelLabel!))
         : labelFor(mode);
     final IconData pillIcon = iconFor(mode);
 
@@ -380,7 +382,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: 30,
+      height: MobileLayout.minTouchTarget,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         label.toUpperCase(),
@@ -394,7 +396,8 @@ class ChatModeSelector extends StatelessWidget {
     );
   }
 
-  /// One row, matching the model dropdown: 40 high, 16 of side padding,
+  /// One row, matching the model dropdown: one touch target high, 16 of side
+  /// padding,
   /// bold label, a tick on the right when it is the current choice.
   PopupMenuItem<T> _menuRow<T>({
     required T value,
@@ -406,7 +409,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       value: value,
-      height: 40,
+      height: MobileLayout.minTouchTarget,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,

@@ -115,7 +115,9 @@ class LocalChatCacheService {
           );
         }
         if (oldVersion < 4) {
-          await db.execute('ALTER TABLE chat_cache ADD COLUMN search_text TEXT');
+          await db.execute(
+            'ALTER TABLE chat_cache ADD COLUMN search_text TEXT',
+          );
           await _compressExistingPayloads(db);
           needsVacuum = true;
         }
@@ -835,9 +837,7 @@ class LocalChatCacheService {
     if (stored is List<int>) {
       return utf8.decode(_payloadCodec.decode(stored));
     }
-    throw StateError(
-      'Unsupported payload storage type: ${stored.runtimeType}',
-    );
+    throw StateError('Unsupported payload storage type: ${stored.runtimeType}');
   }
 
   static Map<String, dynamic> _toDbRow(

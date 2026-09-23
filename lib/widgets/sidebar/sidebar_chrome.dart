@@ -19,6 +19,8 @@ import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/constants.dart';
 
 /// The colour the sidebar panel is painted in — the same step off the page
 /// that a floating card takes in the chat.
@@ -1241,6 +1243,491 @@ class SbFloatingBar extends StatelessWidget {
       radius: kSbCardRadius,
       baseColor: Theme.of(context).scaffoldBackgroundColor,
       child: Material(type: MaterialType.transparency, child: child),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The rail chrome the agent roster is built from.
+//
+// Upstream's own sidebar moved to the card grammar above (SbCard / SbBlock /
+// SbNavCard). The roster and the desktop shell still draw the older rail —
+// a brand row, hover pills, a section label, the pinned bento — so those
+// widgets stay here rather than being deleted with the sidebar that stopped
+// using them. Nothing above depends on them.
+// ---------------------------------------------------------------------------
+
+/// Brand row: optional logo square + text. Trailing widget on the right.
+class SbBrand extends StatelessWidget {
+  final Widget? trailing;
+  final EdgeInsets padding;
+  final String label;
+  final bool showLogo;
+  final double fontSize;
+  final FontWeight fontWeight;
+  const SbBrand({
+    super.key,
+    this.trailing,
+    this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12),
+    this.label = 'Chuk Chat',
+    this.showLogo = false,
+    this.fontSize = 20,
+    this.fontWeight = FontWeight.w700,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          if (showLogo) ...[
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: t.accent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                'C',
+                style: TextStyle(
+                  fontWeight: FontWeight.w900,
+                  fontSize: 13,
+                  color: t.isDark ? Colors.black : Colors.white,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+          ],
+          // Brand label renders as the frozen SVG wordmark; any other
+          // label (none in production today) falls back to plain text.
+          if (label == 'Chuk Chat')
+            BrandWordmark(color: t.iconFg, height: fontSize * 0.75)
+          else
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: fontSize,
+                fontWeight: fontWeight,
+                color: t.iconFg,
+              ),
+            ),
+          const Spacer(),
+          ?trailing,
+        ],
+      ),
+    );
+  }
+}
+
+/// Subtle search trigger — rounded icon button with "Search" label.
+/// Opens whatever search experience the caller wires up (focus inline search,
+/// open command palette, etc.).
+class SbSearchTrigger extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+  const SbSearchTrigger({
+    super.key,
+    required this.onTap,
+    this.label = 'Search',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: t.hairline),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(Icons.search_rounded, size: 15, color: t.muted),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: t.muted,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact accent pill — used for mobile top-right "New chat".
+class SbNewChatPill extends StatelessWidget {
+  final VoidCallback onTap;
+  final String label;
+  final IconData icon;
+  const SbNewChatPill({
+    super.key,
+    required this.onTap,
+    this.label = 'New',
+    this.icon = Icons.edit_rounded,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    final on = t.isDark ? Colors.black : Colors.white;
+    return Material(
+      color: t.accent,
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(10),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AppIcon(icon, size: 15, color: on),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: on,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Sidebar nav row (icon + label, stacked vertically). Primary highlights accent.
+class SbNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+  const SbNavItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
+    final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: kBorderRadiusRow,
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
+          child: Row(
+            children: [
+              AppIcon(icon, size: 19, color: iconColor),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
+                    color: textColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Rail-aligned nav row. 48 px tall, icon centred inside a 48x48 square at
+/// the same x as the floating mini-rail IconButtons — so opening/closing
+/// the sidebar doesn't shift any icon. Label sits to the right of the icon.
+class SbRailRow extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final bool primary;
+
+  /// Inner padding inside the rounded hover pill. Combined with the 6 px
+  /// outer wrapper this yields an effective left offset of 8 — same as
+  /// `kFixedLeftPadding`, so the icon glyph centres line up with the
+  /// hamburger overlay above.
+  final double leftPadding;
+  final double rowHeight;
+  final double iconBoxWidth;
+  final double iconSize;
+  const SbRailRow({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.primary = false,
+    this.leftPadding = 2.0,
+    this.rowHeight = 40.0,
+    this.iconBoxWidth = 48.0,
+    this.iconSize = 24.0,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
+    final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
+    final BorderRadius radius = BorderRadius.circular(10);
+    // Pill width is controlled by the parent (callers wrap a group of
+    // rail rows in `IntrinsicWidth + Column(stretch)` so every row in
+    // the group matches the widest label). Row uses mainAxisSize.min so
+    // its natural width can be measured by IntrinsicWidth.
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      child: SizedBox(
+        height: rowHeight,
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: radius,
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: radius,
+            child: Padding(
+              padding: EdgeInsets.only(left: leftPadding, right: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: iconBoxWidth,
+                    height: rowHeight,
+                    child: AppIcon(icon, size: iconSize, color: iconColor),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    label,
+                    overflow: TextOverflow.clip,
+                    softWrap: false,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: primary ? FontWeight.w700 : FontWeight.w500,
+                      color: textColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Mixed-case section label with optional count. Claude.ai style.
+class SbSectionLabel extends StatelessWidget {
+  final String label;
+  final int? count;
+  final EdgeInsets padding;
+  final Color? color;
+  const SbSectionLabel({
+    super.key,
+    required this.label,
+    this.count,
+    this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    // Just the label in the user's accent colour — no leading dot, no
+    // underline. The accent itself supplies the visual emphasis.
+    final Color c = color ?? t.accent;
+    return Padding(
+      padding: padding,
+      child: Row(
+        children: [
+          // Not upper case any more: small capitals read smaller than they
+          // measure, and this label has to be findable at a glance.
+          Text(
+            label,
+            // A line height above 1 keeps the descenders inside the box
+            // whatever the font: without it the y and the p are clipped.
+            style: TextStyle(
+              fontSize: 16,
+              height: 1.35,
+              letterSpacing: -0.2,
+              fontWeight: FontWeight.w900,
+              color: c,
+            ),
+          ),
+          if (count != null) ...[
+            const Spacer(),
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: c.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Accent-tinted "Pinned" bento card. Caller supplies the row widgets.
+class SbPinnedBento extends StatelessWidget {
+  final int count;
+  final List<Widget> children;
+  final EdgeInsets margin;
+  const SbPinnedBento({
+    super.key,
+    required this.count,
+    required this.children,
+    this.margin = const EdgeInsets.symmetric(horizontal: 6),
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    // Neutral outlined card — a subtle hairline border (no accent fill, no
+    // accent border) wraps the pinned section so it's visually grouped
+    // without screaming colour.
+    return Padding(
+      padding: margin,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(0, 6, 0, 6),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: t.hairline),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 2, 14, 4),
+              child: Row(
+                children: [
+                  Text(
+                    'Pinned',
+                    style: TextStyle(
+                      fontSize: 12,
+                      letterSpacing: 0.1,
+                      fontWeight: FontWeight.w600,
+                      color: t.muted,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '$count',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: t.muted.withValues(alpha: 0.65),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Flexible(
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: children,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Sliver delegate that renders an SbSectionLabel as a pinned header. The
+/// header stays glued to the top of the viewport until the next pinned
+/// header pushes it out — a classic "current section" indicator while
+/// scrolling through Today / This week / Older buckets.
+class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate {
+  final String label;
+  final Color background;
+  final Color? color;
+  final double height;
+  const SbStickyLabelDelegate({
+    required this.label,
+    required this.background,
+    this.color,
+    this.height = 40,
+  });
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return Container(
+      color: background,
+      child: SbSectionLabel(
+        label: label,
+        color: color,
+        padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+      ),
+    );
+  }
+
+  @override
+  double get maxExtent => height;
+  @override
+  double get minExtent => height;
+
+  @override
+  bool shouldRebuild(covariant SbStickyLabelDelegate oldDelegate) {
+    return oldDelegate.label != label ||
+        oldDelegate.background != background ||
+        oldDelegate.color != color ||
+        oldDelegate.height != height;
+  }
+}
+
+/// Hairline divider matching app palette.
+class SbHairline extends StatelessWidget {
+  final EdgeInsets margin;
+  const SbHairline({super.key, this.margin = EdgeInsets.zero});
+  @override
+  Widget build(BuildContext context) {
+    final t = SidebarTokens.of(context);
+    return Padding(
+      padding: margin,
+      child: Container(height: 1, color: t.hairline),
     );
   }
 }
