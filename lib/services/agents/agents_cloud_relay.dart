@@ -45,6 +45,13 @@
 /// Step 2 binds the scanned channel to the signed-in account; it lives in
 /// [_claimPairingChannel], which is the one place the claim's shape is written.
 ///
+/// The same claim heals a paired host whose account session died. Such a host
+/// cannot open the relay with a token any more, so it parks on a *heal
+/// channel* derived from the pairing's channel key (agents_heal_channel.dart).
+/// When a reconnect finds its host offline, it claims that channel once. On
+/// success the host is an ordinary executor of this account again and the
+/// sealed session re-provisions it; on a refusal nothing changes.
+///
 /// The `payload` is opaque to the relay. It carries the local-relay envelope
 /// verbatim — the `join`, the unsealed `pairing` steps of the ceremony, and the
 /// sealed `frame`s — because the host feeds it straight back into the party it
@@ -88,6 +95,10 @@ const String kAgentsRelayPath = '/v2/relay/ws';
 const String kAgentsPairChannelParam = 'cw_pair';
 const String kAgentsTargetDeviceParam = 'cw_device';
 
+/// The heal channel of a stored pairing, added to a reconnect address only for
+/// the dial (never persisted). Key-derived material: never logged.
+const String kAgentsHealChannelParam = 'cw_heal';
+
 /// A dial address for the cloud relay, expressed as a [Uri] so it fits the
 /// existing connector seam and so a stored trust record carries everything a
 /// fresh phone needs to reconnect with no further input.
@@ -97,6 +108,7 @@ class AgentsCloudRelayAddress {
     required this.base,
     this.pairingChannel,
     this.targetDeviceId,
+    this.healChannel,
   });
 
   /// The relay base, scheme + host + optional port, no path.
@@ -109,6 +121,10 @@ class AgentsCloudRelayAddress {
   /// The host device this controller addresses. Known from the stored trust on
   /// every reconnect; learned from the claim on a first pairing.
   final String? targetDeviceId;
+
+  /// The heal channel to claim when [targetDeviceId] is offline. Set on a
+  /// reconnect only. Key-derived material: never logged, never persisted.
+  final String? healChannel;
 
   /// The address for a first pairing, built from a scanned or typed invite.
   factory AgentsCloudRelayAddress.forInvite(AgentsPairingInvite invite) =>
@@ -133,6 +149,8 @@ class AgentsCloudRelayAddress {
         kAgentsPairChannelParam: pairingChannel!,
       if (targetDeviceId != null && targetDeviceId!.isNotEmpty)
         kAgentsTargetDeviceParam: targetDeviceId!,
+      if (healChannel != null && healChannel!.isNotEmpty)
+        kAgentsHealChannelParam: healChannel!,
     },
   );
 
@@ -149,6 +167,7 @@ class AgentsCloudRelayAddress {
     if (url.path != kAgentsRelayPath) return null;
     final channel = url.queryParameters[kAgentsPairChannelParam]?.trim();
     final device = url.queryParameters[kAgentsTargetDeviceParam]?.trim();
+    final heal = url.queryParameters[kAgentsHealChannelParam]?.trim();
     return AgentsCloudRelayAddress(
       base: Uri(
         scheme: scheme,
@@ -157,6 +176,7 @@ class AgentsCloudRelayAddress {
       ),
       pairingChannel: (channel == null || channel.isEmpty) ? null : channel,
       targetDeviceId: (device == null || device.isEmpty) ? null : device,
+      healChannel: (heal == null || heal.isEmpty) ? null : heal,
     );
   }
 
@@ -191,10 +211,12 @@ class AgentsCloudRelayAddress {
       other is AgentsCloudRelayAddress &&
       other.base == base &&
       other.pairingChannel == pairingChannel &&
-      other.targetDeviceId == targetDeviceId;
+      other.targetDeviceId == targetDeviceId &&
+      other.healChannel == healChannel;
 
   @override
-  int get hashCode => Object.hash(base, pairingChannel, targetDeviceId);
+  int get hashCode =>
+      Object.hash(base, pairingChannel, targetDeviceId, healChannel);
 
   /// The channel is key material, so it is not in here.
   @override
@@ -296,6 +318,19 @@ class AgentsCloudRelaySocket implements RelaySocket {
   bool _ready = false;
   bool _closed = false;
 
+  /// The first presence snapshot the relay sends after `auth_ok`: the device
+  /// ids of this account's executors that are online. It is sent
+  /// unconditionally, so a reconnect can tell "host offline" from "not yet
+  /// known" without a second round trip.
+  final Completer<Set<String>> _presence = Completer<Set<String>>();
+
+  /// How long a reconnect waits for that snapshot before it claims the heal
+  /// channel anyway. The relay sends it right behind `auth_ok`.
+  static const Duration _presenceWait = Duration(seconds: 3);
+
+  /// How long a heal claim may take before the reconnect goes on without it.
+  static const Duration _healClaimTimeout = Duration(seconds: 5);
+
   /// One-shot waiters for a handshake / claim answer.
   Completer<Map<String, dynamic>>? _awaiting;
   bool Function(Map<String, dynamic> frame)? _awaitingMatch;
@@ -382,6 +417,10 @@ class AgentsCloudRelaySocket implements RelaySocket {
       if (learned != null) _claimedTargets[cacheKey] = learned;
     } else {
       _targetDeviceId = address.targetDeviceId;
+      final heal = address.healChannel;
+      if (heal != null && heal.isNotEmpty && _targetDeviceId != null) {
+        await _healIfOffline(heal);
+      }
     }
     if (_targetDeviceId == null || _targetDeviceId!.isEmpty) {
       throw const AgentsCloudRelayException(
@@ -458,6 +497,64 @@ class AgentsCloudRelaySocket implements RelaySocket {
       );
     }
     return _deviceIdFrom(frame);
+  }
+
+  /// Claims the heal channel when the target host is not online.
+  ///
+  /// A host whose account session died parks on that channel and can reach
+  /// nobody until a paired app claims it. The claim is the ordinary pairing
+  /// claim, so the relay learns nothing new: it binds the parked socket to
+  /// this account, and the host still has to pass the controller-session
+  /// handshake before it acts on anything. Never throws: a refusal (the usual
+  /// answer, when the host is simply off) leaves the reconnect as it was.
+  Future<void> _healIfOffline(String heal) async {
+    final target = _targetDeviceId;
+    if (target == null) return;
+    Set<String>? online;
+    try {
+      online = await _presence.future.timeout(_presenceWait);
+    } on TimeoutException {
+      online = null;
+    }
+    if (online != null && online.contains(target)) return;
+    try {
+      // Short: the relay answers a claim at once, and a heal attempt must not
+      // hold up an ordinary reconnect.
+      final claimed = await _claimPairingChannel(
+        heal,
+        timeout: _healClaimTimeout,
+      );
+      if (kDebugMode) {
+        debugPrint(
+          claimed == target
+              ? '[agents-cloud] renewed a parked host (heal channel)'
+              : '[agents-cloud] heal claim answered for another device',
+        );
+      }
+    } on AgentsCloudRelayException {
+      // Not parked: the host is off, or healthy on another path.
+    } on TimeoutException {
+      // The relay did not answer the claim; the reconnect goes on as before.
+    } finally {
+      // A claim that timed out leaves its waiter armed. The socket stays open
+      // now, so a stale waiter would swallow a later error frame.
+      _awaiting = null;
+      _awaitingMatch = null;
+    }
+  }
+
+  static Set<String> _onlineExecutors(Map<String, dynamic> frame) {
+    final online = <String>{};
+    final executors = frame['executors'];
+    if (executors is! List) return online;
+    for (final entry in executors) {
+      if (entry is! Map) continue;
+      final id = entry['device_id'];
+      if (id is String && id.isNotEmpty && entry['online'] != false) {
+        online.add(id);
+      }
+    }
+    return online;
   }
 
   /// The one sentence every claim refusal gets. The server refuses an expired
@@ -587,6 +684,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
           unawaited(close());
         }
       case 'cowork_presence':
+        if (!_presence.isCompleted) _presence.complete(_onlineExecutors(frame));
       case 'pong':
         break;
       default:
