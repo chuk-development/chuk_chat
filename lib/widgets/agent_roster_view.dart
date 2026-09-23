@@ -1,53 +1,33 @@
-/// The sidebar: your coworkers down the left of the messenger (§1, §4).
+/// The roster: the left pane of the Agents desktop layout (docs/DESIGN.md
+/// §14.1, §14.3).
 ///
-/// It is a clean vertical list of AGENTS and nothing else. There are no chats
-/// and no sessions in here: every coworker has exactly one long-lived thread,
-/// so a row is an agent, and picking it opens that one thread. The rail carries
-/// a "new coworker" affordance at the top, a selection highlight on the active
-/// agent, and it can collapse to a slim avatar rail on a wide window.
+/// A desktop list, not a phone inbox that got wider: the app name and the two
+/// pane buttons in a 48 px header that lines up with the thread's title bar, a
+/// search field, the sections "Agents" and "Rooms" in dense rows, and the
+/// account row at the bottom.
 ///
-/// One row per agent with its name, an optional role, what it is doing, and
-/// when it was last active. "Last active" is left as "no activity yet" when the
-/// app has not seen anything happen — it is never back-filled with a plausible
-/// time.
+///  * An agent row is 36 px, a room row 32 px; 8 px of horizontal padding and
+///    a 24 px face. Hover fills the row with `surfaceContainerHigh`; the
+///    selected row takes `secondaryContainer` and a 3 px accent bar on its left
+///    edge. Unread is the bold name and a small dot — no count.
+///  * A right click opens the row's context menu (profile, rename, pin, hide,
+///    delete). The "…" button that opens the same menu shows on hover only.
+///  * [collapsed] folds the pane to a 56 px rail of faces (Ctrl+B).
 ///
-/// ## Why it is built out of `widgets/sidebar/sidebar_chrome.dart`
-///
-/// The chrome (`SidebarTokens`, `SbBrand`, `SbRailRow`, `SbSectionLabel`,
-/// `SbHairline`) is chuk_chat's, imported verbatim. Agents's sidebar shows
-/// different CONTENT — agents, not chat history — but it must not look like a
-/// different product, so it takes every colour, radius, weight and motion from
-/// the same tokens chuk's own sidebar uses. Nothing here invents a colour:
-/// `SidebarTokens.of(context)` is the only source, which is what keeps the rail
-/// in step when the user changes theme or accent.
-///
-/// The agent row is the one thing chuk has no widget for. `SbChatTile` is a
-/// single-line row (title + time); a coworker needs two lines — its role and
-/// what it is doing right now. [_AgentTile] therefore reproduces `SbChatTile`'s
-/// visual grammar exactly (same 12 px radius, the always-reserved 1.5 px border
-/// so selection never resizes a row, accent @0.18 fill when selected, iconFg
-/// @0.05 on hover, the same 110 ms cross-fade) and adds the second line.
-///
-/// ## The skeleton is chuk's `SidebarDesktop.build`
-///
-/// Top spacer of `kTopInitialSpacing`; a brand row exactly `kMenuButtonHeight`
-/// tall whose text starts right of the shell's hamburger (the hamburger is
-/// drawn by the shell at `kFixedLeftPadding`, on top of this widget, and never
-/// moves); the rail rows in an `IntrinsicWidth` column so every hover pill is
-/// as wide as the widest label — New coworker, Control Rooms, Agent's browser
-/// in chuk's New chat / Workspaces / Media slots; the list; and chuk's footer
-/// pill floating over the list's tail with a fade behind it. The pill's gear is
-/// the Settings entry, as in chuk, and the pill carries chuk's `BalanceBadge`
-/// (the account's credits, bead cowork-4ih) whenever a Supabase session is up.
-/// chuk's `UpdateBanner` is left out.
+/// Every coworker has exactly one long-lived thread, so a row is an agent and
+/// picking it opens that thread. The phone's inbox is `MobileAgentList`; this
+/// widget is only ever built by the desktop layout.
 library;
 
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:chuk_chat/ui/expressive/motion.dart';
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -57,7 +37,9 @@ import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/services/profile_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
-import 'package:chuk_chat/widgets/agent_avatar.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
@@ -69,18 +51,80 @@ import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 // language; it is exported here so every caller keeps one import.
 export 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 
-/// The brand row's sizing knob.
-///
-/// This is NOT a type-scale role and deliberately stays out of `textTheme`:
-/// with the production label ('Chuk Chat') `SbBrand` draws the frozen SVG
-/// wordmark and uses this number only as `height * 0.75`, so it is a logo
-/// height in disguise. Both neighbouring roles would resize the mark —
-/// `titleLarge` (22) grows it from 13.5 to 16.5 px, `titleMedium` (16) shrinks
-/// it to 12 px — and neither is a decision about text. It belongs with the
-/// sidebar's own metrics (`SidebarTokens`), which lives in chuk's shared
-/// `sidebar_chrome.dart`; until that file is opened for a token, it is named
-/// here instead of left as a bare literal.
-const double kSidebarBrandWordmarkSize = 18;
+/// The brand row's sizing knob: `SbBrand` draws the frozen wordmark and uses
+/// this number as its logo height. Not a type-scale role.
+const double kSidebarBrandWordmarkSize = 16;
+
+/// Which coworkers the user pinned to the top of the desktop roster. Local to
+/// this device, like the pane widths: a pin is how one window is arranged, not
+/// something the host needs to know.
+class DesktopRosterPins extends ChangeNotifier {
+  DesktopRosterPins._();
+
+  static final DesktopRosterPins instance = DesktopRosterPins._();
+
+  static const String _kKey = 'agents.desktop.pinned_v1';
+
+  final Set<String> _ids = <String>{};
+  bool _loaded = false;
+
+  Set<String> get ids => Set<String>.unmodifiable(_ids);
+
+  bool isPinned(String agentId) => _ids.contains(agentId);
+
+  Future<void> load() async {
+    if (_loaded) return;
+    _loaded = true;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final String? raw = prefs.getString(_kKey);
+      if (raw == null) return;
+      final Object? data = jsonDecode(raw);
+      if (data is! List) return;
+      _ids
+        ..clear()
+        ..addAll(data.whereType<String>());
+      notifyListeners();
+    } catch (_) {
+      // Unreadable pins are no pins.
+    }
+  }
+
+  void toggle(String agentId) {
+    if (!_ids.remove(agentId)) _ids.add(agentId);
+    notifyListeners();
+    unawaited(_save());
+  }
+
+  Future<void> _save() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kKey, jsonEncode(_ids.toList()));
+    } catch (_) {
+      // A pin that is not written is lost on the next launch, nothing more.
+    }
+  }
+
+  @visibleForTesting
+  void reset() {
+    _ids.clear();
+    _loaded = false;
+    notifyListeners();
+  }
+}
+
+/// The agents in the order the desktop roster shows them: pinned first, then
+/// the rest, each keeping the roster's own order. Ctrl+1 … Ctrl+9 count this
+/// list, so the roster and the shortcut can never disagree.
+List<AgentsAgent> desktopRosterOrder(
+  List<AgentsAgent> agents,
+  Set<String> pinned,
+) => <AgentsAgent>[
+  for (final AgentsAgent a in agents)
+    if (pinned.contains(a.id)) a,
+  for (final AgentsAgent a in agents)
+    if (!pinned.contains(a.id)) a,
+];
 
 class AgentRosterView extends StatefulWidget {
   const AgentRosterView({
@@ -89,6 +133,7 @@ class AgentRosterView extends StatefulWidget {
     required this.onSelect,
     this.selectedAgentId,
     this.selectedThreadKey,
+    this.selectedRoomId,
     this.onAddAgent,
     this.onDeleteAgent,
     this.onRenameAgent,
@@ -96,12 +141,19 @@ class AgentRosterView extends StatefulWidget {
     this.rooms,
     this.onOpenRoom,
     this.onCreateRoom,
+    this.onRenameRoom,
+    this.onDeleteRoom,
+    this.onManageRoomMembers,
     this.onOpenSettings,
     this.onOpenProfile,
+    this.onOpenQuickSwitcher,
+    this.collapsed = false,
+    this.onToggleCollapsed,
     this.accountLabel,
     this.now,
     this.readMarks,
     this.profiles,
+    this.pins,
   });
 
   final AgentRosterSource source;
@@ -113,449 +165,607 @@ class AgentRosterView extends StatefulWidget {
   final String? selectedAgentId;
   final String? selectedThreadKey;
 
-  /// Opens the onboarding flow. Hidden when null.
+  /// The room open in the centre pane, if one is. Its row is the selected one.
+  final String? selectedRoomId;
+
+  /// Opens the new-agent dialog. Hidden when null.
   final VoidCallback? onAddAgent;
 
-  /// Deletes a coworker. When set, a Delete item appears for agents that are not
-  /// the paired host (the host agent is the real device, not a bot to delete).
+  /// Deletes a coworker, after the user confirmed. A Delete item appears for
+  /// agents that are not the paired host (the host agent is the real device).
   final void Function(String agentId)? onDeleteAgent;
 
-  /// Renames a coworker (bead cowork-817). When set, a Rename item appears in
-  /// every row's menu and opens chuk's rename dialog (`_renameChatDialog` in
-  /// chuk's `sidebar_desktop.dart`, one `TextField` in an `AlertDialog`); the
-  /// trimmed, non-empty, changed name is reported here. The shell persists it.
+  /// Renames a coworker; reports the trimmed, non-empty, changed name.
   final void Function(String agentId, String name)? onRenameAgent;
 
-  /// Opens a coworker's profile page (its row menu → Profile). Hidden when
-  /// null.
+  /// Opens a coworker's profile page. Hidden when null.
   final void Function(AgentsAgent agent)? onOpenProfile;
 
-  /// Control Rooms — chuk's Workspaces rail slot. Hidden when null.
+  /// Control Rooms in the right pane.
   final VoidCallback? onOpenRooms;
 
-  /// The group rooms, listed in this same list under a quiet "Rooms" label.
-  /// Null (or an empty source) leaves the rail exactly as it was.
+  /// The group rooms, listed under "Rooms". Null leaves the section out.
   final RoomSource? rooms;
 
   /// Opens a room. Rooms are not listed without it.
   final void Function(String roomId)? onOpenRoom;
 
-  /// Starts a new room. Adds a "New room" rail row beside "New agent".
+  /// Starts a new room.
   final VoidCallback? onCreateRoom;
 
-  /// Settings — the gear in chuk's footer pill. The whole footer is hidden
-  /// when null (a shell without a shell config has no settings to open).
+  final void Function(String roomId, String name)? onRenameRoom;
+  final void Function(String roomId)? onDeleteRoom;
+  final void Function(String roomId)? onManageRoomMembers;
+
+  /// Settings — the gear in the account row. The row is hidden when null.
   final VoidCallback? onOpenSettings;
 
-  /// What the footer pill says where chuk shows the account's display name.
-  /// Null lets the roster load the profile itself, exactly like chuk's sidebar
-  /// (`_loadProfile` → display name → e-mail → 'Account').
+  /// The quick switcher (Ctrl+K), from the search field's button.
+  final VoidCallback? onOpenQuickSwitcher;
+
+  /// Folded to the rail of faces.
+  final bool collapsed;
+
+  /// Folds or unfolds the pane (Ctrl+B).
+  final VoidCallback? onToggleCollapsed;
+
+  /// The account row's name. Null lets the roster load the profile itself.
   final String? accountLabel;
 
-  /// Clock seam so "5m ago" is deterministic in a test.
+  /// Clock seam so a row's time is deterministic in a test.
   final DateTime Function()? now;
 
-  /// What the reader has already seen, per thread — the unread dot on a row.
-  /// Injectable for tests; defaults to the app-wide store.
   final AgentReadMarks? readMarks;
-
-  /// The coworkers' display profiles (picture, colour, role). Injectable for
-  /// tests; defaults to the app-wide store.
   final AgentProfileStore? profiles;
+  final DesktopRosterPins? pins;
 
   @override
   State<AgentRosterView> createState() => _AgentRosterViewState();
 }
 
 class _AgentRosterViewState extends State<AgentRosterView> {
-  /// chuk's `_profile`: the signed-in account's record, for the footer pill.
-  /// Only fetched when Supabase is up — a widget test has no session and the
-  /// pill then shows [AgentRosterView.accountLabel] or 'Account'.
   ProfileRecord? _profile;
+  final TextEditingController _search = TextEditingController();
+  bool _hiddenOpen = false;
 
-  /// chuk's hosted pieces (profile name, `BalanceBadge`) need a Supabase
-  /// session. Without one — widget tests — the pill is chuk's minus the badge.
   bool get _hosted => SupabaseService.isInitialized;
+
+  DesktopRosterPins get _pins => widget.pins ?? DesktopRosterPins.instance;
+  AgentReadMarks get _marks => widget.readMarks ?? AgentReadMarks.instance;
+  AgentProfileStore get _profiles =>
+      widget.profiles ?? AgentProfileStore.instance;
 
   @override
   void initState() {
     super.initState();
     if (_hosted) _loadProfile();
-  }
-
-  // chuk `sidebar_desktop.dart` `_loadProfile`, verbatim.
-  Future<void> _loadProfile() async {
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) return;
-
-    try {
-      final record = await const ProfileService().loadOrCreateProfile();
-      if (!mounted) return;
-      setState(() {
-        _profile = record;
-      });
-    } catch (_) {
-      // Silently ignore profile load errors; sidebar will show fallback label.
-    }
-  }
-
-  // chuk `sidebar_desktop.dart` `_displayNameFor`, verbatim.
-  String _displayNameFor(ProfileRecord? profile) {
-    if (profile == null) return 'Account';
-    if (profile.displayName.trim().isNotEmpty) {
-      return profile.displayName.trim();
-    }
-    if (profile.email.trim().isNotEmpty) {
-      return profile.email.trim();
-    }
-    return 'Account';
+    _search.addListener(_onSearch);
   }
 
   @override
-  Widget build(BuildContext context) {
-    // The rail follows three sources: the roster, what is unread, and the
-    // display profiles — a new face or a cleared unread dot must land without a
-    // reselect.
-    return AnimatedBuilder(
-      animation: Listenable.merge(<Listenable?>[
-        widget.source,
-        widget.rooms,
-        widget.readMarks ?? AgentReadMarks.instance,
-        widget.profiles ?? AgentProfileStore.instance,
-      ]),
-      builder: (context, _) {
-        final t = SidebarTokens.of(context);
-        final agents = widget.source.visibleAgents;
-        final hidden = widget.source.hiddenAgents;
-        // A room is a conversation, so it belongs in this list and not only
-        // behind Control Rooms. This rail is already sectioned by state
-        // (Working / Scheduled / Ready), so rooms get the same quiet label
-        // rather than a card of their own — and they sit first, because a room
-        // carries no activity of its own to sort it by.
-        final List<AgentsRoom> rooms = widget.onOpenRoom == null
-            ? const <AgentsRoom>[]
-            : (widget.rooms?.rooms ?? const <AgentsRoom>[]);
-
-        // Three buckets, in the order a glance wants them: what is running now,
-        // what will run on its own, what is idle. An empty bucket draws no
-        // header — the rail never shows a label with nothing under it.
-        final working = _bucket(agents, AgentActivity.working);
-        final scheduled = _bucket(agents, AgentActivity.scheduled);
-        final waiting = _bucket(agents, AgentActivity.waiting);
-
-        // Hamburger stays anchored to the top-left always — brand text starts
-        // just to the right of it so the two share the same baseline.
-        const double brandLeftPadding =
-            kFixedLeftPadding + kMenuButtonHeight + 4;
-        final bool hasFooter = widget.onOpenSettings != null;
-
-        return ColoredBox(
-          color: t.bg,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Top spacer matches the hamburger's `top` offset.
-              const SizedBox(height: kTopInitialSpacing),
-
-              // Brand row is exactly kMenuButtonHeight tall and vertically
-              // centred — that puts the label on the hamburger's baseline.
-              const SizedBox(
-                height: kMenuButtonHeight,
-                child: SbBrand(
-                  label: 'Chuk Chat',
-                  showLogo: false,
-                  fontSize: kSidebarBrandWordmarkSize,
-                  padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
-                ),
-              ),
-
-              // The rail rows share a uniform pill width = the widest child's
-              // intrinsic width (chuk's IntrinsicWidth + Column(stretch)).
-              Align(
-                alignment: Alignment.centerLeft,
-                child: IntrinsicWidth(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      if (widget.onAddAgent != null)
-                        SbRailRow(
-                          icon: Icons.person_add_alt,
-                          label: 'New agent',
-                          primary: true,
-                          onTap: widget.onAddAgent!,
-                        ),
-                      if (widget.onCreateRoom != null)
-                        SbRailRow(
-                          icon: Icons.group_add_outlined,
-                          label: 'New room',
-                          onTap: widget.onCreateRoom!,
-                        ),
-                      if (widget.onOpenRooms != null)
-                        SbRailRow(
-                          icon: Icons.groups_outlined,
-                          label: 'Control Rooms',
-                          onTap: widget.onOpenRooms!,
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              SbHairline(margin: const EdgeInsets.fromLTRB(6, 8, 6, 0)),
-              Expanded(
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: agents.isEmpty && hidden.isEmpty && rooms.isEmpty
-                          ? _emptyState(context, t)
-                          : ListView(
-                              // The list runs under the footer; the padding
-                              // keeps the last row reachable above the pill.
-                              padding: EdgeInsets.only(
-                                top: 2,
-                                bottom: hasFooter ? 96 : 12,
-                              ),
-                              children: [
-                                ..._roomSection(context, rooms),
-                                ..._section(context, 'Working', working),
-                                ..._section(context, 'Scheduled', scheduled),
-                                ..._section(context, 'Ready', waiting),
-                                if (hidden.isNotEmpty)
-                                  ..._hiddenSection(context, t, hidden),
-                              ],
-                            ),
-                    ),
-                    if (hasFooter)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: _footer(context, t),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
+  void dispose() {
+    _search.removeListener(_onSearch);
+    _search.dispose();
+    super.dispose();
   }
 
-  /// chuk's sidebar footer: one long fade over the list's tail, then the name
-  /// pill with the settings gear. The fade is a `Positioned.fill` behind the
-  /// pill wrapped in `IgnorePointer`, so it never swallows a tap meant for a
-  /// row showing through it.
-  Widget _footer(BuildContext context, SidebarTokens t) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: IgnorePointer(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    t.bg.withValues(alpha: 0),
-                    t.bg.withValues(alpha: 0.35),
-                    t.bg.withValues(alpha: 0.6),
-                  ],
-                  stops: const [0.0, 0.55, 1.0],
-                ),
-              ),
-            ),
-          ),
-        ),
-        Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [const SizedBox(height: 34), _footerRow(context, t)],
-        ),
-      ],
-    );
+  void _onSearch() => setState(() {});
+
+  Future<void> _loadProfile() async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) return;
+    try {
+      final record = await const ProfileService().loadOrCreateProfile();
+      if (!mounted) return;
+      setState(() => _profile = record);
+    } catch (_) {
+      // The row shows the fallback label.
+    }
   }
 
-  /// chuk's `_buildFooterRow`, slot for slot: display name, the credit pill
-  /// (`BalanceBadge`, chuk's hosted balance from the same account API), the
-  /// gear. The badge is mounted only with a Supabase session (see [_hosted]).
-  Widget _footerRow(BuildContext context, SidebarTokens t) {
-    final TextTheme text = Theme.of(context).textTheme;
-    final String name = widget.accountLabel ?? _displayNameFor(_profile);
-    final Color pillColor = Color.alphaBlend(
-      t.accent.withValues(alpha: 0.08),
-      t.bg,
-    );
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 4, 10, 10),
-      child: Material(
-        color: pillColor,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: widget.onOpenSettings,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 5, 4, 5),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    name,
-                    overflow: TextOverflow.ellipsis,
-                    // The pill's own title — the account you are signed in as.
-                    style: text.titleMedium?.copyWith(
-                      color: t.iconFg,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                if (_hosted) ...[
-                  const SizedBox(width: 8),
-                  // Credit pill — bigger, fully rounded, layered tint above
-                  // the footer background so it reads as a discrete badge.
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: t.accent.withValues(alpha: 0.20),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: BalanceBadge(
-                      // A number inside a pill is a label, not body copy.
-                      textStyle: text.labelLarge?.copyWith(
-                        color: t.accent,
-                        fontWeight: FontWeight.w800,
-                      ),
-                      placeholderStyle: text.labelLarge?.copyWith(
-                        color: t.iconFg.withValues(alpha: 0.55),
-                        fontWeight: FontWeight.w500,
-                      ),
-                      padding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
-                const SizedBox(width: 6),
-                Material(
-                  color: Colors.transparent,
-                  shape: const CircleBorder(),
-                  clipBehavior: Clip.antiAlias,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: widget.onOpenSettings,
-                    child: Tooltip(
-                      message: 'Settings',
-                      child: Padding(
-                        padding: const EdgeInsets.all(8),
-                        child: AppIcon(
-                          Icons.settings_rounded,
-                          size: 24,
-                          color: t.iconFg.withValues(alpha: 0.8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  String _displayNameFor(ProfileRecord? profile) {
+    if (profile == null) return 'Account';
+    if (profile.displayName.trim().isNotEmpty)
+      return profile.displayName.trim();
+    if (profile.email.trim().isNotEmpty) return profile.email.trim();
+    return 'Account';
   }
 
-  List<AgentsAgent> _bucket(List<AgentsAgent> agents, AgentActivity activity) =>
-      <AgentsAgent>[
-        for (final a in agents)
-          if (a.activity == activity) a,
-      ];
+  DateTime _now() => (widget.now ?? DateTime.now)();
 
-  /// A labelled group. Returns nothing at all when the bucket is empty, so the
-  /// rail shows only the states that actually exist right now.
-  List<Widget> _section(
-    BuildContext context,
-    String label,
-    List<AgentsAgent> agents,
-  ) {
-    if (agents.isEmpty) return const <Widget>[];
-    return <Widget>[
-      SbSectionLabel(label: label, count: agents.length),
-      for (final agent in agents) _tile(context, agent),
-    ];
+  bool _isSelected(AgentsAgent agent) =>
+      widget.selectedRoomId == null &&
+      agent.id == widget.selectedAgentId &&
+      (widget.selectedThreadKey == null ||
+          agent.threads.any(
+            (thread) => thread.key == widget.selectedThreadKey,
+          ));
+
+  void _pick(AgentsAgent agent) {
+    if (agent.threads.isEmpty) return;
+    widget.onSelect(agent.id, agent.threads.first.key);
   }
 
-  /// The rooms, under the rail's own quiet section label. Empty means no label
-  /// and no rows, exactly like every other bucket here.
-  List<Widget> _roomSection(BuildContext context, List<AgentsRoom> rooms) {
-    if (rooms.isEmpty) return const <Widget>[];
-    return <Widget>[
-      SbSectionLabel(label: 'Rooms', count: rooms.length),
-      for (final AgentsRoom room in rooms)
-        _RoomTile(
-          key: ValueKey<String>('room-tile-${room.id}'),
-          room: room,
-          profiles: widget.profiles ?? AgentProfileStore.instance,
-          onTap: () => widget.onOpenRoom!(room.id),
-        ),
-    ];
-  }
+  // --- menus -------------------------------------------------------------------
 
-  Widget _tile(BuildContext context, AgentsAgent agent) => _AgentTile(
-    key: ValueKey<String>('agent-tile-${agent.id}'),
-    agent: agent,
-    selected:
-        agent.id == widget.selectedAgentId &&
-        (widget.selectedThreadKey == null ||
-            agent.threads.any(
-              (thread) => thread.key == widget.selectedThreadKey,
-            )),
-    now: _now(),
-    onTap: agent.threads.isEmpty
-        ? null
-        : () => widget.onSelect(agent.id, agent.threads.first.key),
-    unread: (widget.readMarks ?? AgentReadMarks.instance).isUnread(agent),
-    profiles: widget.profiles ?? AgentProfileStore.instance,
-    onOpenProfile: widget.onOpenProfile == null
-        ? null
-        : () => widget.onOpenProfile!(agent),
-    onHide: () => widget.source.hideAgent(agent.id),
-    onRename: widget.onRenameAgent == null
-        ? null
-        : () => _renameAgentDialog(agent),
-    onDelete: widget.onDeleteAgent == null || agent.onHost
-        ? null
-        : () => widget.onDeleteAgent!(agent.id),
-  );
-
-  /// chuk's `_renameChatDialog` (`sidebar_desktop.dart`), for a coworker:
-  /// the same `AlertDialog` with one autofocused `TextField`, Enter or the
-  /// Rename button submits, Cancel or an unchanged / empty name does nothing.
-  Future<void> _renameAgentDialog(AgentsAgent agent) async {
-    final newName = await showCoworkerNameDialog(
+  Future<void> _renameAgent(AgentsAgent agent) async {
+    final String? name = await showCoworkerNameDialog(
       context,
       title: 'Rename agent',
       initialName: agent.name,
       submitLabel: 'Rename',
     );
     if (!mounted) return;
-    if (newName == null || newName.isEmpty || newName == agent.name) return;
-    widget.onRenameAgent?.call(agent.id, newName);
+    if (name == null || name.isEmpty || name == agent.name) return;
+    widget.onRenameAgent?.call(agent.id, name);
   }
 
-  Widget _emptyState(BuildContext context, SidebarTokens t) {
+  Future<void> _deleteAgent(AgentsAgent agent) async {
+    final bool ok = await showAgentsConfirmDialog(
+      context,
+      title: 'Delete ${agent.name}?',
+      message:
+          'The agent and its conversation leave this app. Rooms it was in '
+          'lose it as a member.',
+    );
+    if (!mounted || !ok) return;
+    widget.onDeleteAgent?.call(agent.id);
+  }
+
+  Future<void> _renameRoom(AgentsRoom room) async {
+    final String? name = await showCoworkerNameDialog(
+      context,
+      title: 'Rename room',
+      initialName: room.name,
+      submitLabel: 'Rename',
+    );
+    if (!mounted) return;
+    if (name == null || name.isEmpty || name == room.name) return;
+    widget.onRenameRoom?.call(room.id, name);
+  }
+
+  Future<void> _deleteRoom(AgentsRoom room) async {
+    final bool ok = await showAgentsConfirmDialog(
+      context,
+      title: 'Delete ${room.name}?',
+      message: 'The room and its conversation are removed for everyone in it.',
+    );
+    if (!mounted || !ok) return;
+    widget.onDeleteRoom?.call(room.id);
+  }
+
+  PopupMenuItem<VoidCallback> _item(
+    String label,
+    IconData icon,
+    VoidCallback onTap, {
+    Color? tone,
+    String? shortcut,
+  }) => PopupMenuItem<VoidCallback>(
+    value: onTap,
+    padding: EdgeInsets.zero,
+    child: MenuActionRow(
+      icon: icon,
+      label: label,
+      tone: tone,
+      shortcut: shortcut,
+    ),
+  );
+
+  Future<void> _openAgentMenu(
+    BuildContext anchor,
+    AgentsAgent agent, {
+    Offset? at,
+  }) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final bool pinned = _pins.isPinned(agent.id);
+    final VoidCallback? picked = await showAnchoredMenu<VoidCallback>(
+      anchor,
+      anchorPoint: at,
+      color: scheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<VoidCallback>>[
+        if (widget.onOpenProfile != null)
+          _item(
+            'Profile',
+            Icons.person_outline,
+            () => widget.onOpenProfile!(agent),
+          ),
+        if (widget.onRenameAgent != null)
+          _item(
+            'Rename',
+            Icons.edit_outlined,
+            () => unawaited(_renameAgent(agent)),
+          ),
+        _item(
+          pinned ? 'Unpin' : 'Pin',
+          pinned ? Icons.push_pin : Icons.push_pin_outlined,
+          () => _pins.toggle(agent.id),
+        ),
+        _item(
+          'Hide',
+          Icons.visibility_off_outlined,
+          () => widget.source.hideAgent(agent.id),
+        ),
+        if (widget.onDeleteAgent != null &&
+            !agent.onHost) ...<PopupMenuEntry<VoidCallback>>[
+          const PopupMenuDivider(),
+          _item(
+            'Delete',
+            Icons.delete_outline,
+            () => unawaited(_deleteAgent(agent)),
+            tone: scheme.error,
+          ),
+        ],
+      ],
+    );
+    if (mounted) picked?.call();
+  }
+
+  Future<void> _openRoomMenu(
+    BuildContext anchor,
+    AgentsRoom room, {
+    Offset? at,
+  }) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final VoidCallback? picked = await showAnchoredMenu<VoidCallback>(
+      anchor,
+      anchorPoint: at,
+      color: scheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<VoidCallback>>[
+        if (widget.onManageRoomMembers != null)
+          _item(
+            'Members',
+            Icons.group_outlined,
+            () => widget.onManageRoomMembers!(room.id),
+          ),
+        if (widget.onRenameRoom != null)
+          _item(
+            'Rename',
+            Icons.edit_outlined,
+            () => unawaited(_renameRoom(room)),
+          ),
+        if (widget.onDeleteRoom != null) ...<PopupMenuEntry<VoidCallback>>[
+          const PopupMenuDivider(),
+          _item(
+            'Delete',
+            Icons.delete_outline,
+            () => unawaited(_deleteRoom(room)),
+            tone: scheme.error,
+          ),
+        ],
+      ],
+    );
+    if (mounted) picked?.call();
+  }
+
+  Future<void> _openNewMenu(BuildContext anchor) async {
+    final ColorScheme scheme = Theme.of(anchor).colorScheme;
+    final VoidCallback? picked = await showAnchoredMenu<VoidCallback>(
+      anchor,
+      color: scheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<VoidCallback>>[
+        if (widget.onAddAgent != null)
+          _item(
+            'New agent',
+            Icons.person_add_alt,
+            widget.onAddAgent!,
+            shortcut: deskShortcutLabel('Ctrl+N'),
+          ),
+        if (widget.onCreateRoom != null)
+          _item(
+            'New room',
+            Icons.group_add_outlined,
+            widget.onCreateRoom!,
+            shortcut: deskShortcutLabel('Ctrl+Shift+N'),
+          ),
+        if (widget.onOpenRooms != null)
+          _item('Control Rooms', Icons.groups_outlined, widget.onOpenRooms!),
+      ],
+    );
+    if (mounted) picked?.call();
+  }
+
+  // --- build -------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: Listenable.merge(<Listenable?>[
+        widget.source,
+        widget.rooms,
+        _marks,
+        _profiles,
+        _pins,
+      ]),
+      builder: (BuildContext context, _) {
+        final ColorScheme scheme = Theme.of(context).colorScheme;
+        return Material(
+          color: scheme.surfaceContainerLow,
+          child: widget.collapsed ? _buildRail(context) : _buildPane(context),
+        );
+      },
+    );
+  }
+
+  List<AgentsAgent> get _orderedAgents =>
+      desktopRosterOrder(widget.source.visibleAgents, _pins.ids);
+
+  List<AgentsRoom> get _rooms => widget.onOpenRoom == null
+      ? const <AgentsRoom>[]
+      : (widget.rooms?.rooms ?? const <AgentsRoom>[]);
+
+  Widget _buildPane(BuildContext context) {
+    final String query = _search.text.trim().toLowerCase();
+    bool matches(String name) =>
+        query.isEmpty || name.toLowerCase().contains(query);
+    final List<AgentsAgent> agents = <AgentsAgent>[
+      for (final AgentsAgent a in _orderedAgents)
+        if (matches(a.name)) a,
+    ];
+    final List<AgentsRoom> rooms = <AgentsRoom>[
+      for (final AgentsRoom r in _rooms)
+        if (matches(r.name)) r,
+    ];
+    final List<AgentsAgent> hidden = query.isEmpty
+        ? widget.source.hiddenAgents
+        : const <AgentsAgent>[];
+    final bool nothingAtAll =
+        widget.source.visibleAgents.isEmpty &&
+        widget.source.hiddenAgents.isEmpty &&
+        _rooms.isEmpty;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        _header(context),
+        const DeskHairline(),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+          child: _searchField(context),
+        ),
+        Expanded(
+          child: nothingAtAll
+              ? _emptyState(context)
+              : ListView(
+                  padding: const EdgeInsets.only(top: 4, bottom: 12),
+                  children: <Widget>[
+                    _sectionHeader(
+                      context,
+                      'Agents',
+                      onAdd: widget.onAddAgent,
+                      addTooltip: 'New agent (${deskShortcutLabel('Ctrl+N')})',
+                    ),
+                    for (int i = 0; i < agents.length; i++)
+                      _AgentRow(
+                        key: ValueKey<String>('agent-tile-${agents[i].id}'),
+                        agent: agents[i],
+                        selected: _isSelected(agents[i]),
+                        unread: _marks.isUnread(agents[i]),
+                        pinned: _pins.isPinned(agents[i].id),
+                        now: _now(),
+                        profiles: _profiles,
+                        shortcutIndex: query.isEmpty && i < 9 ? i + 1 : null,
+                        onTap: () => _pick(agents[i]),
+                        onMenu: (BuildContext anchor, Offset? at) =>
+                            _openAgentMenu(anchor, agents[i], at: at),
+                      ),
+                    if (agents.isEmpty && query.isNotEmpty)
+                      _quietLine(context, 'No agent matches.'),
+                    // Rooms: listed when there are some, and offered empty
+                    // only when this roster can create one.
+                    if (widget.onOpenRoom != null &&
+                        (rooms.isNotEmpty ||
+                            (query.isEmpty &&
+                                widget.onCreateRoom != null))) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _sectionHeader(
+                        context,
+                        'Rooms',
+                        onAdd: widget.onCreateRoom,
+                        addTooltip:
+                            'New room (${deskShortcutLabel('Ctrl+Shift+N')})',
+                      ),
+                      for (final AgentsRoom room in rooms)
+                        _RoomRow(
+                          key: ValueKey<String>('room-tile-${room.id}'),
+                          room: room,
+                          selected: room.id == widget.selectedRoomId,
+                          profiles: _profiles,
+                          onTap: () => widget.onOpenRoom!(room.id),
+                          onMenu: (BuildContext anchor, Offset? at) =>
+                              _openRoomMenu(anchor, room, at: at),
+                        ),
+                      if (rooms.isEmpty) _quietLine(context, 'No rooms yet.'),
+                    ],
+                    if (hidden.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 8),
+                      _hiddenHeader(context, hidden.length),
+                      if (_hiddenOpen)
+                        for (final AgentsAgent agent in hidden)
+                          _HiddenRow(
+                            agent: agent,
+                            profiles: _profiles,
+                            onUnhide: () => widget.source.unhideAgent(agent.id),
+                          ),
+                    ],
+                  ],
+                ),
+        ),
+        if (widget.onOpenSettings != null) ...<Widget>[
+          const DeskHairline(),
+          _accountRow(context),
+        ],
+      ],
+    );
+  }
+
+  Widget _header(BuildContext context) {
+    return SizedBox(
+      height: kDeskBarHeight - 1,
+      child: Row(
+        children: <Widget>[
+          const Expanded(
+            child: SbBrand(
+              label: 'Chuk Chat',
+              showLogo: false,
+              fontSize: kSidebarBrandWordmarkSize,
+              padding: EdgeInsets.fromLTRB(16, 0, 8, 0),
+            ),
+          ),
+          if (widget.onAddAgent != null || widget.onCreateRoom != null)
+            Builder(
+              builder: (BuildContext anchor) => DeskIconButton(
+                icon: Icons.edit_square,
+                tooltip: 'New',
+                onPressed: () => unawaited(_openNewMenu(anchor)),
+              ),
+            ),
+          if (widget.onToggleCollapsed != null) ...<Widget>[
+            const SizedBox(width: kDeskButtonGap),
+            DeskIconButton(
+              icon: Icons.view_sidebar_outlined,
+              tooltip: 'Collapse sidebar (${deskShortcutLabel('Ctrl+B')})',
+              onPressed: widget.onToggleCollapsed,
+            ),
+          ],
+          const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _searchField(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    return SizedBox(
+      height: 32,
+      child: TextField(
+        controller: _search,
+        style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
+        textAlignVertical: TextAlignVertical.center,
+        decoration: InputDecoration(
+          isDense: true,
+          filled: true,
+          fillColor: scheme.surfaceContainerHigh,
+          hintText: 'Search',
+          hintStyle: theme.textTheme.bodyMedium?.copyWith(
+            fontSize: 13,
+            color: scheme.onSurfaceVariant,
+          ),
+          prefixIcon: Padding(
+            padding: const EdgeInsets.only(left: 10, right: 6),
+            child: AppIcon(
+              Icons.search,
+              size: 16,
+              color: scheme.onSurfaceVariant,
+            ),
+          ),
+          prefixIconConstraints: const BoxConstraints(minWidth: 32),
+          suffixIcon: _search.text.isNotEmpty
+              ? GestureDetector(
+                  onTap: _search.clear,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: AppIcon(
+                      Icons.close,
+                      size: 14,
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                )
+              : (widget.onOpenQuickSwitcher == null
+                    ? null
+                    : Tooltip(
+                        message: 'Quick switcher',
+                        child: GestureDetector(
+                          onTap: widget.onOpenQuickSwitcher,
+                          child: Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: _KeyCap(deskShortcutLabel('Ctrl+K')),
+                          ),
+                        ),
+                      )),
+          suffixIconConstraints: const BoxConstraints(minWidth: 24),
+          contentPadding: const EdgeInsets.symmetric(vertical: 8),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(kDeskControlRadius),
+            borderSide: BorderSide.none,
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(kDeskControlRadius),
+            borderSide: BorderSide(color: scheme.outline, width: 1),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(
+    BuildContext context,
+    String label, {
+    VoidCallback? onAdd,
+    String? addTooltip,
+  }) => _SectionHeader(label: label, onAdd: onAdd, addTooltip: addTooltip);
+
+  Widget _hiddenHeader(BuildContext context, int count) {
+    final ThemeData theme = Theme.of(context);
+    return InkWell(
+      onTap: () => setState(() => _hiddenOpen = !_hiddenOpen),
+      child: SizedBox(
+        height: 28,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: <Widget>[
+              Text(
+                'Hidden · $count',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.3,
+                ),
+              ),
+              const SizedBox(width: 4),
+              AppIcon(
+                _hiddenOpen ? Icons.expand_less : Icons.expand_more,
+                size: 14,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _quietLine(BuildContext context, String text) {
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: Text(
+        text,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _emptyState(BuildContext context) {
     final TextTheme text = Theme.of(context).textTheme;
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [
+          children: <Widget>[
             Text(
               'No agents yet.',
               textAlign: TextAlign.center,
-              // A sentence the user reads, not a label: body copy.
-              style: text.bodyMedium?.copyWith(color: t.muted),
+              style: text.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-            if (widget.onAddAgent != null) ...[
+            if (widget.onAddAgent != null) ...<Widget>[
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: widget.onAddAgent,
@@ -568,302 +778,447 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     );
   }
 
-  /// The hidden coworkers, folded away at the bottom (§16.1 hide/unhide). A
-  /// hidden agent is not gone — this is where the user brings it back.
-  List<Widget> _hiddenSection(
-    BuildContext context,
-    SidebarTokens t,
-    List<AgentsAgent> hidden,
-  ) {
-    final TextTheme text = Theme.of(context).textTheme;
-    return <Widget>[
-      SbSectionLabel(label: 'Hidden', count: hidden.length, color: t.muted),
-      for (final agent in hidden)
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(10, 4, 8, 4),
-            child: Row(
-              children: [
-                AgentAvatar(
-                  seed: agent.id,
-                  label: agent.name,
-                  radius: 13,
-                  dimmed: true,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    agent.name,
-                    overflow: TextOverflow.ellipsis,
-                    // The row's title, dimmed because the agent is hidden.
-                    style: text.titleSmall?.copyWith(
-                      color: t.iconFg.withValues(alpha: 0.45),
+  Widget _accountRow(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final String name = widget.accountLabel ?? _displayNameFor(_profile);
+    return SizedBox(
+      height: kDeskBarHeight,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 0, 8, 0),
+        child: Row(
+          children: <Widget>[
+            Expanded(
+              child: _HoverTile(
+                onTap: widget.onOpenSettings,
+                height: 36,
+                child: Row(
+                  children: <Widget>[
+                    Container(
+                      width: kDeskRowFace,
+                      height: kDeskRowFace,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: scheme.secondaryContainer,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        name.isEmpty
+                            ? '?'
+                            : name.characters.first.toUpperCase(),
+                        style: theme.textTheme.labelMedium?.copyWith(
+                          color: scheme.onSecondaryContainer,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    if (_hosted) ...<Widget>[
+                      const SizedBox(width: 6),
+                      BalanceBadge(
+                        textStyle: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.primary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        placeholderStyle: theme.textTheme.labelSmall?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ],
                 ),
-                TextButton(
-                  onPressed: () => widget.source.unhideAgent(agent.id),
-                  child: const Text('Unhide'),
-                ),
-              ],
+              ),
+            ),
+            const SizedBox(width: kDeskButtonGap),
+            DeskIconButton(
+              icon: Icons.settings_rounded,
+              tooltip: 'Settings',
+              onPressed: widget.onOpenSettings,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- rail --------------------------------------------------------------------
+
+  Widget _buildRail(BuildContext context) {
+    final List<AgentsAgent> agents = _orderedAgents;
+    final List<AgentsRoom> rooms = _rooms;
+    return Column(
+      children: <Widget>[
+        SizedBox(
+          height: kDeskBarHeight - 1,
+          child: Center(
+            child: DeskIconButton(
+              icon: Icons.view_sidebar_outlined,
+              tooltip: 'Expand sidebar (${deskShortcutLabel('Ctrl+B')})',
+              onPressed: widget.onToggleCollapsed,
             ),
           ),
         ),
-    ];
+        const DeskHairline(),
+        const SizedBox(height: 8),
+        if (widget.onOpenQuickSwitcher != null)
+          DeskIconButton(
+            icon: Icons.search,
+            tooltip: 'Quick switcher (${deskShortcutLabel('Ctrl+K')})',
+            onPressed: widget.onOpenQuickSwitcher,
+          ),
+        if (widget.onAddAgent != null) ...<Widget>[
+          const SizedBox(height: kDeskButtonGap),
+          DeskIconButton(
+            icon: Icons.person_add_alt,
+            tooltip: 'New agent (${deskShortcutLabel('Ctrl+N')})',
+            onPressed: widget.onAddAgent,
+          ),
+        ],
+        const SizedBox(height: 8),
+        const SizedBox(width: 24, child: DeskHairline()),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            children: <Widget>[
+              for (final AgentsAgent agent in agents)
+                _RailFace(
+                  key: ValueKey<String>('rail-agent-${agent.id}'),
+                  tooltip: agent.name,
+                  selected: _isSelected(agent),
+                  unread: _marks.isUnread(agent),
+                  onTap: () => _pick(agent),
+                  child: AgentFace(
+                    agent: agent,
+                    size: 28,
+                    store: _profiles,
+                    showPresence: agent.activity == AgentActivity.working,
+                  ),
+                ),
+              if (rooms.isNotEmpty) ...<Widget>[
+                const SizedBox(height: 6),
+                const Center(child: SizedBox(width: 24, child: DeskHairline())),
+                const SizedBox(height: 6),
+                for (final AgentsRoom room in rooms)
+                  _RailFace(
+                    key: ValueKey<String>('rail-room-${room.id}'),
+                    tooltip: room.name,
+                    selected: room.id == widget.selectedRoomId,
+                    unread: false,
+                    onTap: () => widget.onOpenRoom!(room.id),
+                    child: RoomFaces(
+                      members: room.members,
+                      size: 28,
+                      store: _profiles,
+                      ringColor: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerLow,
+                    ),
+                  ),
+              ],
+            ],
+          ),
+        ),
+        if (widget.onOpenSettings != null) ...<Widget>[
+          const DeskHairline(),
+          SizedBox(
+            height: kDeskBarHeight,
+            child: Center(
+              child: DeskIconButton(
+                icon: Icons.settings_rounded,
+                tooltip: 'Settings',
+                onPressed: widget.onOpenSettings,
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
-
-  DateTime _now() => (widget.now ?? DateTime.now)();
 }
 
-/// One coworker, in chuk's tile grammar.
-///
-/// Deliberately NOT `SbChatTile`: that row carries a title and a timestamp on
-/// one line, and a coworker needs two — the role it was given, and what it is
-/// doing. Every visual value below is copied from `SbChatTile` so the two read
-/// as the same component: 12 px radius, a border that is always 1.5 px wide
-/// (transparent when unselected) so selecting a row changes only its colour and
-/// never the list's layout, accent @0.18 as the selected fill with accent @0.55
-/// as its edge, iconFg @0.05 on hover, and the same 110 ms cross-fade.
-class _AgentTile extends StatefulWidget {
-  const _AgentTile({
+/// A section label: small caps in the quiet colour, and a "+" that shows
+/// while the pointer is on the section.
+class _SectionHeader extends StatefulWidget {
+  const _SectionHeader({required this.label, this.onAdd, this.addTooltip});
+
+  final String label;
+  final VoidCallback? onAdd;
+  final String? addTooltip;
+
+  @override
+  State<_SectionHeader> createState() => _SectionHeaderState();
+}
+
+class _SectionHeaderState extends State<_SectionHeader> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: SizedBox(
+        height: 28,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 10, 0),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  widget.label,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+              if (widget.onAdd != null)
+                AnimatedOpacity(
+                  duration: const Duration(milliseconds: 120),
+                  opacity: _hovered ? 1 : 0,
+                  child: DeskIconButton(
+                    icon: Icons.add_rounded,
+                    size: 22,
+                    glyph: 16,
+                    tooltip: widget.addTooltip ?? 'Add',
+                    onPressed: widget.onAdd,
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The hover fill and the rounded row shape every roster row shares.
+class _HoverTile extends StatefulWidget {
+  const _HoverTile({
+    required this.child,
+    required this.height,
+    this.onTap,
+    this.selected = false,
+    this.onSecondaryTapUp,
+    this.onHover,
+  });
+
+  final Widget child;
+  final double height;
+  final VoidCallback? onTap;
+  final bool selected;
+  final GestureTapUpCallback? onSecondaryTapUp;
+  final ValueChanged<bool>? onHover;
+
+  @override
+  State<_HoverTile> createState() => _HoverTileState();
+}
+
+class _HoverTileState extends State<_HoverTile> {
+  bool _hovered = false;
+
+  void _setHover(bool value) {
+    if (_hovered == value) return;
+    setState(() => _hovered = value);
+    widget.onHover?.call(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color fill = widget.selected
+        ? scheme.secondaryContainer
+        : (_hovered ? scheme.surfaceContainerHigh : Colors.transparent);
+    return MouseRegion(
+      cursor: widget.onTap == null
+          ? SystemMouseCursors.basic
+          : SystemMouseCursors.click,
+      onEnter: (_) => _setHover(true),
+      onExit: (_) => _setHover(false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        onSecondaryTapUp: widget.onSecondaryTapUp,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 90),
+          height: widget.height,
+          decoration: BoxDecoration(
+            color: fill,
+            borderRadius: BorderRadius.circular(kDeskControlRadius),
+          ),
+          child: Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: kDeskRowPadH),
+                  child: widget.child,
+                ),
+              ),
+              // The selected row's accent bar on its left edge.
+              if (widget.selected)
+                Positioned(
+                  key: const ValueKey<String>('roster-selected-bar'),
+                  left: 0,
+                  top: 8,
+                  bottom: 8,
+                  width: kDeskSelectedBar,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One coworker: 36 px, face 24, name; on the right the unread dot, the
+/// state or the time — and the "…" while the pointer is on the row.
+class _AgentRow extends StatefulWidget {
+  const _AgentRow({
     super.key,
     required this.agent,
     required this.selected,
+    required this.unread,
+    required this.pinned,
     required this.now,
-    this.onTap,
-    required this.onHide,
-    this.onRename,
-    this.onDelete,
-    this.onOpenProfile,
-    this.unread = false,
-    this.profiles,
+    required this.profiles,
+    required this.onTap,
+    required this.onMenu,
+    this.shortcutIndex,
   });
 
   final AgentsAgent agent;
   final bool selected;
-  final DateTime now;
-  final VoidCallback? onTap;
-  final VoidCallback onHide;
-
-  /// Opens the coworker's profile page. Null hides the menu item.
-  final VoidCallback? onOpenProfile;
-
-  /// Something happened in its thread since the reader last had it open.
   final bool unread;
+  final bool pinned;
+  final DateTime now;
+  final AgentProfileStore profiles;
+  final VoidCallback onTap;
+  final Future<void> Function(BuildContext anchor, Offset? at) onMenu;
 
-  final AgentProfileStore? profiles;
-
-  /// Opens the rename dialog. Null hides the item.
-  final VoidCallback? onRename;
-
-  /// Null for the paired host: it is the user's real device, not a bot to
-  /// delete, so the menu simply does not offer it.
-  final VoidCallback? onDelete;
+  /// Ctrl+n opens this row; shown in the row's tooltip.
+  final int? shortcutIndex;
 
   @override
-  State<_AgentTile> createState() => _AgentTileState();
+  State<_AgentRow> createState() => _AgentRowState();
 }
 
-class _AgentTileState extends State<_AgentTile> {
+class _AgentRowState extends State<_AgentRow> {
   bool _hovered = false;
-
-  /// The role line: the one the user set in the profile wins over the one the
-  /// coworker was created with.
-  String? get _role {
-    final store = widget.profiles ?? AgentProfileStore.instance;
-    final stored = store.profileOf(widget.agent.id).role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final own = widget.agent.role?.trim();
-    return (own == null || own.isEmpty) ? null : own;
-  }
-
-  /// The row menu, on the app's one menu surface. Same entries, same order
-  /// and same conditions as the popup it replaces. The value of a row IS its
-  /// action, so nothing has to be decoded again after the pick.
-  Future<void> _openRowMenu(BuildContext anchor) async {
-    final ColorScheme scheme = Theme.of(anchor).colorScheme;
-    final VoidCallback? picked = await showAnchoredMenu<VoidCallback>(
-      anchor,
-      color: scheme.surfaceContainerHigh,
-      items: <PopupMenuEntry<VoidCallback>>[
-        if (widget.onOpenProfile != null)
-          PopupMenuItem<VoidCallback>(
-            value: widget.onOpenProfile,
-            padding: EdgeInsets.zero,
-            child: const MenuActionRow(
-              icon: Icons.person_outline,
-              label: 'Profile',
-            ),
-          ),
-        if (widget.onRename != null)
-          PopupMenuItem<VoidCallback>(
-            value: widget.onRename,
-            padding: EdgeInsets.zero,
-            child: const MenuActionRow(
-              icon: Icons.edit_outlined,
-              label: 'Rename',
-            ),
-          ),
-        PopupMenuItem<VoidCallback>(
-          value: widget.onHide,
-          padding: EdgeInsets.zero,
-          child: const MenuActionRow(
-            icon: Icons.visibility_off_outlined,
-            label: 'Hide',
-          ),
-        ),
-        if (widget.onDelete != null)
-          PopupMenuItem<VoidCallback>(
-            value: widget.onDelete,
-            padding: EdgeInsets.zero,
-            child: MenuActionRow(
-              icon: Icons.delete_outline,
-              label: 'Delete',
-              tone: scheme.error,
-            ),
-          ),
-      ],
-    );
-    if (mounted) picked?.call();
-  }
 
   @override
   Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-    final agent = widget.agent;
-    final selected = widget.selected;
-    final working = agent.activity == AgentActivity.working;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final AgentsAgent agent = widget.agent;
+    final bool working = agent.activity == AgentActivity.working;
+    final Color nameColor = widget.selected
+        ? scheme.onSecondaryContainer
+        : scheme.onSurface;
+
+    Widget trailing;
+    if (_hovered) {
+      trailing = Builder(
+        builder: (BuildContext anchor) => DeskIconButton(
+          icon: Icons.more_horiz,
+          size: 24,
+          glyph: 16,
+          tooltip: 'More',
+          onPressed: () => unawaited(widget.onMenu(anchor, null)),
+        ),
+      );
+    } else if (widget.unread) {
+      trailing = Container(
+        key: const ValueKey<String>('roster-unread-dot'),
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(
+          color: scheme.primary,
+          shape: BoxShape.circle,
+        ),
+      );
+    } else if (working) {
+      trailing = Text(
+        activityLabel(agent.activity),
+        style: theme.textTheme.labelSmall?.copyWith(color: scheme.primary),
+      );
+    } else {
+      trailing = Text(
+        compactAgeLabel(agent.lastActivity, now: widget.now),
+        style: theme.textTheme.labelSmall?.copyWith(
+          color: scheme.onSurfaceVariant,
+        ),
+      );
+    }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Builder(
+        builder: (BuildContext rowContext) => _HoverTile(
+          height: kDeskAgentRow,
+          selected: widget.selected,
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            // Without a curve this ran on Curves.linear — the only mechanical
-            // motion left in the app, on its most permanently visible surface.
-            duration: kExpressiveShort,
-            curve: kExpressiveDecelerate,
-            padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
-            decoration: BoxDecoration(
-              color: selected
-                  ? t.accent.withValues(alpha: 0.18)
-                  : (_hovered ? t.iconFg.withValues(alpha: 0.05) : null),
-              border: Border.all(
-                color: selected
-                    ? t.accent.withValues(alpha: 0.55)
-                    : Colors.transparent,
-                width: 1.5,
+          onHover: (bool value) => setState(() => _hovered = value),
+          onSecondaryTapUp: (TapUpDetails d) =>
+              unawaited(widget.onMenu(rowContext, d.globalPosition)),
+          child: Row(
+            children: <Widget>[
+              AgentFace(
+                agent: agent,
+                size: kDeskRowFace,
+                store: widget.profiles,
+                showPresence: working,
               ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                AgentFace(agent: agent, size: 34, store: widget.profiles),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        agent.name,
-                        overflow: TextOverflow.ellipsis,
-                        // The row's title: the coworker's name.
-                        style: text.titleMedium?.copyWith(
-                          height: 1.2,
-                          // One weight in both states. A weight that changes on
-                          // selection re-measures the glyphs, so the name
-                          // visibly shifts under the cursor the moment a row is
-                          // picked (bead cowork-84i). Selection is the fill,
-                          // the border and the colour — never the metrics.
-                          fontWeight: FontWeight.w600,
-                          color: selected ? t.accent : t.iconFg,
-                        ),
-                      ),
-                      if (_role != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 1),
-                          child: Text(
-                            _role!,
-                            overflow: TextOverflow.ellipsis,
-                            // The line under the title: a row subtitle.
-                            style: text.bodySmall?.copyWith(
-                              height: 1.25,
-                              color: t.accent.withValues(alpha: 0.85),
-                            ),
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Row(
-                          children: [
-                            _ActivityDot(activity: agent.activity, tokens: t),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Text(
-                                '${activityLabel(agent.activity)} · '
-                                '${lastActivityLabel(agent.lastActivity, now: widget.now)}',
-                                overflow: TextOverflow.ellipsis,
-                                // Status metadata beside the state dot — the
-                                // smallest supporting label on the row.
-                                style: text.labelSmall?.copyWith(
-                                  height: 1.25,
-                                  color: working
-                                      ? t.accent.withValues(alpha: 0.9)
-                                      : t.iconFg.withValues(alpha: 0.55),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  agent.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    color: nameColor,
+                    fontWeight: widget.unread || widget.selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                   ),
                 ),
-                // Unread: one dot in the accent. No count — the app cannot know
-                // how many messages arrived while the reader was away.
-                if (widget.unread)
-                  Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: Container(
-                      width: 9,
-                      height: 9,
-                      decoration: BoxDecoration(
-                        color: t.accent,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                // The row menu stays in the tree at all times — a hover-only
-                // control is invisible on a touch screen — but it sits back at
-                // low contrast until the pointer is on the row.
-                AnimatedOpacity(
-                  duration: kExpressiveShort,
-                  curve: kExpressiveDecelerate,
-                  opacity: _hovered || selected ? 1 : 0.45,
-                  child: Builder(
-                    builder: (BuildContext anchor) => IconButton(
-                      tooltip: 'More',
-                      padding: EdgeInsets.zero,
-                      iconSize: 18,
-                      icon: AppIcon(
-                        Icons.more_vert,
-                        size: 18,
-                        color: t.iconFg.withValues(alpha: 0.7),
-                      ),
-                      onPressed: () => _openRowMenu(anchor),
-                    ),
-                  ),
+              ),
+              if (widget.pinned && !_hovered) ...<Widget>[
+                AppIcon(
+                  Icons.push_pin,
+                  size: 12,
+                  color: scheme.onSurfaceVariant,
                 ),
+                const SizedBox(width: 6),
               ],
-            ),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 24),
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  widthFactor: 1,
+                  child: trailing,
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -871,105 +1226,93 @@ class _AgentTileState extends State<_AgentTile> {
   }
 }
 
-/// One ROOM, in the same tile grammar as [_AgentTile].
-///
-/// Every visual value is copied from [_AgentTile] — 6/1 outer padding,
-/// 10/7/6/7 inner padding, the always-reserved 1.5 px transparent border, the
-/// 12 px radius, iconFg @0.05 on hover, the same 110 ms cross-fade — so a room
-/// row and a coworker row are the same row. The single difference is the slot
-/// on the left: [RoomFaces] at [kRoomFacesRail], which is wider than this
-/// rail's 34 px [AgentFace] because two faces in 34 px put the monogram under
-/// the app's 10 px floor. The gap after it shrinks by the same 6 px, so both
-/// rows start their name on the same x — which is the alignment the eye reads.
-class _RoomTile extends StatefulWidget {
-  const _RoomTile({
+/// One room: 32 px, the members' faces, the name, the "…" on hover.
+class _RoomRow extends StatefulWidget {
+  const _RoomRow({
     super.key,
     required this.room,
+    required this.selected,
     required this.profiles,
     required this.onTap,
+    required this.onMenu,
   });
 
   final AgentsRoom room;
+  final bool selected;
   final AgentProfileStore profiles;
   final VoidCallback onTap;
+  final Future<void> Function(BuildContext anchor, Offset? at) onMenu;
 
   @override
-  State<_RoomTile> createState() => _RoomTileState();
+  State<_RoomRow> createState() => _RoomRowState();
 }
 
-class _RoomTileState extends State<_RoomTile> {
+class _RoomRowState extends State<_RoomRow> {
   bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
-    final t = SidebarTokens.of(context);
-    final TextTheme text = Theme.of(context).textTheme;
-    final AgentsRoom room = widget.room;
-
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-      child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: InkWell(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: Builder(
+        builder: (BuildContext rowContext) => _HoverTile(
+          height: kDeskRoomRow,
+          selected: widget.selected,
           onTap: widget.onTap,
-          borderRadius: BorderRadius.circular(20),
-          child: AnimatedContainer(
-            duration: kExpressiveShort,
-            curve: kExpressiveDecelerate,
-            padding: const EdgeInsets.fromLTRB(10, 7, 6, 7),
-            decoration: BoxDecoration(
-              color: _hovered ? t.iconFg.withValues(alpha: 0.05) : null,
-              border: Border.all(color: Colors.transparent, width: 1.5),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                RoomFaces(
-                  members: room.members,
-                  size: kRoomFacesRail,
+          onHover: (bool value) => setState(() => _hovered = value),
+          onSecondaryTapUp: (TapUpDetails d) =>
+              unawaited(widget.onMenu(rowContext, d.globalPosition)),
+          child: Row(
+            children: <Widget>[
+              SizedBox(
+                width: kDeskRowFace,
+                height: kDeskRowFace,
+                child: RoomFaces(
+                  members: widget.room.members,
+                  size: kDeskRowFace,
                   store: widget.profiles,
-                  // The rail paints its own background, not the theme surface.
-                  ringColor: t.bg,
+                  ringColor: widget.selected
+                      ? scheme.secondaryContainer
+                      : scheme.surfaceContainerLow,
                 ),
-                // 40 + 4 is the coworker row's 34 + 10: the NAME starts on the
-                // same x, which is what makes the two rows read as one list.
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        room.name,
-                        overflow: TextOverflow.ellipsis,
-                        // The row's title: the room's name.
-                        style: text.titleMedium?.copyWith(
-                          height: 1.2,
-                          fontWeight: FontWeight.w600,
-                          color: t.iconFg,
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 2),
-                        child: Text(
-                          roomMembersLabel(room),
-                          overflow: TextOverflow.ellipsis,
-                          // Who is in the room — the row's supporting label,
-                          // the same size and weight the coworker row gives
-                          // its status line.
-                          style: text.labelSmall?.copyWith(
-                            height: 1.25,
-                            color: t.iconFg.withValues(alpha: 0.55),
-                          ),
-                        ),
-                      ),
-                    ],
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  widget.room.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontSize: 14,
+                    color: widget.selected
+                        ? scheme.onSecondaryContainer
+                        : scheme.onSurface,
+                    fontWeight: widget.selected
+                        ? FontWeight.w700
+                        : FontWeight.w500,
                   ),
                 ),
-              ],
-            ),
+              ),
+              if (_hovered)
+                Builder(
+                  builder: (BuildContext anchor) => DeskIconButton(
+                    icon: Icons.more_horiz,
+                    size: 24,
+                    glyph: 16,
+                    tooltip: 'More',
+                    onPressed: () => unawaited(widget.onMenu(anchor, null)),
+                  ),
+                )
+              else
+                Text(
+                  '${widget.room.members.length}',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -977,27 +1320,141 @@ class _RoomTileState extends State<_RoomTile> {
   }
 }
 
-/// The state dot. A working agent gets the accent plus a soft glow, the same
-/// treatment `SbChatTile` gives a streaming chat, so "something is running" is
-/// the one thing that catches the eye in a long rail.
-class _ActivityDot extends StatelessWidget {
-  const _ActivityDot({required this.activity, required this.tokens});
+/// A hidden coworker, dimmed, with Unhide.
+class _HiddenRow extends StatelessWidget {
+  const _HiddenRow({
+    required this.agent,
+    required this.profiles,
+    required this.onUnhide,
+  });
 
-  final AgentActivity activity;
-  final SidebarTokens tokens;
+  final AgentsAgent agent;
+  final AgentProfileStore profiles;
+  final VoidCallback onUnhide;
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final color = switch (activity) {
-      AgentActivity.working => tokens.accent,
-      AgentActivity.scheduled => theme.colorScheme.tertiary,
-      AgentActivity.waiting => tokens.iconFg.withValues(alpha: 0.35),
-    };
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8),
+      child: _HoverTile(
+        height: kDeskRoomRow,
+        child: Row(
+          children: <Widget>[
+            AgentFace(
+              agent: agent,
+              size: kDeskRowFace,
+              store: profiles,
+              dimmed: true,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                agent.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            TextButton(
+              style: TextButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 24),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              onPressed: onUnhide,
+              child: const Text('Unhide'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// A face in the folded rail: a 40 px target, the selected fill and bar, an
+/// unread dot in its corner, the name as the tooltip.
+class _RailFace extends StatelessWidget {
+  const _RailFace({
+    super.key,
+    required this.child,
+    required this.tooltip,
+    required this.selected,
+    required this.unread,
+    required this.onTap,
+  });
+
+  final Widget child;
+  final String tooltip;
+  final bool selected;
+  final bool unread;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      child: Tooltip(
+        message: tooltip,
+        preferBelow: false,
+        waitDuration: const Duration(milliseconds: 300),
+        child: _HoverTile(
+          height: 40,
+          selected: selected,
+          onTap: onTap,
+          child: Stack(
+            clipBehavior: Clip.none,
+            alignment: Alignment.center,
+            children: <Widget>[
+              child,
+              if (unread)
+                Positioned(
+                  right: -2,
+                  top: 4,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: scheme.primary,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A key in a hint: "Ctrl+K" in a small outlined box.
+class _KeyCap extends StatelessWidget {
+  const _KeyCap(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
     return Container(
-      width: 7,
-      height: 7,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Text(
+        label,
+        style: theme.textTheme.labelSmall?.copyWith(
+          fontSize: 10,
+          color: scheme.onSurfaceVariant,
+        ),
+      ),
     );
   }
 }
@@ -1018,4 +1475,16 @@ String lastActivityLabel(DateTime? when, {required DateTime now}) {
   if (delta.inMinutes < 60) return '${delta.inMinutes}m ago';
   if (delta.inHours < 24) return '${delta.inHours}h ago';
   return '${delta.inDays}d ago';
+}
+
+/// The roster row's time: "now", "5m", "2h", "3d" — or nothing when nothing
+/// has happened. Never a fabricated time.
+String compactAgeLabel(DateTime? when, {required DateTime now}) {
+  if (when == null) return '';
+  final delta = now.difference(when);
+  if (delta.isNegative || delta.inSeconds < 45) return 'now';
+  if (delta.inMinutes < 60) return '${delta.inMinutes}m';
+  if (delta.inHours < 24) return '${delta.inHours}h';
+  if (delta.inDays < 7) return '${delta.inDays}d';
+  return '${(delta.inDays / 7).floor()}w';
 }

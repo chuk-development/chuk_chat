@@ -12,6 +12,8 @@ import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
@@ -32,7 +34,12 @@ class AgentsThreadAction {
     required this.icon,
     required this.tooltip,
     required this.onPressed,
+    this.selected = false,
   });
+
+  /// A toggle that is on (the desktop details pane): drawn with the selected
+  /// fill in the desktop title bar.
+  final bool selected;
 
   final IconData icon;
 
@@ -87,7 +94,12 @@ class AgentsThreadHeader extends StatelessWidget {
     this.showCallTargets = true,
     this.onOpenScreen,
     this.floating = false,
+    this.menuActions = const <AgentsThreadAction>[],
   });
+
+  /// The desktop title bar's "…" menu: actions that are not worth a button of
+  /// their own. Anything from [actions] that does not fit joins them.
+  final List<AgentsThreadAction> menuActions;
 
   /// The bar floats over the chat on the top veil (docs/DESIGN.md §2–3): the
   /// messages scroll up behind it instead of stopping at a solid band. Off, the
@@ -165,6 +177,9 @@ class AgentsThreadHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // The desktop window gets a desktop title bar (docs/DESIGN.md §14.2); the
+    // phone keeps the dense row exactly as it was.
+    if (!dense) return _buildDesktopBar(context);
     final theme = Theme.of(context);
     final scheme = theme.colorScheme;
     final row = SizedBox(
@@ -198,6 +213,221 @@ class AgentsThreadHeader extends StatelessWidget {
     // title bar — the reader saw two stacked bands and no content (cowork-y6q).
     // The bar is told apart by its content, not by a line.
     return Material(color: scheme.surface, child: padded);
+  }
+
+  /// The desktop title bar: 48 px, part of the frame. The subject on the
+  /// left — face, name, status — and on the right the call, the screen, the
+  /// thread's own actions and the "…" menu, every one the same 32 px button.
+  Widget _buildDesktopBar(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Material(
+      color: scheme.surface,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          SizedBox(
+            height: kDeskBarHeight - 1,
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(leadingInset + 12, 0, 8, 0),
+              child: LayoutBuilder(
+                builder: (BuildContext context, BoxConstraints box) =>
+                    _buildDesktopRow(context, box.maxWidth),
+              ),
+            ),
+          ),
+          const DeskHairline(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDesktopRow(BuildContext context, double maxWidth) {
+    const double step = kDeskButton + kDeskButtonGap;
+    final bool calls = showCallTargets && agent != null;
+    final int fixed = calls ? 2 : 0;
+    // What fits next to a subject that keeps [_minTitleWidth]; the rest
+    // folds into the menu, never off the edge.
+    final int room = math.max(
+      0,
+      ((maxWidth - _minTitleWidth) / step).floor() - fixed,
+    );
+    final bool needsMenu = menuActions.isNotEmpty || actions.length > room;
+    final int inline = needsMenu
+        ? math.max(0, math.min(actions.length, room - 1))
+        : actions.length;
+    final List<AgentsThreadAction> folded = <AgentsThreadAction>[
+      ...actions.skip(inline),
+      ...menuActions,
+    ];
+    final List<Widget> buttons = <Widget>[
+      if (calls) ...<Widget>[
+        _buildDeskCall(context),
+        _buildDeskScreen(context),
+      ],
+      for (final AgentsThreadAction action in actions.take(inline))
+        DeskIconButton(
+          icon: action.icon,
+          tooltip: action.tooltip,
+          selected: action.selected,
+          onPressed: action.onPressed,
+        ),
+      if (folded.isNotEmpty) _buildDeskMenu(context, folded),
+    ];
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Row(
+            children: <Widget>[
+              Flexible(flex: 3, child: _buildDesktopSubject(context)),
+              if (automationLabel != null)
+                Flexible(
+                  flex: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.only(left: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _AutomationChip(
+                        label: automationLabel!,
+                        paused: automationPaused,
+                        expanded: automationExpanded,
+                        onTap: onToggleAutomations,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        for (int i = 0; i < buttons.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(width: kDeskButtonGap),
+          buttons[i],
+        ],
+      ],
+    );
+  }
+
+  /// Face (24), name (titleSmall, w600) and the status line under it. The
+  /// whole block is one target: it opens the coworker's details.
+  Widget _buildDesktopSubject(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final String state = switch (connection) {
+      AgentsThreadConnection.live => 'Connected',
+      AgentsThreadConnection.connecting => 'Connecting…',
+      AgentsThreadConnection.down => 'Offline',
+    };
+    final AgentsAgent? who = agent;
+    final TextStyle? nameStyle = theme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w600,
+      height: 1.2,
+    );
+    final TextStyle? lineStyle = theme.textTheme.labelSmall?.copyWith(
+      color: scheme.onSurfaceVariant,
+      height: 1.2,
+    );
+    final Widget text = Column(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          who?.name ?? title ?? '',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: nameStyle,
+        ),
+        if (who != null)
+          AgentStatusLine(agent: who, fontSize: 11)
+        else if (subtitle != null)
+          Text(
+            subtitle!,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: lineStyle,
+          )
+      ],
+    );
+    final Widget subject = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        if (who != null) ...<Widget>[
+          Tooltip(
+            message: state,
+            child: AgentFace(agent: who, size: kDeskRowFace),
+          ),
+          const SizedBox(width: 10),
+        ],
+        Flexible(child: text),
+      ],
+    );
+    // No face to carry the connection's tooltip: the subject carries it.
+    if (who == null) return Tooltip(message: state, child: subject);
+    if (onOpenProfile == null) return subject;
+    return _DeskSubjectTarget(
+      tooltip: 'Details',
+      onTap: () => onOpenProfile!(who),
+      child: subject,
+    );
+  }
+
+  Widget _buildDeskCall(BuildContext context) => DeskIconButton(
+    icon: Icons.call_rounded,
+    parked: true,
+    tooltip: 'Voice call is not available yet',
+    semanticsId: 'thread_header_call',
+    onPressed: () => pillToast(
+      context,
+      'Voice calls with a coworker are not available yet',
+      icon: Icons.call_end_rounded,
+    ),
+  );
+
+  Widget _buildDeskScreen(BuildContext context) => DeskIconButton(
+    icon: Icons.desktop_windows_rounded,
+    parked: onOpenScreen == null,
+    color: onOpenScreen == null ? null : Theme.of(context).colorScheme.tertiary,
+    tooltip: onOpenScreen == null
+        ? 'No screen open right now'
+        : "Agent's screen",
+    semanticsId: 'thread_header_screen',
+    onPressed:
+        onOpenScreen ??
+        () => pillToast(
+          context,
+          'The coworker has no screen open right now',
+          icon: Icons.desktop_access_disabled_rounded,
+        ),
+  );
+
+  Widget _buildDeskMenu(BuildContext context, List<AgentsThreadAction> folded) {
+    return Builder(
+      builder: (BuildContext anchorContext) => DeskIconButton(
+        icon: Icons.more_horiz,
+        tooltip: 'More actions',
+        onPressed: () async {
+          final ColorScheme scheme = Theme.of(anchorContext).colorScheme;
+          final AgentsThreadAction? picked =
+              await showAnchoredMenu<AgentsThreadAction>(
+                anchorContext,
+                alignRight: true,
+                color: scheme.surfaceContainerHigh,
+                items: <PopupMenuEntry<AgentsThreadAction>>[
+                  for (final AgentsThreadAction action in folded)
+                    PopupMenuItem<AgentsThreadAction>(
+                      value: action,
+                      padding: EdgeInsets.zero,
+                      child: MenuActionRow(
+                        icon: action.icon,
+                        label: action.tooltip,
+                      ),
+                    ),
+                ],
+              );
+          picked?.onPressed();
+        },
+      ),
+    );
   }
 
   Widget _buildRow(BuildContext context, double maxWidth) {
@@ -555,6 +785,50 @@ class _AutomationChip extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The title bar's subject as one hover target: a quiet fill under the
+/// pointer, a click opens the details pane.
+class _DeskSubjectTarget extends StatefulWidget {
+  const _DeskSubjectTarget({
+    required this.child,
+    required this.onTap,
+    required this.tooltip,
+  });
+
+  final Widget child;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  @override
+  State<_DeskSubjectTarget> createState() => _DeskSubjectTargetState();
+}
+
+class _DeskSubjectTargetState extends State<_DeskSubjectTarget> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 120),
+          padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
+          decoration: BoxDecoration(
+            color: _hovered ? scheme.surfaceContainerHigh : Colors.transparent,
+            borderRadius: BorderRadius.circular(kDeskControlRadius),
+          ),
+          child: widget.child,
         ),
       ),
     );

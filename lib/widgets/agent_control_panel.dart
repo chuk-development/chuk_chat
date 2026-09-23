@@ -22,7 +22,14 @@ class AgentControlPanel extends StatefulWidget {
     required this.agent,
     required this.source,
     this.onScheduleSubmitted,
+    this.showHeader = true,
+    this.showRefresh = true,
   });
+
+  /// The name row at the top. The desktop details pane keeps it; the pane
+  /// header above it already carries Refresh, so it turns [showRefresh] off.
+  final bool showHeader;
+  final bool showRefresh;
 
   final AgentsAgent agent;
   final AgentControlSource source;
@@ -68,24 +75,26 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
         return ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.agent.name,
-                    style: theme.textTheme.titleMedium,
+            if (widget.showHeader)
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      widget.agent.name,
+                      style: theme.textTheme.titleMedium,
+                    ),
                   ),
-                ),
-                IconButton(
-                  tooltip: 'Refresh',
-                  // No compact density here: it shrank the only control on
-                  // the panel to 40 dp.
-                  icon: const AppIcon(Icons.refresh, size: 18),
-                  onPressed: () =>
-                      _run(() => widget.source.refresh(_sessionKey)),
-                ),
-              ],
-            ),
+                  if (widget.showRefresh)
+                    IconButton(
+                      tooltip: 'Refresh',
+                      // No compact density here: it shrank the only control on
+                      // the panel to 40 dp.
+                      icon: const AppIcon(Icons.refresh, size: 18),
+                      onPressed: () =>
+                          _run(() => widget.source.refresh(_sessionKey)),
+                    ),
+                ],
+              ),
             if (widget.agent.role != null)
               Padding(
                 padding: const EdgeInsets.only(top: 2),

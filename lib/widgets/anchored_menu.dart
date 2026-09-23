@@ -109,9 +109,16 @@ Future<T?> showAnchoredMenu<T>(
       items: items,
       color: color,
       borderColor: borderColor,
-      minWidth: minWidth,
+      minWidth: MenuDensity.isDense(anchorContext)
+          ? math.min(minWidth, 180)
+          : minWidth,
       maxWidth: maxWidth,
-      borderRadius: borderRadius ?? (agentsChatCore ? kMenuOuterRadius : 18),
+      // The Agents desktop layout opens its menus under a mouse pointer: the
+      // dense shape, whatever radius the caller asked for (docs/DESIGN.md
+      // §14.6). Nothing else is ever inside a [MenuDensity].
+      borderRadius: MenuDensity.isDense(anchorContext)
+          ? kMenuDenseOuterRadius
+          : borderRadius ?? (agentsChatCore ? kMenuOuterRadius : 18),
       preferAbove: preferAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,
