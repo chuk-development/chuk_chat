@@ -37,8 +37,8 @@ class AgentReadMarks extends ChangeNotifier {
   /// the open thread — and on desktop Linux each preference write rewrites the
   /// whole preferences file on the UI isolate. The in-memory mark (what the
   /// unread dots read) changes at once; only the disk copy waits, so a burst
-  /// costs one write. [Duration.zero] writes at once (tests).
-  @visibleForTesting
+  /// costs one write. [Duration.zero] writes at once (tests). The roster's
+  /// activity writes use the same delay (`LocalAgentRosterSource`).
   static Duration persistDelay = const Duration(seconds: 1);
 
   Timer? _persistTimer;

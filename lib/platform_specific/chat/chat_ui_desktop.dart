@@ -583,11 +583,28 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         );
       }
 
+      if (widget.agentsThread) _resetThreadTransientState();
       _loadChatById(widget.selectedChatId);
       // Trigger rebuild to reflect new chat's streaming status
       // _isStreaming getter will automatically check the new _activeChatId
       setState(() {});
     }
+  }
+
+  /// Agents only: the state that belongs to the thread being left, dropped
+  /// on a thread switch. The Agents screen is no longer remounted per thread
+  /// (the original app remounted, which dropped all of this), so a draft, an
+  /// open edit, attachments or a queued follow-up would otherwise carry over
+  /// into the next agent's thread. Upstream's chat keeps its behaviour.
+  void _resetThreadTransientState() {
+    messageActionsHandler.cancelEdit();
+    composerController.clear();
+    // List-only: restored attachments still belong to the saved message, and
+    // the original app dropped fresh ones on remount without deleting them.
+    _fileHandler.attachedFiles.clear();
+    restoredAttachmentIds.clear();
+    _pendingMessageText = null;
+    _flyInKey = null;
   }
 
   @override
