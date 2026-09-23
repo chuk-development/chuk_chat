@@ -10,7 +10,7 @@
 
 import 'package:flutter/material.dart';
 
-
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -45,6 +45,13 @@ extension ExpressiveOnColor on ColorScheme {
       (inverseSurface, onInverseSurface),
       (surface, onSurface),
     ];
+    // chuk_chat picks plain white or black on a tone; the scheme pairing is
+    // the Agents app's.
+    if (!agentsChatCore) {
+      return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+          ? Colors.white
+          : Colors.black;
+    }
     for (final (Color fill, Color on) in pairs) {
       if (fill == background) return on;
     }
@@ -203,7 +210,7 @@ class _ExpressiveRowState extends State<ExpressiveRow> {
 /// The filled tile every row in a group sits in. Anything can go inside —
 /// a settings row, an account header, a connector — and it will carry the
 /// group's shape, its colour and its press feedback.
-class ExpressiveTile extends StatelessWidget {
+class ExpressiveTile extends StatefulWidget {
   const ExpressiveTile({
     super.key,
     required this.child,
@@ -216,9 +223,56 @@ class ExpressiveTile extends StatelessWidget {
   final EdgeInsets padding;
 
   @override
+  State<ExpressiveTile> createState() => _ExpressiveTileState();
+}
+
+class _ExpressiveTileState extends State<ExpressiveTile> {
+  bool _pressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final m3 = Theme.of(context).m3;
     final BorderRadius resting = _ExpressiveTileShape.of(context);
+    final VoidCallback? onTap = widget.onTap;
+    final EdgeInsets padding = widget.padding;
+    final Widget child = widget.child;
+
+    if (!agentsChatCore) {
+      final bool enabled = onTap != null;
+      // The squeeze: pressing rounds every corner and shrinks the tile a
+      // little. It is the whole of the expressive feedback — no ripple is
+      // needed on top of it.
+      return AnimatedScale(
+        scale: _pressed ? 0.985 : 1,
+        duration: const Duration(milliseconds: 130),
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 130),
+          curve: Curves.easeOutCubic,
+          decoration: BoxDecoration(
+            color: _pressed ? m3.surfaceContainerHigh : m3.surfaceContainer,
+            borderRadius: _pressed
+                ? BorderRadius.circular(kExpressiveOuterRadius)
+                : resting,
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              onTapDown: enabled
+                  ? (_) => setState(() => _pressed = true)
+                  : null,
+              onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+              onTapCancel: enabled
+                  ? () => setState(() => _pressed = false)
+                  : null,
+              child: Padding(padding: padding, child: child),
+            ),
+          ),
+        ),
+      );
+    }
 
     // The squeeze: pressing shrinks the tile a little and squares its corners
     // off, then a spring carries it back. It is the same [MorphTap] every
@@ -413,7 +467,7 @@ class ExpressiveIconTile extends StatelessWidget {
         // about 0.86 of that. That lands a 42 px tile on a 25 px drawing —
         // the 24-in-40 proportion a filled tile wants. The old 0.5 was set
         // when the icon ignored it and filled the whole tile anyway.
-        size: size * 0.7,
+        size: size * (agentsChatCore ? 0.7 : 0.5),
         color: tone == null ? cs.onPrimaryContainer : cs.onColorFor(background),
       ),
     );
@@ -449,7 +503,10 @@ class ExpressiveSectionHeader extends StatelessWidget {
       ),
     );
     return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 16, 6, 8),
+      // The Agents app gives a section more air above its title.
+      padding: agentsChatCore
+          ? const EdgeInsets.fromLTRB(6, 26, 6, 10)
+          : const EdgeInsets.fromLTRB(6, 16, 6, 8),
       child: trailing == null
           ? title
           : Row(

@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+
 /// Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
 /// vectorized from the website's nav render — "Chuk Chat" with the
 /// "Private and Secure. Always." slogan beneath) so it looks identical
@@ -25,6 +27,25 @@ class BrandWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (agentsChatCore) {
+      // The Agents app draws the name as text in the UI font, in the same box
+      // the lockup takes, and has no slogan line.
+      return SizedBox(
+        height: height * _lockupRatio,
+        child: Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Chuk Chat',
+            style: TextStyle(
+              // 20px text has ~15px ink height; keep that ratio.
+              fontSize: height / 0.75,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ),
+      );
+    }
     return SvgPicture.asset(
       'assets/wordmark.svg',
       height: height * _lockupRatio,

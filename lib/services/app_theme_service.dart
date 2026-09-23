@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/theme_settings_service.dart';
 import 'package:chuk_chat/services/customization_preferences_service.dart';
@@ -22,6 +23,11 @@ class AppThemeService extends ChangeNotifier {
 
   static final AppThemeService _instance = AppThemeService._();
   static AppThemeService get instance => _instance;
+
+  /// Whether contrast, UI font and dynamic colour travel with the synced look.
+  /// The Agents build keeps them on the device (SharedPreferences only), as
+  /// the original Agents app did; chuk_chat syncs them with the colours.
+  static bool get _lookSyncs => !agentsChatCore;
 
   // Theme state
   Brightness _themeMode = kDefaultThemeMode;
@@ -324,9 +330,14 @@ class AppThemeService extends ChangeNotifier {
         _accentColor != settings.accentColor ||
         _iconFgColor != settings.iconColor ||
         _bgColor != settings.backgroundColor ||
-        (settings.contrast != null && _contrast != settings.contrast) ||
-        (settings.uiFont != null && _uiFontFamily != settings.uiFont) ||
-        (settings.dynamicColor != null &&
+        (_lookSyncs &&
+            settings.contrast != null &&
+            _contrast != settings.contrast) ||
+        (_lookSyncs &&
+            settings.uiFont != null &&
+            _uiFontFamily != settings.uiFont) ||
+        (_lookSyncs &&
+            settings.dynamicColor != null &&
             _dynamicColorEnabled != settings.dynamicColor) ||
         _showReasoningTokens != customizationPrefs.showReasoningTokens ||
         _showModelInfo != customizationPrefs.showModelInfo ||
@@ -363,12 +374,15 @@ class AppThemeService extends ChangeNotifier {
     // only way not to reset somebody's contrast and font on the first sync
     // after the upgrade.
     final bool lookIsIncomplete =
-        settings.contrast == null ||
-        settings.uiFont == null ||
-        settings.dynamicColor == null;
-    _contrast = settings.contrast ?? _contrast;
-    _uiFontFamily = settings.uiFont ?? _uiFontFamily;
-    _dynamicColorEnabled = settings.dynamicColor ?? _dynamicColorEnabled;
+        _lookSyncs &&
+        (settings.contrast == null ||
+            settings.uiFont == null ||
+            settings.dynamicColor == null);
+    if (_lookSyncs) {
+      _contrast = settings.contrast ?? _contrast;
+      _uiFontFamily = settings.uiFont ?? _uiFontFamily;
+      _dynamicColorEnabled = settings.dynamicColor ?? _dynamicColorEnabled;
+    }
     _showReasoningTokens = customizationPrefs.showReasoningTokens;
     _showModelInfo = customizationPrefs.showModelInfo;
     _showTps = customizationPrefs.showTps;
@@ -509,9 +523,11 @@ class AppThemeService extends ChangeNotifier {
       accentColor: _accentColor,
       iconColor: _iconFgColor,
       backgroundColor: _bgColor,
-      contrast: _contrast,
-      uiFont: _uiFontFamily,
-      dynamicColor: _dynamicColorEnabled,
+      // Null leaves the account's stored values alone (see
+      // [ThemeSettings.toMap]); the Agents build keeps these device-local.
+      contrast: _lookSyncs ? _contrast : null,
+      uiFont: _lookSyncs ? _uiFontFamily : null,
+      dynamicColor: _lookSyncs ? _dynamicColorEnabled : null,
     );
 
     try {
@@ -607,7 +623,7 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setBool(_kDynamicColorEnabledKey, _dynamicColorEnabled);
-    _debouncedSyncTheme();
+    if (_lookSyncs) _debouncedSyncTheme();
   }
 
   void setShowReasoningTokens(bool show) {
@@ -752,7 +768,7 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setDouble(_kContrastKey, _contrast);
-    _debouncedSyncTheme();
+    if (_lookSyncs) _debouncedSyncTheme();
   }
 
   /// The app-chrome font is part of a theme pack, so it syncs with the rest of
@@ -767,7 +783,7 @@ class AppThemeService extends ChangeNotifier {
     notifyListeners();
     final prefs = await _getPrefs();
     await prefs.setString(_kUiFontFamilyKey, _uiFontFamily);
-    _debouncedSyncTheme();
+    if (_lookSyncs) _debouncedSyncTheme();
   }
 
   /// Onboarding completion is per-user: cached locally under a user-scoped

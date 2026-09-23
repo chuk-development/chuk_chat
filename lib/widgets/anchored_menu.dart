@@ -13,6 +13,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// Gap between the anchor and the menu.
@@ -43,9 +44,10 @@ Future<T?> showAnchoredMenu<T>(
   // Caps how wide a long row may push the menu; without it a very long
   // model name makes the menu as wide as the screen.
   double? maxWidth,
-  // Agents opened every menu at kMenuOuterRadius (26); upstream's own menus
-  // are tuned to 18, and every call site takes the default.
-  double borderRadius = 18,
+  // Null takes the build's default: the Agents app opened every menu at
+  // kMenuOuterRadius (26), upstream's own menus are tuned to 18. Most call
+  // sites take the default, so the Agents home and roster menus follow it.
+  double? borderRadius,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
   // right opens leftwards). true → align the menu's right edge to the anchor
@@ -109,7 +111,7 @@ Future<T?> showAnchoredMenu<T>(
       borderColor: borderColor,
       minWidth: minWidth,
       maxWidth: maxWidth,
-      borderRadius: borderRadius,
+      borderRadius: borderRadius ?? (agentsChatCore ? kMenuOuterRadius : 18),
       preferAbove: preferAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,

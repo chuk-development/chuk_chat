@@ -399,7 +399,10 @@ class ExpressiveIconButton extends StatelessWidget {
     Widget button = MorphTap(
       onTap: onTap,
       pressedScale: parked ? 0.98 : 0.93,
-      color: enabled ? fill : fill.withValues(alpha: 0.5),
+      // Half of the fill's OWN alpha. `withValues(alpha: 0.5)` sets it
+      // outright, which turned a transparent target (the header's parked
+      // call and screen) into a 50 % black square.
+      color: enabled ? fill : fill.withValues(alpha: fill.a * 0.5),
       // An oval stays an oval while the finger is down, the way the connected
       // group does; only the square target squares off further.
       shape: oval

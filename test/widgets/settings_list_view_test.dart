@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/ui/expressive/staggered.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
@@ -26,6 +27,11 @@ List<double> _opacities(WidgetTester tester) {
 }
 
 void main() {
+  // The spring tile, the cascade and the scheme pairing are the Agents app's;
+  // chuk_chat's widgets keep their own (see the flag-off test below).
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
+
   List<Widget> rows(int count) => <Widget>[
     for (var i = 0; i < count; i++)
       SizedBox(height: 40, child: Text('row $i')),
@@ -61,6 +67,18 @@ void main() {
 
     // The very first frame already shows every row in place.
     expect(_opacities(tester), everyElement(1.0));
+    for (var i = 0; i < 6; i++) {
+      expect(find.text('row $i'), findsOneWidget);
+    }
+  });
+
+  testWidgets('with Agents off the rows do not cascade', (
+    WidgetTester tester,
+  ) async {
+    debugAgentsChatCoreOverride = false;
+    await tester.pumpWidget(_host(children: rows(6)));
+
+    expect(find.byType(StaggeredItem), findsNothing);
     for (var i = 0; i < 6; i++) {
       expect(find.text('row $i'), findsOneWidget);
     }
