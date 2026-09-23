@@ -208,6 +208,10 @@ class AgentsPairingStore {
   Future<AgentsStoredPairing?> loadPairingFromCloud() =>
       _cloudSync.loadEncryptedPairing();
 
+  /// [loadPairingFromCloud] with the reason when there is no record.
+  Future<AgentsCloudPairingRead> readPairingFromCloud() =>
+      _cloudSync.readEncryptedPairing();
+
   Future<bool> publishPairing(AgentsStoredPairing pairing) =>
       _cloudSync.publishEncryptedPairing(pairing);
 

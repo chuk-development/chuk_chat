@@ -91,6 +91,7 @@ import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
@@ -103,6 +104,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
@@ -132,6 +134,7 @@ class MessengerShell extends StatefulWidget {
     this.chatDebugExport,
     this.readMarks,
     this.agentProfiles,
+    this.pairingRestoreBuilder,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -188,6 +191,18 @@ class MessengerShell extends StatefulWidget {
 
   /// The coworkers' display profiles (picture, colour, role, brief).
   final AgentProfileStore? agentProfiles;
+
+  /// Builds the cloud-pairing restore supervisor. Null builds the real one.
+  /// A widget test injects one with a scripted key and mirror, so each status
+  /// the shell shows ("Looking for your computer…", "Add your computer") can
+  /// be reached without Supabase.
+  @visibleForTesting
+  final AgentsPairingRestore Function(
+    AgentsPairingStore store,
+    AccountSessionSource sessionSource,
+    Future<void> Function() onRestored,
+  )?
+  pairingRestoreBuilder;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
@@ -1024,6 +1039,10 @@ class _MessengerShellState extends State<MessengerShell>
           readMarks: _readMarks,
           profiles: _agentProfiles,
           accountLabel: null,
+          // With no coworker and no room the inbox says what is going on
+          // with the computer — never a bare "no agents" while there is no
+          // computer to hold one.
+          emptyState: _buildStatusPanel(),
         ),
         settings: widget.shellConfig == null
             ? const SizedBox.shrink()
