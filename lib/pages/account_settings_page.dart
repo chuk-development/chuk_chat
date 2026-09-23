@@ -1,11 +1,14 @@
 // Merge note: upstream's screen is kept whole — Agents's copy was the same
 // page restructured for ExpressiveScreen, and upstream already had the three
 // password reveal toggles. Kept from Agents: the reveal toggle on the
-// confirm-password dialog that guards account deletion.
+// confirm-password dialog that guards account deletion (FEATURE_AGENTS on
+// only).
 // lib/pages/account_settings_page.dart
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
@@ -381,21 +384,24 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
                     prefixIcon: const AppIcon(Icons.lock_outline),
                     // The other password fields on this page can be revealed;
                     // the one that deletes the account was the exception.
-                    suffixIcon: IconButton(
-                      tooltip: obscurePassword
-                          ? 'Show password'
-                          : 'Hide password',
-                      icon: AppIcon(
-                        obscurePassword
-                            ? Icons.visibility_off
-                            : Icons.visibility,
-                      ),
-                      onPressed: () {
-                        setDialogState(() {
-                          obscurePassword = !obscurePassword;
-                        });
-                      },
-                    ),
+                    // Agents only; chuk_chat's dialog has no reveal toggle.
+                    suffixIcon: !agentsChatCore
+                        ? null
+                        : IconButton(
+                            tooltip: obscurePassword
+                                ? 'Show password'
+                                : 'Hide password',
+                            icon: AppIcon(
+                              obscurePassword
+                                  ? Icons.visibility_off
+                                  : Icons.visibility,
+                            ),
+                            onPressed: () {
+                              setDialogState(() {
+                                obscurePassword = !obscurePassword;
+                              });
+                            },
+                          ),
                   ),
                   onSubmitted:
                       isVerifying ? null : (_) => verify(setDialogState),

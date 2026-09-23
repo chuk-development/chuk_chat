@@ -10,9 +10,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+
 import '../support/icon_finder.dart';
 
-import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
 const Color kAccent = Color(0xFF1565C0);
@@ -95,6 +96,10 @@ TextSpan _span(WidgetTester tester, String text) {
 
 void main() {
   group('links', () {
+    // The Agents build's typography; chuk_chat renders upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('a link is underlined and painted in the accent colour', (
       tester,
     ) async {
@@ -168,6 +173,10 @@ void main() {
   });
 
   group('inline styles', () {
+    // The Agents build's typography; chuk_chat renders upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('bold, italic and strikethrough', (tester) async {
       await _pumpMarkdown(tester, '**bold** and *slanted* and ~~gone~~');
 
@@ -218,6 +227,10 @@ void main() {
   });
 
   group('headings', () {
+    // The Agents build's typography; chuk_chat renders upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('h1 to h6 never grow again on the way down', (tester) async {
       await _pumpMarkdown(tester, '''
 # one
@@ -332,6 +345,10 @@ $$E = mc^2$$
   });
 
   group('lists', () {
+    // The Agents build's typography; chuk_chat renders upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('nested ordered and unordered lists render every item', (
       tester,
     ) async {
@@ -502,9 +519,9 @@ final x = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     await tester.pumpWidget(buildUpstreamMarkdown(text));
 
     // Cell text stays literal — no dollar pair swallowed into a math span.
-    // The table is drawn by ChukTable, which lays its rows out itself rather
-    // than through a Flutter [Table].
-    expect(find.byType(ChukTable), findsOneWidget);
+    // With FEATURE_AGENTS off the table is upstream's, drawn through a
+    // Flutter [Table], exactly as upstream's own test expects.
+    expect(find.byType(Table), findsOneWidget);
     expect(
       find.textContaining(r'$29/month, $149/year', findRichText: true),
       findsOne,

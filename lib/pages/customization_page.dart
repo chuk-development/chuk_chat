@@ -1,6 +1,7 @@
 // Merge note: upstream's chrome (Scaffold + FloatingAppBar) is kept over
-// Agents's ExpressiveScreen. Agents's own work is kept on top: both dropdowns
-// now open the house anchored menu, and the "Full log" switch is added.
+// Agents's ExpressiveScreen. Agents's own work is kept on top, with
+// FEATURE_AGENTS on only: both dropdowns open the house anchored menu, and the
+// "Full log" switch is added. Without the flag the page is upstream's.
 // Agents had also deleted upstream's auto-title rows and the Downloads row
 // because its product has neither; the merged app has both, so they stay.
 // lib/pages/customization_page.dart
@@ -22,6 +23,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
@@ -257,10 +259,40 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 icon: Icons.language,
                 title: l.language,
                 subtitle: l.languageSubtitle,
-                trailing: MenuAnchorButton(
-                  label: _localeNames[_selectedLocale] ?? _selectedLocale,
-                  onTap: _pickLocale,
-                ),
+                // The Agents build opens the house anchored menu; chuk_chat
+                // keeps upstream's Material dropdown.
+                trailing: !agentsChatCore
+                    ? DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          icon: const AppIcon(
+                            Icons.keyboard_arrow_down_rounded,
+                          ),
+                          value: _selectedLocale,
+                          dropdownColor: m3.surfaceContainerHigh,
+                          borderRadius: kBorderRadiusMenu,
+                          focusColor: Colors.transparent,
+                          items: [
+                            for (final MapEntry<String, String> entry
+                                in _localeNames.entries)
+                              DropdownMenuItem(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                          ],
+                          onChanged: (String? value) {
+                            if (value != null && value != _selectedLocale) {
+                              setState(() {
+                                _selectedLocale = value;
+                              });
+                              widget.config.setUiLocale(value);
+                            }
+                          },
+                        ),
+                      )
+                    : MenuAnchorButton(
+                        label: _localeNames[_selectedLocale] ?? _selectedLocale,
+                        onTap: _pickLocale,
+                      ),
               ),
             ],
           ),
@@ -390,11 +422,50 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     ),
                     const SizedBox(height: 10),
                     ExpressiveField(
-                      child: MenuAnchorButton(
-                        label: _fontFamilyLabel(_selectedChatFontFamily, l),
-                        expand: true,
-                        onTap: _pickChatFontFamily,
-                      ),
+                      child: !agentsChatCore
+                          ? DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                icon: const AppIcon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                                value: _selectedChatFontFamily,
+                                isExpanded: true,
+                                dropdownColor: m3.surfaceContainerHigh,
+                                borderRadius: kBorderRadiusMenu,
+                                // The default focus tint is a full-bleed
+                                // rectangle drawn behind the rounded
+                                // container — it is what makes a focused
+                                // dropdown look square. The container
+                                // already carries the shape.
+                                focusColor: Colors.transparent,
+                                items: kSupportedChatFontFamilies
+                                    .map(
+                                      (id) => DropdownMenuItem<String>(
+                                        value: id,
+                                        child: Text(_fontFamilyLabel(id, l)),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (String? value) {
+                                  if (value == null ||
+                                      value == _selectedChatFontFamily) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _selectedChatFontFamily = value;
+                                  });
+                                  widget.config.setChatFontFamily(value);
+                                },
+                              ),
+                            )
+                          : MenuAnchorButton(
+                              label: _fontFamilyLabel(
+                                _selectedChatFontFamily,
+                                l,
+                              ),
+                              expand: true,
+                              onTap: _pickChatFontFamily,
+                            ),
                     ),
                     const SizedBox(height: 12),
                     ExpressiveField(
@@ -553,24 +624,25 @@ class _CustomizationPageState extends State<CustomizationPage> {
           // step, or just the answer (docs/PRODUCT_PHILOSOPHY.md). Default off.
           // Agents put this where it had deleted upstream's auto-title rows;
           // the merged app keeps both, so it sits next to them instead.
-          ExpressiveSectionHeader('Detail'),
-          ListenableBuilder(
-            listenable: VerboseService.instance,
-            builder: (context, _) => ExpressiveGroup(
-              children: [
-                ExpressiveSwitchRow(
-                  icon: Icons.terminal_outlined,
-                  title: 'Full log',
-                  subtitle:
-                      'Show every command, tool call and browser step in the '
-                      'thread, not just the answer.',
-                  value: VerboseService.instance.enabled,
-                  onChanged: (bool value) =>
-                      VerboseService.instance.setEnabled(value),
-                ),
-              ],
+          if (agentsChatCore) ExpressiveSectionHeader('Detail'),
+          if (agentsChatCore)
+            ListenableBuilder(
+              listenable: VerboseService.instance,
+              builder: (context, _) => ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.terminal_outlined,
+                    title: 'Full log',
+                    subtitle:
+                        'Show every command, tool call and browser step in the '
+                        'thread, not just the answer.',
+                    value: VerboseService.instance.enabled,
+                    onChanged: (bool value) =>
+                        VerboseService.instance.setEnabled(value),
+                  ),
+                ],
+              ),
             ),
-          ),
 
           // Downloads: nav row into DownloadSettingsPage.
           ExpressiveSectionHeader(l.downloads),

@@ -4,6 +4,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -126,8 +128,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('picking a preset from the dropdown applies it to the config',
-      (tester) async {
+  // The Agents build opens the anchored menu; chuk_chat keeps upstream's
+  // Material dropdown. Either way the pick lands in the config.
+  for (final bool agents in <bool>[true, false])
+  testWidgets('picking a preset from the dropdown applies it to the config'
+      '${agents ? '' : ' (FEATURE_AGENTS off)'}', (tester) async {
+    debugAgentsChatCoreOverride = agents;
+    addTearDown(() => debugAgentsChatCoreOverride = null);
     final state = _State();
     await tester.pumpWidget(_host(_config(state)));
     await tester.pumpAndSettle();
@@ -139,7 +146,11 @@ void main() {
     final v = github.dark; // default brightness is dark
     // The preset picker is the first anchored-menu button on the page (the
     // font pickers follow it).
-    await tester.tap(find.byType(MenuAnchorButton).first);
+    await tester.tap(
+      agents
+          ? find.byType(MenuAnchorButton).first
+          : find.byType(DropdownButton<ThemePreset>),
+    );
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text('GitHub'),

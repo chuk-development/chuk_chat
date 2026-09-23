@@ -1,8 +1,8 @@
 // Merge note: upstream moved this page onto Scaffold + FloatingAppBar, Agents
-// onto ExpressiveScreen. Upstream's chrome is kept. Everything else Agents did
-// here is kept on top: the minimum tap target on a colour swatch, the preset
-// and font dropdowns replaced by the anchored menu, and the dialog shape left
-// to the theme.
+// onto ExpressiveScreen. Upstream's chrome is kept. What Agents did here —
+// the minimum tap target on a colour swatch, the preset and font dropdowns
+// replaced by the anchored menu, the dialog shape left to the theme — applies
+// with FEATURE_AGENTS on only; without it the page is upstream's exactly.
 // lib/pages/theme_page.dart
 import 'dart:async';
 
@@ -15,6 +15,7 @@ import 'package:flutter/services.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/theme/theme_presets.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
@@ -695,6 +696,9 @@ class _ColorPickerDialogState extends State<_ColorPickerDialog> {
     final l = AppLocalizations.of(context)!;
     final color = _hsv.toColor();
     return AlertDialog(
+      shape: agentsChatCore
+          ? null
+          : RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
       backgroundColor: m3.surfaceContainerHigh,
       title: Text(l.pickAColor),
       content: SizedBox(
@@ -898,7 +902,7 @@ class _Swatch extends StatelessWidget {
     // The coloured circle stays as small as the grid wants it; the TAP square
     // around it never falls under Material's minimum, so a swatch is still a
     // swatch and a finger still lands on it.
-    final double target = size < kMinInteractiveDimension
+    final double target = agentsChatCore && size < kMinInteractiveDimension
         ? kMinInteractiveDimension
         : size;
     return InkWell(
@@ -984,17 +988,68 @@ class _PresetPicker extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: MenuAnchorButton(
-              label: selected?.name ?? customLabel,
-              expand: true,
-              leading: selected == null
-                  ? null
-                  : _PresetDots(preset: selected!, brightness: brightness),
-              labelStyle: selected == null
-                  ? TextStyle(color: m3.onSurfaceVariant)
-                  : TextStyle(color: cs.onSurface),
-              onTap: _pick,
-            ),
+            child: !agentsChatCore
+                ? DropdownButtonHideUnderline(
+                    child: DropdownButton<ThemePreset>(
+                      value: selected,
+                      isExpanded: true,
+                      dropdownColor: m3.surfaceContainerHigh,
+                      borderRadius: kBorderRadiusMenu,
+                      focusColor: Colors.transparent,
+                      // The chevron every other picker in the app uses. The
+                      // Material default is a filled triangle, which is the
+                      // one arrow shape that appears nowhere else.
+                      icon: AppIcon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: m3.onSurfaceVariant,
+                      ),
+                      hint: Text(
+                        customLabel,
+                        style: TextStyle(color: m3.onSurfaceVariant),
+                      ),
+                      items: presets
+                          .map(
+                            (p) => DropdownMenuItem<ThemePreset>(
+                              value: p,
+                              child: Row(
+                                children: [
+                                  _PresetDots(
+                                    preset: p,
+                                    brightness: brightness,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      p.name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(color: cs.onSurface),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (p) {
+                        if (p != null) onSelected(p);
+                      },
+                    ),
+                  )
+                : MenuAnchorButton(
+                    label: selected?.name ?? customLabel,
+                    expand: true,
+                    leading: selected == null
+                        ? null
+                        : _PresetDots(
+                            preset: selected!,
+                            brightness: brightness,
+                          ),
+                    labelStyle: selected == null
+                        ? TextStyle(color: m3.onSurfaceVariant)
+                        : TextStyle(color: cs.onSurface),
+                    onTap: _pick,
+                  ),
           ),
         ],
       ),
@@ -1100,15 +1155,46 @@ class _FontCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ExpressiveField(
-            child: MenuAnchorButton(
-              label: labelFor(value),
-              expand: true,
-              labelStyle: TextStyle(
-                color: cs.onSurface,
-                fontFamily: resolveChatFontFamily(value),
-              ),
-              onTap: _pick,
-            ),
+            child: !agentsChatCore
+                ? DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      value: value,
+                      isExpanded: true,
+                      dropdownColor: m3.surfaceContainerHigh,
+                      borderRadius: kBorderRadiusMenu,
+                      focusColor: Colors.transparent,
+                      icon: AppIcon(
+                        Icons.keyboard_arrow_down_rounded,
+                        color: m3.onSurfaceVariant,
+                      ),
+                      items: options
+                          .map(
+                            (id) => DropdownMenuItem<String>(
+                              value: id,
+                              child: Text(
+                                labelFor(id),
+                                style: TextStyle(
+                                  color: cs.onSurface,
+                                  fontFamily: resolveChatFontFamily(id),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (v) {
+                        if (v != null && v != value) onChanged(v);
+                      },
+                    ),
+                  )
+                : MenuAnchorButton(
+                    label: labelFor(value),
+                    expand: true,
+                    labelStyle: TextStyle(
+                      color: cs.onSurface,
+                      fontFamily: resolveChatFontFamily(value),
+                    ),
+                    onTap: _pick,
+                  ),
           ),
           const SizedBox(height: 10),
           ExpressiveField(

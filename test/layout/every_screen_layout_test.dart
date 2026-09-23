@@ -47,6 +47,7 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
@@ -665,9 +666,19 @@ void main() {
     expect(planted, isNotEmpty, reason: 'the overflow was not seen');
   });
 
-  for (final _Screen screen in _screens()) {
+  // Both builds. The Agents build holds every control to 48 dp; with
+  // FEATURE_AGENTS off the screens are upstream chuk_chat's exactly (pinned by
+  // test/widgets/flag_off_parity_test.dart), including upstream's 40 dp
+  // settings rows and 32 dp colour swatches, so that pass checks overflow,
+  // bleed, throws and tiny text but not the target size.
+  for (final bool agents in <bool>[true, false]) {
+    final String build = agents ? '' : ' (FEATURE_AGENTS off)';
+    for (final _Screen screen in _screens()) {
     for (final LayoutSize window in kLayoutSizes) {
-      testWidgets('${screen.name} @ ${window.name}', (WidgetTester tester) async {
+      testWidgets('${screen.name} @ ${window.name}$build',
+          (WidgetTester tester) async {
+        debugAgentsChatCoreOverride = agents;
+        addTearDown(() => debugAgentsChatCoreOverride = null);
         for (final double scale in kTextScales) {
           final _Bag bag = _Bag();
           late List<Bleed> bleed;
@@ -707,7 +718,7 @@ void main() {
             reason: '$where paints past the edge:\n  ${bleed.join('\n  ')}',
           );
           expect(
-            small,
+            agents ? small : const <SmallTarget>[],
             isEmpty,
             reason: '$where has controls under 48 dp:\n  ${small.join('\n  ')}',
           );
@@ -720,5 +731,6 @@ void main() {
         }
       });
     }
+  }
   }
 }

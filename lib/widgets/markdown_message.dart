@@ -14,10 +14,12 @@ import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/chuk_table_classic.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Lays [overlay] on top of [base] field by field.
@@ -484,11 +486,15 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     final Color defaultCodeColor = theme.brightness == Brightness.dark
         ? const Color(0xFF9CDCFE) // Light blue - same as variables in VS Code
         : const Color(0xFF2E3440); // Dark for light mode
+    // The Agents build carries its typography fixes (derived heading sizes,
+    // inline code and links that survive a themed parent style, bubble-
+    // coloured list markers). chuk_chat keeps upstream's rendering as is.
+    final bool agents = agentsChatCore;
     final TextStyle codeTextStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 13,
       height: 1.4,
-      letterSpacing: 0,
+      letterSpacing: agents ? 0 : null,
       color: defaultCodeColor,
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
@@ -508,7 +514,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     // smaller than `bodyLarge` (h5) — so `#### x` used to render smaller than
     // `##### x`. Deriving them also lets the headings follow the chat font
     // size the user picked.
-    double headingSize(double factor) => baseFontSize * factor;
+    double? headingSize(double factor) => agents ? baseFontSize * factor : null;
 
     final MarkdownConfig config = MarkdownConfig(
       configs: [
@@ -651,14 +657,25 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         // underline and the accent colour survive inside a heading or bold
         // text instead of resetting the text to body size.
         LinkConfig(
-          style: TextStyle(
-            color: accentColor,
-            decoration: TextDecoration.underline,
-            decorationColor: accentColor,
-            decorationThickness: 1.2,
-            fontFamily: proseFontFamily,
-            fontSize: baseFontSize,
-          ),
+          style: agents
+              ? TextStyle(
+                  color: accentColor,
+                  decoration: TextDecoration.underline,
+                  decorationColor: accentColor,
+                  decorationThickness: 1.2,
+                  fontFamily: proseFontFamily,
+                  fontSize: baseFontSize,
+                )
+              : (theme.textTheme.bodyMedium?.copyWith(
+                      color: accentColor,
+                      decoration: TextDecoration.underline,
+                      fontFamily: proseFontFamily,
+                    )) ??
+                    TextStyle(
+                      color: accentColor,
+                      decoration: TextDecoration.underline,
+                      fontFamily: proseFontFamily,
+                    ),
           onTap: (url) {
             _onTapLink(url);
           },
@@ -698,46 +715,51 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         // theme, not from the bubble. On a coloured bubble that made the
         // bullets nearly invisible. These markers use the bubble text colour
         // and the reading size.
-        ListConfig(
-          marginLeft: 28,
-          marginBottom: 4,
-          marker: (bool isOrdered, int depth, int index) {
-            if (isOrdered) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 6),
-                child: SelectionContainer.disabled(
-                  child: Align(
-                    alignment: Alignment.topRight,
-                    child: Text(
-                      '${index + 1}.',
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        color: widget.textColor,
-                        fontSize: baseFontSize,
-                        height: baseLineHeight,
-                        fontFamily: proseFontFamily,
+        if (!agents) ListConfig(),
+        if (agents)
+          ListConfig(
+            marginLeft: 28,
+            marginBottom: 4,
+            marker: (bool isOrdered, int depth, int index) {
+              if (isOrdered) {
+                return Padding(
+                  padding: const EdgeInsets.only(right: 6),
+                  child: SelectionContainer.disabled(
+                    child: Align(
+                      alignment: Alignment.topRight,
+                      child: Text(
+                        '${index + 1}.',
+                        maxLines: 1,
+                        softWrap: false,
+                        style: TextStyle(
+                          color: widget.textColor,
+                          fontSize: baseFontSize,
+                          height: baseLineHeight,
+                          fontFamily: proseFontFamily,
+                        ),
                       ),
                     ),
                   ),
+                );
+              }
+              final double dotTop =
+                  ((baseFontSize * baseLineHeight) - _kBulletSize) / 2;
+              return Padding(
+                padding: EdgeInsets.only(
+                  top: dotTop < 0 ? 0 : dotTop,
+                  right: 8,
+                ),
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Container(
+                    width: _kBulletSize,
+                    height: _kBulletSize,
+                    decoration: _bulletDecoration(depth, widget.textColor),
+                  ),
                 ),
               );
-            }
-            final double dotTop =
-                ((baseFontSize * baseLineHeight) - _kBulletSize) / 2;
-            return Padding(
-              padding: EdgeInsets.only(top: dotTop < 0 ? 0 : dotTop, right: 8),
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Container(
-                  width: _kBulletSize,
-                  height: _kBulletSize,
-                  decoration: _bulletDecoration(depth, widget.textColor),
-                ),
-              ),
-            );
-          },
-        ),
+            },
+          ),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
         CheckBoxConfig(
           builder: (checked) => AppIcon(
@@ -762,16 +784,18 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           generator: (e, config, visitor) =>
               _SafeCodeBlockNode(e, config.pre, visitor),
         ),
-        SpanNodeGeneratorWithTag(
-          tag: MarkdownTag.a.name,
-          generator: (e, config, visitor) =>
-              AccentLinkNode(e.attributes, config.a, accentColor),
-        ),
-        SpanNodeGeneratorWithTag(
-          tag: MarkdownTag.code.name,
-          generator: (e, config, visitor) =>
-              InlineCodeNode(e.textContent, inlineCodeStyle),
-        ),
+        if (agents) ...[
+          SpanNodeGeneratorWithTag(
+            tag: MarkdownTag.a.name,
+            generator: (e, config, visitor) =>
+                AccentLinkNode(e.attributes, config.a, accentColor),
+          ),
+          SpanNodeGeneratorWithTag(
+            tag: MarkdownTag.code.name,
+            generator: (e, config, visitor) =>
+                InlineCodeNode(e.textContent, inlineCodeStyle),
+          ),
+        ],
         SpanNodeGeneratorWithTag(
           tag: _latexTag,
           generator: (e, config, visitor) =>
@@ -801,15 +825,24 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     )) {
       if (segment.isTable && segment.table != null) {
         builtWidgets.add(
-          ChukTable(
-            table: segment.table!,
-            textColor: widget.textColor,
-            accentColor: accentColor,
-            fontFamily: proseFontFamily,
-            // A link in a table cell goes through the same confirm-then-open
-            // path as a link in prose (bead cowork-94s9).
-            onTapLink: _onTapLink,
-          ),
+          agents
+              ? ChukTable(
+                  table: segment.table!,
+                  textColor: widget.textColor,
+                  accentColor: accentColor,
+                  fontFamily: proseFontFamily,
+                  // A link in a table cell goes through the same
+                  // confirm-then-open path as a link in prose (bead
+                  // cowork-94s9).
+                  onTapLink: _onTapLink,
+                )
+              // chuk_chat keeps upstream's table unchanged.
+              : ChukTableClassic(
+                  table: segment.table!,
+                  textColor: widget.textColor,
+                  accentColor: accentColor,
+                  fontFamily: proseFontFamily,
+                ),
         );
         continue;
       }
