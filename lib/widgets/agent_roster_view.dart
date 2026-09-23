@@ -22,7 +22,6 @@ library;
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -45,7 +44,7 @@ import 'package:chuk_chat/widgets/coworker_name_dialog.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
-import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
 
 // The name dialog moved to its own file when it was rebuilt in the app's
 // language; it is exported here so every caller keeps one import.
@@ -265,8 +264,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
 
   String _displayNameFor(ProfileRecord? profile) {
     if (profile == null) return 'Account';
-    if (profile.displayName.trim().isNotEmpty)
+    if (profile.displayName.trim().isNotEmpty) {
       return profile.displayName.trim();
+    }
     if (profile.email.trim().isNotEmpty) return profile.email.trim();
     return 'Account';
   }
@@ -603,12 +603,22 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       height: kDeskBarHeight - 1,
       child: Row(
         children: <Widget>[
-          const Expanded(
-            child: SbBrand(
-              label: 'Chuk Chat',
-              showLogo: false,
-              fontSize: kSidebarBrandWordmarkSize,
-              padding: EdgeInsets.fromLTRB(16, 0, 8, 0),
+          // The app name: the frozen wordmark, scaled down rather than cut
+          // when the pane is at its narrowest.
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: BrandWordmark(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    height: kSidebarBrandWordmarkSize * 0.75,
+                  ),
+                ),
+              ),
             ),
           ),
           if (widget.onAddAgent != null || widget.onCreateRoom != null)

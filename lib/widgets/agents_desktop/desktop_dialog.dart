@@ -53,6 +53,7 @@ class AgentsDesktopDialog extends StatelessWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: ConstrainedBox(
+        key: const ValueKey<String>('agents-desktop-dialog-box'),
         constraints: BoxConstraints(
           maxWidth: kDeskDialogMaxWidth,
           maxHeight: MediaQuery.sizeOf(context).height * 0.85,
