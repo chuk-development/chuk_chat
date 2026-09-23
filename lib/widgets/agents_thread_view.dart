@@ -974,6 +974,34 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   /// Deletes the stored trust — the next connection needs a fresh code again —
   /// and drops the live connection.
+  /// Asks before removing the computer. The pairing is mirrored to the
+  /// account, so removing it here unlinks every device on this account; the
+  /// dialog says so, because one tap on an error bar used to do it silently.
+  Future<void> _confirmForget() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remove this computer?'),
+        content: const Text(
+          'This unlinks your computer from your account on every device. '
+          'To use it again you have to add it once more.',
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            key: const ValueKey<String>('agents-remove-computer-confirm'),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) await _forget();
+  }
+
   Future<void> _forget() async {
     _autoReconnectTimer?.cancel();
     _autoReconnectTimer = null;
@@ -1992,7 +2020,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   }
 
   /// The bottom bar shown when the app is paired but not currently connected:
-  /// a status line plus Reconnect (keeps the pairing) and Forget (deletes it).
+  /// a status line plus Reconnect (keeps the pairing). Removing the computer
+  /// (deletes the pairing) is in the overflow menu, behind a confirmation.
   Widget _buildReconnectBar(BuildContext context, String? banner) {
     final theme = Theme.of(context);
     final reconnecting = _busy;
@@ -2017,9 +2046,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
               ),
             ),
             const SizedBox(width: 8),
-            TextButton(
-              onPressed: reconnecting ? null : _forget,
-              child: const Text('Forget'),
+            // Removing the computer is rare and account-wide, so it is not a
+            // button next to Reconnect on an error bar. It sits one step away,
+            // behind a menu and a confirmation.
+            PopupMenuButton<String>(
+              key: const ValueKey<String>('agents-reconnect-more'),
+              tooltip: 'More',
+              enabled: !reconnecting,
+              icon: const Icon(Icons.more_vert),
+              onSelected: (_) => _confirmForget(),
+              itemBuilder: (context) => const <PopupMenuEntry<String>>[
+                PopupMenuItem<String>(
+                  value: 'remove',
+                  child: Text('Remove this computer…'),
+                ),
+              ],
             ),
             const SizedBox(width: 4),
             FilledButton(
