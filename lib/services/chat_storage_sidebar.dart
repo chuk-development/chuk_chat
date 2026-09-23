@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -202,6 +203,25 @@ class ChatStorageSidebar {
     }
   }
 
+  /// The chats in memory that the `encrypted_chats` title list no longer
+  /// names, which the title sync then removes.
+  ///
+  /// An Agents thread never has a row in `encrypted_chats` (it lives in
+  /// `cowork_chats` and on the host), so it is never "gone" here. Treating it
+  /// as gone dropped the open thread from memory every 30 s: switching back to
+  /// it showed an empty conversation, and the store's removal watcher threw
+  /// its replay cursor away with it. `ChatStorageService.removeChatLocally`
+  /// already keeps Agents threads for the full sync; this is the same rule for
+  /// the title sync.
+  @visibleForTesting
+  static Set<String> idsGoneFromServer(
+    Iterable<String> localIds,
+    Set<String> serverIds,
+  ) => <String>{
+    for (final id in localIds)
+      if (!serverIds.contains(id) && !ChatOrigin.isAgentsThread(id)) id,
+  };
+
   /// Sync titles from network and update cache (runs in background)
   /// Only notifies UI if there are actual changes to prevent unnecessary rebuilds.
   /// Optimized: Only decrypts titles that are new or changed (based on updated_at).
@@ -230,12 +250,19 @@ class ChatStorageSidebar {
       }
 
       if (rows.isEmpty) {
-        if (ChatStorageState.chatsById.isNotEmpty) {
-          ChatStorageState.chatsById.clear();
+        final gone = idsGoneFromServer(
+          ChatStorageState.chatsById.keys,
+          const <String>{},
+        );
+        if (gone.isNotEmpty) {
+          gone.forEach(ChatStorageState.chatsById.remove);
           hasChanges = true;
         }
         if (hasChanges) ChatStorageState.notifyChanges();
-        await saveTitlesToCache(userId, []);
+        await saveTitlesToCache(
+          userId,
+          ChatStorageState.chatsById.values.toList(),
+        );
         return;
       }
 
@@ -352,7 +379,7 @@ class ChatStorageSidebar {
       }
 
       // Remove deleted chats
-      final deletedIds = oldIds.difference(newIds);
+      final deletedIds = idsGoneFromServer(oldIds, newIds);
       if (deletedIds.isNotEmpty) {
         for (final id in deletedIds) {
           ChatStorageState.chatsById.remove(id);
