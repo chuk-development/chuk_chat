@@ -56,5 +56,6 @@ const double kDeskComposerButton = 28;
 /// Reading measure of the transcript and the composer (§14.4).
 const double kDeskReadingMeasure = 720;
 
-/// Dialogs on the desktop (§14.6).
+/// Dialogs on the desktop (§14.6): at most this wide, with this corner.
 const double kDeskDialogMaxWidth = 480;
+const double kDeskDialogRadius = 20;

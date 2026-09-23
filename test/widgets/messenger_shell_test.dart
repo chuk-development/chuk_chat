@@ -1230,8 +1230,10 @@ void main() {
     // The room list is the right panel (chuk's Workspaces slot); at 800 px
     // the sidebar folds to make room for it.
     expect(find.byType(RoomListView), findsOneWidget);
-    expect(find.text('Rooms'), findsWidgets);
-    // Listed in the pane and in the roster.
+    // The pane's own header names it; at 800 px the roster folded to the
+    // rail to make room.
+    expect(find.text('Control Rooms'), findsWidgets);
+    // Listed in the pane (and in the roster when it is open).
     expect(find.text('launch'), findsWidgets);
     expect(find.text('2 members'), findsOneWidget);
 

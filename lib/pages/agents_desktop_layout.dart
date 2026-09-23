@@ -536,7 +536,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               ),
             ],
           ),
-          Expanded(child: _buildRoomList()),
+          Expanded(child: _buildRoomList(showHeader: false)),
         ],
       ),
     );

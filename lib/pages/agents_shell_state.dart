@@ -728,8 +728,9 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// open still pushes `RoomThreadPage` as its own route, so the agent thread
   /// and its live socket stay mounted underneath — a room never disturbs the
   /// one-to-one connection.
-  Widget _buildRoomList() => RoomListView(
+  Widget _buildRoomList({bool showHeader = true}) => RoomListView(
     source: _rooms,
+    showHeader: showHeader,
     onCreate: _openRoomCreate,
     onSelect: _openRoom,
     onDelete: _deleteRoom,

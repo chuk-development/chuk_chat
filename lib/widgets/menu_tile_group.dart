@@ -111,6 +111,7 @@ class MenuTileGroup extends StatelessWidget {
               : kMenuDenseOuterRadius)
         : outerRadius;
     final double inner = dense ? kMenuDenseInnerRadius : kMenuInnerRadius;
+    if (dense) return _buildDense(context, outer);
     final List<Widget> out = <Widget>[];
     for (final List<Widget> run in groups) {
       if (run.isEmpty) continue;
@@ -136,6 +137,42 @@ class MenuTileGroup extends StatelessWidget {
           ),
         );
       }
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: out,
+    );
+  }
+
+  /// The desktop menu: each run is one continuous surface with a hairline
+  /// edge — rows of 32 px under a mouse pointer do not need to be tiles of
+  /// their own, and a tile the colour of the bubble behind it let the gaps
+  /// read as holes.
+  Widget _buildDense(BuildContext context, double outer) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final List<Widget> out = <Widget>[];
+    for (final List<Widget> run in groups) {
+      if (run.isEmpty) continue;
+      if (out.isNotEmpty) out.add(const SizedBox(height: kMenuDenseGroupGap));
+      out.add(
+        Material(
+          color: color,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(outer),
+            side: BorderSide(color: scheme.outlineVariant),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: run,
+            ),
+          ),
+        ),
+      );
     }
     return Column(
       mainAxisSize: MainAxisSize.min,

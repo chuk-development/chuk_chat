@@ -416,6 +416,7 @@ class AgentsThreadHeader extends StatelessWidget {
                   for (final AgentsThreadAction action in folded)
                     PopupMenuItem<AgentsThreadAction>(
                       value: action,
+                      height: kMenuDenseRowHeight,
                       padding: EdgeInsets.zero,
                       child: MenuActionRow(
                         icon: action.icon,
