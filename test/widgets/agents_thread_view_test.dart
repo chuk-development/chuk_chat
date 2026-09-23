@@ -462,9 +462,14 @@ void main() {
         await letTheReconnectsFail(tester);
 
         // Still paired (stored), so the code form stays gone; the bottom bar
-        // offers Reconnect and, for the it-is-really-broken case, Forget.
+        // offers Reconnect. Removing the computer is one step away, in the
+        // overflow menu, never a button beside Reconnect.
         expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
-        expect(find.widgetWithText(TextButton, 'Forget'), findsOneWidget);
+        expect(find.widgetWithText(TextButton, 'Forget'), findsNothing);
+        expect(
+          find.byKey(const ValueKey<String>('agents-reconnect-more')),
+          findsOneWidget,
+        );
         expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
         expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
         // The conversation was never disturbed by any of it.
@@ -536,15 +541,36 @@ void main() {
       expect(AgentsRunLedger.instance.isRunning('default'), isTrue);
     });
 
-    testWidgets('Forget deletes the pairing and returns to the code form', (
+    testWidgets('cancelling "Remove this computer" keeps the pairing', (
       tester,
     ) async {
       final (_, store) = await pumpPersistent(tester, hostAway: true);
-      // Forget lives on the bar, and the bar only comes back once the app has
-      // tried and failed to reconnect on its own.
       await letTheReconnectsFail(tester);
 
-      await tester.tap(find.widgetWithText(TextButton, 'Forget'));
+      await tester.tap(find.byKey(const ValueKey<String>('agents-reconnect-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove this computer…'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(await store.loadPairing(), isNotNull);
+    });
+
+    testWidgets('confirmed removal deletes the pairing and returns to the '
+        'code form', (tester) async {
+      final (_, store) = await pumpPersistent(tester, hostAway: true);
+      // The menu lives on the bar, and the bar only comes back once the app
+      // has tried and failed to reconnect on its own.
+      await letTheReconnectsFail(tester);
+
+      await tester.tap(find.byKey(const ValueKey<String>('agents-reconnect-more')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Remove this computer…'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-remove-computer-confirm')),
+      );
       await tester.pump();
       await tester.pumpAndSettle();
 
