@@ -42,6 +42,12 @@ void main() {
   });
 
   Future<void> pump(WidgetTester tester) async {
+    // Tall enough for every card: the page's list builds lazily, so a card
+    // below the fold would not exist to be found.
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MaterialApp(home: AutomationsPage()));
     await tester.pump();
   }
