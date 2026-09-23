@@ -357,14 +357,33 @@ step 5/5 "systemd user service"
 # The default state directory is not written into the unit: the host resolves
 # it itself, and only then moves a legacy ~/.cowork or ~/.agents state into it
 # (an explicit path is used as given and never migrated into).
+#
+# A path given here can hold spaces and characters special to systemd or to
+# sed. It is quoted for ExecStart (backslash, double quote, and the "%" and
+# "$" that systemd expands are escaped), then escaped for the sed replacement.
+systemd_quote() {
+    local v="$1"
+    v="${v//\\/\\\\}"
+    v="${v//\"/\\\"}"
+    v="${v//%/%%}"
+    v="${v//\$/\$\$}"
+    printf '"%s"' "${v}"
+}
+sed_replacement_escape() {
+    printf '%s' "$1" | sed -e 's/[\\&|]/\\&/g'
+}
 if [ "${AGENTS_HOME}" = "${DEFAULT_STATE_DIR}" ]; then
     WORKSPACE_ARG=""
 else
-    WORKSPACE_ARG="--workspace ${AGENTS_HOME} "
+    case "${AGENTS_HOME}" in
+        *$'\n'*) die "the state directory must not contain a newline: ${AGENTS_HOME}" ;;
+    esac
+    WORKSPACE_ARG="--workspace $(systemd_quote "${AGENTS_HOME}") "
 fi
+WORKSPACE_ARG_SED="$(sed_replacement_escape "${WORKSPACE_ARG}")"
 UNIT_BODY="$(sed \
     -e "s|@EXEC@|${LAUNCHER}|g" \
-    -e "s|@WORKSPACE_ARG@|${WORKSPACE_ARG}|g" \
+    -e "s|@WORKSPACE_ARG@|${WORKSPACE_ARG_SED}|g" \
     -e "s|@IMAGE@|${IMAGE_TAG}|g" \
     -e "s|@SANDBOX_KIND@|${SANDBOX_KIND}|g" \
     -- "${UNIT_TEMPLATE}")"

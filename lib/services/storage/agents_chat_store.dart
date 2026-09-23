@@ -113,11 +113,15 @@ typedef AgentsCloudUpsert = Future<Map<String, dynamic>?> Function(
 );
 
 /// Signature of a cloud read of [kAgentsChatsTable]. [ids] null reads every
-/// row of the user. [columns] is the Supabase select list.
+/// row of the user. [columns] is the Supabase select list. [from] and [to]
+/// (both inclusive, set together) ask for one page of the rows ordered by id,
+/// like Supabase's `.range(from, to)`.
 typedef AgentsCloudSelect = Future<List<Map<String, dynamic>>> Function(
   String userId, {
   List<String>? ids,
   required String columns,
+  int? from,
+  int? to,
 });
 
 /// The columns of a full `cowork_chats` row.
@@ -184,6 +188,11 @@ class AgentsChatStore {
   static Future<void> Function(String key)? outboxDelete;
   @visibleForTesting
   static AgentsCloudSelect? cloudSelect;
+
+  /// Rows per page of the id list. Supabase caps one response at its
+  /// `max-rows` setting (1000 by default), so the list is read in pages.
+  @visibleForTesting
+  static int idPageSize = 1000;
   @visibleForTesting
   static Future<void> Function(
     String userId,
@@ -527,7 +536,7 @@ class AgentsChatStore {
     try {
       if (!await _ensureKey()) return const <String>[];
       await _loadOutbox(userId);
-      final listed = await _select(userId, columns: 'id, updated_at');
+      final listed = await _selectIdList(userId);
       if (listed.isEmpty) return const <String>[];
 
       final local = await _localTimestamps(userId);
@@ -721,7 +730,7 @@ class AgentsChatStore {
     if (userId == null || !cloudAvailable) return const <AgentsCloudThread>[];
     // The ids first (small), then the full rows in batches: one request for
     // every payload can outgrow the timeout and block the password change.
-    final listed = await _select(userId, columns: 'id, updated_at');
+    final listed = await _selectIdList(userId);
     final ids = <String>[
       for (final row in listed)
         if (row['id'] is String) row['id'] as String,
@@ -855,19 +864,48 @@ class AgentsChatStore {
     await flushOutbox();
   }
 
+  /// `id` and `updated_at` of every row of the user, read in pages of
+  /// [idPageSize] until a short page. One plain read would stop at the
+  /// server's row limit and leave the rest out without a word.
+  static Future<List<Map<String, dynamic>>> _selectIdList(
+    String userId,
+  ) async {
+    final out = <Map<String, dynamic>>[];
+    final size = idPageSize;
+    for (var from = 0; ; from += size) {
+      final page = await _select(
+        userId,
+        columns: 'id, updated_at',
+        from: from,
+        to: from + size - 1,
+      );
+      out.addAll(page);
+      if (page.length < size) return out;
+    }
+  }
+
   static Future<List<Map<String, dynamic>>> _select(
     String userId, {
     List<String>? ids,
     required String columns,
+    int? from,
+    int? to,
   }) async {
     final hook = cloudSelect;
-    if (hook != null) return hook(userId, ids: ids, columns: columns);
+    if (hook != null) {
+      return hook(userId, ids: ids, columns: columns, from: from, to: to);
+    }
     var query = SupabaseService.client
         .from(kAgentsChatsTable)
         .select(columns)
         .eq('user_id', userId);
     if (ids != null) query = query.inFilter('id', ids);
-    final rows = await query.timeout(const Duration(seconds: 30));
+    final rows = (from != null && to != null)
+        ? await query
+              .order('id', ascending: true)
+              .range(from, to)
+              .timeout(const Duration(seconds: 30))
+        : await query.timeout(const Duration(seconds: 30));
     return rows.cast<Map<String, dynamic>>();
   }
 
@@ -999,6 +1037,7 @@ class AgentsChatStore {
     outboxWrite = null;
     outboxDelete = null;
     cloudSelect = null;
+    idPageSize = 1000;
     cloudUpdate = null;
     cloudDelete = null;
     decryptor = null;

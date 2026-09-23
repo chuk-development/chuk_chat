@@ -82,6 +82,20 @@ void main() {
     await dispose(tester, 'idle-reset');
   });
 
+  testWidgets('the timeout closes the dead stream\'s subscription', (
+    tester,
+  ) async {
+    var cancelled = false;
+    input = StreamController<ChatStreamEvent>(onCancel: () => cancelled = true);
+    await start('idle-cancel');
+
+    await tester.pump(const Duration(seconds: 61));
+    expect(errorCodes, <String?>[StreamErrorCodes.idleTimeout]);
+    expect(cancelled, isTrue);
+
+    await dispose(tester, 'idle-cancel');
+  });
+
   testWidgets('partial content is completed, not thrown away', (tester) async {
     await start('idle-partial');
 

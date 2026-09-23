@@ -195,6 +195,7 @@ class DockerEnvironment(BaseEnvironment):
         extra_run_args: tuple[str, ...] = (),
         cli: DockerCli | None = None,
         owner: str | None = None,
+        legacy_workspace_roots: tuple[str, ...] = (),
     ) -> None:
         self._image = resolve_image(image)
         self._agent_id = agent_id
@@ -211,6 +212,9 @@ class DockerEnvironment(BaseEnvironment):
         # The host that owns this container (``cowork.owner``). Only that
         # host's orphan reaper may remove it (bead chuk_chat-6mg).
         self._owner = owner or None
+        # Workspace roots that attribute a container from before the owner
+        # label to this owner (see ``owned_by``). Used only with an owner.
+        self._legacy_roots = tuple(legacy_workspace_roots)
         self._container: str | None = None
         self._reused = False
         # The exec client this environment is blocked on, so ``cancel`` (§7.1)
@@ -306,9 +310,7 @@ class DockerEnvironment(BaseEnvironment):
                 f"{self._cli.binary} CLI or daemon is unavailable"
             )
 
-        existing = find_agent_container(
-            agent_id=self._agent_id, task_id=self._task_id, cli=self._cli
-        )
+        existing = self._find_own_container()
         if existing is not None and not self._matches(existing):
             # Wrong workspace or wrong image: reusing it would hand the agent
             # someone else's files. Replace it.
@@ -335,6 +337,21 @@ class DockerEnvironment(BaseEnvironment):
         self._reused = False
         self._resolve_user()
         return self._container
+
+    def _find_own_container(self) -> ContainerInfo | None:
+        """This agent's labelled container, scoped to :attr:`_owner` when set.
+
+        A container of another host never reaches ``_matches``,
+        ``_start_existing`` or ``remove_container`` (bead: find_agent_container
+        matched by agent id machine-wide).
+        """
+        return find_agent_container(
+            agent_id=self._agent_id,
+            task_id=self._task_id,
+            cli=self._cli,
+            owner=self._owner,
+            legacy_workspace_roots=self._legacy_roots,
+        )
 
     def _start_existing(self, existing: ContainerInfo) -> bool:
         """Start a stopped container back up, tolerating a transitional state.
@@ -535,9 +552,7 @@ class DockerEnvironment(BaseEnvironment):
         target = self._container
         if target is None:
             # Nothing started in this process, but a labelled box may still exist.
-            found = find_agent_container(
-                agent_id=self._agent_id, task_id=self._task_id, cli=self._cli
-            )
+            found = self._find_own_container()
             if found is None:
                 return False
             target = found.id or found.name

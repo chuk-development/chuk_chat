@@ -117,6 +117,10 @@ class StreamingManager extends StreamingManagerBase {
       } else {
         onComplete(content, stream.reasoningBuffer.toString(), stream.tps);
       }
+      // Close the connection as completeStream does. cleanupStream only drops
+      // the map entry, so a late event of this dead stream would otherwise
+      // land in the next stream of the same chat.
+      unawaited(stream.subscription.cancel());
       cleanupStream(chatId);
     });
   }

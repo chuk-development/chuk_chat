@@ -502,3 +502,63 @@ def test_unavailable_runtime_raises_a_clear_error():
     env = DockerEnvironment(agent_id="a1", cli=FakeCli(up=False))
     with pytest.raises(DockerUnavailableError):
         env._ensure_container()
+
+
+# --------------------------------------------------- lookup, owner-scoped
+# find_agent_container used to match by agent id machine-wide: a second host
+# with the same agent id reused, restarted or removed the first host's box.
+
+
+def test_find_with_an_owner_skips_another_hosts_container():
+    cli = FakeCli([container(cid="theirs", agent="a1", owner="/other")])
+    assert find_agent_container(agent_id="a1", cli=cli, owner="/o") is None
+    # Without an owner the old, machine-wide lookup still finds it.
+    assert find_agent_container(agent_id="a1", cli=cli).id == "theirs"
+
+
+def test_find_with_an_owner_takes_an_unlabelled_box_only_under_its_roots():
+    cli = FakeCli(
+        [
+            container(cid="old-theirs", agent="a1", workspace="/tmp/x/agents/a1"),
+            container(cid="old-mine", agent="a1", workspace="/o/agents/a1"),
+        ]
+    )
+    found = find_agent_container(
+        agent_id="a1", cli=cli, owner="/o", legacy_workspace_roots=("/o",)
+    )
+    assert found.id == "old-mine"
+    assert find_agent_container(agent_id="a1", cli=cli, owner="/o") is None
+
+
+def test_an_owned_environment_never_touches_another_hosts_container():
+    theirs = container(cid="theirs", agent="a1", image="img:1", owner="/other", state="exited")
+    cli = FakeCli([theirs])
+    env = DockerEnvironment(agent_id="a1", image="img:1", cli=cli, owner="/o")
+    cid = env._ensure_container()
+    assert cid != "theirs"
+    assert env.reused_container is False
+    assert not any(call[0] in ("rm", "start") for call in cli.calls)
+    assert {c["id"] for c in cli.containers} == {"theirs", cid}
+
+
+def test_remove_with_an_owner_leaves_another_hosts_container():
+    cli = FakeCli([container(cid="theirs", agent="a1", owner="/other")])
+    env = DockerEnvironment(agent_id="a1", cli=cli, owner="/o")
+    assert env.remove() is False
+    assert [c["id"] for c in cli.containers] == ["theirs"]
+
+
+def test_an_owned_environment_does_not_claim_an_anonymous_container():
+    cli = FakeCli([container(cid="old", agent="a1", image="img:1", workspace=None)])
+    env = DockerEnvironment(
+        agent_id="a1", image="img:1", cli=cli, owner="/o", legacy_workspace_roots=("/o",)
+    )
+    # No workspace label and no owner label: nobody can claim it, so a new box.
+    assert env._ensure_container() != "old"
+
+
+def test_remove_without_an_owner_keeps_the_old_lookup():
+    cli = FakeCli([container(cid="c1", agent="a1")])
+    env = DockerEnvironment(agent_id="a1", cli=cli)
+    assert env.remove() is True
+    assert cli.containers == []

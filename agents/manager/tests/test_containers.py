@@ -254,6 +254,7 @@ def test_an_owned_supervisor_scopes_the_reaper_and_labels_its_envs(monkeypatch):
     def factory(**kwargs):
         made.append(dict(kwargs))
         kwargs.pop("owner", None)
+        kwargs.pop("legacy_workspace_roots", None)
         return FakeEnv(**kwargs)
 
     monkeypatch.setattr("chuk_agents_manager.containers.reap_orphans", fake_reap)
@@ -265,6 +266,7 @@ def test_an_owned_supervisor_scopes_the_reaper_and_labels_its_envs(monkeypatch):
     sup.start("a")
     sup.reap_orphans()
     assert made[0]["owner"] == "/home/me/.agents"
+    assert made[0]["legacy_workspace_roots"] == ("/home/me/.agents",)
     assert seen["owner"] == "/home/me/.agents"
     assert seen["legacy_workspace_roots"] == ("/home/me/.agents",)
 

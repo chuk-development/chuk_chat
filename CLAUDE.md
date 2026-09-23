@@ -217,9 +217,10 @@ Pass via `--dart-define=FLAG=value`. Defined in `lib/platform_config.dart`.
 `codemagic.yaml` and `AGENTS.md` still pass `--dart-define=FEATURE_PROJECTS=…`,
 which does nothing.
 
-`./run.sh` turns on everything that works (skills, voice, server tools,
-tray) and deliberately leaves the three broken/costly ones off. Override any of
-them per-run: `FEATURE_SKILLS=false ./run.sh linux`.
+`./run.sh` turns on skills, server tools, artifacts and (on desktop) the
+tray. Voice mode is off by default, as are the Linux keyring and the other
+broken or costly flags. Override any of them per-run:
+`FEATURE_SKILLS=false ./run.sh linux`.
 
 ## Agent Skills
 
