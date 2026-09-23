@@ -22,7 +22,6 @@ import 'package:chuk_chat/services/mcp/mcp_tool_bridge.dart';
 import 'package:chuk_chat/services/tool_registry.dart';
 import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart';
-import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:chuk_chat/utils/tool_sanitizer.dart';
 
@@ -95,17 +94,10 @@ class ToolLoopSession {
   final List<ToolCall> toolCalls = [];
 
   /// Content blocks produced as side-effects of tool calls in this loop
-  /// (e.g. `send_file_to_user` emits a `sandboxArtifact` block). These are
+  /// (e.g. a places lookup emits a `<map>` block). These are
   /// surfaced to the streaming handler via `ToolLoopResult.producedBlocks`,
   /// which slices the new items off this list each round.
   final List<ContentBlock> producedBlocks = [];
-
-  /// Consecutive sandbox-infrastructure failures in this turn (HTTP 0/502/
-  /// 503/504 or "upstream unavailable"). Reset to 0 whenever a sandbox call
-  /// succeeds; a fresh session (one per user turn) starts it at 0. Once it
-  /// reaches [ToolCallHandler._kMaxConsecutiveSandboxInfraFailures] the tool
-  /// loop short-circuits further sandbox tool calls for the rest of the turn.
-  int consecutiveSandboxInfraFailures = 0;
 
   int emptyFinalRecoveryAttempts = 0;
   int malformedToolProtocolRecoveryAttempts = 0;
@@ -217,7 +209,7 @@ class ToolLoopResult {
   final List<RoundSegment> interleavedSegments;
 
   /// New content blocks produced as side-effects of tool calls during this
-  /// round (e.g. `send_file_to_user` -> `sandboxArtifact`). Streaming
+  /// round (e.g. a places lookup -> `<map>` block). Streaming
   /// handlers should append these to the assistant message's content blocks
   /// so the user sees the artifact inline.
   final List<ContentBlock> producedBlocks;
@@ -368,12 +360,6 @@ class ToolCallHandler {
   static const int _maxTruncatedCompletionRecoveryAttempts = 2;
   static const int _maxDeferredActionRecoveryAttempts = 2;
   static const int _maxNonFinalTurnRecoveryAttempts = 1;
-
-  /// Consecutive sandbox-infrastructure failures (HTTP 0/502/503/504) allowed
-  /// in one turn before the circuit breaker short-circuits any further sandbox
-  /// tool call. The sandbox being down does not recover mid-turn, so retrying
-  /// only burns the tool-call budget and ends in the safety-limit message.
-  static const int _kMaxConsecutiveSandboxInfraFailures = 2;
 
   /// One-shot self-verification pass before a tool-grounded answer is shown.
   static const int _maxFactCheckRecoveryAttempts = 1;
@@ -567,9 +553,6 @@ class ToolCallHandler {
     }
     if (completed((tc) => tc.name == 'generate_image')) {
       delivered.add('the image');
-    }
-    if (completed((tc) => tc.name == 'send_file_to_user')) {
-      delivered.add('the file');
     }
 
     if (delivered.isEmpty) {
@@ -1147,12 +1130,6 @@ class ToolCallHandler {
 
       String rawResult;
       bool isError;
-      // Circuit breaker: once the sandbox infrastructure has failed enough
-      // times this turn (HTTP 0/502/503/504 — the upstream is down, not a bad
-      // request), stop dispatching sandbox/file tools. Return a terminal,
-      // non-retryable result so the model finishes with what it already has
-      // instead of looping until it trips the tool-call safety limit.
-      final isSandboxTool = sandbox_tools.isSandboxBackedTool(call.name);
       if (call.arguments.containsKey(_kMalformedArgumentsKey)) {
         // The provider's argument stream did not arrive as valid JSON. Saying
         // so beats running the tool with nothing, which answers "No URL
@@ -1161,11 +1138,6 @@ class ToolCallHandler {
             'Error: the arguments of this call were not valid JSON, so it '
             'was not run. Send the call again with complete arguments. '
             'Received: ${call.arguments[_kMalformedArgumentsKey]}';
-        isError = true;
-      } else if (isSandboxTool &&
-          session.consecutiveSandboxInfraFailures >=
-              _kMaxConsecutiveSandboxInfraFailures) {
-        rawResult = sandbox_tools.kSandboxUnavailableThisTurnMessage;
         isError = true;
       } else {
         try {
@@ -1184,17 +1156,6 @@ class ToolCallHandler {
         } catch (error) {
           rawResult = 'Error executing ${call.name}: $error';
           isError = true;
-        }
-
-        // Track consecutive sandbox-infrastructure failures for the breaker:
-        // an infra error advances the count, any other outcome (success or a
-        // user-level error like a bad path) resets it.
-        if (isSandboxTool) {
-          if (sandbox_tools.isSandboxInfraError(rawResult)) {
-            session.consecutiveSandboxInfraFailures++;
-          } else {
-            session.consecutiveSandboxInfraFailures = 0;
-          }
         }
       }
 
@@ -1290,7 +1251,7 @@ class ToolCallHandler {
       toolCalls: _cloneToolCalls(session.toolCalls),
       interleavedSegments: interleaved,
       // Forward any side-effect blocks emitted by tools this round
-      // (e.g. send_file_to_user -> sandboxArtifact).
+      // (e.g. a places lookup -> `<map>` block).
       producedBlocks: session.producedBlocks.length > producedBlocksBefore
           ? List<ContentBlock>.unmodifiable(
               session.producedBlocks.sublist(producedBlocksBefore),

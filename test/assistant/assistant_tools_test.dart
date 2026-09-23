@@ -95,7 +95,7 @@ void main() {
     });
 
     test('chat-only tooling stays out of the assistant surface', () {
-      // Artifacts, sandboxes and the rest belong to the chat registry. Every
+      // Artifacts and the rest belong to the chat registry. Every
       // schema here is paid for in every spoken turn.
       final names = assistantToolsByName.keys.toSet();
       expect(
@@ -103,8 +103,6 @@ void main() {
           'create_artifact',
           'artifact_manager',
           'bash',
-          'code_run',
-          'sandbox_list',
           'find_tools',
         }),
         isEmpty,

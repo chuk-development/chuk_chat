@@ -408,5 +408,5 @@ class AppInitializationService {
   // `SupabaseService.signOut()` directly, bypassing `AuthService` (and any hook
   // in it) entirely. The caches it named now invalidate themselves by comparing
   // the active user id on every access; `AuthService.signOut()` already owns
-  // the rest of the teardown (socket, sandbox ids, encryption key).
+  // the rest of the teardown (socket, encryption key).
 }

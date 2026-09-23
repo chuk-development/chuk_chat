@@ -105,8 +105,6 @@ const Map<String, String> stringsEs = {
   'toolAlwaysOn': 'Siempre activo',
   'toolArtifacts': 'Artefactos',
   'toolArtifactsSubtitle': 'Código, documentos y dibujos editables',
-  'toolCodeSandbox': 'Sandbox de código',
-  'toolCodeSandboxSubtitle': 'Ejecuta código y gestiona archivos en un sandbox',
   'toolGroupCodeArtifacts': 'Código y artefactos',
   'connectors': 'Conectores',
   'loadingToolSettings': 'Cargando ajustes de herramientas...',
@@ -119,7 +117,6 @@ const Map<String, String> stringsEs = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
-  'catSandbox': 'Sandbox / Código',
   'catSearchWebDesc':
       'Buscar en la web, obtener páginas, generar imágenes y consultar datos',
   'catUtilitiesDesc':
@@ -134,8 +131,6 @@ const Map<String, String> stringsEs = {
       'Enviar mensajes, buscar canales y obtener datos de Slack',
   'catGoogleCalGmailDesc':
       'Gestionar tu agenda y correo electrónico con Google Calendar y Gmail',
-  'catSandboxDesc':
-      'Ejecutar código Python o shell en un sandbox aislado y leer/escribir archivos',
   'connect': 'Conectar',
   'disconnect': 'Desconectar',
   'disconnectCategory': '¿Desconectar {label}?',

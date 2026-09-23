@@ -219,8 +219,6 @@ const Map<String, String> stringsEn = {
   'toolAlwaysOn': 'Always on',
   'toolArtifacts': 'Artifacts',
   'toolArtifactsSubtitle': 'Editable code, docs and drawings',
-  'toolCodeSandbox': 'Code sandbox',
-  'toolCodeSandboxSubtitle': 'Run code and manage files in a sandbox',
   'toolGroupCodeArtifacts': 'Code & artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Let the assistant use tools from other services',
@@ -234,7 +232,6 @@ const Map<String, String> stringsEn = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Calendar / Gmail)',
-  'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Search the web, fetch pages, generate images, and look up data',
   'catUtilitiesDesc': 'Calculator, clock, notes, QR codes, and other utilities',
@@ -245,8 +242,6 @@ const Map<String, String> stringsEn = {
   'catSlackDesc': 'Send messages, search channels, and fetch Slack data',
   'catGoogleCalGmailDesc':
       'Manage your schedule and email via Google Calendar and Gmail',
-  'catSandboxDesc':
-      'Run Python or shell code in an isolated sandbox and read/write files',
   'connect': 'Connect',
   'disconnect': 'Disconnect',
   'disconnectCategory': 'Disconnect {label}?',

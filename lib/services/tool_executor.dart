@@ -29,7 +29,6 @@ import 'package:chuk_chat/tool_handlers/platform_tools.dart' as platform_tools;
 import 'package:chuk_chat/tool_handlers/chat_search_tools.dart'
     as chat_search_tools;
 import 'package:chuk_chat/tool_handlers/typst_tools.dart' as typst_tools;
-import 'package:chuk_chat/tool_handlers/sandbox_tools.dart' as sandbox_tools;
 import 'package:chuk_chat/tool_handlers/artifact_tools.dart' as artifact_tools;
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 
@@ -44,9 +43,8 @@ class ToolExecutionResult {
   final bool isError;
 
   /// Optional content blocks produced as a side-effect of this tool call.
-  /// Currently used by `send_file_to_user` to attach a
-  /// [ContentBlockType.sandboxArtifact] block to the streaming assistant
-  /// message so the user sees the file inline as a downloadable artifact.
+  /// They are appended to the streaming assistant message after the tool
+  /// round (for example the `<map>` block a map tool emits).
   final List<ContentBlock> producedBlocks;
 }
 
@@ -116,12 +114,6 @@ class ToolExecutor {
     'update_artifact',
     'update_project',
     'typst_compile',
-    'code_run',
-    'sandbox_list',
-    'sandbox_read',
-    'sandbox_write',
-    'sandbox_reset',
-    'send_file_to_user',
   };
 
   /// Tools that stay off until the user turns them on. Empty today.
@@ -474,8 +466,6 @@ class ToolExecutor {
         return platform_tools.isPlatformServiceConnected('slack');
       case ToolCategory.google:
         return platform_tools.isPlatformServiceConnected('google');
-      case ToolCategory.sandbox:
-        return true; // Server-managed Docker sandbox
       case ToolCategory.mcp:
         // A connected server is a connected service: the connection is what
         // put its tools in the registry in the first place.
@@ -774,79 +764,6 @@ class ToolExecutor {
         return _wrapOutput(_executeSkill(args));
       case 'update_project':
         return _wrapOutput(await _executeUpdateProject(args));
-
-      // -- Sandbox: code execution + file I/O --
-      case 'code_run':
-        return _wrapOutput(
-          await sandbox_tools.executeCodeRun(
-            accessToken: accessToken,
-            chatId:
-                currentChatId ??
-                ChatStorageService.selectedChatId ??
-                ChatStorageService.activeMessageChatId,
-            args: args,
-          ),
-        );
-      case 'sandbox_list':
-        return _wrapOutput(
-          await sandbox_tools.executeSandboxListFiles(
-            accessToken: accessToken,
-            chatId:
-                currentChatId ??
-                ChatStorageService.selectedChatId ??
-                ChatStorageService.activeMessageChatId,
-            args: args,
-          ),
-        );
-      case 'sandbox_read':
-        // Raw file contents: a file whose first line starts with "Error"
-        // must not be reported as a failed tool call.
-        return _wrapOutput(
-          sniff: false,
-          await sandbox_tools.executeSandboxReadFile(
-            accessToken: accessToken,
-            chatId:
-                currentChatId ??
-                ChatStorageService.selectedChatId ??
-                ChatStorageService.activeMessageChatId,
-            args: args,
-          ),
-        );
-      case 'sandbox_write':
-        return _wrapOutput(
-          await sandbox_tools.executeSandboxWriteFile(
-            accessToken: accessToken,
-            chatId:
-                currentChatId ??
-                ChatStorageService.selectedChatId ??
-                ChatStorageService.activeMessageChatId,
-            args: args,
-          ),
-        );
-      case 'sandbox_reset':
-        return _wrapOutput(
-          await sandbox_tools.executeSandboxReset(
-            accessToken: accessToken,
-            chatId:
-                currentChatId ??
-                ChatStorageService.selectedChatId ??
-                ChatStorageService.activeMessageChatId,
-            args: args,
-          ),
-        );
-
-      // `send_file_to_user` is a sandbox tool that also produces a
-      // ContentBlock side-effect, so it returns its own ToolExecutionResult
-      // (with `producedBlocks`) rather than going through `_wrapOutput`.
-      case 'send_file_to_user':
-        return sandbox_tools.executeSandboxSendFileToUser(
-          accessToken: accessToken,
-          chatId:
-              currentChatId ??
-              ChatStorageService.selectedChatId ??
-              ChatStorageService.activeMessageChatId,
-          args: args,
-        );
 
       // -- Typst compile (server-sandboxed) --
       case 'typst_compile':

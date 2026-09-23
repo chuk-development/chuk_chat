@@ -130,7 +130,7 @@ AssistantToolOutcome _plain(Object? value) => AssistantToolOutcome(value);
 /// server lookups a spoken question actually needs.
 ///
 /// This is deliberately NOT the chat tool registry. The overlay is a
-/// latency-critical surface; artifacts, sandboxes, GitHub and the rest have no
+/// latency-critical surface; artifacts, GitHub and the rest have no
 /// place in a two-second spoken turn, and every extra schema is paid for in
 /// every prompt.
 final List<AssistantTool> assistantTools = <AssistantTool>[

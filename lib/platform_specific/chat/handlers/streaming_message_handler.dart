@@ -694,7 +694,7 @@ class StreamingMessageHandler {
                 contentBlocks.addAll(appendedBlocks);
 
                 // Append side-effect blocks produced by tools this round
-                // (e.g. send_file_to_user -> sandboxArtifact). These ride
+                // (e.g. a places lookup -> `<map>` block). These ride
                 // after the tool-calls block they came from so the user
                 // sees the artifact right next to the call that produced it.
                 final producedThisRound = loopResult.producedBlocks;
@@ -899,7 +899,7 @@ class StreamingMessageHandler {
                 );
               }
 
-              // Append any side-effect blocks (e.g. sandboxArtifact) carried
+              // Append any side-effect blocks (e.g. a `<map>` block) carried
               // on the final-answer loop result. They may arrive here if a
               // producing tool ran in the same pass that emitted the final
               // text instead of continuing the loop.

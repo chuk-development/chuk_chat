@@ -287,7 +287,7 @@ void main() {
           newToolCalls: [
             ToolCall(
               id: 'tc-1',
-              name: 'code_run',
+              name: 'bash',
               status: ToolCallStatus.completed,
             ),
           ],
@@ -301,7 +301,7 @@ void main() {
           newToolCalls: [
             ToolCall(
               id: 'tc-2',
-              name: 'code_run',
+              name: 'bash',
               status: ToolCallStatus.completed,
             ),
           ],
@@ -328,7 +328,7 @@ void main() {
           newToolCalls: [
             ToolCall(
               id: 'tc-1',
-              name: 'code_run',
+              name: 'bash',
               status: ToolCallStatus.completed,
             ),
           ],
@@ -342,7 +342,7 @@ void main() {
           newToolCalls: [
             ToolCall(
               id: 'tc-2',
-              name: 'code_run',
+              name: 'bash',
               status: ToolCallStatus.completed,
             ),
           ],
@@ -366,7 +366,7 @@ void main() {
             RoundSegment.toolCall(
               ToolCall(
                 id: 'tc-1',
-                name: 'code_run',
+                name: 'bash',
                 status: ToolCallStatus.completed,
               ),
             ),
@@ -381,7 +381,7 @@ void main() {
             RoundSegment.toolCall(
               ToolCall(
                 id: 'tc-2',
-                name: 'code_run',
+                name: 'bash',
                 status: ToolCallStatus.completed,
               ),
             ),
@@ -468,7 +468,7 @@ void main() {
 
       test('fold keeps interim content verbatim in reasoning (no text edits)', () {
         final toolCalls = [
-          ToolCall(name: 'sandbox_write', status: ToolCallStatus.completed),
+          ToolCall(name: 'artifact_manager', status: ToolCallStatus.completed),
         ];
 
         const interim =

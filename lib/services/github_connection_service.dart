@@ -1,8 +1,8 @@
 // lib/services/github_connection_service.dart
 //
 // Thin client for /v1/user/github/* — the per-user OAuth Device Flow
-// that lets the AI use `git` / `gh` inside the sandbox under the
-// user's GitHub identity.
+// that backs the GitHub MCP connector under the user's GitHub
+// identity.
 //
 // The actual access token lives encrypted on the api-server, NOT on
 // the client. The client only ever sees connection state (login name,
@@ -92,8 +92,7 @@ class GitHubConnectInit {
 }
 
 /// Poll result from /connect/poll. ``success`` means the token is
-/// now stored server-side and the sandbox will pick it up on the
-/// next /create call.
+/// now stored server-side and the GitHub connector can use it.
 enum GitHubConnectPollState { pending, success, expired, denied }
 
 class GitHubConnectPollResult {

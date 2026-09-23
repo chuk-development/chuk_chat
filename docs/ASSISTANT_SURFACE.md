@@ -95,7 +95,7 @@ drives the whole state machine without a recorder or a binding.
 
 `assistantTools` is deliberately **not** the chat registry. The surface is
 latency-critical and every schema is paid for in every spoken turn, so
-artifacts, sandboxes, GitHub and the rest stay out (a test pins this).
+artifacts, GitHub and the rest stay out (a test pins this).
 
 Device: `read_screen`, `find_on_screen`, `look_at_screen`, `tap_text`,
 `system_action`, `open_app`, `open_maps`, `list_apps`, `find_contact`,

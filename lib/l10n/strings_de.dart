@@ -208,8 +208,6 @@ const Map<String, String> stringsDe = {
   'toolAlwaysOn': 'Immer an',
   'toolArtifacts': 'Artifacts',
   'toolArtifactsSubtitle': 'Bearbeitbarer Code, Dokumente und Zeichnungen',
-  'toolCodeSandbox': 'Code-Sandbox',
-  'toolCodeSandboxSubtitle': 'Code ausführen und Dateien in einer Sandbox verwalten',
   'toolGroupCodeArtifacts': 'Code & Artifacts',
   'connectors': 'Connectors',
   'connectorsSubtitle': 'Werkzeuge anderer Dienste für die KI freigeben',
@@ -223,7 +221,6 @@ const Map<String, String> stringsDe = {
   'catGitHub': 'GitHub',
   'catSlack': 'Slack',
   'catGoogleCalGmail': 'Google (Kalender / Gmail)',
-  'catSandbox': 'Sandbox / Code',
   'catSearchWebDesc':
       'Web durchsuchen, Seiten abrufen, Bilder generieren und Daten nachschlagen',
   'catUtilitiesDesc':
@@ -238,8 +235,6 @@ const Map<String, String> stringsDe = {
       'Nachrichten senden, Kanäle durchsuchen und Slack-Daten abrufen',
   'catGoogleCalGmailDesc':
       'Termine und E-Mails über Google Kalender und Gmail verwalten',
-  'catSandboxDesc':
-      'Python- oder Shell-Code in einer isolierten Sandbox ausführen und Dateien lesen/schreiben',
   'connect': 'Verbinden',
   'disconnect': 'Trennen',
   'disconnectCategory': '{label} trennen?',

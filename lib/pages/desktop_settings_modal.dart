@@ -37,9 +37,9 @@ import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
-import 'package:chuk_chat/pages/sandbox_management_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
@@ -235,14 +235,13 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           keywords: 'skills agent skills procedures abilities fähigkeiten',
           builder: (_) => const SkillsSettingsPage(),
         ),
-        if (kFeatureSandboxes)
+        if (kFeatureMcp)
           _SettingsDest(
-            id: 'sandboxes',
-            icon: Icons.developer_board,
-            label: 'Sandboxes',
-            keywords:
-                'sandbox sandboxes code execution container docker runtime',
-            builder: (_) => const SandboxManagementPage(),
+            id: 'github',
+            icon: Icons.code,
+            label: 'GitHub',
+            keywords: 'github git repository connector token',
+            builder: (_) => const GitHubConnectionPage(),
           ),
       ]),
       _SettingsGroup('Appearance', [

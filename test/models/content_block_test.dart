@@ -194,4 +194,28 @@ void main() {
       expect(decoded[3].text, equals('Here are the results'));
     });
   });
+
+  group('legacy code-sandbox file blocks', () {
+    test('decode to a plain note that names the file', () {
+      final block = ContentBlock.fromJson({
+        'type': 'sandboxArtifact',
+        'sandboxArtifact': {
+          'storagePath': 'user/abc.enc',
+          'filename': 'report.pdf',
+          'mime': 'application/pdf',
+          'sizeBytes': 1234,
+        },
+      });
+      expect(block.type, equals(ContentBlockType.text));
+      expect(block.text, contains('"report.pdf"'));
+      expect(block.text, contains('no longer available'));
+      expect(block.toJson().containsKey('sandboxArtifact'), isFalse);
+    });
+
+    test('decode without a payload', () {
+      final block = ContentBlock.fromJson({'type': 'sandboxArtifact'});
+      expect(block.type, equals(ContentBlockType.text));
+      expect(block.text, startsWith('_A file'));
+    });
+  });
 }
