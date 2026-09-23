@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Build the Agents Android APK the ONLY correct way, then install it with adb.
 #
-# The app is broken without its compile-time environment: Supabase keys and the
-# feature flags (FEATURE_AGENTS ...) all come from .env. A plain
-# `flutter build apk` installs fine and then shows a dead screen. Always use
-# this script; never hand-roll the flutter command. To change what is built,
-# edit .env (template: .env.example).
+# The app is broken without its compile-time environment: Supabase keys come
+# from .env, and this script turns Agents on (FEATURE_AGENTS=true) — without it
+# the same source builds plain chuk_chat. A plain `flutter build apk` installs
+# fine and then shows the wrong app or a dead screen. Always use this script;
+# never hand-roll the flutter command.
 #
 # Usage:
 #   scripts/build_apk.sh              # arm64 release build + adb install + launch
@@ -33,15 +33,17 @@ for arg in "$@"; do
   esac
 done
 
-PKG=dev.chuk.cowork
+# One app: Agents is chuk_chat built with FEATURE_AGENTS, same package.
+PKG=dev.chuk.chat
 OUT=build/app/outputs/flutter-apk/app-release.apk
 APP_VERSION="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
 BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 DEFINES=(
-  # Everything the app needs lives in .env — Supabase keys and the feature
-  # flags (FEATURE_AGENTS and friends). Change the build there, not here.
+  # Supabase keys live in .env. Agents is a build flag, not a runtime switch:
+  # this is the Agents APK, so the flag is set here, after the env file.
   "--dart-define-from-file=$ENV_FILE"
+  "--dart-define=FEATURE_AGENTS=true"
   "--dart-define=APP_VERSION=$APP_VERSION"
   "--dart-define=BUILD_TIMESTAMP=$BUILD_TIMESTAMP"
 )
