@@ -51,9 +51,17 @@ void main() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
   });
 
-  test('config lands in prefs and the secret in secure storage', () async {
+  test('config lands in the kv_cache and the secret in secure storage',
+      () async {
     final secrets = _MemorySecrets();
-    final store = McpStore(secrets: secrets);
+    final kv = <String, String>{};
+    final store = McpStore(
+      secrets: secrets,
+      list: McpListBackend(
+        read: (k) async => kv[k],
+        write: (k, v) async => kv[k] = v,
+      ),
+    );
 
     await store.upsert(
       const McpConnection(
@@ -65,9 +73,11 @@ void main() {
     );
 
     final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(McpStore.prefsKey);
+    // The list is kept out of SharedPreferences (it grows past 200 KB).
+    expect(prefs.containsKey(McpStore.prefsKey), isFalse);
+    final raw = kv[McpStore.prefsKey];
     expect(raw, contains('GitHub'));
-    // The token never touches SharedPreferences.
+    // The token never touches the list.
     expect(raw, isNot(contains('tok-123')));
 
     // The secret is now a record, not a bare string.

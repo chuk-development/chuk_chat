@@ -168,12 +168,10 @@ class McpService {
   }
 
   // MERGE NOTE: upstream moved this list out of SharedPreferences into the
-  // SQLite kv_cache (_readConnectionsRaw/_persist, with a one-time migration
-  // that DELETES the prefs key). Dropped here: in the Agents structure McpStore
-  // owns the same key ('mcp_connections_v1') in SharedPreferences, so running
-  // upstream's migration would move the connectors out from under the store and
-  // the list would come back empty. Redo the kv_cache move in mcp_store.dart if
-  // it is wanted.
+  // SQLite kv_cache (_readConnectionsRaw/_persist). Upstream's copy of that
+  // code is not ported; McpStore owns the list and does the same move itself:
+  // same kv_cache key ('mcp_connections_v1'), same row shape, and a prefs copy
+  // is written to the kv_cache before it is deleted (see McpStore._readRaw).
 
   /// Adopt the encrypted mirror and wait for it, for a test. [load] fires the
   /// same work without awaiting it, which a test cannot observe.

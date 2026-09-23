@@ -29,6 +29,13 @@ class LocalChatCacheService {
     await prefs.setString('kv_$key', value);
   }
 
+  static Future<bool> kvSetIfAbsent(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.containsKey('kv_$key')) return false;
+    await prefs.setString('kv_$key', value);
+    return true;
+  }
+
   static Future<void> kvDelete(String key) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('kv_$key');

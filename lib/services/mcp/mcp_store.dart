@@ -1,8 +1,17 @@
 // lib/services/mcp/mcp_store.dart
 //
-// Storage for MCP connections. The non-secret config is a JSON list in
-// SharedPreferences under `mcp_connections_v1`; each connection's secret
-// record lives in secure storage under `mcp_secrets_<id>`.
+// Storage for MCP connections. The non-secret config is a JSON list in the
+// SQLite kv_cache under `mcp_connections_v1`; each connection's secret record
+// lives in secure storage under `mcp_secrets_<id>`.
+//
+// The list used to live in SharedPreferences under the same key. With every
+// server's tool list and JSON schemas in it, it grew past 200 KB, and on Linux
+// SharedPreferences rewrites the whole prefs file synchronously on the UI
+// isolate for every setX anywhere in the app. The kv_cache key is the one
+// upstream chuk_chat uses, and the row shape is the same, so both apps read
+// one list. A prefs value still present is either an install from before the
+// move or a write that could not reach the kv_cache; it always wins, and it is
+// moved into the kv_cache (and only then deleted) on the next load.
 //
 // The secret record is chuk_chat's exact shape — the registered client, the
 // tokens (access, refresh, expiry, scope) and the authorization server that
@@ -23,6 +32,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart'
     show AgentsSecureKeyValueStore, FlutterSecureKeyValueStore;
+import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_oauth.dart';
 import 'package:chuk_chat/services/mcp/mcp_service.dart';
@@ -120,12 +130,29 @@ class McpSecrets {
   );
 }
 
-class McpStore {
-  McpStore({AgentsSecureKeyValueStore? secrets, McpOAuth? oauth})
-    : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
-      _oauth = oauth ?? McpOAuth();
+/// Where [McpStore] keeps the connection list: the SQLite kv_cache by
+/// default. A seam so a test can use a map, or a writer that fails.
+class McpListBackend {
+  const McpListBackend({
+    this.read = LocalChatCacheService.kvGet,
+    this.write = LocalChatCacheService.kvSet,
+  });
 
-  /// Non-secret connection config.
+  final Future<String?> Function(String key) read;
+  final Future<void> Function(String key, String value) write;
+}
+
+class McpStore {
+  McpStore({
+    AgentsSecureKeyValueStore? secrets,
+    McpOAuth? oauth,
+    McpListBackend? list,
+  }) : _secrets = secrets ?? const FlutterSecureKeyValueStore(),
+       _oauth = oauth ?? McpOAuth(),
+       _list = list ?? const McpListBackend();
+
+  /// Non-secret connection config: the kv_cache key, and the legacy
+  /// SharedPreferences key the list is migrated out of.
   static const String prefsKey = 'mcp_connections_v1';
 
   /// Per-connection secret key prefix in secure storage (the secret record).
@@ -137,6 +164,7 @@ class McpStore {
 
   final AgentsSecureKeyValueStore _secrets;
   final McpOAuth _oauth;
+  final McpListBackend _list;
 
   /// The refresh in flight for a connection id, if any.
   ///
@@ -159,31 +187,106 @@ class McpStore {
   /// reads as an empty list rather than a crash.
   Future<List<McpConnection>> load() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final raw = prefs.getString(prefsKey);
-      if (raw == null || raw.isEmpty) return const <McpConnection>[];
-      final decoded = jsonDecode(raw);
-      if (decoded is! List) return const <McpConnection>[];
-      return <McpConnection>[
-        for (final entry in decoded)
-          if (entry is Map)
-            McpConnection.fromJson(Map<String, dynamic>.from(entry)),
-      ];
+      return _decode(await _readRaw());
     } catch (e) {
       if (kDebugMode) debugPrint('⚠️ [Mcp] Could not read connections: $e');
       return const <McpConnection>[];
     }
   }
 
-  /// Persist the whole list (config only; secrets are written separately).
-  Future<void> _saveAll(List<McpConnection> connections) async {
+  static List<McpConnection> _decode(String? raw) {
+    if (raw == null || raw.isEmpty) return const <McpConnection>[];
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) return const <McpConnection>[];
+    return <McpConnection>[
+      for (final entry in decoded)
+        if (entry is Map)
+          McpConnection.fromJson(Map<String, dynamic>.from(entry)),
+    ];
+  }
+
+  /// The stored list as JSON. A SharedPreferences copy wins over the
+  /// kv_cache: it is either an install from before the move or the fallback
+  /// of a write the kv_cache refused, so it is the newest there is. It is
+  /// moved over on the way (see [_moveToKv]).
+  Future<String?> _readRaw() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      prefsKey,
-      jsonEncode(<Map<String, dynamic>>[
-        for (final c in connections) c.toJson(),
-      ]),
-    );
+    final legacy = prefs.getString(prefsKey);
+    if (legacy != null) {
+      await _moveToKv(prefs, legacy, _list);
+      return legacy;
+    }
+    return _list.read(prefsKey);
+  }
+
+  /// Move a SharedPreferences copy of the list into the kv_cache: write it
+  /// there first, and delete the prefs key only once that write succeeded.
+  /// A failed write leaves the prefs value where it was, so the store keeps
+  /// working from it and the next load tries again. Returns true when the
+  /// prefs key is gone. Never throws.
+  static Future<bool> _moveToKv(
+    SharedPreferences prefs,
+    String legacy,
+    McpListBackend list,
+  ) async {
+    try {
+      await list.write(prefsKey, legacy);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [Mcp] Connections stay in prefs, kv write failed: $e');
+      }
+      return false;
+    }
+    try {
+      return await prefs.remove(prefsKey);
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [Mcp] Could not drop the prefs copy: $e');
+      return false;
+    }
+  }
+
+  /// One-time move of the connection list out of SharedPreferences. Cheap
+  /// when there is nothing to move (one in-memory prefs lookup), so it is safe
+  /// to call at every startup. [load] does the same on first use; this only
+  /// lets startup shrink the prefs file before anything opens the connectors.
+  /// Returns true when a prefs copy was moved. Never throws.
+  static Future<bool> migrateLegacyPrefs({
+    McpListBackend list = const McpListBackend(),
+  }) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final legacy = prefs.getString(prefsKey);
+      if (legacy == null) return false;
+      return await _moveToKv(prefs, legacy, list);
+    } catch (e) {
+      if (kDebugMode) debugPrint('⚠️ [Mcp] Legacy connections move failed: $e');
+      return false;
+    }
+  }
+
+  /// Persist the whole list (config only; secrets are written separately).
+  ///
+  /// Into the kv_cache; a SharedPreferences copy left behind is dropped once
+  /// the kv write landed. When the kv_cache cannot be written (no SQLite, a
+  /// locked or broken DB) the list falls back to SharedPreferences rather
+  /// than being lost, and moves over on a later load.
+  Future<void> _saveAll(List<McpConnection> connections) async {
+    final encoded = jsonEncode(<Map<String, dynamic>>[
+      for (final c in connections) c.toJson(),
+    ]);
+    final prefs = await SharedPreferences.getInstance();
+    try {
+      await _list.write(prefsKey, encoded);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [Mcp] kv write failed, keeping connections in prefs: $e',
+        );
+      }
+      await prefs.setString(prefsKey, encoded);
+      return;
+    }
+    if (prefs.containsKey(prefsKey)) await prefs.remove(prefsKey);
   }
 
   /// Add or replace [connection] (matched by id) and, when given, store its

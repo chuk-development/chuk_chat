@@ -241,6 +241,25 @@ class LocalChatCacheService {
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
+  /// Write [value] under [key] only when the key holds nothing yet. Returns
+  /// true when this call wrote it. The check and the write run in one
+  /// transaction, so a newer value another writer stored in between is never
+  /// overwritten — which is what a one-time migration of an old copy needs.
+  static Future<bool> kvSetIfAbsent(String key, String value) async {
+    final db = await _getDb();
+    return db.transaction((txn) async {
+      final rows = await txn.query(
+        'kv_cache',
+        columns: ['key'],
+        where: 'key = ?',
+        whereArgs: [key],
+      );
+      if (rows.isNotEmpty) return false;
+      await txn.insert('kv_cache', {'key': key, 'value': value});
+      return true;
+    });
+  }
+
   /// Delete a cached value by key.
   static Future<void> kvDelete(String key) async {
     final db = await _getDb();
