@@ -96,7 +96,11 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                   ),
                 ),
               ),
-            if (!widget.agent.onHost)
+            // "Not installed" only while the host reports nothing for this
+            // coworker. A sandbox the host measured is proof it runs there:
+            // the note used to sit next to 44 runs in its own container.
+            if (!widget.agent.onHost &&
+                snapshot.sandbox is! ControlAvailable<AgentSandbox>)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
                 child: Text(
