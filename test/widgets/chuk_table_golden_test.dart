@@ -7,7 +7,7 @@
 //
 //   flutter test test/widgets/chuk_table_golden_test.dart --update-goldens
 //
-// and then OPEN the files under `_scratch/shots/`.
+// and then OPEN the files under `test/widgets/goldens/chuk_table/`.
 //
 // The content is real: the Songs document the coworker wrote, with the
 // Instagram reel it came from, the Spotify search it opens, a Cyrillic title
@@ -22,8 +22,10 @@ import 'package:chuk_chat/widgets/chuk_table.dart';
 
 import 'charts/chart_test_support.dart';
 
-/// Where the shots land: in the repository, never in /tmp.
-const String _shots = '../../../_scratch/shots';
+/// Where the shots land: committed next to this file (relative to
+/// `test/widgets/`), like the chart goldens, so a plain run compares against
+/// the reviewed images instead of failing on a missing file.
+const String _shots = 'goldens/chuk_table';
 
 /// The songs table, as the `chat_document` tool stores one: the reel it came
 /// from, the song, the artist, and the Spotify search that opens it.
