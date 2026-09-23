@@ -54,6 +54,7 @@ const Map<String, String> stringsEn = {
   'about': 'About',
   'aboutSubtitle': 'Version details and open source licenses',
   'logout': 'Logout',
+  'logoutFailed': 'Could not log out. Please try again.',
   'noChatsToExport': 'No chats to export',
   'copiedToClipboard': 'Copied to clipboard',
   'savedToPath': 'Saved to {path}',

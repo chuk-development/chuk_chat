@@ -18,6 +18,7 @@
 /// today.
 library;
 
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
@@ -25,6 +26,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart'
     show AgentsHostAgentName;
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_store.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 
@@ -109,6 +111,11 @@ abstract class AgentRosterSource extends ChangeNotifier {
   void setSchedule(String agentId, ScheduleSpec spec);
 
   void removeAgent(String id);
+
+  /// Writes a change that is still waiting to be stored (see [markActivity])
+  /// now. Called when the app goes to the background and when the shell
+  /// closes. A source with nothing to store does nothing.
+  void flushPendingPersist() {}
 }
 
 /// The roster the app ships with, kept in memory and cached on disk.
@@ -175,8 +182,41 @@ class LocalAgentRosterSource extends AgentRosterSource {
   /// what a cold start should show. The write itself is coalesced and runs in
   /// the background — nothing the user sees waits on it.
   void _persist() {
+    // A structural write carries the newest activity too, so a waiting
+    // activity write has nothing left to do.
+    _activityPersistTimer?.cancel();
+    _activityPersistTimer = null;
     _store.saveRoster(_agents, _hidden);
     _store.saveDeleted(_deleted);
+  }
+
+  /// The activity write that waits for the end of a burst. A live run marks
+  /// activity on every event, and on desktop Linux each preference write
+  /// rewrites the whole file on the UI isolate, so activity is written after
+  /// [AgentReadMarks.persistDelay] of quiet instead of per event. Structural
+  /// changes (add, hide, delete) still write at once.
+  Timer? _activityPersistTimer;
+
+  void _schedulePersistActivity() {
+    final Duration delay = AgentReadMarks.persistDelay;
+    if (delay == Duration.zero) {
+      _persist();
+      return;
+    }
+    _activityPersistTimer?.cancel();
+    _activityPersistTimer = Timer(delay, _persist);
+  }
+
+  @override
+  void flushPendingPersist() {
+    if (_activityPersistTimer == null) return;
+    _persist();
+  }
+
+  @override
+  void dispose() {
+    flushPendingPersist();
+    super.dispose();
   }
 
   @override
@@ -337,8 +377,8 @@ class LocalAgentRosterSource extends AgentRosterSource {
       ],
     );
     // Stored, so the next cold start shows this time and not "no activity
-    // yet". The store coalesces the writes of a burst into one.
-    _persist();
+    // yet". Debounced: a burst of events costs one write.
+    _schedulePersistActivity();
     notifyListeners();
   }
 

@@ -1049,6 +1049,57 @@ void main() {
       },
     );
 
+    for (final bool phone in <bool>[false, true]) {
+      testWidgets(
+        'a thread switch leaves no draft behind (${phone ? 'phone' : 'desktop'})',
+        (tester) async {
+          final controller = FakeRelayController();
+          Widget build(String threadKey) => _app(
+            AgentsThreadView(
+              phoneLayout: phone,
+              controllerBuilder: () async => controller,
+              sessionSource: const _FakeSessionSource(),
+              threadKey: threadKey,
+              fileSaver: _NoopSaver(),
+            ),
+          );
+          tester.view.physicalSize = phone
+              ? const Size(412, 915)
+              : const Size(1400, 900);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.resetPhysicalSize);
+          addTearDown(tester.view.resetDevicePixelRatio);
+
+          await tester.pumpWidget(build('draft-a'));
+          await tester.pumpAndSettle();
+          final Type screenType = phone ? ChukChatUIMobile : ChukChatUIDesktop;
+          final State before = tester.state(find.byType(screenType));
+
+          String composerText() =>
+              tester.widget<TextField>(find.byType(TextField).first)
+                  .controller!
+                  .text;
+          await tester.enterText(find.byType(TextField).first, 'half a thought');
+          await tester.pump();
+          expect(composerText(), 'half a thought');
+
+          await tester.pumpWidget(build('draft-b'));
+          await tester.pumpAndSettle();
+          // The same screen, not a remount: the reset is what cleared it.
+          expect(tester.state(find.byType(screenType)), same(before));
+          expect(composerText(), isEmpty);
+
+          // Back to the first thread: clean, as the original app's remount
+          // left it.
+          await tester.pumpWidget(build('draft-a'));
+          await tester.pumpAndSettle();
+          expect(composerText(), isEmpty);
+
+          await _flushIdleTimers(tester);
+        },
+      );
+    }
+
     testWidgets('the replayed transcript paints in the imported message list', (
       tester,
     ) async {

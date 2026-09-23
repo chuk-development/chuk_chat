@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/storage/agents_chat_cache_migration.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+import 'package:chuk_chat/widgets/markdown_message.dart';
 
 class AgentsChatStorageBootstrap {
   AgentsChatStorageBootstrap._();
@@ -217,6 +218,9 @@ class AgentsChatStorageBootstrap {
     if (_activeUserId == null) return;
     _activeUserId = null;
     _stopFlushing();
+    // Covers a sign-out that did not go through AuthService (an expired
+    // session): the kept message parses are the old account's plaintext.
+    MarkdownMessage.clearCaches();
     final hook = onSignedOutHook;
     if (hook != null) {
       await hook();

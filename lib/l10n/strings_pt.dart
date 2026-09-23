@@ -27,6 +27,7 @@ const Map<String, String> stringsPt = {
   'about': 'Sobre',
   'aboutSubtitle': 'Detalhes da versão e licenças de código aberto',
   'logout': 'Sair',
+  'logoutFailed': 'Não foi possível sair. Tente novamente.',
   'noChatsToExport': 'Nenhuma conversa para exportar',
   'copiedToClipboard': 'Copiado para a área de transferência',
   'savedToPath': 'Salvo em {path}',
