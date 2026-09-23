@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../../support/fake_relay_controller.dart';
 import '../../support/icon_finder.dart';
@@ -59,6 +60,10 @@ Widget _app(Widget child) => MaterialApp(
 );
 
 void main() {
+  // The Agents chat core (host-run tools, relay transport), selected for this
+  // flag-off test process.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await VerboseService.instance.setEnabled(false);

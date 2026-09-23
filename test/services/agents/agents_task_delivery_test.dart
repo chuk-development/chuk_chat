@@ -9,7 +9,7 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
-import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 
 import '../../support/fake_relay_controller.dart';
 
@@ -72,7 +72,7 @@ void main() {
   /// The subscription is left open so the test can feed acks into it.
   ({List<ChatStreamEvent> seen, Future<void> Function() cancel}) send() {
     final List<ChatStreamEvent> seen = <ChatStreamEvent>[];
-    final sub = WebSocketChatService.sendStreamingChat(
+    final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
