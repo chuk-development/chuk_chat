@@ -22,7 +22,6 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
-import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/mobile_chat_widgets.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/widgets/chat_composer_box.dart';
@@ -85,6 +84,11 @@ class RoomThreadPage extends StatefulWidget {
   @override
   State<RoomThreadPage> createState() => _RoomThreadPageState();
 }
+
+/// The composer's target size. It matches `_composerTargetSize` in
+/// chuk_chat's mobile composer, so the room's send button and the chat's send
+/// button are the same size.
+const double _composerTargetSize = 38;
 
 class _RoomThreadPageState extends State<RoomThreadPage> {
   final List<AgentsRoomTurn> _turns = <AgentsRoomTurn>[];
@@ -485,7 +489,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
                       const Spacer(),
                       buildTinyActionButton(
                         icon: Icons.north_rounded,
-                        buttonSize: ComposerMetrics.targetSize,
+                        buttonSize: _composerTargetSize,
                         iconSize: 18,
                         onTap: _disconnected ? () {} : _send,
                         color: _disconnected
