@@ -406,5 +406,11 @@ printf '  state:    %s\n' "${AGENTS_HOME}"
 printf '  launcher: %s\n' "${LAUNCHER}"
 printf '  image:    %s\n' "${IMAGE_TAG}"
 printf '  service:  %s\n\n' "${UNIT_PATH}"
-printf 'Pair your phone once:\n\n    %s connect\n\n' "${LAUNCHER}"
+# A reinstall on a paired machine must not tell the user to pair again: the
+# pairing survives (it is migrated, never replaced). `status` only reads.
+if [ "${DRY_RUN}" -eq 0 ] && "${LAUNCHER}" status 2>/dev/null | grep -Eq '^ *Paired: +yes'; then
+  printf 'Already paired: the app reconnects by itself, no code needed.\n\n'
+else
+  printf 'Pair your phone once:\n\n    %s connect\n\n' "${LAUNCHER}"
+fi
 printf 'Then it runs by itself. Status:  systemctl --user status %s\n\n' "${UNIT_NAME}"
