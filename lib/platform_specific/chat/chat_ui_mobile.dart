@@ -27,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import 'dart:convert';
 import 'dart:math' as math;
+import 'package:chuk_chat/platform_specific/chat/composer_metrics.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -105,6 +106,13 @@ class _WorkspaceChoice {
   final String? workspaceId;
   final bool create;
 }
+
+/// The text a cancelled queue puts back into the composer: the pending
+/// message first, then every queued follow-up in the order it was typed,
+/// separated by a blank line. With no follow-ups it is [pending] unchanged.
+@visibleForTesting
+String queuedMessagesForComposer(String pending, List<String> followUps) =>
+    followUps.isEmpty ? pending : <String>[pending, ...followUps].join('\n\n');
 
 class ChukChatUIMobile extends StatefulWidget {
   final VoidCallback onToggleSidebar;
@@ -1627,17 +1635,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
   }
 
-  /// One size for every target in the composer action row: the plus, the
-  /// mode pill, the microphone and send. The row reads as one family only if
-  /// they share a number — a 36 here and a 38 there is visible, and the
-  /// microphone turning into the stop target must not resize anything.
-  /// Change this one constant, never a single call site.
-  static const double _composerTargetSize = 38;
-
-  /// The gap between two targets of that row. One number, so the spacing is
-  /// even from the plus to send.
-  static const double _composerTargetGap = 6;
-
   /// Open a menu anchored to a composer button. It leaves the focus and
   /// so the keyboard alone.
   Future<T?> _showAnchoredComposerMenu<T>({
@@ -2135,18 +2132,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   void _cancelPendingMessage() {
     final pending = _pendingMessageText;
     if (pending == null) return;
-    // Several queued messages cannot all go back into one field; only a
-    // single one is restored.
-    final bool restore =
-        _queuedFollowUps.isEmpty && composerController.text.trim().isEmpty;
+    // Messenger mode queues more than one message: all of them go back,
+    // in the order they were typed, as one text. Without a queue this is
+    // the pending message alone, as upstream.
+    final bool restore = composerController.text.trim().isEmpty;
+    final restored = queuedMessagesForComposer(pending, _queuedFollowUps);
     _queuedFollowUps.clear();
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
         if (restore) {
-          composerController.text = pending;
+          composerController.text = restored;
           composerController.selection = TextSelection.collapsed(
-            offset: pending.length,
+            offset: restored.length,
           );
         }
       });
@@ -3675,7 +3673,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           showLabel: false,
           // The same height as the round buttons beside it in the composer
           // row; a pill that stands two pixels taller reads as a mistake.
-          height: _composerTargetSize,
+          height: ComposerMetrics.targetSize,
           selectedModelId: selectedModelId,
           modelLabel:
               selectedModelName ??
@@ -3888,20 +3886,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   builder: (anchorContext) => buildTinyIconButton(
                     icon: Icons.add_rounded,
                     iconSize: 22,
-                    buttonSize: _composerTargetSize,
+                    buttonSize: ComposerMetrics.targetSize,
                     // Round, so the tap ink is a circle and not a square
                     // patch behind a round icon.
-                    cornerRadius: _composerTargetSize / 2,
+                    cornerRadius: ComposerMetrics.targetSize / 2,
                     onTap: () => _handleAddAttachmentTap(anchorContext),
                     isActive: hasAttachments,
                     color: iconFg,
                   ),
                 ),
               ),
-              const SizedBox(width: _composerTargetGap),
+              const SizedBox(width: ComposerMetrics.targetGap),
               _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
               if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
@@ -3909,26 +3907,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
                   iconSize: 20,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _handleMicTap,
                   isActive: true,
                   color: Colors.red,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
               ] else if (!hasTypedText && !showStopAction) ...[
                 buildTinyIconButton(
                   icon: Icons.mic,
                   iconSize: 20,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _handleMicTap,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'mic_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
               ] else if (_showFullscreenButton && !showStopAction) ...[
                 // Takes the microphone's slot: the microphone only shows with
                 // an empty field and this only with a long one, so the two
@@ -3937,14 +3935,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 buildTinyIconButton(
                   icon: Icons.open_in_full_rounded,
                   iconSize: 18,
-                  buttonSize: _composerTargetSize,
-                  cornerRadius: _composerTargetSize / 2,
+                  buttonSize: ComposerMetrics.targetSize,
+                  cornerRadius: ComposerMetrics.targetSize / 2,
                   onTap: _openFullscreenEditor,
                   isActive: false,
                   color: iconFg,
                   semanticsId: 'fullscreen_composer_button',
                 ),
-                const SizedBox(width: _composerTargetGap),
+                const SizedBox(width: ComposerMetrics.targetGap),
               ],
               buildTinyActionButton(
                 icon: isRecording
@@ -3954,7 +3952,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           : (showVoiceModeAction
                                 ? Icons.graphic_eq_rounded
                                 : Icons.north_rounded)),
-                buttonSize: _composerTargetSize,
+                buttonSize: ComposerMetrics.targetSize,
                 iconSize: 18,
                 onTap: isRecording
                     ? _handleAudioSend

@@ -47,18 +47,29 @@ class _Cloud {
   final List<String> deletes = [];
   final Map<String, Map<String, dynamic>> updates = {};
 
+  /// The server's row limit: no response holds more rows, as with
+  /// Supabase's `max-rows`.
+  int maxRows = 1000;
+
   void install() {
-    AgentsChatStore.cloudSelect = (userId, {ids, required columns}) async {
-      expect(userId, _user);
-      selects.add(ids);
-      return [
-        for (final row in rows.values)
-          if (ids == null || ids.contains(row['id']))
-            columns == 'id, updated_at'
-                ? {'id': row['id'], 'updated_at': row['updated_at']}
-                : Map<String, dynamic>.from(row),
-      ];
-    };
+    AgentsChatStore.cloudSelect =
+        (userId, {ids, required columns, from, to}) async {
+          expect(userId, _user);
+          selects.add(ids);
+          final sorted = rows.values.toList()
+            ..sort((a, b) => (a['id'] as String).compareTo(b['id'] as String));
+          var matched = [
+            for (final row in sorted)
+              if (ids == null || ids.contains(row['id']))
+                columns == 'id, updated_at'
+                    ? {'id': row['id'], 'updated_at': row['updated_at']}
+                    : Map<String, dynamic>.from(row),
+          ];
+          if (from != null && to != null) {
+            matched = matched.skip(from).take(to - from + 1).toList();
+          }
+          return matched.take(maxRows).toList();
+        };
     AgentsChatStore.cloudDelete = (userId, id) async {
       expect(userId, _user);
       deletes.add(id);
@@ -465,6 +476,28 @@ void main() {
       cloud.selects.clear();
       expect((await AgentsChatStore.pullFromCloud()).length, 120);
       expect(cloud.selects.whereType<List<String>>().length, 3);
+    });
+
+    test('the id list is read in pages past the server row limit', () async {
+      cloud.maxRows = 50;
+      AgentsChatStore.idPageSize = 50;
+      for (var i = 0; i < 120; i++) {
+        cloud.rows['p-${i.toString().padLeft(3, '0')}'] = _cloudRow(
+          'p-${i.toString().padLeft(3, '0')}',
+          _payload([
+            ['user', 'n$i'],
+          ]),
+        );
+      }
+
+      final snapshot = await AgentsChatStore.snapshotCloudThreads();
+      expect(snapshot.length, 120);
+      // Three id pages (50, 50, 20), then three full-row batches.
+      expect(cloud.selects.where((ids) => ids == null).length, 3);
+
+      cloud.selects.clear();
+      expect((await AgentsChatStore.pullFromCloud()).length, 120);
+      expect(cloud.selects.where((ids) => ids == null).length, 3);
     });
 
     test('a failed write throws, so the key rotation rolls back', () async {
