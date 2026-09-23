@@ -1698,14 +1698,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                 decoration: BoxDecoration(
                                   color: bg,
                                   borderRadius: BorderRadius.circular(16),
+                                  // Border only: no coloured glow.
                                   border: Border.all(color: accent, width: 2),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: accent.withValues(alpha: 0.3),
-                                      blurRadius: 20,
-                                      spreadRadius: 5,
-                                    ),
-                                  ],
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
