@@ -10,6 +10,7 @@ from pathlib import Path
 
 from .files_out import FileSink, SentFile, sanitize_name
 from .registry import ToolRegistry
+from .sqlite_tuning import tune_connection
 
 MAX_DOCUMENT_BYTES = 256 * 1024
 _ID = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,79}$')
@@ -139,7 +140,7 @@ class DocumentStore:
 
     @contextmanager
     def _connect(self):
-        db = sqlite3.connect(self.path, timeout=10)
+        db = tune_connection(sqlite3.connect(self.path, timeout=10))
         try:
             with db:
                 yield db
