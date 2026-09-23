@@ -241,6 +241,41 @@ def test_reap_orphans_passes_the_live_sessions_to_the_reaper(monkeypatch):
     assert seen["cli"] is cli
 
 
+def test_an_owned_supervisor_scopes_the_reaper_and_labels_its_envs(monkeypatch):
+    """Bead chuk_chat-6mg: a host reaps only its own containers."""
+    seen: dict[str, object] = {}
+
+    def fake_reap(**kwargs):
+        seen.update(kwargs)
+        return []
+
+    made: list[dict] = []
+
+    def factory(**kwargs):
+        made.append(dict(kwargs))
+        kwargs.pop("owner", None)
+        return FakeEnv(**kwargs)
+
+    monkeypatch.setattr("chuk_agents_manager.containers.reap_orphans", fake_reap)
+    sup = make_supervisor(
+        env_factory=factory,
+        owner="/home/me/.agents",
+        legacy_workspace_roots=("/home/me/.agents",),
+    )
+    sup.start("a")
+    sup.reap_orphans()
+    assert made[0]["owner"] == "/home/me/.agents"
+    assert seen["owner"] == "/home/me/.agents"
+    assert seen["legacy_workspace_roots"] == ("/home/me/.agents",)
+
+
+def test_an_unowned_supervisor_passes_no_owner_to_its_envs():
+    """Fakes and older factories that take no ``owner`` keep working."""
+    sup = make_supervisor()
+    sup.start("a")
+    assert FakeEnv.instances[0].agent_id == "a"
+
+
 # ---------------------------------------------------------------- roster
 
 

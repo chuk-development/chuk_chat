@@ -14,6 +14,9 @@ containers a previous one started:
                         session closes.
 ``cowork.session``      the id of the run that created it — what the orphan
                         reaper compares against the set of live sessions.
+``cowork.owner``        the host (its state directory) that created it. The
+                        reaper of one host only ever removes containers of
+                        that same owner (bead chuk_chat-6mg).
 ======================  ==================================================
 
 The reaper exists because a killed Manager leaves its containers behind: they
@@ -22,12 +25,19 @@ them. :func:`reap_orphans` removes every managed container whose session is not
 in the live set, which for a starting Manager (live set empty) means "everything
 left over from the last run".
 
+More than one host can run on one machine: the user's own host, a second
+instance, a test run. So a caller that names an ``owner`` only reaps its own
+containers: the ones labelled with that owner, and old unlabelled ones whose
+workspace mount lies under one of the owner's directories. A container of
+another host is never touched.
+
 All docker access goes through :class:`DockerCli`, a thin argv wrapper, so the
 lifecycle logic is unit-testable against a fake without a daemon.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -43,6 +53,10 @@ LABEL_SESSION = "cowork.session"
 LABEL_WORKSPACE = "cowork.workspace"
 #: Image the container was created from — the other half of the reuse guard.
 LABEL_IMAGE = "cowork.image"
+#: The host that created the container (its resolved state directory). Scopes
+#: the orphan reaper to one host, so two hosts on one machine never reap each
+#: other's live containers.
+LABEL_OWNER = "cowork.owner"
 
 #: Legacy label kept so containers from before the lifecycle work stay findable.
 SESSION_LABEL = "agents-session"
@@ -93,6 +107,14 @@ class ContainerInfo:
     @property
     def session_id(self) -> str | None:
         return self.labels.get(LABEL_SESSION) or self.labels.get(SESSION_LABEL)
+
+    @property
+    def owner(self) -> str | None:
+        return self.labels.get(LABEL_OWNER) or None
+
+    @property
+    def workspace(self) -> str | None:
+        return self.labels.get(LABEL_WORKSPACE) or None
 
 
 class DockerCli:
@@ -153,6 +175,7 @@ def build_labels(
     session_id: str,
     workspace: str | None = None,
     image: str | None = None,
+    owner: str | None = None,
 ) -> dict[str, str]:
     """The full label set every managed container carries."""
     labels = {
@@ -166,6 +189,8 @@ def build_labels(
         labels[LABEL_WORKSPACE] = workspace
     if image is not None:
         labels[LABEL_IMAGE] = image
+    if owner:
+        labels[LABEL_OWNER] = owner
     return labels
 
 
@@ -264,10 +289,42 @@ def remove_container(name_or_id: str, *, cli: DockerCli | None = None) -> bool:
     return "no such container" in result.stderr.lower()
 
 
+def _is_under(path: str, root: str) -> bool:
+    """True when ``path`` is ``root`` or lies inside it (no symlink resolving)."""
+    path = os.path.normpath(os.path.abspath(path))
+    root = os.path.normpath(os.path.abspath(root))
+    if path == root:
+        return True
+    return path.startswith(root.rstrip(os.sep) + os.sep)
+
+
+def owned_by(
+    container: ContainerInfo,
+    owner: str,
+    legacy_workspace_roots: tuple[str, ...] | list[str] = (),
+) -> bool:
+    """True when ``container`` belongs to the host ``owner``.
+
+    A container with an owner label belongs to that owner only. A container
+    from before the owner label existed belongs to ``owner`` only when its
+    workspace mount lies under one of ``legacy_workspace_roots``. A container
+    with neither label cannot be attributed and belongs to nobody.
+    """
+    labelled = container.owner
+    if labelled is not None:
+        return labelled == owner
+    workspace = container.workspace
+    if workspace is None:
+        return False
+    return any(_is_under(workspace, root) for root in legacy_workspace_roots if root)
+
+
 def reap_orphans(
     *,
     active_session_ids: set[str] | frozenset[str] | None = None,
     cli: DockerCli | None = None,
+    owner: str | None = None,
+    legacy_workspace_roots: tuple[str, ...] | list[str] = (),
 ) -> list[str]:
     """Remove managed containers no live session owns; return their names.
 
@@ -277,10 +334,18 @@ def reap_orphans(
 
     Only containers carrying ``cowork.managed=true`` are ever considered, so a
     user's own containers are never touched.
+
+    With ``owner`` set, only containers of that owner are considered (see
+    :func:`owned_by`), so a second host on the same machine never removes the
+    live containers of the first. Without ``owner`` every managed container on
+    the machine is a candidate; only a caller that is sure it is the one host
+    on the machine may do that.
     """
     live = set(active_session_ids or ())
     reaped: list[str] = []
     for container in list_containers(cli=cli, filters={LABEL_MANAGED: "true"}):
+        if owner is not None and not owned_by(container, owner, legacy_workspace_roots):
+            continue
         session = container.session_id
         if session is not None and session in live:
             continue
