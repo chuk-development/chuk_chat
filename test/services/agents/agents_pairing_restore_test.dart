@@ -40,10 +40,15 @@ class _FakeMirror extends SupabasePairingSync {
     return writable;
   }
 
+  /// What a read answers while [available] is false.
+  AgentsCloudPairingOutcome missing = AgentsCloudPairingOutcome.keyLocked;
+
   @override
-  Future<AgentsStoredPairing?> loadEncryptedPairing() async {
+  Future<AgentsCloudPairingRead> readEncryptedPairing() async {
     reads++;
-    return available ? record : null;
+    return available
+        ? AgentsCloudPairingRead(AgentsCloudPairingOutcome.found, record)
+        : AgentsCloudPairingRead(missing);
   }
 
   @override
@@ -254,4 +259,166 @@ void main() {
       expect(await store.loadPairing(), isNotNull);
     },
   );
+
+  group('restore reason', () {
+    const signedIn = AccountSession(
+      accessToken: 'jwt',
+      refreshToken: 'refresh',
+      userId: 'user-1',
+    );
+
+    AgentsPairingRestore supervise(
+      AgentsPairingStore store, {
+      AccountSession? session = signedIn,
+      bool hasKey = true,
+    }) {
+      final supervisor = AgentsPairingRestore(
+        store: store,
+        sessionSource: _Session()..session = session,
+        onRestored: () async {},
+        authChanges: const Stream<Never>.empty(),
+        hasEncryptionKey: () => hasKey,
+        loadEncryptionKey: () async => hasKey,
+        sleep: noSleep,
+      )..start();
+      addTearDown(supervisor.dispose);
+      return supervisor;
+    }
+
+    test('starts as checking', () {
+      final supervisor = AgentsPairingRestore(
+        store: AgentsPairingStore(
+          backend: _MemoryStore(),
+          cloudSync: _FakeMirror(record),
+        ),
+        sessionSource: _Session(),
+        onRestored: () async {},
+        authChanges: const Stream<Never>.empty(),
+      );
+      addTearDown(supervisor.dispose);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.checking);
+      expect(supervisor.reason.value.mayStillRestore, isTrue);
+    });
+
+    test('no session yet is a not-yet', () async {
+      final supervisor = supervise(
+        AgentsPairingStore(
+          backend: _MemoryStore(),
+          cloudSync: _FakeMirror(record),
+        ),
+        session: null,
+      );
+      await until(() => supervisor.attempts > 1);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.noSession);
+      expect(supervisor.reason.value.mayStillRestore, isTrue);
+    });
+
+    test('a locked key is a not-yet', () async {
+      final mirror = _FakeMirror(record);
+      final supervisor = supervise(
+        AgentsPairingStore(backend: _MemoryStore(), cloudSync: mirror),
+        hasKey: false,
+      );
+      await until(() => supervisor.attempts > 1);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.keyLocked);
+      expect(mirror.reads, 0, reason: 'no read without the key');
+    });
+
+    final Map<AgentsCloudPairingOutcome, AgentsPairingRestoreReason> mapped =
+        <AgentsCloudPairingOutcome, AgentsPairingRestoreReason>{
+          AgentsCloudPairingOutcome.noRecord:
+              AgentsPairingRestoreReason.noCloudRecord,
+          AgentsCloudPairingOutcome.network: AgentsPairingRestoreReason.network,
+          AgentsCloudPairingOutcome.decryptFailed:
+              AgentsPairingRestoreReason.decryptFailed,
+          AgentsCloudPairingOutcome.keyLocked:
+              AgentsPairingRestoreReason.keyLocked,
+          AgentsCloudPairingOutcome.noSession:
+              AgentsPairingRestoreReason.noSession,
+        };
+    for (final MapEntry<AgentsCloudPairingOutcome, AgentsPairingRestoreReason>
+        entry in mapped.entries) {
+      test('a mirror read of ${entry.key.name} reads as ${entry.value.name}, '
+          'and the supervisor keeps trying', () async {
+        final mirror = _FakeMirror(record)..missing = entry.key;
+        final supervisor = supervise(
+          AgentsPairingStore(backend: _MemoryStore(), cloudSync: mirror),
+        );
+        await until(() => mirror.reads > 2, reason: 'retries the read');
+        expect(supervisor.reason.value, entry.value);
+        expect(supervisor.isSettled, isFalse);
+      });
+    }
+
+    test('only the not-yet reasons may still restore', () {
+      expect(
+        <AgentsPairingRestoreReason>[
+          for (final r in AgentsPairingRestoreReason.values)
+            if (r.mayStillRestore) r,
+        ],
+        <AgentsPairingRestoreReason>[
+          AgentsPairingRestoreReason.checking,
+          AgentsPairingRestoreReason.noSession,
+          AgentsPairingRestoreReason.keyLocked,
+          AgentsPairingRestoreReason.network,
+          AgentsPairingRestoreReason.localStoreFailed,
+        ],
+      );
+    });
+
+    test('a record with no computer to dial is noCloudRoute', () async {
+      final loopback = AgentsStoredPairing(
+        hostUrl: Uri.parse('ws://127.0.0.1:8787'),
+        channelId: record.channelId,
+        channelKey: record.channelKey,
+        peerDeviceId: record.peerDeviceId,
+        peerPublicKey: record.peerPublicKey,
+      );
+      final mirror = _FakeMirror(loopback)..available = true;
+      final store = AgentsPairingStore(
+        backend: _MemoryStore(),
+        cloudSync: mirror,
+      );
+      final supervisor = supervise(store);
+      await until(() => mirror.reads > 1);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.noCloudRoute);
+      expect(await store.loadPairing(), isNull);
+    });
+
+    test('a restored pairing reads as paired', () async {
+      final mirror = _FakeMirror(record)..available = true;
+      final supervisor = supervise(
+        AgentsPairingStore(backend: _MemoryStore(), cloudSync: mirror),
+      );
+      await until(() => supervisor.isSettled);
+      expect(supervisor.reason.value, AgentsPairingRestoreReason.paired);
+    });
+
+    test('an unreadable local store is a not-yet', () async {
+      final supervisor = supervise(
+        AgentsPairingStore(
+          backend: _ThrowingStore(),
+          cloudSync: _FakeMirror(record),
+        ),
+      );
+      await until(() => supervisor.attempts > 1);
+      expect(
+        supervisor.reason.value,
+        AgentsPairingRestoreReason.localStoreFailed,
+      );
+      expect(supervisor.reason.value.mayStillRestore, isTrue);
+    });
+  });
+}
+
+class _ThrowingStore implements AgentsSecureKeyValueStore {
+  @override
+  Future<String?> read(String key) async => throw StateError('locked');
+
+  @override
+  Future<void> write(String key, String value) async =>
+      throw StateError('locked');
+
+  @override
+  Future<void> delete(String key) async => throw StateError('locked');
 }

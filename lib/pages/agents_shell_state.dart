@@ -82,6 +82,19 @@ mixin AgentsShellHost on State<MessengerShell> {
   final ValueNotifier<AgentsRelayController?> _controller =
       ValueNotifier<AgentsRelayController?>(null);
 
+  /// The link as the thread view last reported it. With [_restoreReason], the
+  /// heal flag and the roster it decides what the shell shows while there is
+  /// no conversation (never an empty area).
+  final ValueNotifier<AgentsLinkReport> _linkReport =
+      ValueNotifier<AgentsLinkReport>(AgentsLinkReport.initial);
+
+  /// Why the cloud restore last stopped, mirrored from [_pairingRestore] so
+  /// the status panel can listen before the supervisor exists.
+  final ValueNotifier<AgentsPairingRestoreReason> _restoreReason =
+      ValueNotifier<AgentsPairingRestoreReason>(
+        AgentsPairingRestoreReason.checking,
+      );
+
   /// Rooms deleted while the socket was down. The host never heard the delete
   /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
   /// would keep an orphan. These flush the moment a transport arrives.
@@ -331,8 +344,11 @@ mixin AgentsShellHost on State<MessengerShell> {
     _roster.removeListener(_onRosterChanged);
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
+    _pairingRestore?.reason.removeListener(_onRestoreReason);
     unawaited(_pairingRestore?.dispose() ?? Future<void>.value());
     _controller.dispose();
+    _linkReport.dispose();
+    _restoreReason.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     if (_ownsThemeController) _themeController.dispose();
   }
@@ -394,14 +410,74 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// swaps the thread view's [GlobalKey] once, which re-runs its bootstrap — the
   /// very path a fresh local pairing already takes.
   void _restoreCloudPairing() {
-    _pairingRestore ??= AgentsPairingRestore(
-      store: _pairingStore,
-      sessionSource: widget.sessionSource,
-      onRestored: () async {
-        if (!mounted) return;
-        setState(() => _threadViewKey = GlobalKey());
+    if (_pairingRestore != null || !mounted) return;
+    Future<void> onRestored() async {
+      if (!mounted) return;
+      setState(() => _threadViewKey = GlobalKey());
+    }
+
+    final builder = widget.pairingRestoreBuilder;
+    final restore = builder != null
+        ? builder(_pairingStore, widget.sessionSource, onRestored)
+        : AgentsPairingRestore(
+            store: _pairingStore,
+            sessionSource: widget.sessionSource,
+            onRestored: onRestored,
+          );
+    _pairingRestore = restore;
+    restore.reason.addListener(_onRestoreReason);
+    restore.start();
+  }
+
+  void _onRestoreReason() {
+    final restore = _pairingRestore;
+    if (!mounted || restore == null) return;
+    _restoreReason.value = restore.reason.value;
+  }
+
+  /// The live thread view's state, for the status panel's actions.
+  AgentsThreadViewState? get _threadViewState {
+    final state = _threadViewKey.currentState;
+    return state is AgentsThreadViewState ? state : null;
+  }
+
+  /// What the shell shows while there is no conversation: the one status that
+  /// [resolveAgentsShellStatus] picks, with its actions wired to the thread
+  /// view (pairing, reconnect) and to the roster (a new agent).
+  Widget _buildStatusPanel({double topInset = 0}) {
+    return ListenableBuilder(
+      listenable: Listenable.merge(<Listenable>[
+        _linkReport,
+        _restoreReason,
+        AgentsCloudRelaySocket.healInProgress,
+        _roster,
+      ]),
+      builder: (BuildContext context, Widget? _) {
+        final AgentsLinkReport link = _linkReport.value;
+        final AgentsShellStatus status = resolveAgentsShellStatus(
+          link: link,
+          restore: _restoreReason.value,
+          healing: AgentsCloudRelaySocket.healInProgress.value,
+          rosterEmpty: _roster.visibleAgents.isEmpty,
+        );
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 220),
+          child: AgentsStatusPanel(
+            key: ValueKey<AgentsShellStatus>(status),
+            status: status,
+            message: link.message,
+            busy: link.busy,
+            topInset: topInset,
+            onAddComputer: () =>
+                unawaited(_threadViewState?.openPairing() ?? Future.value()),
+            onReconnect: () => unawaited(
+              _threadViewState?.reconnect(force: true) ?? Future.value(),
+            ),
+            onAddAgent: () => unawaited(_openOnboarding()),
+          ),
+        );
       },
-    )..start();
+    );
   }
 
   /// Keeps trying until this device is linked. Disposed with the shell.
@@ -491,6 +567,8 @@ mixin AgentsShellHost on State<MessengerShell> {
       leadingInset: leadingInset,
       topInset: topInset,
       phoneLayout: phone,
+      linkReport: _linkReport,
+      emptyState: _buildStatusPanel(),
     );
   }
 

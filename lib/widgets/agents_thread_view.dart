@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/secrets/secrets_service.dart';
@@ -93,6 +94,8 @@ class AgentsThreadView extends StatefulWidget {
     this.leadingInset = 0,
     this.topInset = 0,
     this.phoneLayout = false,
+    this.linkReport,
+    this.emptyState,
   });
 
   /// Builds the transport controller. Async because a real client generates a
@@ -194,6 +197,18 @@ class AgentsThreadView extends StatefulWidget {
   /// phone layout too — that is how the layout is checked on Linux.
   final bool phoneLayout;
 
+  /// Where this view publishes what it knows about the link: not read yet, no
+  /// pairing, connecting, offline, connected. The shell turns it into the
+  /// status it shows while there is no conversation (agents_shell_status.dart).
+  /// Written after the frame, never during a build.
+  final ValueNotifier<AgentsLinkReport>? linkReport;
+
+  /// Shown in place of the chat while no thread is selected ([threadKey] is
+  /// empty). The shell builds it from the link status; it carries the "Add
+  /// your computer" and Reconnect actions, so the bottom connect bar stands
+  /// down while it is on screen. Null keeps the old empty area.
+  final Widget? emptyState;
+
   @override
   State<AgentsThreadView> createState() => AgentsThreadViewState();
 }
@@ -290,6 +305,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// The persisted trust, loaded once at startup. Non-null means "already
   /// paired": auto-reconnect, hide the code form, offer Forget.
   AgentsStoredPairing? _storedPairing;
+
+  /// Whether the stored pairing has been read. Before that the link is
+  /// "starting", not "unpaired": a paired device must not flash the call to
+  /// add a computer on every launch.
+  bool _pairingLoaded = false;
+
+  /// The last report handed to [AgentsThreadView.linkReport], and whether a
+  /// post-frame write is already queued.
+  AgentsLinkReport? _publishedLink;
+  bool _linkWriteQueued = false;
 
   /// The user tapped Disconnect: stay down until they act, no auto-reconnect.
   bool _manuallyDisconnected = false;
@@ -487,9 +512,39 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         _hostController.text = _storedPairing!.hostUrl.toString();
       }
     }
-    await _buildController();
+    if (mounted) setState(() => _pairingLoaded = true);
+    if (!await _tryBuildController()) {
+      // No transport yet. A paired device keeps trying on its own (the
+      // watchdog re-arms the reconnect while there is no controller); an
+      // unpaired one builds it again when the user adds a computer.
+      if (_storedPairing != null) _scheduleAutoReconnect();
+      return;
+    }
     if (_storedPairing != null) {
       await _reconnect();
+    }
+  }
+
+  /// [_buildController], with a failure turned into state the user can see
+  /// and act on instead of an unhandled error and an empty screen.
+  Future<bool> _tryBuildController() async {
+    try {
+      await _buildController();
+      return _controller != null;
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '[cowork-thread] transport build failed: ${error.runtimeType}',
+        );
+      }
+      if (mounted) {
+        setState(
+          () => _localError = _storedPairing == null
+              ? 'Agents could not start the connection. Try again.'
+              : _kComputerAway,
+        );
+      }
+      return false;
     }
   }
 
@@ -771,11 +826,24 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     );
     _reconnectAttempts++;
     _failedReconnects++;
+    // Counted as a failure the moment it is scheduled, so the user-facing
+    // "offline" state follows the retries rather than a phase transition.
+    if (mounted) setState(() {});
     _autoReconnectTimer = Timer(Duration(milliseconds: delayMs), () async {
       _autoReconnectTimer = null;
       if (!mounted || _storedPairing == null || _manuallyDisconnected) return;
       // A fresh controller per attempt: the client is single-shot per socket.
-      await _rebuildController();
+      try {
+        await _rebuildController();
+      } catch (error) {
+        if (kDebugMode) {
+          debugPrint(
+            '[cowork-thread] transport rebuild failed: ${error.runtimeType}',
+          );
+        }
+        if (mounted) setState(() => _localError = _kComputerAway);
+        return;
+      }
       await _reconnect();
     });
   }
@@ -824,12 +892,30 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _manuallyDisconnected = false;
     _reconnectAttempts = 0;
     _rebuildingForResume = true;
+    if (mounted) setState(() {});
     try {
       await _rebuildController();
       await _reconnect();
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[cowork-thread] reconnect failed: ${error.runtimeType}');
+      }
+      if (mounted) setState(() => _localError = _kComputerAway);
     } finally {
       _rebuildingForResume = false;
+      if (mounted) setState(() {});
     }
+  }
+
+  /// Opens the "Add your computer" flow (the QR scan). Public so the shell's
+  /// status panel can start it; the pairing ceremony lives here with the
+  /// transport. Builds the transport first when an earlier build failed.
+  Future<void> openPairing() async {
+    if (_busy) return;
+    if (_controller == null && !await _tryBuildController()) return;
+    if (!mounted) return;
+    setState(() => _localError = null);
+    await _openPairingScreen();
   }
 
   Future<void> _connect() async {
@@ -1435,6 +1521,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       valueListenable: controller?.state ?? _startupState,
       builder: (context, state, _) {
         final connected = state.phase == AgentsRelayPhase.paired;
+        _publishLink(_linkReportFor(state));
         final chat = _buildChat(context);
         final approval = _approval;
         final secretRequest = _secretRequest;
@@ -1462,6 +1549,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             if (_useDesktopChat(context) &&
                 !connected &&
                 controller != null &&
+                // The status panel carries the product actions; only the
+                // developer's same-machine row still needs the bar there.
+                (!_showsEmptyState || widget.devHostUrl.isNotEmpty) &&
                 _showConnectBar)
               _buildConnectBar(context, state),
           ],
@@ -1519,11 +1609,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           : () =>
                 setState(() => _automationsCollapsed = !_automationsCollapsed),
       actions: <AgentsThreadAction>[
-        AgentsThreadAction(
-          icon: Icons.folder_open_outlined,
-          tooltip: 'Documents',
-          onPressed: () => _openDocuments(context),
-        ),
+        // A thread's documents: none before a thread is open.
+        if (widget.threadKey.isNotEmpty)
+          AgentsThreadAction(
+            icon: Icons.folder_open_outlined,
+            tooltip: 'Documents',
+            onPressed: () => _openDocuments(context),
+          ),
         ...widget.actions,
       ],
       leadingInset: dense ? 0 : widget.leadingInset,
@@ -1565,12 +1657,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // (see [_cacheReady]). Deliberately blank rather than a spinner — the wait
     // is a frame or two, and a spinner that flashes on every launch reads as
     // trouble.
-    if (!_cacheReady) return const SizedBox.expand();
     // No thread selected (a first launch with no roster and no host). The
     // shell no longer invents a placeholder key, so there is nothing to open;
     // mounting the screen on an empty id would give the cache a row nobody
     // asked for and a replay cursor for a conversation that does not exist.
-    if (widget.threadKey.isEmpty) return const SizedBox.expand();
+    // The shell's status panel says what is going on instead: an empty chat
+    // area read as a broken app (the "blank Agents window").
+    if (widget.threadKey.isEmpty) {
+      return widget.emptyState ?? const SizedBox.expand();
+    }
+    if (!_cacheReady) return const SizedBox.expand();
     final config = widget.shellConfig;
     // The screen reads its rows once, on mount. A replay that rewrote the cache
     // bumps the revision, which changes the key, which remounts it on fresh
@@ -1661,6 +1757,58 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// its place only once that has visibly failed, or once the user disconnected
   /// on purpose. Anything in between is chatter about a socket that is already
   /// on its way back.
+  /// The shell's status panel is on screen in place of the chat.
+  bool get _showsEmptyState =>
+      widget.threadKey.isEmpty && widget.emptyState != null;
+
+  /// What the link is, in the words the shell's status panel uses. The
+  /// bottom bar's own rule ([_showConnectBar]) decides when "connecting"
+  /// becomes "offline": after a few failed tries, or a manual disconnect.
+  AgentsLinkReport _linkReportFor(AgentsRelayState state) {
+    if (!_pairingLoaded) return AgentsLinkReport.initial;
+    final bool busy = _busy || _rebuildingForResume;
+    if (_storedPairing == null) {
+      return AgentsLinkReport(
+        AgentsLinkState.unpaired,
+        busy: _busy,
+        message:
+            _localError ??
+            (state.phase == AgentsRelayPhase.error
+                ? 'Pairing did not work. Scan the code on your computer again.'
+                : null),
+      );
+    }
+    if (_controller != null && state.phase == AgentsRelayPhase.paired) {
+      return const AgentsLinkReport(AgentsLinkState.connected);
+    }
+    if (_manuallyDisconnected || _failedReconnects >= 3) {
+      final String? error = _localError;
+      return AgentsLinkReport(
+        AgentsLinkState.offline,
+        busy: busy,
+        // The panel already says "make sure it is on"; only a different,
+        // more specific sentence is worth a second line.
+        message: error == _kComputerAway ? null : error,
+      );
+    }
+    return AgentsLinkReport(AgentsLinkState.connecting, busy: busy);
+  }
+
+  /// Hands [report] to the shell after this frame, once per change.
+  void _publishLink(AgentsLinkReport report) {
+    final ValueNotifier<AgentsLinkReport>? sink = widget.linkReport;
+    if (sink == null || report == _publishedLink) return;
+    _publishedLink = report;
+    if (_linkWriteQueued) return;
+    _linkWriteQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _linkWriteQueued = false;
+      final AgentsLinkReport? latest = _publishedLink;
+      if (!mounted || latest == null) return;
+      widget.linkReport?.value = latest;
+    });
+  }
+
   bool get _showConnectBar {
     if (_storedPairing == null) return true;
     return _manuallyDisconnected || _failedReconnects >= 3;
