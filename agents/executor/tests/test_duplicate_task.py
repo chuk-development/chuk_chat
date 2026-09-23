@@ -40,13 +40,19 @@ PROMPT = "offne bitt die ergebniss seite im browser ok"
 
 
 class _BlockingModel(MockModelClient):
-    """A model that holds the run open until the test lets it finish."""
+    """A model that holds the run open until the test lets it finish.
+
+    It must block in ``complete``: that is the one method the agent loop calls.
+    It used to override ``chat``, which nothing calls, so the run was never held
+    and finished at once; the tests only passed when the disk was slow enough
+    to keep the first run registered while the second task arrived.
+    """
 
     gate = threading.Event()
 
-    def chat(self, *args, **kwargs):  # type: ignore[override]
+    def complete(self, messages):  # type: ignore[override]
         self.gate.wait(timeout=20.0)
-        return super().chat(*args, **kwargs)
+        return super().complete(messages)
 
 
 @pytest.fixture
