@@ -115,8 +115,10 @@ const bool kFeaturePaymentsDirect = bool.fromEnvironment(
 // re-sync never drops them.
 
 /// Agents mode — a phone-driven agent that runs on the user's laptop with real
-/// system/CLI access, sandboxed execution and a persistent tray daemon. Lives in
-/// the SAME app as Chat; a top-left switcher toggles between Chat and Agents.
+/// system/CLI access, sandboxed execution and a persistent tray daemon. It is a
+/// build flag, not a switch in the app: with it on, `main.dart` shows the
+/// Agents `MessengerShell`; with it off, upstream's `RootWrapper`, exactly as
+/// chuk_chat ships it. There is no in-app switcher between the two.
 /// Disabled by default; enable via --dart-define=FEATURE_AGENTS=true.
 /// See docs/AGENTS_BUILD_PLAN.md.
 const bool kFeatureAgents = bool.fromEnvironment(
