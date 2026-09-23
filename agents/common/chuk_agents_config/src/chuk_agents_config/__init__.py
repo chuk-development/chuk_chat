@@ -70,6 +70,7 @@ from .schema import (
     RelayConfig,
     SandboxConfig,
     SkillsConfig,
+    TraceConfig,
     VncConfig,
 )
 
@@ -102,6 +103,7 @@ __all__ = [
     "SandboxConfig",
     "Setting",
     "SkillsConfig",
+    "TraceConfig",
     "VncConfig",
     "config_home",
     "default_state_home",
