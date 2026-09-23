@@ -554,7 +554,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Request focus if sidebar closed
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      composerFocusNode.canRequestFocus = !widget.isSidebarExpanded;
       if (!widget.isSidebarExpanded) {
         composerFocusNode.requestFocus();
       }
@@ -640,9 +639,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // While the sidebar covers the chat the composer must not hold or take
     // focus. Otherwise a menu, dialog or page that closes over the sidebar
     // hands focus back to the composer and the keyboard pops up unasked.
-    if (widget.isSidebarExpanded != oldWidget.isSidebarExpanded) {
-      if (widget.isSidebarExpanded) composerFocusNode.unfocus();
-      composerFocusNode.canRequestFocus = !widget.isSidebarExpanded;
+    // The composer TextField also refuses focus while the sidebar is open.
+    if (widget.isSidebarExpanded && !oldWidget.isSidebarExpanded) {
+      composerFocusNode.unfocus();
     }
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
@@ -3522,6 +3521,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                     child: TextField(
                       controller: composerController,
                       focusNode: composerFocusNode,
+                      // No focus while the sidebar covers the chat. Set here,
+                      // not on the node: TextField writes this value back to
+                      // its node on every rebuild.
+                      canRequestFocus: !widget.isSidebarExpanded,
                       selectionControls: ComposerSelectionControls.instance,
                       autofocus: false,
                       keyboardType: TextInputType.multiline,
