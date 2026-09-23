@@ -126,7 +126,9 @@ Future<void> main() async {
   // sees it. Refreshing it blindly would fail (and log the user out) when the
   // paired host rotated the pair while the app was away; AuthGate recovers
   // the session through the host instead. Must run before any Supabase init.
-  await SessionStash.setAsideExpiredSession();
+  // Agents only: without a paired host there is nobody to recover through,
+  // and upstream chuk_chat lets gotrue refresh the expired session itself.
+  if (kFeatureAgents) await SessionStash.setAsideExpiredSession();
 
   // Agents awaits the Supabase init here so the stash decision above is in
   // force before the first frame. The call is idempotent, so upstream's
