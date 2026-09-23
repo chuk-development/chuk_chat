@@ -258,10 +258,17 @@ def find_agent_container(
     agent_id: str,
     task_id: str = DEFAULT_TASK_ID,
     cli: DockerCli | None = None,
+    owner: str | None = None,
+    legacy_workspace_roots: tuple[str, ...] | list[str] = (),
 ) -> ContainerInfo | None:
     """The reusable container for ``(agent_id, task_id)``, if one exists.
 
     A running container wins over a stopped one; otherwise the first match.
+
+    With ``owner`` set, only containers of that owner count (see
+    :func:`owned_by`), so one host never reuses, restarts or removes the box
+    of another host that runs an agent with the same id. Without ``owner``
+    the match is machine-wide, as before.
     """
     matches = list_containers(
         cli=cli,
@@ -271,6 +278,8 @@ def find_agent_container(
             LABEL_TASK: task_id,
         },
     )
+    if owner is not None:
+        matches = [c for c in matches if owned_by(c, owner, legacy_workspace_roots)]
     if not matches:
         return None
     for container in matches:
