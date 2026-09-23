@@ -1,11 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 /// The Retry button in the imported bubble calls
 /// `OfflineRetryManager.instance.retryNow()`. That method used to be an empty
 /// `async {}`: the button was there, it was pressed, and nothing happened.
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   final OfflineRetryManager manager = OfflineRetryManager.instance;
 
   setUp(manager.debugReset);

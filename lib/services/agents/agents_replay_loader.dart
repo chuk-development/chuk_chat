@@ -39,6 +39,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/agents/media_index.dart';
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -781,6 +782,7 @@ class AgentsReplayLoader extends ChangeNotifier {
     // The same rows carry every picture and every file the coworker handed
     // over. The Media tab has no other way to find them (MediaIndex).
     MediaIndex.instance.noteRows(session, committed);
+    ChatOrigin.claimAgentsThread(session);
     final saved = ChatStorageService.saveChat(committed, chatId: session);
     unawaited(
       saved.then(
@@ -861,6 +863,7 @@ class AgentsReplayLoader extends ChangeNotifier {
         .map<Map<String, dynamic>>(Map<String, dynamic>.from)
         .toList();
     ThreadPreviewStore.instance.noteRows(session, committed);
+    ChatOrigin.claimAgentsThread(session);
     unawaited(
       ChatStorageService.saveChat(committed, chatId: session).then(
         (_) {},

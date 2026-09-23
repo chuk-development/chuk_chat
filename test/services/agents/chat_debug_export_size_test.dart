@@ -8,11 +8,15 @@ import 'package:chuk_chat/services/agents/chat_debug_export.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/models/content_block.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 /// The debug copy has to be the size chuk_chat's is. A thread that carries a
 /// long answer, a long reasoning block, a tool that returned a file and an
 /// attachment must not turn one tap into megabytes on the clipboard.
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   // Agents delivers files as file blocks; decode them as the Agents build
   // does (the default follows FEATURE_AGENTS, which tests leave off).
   ContentBlock.decodesFileBlocks = true;

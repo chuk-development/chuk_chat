@@ -1,25 +1,33 @@
-// AGENTS ADAPTER. Upstream: chuk_chat/lib/services/offline_send_coordinator.dart @ d31526a229fdde27c82adf3661d5d3a149db8340.
-// Reason: replaced by relay. Upstream queues a send while the phone is offline
-// and later replays it against the hosted API, ANSWER AND ALL. Agents must not
-// do that: the run belongs to the host and keeps going with no client
-// attached, so only the PROMPT is queued here — never the reply.
-// [OfflineSendPayload] is kept verbatim (it is a plain value object several
-// imported files build).
+// lib/services/offline_send_coordinator.dart
 //
-// It used to be inert, and that lost data. The imported send paths
-// (`chat_ui_mobile.dart`, `desktop_send_logic.dart`) short-circuit on
-// `NetworkStatusService.isOnline == false` BEFORE the relay is ever asked, and
-// they call this. With `enqueue` returning `''` the row was written with
-// `status: pending, queueId: ''` and nothing behind it: a prompt typed in
-// airplane mode was silently gone. It now goes into [AgentsTaskOutbox], the
-// same queue the host-unreachable path uses.
-// Keep the public API signature-compatible with upstream so the imported chat UI compiles unchanged. Do not "improve" this file.
-
+// Bridges the chat send flow to the offline queue + retry manager.  Keeps the
+// payload schema (`buildPayload` / `payloadFrom`) in one place so the executor
+// registered with [OfflineRetryManager] reads the same shape that callers
+// produce when enqueueing.
+//
+// AGENTS ADAPTATION. With FEATURE_AGENTS off this is upstream's file in
+// behaviour: every payload goes into [OfflineQueueService], which
+// [OfflineRetryManager] drains through [OfflineSendExecutor].
+//
+// With it on, the chat kind picks the queue ([ChatOrigin]):
+//
+// * a chuk_chat chat keeps upstream's path, so a message typed offline is
+//   sent by the executor once the network is back;
+// * an Agents thread queues only the PROMPT in [AgentsTaskOutbox]. The run
+//   belongs to the host and keeps going with no client attached, so the
+//   answer must never be replayed here. The thread view flushes that outbox
+//   when the host is paired.
+//
+// [OfflineSendPayload] stays verbatim: several imported files build it.
 import 'dart:convert';
+
+import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
+import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 class OfflineSendPayload {
   const OfflineSendPayload({
@@ -95,25 +103,36 @@ class OfflineSendPayload {
   }
 }
 
-/// The imported send paths' door into [AgentsTaskOutbox].
-///
-/// One id names the same thing everywhere: the payload's [OfflineSendPayload.chatId]
-/// IS the executor's `session_key` AND the imported screen's `selectedChatId`
-/// (see `AgentsThreadView.threadKey`), so the prompt queues under the very key
-/// the flush later sends it on.
+/// Convenience wrapper around [OfflineQueueService] + [OfflineRetryManager].
+/// AGENTS: an Agents thread's prompt goes into [AgentsTaskOutbox] instead.
 class OfflineSendCoordinator {
   OfflineSendCoordinator._();
 
-  /// Queues the prompt and returns the outbox entry's id.
+  /// Enqueue a payload for later send. Returns the queue id assigned to it.
   ///
-  /// The returned id is what the caller writes into the bubble's `queueId`, so
-  /// it must be REAL: it is how the flush later finds the row again and takes
-  /// the queue mark off it.
-  ///
-  /// Everything upstream would need to reproduce the answer — the system
-  /// prompt, the history, `maxTokens` — is deliberately dropped. The host
-  /// composes the run; this side only has to deliver the question.
-  static Future<String> enqueue(OfflineSendPayload payload) async {
+  /// The id is what the caller writes into the bubble's `queueId`; the drain
+  /// of the same queue finds the row again by it.
+  static Future<String> enqueue(OfflineSendPayload payload) {
+    if (ChatOrigin.isAgentsThread(payload.chatId)) {
+      return _enqueueAgentsPrompt(payload);
+    }
+    if (kDebugMode) {
+      debugPrint(
+        '[OfflineSend] enqueue chat=${payload.chatId} '
+        'text_len=${payload.messageText.length}',
+      );
+    }
+    return OfflineQueueService.instance.enqueue(
+      chatId: payload.chatId,
+      sendPayload: payload.toJson(),
+    );
+  }
+
+  /// AGENTS: the payload's [OfflineSendPayload.chatId] IS the executor's
+  /// `session_key`, so the prompt queues under the key the flush sends it on.
+  /// Everything upstream needs to reproduce the answer (system prompt,
+  /// history, `maxTokens`) is dropped: the host composes the run.
+  static Future<String> _enqueueAgentsPrompt(OfflineSendPayload payload) async {
     final OutboxTask task = await AgentsTaskOutbox.enqueue(
       sessionKey: payload.chatId,
       prompt: payload.messageText,
@@ -125,15 +144,9 @@ class OfflineSendCoordinator {
   }
 
   /// Triggers an immediate drain of the queue.
-  ///
-  /// RESTORED from upstream (chuk_chat). Dropped by the Agents adapter because
-  /// nothing in the imported closure called it; the merged tree brings
-  /// upstream's offline retry path back with it.
   static Future<void> retryNow() => OfflineRetryManager.instance.retryNow();
 
   /// Helper to decode a [QueuedMessage]'s payload back into a typed value.
-  ///
-  /// RESTORED from upstream: `services/offline_send_executor.dart` calls it.
   static OfflineSendPayload payloadFrom(QueuedMessage msg) =>
       OfflineSendPayload.fromJson(msg.sendPayload);
 }

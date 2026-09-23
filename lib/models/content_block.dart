@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart' show visibleForTesting;
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/models/tool_call.dart';
-import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
 
 /// The type of a content block within an AI response.
 enum ContentBlockType { text, toolCalls, reasoning, sandboxArtifact }
@@ -113,9 +113,14 @@ class ContentBlock {
   /// Whether a stored file block decodes to a file card. With Agents on, it
   /// does: Agents delivers files through this block. Without Agents the only
   /// writer was the removed code sandbox, so an old block becomes a plain
-  /// note, exactly as in chuk_chat. Not `final` so a test can pick a side.
+  /// note, exactly as in chuk_chat. Follows [agentsChatCore], the one switch
+  /// for every Agents code path.
+  static bool get decodesFileBlocks => agentsChatCore;
+
+  /// A test picks a side here. Sets the one shared override.
   @visibleForTesting
-  static bool decodesFileBlocks = kFeatureAgents;
+  static set decodesFileBlocks(bool value) =>
+      debugAgentsChatCoreOverride = value;
 
   factory ContentBlock.fromJson(Map<String, dynamic> json) {
     final typeName = json['type'] as String? ?? 'text';

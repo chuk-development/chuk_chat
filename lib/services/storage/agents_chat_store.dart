@@ -36,12 +36,13 @@
 /// when the sync finds no cloud row for it. Local data is never overwritten
 /// by an older cloud picture and never thrown away before it was uploaded.
 ///
-/// Reads go through the verbatim chuk_chat modules unchanged:
-/// [ChatStorageService.loadFullChat] is cache-first, and `ChatSyncService`
-/// pulls rows written by another device. Both see exactly the rows this
-/// store writes, because it uses the same payload shape
-/// (`{"v": kChatPayloadVersion, "messages": [...]}`), the same cache row
-/// builder and the same table.
+/// Only Agents threads come here ([ChatOrigin.isAgentsThread]); a chuk_chat
+/// chat keeps upstream's INSERT/UPDATE of `encrypted_chats`. Reads go through
+/// the verbatim chuk_chat modules: [ChatStorageService.loadFullChat] is
+/// cache-first, with the same payload shape
+/// (`{"v": kChatPayloadVersion, "messages": [...]}`) and the same cache row
+/// builder. The cloud sync reads `encrypted_chats` only, so it never sees a
+/// row this store writes to [kAgentsChatsTable].
 library;
 
 import 'dart:async';
@@ -62,6 +63,7 @@ import 'package:chuk_chat/services/chat_storage_mutations.dart'
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 
 /// The Supabase table Agents threads live in. Same columns and RLS as
@@ -160,6 +162,7 @@ class AgentsChatStore {
     bool? isStarred,
     String? customName,
   }) async {
+    ChatOrigin.claimAgentsThread(sessionKey);
     final messages = _decode(rows);
     // Documents have their own host lifetime. A transcript delta/compaction may
     // omit their original file event, but must not erase an already saved copy.

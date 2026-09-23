@@ -4,8 +4,9 @@
 // The Agents one is host-driven: a paired thread flushes its own outbox, an
 // unpaired one asks the transport to go get the host, and the executor is never
 // used because the run belongs to the host (a second producer would double the
-// turn). retryNow() prefers the Agents registrations when a thread view has
-// mounted them and falls back to upstream's drain otherwise.
+// turn). With FEATURE_AGENTS off retryNow() is upstream's drain only. With it
+// on, a mounted thread view's registrations run first, then the persisted
+// queue (chuk_chat chats only) drains as upstream's does.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -13,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/utils/exponential_backoff.dart';
 
 /// Outcome of a send executor call.
@@ -141,10 +143,15 @@ class OfflineRetryManager {
 
   /// Manual trigger — UI "Retry" buttons call this.
   ///
-  /// A mounted Agents thread view owns the press: flush its outbox while the
-  /// host is paired, otherwise go and get the host. With no thread view in
-  /// front, this is upstream's queue drain.
+  /// AGENTS: with FEATURE_AGENTS off this is upstream's queue drain and
+  /// nothing else. With it on, a mounted Agents thread view also gets the
+  /// press: flush its outbox while the host is paired, otherwise go and get
+  /// the host. The persisted queue only holds chuk_chat chats
+  /// (`OfflineSendCoordinator` routes by chat kind), so it is drained as well
+  /// whenever it holds anything; an Agents view in front must not strand a
+  /// chuk_chat message.
   Future<void> retryNow() async {
+    if (!ChatOrigin.agentsEnabled) return _retryAll();
     final OutboxFlush? flush = _flush;
     final HostReconnect? reconnect = _reconnect;
     if (flush == null && reconnect == null) {
@@ -161,6 +168,14 @@ class OfflineRetryManager {
       return;
     }
 
+    await _retryAgentsThread(flush, reconnect);
+    if (_executor != null && await _hasQueuedMessages()) await _retryAll();
+  }
+
+  Future<void> _retryAgentsThread(
+    OutboxFlush? flush,
+    HostReconnect? reconnect,
+  ) async {
     if (_busy) return;
     _busy = true;
     final String chatId = _sessionKey ?? '';

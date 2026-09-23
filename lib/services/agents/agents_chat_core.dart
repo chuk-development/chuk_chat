@@ -6,9 +6,10 @@ import 'package:chuk_chat/platform_config.dart';
 /// (`AgentsToolCallHandler`), sends go over the paired relay
 /// (`AgentsChatTransport`) and silence never ends a stream.
 ///
-/// Follows `FEATURE_AGENTS`. The three switch points — `ToolCallHandler()`,
-/// `WebSocketChatService` and `StreamingManager` — read this and nothing else,
-/// so a test can select one side for all three at once.
+/// Follows `FEATURE_AGENTS`. The ONE switch for every Agents code path: the
+/// chat core (`ToolCallHandler()`, `WebSocketChatService`, `StreamingManager`),
+/// storage routing (`ChatOrigin`) and file blocks (`ContentBlock`) all read
+/// this and nothing else, so a test selects one side for all of them at once.
 bool get agentsChatCore => debugAgentsChatCoreOverride ?? kFeatureAgents;
 
 /// Test seam for [agentsChatCore]. Tests run with `FEATURE_AGENTS` off; an
