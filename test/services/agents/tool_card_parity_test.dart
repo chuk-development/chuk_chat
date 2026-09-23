@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../../support/fake_relay_controller.dart';
 
@@ -139,6 +140,9 @@ final List<AgentsRelayInbound> _replayedRun = <AgentsRelayInbound>[
 ];
 
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const sessionKey = 'thread-1';

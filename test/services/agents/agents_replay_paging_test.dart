@@ -7,6 +7,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../../support/fake_relay_controller.dart';
 
@@ -15,6 +16,9 @@ import '../../support/fake_relay_controller.dart';
 /// loader then asks for the older page below it, prepends it, and stops when
 /// the host says there is no more. A cursor never moves down.
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   TestWidgetsFlutterBinding.ensureInitialized();
   const session = 'thread-1';
   final loader = AgentsReplayLoader.instance;

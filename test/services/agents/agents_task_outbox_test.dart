@@ -2,11 +2,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 /// Bead cowork-i7sd: "ob die Nachrichten im Backend ankommen, ist irgendwie
 /// nicht klar". A prompt the socket would not take used to be gone — not
 /// stored, not retried, not sent when the host came back.
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   late Map<String, String> disk;
   late DateTime clock;
 

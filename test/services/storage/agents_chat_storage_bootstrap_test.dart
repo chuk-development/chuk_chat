@@ -4,8 +4,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   late StreamController<AuthState> auth;
   late List<String> log;
   String? user;
