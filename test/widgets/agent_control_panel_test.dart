@@ -170,6 +170,20 @@ void main() {
     );
   });
 
+  testWidgets('an app-made agent the host runs is not called uninstalled', (
+    tester,
+  ) async {
+    // The host measured a sandbox for it: it runs there, whatever onHost says.
+    final source = FakeAgentControlSource(initial: _fullSnapshot);
+    addTearDown(source.dispose);
+    await _pump(tester, source, agent: _agent(onHost: false));
+
+    expect(
+      find.text('Created in the app. It is not installed on the host yet.'),
+      findsNothing,
+    );
+  });
+
   testWidgets('the panel shows the agent role', (tester) async {
     final source = FakeAgentControlSource();
     addTearDown(source.dispose);
