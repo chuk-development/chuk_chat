@@ -1746,6 +1746,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             ? null
             : () async => widget.onOpenModelScreen!(),
         agentsThread: true,
+        agentsTitle: widget.title,
         topInset: desktopTopInset,
       );
     }

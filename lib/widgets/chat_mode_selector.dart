@@ -38,11 +38,16 @@ class ChatModeSelector extends StatelessWidget {
     this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
     this.agentsMenus = false,
+    this.flat = false,
   });
 
   /// The Agents thread's menus: the original app's filled tiles at the menu
   /// radius, with no frame. Off, upstream's framed picker is kept.
   final bool agentsMenus;
+
+  /// The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
+  /// a small corner and a hover fill, like every other button on that row.
+  final bool flat;
 
   /// Menu rows one touch target high: the Agents build. chuk_chat keeps
   /// upstream's 40 dp rows and 30 dp section headers.
@@ -177,19 +182,24 @@ class ChatModeSelector extends StatelessWidget {
       label: 'Mode: $pillLabel',
       child: InkWell(
         onTap: () => _openModeMenu(context),
-        borderRadius: BorderRadius.circular(height / 2),
+        borderRadius: BorderRadius.circular(flat ? 8 : height / 2),
+        hoverColor: flat ? theme.colorScheme.surfaceContainerHigh : null,
         child: Container(
           height: height,
           padding: EdgeInsets.symmetric(
-            horizontal: showLabel ? height * 0.25 : height * 0.30,
+            horizontal: flat
+                ? 8
+                : (showLabel ? height * 0.25 : height * 0.30),
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(height / 2),
-            border: Border.all(
-              color: iconFg.withValues(alpha: 0.3),
-              width: 1.8,
-            ),
-          ),
+          decoration: flat
+              ? null
+              : BoxDecoration(
+                  borderRadius: BorderRadius.circular(height / 2),
+                  border: Border.all(
+                    color: iconFg.withValues(alpha: 0.3),
+                    width: 1.8,
+                  ),
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
