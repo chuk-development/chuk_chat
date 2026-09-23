@@ -1,6 +1,7 @@
 // lib/services/chat_sync_service.dart
 import 'dart:async';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -133,6 +134,8 @@ class ChatSyncService {
   /// [resume] is called after a fresh network probe in AppLifecycleService,
   /// so the status is already up-to-date by the time we get here.
   static Future<void> _syncTitlesOnResume() async {
+    // The Agents build lists no chuk_chat chats; see [_performAgentsSync].
+    if (agentsChatCore) return;
     if (_isSyncing) return;
     if (!ChatStorageService.initialSyncComplete) return;
     final now = DateTime.now();
@@ -166,10 +169,35 @@ class ChatSyncService {
     await _performSync();
   }
 
+  /// The tick of the Agents build.
+  ///
+  /// That build shows no chuk_chat chat list: Agents threads live in
+  /// `cowork_chats` and are synced by `AgentsChatStore`. The chuk_chat work of
+  /// a tick (the `encrypted_chats` title list, the payload merge, the title
+  /// cache written as one large JSON string, and the preload of every chat
+  /// into SQLite) cost the UI isolate hundreds of milliseconds every 30 s and
+  /// on every focus change, and fed nothing on screen. Only the MCP connector
+  /// pull, which the Agents settings do show, rides this tick.
+  static Future<void> _performAgentsSync() async {
+    if (!_hasCompletedFirstSync) {
+      _hasCompletedFirstSync = true;
+      if (_firstSyncCompleter != null && !_firstSyncCompleter!.isCompleted) {
+        _firstSyncCompleter!.complete();
+      }
+    }
+    if (!NetworkStatusService.isOnline) return;
+    if (SupabaseService.auth.currentUser == null) return;
+    if (!EncryptionService.hasKey) return;
+    unawaited(McpSyncService.pullAndReconcile());
+    _lastSyncAt = DateTime.now();
+    _lastSyncOutcome = 'agents: mcp only';
+  }
+
   /// Perform the actual sync operation
   static Future<void> _performSync() async {
     if (_isSyncing) return; // Prevent concurrent syncs
     if (!_isEnabled) return;
+    if (agentsChatCore) return _performAgentsSync();
 
     // Wait for initial cache load to complete before syncing
     // This prevents race conditions and duplicate work on startup

@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -53,10 +55,35 @@ class ModelCacheService {
     }
   }
 
+  /// The decoded catalogue, kept after the first read.
+  ///
+  /// The catalogue is about 200 KB of JSON. Every mount of the chat screen
+  /// reads it several times (model name, picked models, capabilities), and in
+  /// the Agents build every agent switch mounts the screen again, so each
+  /// switch paid for several full `jsonDecode` calls on the UI isolate. The
+  /// catalogue changes only through [saveAvailableModels], which drops this
+  /// copy, so the memo can never be older than the stored value.
+  static List<Map<String, dynamic>>? _decodedModels;
+
+  /// Moves on every [saveAvailableModels], so a read that started before a
+  /// write does not store the old list as the memo.
+  static int _modelsGeneration = 0;
+
+  /// Drops the in-memory copy of the catalogue. Tests that swap the storage
+  /// under this class call it; the app itself never needs to.
+  @visibleForTesting
+  static void debugClearMemo() => _decodedModels = null;
+
   static Future<void> saveAvailableModels(
     List<Map<String, dynamic>> models,
   ) async {
+    _modelsGeneration++;
+    _decodedModels = null;
     await LocalChatCacheService.kvSet(_kModelsKey, jsonEncode(models));
+    // Again after the write: a read that began while it was in flight may
+    // have seen the old value.
+    _modelsGeneration++;
+    _decodedModels = null;
     await LocalChatCacheService.kvSet(
       _kModelsTimestampKey,
       DateTime.now().millisecondsSinceEpoch.toString(),
@@ -76,20 +103,32 @@ class ModelCacheService {
   }
 
   static Future<List<Map<String, dynamic>>> loadAvailableModels() async {
+    final memo = _decodedModels;
+    if (memo != null) return _copyOf(memo);
+    final generation = _modelsGeneration;
     await _migrateFromPrefs();
     final raw = await LocalChatCacheService.kvGet(_kModelsKey);
     if (raw == null) return const <Map<String, dynamic>>[];
     try {
       final decoded = jsonDecode(raw);
       if (decoded is! List) return const <Map<String, dynamic>>[];
-      return decoded
+      final models = decoded
           .whereType<Map<String, dynamic>>()
-          .map((entry) => Map<String, dynamic>.from(entry))
           .toList(growable: false);
+      if (generation == _modelsGeneration) _decodedModels = models;
+      return _copyOf(models);
     } catch (_) {
       return const <Map<String, dynamic>>[];
     }
   }
+
+  /// A fresh list of fresh maps, as every read handed out before the memo:
+  /// a caller that edits an entry must not edit the memo.
+  static List<Map<String, dynamic>> _copyOf(
+    List<Map<String, dynamic>> models,
+  ) => models
+      .map((entry) => Map<String, dynamic>.from(entry))
+      .toList(growable: false);
 
   /// Human name of a model, e.g. `DeepSeek: DeepSeek V4 Flash` for
   /// `deepseek/deepseek-v4-flash`.
