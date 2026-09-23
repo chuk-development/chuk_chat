@@ -3212,7 +3212,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
   Future<void> _loadSystemPrompt() async {
     try {
-      final systemPrompt = await UserPreferencesService.loadSystemPrompt();
+      final systemPrompt =
+          await UserPreferencesService.loadSystemPromptForMount();
       if (!mounted) return;
       setState(() {
         _systemPrompt = systemPrompt;

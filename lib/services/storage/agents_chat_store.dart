@@ -775,7 +775,7 @@ class AgentsChatStore {
     if (snapshot.isEmpty) return;
     final userId = _currentUserId();
     if (userId == null) return;
-    final encrypt = encryptor ?? EncryptionService.encrypt;
+    final encrypt = encryptor ?? EncryptionService.encryptInBackground;
     final update = cloudUpdate ?? _supabaseUpdate;
     for (final thread in snapshot) {
       final values = <String, dynamic>{
@@ -1131,7 +1131,7 @@ class AgentsChatStore {
       return false;
     }
     try {
-      final encrypt = encryptor ?? EncryptionService.encrypt;
+      final encrypt = encryptor ?? EncryptionService.encryptInBackground;
       final encryptedPayload = await encrypt(payloadJson);
       final encryptedTitle = title.isNotEmpty ? await encrypt(title) : null;
       final row = <String, dynamic>{

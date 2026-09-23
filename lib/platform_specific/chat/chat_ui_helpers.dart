@@ -16,8 +16,10 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
@@ -112,42 +114,92 @@ class MessageRenderData {
 /// A surface keeps one instance and clears it whenever it replaces the active
 /// message list. Cache keys are the raw JSON payloads, so an updated field
 /// naturally gets a new decoded entry during streaming.
+///
+/// In the Agents build every instance reads and writes ONE process-wide set
+/// of maps. There the chat screen is mounted again on every agent switch, so a
+/// cache owned by the screen died with it and every switch decoded every tool
+/// call again. The keys are the raw payloads, so an entry can never belong to
+/// the wrong message; [clear] leaves the shared maps alone, and their size is
+/// bounded like the per-screen maps, only higher.
 class MessageRenderCache {
-  final Map<String, List<String>?> _images = <String, List<String>?>{};
-  final Map<String, List<DocumentAttachment>?> _attachments =
-      <String, List<DocumentAttachment>?>{};
-  final Map<String, List<ToolCall>?> _toolCalls = <String, List<ToolCall>?>{};
-  final Map<String, List<ContentBlock>?> _contentBlocks =
-      <String, List<ContentBlock>?>{};
+  MessageRenderCache()
+    : _shared = agentsChatCore,
+      _maps = agentsChatCore ? _sharedMaps : _MessageRenderMaps() {
+    // The shared maps hold one account's decoded plaintext: a screen that
+    // mounts for another user starts them empty.
+    if (_shared) {
+      final String? user = CurrentUser.id;
+      if (user != _sharedOwner) {
+        _sharedOwner = user;
+        _sharedMaps.clear();
+      }
+    }
+  }
+
+  final bool _shared;
+  final _MessageRenderMaps _maps;
+
+  static final _MessageRenderMaps _sharedMaps = _MessageRenderMaps();
+  static String? _sharedOwner;
+
+  /// Entries per shared map before it is emptied: four agents with a long
+  /// thread each fit, a whole day of switching does not grow without bound.
+  static const int _sharedMaxEntries = 1200;
+
+  /// Empties the shared maps. For tests.
+  @visibleForTesting
+  static void debugClearShared() => _sharedMaps.clear();
 
   MessageRenderData build({
     required List<Map<String, String>> messages,
     required int index,
     required bool isStreaming,
   }) {
-    ChatUiHelpers.trimCachesIfNeeded(<Map<dynamic, dynamic>>[
-      _images,
-      _attachments,
-      _toolCalls,
-      _contentBlocks,
-    ]);
+    final List<Map<dynamic, dynamic>> maps = <Map<dynamic, dynamic>>[
+      _maps.images,
+      _maps.attachments,
+      _maps.toolCalls,
+      _maps.contentBlocks,
+    ];
+    if (_shared) {
+      for (final map in maps) {
+        if (map.length > _sharedMaxEntries) map.clear();
+      }
+    } else {
+      ChatUiHelpers.trimCachesIfNeeded(maps);
+    }
     return ChatUiHelpers.buildMessageRenderData(
       raw: messages[index],
       index: index,
       messageCount: messages.length,
       isStreaming: isStreaming,
-      imagesCache: _images,
-      attachmentsCache: _attachments,
-      toolCallsCache: _toolCalls,
-      contentBlocksCache: _contentBlocks,
+      imagesCache: _maps.images,
+      attachmentsCache: _maps.attachments,
+      toolCallsCache: _maps.toolCalls,
+      contentBlocksCache: _maps.contentBlocks,
     );
   }
 
   void clear() {
-    _images.clear();
-    _attachments.clear();
-    _toolCalls.clear();
-    _contentBlocks.clear();
+    if (_shared) return;
+    _maps.clear();
+  }
+}
+
+/// The four decode maps behind a [MessageRenderCache].
+class _MessageRenderMaps {
+  final Map<String, List<String>?> images = <String, List<String>?>{};
+  final Map<String, List<DocumentAttachment>?> attachments =
+      <String, List<DocumentAttachment>?>{};
+  final Map<String, List<ToolCall>?> toolCalls = <String, List<ToolCall>?>{};
+  final Map<String, List<ContentBlock>?> contentBlocks =
+      <String, List<ContentBlock>?>{};
+
+  void clear() {
+    images.clear();
+    attachments.clear();
+    toolCalls.clear();
+    contentBlocks.clear();
   }
 }
 
@@ -666,7 +718,9 @@ class ChatUiHelpers {
     var modified = false;
 
     final toolCallsJson = message['toolCalls'];
-    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+    if (toolCallsJson != null &&
+        toolCallsJson.isNotEmpty &&
+        !_knownWithoutStaleCalls(toolCallsJson)) {
       try {
         final decoded = jsonDecode(toolCallsJson);
         if (decoded is List) {
@@ -679,13 +733,17 @@ class ChatUiHelpers {
               toolCalls.map((call) => call.toJson()).toList(),
             );
             modified = true;
+          } else {
+            _rememberWithoutStaleCalls(toolCallsJson);
           }
         }
       } catch (_) {}
     }
 
     final contentBlocksJson = message['contentBlocks'];
-    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+    if (contentBlocksJson != null &&
+        contentBlocksJson.isNotEmpty &&
+        !_knownWithoutStaleCalls(contentBlocksJson)) {
       try {
         final decoded = jsonDecode(contentBlocksJson);
         if (decoded is List) {
@@ -709,12 +767,46 @@ class ChatUiHelpers {
               blocks.map((block) => block.toJson()).toList(),
             );
             modified = true;
+          } else {
+            _rememberWithoutStaleCalls(contentBlocksJson);
           }
         }
       } catch (_) {}
     }
 
     return modified;
+  }
+
+  /// Payloads (`toolCalls` or `contentBlocks` JSON) already decoded once and
+  /// found to hold no running or pending call.
+  ///
+  /// The recovery above runs over every message of a chat each time the chat
+  /// is loaded, and decodes every payload to look. Its answer depends on the
+  /// payload string alone, so a payload that had nothing to heal never has,
+  /// and the next load of the same chat (in the Agents build: every agent
+  /// switch) can skip the decode. Only the "nothing to heal" answer is kept.
+  ///
+  /// The payloads are plaintext of one account, so the set is emptied when the
+  /// signed-in user changes ([_withoutStaleCallsOwner]).
+  static final Set<String> _withoutStaleCalls = <String>{};
+  static const int _withoutStaleCallsMax = 4000;
+  static String? _withoutStaleCallsOwner;
+
+  static bool _knownWithoutStaleCalls(String json) {
+    final String? user = CurrentUser.id;
+    if (user != _withoutStaleCallsOwner) {
+      _withoutStaleCallsOwner = user;
+      _withoutStaleCalls.clear();
+      return false;
+    }
+    return _withoutStaleCalls.contains(json);
+  }
+
+  static void _rememberWithoutStaleCalls(String json) {
+    if (_withoutStaleCalls.length >= _withoutStaleCallsMax) {
+      _withoutStaleCalls.clear();
+    }
+    _withoutStaleCalls.add(json);
   }
 
   static bool _finalizeStaleToolCallsForRecovery(List<ToolCall> toolCalls) {
