@@ -1549,30 +1549,64 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       builder: (context, state, _) {
         final connected = state.phase == AgentsRelayPhase.paired;
         _publishLink(_linkReportFor(state));
-        final chat = _buildChat(context);
         final approval = _approval;
         final secretRequest = _secretRequest;
         final automations = _automations.liveForSession(widget.threadKey);
         final showAutomations = connected && automations.isNotEmpty;
         // Keep the renderer at the same keyed position across connection
         // changes: local history, scroll position and drafts remain available.
+        final bool desktop = _useDesktopChat(context);
+        final bool showCards =
+            showAutomations &&
+            !_automationsCollapsed &&
+            (desktop || MobileChatPreferences.instance.showActivity);
+        // On a desktop window the header floats over the chat on the top veil
+        // and the messages scroll up behind it (docs/DESIGN.md §2–3). Only
+        // while a bar or the automation cards sit between the header and the
+        // chat does it stay a solid strip above them.
+        final bool floatHeader =
+            desktop &&
+            !showCards &&
+            !(connected && (approval != null || secretRequest != null));
+        final chat = _buildChat(
+          context,
+          desktopTopInset: floatHeader ? AgentsThreadHeader.barHeight : 0,
+        );
+        // Always a Stack on a desktop window, so the chat keeps its element
+        // (and its scroll position and draft) when the header switches
+        // between floating and solid.
+        final Widget body = desktop
+            ? Stack(
+                children: [
+                  Positioned.fill(child: chat),
+                  if (floatHeader)
+                    Positioned(
+                      left: 0,
+                      right: 0,
+                      top: 0,
+                      child: _buildHeader(
+                        context,
+                        state,
+                        showAutomations ? automations : null,
+                        floating: true,
+                      ),
+                    ),
+                ],
+              )
+            : chat;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (_useDesktopChat(context))
+            if (desktop && !floatHeader)
               _buildHeader(context, state, showAutomations ? automations : null)
-            else if (approval != null || secretRequest != null)
+            else if (!desktop && (approval != null || secretRequest != null))
               SizedBox(height: widget.topInset),
             if (connected && approval != null)
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
-            if (showAutomations &&
-                !_automationsCollapsed &&
-                (_useDesktopChat(context) ||
-                    MobileChatPreferences.instance.showActivity))
-              _buildAutomationCards(context, automations),
-            Expanded(key: const ValueKey('persistent-chat'), child: chat),
+            if (showCards) _buildAutomationCards(context, automations),
+            Expanded(key: const ValueKey('persistent-chat'), child: body),
             if (_useDesktopChat(context) &&
                 !connected &&
                 controller != null &&
@@ -1601,8 +1635,9 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   Widget _buildHeader(
     BuildContext context,
     AgentsRelayState state,
-    List<AgentsAutomation>? automations,
-  ) {
+    List<AgentsAutomation>? automations, {
+    bool floating = false,
+  }) {
     // The phone gets the dense shape: the floating chrome above already shows
     // the coworker, its face and its presence, and two titles read as two bars.
     final bool dense = !_useDesktopChat(context);
@@ -1648,6 +1683,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       leadingInset: dense ? 0 : widget.leadingInset,
       topInset: dense ? widget.topInset : 0,
       dense: dense,
+      floating: floating,
     );
   }
 
@@ -1678,7 +1714,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   ///    every tool, the client must never dispatch one.
   ///  * the three "show" flags follow the verbose toggle — quiet by default,
   ///    full log on demand.
-  Widget _buildChat(BuildContext context) {
+  Widget _buildChat(BuildContext context, {double desktopTopInset = 0}) {
     // Do not mount the screen before the cache is readable: it would look its
     // thread up, miss, and throw the history away for the rest of the session
     // (see [_cacheReady]). Deliberately blank rather than a spinner — the wait
@@ -1719,6 +1755,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         onOpenModelSettings: widget.onOpenModelScreen == null
             ? null
             : () async => widget.onOpenModelScreen!(),
+        topInset: desktopTopInset,
       );
     }
     return ChukChatUIMobile(

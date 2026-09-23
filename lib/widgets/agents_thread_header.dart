@@ -10,6 +10,7 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 
@@ -84,7 +85,21 @@ class AgentsThreadHeader extends StatelessWidget {
     this.onOpenProfile,
     this.showCallTargets = true,
     this.onOpenScreen,
+    this.floating = false,
   });
+
+  /// The bar floats over the chat on the top veil (docs/DESIGN.md §2–3): the
+  /// messages scroll up behind it instead of stopping at a solid band. Off, the
+  /// bar is a solid strip on the surface — the shape used while an approval
+  /// bar or the automation cards sit between it and the chat.
+  final bool floating;
+
+  /// The height of the bar row with its padding, without the veil's fade.
+  /// A chat under a [floating] bar starts its first row this far down.
+  static const double barHeight = 16 + _slot + 8;
+
+  /// How far the veil fades out below the bar row.
+  static const double veilFade = 26;
 
   /// The coworker this thread belongs to. Null before one is selected: the row
   /// then carries the state and the actions alone rather than inventing a name.
@@ -168,6 +183,15 @@ class AgentsThreadHeader extends StatelessWidget {
       child: row,
     );
     if (dense) return padded;
+    if (floating) {
+      return DecoratedBox(
+        decoration: topVeilDecoration(scheme),
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: veilFade),
+          child: padded,
+        ),
+      );
+    }
     // No rule under the bar. The header sits on the same surface as the chat,
     // and the hairline only drew a second horizon right under the window's own
     // title bar — the reader saw two stacked bands and no content (cowork-y6q).

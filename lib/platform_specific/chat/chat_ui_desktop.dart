@@ -117,6 +117,11 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// screen, so both paths land in the same redesigned settings surface.
   final Future<void> Function()? onOpenModelSettings;
 
+  /// Room at the top of the message list for a bar that floats over it (the
+  /// Agents thread header on its veil). The list scrolls behind the bar; only
+  /// its first row starts below it. Zero for chuk_chat's own screen.
+  final double topInset;
+
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
     super.key,
@@ -144,6 +149,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.showToolCalls = true,
     this.autoSendVoiceTranscription = false,
     this.onOpenModelSettings,
+    this.topInset = 0,
   });
 
   @override
@@ -1810,7 +1816,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                           padding: EdgeInsets.only(
                                             left: effectiveHorizontalPadding,
                                             right: effectiveHorizontalPadding,
-                                            top: 10,
+                                            top: 10 + widget.topInset,
                                             bottom: messageListBottomPadding,
                                           ),
                                           itemCount: _messages.length,

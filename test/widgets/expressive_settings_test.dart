@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
@@ -26,6 +27,11 @@ Widget _host({required Widget child, bool reducedMotion = false}) {
 }
 
 void main() {
+  // The spring tile, the cascade and the scheme pairing are the Agents app's;
+  // chuk_chat's widgets keep their own (see the flag-off test below).
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
+
   group('ExpressiveTile', () {
     testWidgets('calls back on tap', (WidgetTester tester) async {
       var taps = 0;

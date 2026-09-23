@@ -1,8 +1,8 @@
-// Merge note: upstream's full settings list is kept — Agents had deleted most
-// of the hosted rows, and the merged app has them. Kept from Agents: its own
-// 'Agents' section (here.now, Embedding, API Keys, Automations). Agents also
-// pointed the connectors and developer rows at its own pages under
-// lib/pages/settings/; upstream's rows are kept, so those stay unrouted.
+// Two hubs, one page. With Agents off this is upstream's full settings list.
+// With Agents on it is the Agents app's own hub ([_buildAgentsHub]): its large
+// headline, its one Account row, its 'Agents' section (here.now, Embedding,
+// API Keys, Automations) and its own connectors and developer pages under
+// lib/pages/settings/.
 // lib/pages/settings_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -54,6 +54,11 @@ import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
+import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
+    as agents_settings;
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -128,6 +133,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
+    if (agentsChatCore) return _buildAgentsHub(context);
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -295,65 +301,6 @@ class _SettingsPageState extends State<SettingsPage> {
                     MaterialPageRoute(
                       builder: (_) => const GitHubConnectionPage(),
                     ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          // Agents's own destinations. They have no chuk counterpart because
-          // they are about the machine the agent runs on, not about a hosted
-          // chat account.
-          ExpressiveSectionHeader('Agents'),
-          ExpressiveGroup(
-            children: [
-              _SettingsRow(
-                icon: Icons.place_outlined,
-                title: 'here.now',
-                subtitle: 'Let a coworker publish a page on your behalf',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const HereNowSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.memory_outlined,
-                title: 'Embedding',
-                subtitle: 'The model that indexes what the agent reads',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EmbeddingSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.key_outlined,
-                title: 'API Keys',
-                subtitle: 'Keys the agent can use but never read',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SecretsSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.schedule_outlined,
-                title: 'Automations',
-                subtitle: 'Schedules and watchers your coworkers set up',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AutomationsPage()),
                   );
                 },
               ),
@@ -602,6 +549,322 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
     return null;
+  }
+
+  /// The Agents build's hub, exactly as the Agents app drew it: the large
+  /// left headline of [ExpressiveScreen], one Account row, the Agents section
+  /// right under "AI & Chat", and none of chuk_chat's hosted-account rows.
+  Widget _buildAgentsHub(BuildContext context) {
+    final l = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final cs = theme.colorScheme;
+    final m3 = theme.m3;
+    final Color scaffoldBg = theme.scaffoldBackgroundColor;
+
+    return ExpressiveScreen(
+      title: l.settings,
+      backgroundColor: scaffoldBg,
+      // Inside the home's Settings tab there is nowhere to go back to: the
+      // navigation bar is the way out.
+      showBack: Navigator.of(context).canPop(),
+      builder: (BuildContext context) => SettingsListView(
+        // [ExpressiveScreen] already grows the top padding by its bar; the
+        // floating-header inset would count the bar a second time.
+        headerInset: false,
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 8,
+          16,
+          MediaQuery.paddingOf(context).bottom + 24,
+        ),
+        children: [
+          ExpressiveSectionHeader('Account'),
+          ExpressiveGroup(
+            children: [
+              _SettingsRow(
+                icon: Icons.person_outline,
+                title: 'Account',
+                subtitle: 'Who is signed in on this device',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AccountSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          ExpressiveSectionHeader('AI & Chat'),
+          ExpressiveGroup(
+            children: [
+              KeyedSubtree(
+                key: TourKeyRegistry.instance.keyFor(
+                  TourSlots.settingsModelSelectionTile,
+                ),
+                child: _SettingsRow(
+                  icon: Icons.smart_toy_outlined,
+                  title: l.modelSelection,
+                  subtitle: l.modelSelectionSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        settings: const RouteSettings(
+                          name: 'tour:model_selector',
+                        ),
+                        builder: (_) => const ModelSelectorPage(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (kFeatureMcp && !kIsWeb)
+                _SettingsRow(
+                  icon: Icons.extension_outlined,
+                  title: l.connectors,
+                  subtitle: l.connectorsSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const agents_settings.McpConnectorsPage(),
+                      ),
+                    );
+                  },
+                ),
+              _SettingsRow(
+                icon: Icons.auto_awesome_outlined,
+                title: l.skills,
+                subtitle: l.skillsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SkillsSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          // Agents's own destinations. They have no chuk counterpart because
+          // they are about the machine the agent runs on, not about a hosted
+          // chat account.
+          ExpressiveSectionHeader('Agents'),
+          ExpressiveGroup(
+            children: [
+              _SettingsRow(
+                icon: Icons.place_outlined,
+                title: 'here.now',
+                subtitle: 'Let a coworker publish a page on your behalf',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const HereNowSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.memory_outlined,
+                title: 'Embedding',
+                subtitle: 'The model that indexes what the agent reads',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const EmbeddingSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.key_outlined,
+                title: 'API Keys',
+                subtitle: 'Keys the agent can use but never read',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const SecretsSettingsPage(),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.schedule_outlined,
+                title: 'Automations',
+                subtitle: 'Schedules and watchers your coworkers set up',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AutomationsPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          ExpressiveSectionHeader('Appearance'),
+          ExpressiveGroup(
+            children: [
+              _SettingsRow(
+                icon: Icons.palette_outlined,
+                title: l.themeSettings,
+                subtitle: l.themeSettingsSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => ThemePage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+              _SettingsRow(
+                icon: Icons.tune,
+                title: l.customization,
+                subtitle: l.customizationSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CustomizationPage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
+            ],
+          ),
+
+          ExpressiveSectionHeader('System'),
+          ExpressiveGroup(
+            children: [
+              _SettingsRow(
+                icon: Icons.info_outline,
+                title: l.about,
+                subtitle: l.aboutSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AboutPage()),
+                  );
+                },
+              ),
+            ],
+          ),
+          if (_developerOptionsEnabled) ...[
+            const SizedBox(height: 12),
+            _DevTile(
+              title: l.developerOptions,
+              subtitle: l.developerOptionsSubtitle,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const DeveloperSettingsPage(),
+                  ),
+                );
+              },
+            ),
+          ],
+
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: cs.error,
+                side: BorderSide(color: m3.outline),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+              onPressed: () async {
+                final messenger = ScaffoldMessenger.of(context);
+                final navigator = Navigator.of(context);
+                try {
+                  await const AuthService().signOut();
+                  if (!navigator.mounted) return;
+                  if (navigator.canPop()) {
+                    navigator.pop();
+                  }
+                } on AuthServiceException catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        error.message,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      duration: const Duration(seconds: 2),
+                      dismissDirection: DismissDirection.horizontal,
+                    ),
+                  );
+                } catch (error) {
+                  messenger.showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Error: $error',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      behavior: SnackBarBehavior.floating,
+                      margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      duration: const Duration(seconds: 2),
+                      dismissDirection: DismissDirection.horizontal,
+                    ),
+                  );
+                }
+              },
+              child: Text(
+                l.logout,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w500,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: Text(
+              'Chuk Chat',
+              style: TextStyle(
+                fontSize: 11,
+                color: m3.onSurfaceVariant.withValues(alpha: 0.7),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
