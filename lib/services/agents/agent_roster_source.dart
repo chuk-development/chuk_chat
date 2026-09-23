@@ -149,7 +149,18 @@ class LocalAgentRosterSource extends AgentRosterSource {
     var changed = false;
     for (final AgentsAgent agent in snapshot.agents) {
       if (_deleted.contains(agent.id)) continue;
-      if (_indexOf(agent.id, orNull: true) >= 0) continue;
+      final index = _indexOf(agent.id, orNull: true);
+      if (index >= 0) {
+        // The agent in memory wins, but it cannot know when the coworker was
+        // last active before this launch: take the stored time where it has
+        // none.
+        final merged = _withStoredActivity(_agents[index], agent);
+        if (!identical(merged, _agents[index])) {
+          _agents[index] = merged;
+          changed = true;
+        }
+        continue;
+      }
       _agents.add(agent);
       changed = true;
     }
@@ -325,7 +336,32 @@ class LocalAgentRosterSource extends AgentRosterSource {
               : thread,
       ],
     );
+    // Stored, so the next cold start shows this time and not "no activity
+    // yet". The store coalesces the writes of a burst into one.
+    _persist();
     notifyListeners();
+  }
+
+  /// [memory] with the stored [stored] activity times filled in where
+  /// [memory] has none. Returns [memory] itself when nothing was missing.
+  static AgentsAgent _withStoredActivity(AgentsAgent memory, AgentsAgent stored) {
+    final storedThreads = <String, DateTime?>{
+      for (final thread in stored.threads) thread.key: thread.lastActivity,
+    };
+    var changed = false;
+    final threads = <AgentsThreadInfo>[
+      for (final thread in memory.threads)
+        if (thread.lastActivity == null && storedThreads[thread.key] != null)
+          (() {
+            changed = true;
+            return thread.copyWith(lastActivity: storedThreads[thread.key]);
+          })()
+        else
+          thread,
+    ];
+    final agentAt = memory.lastActivity ?? stored.lastActivity;
+    if (!changed && agentAt == memory.lastActivity) return memory;
+    return memory.copyWith(lastActivity: agentAt, threads: threads);
   }
 
   @override
