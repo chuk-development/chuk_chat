@@ -328,12 +328,8 @@ class LocalAgentRosterSource extends AgentRosterSource {
       if (id == null || ignore.contains(id)) continue;
       final index = _indexOf(id, orNull: true);
       if (index >= 0) {
-        // The host listing a coworker is the proof it is installed there: an
-        // agent made in the app stops reading "not installed on the host yet"
-        // once the host has it.
-        final current = _agents[index];
-        if (current.name == entry.name && current.onHost) continue;
-        _agents[index] = current.copyWith(name: entry.name, onHost: true);
+        if (_agents[index].name == entry.name) continue;
+        _agents[index] = _agents[index].copyWith(name: entry.name);
         changed = true;
         continue;
       }
@@ -344,7 +340,6 @@ class LocalAgentRosterSource extends AgentRosterSource {
         AgentsAgent(
           id: id,
           name: entry.name,
-          onHost: true,
           threads: <AgentsThreadInfo>[
             AgentsThreadInfo(key: id, title: 'General'),
           ],
