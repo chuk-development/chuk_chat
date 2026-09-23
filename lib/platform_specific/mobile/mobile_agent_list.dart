@@ -343,7 +343,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
         widget.onRenameAgent?.call(agent);
       case 'read':
         for (final AgentsThreadInfo thread in agent.threads) {
-          await _marks.markRead(thread.key);
+          unawaited(_marks.markRead(thread.key));
         }
       case 'hide':
         widget.source.hideAgent(agent.id);
