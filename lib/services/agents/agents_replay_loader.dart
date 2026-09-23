@@ -936,7 +936,9 @@ class AgentsReplayLoader extends ChangeNotifier {
     final bytes = file.bytes;
     if (bytes == null || !file.isValid) return null;
     try {
-      final storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
+      // Local blob store, like the live ledger: a relayed host file never
+      // goes to the Supabase bucket.
+      final storagePath = await ImageStorageService.uploadLocalBlob(bytes);
       // The SAME block the live ledger builds (bead cowork-266).
       return artifactBlockFromFile(storagePath, file);
     } catch (error) {

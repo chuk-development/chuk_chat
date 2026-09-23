@@ -31,6 +31,7 @@ import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../support/fake_relay_controller.dart';
 
@@ -87,6 +88,10 @@ Widget _app(Widget child) => MaterialApp(
 );
 
 void main() {
+  // The Agents chat core (host-run tools, relay transport), selected for this
+  // flag-off test process.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
   TestWidgetsFlutterBinding.ensureInitialized();
 
   late _FakeDisk disk;

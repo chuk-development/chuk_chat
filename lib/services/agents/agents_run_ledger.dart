@@ -3,14 +3,15 @@
 ///
 /// Agents's transport speaks [AgentsRelayInbound]; chuk_chat's `MessageBubble`
 /// speaks [ToolCall] and [ContentBlock]. The adapter
-/// (`services/websocket_chat_service.dart`) turns the *text* channels into
+/// (`services/agents/agents_chat_transport.dart`) turns the *text* channels into
 /// `ChatStreamEvent`s; everything else — a tool that ran, a child agent, a file
 /// the agent handed over, an approval the user answered — has no place in that
 /// stream, because emitting it would mean emitting a `ToolCallsEvent`, and a
 /// `ToolCallsEvent` is exactly what would wake the client-side tool loop back
 /// up. So those events land here instead, keyed by session, and the fold
-/// (`services/tool_call_handler.dart`) hands the finished pile to the renderer
-/// as `ToolLoopResult.toolCalls` / `.producedBlocks` when the turn completes.
+/// (`services/agents/agents_tool_call_handler.dart`) hands the finished pile
+/// to the renderer as `ToolLoopResult.toolCalls` / `.producedBlocks` when the
+/// turn completes.
 ///
 /// The ledger is a [ChangeNotifier] so the thread view can drive "this coworker
 /// is working" off it instead of re-deriving run state from the raw stream.
@@ -833,7 +834,9 @@ class AgentsRunLedger extends ChangeNotifier {
     final run = _live(sessionKey);
     final String storagePath;
     try {
-      storagePath = await ImageStorageService.uploadEncryptedImage(bytes);
+      // Straight to the local blob store: a relayed host file never goes to
+      // the Supabase bucket, signed in or not.
+      storagePath = await ImageStorageService.uploadLocalBlob(bytes);
     } catch (error) {
       if (kDebugMode) debugPrint('[agents-ledger] blob write failed: $error');
       return null;

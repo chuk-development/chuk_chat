@@ -20,8 +20,8 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
-import 'package:chuk_chat/services/tool_call_handler.dart';
-import 'package:chuk_chat/services/websocket_chat_service.dart';
+import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
+import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 
 import '../../support/fake_relay_controller.dart';
 
@@ -169,7 +169,7 @@ void main() {
   /// the fold hands the renderer its tool calls, as `onComplete` does.
   Future<List<ToolCall>> live(List<AgentsRelayInbound> events) async {
     final seen = <ChatStreamEvent>[];
-    final sub = WebSocketChatService.sendStreamingChat(
+    final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -184,7 +184,7 @@ void main() {
     await sub.cancel();
     expect(seen.whereType<DoneEvent>(), hasLength(1));
 
-    final handler = ToolCallHandler();
+    final handler = AgentsToolCallHandler.instance;
     final session = handler.createSession(
       initialUserMessage: 'do the thing',
       history: const <Map<String, dynamic>>[],
@@ -280,7 +280,7 @@ void main() {
 
   test('the live ledger keeps the host clock for the run', () async {
     final seen = <ChatStreamEvent>[];
-    final sub = WebSocketChatService.sendStreamingChat(
+    final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
