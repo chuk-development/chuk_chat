@@ -951,7 +951,7 @@ class ToolExecutor {
             artifactId,
           );
           if (existing != null) {
-            return rewriteExisting(existing: existing);
+            return await rewriteExisting(existing: existing);
           }
 
           try {
@@ -975,7 +975,7 @@ class ToolExecutor {
               artifactId,
             );
             if (raceExisting != null) {
-              return rewriteExisting(existing: raceExisting);
+              return await rewriteExisting(existing: raceExisting);
             }
             rethrow;
           }

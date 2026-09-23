@@ -633,11 +633,11 @@ Future<String> executeNotes(Map<String, dynamic> args) async {
       case 'get':
         return await _getNote(args);
       case 'list':
-        return _listNotes();
+        return await _listNotes();
       case 'delete':
         return await _deleteNote(args);
       case 'clear':
-        return _clearNotes();
+        return await _clearNotes();
       default:
         return 'Error: Unknown action "$action". Use: update_memory, '
             'update_user, update_soul, patch_memory, patch_user, patch_soul';

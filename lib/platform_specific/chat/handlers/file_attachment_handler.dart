@@ -164,13 +164,19 @@ class FileAttachmentHandler {
     }
 
     for (final platformFile in pickedFiles) {
+      // null means the picker could not determine the length (failed read).
+      final int? fileSizeBytes = await platformFile.length();
+      if (fileSizeBytes == null) {
+        onError?.call('Could not read ${platformFile.name}');
+        continue;
+      }
       if (kIsWeb) {
         // Size first, bytes only once the file passed the checks — reading a
         // rejected 200 MB selection would take the browser heap with it.
         await _handleWebFileAttachment(
           readBytes: platformFile.readAsBytes,
           fileName: platformFile.name,
-          fileSizeBytes: await platformFile.length(),
+          fileSizeBytes: fileSizeBytes,
           supportsImages: supportsImages,
         );
       } else {
@@ -179,7 +185,7 @@ class FileAttachmentHandler {
         await _handleFileAttachment(
           file: File(path),
           fileName: platformFile.name,
-          fileSizeBytes: await platformFile.length(),
+          fileSizeBytes: fileSizeBytes,
           supportsImages: supportsImages,
         );
       }

@@ -256,7 +256,12 @@ class DesktopFileHandler {
       final String fileName = platformFile.name;
       // Ask for the size, not the content: a file rejected below must never
       // have been loaded into the browser heap first.
-      final int fileSize = await platformFile.length();
+      final int? fileSize = await platformFile.length();
+      if (fileSize == null) {
+        // The picker could not determine the length (failed read).
+        onShowSnackBar?.call('Could not read $fileName');
+        continue;
+      }
       final String fileExtension = fileName.contains('.')
           ? fileName.split('.').last.toLowerCase()
           : '';
