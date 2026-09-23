@@ -14,6 +14,7 @@ import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
@@ -118,6 +119,98 @@ class _MdSegment {
 /// Splits raw markdown into alternating plain-markdown and table segments so
 /// tables can render with the native [ChukTable] while everything else flows
 /// through `markdown_widget`. Tables inside fenced code blocks are left alone.
+/// Parse results by message text, shared by every [MarkdownMessage].
+///
+/// A bubble parses its text when its state is created. In the Agents build the
+/// chat screen, and with it every bubble, is created again on each agent
+/// switch, so the same transcript was split and parsed again every time. The
+/// split and the markdown parse depend on the text alone, so they are kept
+/// here; the widgets are still built fresh for the current theme and bubble.
+/// Insertion order makes the eviction oldest-first.
+///
+/// Only settled text is stored ([keep]): a streaming answer changes its text
+/// on every chunk, and storing each partial would push the transcript out.
+/// The texts are one account's plaintext, so the cache empties when the
+/// signed-in user changes.
+class _MdParseCache {
+  static const int _max = 400;
+  static final Map<String, List<_MdSegment>> _segments =
+      <String, List<_MdSegment>>{};
+  static final Map<String, List<m.Node>> _nodes = <String, List<m.Node>>{};
+  static String? _owner;
+
+  static void _syncOwner() {
+    final String? user = CurrentUser.id;
+    if (user == _owner) return;
+    _owner = user;
+    _segments.clear();
+    _nodes.clear();
+  }
+
+  static void _put<V>(Map<String, V> map, String key, V value) {
+    if (map.length >= _max) map.remove(map.keys.first);
+    map[key] = value;
+  }
+
+  static List<_MdSegment> segmentsFor(String text, {required bool keep}) {
+    _syncOwner();
+    final List<_MdSegment>? hit = _segments[text];
+    if (hit != null) return hit;
+    final List<_MdSegment> built = List<_MdSegment>.unmodifiable(
+      _splitMarkdownTables(text),
+    );
+    if (keep) _put(_segments, text, built);
+    return built;
+  }
+
+  /// The same parse `MarkdownGenerator.buildWidgets` runs, with the one
+  /// inline syntax [_MarkdownMessageState] adds.
+  static List<m.Node> nodesFor(String data, {required bool keep}) {
+    final List<m.Node>? hit = _nodes[data];
+    if (hit != null) return hit;
+    final m.Document document = m.Document(
+      extensionSet: m.ExtensionSet.gitHubFlavored,
+      encodeHtml: false,
+      inlineSyntaxes: <m.InlineSyntax>[LatexSyntax()],
+    );
+    final List<m.Node> parsed = List<m.Node>.unmodifiable(
+      document.parseLines(data.split(WidgetVisitor.defaultSplitRegExp)),
+    );
+    if (keep) _put(_nodes, data, parsed);
+    return parsed;
+  }
+}
+
+/// `MarkdownGenerator.buildWidgets` of markdown_widget 2.3, with the parse
+/// taken from [_MdParseCache]. The visitor only reads the nodes, so one parse
+/// serves every build of the same text.
+List<Widget> _buildMarkdownWidgets(
+  MarkdownGenerator generator,
+  String data,
+  MarkdownConfig config, {
+  required bool keepParse,
+}) {
+  final WidgetVisitor visitor = WidgetVisitor(
+    config: config,
+    generators: generator.generators,
+    textGenerator: generator.textGenerator,
+    richTextBuilder: generator.richTextBuilder,
+    splitRegExp: WidgetVisitor.defaultSplitRegExp,
+  );
+  final List<SpanNode> spans = visitor.visit(
+    _MdParseCache.nodesFor(data, keep: keepParse),
+  );
+  return <Widget>[
+    for (final SpanNode span in spans)
+      Padding(
+        padding: generator.linesMargin,
+        child:
+            generator.richTextBuilder?.call(span.build()) ??
+            Text.rich(span.build()),
+      ),
+  ];
+}
+
 List<_MdSegment> _splitMarkdownTables(String text) {
   final List<String> lines = text.split('\n');
   final List<_MdSegment> segments = <_MdSegment>[];
@@ -220,7 +313,9 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         widget.backgroundColor != oldWidget.backgroundColor ||
         widget.paragraphFontSize != oldWidget.paragraphFontSize ||
         widget.fontFamily != oldWidget.fontFamily) {
-      _rebuildCache();
+      // A text that changes under a live bubble is a stream in progress: parse
+      // it, but do not keep the partial in the shared parse cache.
+      _rebuildCache(keepParse: widget.text == oldWidget.text);
     }
   }
 
@@ -347,7 +442,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     return SelectionArea(child: body);
   }
 
-  void _rebuildCache() {
+  void _rebuildCache({bool keepParse = true}) {
     final ThemeData theme = Theme.of(context);
     final Color codeBackground = _codeBackground();
     final Map<String, TextStyle> syntaxTheme = _getSyntaxTheme(context);
@@ -667,7 +762,10 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         TextStyle(color: widget.textColor, height: 1.45, fontSize: 14);
 
     final List<Widget> builtWidgets = <Widget>[];
-    for (final _MdSegment segment in _splitMarkdownTables(widget.text)) {
+    for (final _MdSegment segment in _MdParseCache.segmentsFor(
+      widget.text,
+      keep: keepParse,
+    )) {
       if (segment.isTable && segment.table != null) {
         builtWidgets.add(
           ChukTable(
@@ -685,9 +783,11 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       if (segment.text.trim().isEmpty) continue;
       try {
         builtWidgets.addAll(
-          generator.buildWidgets(
+          _buildMarkdownWidgets(
+            generator,
             linkifyPhoneNumbers(segment.text),
-            config: config,
+            config,
+            keepParse: keepParse,
           ),
         );
       } catch (error, stackTrace) {
@@ -1044,6 +1144,66 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   Timer? _debounceTimer;
   String? _displayedCode;
 
+  /// Highlight results by language and code, shared by every code block.
+  ///
+  /// Highlighting runs in a fresh isolate. A code block that is built again
+  /// (the chat screen mounts again on every agent switch in the Agents build,
+  /// and a scrolled-away bubble is rebuilt when it comes back) used to spawn
+  /// that isolate again for the same code. The result depends only on the
+  /// code and the language, so it is kept; the spans are still made from it
+  /// with the current theme. Insertion order makes the eviction oldest-first.
+  ///
+  /// As with [_MdParseCache], only a block that is not changing under a
+  /// stream is stored ([_keepHighlight]), and the cache empties when the
+  /// signed-in user changes.
+  static final Map<String, List<hi.Node>> _parsedNodes =
+      <String, List<hi.Node>>{};
+  static const int _parsedNodesMax = 300;
+  static String? _parsedNodesOwner;
+
+  static void _syncParsedOwner() {
+    final String? user = CurrentUser.id;
+    if (user == _parsedNodesOwner) return;
+    _parsedNodesOwner = user;
+    _parsedNodes.clear();
+  }
+
+  /// False once the code changed under this block (a stream in progress).
+  bool _keepHighlight = true;
+
+  static String _parsedKey(String code, String? language) =>
+      '${(language ?? '').trim().toLowerCase()}\u0000$code';
+
+  /// Applies a kept result for the current code, if there is one. Returns
+  /// whether it did.
+  bool _applyParsedFromCache({required bool rebuild}) {
+    _syncParsedOwner();
+    final String code = _codeForDisplay();
+    final List<hi.Node>? nodes = _parsedNodes[_parsedKey(code, widget.language)];
+    if (nodes == null) return false;
+    final List<InlineSpan> spans = _convertNodesSafely(
+      nodes,
+      widget.theme,
+      widget.textStyle,
+    );
+    if (spans.isEmpty) return false;
+    if (rebuild) {
+      setState(() => _highlightedSpans = spans);
+    } else {
+      _highlightedSpans = spans;
+    }
+    return true;
+  }
+
+  static void _keepParsed(String code, String? language, List<hi.Node> nodes) {
+    if (nodes.isEmpty) return;
+    _syncParsedOwner();
+    if (_parsedNodes.length >= _parsedNodesMax) {
+      _parsedNodes.remove(_parsedNodes.keys.first);
+    }
+    _parsedNodes[_parsedKey(code, language)] = nodes;
+  }
+
   /// Returns a pretty-printed version of [code] if the language is `json`
   /// (or auto-detected as JSON from the content) and the current
   /// formatting is a single long line. Otherwise returns [code] verbatim.
@@ -1084,6 +1244,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
   @override
   void initState() {
     super.initState();
+    if (_applyParsedFromCache(rebuild: false)) return;
     _scheduleHighlight();
   }
 
@@ -1094,6 +1255,9 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
         widget.language != oldWidget.language ||
         widget.theme != oldWidget.theme) {
       _displayedCode = null;
+      _debounceTimer?.cancel();
+      if (widget.code != oldWidget.code) _keepHighlight = false;
+      if (_applyParsedFromCache(rebuild: false)) return;
       _scheduleHighlight();
     }
   }
@@ -1165,6 +1329,7 @@ class _AsyncCodeBlockState extends State<_AsyncCodeBlock> {
             },
           );
 
+      if (_keepHighlight) _keepParsed(code, language, nodes);
       if (!mounted) return;
 
       // Convert nodes to TextSpans on the main thread (fast)

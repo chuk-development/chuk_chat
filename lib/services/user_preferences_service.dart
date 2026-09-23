@@ -8,6 +8,7 @@ import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/current_user.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
@@ -21,6 +22,10 @@ class UserPreferencesService {
   static DateTime? _selectedModelFetchedAt;
   static Future<String?>? _selectedModelInFlight;
   static const Duration _kSelectedModelTtl = Duration(minutes: 1);
+
+  /// The model id this process last wrote to `user_preferences` for the
+  /// cache owner. See [saveSelectedModel].
+  static String? _lastSavedModelId;
 
   /// The user every static cache in this class currently belongs to.
   ///
@@ -47,13 +52,21 @@ class UserPreferencesService {
     _cachedSelectedModel = null;
     _selectedModelFetchedAt = null;
     _selectedModelInFlight = null;
+    _lastSavedModelId = null;
     // Back to "not loaded" — never `''`, which means "loaded, no prompt set".
     _systemPromptMemCache = null;
   }
 
   /// Save the user's selected model to Supabase
+  ///
+  /// In the Agents build the chat screen mounts again on every agent switch,
+  /// and each mount restores the chat mode, which saves its model. The same id
+  /// went to Supabase on every switch, and each upsert came back as a realtime
+  /// event that reloaded the provider. So in that build a save of the id this
+  /// process already wrote is skipped: only a real change goes out.
   static Future<bool> saveSelectedModel(String modelId) async {
     _syncCacheToCurrentUser(CurrentUser.id);
+    if (agentsChatCore && modelId == _lastSavedModelId) return true;
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -83,6 +96,7 @@ class UserPreferencesService {
         // round-trip their choice must not populate the new user's cache or be
         // announced to the new user's UI on the event bus.
         if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return true;
+        _lastSavedModelId = modelId;
         // Update in-memory cache immediately
         _cachedSelectedModel = modelId;
         _selectedModelFetchedAt = DateTime.now();
@@ -213,12 +227,14 @@ class UserPreferencesService {
         // Never hand another user's model to whoever is signed in now, and
         // never write it into their cache.
         if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
+        noteRemoteSelectedModel(modelId);
         _cachedSelectedModel = modelId;
         _selectedModelFetchedAt = DateTime.now();
         return modelId;
       } else {
         await ModelCacheService.saveSelectedModel(userId, '');
         if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return null;
+        noteRemoteSelectedModel(null);
         _cachedSelectedModel = null;
         _selectedModelFetchedAt = DateTime.now();
         if (kDebugMode) {
@@ -260,6 +276,7 @@ class UserPreferencesService {
           // A background sync must never resurrect the previous user's model
           // after a sign-out, nor announce it on the event bus.
           if (!CurrentUser.stillOwns(userId, _cacheOwnerUserId)) return;
+          noteRemoteSelectedModel(modelId);
           _cachedSelectedModel = modelId;
           _selectedModelFetchedAt = DateTime.now();
           // Notify via event bus
@@ -276,6 +293,7 @@ class UserPreferencesService {
   /// Clear the user's model preference
   static Future<bool> clearSelectedModel() async {
     _syncCacheToCurrentUser(CurrentUser.id);
+    _lastSavedModelId = null;
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -584,6 +602,15 @@ class UserPreferencesService {
     _providerPrefsFetchedAt = null;
   }
 
+  /// The server holds [modelId] now (a read, or a realtime event). When that
+  /// is not what this process last wrote, another device changed it, so the
+  /// next save must go out even if it repeats the id written before — see
+  /// [saveSelectedModel]. The echo of this process's own write names the same
+  /// id and changes nothing.
+  static void noteRemoteSelectedModel(String? modelId) {
+    if (modelId != _lastSavedModelId) _lastSavedModelId = null;
+  }
+
   /// Drop the in-memory selected-model cache so the next [loadSelectedModel]
   /// hits Supabase. Called by realtime listeners when another device updates
   /// `user_preferences.selected_model_id`.
@@ -756,6 +783,23 @@ class UserPreferencesService {
       }
       return false;
     }
+  }
+
+  /// The system prompt for a chat screen that has just mounted.
+  ///
+  /// chuk_chat mounts its chat screen once and keeps it, so the fresh read of
+  /// [loadSystemPrompt] (a Supabase select and a decrypt) happened once per
+  /// session. The Agents build mounts the screen again on every agent switch;
+  /// there the prompt this process already decrypted is reused, and only the
+  /// first mount goes to the network. [saveSystemPrompt], [clearSystemPrompt]
+  /// and a change of user all replace or drop that copy.
+  static Future<String?> loadSystemPromptForMount() async {
+    if (agentsChatCore) {
+      _syncCacheToCurrentUser(CurrentUser.id);
+      final cached = _systemPromptMemCache;
+      if (cached != null) return cached.isEmpty ? null : cached;
+    }
+    return loadSystemPrompt();
   }
 
   /// Load the user's system prompt (decrypted)

@@ -102,6 +102,10 @@ class UserModelPrefsRealtimeService {
     }
     UserPreferencesService.invalidateSelectedModelCache();
     final newRow = payload.newRecord;
+    final dynamic remoteId = newRow['selected_model_id'];
+    UserPreferencesService.noteRemoteSelectedModel(
+      remoteId is String && remoteId.isNotEmpty ? remoteId : null,
+    );
     if (newRow.isNotEmpty) {
       final dynamic modelId = newRow['selected_model_id'];
       if (modelId is String && modelId.isNotEmpty) {

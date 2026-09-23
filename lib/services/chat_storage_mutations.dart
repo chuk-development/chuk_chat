@@ -263,6 +263,11 @@ class ChatStorageMutations {
 /// SharedPreferences; that bloated the prefs file the legacy plugin re-parses
 /// on every getInstance() (startup path) and rewrites whole on every write.
 /// It now lives in the SQLite kv_cache under [chatTitlesCacheKey].
+/// From this many titles on, [saveTitlesToCache] encodes in an isolate.
+const int _kTitlesEncodeInBackgroundAt = 200;
+
+String _encodeTitles(List<Map<String, Object>> data) => jsonEncode(data);
+
 Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
   final cacheKey = chatTitlesCacheKey(userId);
 
@@ -279,7 +284,12 @@ Future<void> saveTitlesToCache(String userId, List<StoredChat> chats) async {
       )
       .toList();
 
-  await LocalChatCacheService.kvSet(cacheKey, jsonEncode(data));
+  // A few hundred titles make a string of 100 KB and more; encode a list
+  // that long off the UI isolate so a sync tick does not drop frames.
+  final String encoded = data.length >= _kTitlesEncodeInBackgroundAt
+      ? await compute(_encodeTitles, data)
+      : jsonEncode(data);
+  await LocalChatCacheService.kvSet(cacheKey, encoded);
   final withTimestamp = chats.where((c) => c.updatedAt != null).length;
   if (kDebugMode) {
     debugPrint(
