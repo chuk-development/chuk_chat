@@ -25,7 +25,6 @@ import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
     show kBubbleGroupPause;
-import 'package:chuk_chat/ui/expressive/day_divider.dart' show sameCalendarDay;
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -1353,16 +1352,47 @@ class ChatUiHelpers {
 /// The clock of a row: what the day divider and the bubble stamp show. A row
 /// carries `sentAt` when the client wrote it and `startedAt` when the turn
 /// began; a replayed row can carry neither.
+///
+/// Memoized per stamp: every row build asks for its own time and its
+/// neighbours' (day divider, run start, run end), and each answer is a parse
+/// plus a local-time conversion — which on Linux is a time-zone lookup in
+/// libc. A [DateTime] is immutable, so the same string always gives the same
+/// answer.
 DateTime? messageRowTime(Map<String, String> raw) =>
-    DateTime.tryParse(raw['sentAt'] ?? raw['startedAt'] ?? '');
+    _rowTimeFor(raw['sentAt'] ?? raw['startedAt'] ?? '');
+
+const int _kRowTimeCacheCap = 4096;
+final Map<String, DateTime?> _rowTimeCache = <String, DateTime?>{};
+final Map<String, int> _rowLocalDayCache = <String, int>{};
+
+DateTime? _rowTimeFor(String stamp) {
+  if (stamp.isEmpty) return null;
+  if (_rowTimeCache.containsKey(stamp)) return _rowTimeCache[stamp];
+  if (_rowTimeCache.length >= _kRowTimeCacheCap) _rowTimeCache.clear();
+  return _rowTimeCache[stamp] = DateTime.tryParse(stamp);
+}
+
+/// The local calendar day of a row's stamp as `yyyymmdd`, or null when the
+/// row is undated. Memoized like [messageRowTime].
+int? _rowLocalDay(Map<String, String> raw) {
+  final String stamp = raw['sentAt'] ?? raw['startedAt'] ?? '';
+  final int? cached = _rowLocalDayCache[stamp];
+  if (cached != null) return cached;
+  final DateTime? time = _rowTimeFor(stamp);
+  if (time == null) return null;
+  final DateTime local = time.toLocal();
+  if (_rowLocalDayCache.length >= _kRowTimeCacheCap) _rowLocalDayCache.clear();
+  return _rowLocalDayCache[stamp] =
+      local.year * 10000 + local.month * 100 + local.day;
+}
 
 /// Whether a day divider is drawn above [row]. An undated row gets none — an
 /// undated message is no evidence of a day.
 bool messageOpensDay(Map<String, String>? previous, Map<String, String> row) {
-  final DateTime? day = messageRowTime(row);
+  final int? day = _rowLocalDay(row);
   if (day == null) return false;
-  final DateTime? before = previous == null ? null : messageRowTime(previous);
-  return before == null || !sameCalendarDay(before.toLocal(), day.toLocal());
+  final int? before = previous == null ? null : _rowLocalDay(previous);
+  return before == null || before != day;
 }
 
 /// Whether the row at [index] opens a new run: it is the first row, the sender

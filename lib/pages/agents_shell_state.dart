@@ -135,6 +135,12 @@ mixin AgentsShellHost on State<MessengerShell> {
   static const String _kLastAgentKey = 'cowork.last_agent_id';
   static const String _kLastThreadKey = 'cowork.last_thread_key';
 
+  /// Both halves of the pick in ONE key, `[agentId, threadKey]` as JSON: on
+  /// desktop Linux every preference write rewrites the whole preferences file,
+  /// so a switch costs one write instead of two. The two keys above are still
+  /// read when this one is absent (installs from before it).
+  static const String _kLastPickKey = 'cowork.last_pick_v2';
+
   String? _restoredAgentId;
   String? _restoredThreadKey;
 
@@ -264,8 +270,11 @@ mixin AgentsShellHost on State<MessengerShell> {
     String? threadKey;
     try {
       final prefs = await SharedPreferences.getInstance();
-      agentId = prefs.getString(_kLastAgentKey);
-      threadKey = prefs.getString(_kLastThreadKey);
+      final (String, String)? pick = _decodePick(
+        prefs.getString(_kLastPickKey),
+      );
+      agentId = pick?.$1 ?? prefs.getString(_kLastAgentKey);
+      threadKey = pick?.$2 ?? prefs.getString(_kLastThreadKey);
     } catch (_) {
       // No preferences (a test, a locked store): fall back to the first
       // coworker, which is still better than an empty chat.
@@ -308,15 +317,29 @@ mixin AgentsShellHost on State<MessengerShell> {
     final (agentId, threadKey) = pick;
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getString(_kLastAgentKey) != agentId) {
-        await prefs.setString(_kLastAgentKey, agentId);
-      }
-      if (prefs.getString(_kLastThreadKey) != threadKey) {
-        await prefs.setString(_kLastThreadKey, threadKey);
+      final String encoded = jsonEncode(<String>[agentId, threadKey]);
+      if (prefs.getString(_kLastPickKey) != encoded) {
+        await prefs.setString(_kLastPickKey, encoded);
       }
     } catch (_) {
       // Losing the pointer costs the next launch its position, nothing more.
     }
+  }
+
+  static (String, String)? _decodePick(String? raw) {
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      final Object? decoded = jsonDecode(raw);
+      if (decoded is List &&
+          decoded.length == 2 &&
+          decoded[0] is String &&
+          decoded[1] is String) {
+        return (decoded[0] as String, decoded[1] as String);
+      }
+    } catch (_) {
+      // A damaged value falls back to the two old keys.
+    }
+    return null;
   }
 
   void _onRosterChanged() {
