@@ -1,10 +1,8 @@
-// Merge note: upstream's destination list is kept whole — Agents had deleted
-// pricing, identity, tool calling, sandboxes, export chats and replay
-// onboarding because its product has none of them, and the merged app does.
-// Kept from Agents: its own 'Agents' group, and the minimum tap target on the
-// nav rows. Agents also pointed the connectors and developer rows at its own
-// pages under lib/pages/settings/; upstream's rows are kept, so those two
-// Agents pages are reachable only once someone routes them.
+// Two destination lists. With Agents off, upstream's list whole. With Agents
+// on, the Agents app's own list ([_agentsGroups]): its 'Agents' group, its
+// connectors and developer pages under lib/pages/settings/, and none of the
+// hosted-account rows. Kept from Agents on both: the minimum tap target on
+// the nav rows.
 // lib/pages/desktop_settings_modal.dart
 //
 // Desktop settings as a modal popup over the chat UI — a proper desktop
@@ -63,6 +61,10 @@ import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
+import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
+import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
+    as agents_settings;
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 /// Opens the desktop settings modal over the current chat UI.
 Future<void> showDesktopSettingsModal(
@@ -185,7 +187,138 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     );
   }
 
+  /// The Agents build's destinations, as the Agents app listed them: no
+  /// hosted-account rows (pricing, identity, tool calling, GitHub, export,
+  /// onboarding replay), and its own connectors and developer pages.
+  List<_SettingsGroup> _agentsGroups(AppLocalizations l) {
+    return [
+      _SettingsGroup('Account', [
+        _SettingsDest(
+          id: 'account',
+          icon: Icons.person_outline,
+          label: l.accountSettings,
+          keywords:
+              'account profile email sign out log out logout '
+              'konto profil abmelden',
+          builder: (_) => const AccountSettingsPage(),
+        ),
+      ]),
+      _SettingsGroup('AI & Chat', [
+        _SettingsDest(
+          id: 'model',
+          icon: Icons.smart_toy_outlined,
+          label: l.modelSelection,
+          keywords:
+              'model models ai llm gpt deepseek glm provider selection '
+              'default fast thinking reasoning modell auswahl',
+          builder: (_) => const ModelSelectorPage(),
+        ),
+        if (kFeatureMcp && !kIsWeb)
+          _SettingsDest(
+            id: 'connectors',
+            icon: Icons.extension_outlined,
+            label: l.connectors,
+            keywords:
+                'connectors mcp integrations github slack gmail calendar '
+                'notion email nextcloud oauth verbindungen integration',
+            builder: (_) => const agents_settings.McpConnectorsPage(),
+          ),
+        _SettingsDest(
+          id: 'skills',
+          icon: Icons.auto_awesome_outlined,
+          label: l.skills,
+          keywords: 'skills agent skills procedures abilities fähigkeiten',
+          builder: (_) => const SkillsSettingsPage(),
+        ),
+      ]),
+      // Agents's own destinations: about the machine the agent runs on, which
+      // is what chuk_chat has no equivalent for.
+      _SettingsGroup('Agents', [
+        _SettingsDest(
+          id: 'herenow',
+          icon: Icons.place_outlined,
+          label: 'here.now',
+          keywords:
+              'herenow here now publish page site approval '
+              'veröffentlichen seite freigabe',
+          builder: (_) => const HereNowSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'embedding',
+          icon: Icons.memory_outlined,
+          label: 'Embedding',
+          keywords:
+              'embedding index vector memory model einbettung index '
+              'gedächtnis',
+          builder: (_) => const EmbeddingSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'apikeys',
+          icon: Icons.key_outlined,
+          label: 'API Keys',
+          keywords:
+              'api keys key secret secrets token password credentials '
+              'env environment schlüssel geheimnis zugangsdaten',
+          builder: (_) => const SecretsSettingsPage(),
+        ),
+        _SettingsDest(
+          id: 'automations',
+          icon: Icons.schedule_outlined,
+          label: 'Automations',
+          keywords:
+              'automations automation schedule cron watcher watch monitor '
+              'poll trigger remind zeitplan überwachen automatisierung',
+          builder: (_) => const AutomationsPage(),
+        ),
+      ]),
+      _SettingsGroup('Appearance', [
+        _SettingsDest(
+          id: 'theme',
+          icon: Icons.palette_outlined,
+          label: l.themeSettings,
+          keywords:
+              'theme color colour colors farbe farben accent background '
+              'dark mode light mode contrast palette dynamic color preset '
+              'interface font chat font typeface appearance look design hell '
+              'dunkel kontrast schrift schriftart aussehen',
+          builder: (_) => ThemePage(config: widget.config),
+        ),
+        _SettingsDest(
+          id: 'customization',
+          icon: Icons.tune,
+          label: l.customization,
+          keywords:
+              'customization language sprache font size ui scale zoom '
+              'reasoning tokens model info tps images in context typography '
+              'verbose full log detail anpassung schriftgröße skalierung',
+          builder: (_) => CustomizationPage(config: widget.config),
+        ),
+      ]),
+      _SettingsGroup('System', [
+        _SettingsDest(
+          id: 'about',
+          icon: Icons.info_outline,
+          label: l.about,
+          keywords: 'about version license credits info legal über lizenz',
+          builder: (_) => const AboutPage(),
+        ),
+        if (_developerOptions)
+          _SettingsDest(
+            id: 'developer',
+            icon: Icons.code,
+            label: l.developerOptions,
+            keywords:
+                'developer debug diagnostics logs advanced experimental '
+                'entwickler fehlersuche',
+            builder: (_) => const DeveloperSettingsPage(),
+            tone: Theme.of(context).colorScheme.tertiary,
+          ),
+      ]),
+    ];
+  }
+
   List<_SettingsGroup> _groups(AppLocalizations l) {
+    if (agentsChatCore) return _agentsGroups(l);
     return [
       _SettingsGroup('Account', [
         _SettingsDest(
@@ -254,46 +387,6 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             keywords: 'github git repository connector token',
             builder: (_) => const GitHubConnectionPage(),
           ),
-      ]),
-      // Agents's own destinations: about the machine the agent runs on, which
-      // is what chuk_chat has no equivalent for.
-      _SettingsGroup('Agents', [
-        _SettingsDest(
-          id: 'herenow',
-          icon: Icons.place_outlined,
-          label: 'here.now',
-          keywords:
-              'herenow here now publish page site approval '
-              'veröffentlichen seite freigabe',
-          builder: (_) => const HereNowSettingsPage(),
-        ),
-        _SettingsDest(
-          id: 'embedding',
-          icon: Icons.memory_outlined,
-          label: 'Embedding',
-          keywords:
-              'embedding index vector memory model einbettung index '
-              'gedächtnis',
-          builder: (_) => const EmbeddingSettingsPage(),
-        ),
-        _SettingsDest(
-          id: 'apikeys',
-          icon: Icons.key_outlined,
-          label: 'API Keys',
-          keywords:
-              'api keys key secret secrets token password credentials '
-              'env environment schlüssel geheimnis zugangsdaten',
-          builder: (_) => const SecretsSettingsPage(),
-        ),
-        _SettingsDest(
-          id: 'automations',
-          icon: Icons.schedule_outlined,
-          label: 'Automations',
-          keywords:
-              'automations automation schedule cron watcher watch monitor '
-              'poll trigger remind zeitplan überwachen automatisierung',
-          builder: (_) => const AutomationsPage(),
-        ),
       ]),
       _SettingsGroup('Appearance', [
         _SettingsDest(

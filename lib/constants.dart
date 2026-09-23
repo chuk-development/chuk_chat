@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 /* ---------- DEFAULT COLOURS (Material You dark palette) ---------- */
 const Color kDefaultBgColor = Color(0xFF111318);
@@ -101,11 +102,13 @@ double contrastFactor(double contrast) {
    surfaces. Anything a pointer can hover, focus or press must round its
    ink to one of these — a square highlight inside a rounded card is the
    single most visible inconsistency in the app. */
-const double kRadiusCard = 28.0;
-const double kRadiusField = 20.0;
-const double kRadiusMenu = 20.0;
-const double kRadiusRow = 20.0;
-const double kRadiusDialog = 32.0;
+// The Agents build carries the Agents app's rounder scale; chuk_chat keeps
+// its own. Getters, not consts, so [agentsChatCore] picks the side.
+double get kRadiusCard => agentsChatCore ? 28.0 : 20.0;
+double get kRadiusField => agentsChatCore ? 20.0 : 16.0;
+double get kRadiusMenu => agentsChatCore ? 20.0 : 16.0;
+double get kRadiusRow => agentsChatCore ? 20.0 : 14.0;
+double get kRadiusDialog => agentsChatCore ? 32.0 : 28.0;
 
 /// Stadium radius for every button. Buttons are pills app-wide.
 const double kRadiusPill = 999.0;
@@ -123,10 +126,10 @@ const TextStyle _kButtonTextStyle = TextStyle(
   letterSpacing: 0.1,
 );
 
-final BorderRadius kBorderRadiusCard = BorderRadius.circular(kRadiusCard);
-final BorderRadius kBorderRadiusField = BorderRadius.circular(kRadiusField);
-final BorderRadius kBorderRadiusMenu = BorderRadius.circular(kRadiusMenu);
-final BorderRadius kBorderRadiusRow = BorderRadius.circular(kRadiusRow);
+BorderRadius get kBorderRadiusCard => BorderRadius.circular(kRadiusCard);
+BorderRadius get kBorderRadiusField => BorderRadius.circular(kRadiusField);
+BorderRadius get kBorderRadiusMenu => BorderRadius.circular(kRadiusMenu);
+BorderRadius get kBorderRadiusRow => BorderRadius.circular(kRadiusRow);
 final BorderRadius kBorderRadiusPill = BorderRadius.circular(kRadiusPill);
 
 /* ---------- THEME BUILDER ---------- */
@@ -139,6 +142,10 @@ ThemeData buildAppTheme({
   String? uiFont,
 }) {
   final bool isDark = brightness == Brightness.dark;
+  // The Agents build reproduces the Agents app's theme exactly: its navy /
+  // white on-accent colour, the Material default SnackBar and the expressive
+  // type and FAB layer. chuk_chat keeps its own values below.
+  final bool agents = agentsChatCore;
 
   // Contrast scales the surface-ladder deltas and the outline alphas. At the
   // default midpoint the factor is exactly 1.0, so every value below matches
@@ -206,7 +213,9 @@ ThemeData buildAppTheme({
     // fill is a colour that appears nowhere else in the app. The old value
     // was a hardcoded navy, which on the default orange read as text from a
     // different program.
-    onPrimary: iconFg,
+    onPrimary: agents
+        ? (isDark ? const Color(0xFF062E6F) : const Color(0xFFFFFFFF))
+        : iconFg,
     primaryContainer: primaryContainer,
     onPrimaryContainer: onPrimaryContainer,
     secondary: iconFg,
@@ -296,23 +305,27 @@ ThemeData buildAppTheme({
     // looking like the default again. So the shape lives here: a floating
     // pill in the same fill and radius as the rest of the floating chrome,
     // clear of the bottom edge, and swipeable away in either direction.
-    snackBarTheme: SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: surface,
-      contentTextStyle: TextStyle(
-        color: iconFg,
-        fontSize: 14,
-        fontWeight: FontWeight.w500,
-      ),
-      actionTextColor: accent,
-      // No shadow: the fill is a step off the page, which is what separates
-      // it. A shadow on a borderless pill only draws a dark halo.
-      elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-      insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-      dismissDirection: DismissDirection.horizontal,
-      closeIconColor: iconFg,
-    ),
+    snackBarTheme: agents
+        ? null
+        : SnackBarThemeData(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: surface,
+            contentTextStyle: TextStyle(
+              color: iconFg,
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
+            ),
+            actionTextColor: accent,
+            // No shadow: the fill is a step off the page, which is what separates
+            // it. A shadow on a borderless pill only draws a dark halo.
+            elevation: 0,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(26),
+            ),
+            insetPadding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+            dismissDirection: DismissDirection.horizontal,
+            closeIconColor: iconFg,
+          ),
     // Ink is rounded everywhere. A ListTile without a shape paints its
     // hover/press fill as a full-bleed rectangle, which is what makes a
     // rounded settings card turn square the moment you touch it.
@@ -346,13 +359,15 @@ ThemeData buildAppTheme({
     // Every floating action button carries the accent fill, with the glyph
     // colour picked for contrast. The Material default is a muted container
     // that reads as a disabled button next to the app's other actions.
-    floatingActionButtonTheme: FloatingActionButtonThemeData(
-      backgroundColor: accent,
-      foregroundColor:
-          ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
-          ? const Color(0xFFFFFFFF)
-          : const Color(0xFF000000),
-    ),
+    floatingActionButtonTheme: agents
+        ? null
+        : FloatingActionButtonThemeData(
+            backgroundColor: accent,
+            foregroundColor:
+                ThemeData.estimateBrightnessForColor(accent) == Brightness.dark
+                ? const Color(0xFFFFFFFF)
+                : const Color(0xFF000000),
+          ),
     cardTheme: CardThemeData(
       color: surface,
       elevation: 0,
@@ -493,7 +508,7 @@ ThemeData buildAppTheme({
     bottomSheetTheme: BottomSheetThemeData(
       backgroundColor: surfaceLow,
       elevation: 0,
-      shape: const RoundedRectangleBorder(
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(kRadiusDialog),
         ),
@@ -549,6 +564,8 @@ ThemeData buildAppTheme({
   // The expressive layer on top: heavier weights and tighter tracking on the
   // large sizes, and the expressive FAB corner. Colours, surfaces and every
   // component shape above are unchanged — this is emphasis, not a repaint.
+  // Agents only: chuk_chat's theme ends at [base].
+  if (!agents) return base;
   return base.copyWith(
     textTheme: _emphasizedTextTheme(base.textTheme),
     floatingActionButtonTheme: FloatingActionButtonThemeData(
