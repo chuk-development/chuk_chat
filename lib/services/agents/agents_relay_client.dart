@@ -43,6 +43,10 @@ import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
+    show AgentsCloudRelayAddress;
+import 'package:chuk_chat/services/agents/agents_heal_channel.dart';
+import 'package:chuk_chat/services/agents/agents_host_session.dart';
 import 'package:chuk_chat/services/executor_provisioning.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
@@ -1489,6 +1493,7 @@ class AgentsRelayClient
     Stream<AuthState>? authChanges,
     Future<AccountSession?> Function(String refreshToken)? sessionAdopter,
     SessionRefreshScheduler? scheduler,
+    AgentsHostSessionMinter? hostSessionMinter,
   }) : _deviceId = deviceId,
        _signingKeyPair = signingKeyPair,
        _connector = connector,
@@ -1503,6 +1508,7 @@ class AgentsRelayClient
        _sessionSource = sessionSource,
        _authChanges = authChanges,
        _sessionAdopter = sessionAdopter,
+       _hostSessionMinter = hostSessionMinter,
        _scheduler = scheduler ?? SessionRefreshScheduler.instance;
 
   final String _deviceId;
@@ -1635,6 +1641,21 @@ class AgentsRelayClient
   /// The access token the host was last given, so an unchanged token is not
   /// re-sent and an older one never overwrites a newer one.
   String? _provisionedAccessToken;
+
+  /// Mints a session of the host's own (`POST /v2/agents/host-session`) when
+  /// the host asks with `host_session_request`. Null falls back to the real
+  /// API when Supabase is initialised. Injectable so a test needs no network.
+  final AgentsHostSessionMinter? _hostSessionMinter;
+
+  /// The mint in flight, so two requests in a row cost one API call.
+  Future<void>? _hostSessionInFlight;
+
+  /// When a host session was last handed over. The host asks at most every
+  /// 30 s; this keeps a burst of asks (a reconnect storm) from minting more.
+  DateTime? _hostSessionSentAt;
+
+  /// The shortest gap between two mints for this client.
+  static const Duration _hostSessionMinInterval = Duration(seconds: 20);
 
   /// The app's token-refresh scheduler (bead cowork-2n1). This client tells it
   /// whether the host is attached and lends it [_reattachForScheduler], so a
@@ -1902,7 +1923,7 @@ class AgentsRelayClient
 
     final RelaySocket socket;
     try {
-      socket = await _connector(hostUrl);
+      socket = await _connector(await _reconnectDialUrl(hostUrl, pairing));
     } catch (e) {
       _fail('Could not reach host: $e');
       rethrow;
@@ -2127,6 +2148,97 @@ class AgentsRelayClient
     if (adopted.accessToken.isEmpty || adopted.userId.isEmpty) return;
     _provisionedAccessToken = null; // the ack must go out even if unchanged
     await _reprovision(adopted);
+  }
+
+  /// The host asked for an account session of its own
+  /// (`host_session_request`). Mint one through the API with this app's own
+  /// session and hand it over. Best-effort: on failure the host keeps what it
+  /// has and asks again later, so there is nothing to show the user.
+  Future<void> _answerHostSessionRequest() {
+    final inFlight = _hostSessionInFlight;
+    if (inFlight != null) return inFlight;
+    final sentAt = _hostSessionSentAt;
+    if (sentAt != null &&
+        DateTime.now().difference(sentAt) < _hostSessionMinInterval) {
+      return Future<void>.value();
+    }
+    final future = _mintAndSendHostSession().whenComplete(() {
+      _hostSessionInFlight = null;
+    });
+    _hostSessionInFlight = future;
+    return future;
+  }
+
+  Future<void> _mintAndSendHostSession() async {
+    if (_disposed || !_state.value.isPaired) return;
+    final peerDeviceId = _peerDeviceId;
+    final source = _effectiveSessionSource;
+    final minter = _effectiveHostSessionMinter;
+    if (peerDeviceId == null || source == null || minter == null) return;
+    AccountSession? session;
+    try {
+      // Refreshes only when the access token is about to lapse.
+      session = await source.refresh();
+    } catch (_) {
+      session = null;
+    }
+    session ??= source.current();
+    if (session == null || session.accessToken.isEmpty) return;
+    AgentsHostSession? grant;
+    try {
+      grant = await minter(session);
+    } catch (_) {
+      grant = null;
+    }
+    if (grant == null || _disposed || !_state.value.isPaired) {
+      if (kDebugMode) debugPrint('[agents-relay] host session not minted');
+      return;
+    }
+    try {
+      await ExecutorProvisioning(this).provisionHostSession(
+        ExecutorHandle(deviceId: peerDeviceId, label: 'host'),
+        grant,
+      );
+      _hostSessionSentAt = DateTime.now();
+      if (kDebugMode) debugPrint('[agents-relay] host session handed over');
+    } catch (_) {
+      // The socket went away; the host asks again on the next connect.
+    }
+  }
+
+  AgentsHostSessionMinter? get _effectiveHostSessionMinter {
+    final minter = _hostSessionMinter;
+    if (minter != null) return minter;
+    return SupabaseService.isInitialized ? mintAgentsHostSession : null;
+  }
+
+  /// The URL a reconnect dials. For the cloud relay it carries the heal
+  /// channel of this pairing, so the socket can claim a host that is parked
+  /// because its account session died (agents_heal_channel.dart). The marker
+  /// is stripped before the socket opens; the relay never sees it in a URL.
+  static Future<Uri> _reconnectDialUrl(
+    Uri hostUrl,
+    AgentsStoredPairing pairing,
+  ) async {
+    final address = AgentsCloudRelayAddress.tryParse(hostUrl);
+    if (address == null ||
+        address.pairingChannel != null ||
+        address.targetDeviceId == null) {
+      return hostUrl;
+    }
+    try {
+      final heal = await deriveAgentsHealChannel(
+        pairing.channelKey,
+        pairing.channelId,
+      );
+      return AgentsCloudRelayAddress(
+        base: address.base,
+        targetDeviceId: address.targetDeviceId,
+        healChannel: heal,
+      ).toUri();
+    } catch (_) {
+      return hostUrl;
+    }
   }
 
   @override
@@ -2829,6 +2941,9 @@ class AgentsRelayClient
       case 'account_session_rotated':
         // The host rotated the session while the app was away: adopt and ack.
         unawaited(_adoptRotatedSession(payload));
+      case 'host_session_request':
+        // The host wants a session of its own. Answered here, never surfaced.
+        unawaited(_answerHostSessionRequest());
       case 'mcp_tools':
         // What the host's connectors answered with. Not surfaced either: the
         // list simply stops claiming a working server has no tools.

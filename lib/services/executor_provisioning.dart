@@ -1,4 +1,5 @@
 import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agents_host_session.dart';
 import 'package:chuk_chat/supabase_config.dart';
 
 /// Identifies one executor the app can hand its session to.
@@ -51,10 +52,15 @@ class UnimplementedExecutorTransport implements ExecutorTransport {
 /// models and credits on the user's behalf.
 ///
 /// IMPORTANT: this hands the executor the authentication (token), NEVER the
-/// login credentials; the token is revocable. The access + refresh tokens are
-/// short-lived and can be cut off server-side, so a compromised or retired
-/// executor can be locked out without touching the password. The password
-/// never leaves the phone.
+/// login credentials; the token is revocable. The password never leaves the
+/// phone.
+///
+/// The app's own refresh token never leaves the app either. Supabase rotates
+/// refresh tokens, so an app and a host that share one family refuse each
+/// other in turn: a host that sat offline came back with a dead token and
+/// could not be reached any more. So [provision] hands over only the app's
+/// short-lived access token, and the host's long-lived credential is a session
+/// of its own, minted through the API and sent by [provisionHostSession].
 ///
 /// The real network work lives behind [ExecutorTransport]; this class only
 /// shapes the authentication payload and hands it to the transport. Swap in the
@@ -64,12 +70,13 @@ class ExecutorProvisioning {
 
   final ExecutorTransport _transport;
 
-  /// Provisions [target] with the account [session] token pair.
+  /// Provisions [target] with the app's short-lived access token. A host that
+  /// holds a session of its own keeps it; one that does not asks for one with
+  /// `host_session_request`.
   Future<void> provision(ExecutorHandle target, AccountSession session) {
     final payload = <String, dynamic>{
       'type': 'account_authentication',
       'access_token': session.accessToken,
-      'refresh_token': session.refreshToken,
       'user_id': session.userId,
       // The host needs these to refresh the token; the anon key is public and
       // travels inside the E2E channel. Provided in the token so any host works
@@ -78,6 +85,25 @@ class ExecutorProvisioning {
       'anon_key': SupabaseConfig.supabaseAnonKey,
       // So the host can refresh before the token lapses, not after a 401.
       if (session.expiresAt != null) 'expires_at': session.expiresAt,
+    };
+    return _transport.sendAuthentication(target, payload);
+  }
+
+  /// Provisions [target] with a session minted for the host alone. Marked
+  /// `session_kind: host` so the host stores it and refreshes it on its own.
+  Future<void> provisionHostSession(
+    ExecutorHandle target,
+    AgentsHostSession grant,
+  ) {
+    final payload = <String, dynamic>{
+      'type': 'account_authentication',
+      'session_kind': 'host',
+      'access_token': grant.accessToken,
+      'refresh_token': grant.refreshToken,
+      'user_id': grant.userId,
+      'supabase_url': SupabaseConfig.supabaseUrl,
+      'anon_key': SupabaseConfig.supabaseAnonKey,
+      if (grant.expiresAt != null) 'expires_at': grant.expiresAt,
     };
     return _transport.sendAuthentication(target, payload);
   }

@@ -46,6 +46,9 @@ TOKEN_FIELDS = (
     "supabase_url",
     "anon_key",
     "expires_at",
+    # "host" when the pair is the host's own session (minted for it through
+    # the API), "app" when it is the app's session. See host_credential.py.
+    "session_kind",
 )
 
 

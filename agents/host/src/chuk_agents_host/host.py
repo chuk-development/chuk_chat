@@ -17,9 +17,12 @@ nothing hits prod even when a task names a model.
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import json
 import os
 import threading
+import time
 from pathlib import Path
 from typing import Callable
 
@@ -52,6 +55,15 @@ from chuk_agents_executor import (
 )
 
 from .account_store import AccountStore
+from .host_credential import (
+    KIND_ACCESS_ONLY,
+    KIND_HOST,
+    TYPE_HOST_SESSION_REQUEST,
+    decide as decide_provision,
+    derive_heal_channel,
+    refresh_is_dead,
+    stored_kind,
+)
 from .cloud_relay import (
     DEFAULT_RELAY_BASE_URL,
     CloudRelayTransport,
@@ -93,6 +105,16 @@ KEY_VERSION = 1
 TRANSPORT_LOCAL = "local"
 TRANSPORT_CLOUD = "cloud"
 DEFAULT_SYSTEM_PROMPT = "You are a Agents coworker running on the user's own machine."
+
+#: While parked on the heal channel, how often the host tries its dead refresh
+#: token once more. A refusal can be a misread network fault; this makes sure a
+#: host never stays parked when its credential would in fact work again.
+HEAL_RETRY_SECONDS = 600.0
+
+#: The shortest gap between two ``host_session_request`` frames. The app mints
+#: on each one, and the API rate-limits minting, so asking in a loop only burns
+#: that budget.
+HOST_SESSION_REQUEST_INTERVAL_SECONDS = 30.0
 
 
 def _agent_dirname(agent_id: str, limit: int = 32) -> str:
@@ -275,6 +297,14 @@ class LocalHost:
         # is provisioned; the token is what every later relay handshake carries.
         self._account = AccountStore(self._workspace / "account.json")
         self._relay_device_id = self._account.device_id()
+        # Which session the host holds (host_credential.py): its own ("host"),
+        # the app's ("app", the old way), or only an access token. And whether
+        # GoTrue has refused its refresh token, which sends the relay dial to the
+        # heal channel instead of offering a dead token forever.
+        self._credential_kind: str | None = None
+        self._credential_dead = False
+        self._heal_retry_at = 0.0
+        self._host_session_asked_at: float | None = None
         if force_repair:
             self._store.clear()
             # A deliberate re-pair may hand this host to a different account, and
@@ -285,6 +315,9 @@ class LocalHost:
             self._trust: HostTrust | None = None
         else:
             self._trust = self._store.load()
+        # After a forced re-pair has cleared the token, so a stale kind cannot
+        # outlive the credential it described.
+        self._credential_kind = stored_kind(self._account.token())
 
         # The channel id is STABLE across restarts: an explicit override wins (for
         # tests), else the stored pairing's channel, else a deterministic value
@@ -458,6 +491,8 @@ class LocalHost:
         # The account token goes with the trust: a new device may be a new
         # account, and a stale token would park this host on the wrong one.
         self._account.clear_token()
+        self._credential_kind = None
+        self._credential_dead = False
         probe = Pairing.initiator(
             device_id=self._device_id,
             device_identity=self._identity,
@@ -602,6 +637,7 @@ class LocalHost:
                 base_url=self._relay_base_url,
                 token_provider=self._relay_access_token,
                 pairing_channel_provider=self._current_pairing_channel,
+                heal_channel_provider=self._current_heal_channel,
                 on_controller_event=self._on_cloud_controller_event,
                 on_pairing_expired=self._on_pairing_channel_expired,
                 logger=self._log,
@@ -924,13 +960,8 @@ class LocalHost:
         # Keep the live session so the task server can hand its (refreshable)
         # access token to the executor for appSession MCP connectors.
         self._session = session
-        # Who may refresh (bead cowork-c91): with a controller attached the APP
-        # is the token source — the host asks it to re-provision and waits;
-        # with none attached the host refreshes itself and reports the rotated
-        # pair back. Wired here so every client built off this session obeys it.
-        session.may_self_refresh = lambda: not self._controller_attached()
-        session.request_reprovision = self._request_reprovision
-        session.on_self_refreshed = self._on_session_self_refreshed
+        # Who may refresh depends on whose session this is (_wire_session).
+        self._wire_session(session)
         # A (re)connecting app that already adopted a rotated pair acks it here.
         self._note_incoming_token(token)
         # The account owner, for the notification rows (owner-only RLS).
@@ -950,10 +981,13 @@ class LocalHost:
     ) -> TaskServer:
         # This session's sealer, for frames the host itself originates.
         self._sealer = sealer
-        # §15 step 7 landed: keep the whole set (refresh token included) so this
-        # host can still authenticate to the relay — and still refresh — after a
-        # restart with the app closed for weeks.
-        self._persist_account_token(token)
+        # §15 step 7 landed. Which pair the host runs on is decided here
+        # (host_credential.py): its own independent session when it has a live
+        # one, else what the frame carries. Asking for an independent session
+        # goes out first, so a model resolve that fails below does not lose it.
+        token, want_host_session = self._provision_token(token)
+        if want_host_session:
+            self._ask_for_host_session("provisioned_without_own_session")
         model_factory, model_select = self._make_model_wiring(token)
         # Room members are built off the same wiring (docs/ROOMS_GOING_LIVE.md):
         # the pool reads these live, so a member started for the next room runs
@@ -1052,6 +1086,18 @@ class LocalHost:
         session = self._session
         if session is None or not isinstance(token, dict):
             return
+        decision = decide_provision(
+            token, current_kind=self._credential_kind, dead=self._credential_dead
+        )
+        if not decision.adopt:
+            # The host holds its own live session. The app's token (an old app's
+            # whole pair, or a new app's access token) changes nothing: storing
+            # it would put the host back on the app's refresh-token family.
+            user_id = token.get("user_id")
+            if isinstance(user_id, str) and user_id:
+                self._user_id = user_id
+            return
+        previous = (session.access_token, session.refresh_token, self._credential_kind)
         access = token.get("access_token")
         refresh = token.get("refresh_token")
         if isinstance(access, str) and access:
@@ -1064,8 +1110,21 @@ class LocalHost:
         user_id = token.get("user_id")
         if isinstance(user_id, str) and user_id:
             self._user_id = user_id
-        self._persist_account_token(token)
-        self._log("account session refreshed in place from a new token frame")
+        self._credential_kind = decision.kind
+        self._credential_dead = False
+        if decision.persist:
+            self._persist_account_token(token, kind=decision.kind)
+        if decision.kind == KIND_HOST:
+            # A pair the host rotated in the app's family is not the host's
+            # concern any more: stop offering it to the app.
+            self._pending_session_rotation = None
+            self._log("the host now runs on its own account session")
+            if previous[2] == KIND_HOST and previous[1] != session.refresh_token:
+                self._revoke_session_quietly(previous[0], session)
+        else:
+            self._log("account session refreshed in place from a new token frame")
+        if decision.want_host_session:
+            self._ask_for_host_session("provisioned_without_own_session")
         # An app that adopted our rotated pair sends it back: that is the ack.
         self._note_incoming_token(token)
         # Wake a refresh that is waiting for exactly this frame (c91).
@@ -1077,13 +1136,15 @@ class LocalHost:
 
     # -- account session: who refreshes, and how the pair stays in sync (c91) --
 
-    def _persist_account_token(self, token: dict) -> None:
+    def _persist_account_token(self, token: dict, *, kind: str | None = None) -> None:
         """Write the account credential to ``account.json`` (0600).
 
         Called on every path that changes the pair — the first provision, a later
         ``account_authentication``, and the host's own rotation — because the
         relay handshake needs a token that is still alive at the *next* process
         start, not only in this one."""
+        if kind is not None and isinstance(token, dict):
+            token = {**token, "session_kind": kind}
         try:
             if self._account.save_token(token):
                 self._log("account token persisted for the next relay handshake")
@@ -1125,52 +1186,216 @@ class LocalHost:
                 else None
             ),
         )
-        session.may_self_refresh = lambda: not self._controller_attached()
-        session.request_reprovision = self._request_reprovision
-        session.on_self_refreshed = self._on_session_self_refreshed
+        self._credential_kind = stored_kind(token)
+        self._wire_session(session)
         self._session = session
         self._user_id = str(token.get("user_id") or getattr(self, "_user_id", "") or "")
         return session
 
     def _refresh_rejected_token(self, token: str) -> bool:
         """The relay refused this access token. Refresh that exact token once and
-        report whether a different one is now in hand.
+        report whether the next dial is a new attempt.
 
-        True means redial immediately: the credential changed, so the next dial
-        is a new attempt and not a repeat of the one that just failed. False
-        leaves the ordinary backoff in place, so a relay that is down (or a
-        refresh token that is truly dead) is not hammered.
+        True means redial immediately: either the credential changed, or GoTrue
+        refused the refresh token for good and the next dial parks on the heal
+        channel instead. False leaves the ordinary backoff in place, so a relay
+        that is down (or a GoTrue that is down) is not hammered.
         """
         session = self._account_session()
         if session is None:
             return False
+        if self._credential_kind == KIND_ACCESS_ONLY:
+            # An access token with no refresh token behind it: nothing can
+            # renew it here, only the app can.
+            self._mark_credential_dead("the refused access token has no refresh token")
+            return self._trust is not None
         try:
             session.refresh(reason="relay_rejected", seen_token=token)
         except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the pipe
             self._log(f"could not refresh the refused account token: {type(exc).__name__}: {exc}")
+            if refresh_is_dead(exc):
+                self._mark_credential_dead("GoTrue refused the refresh token")
+                return self._trust is not None
             return False
         fresh = session.access_token or ""
         return bool(fresh and fresh != token)
 
     def _relay_access_token(self) -> str | None:
         """A CURRENT access token for the relay handshake, or ``None`` while this
-        host has never been provisioned (so it bootstraps by pairing instead).
+        host has never been provisioned (so it bootstraps by pairing instead) or
+        while its credential is dead (so it parks on the heal channel).
 
         An expired token is refreshed through the session — the same single path
-        every other caller uses, so the app stays the token source while it is
-        attached and the host only spends the refresh token when it is alone. A
-        refresh that fails is not fatal here: the stale token is still offered,
-        the relay answers ``auth_error``, and the party redials with backoff.
+        every other caller uses. A refresh that fails on the network is not
+        fatal here: the stale token is still offered, the relay answers
+        ``auth_error``, and the party redials with backoff. A refresh GoTrue
+        refuses for good is different: offering that token again can never work,
+        and it is the only credential the relay would have taken from this host,
+        so a paired host parks on its heal channel instead (host_credential.py).
         """
         session = self._account_session()
         if session is None:
             return None
+        if self._credential_kind == KIND_ACCESS_ONLY and session.is_expired():
+            self._mark_credential_dead(
+                "the app's access token expired and no refresh token is held"
+            )
+        if self._credential_dead and self._trust is not None:
+            return self._retry_dead_credential(session)
         if session.is_expired():
             try:
                 session.refresh(reason="token_expired")
             except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the pipe
                 self._log(f"could not refresh the account token: {type(exc).__name__}: {exc}")
+                if refresh_is_dead(exc):
+                    self._mark_credential_dead("GoTrue refused the refresh token")
+                    if self._trust is not None:
+                        return None
         return session.access_token or None
+
+    # -- a dead credential, and the heal channel (host_credential.py) ------
+
+    def _retry_dead_credential(self, session: SupabaseSession) -> str | None:
+        """Try a dead refresh token once more, at most every HEAL_RETRY_SECONDS.
+
+        Returns the fresh access token when GoTrue took it after all, else None
+        (the dial then parks on the heal channel)."""
+        now = time.monotonic()
+        if now < self._heal_retry_at or self._credential_kind == KIND_ACCESS_ONLY:
+            return None
+        self._heal_retry_at = now + HEAL_RETRY_SECONDS
+        try:
+            session.refresh(reason="heal_retry")
+        except Exception as exc:  # noqa: BLE001 - still dead is the expected answer
+            self._log(f"the account session is still dead ({type(exc).__name__})")
+            return None
+        self._credential_dead = False
+        self._log("the account session works again; leaving the heal channel")
+        return session.access_token or None
+
+    def _mark_credential_dead(self, why: str) -> None:
+        """Record that the held session can never be refreshed again."""
+        if self._credential_dead:
+            return
+        self._credential_dead = True
+        self._heal_retry_at = time.monotonic() + HEAL_RETRY_SECONDS
+        if self._trust is not None:
+            self._log(
+                f"the account session is dead ({why}); the host now waits on its "
+                "heal channel for a paired app to renew it — no new pairing needed"
+            )
+        else:
+            self._log(f"the account session is dead ({why}) and this host is not paired")
+        if self._controller_attached():
+            self._ask_for_host_session("credential_dead")
+
+    def _on_session_refresh_failed(self, exc: Exception) -> None:
+        """The session's own refresh against GoTrue failed (any caller)."""
+        if refresh_is_dead(exc):
+            self._mark_credential_dead("GoTrue refused the refresh token")
+
+    def _current_heal_channel(self) -> str | None:
+        """The heal channel to park on, or None while a credential works.
+
+        Only a paired host has one: it is derived from the channel key the paired
+        app also holds, and that app is the only one that can use it."""
+        trust = self._trust
+        if trust is None:
+            return None
+        if not self._credential_dead and self._account_session() is not None:
+            return None
+        try:
+            return derive_heal_channel(trust.channel_key, trust.channel_id)
+        except ValueError as exc:
+            self._log(f"cannot derive the heal channel: {exc}")
+            return None
+
+    def _ask_for_host_session(self, reason: str) -> bool:
+        """Ask the attached app to mint this host a session of its own
+        (``host_session_request``). At most once per interval: the app calls the
+        API on each ask, and the API limits how often it mints."""
+        now = time.monotonic()
+        asked = self._host_session_asked_at
+        if asked is not None and now - asked < HOST_SESSION_REQUEST_INTERVAL_SECONDS:
+            return False
+        sent = self._send_host_payload({"type": TYPE_HOST_SESSION_REQUEST, "reason": reason})
+        if sent:
+            self._host_session_asked_at = now
+            self._log(f"asked the app for an account session of the host's own ({reason})")
+        return sent
+
+    def _provision_token(self, token: dict) -> tuple[dict, bool]:
+        """The pair the task server is built on, and whether to ask the app for an
+        independent session. Persists what the decision says to persist."""
+        decision = decide_provision(
+            token, current_kind=self._credential_kind, dead=self._credential_dead
+        )
+        if not decision.adopt:
+            chosen = dict(self._account.token() or {})
+            # The live session wins over the file: a write that failed must not
+            # rebuild the host on a stale or empty pair.
+            live = self._session
+            if live is not None and live.access_token:
+                chosen["access_token"] = live.access_token
+                if live.refresh_token:
+                    chosen["refresh_token"] = live.refresh_token
+                if live.expires_at is not None:
+                    chosen["expires_at"] = live.expires_at
+            for key in ("supabase_url", "anon_key", "user_id"):
+                if not chosen.get(key) and token.get(key):
+                    chosen[key] = token[key]
+            return chosen, False
+        self._credential_kind = decision.kind
+        self._credential_dead = False
+        if decision.persist:
+            self._persist_account_token(token, kind=decision.kind)
+        return token, decision.want_host_session
+
+    def _wire_session(self, session: SupabaseSession) -> None:
+        """Who may refresh this session, and what happens when it rotates.
+
+        * The host's own session: the host refreshes it whenever it needs to.
+          Nobody else holds that refresh token, so there is nothing to report.
+        * The app's session (an old app): the c91 rule — with the app attached
+          the app is the token source, alone the host refreshes and reports the
+          rotated pair back.
+        * An access token only: never refreshed here; the app is asked.
+        """
+        session.may_self_refresh = lambda: self._credential_kind == KIND_HOST or (
+            self._credential_kind != KIND_ACCESS_ONLY and not self._controller_attached()
+        )
+        session.request_reprovision = self._request_reprovision
+        session.on_self_refreshed = self._on_session_self_refreshed
+        session.on_refresh_failed = self._on_session_refresh_failed
+
+    def _revoke_session_quietly(self, access_token: str, session: SupabaseSession) -> None:
+        """Sign out the host's previous own session, best effort, off-thread.
+
+        A new independent session replaced it, so the old one is only a live
+        credential nobody uses. Skipped when the two cannot be told apart."""
+        old_id = _jwt_session_id(access_token)
+        if old_id is None or old_id == _jwt_session_id(session.access_token):
+            return
+        url = f"{session.supabase_url.rstrip('/')}/auth/v1/logout"
+        anon_key = session.anon_key
+
+        def _run() -> None:
+            try:
+                import httpx
+
+                with httpx.Client(timeout=10.0) as client:
+                    client.post(
+                        url,
+                        params={"scope": "local"},
+                        headers={
+                            "apikey": anon_key,
+                            "Authorization": f"Bearer {access_token}",
+                        },
+                    )
+            except Exception:  # noqa: BLE001,S110 - hygiene only; nothing depends on it
+                pass
+
+        threading.Thread(target=_run, name="agents-host-revoke", daemon=True).start()
 
     def _send_host_payload(self, payload: dict) -> bool:
         """Seal a host-originated payload with the current session's sealer and
@@ -1192,16 +1417,37 @@ class LocalHost:
     def _request_reprovision(self, reason: str) -> None:
         """Ask the attached app for a fresh token pair (docs/WIRE_CONTRACT.md
         ``reprovision_request``). The app answers with a normal
-        ``account_authentication`` frame, which lands in ``_on_reprovision``."""
+        ``account_authentication`` frame, which lands in ``_on_reprovision``.
+        A host that holds only an access token also asks for a session of its
+        own, since nothing else can ever renew it."""
         self._log(f"asking the app to re-provision ({reason})")
         self._send_host_payload({"type": "reprovision_request", "reason": reason})
+        if self._credential_kind == KIND_ACCESS_ONLY:
+            self._ask_for_host_session(reason)
 
     def _on_session_self_refreshed(self, session: SupabaseSession) -> None:
         """The host refreshed on its own (no controller attached) and GoTrue
         rotated the pair — the app's copy is now dead. Report the new pair
         (``account_session_rotated``): now if someone is attached, else pending
-        until the next connect, until the app acks by sending it back."""
+        until the next connect, until the app acks by sending it back.
+
+        The host's own session is different: nobody else holds that refresh
+        token, so the rotated pair is only persisted, never reported."""
         from datetime import UTC, datetime
+
+        # Any refresh GoTrue accepted proves the credential is alive again.
+        self._credential_dead = False
+        if self._credential_kind == KIND_HOST:
+            self._persist_account_token(
+                {
+                    "access_token": session.access_token,
+                    "refresh_token": session.refresh_token,
+                    **({"expires_at": session.expires_at} if session.expires_at else {}),
+                },
+                kind=KIND_HOST,
+            )
+            self._log("the host refreshed its own account session")
+            return
 
         payload = {
             "type": "account_session_rotated",
@@ -1230,7 +1476,13 @@ class LocalHost:
         pending = self._pending_session_rotation
         if pending is None or not isinstance(token, dict):
             return
-        if token.get("refresh_token") == pending.get("refresh_token"):
+        # A new app never sends a refresh token, so its ack is the adopted
+        # access token; an old app still sends the pair back.
+        refresh = token.get("refresh_token")
+        access = token.get("access_token")
+        if (refresh and refresh == pending.get("refresh_token")) or (
+            access and access == pending.get("access_token")
+        ):
             self._pending_session_rotation = None
             self._log("rotated account session acknowledged by the app")
 
@@ -1446,3 +1698,18 @@ class LocalHost:
         fallback when the app is the thing that is broken.
         """
         return self._estop_path
+
+
+def _jwt_session_id(token: str | None) -> str | None:
+    """The ``session_id`` claim of a Supabase JWT, read without verifying it.
+    Used only to tell two sessions apart before a best-effort sign-out."""
+    if not isinstance(token, str) or token.count(".") != 2:
+        return None
+    body = token.split(".")[1]
+    body += "=" * (-len(body) % 4)
+    try:
+        claims = json.loads(base64.urlsafe_b64decode(body))
+    except Exception:  # noqa: BLE001 - an unreadable token has no session id
+        return None
+    value = claims.get("session_id") if isinstance(claims, dict) else None
+    return value if isinstance(value, str) and value else None

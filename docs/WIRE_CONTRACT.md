@@ -66,7 +66,7 @@ unlocked to transfer pairing; a successful JWT login alone does not unlock it.
 | `stop` | `session_key` | Existing. It is sent ONLY for an explicit user stop (bead cowork-gnr8). A stream subscription that is merely cancelled — the reader leaves the thread, the chat page is rebuilt or disposed, the app goes to the background, one stream replaces the next — must NOT produce a `stop`: a controller that goes away leaves its runs going and the results wait in the store. The executor answers with a `stop_ack` listing the run request ids it fired at (`[]` = nothing matched); that frame carries no `session_key`, so the app cannot route it per thread and does not surface it. The terminal `done` with `reason: "interrupted"` is what ends the run for the app. |
 | `replay` | `session_key`, `after_id`? (int, default 0), `before_id`? (int), `limit`? (int) | `after_id` is NEW. Replay only the messages with `mid > after_id`. `0` replays the full history (fresh install). `limit` / `before_id`: see "Replay paging" (Bead cowork-axx). |
 | `run_ack` | `run_id` | NEW. The app sends it after it rendered a live `done`. The host marks the run as seen (`runs.seen_at`), so a later replay does not flag it `while_away`, and it can skip a push notification. The host waits for it at most 15 s (`AGENTS_RUN_ACK_TIMEOUT_SECONDS`) after a `done` that ended with an app attached; no ack in that window and the run is announced as finished while away (desktop toast + cloud push, once per run) — Bead cowork-sq3. |
-| `account_authentication` | `access_token`, `refresh_token`, `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
+| `account_authentication` | `access_token`, `refresh_token`? (only with `session_kind: "host"`; an old app sends its own), `session_kind`? (NEW), `user_id`, `supabase_url`, `anon_key`, `expires_at`? (epoch seconds, NEW) | Existing. NEW rule: it can arrive again during a session (token rotation, re-provision). The executor MUST route it to the host as a re-provision and MUST NOT treat it as a task. The app sends it (a) once after pairing, (b) at once on Supabase `AuthChangeEvent.tokenRefreshed`, even while a task runs, (c) as the answer to a `reprovision_request`, (d) as the ack of an `account_session_rotated`. |
 
 ### Task acknowledgement (NEW, additive)
 
@@ -158,9 +158,57 @@ The host must never run a task on a stale token. Three paths keep it fresh:
    rotates the refresh token, so the app's copy is dead. The host sends
    `{"type": "account_session_rotated", "access_token", "refresh_token", "expires_at", "rotated_at"}`
    (pending, re-sent until acked). The app adopts it (`setSession(refresh_token)`),
-   updates its stores, and acks with an `account_authentication` carrying the new
-   pair. Idempotent: an app that already holds a newer token keeps its own and still
-   acks.
+   updates its stores, and acks with an `account_authentication` carrying the
+   adopted access token (an old app also sends the refresh token). Idempotent: an
+   app that already holds a newer token keeps its own and still acks. This path
+   applies only while the host runs on the app's session; see the next section.
+
+### The host's own session and the heal channel (NEW)
+
+The rules above let the app and the host share one refresh-token family. That
+fails: Supabase rotates refresh tokens, so the side that refreshes second is
+refused. On 2026-09-23 a host that was offline for three days came back with a
+dead refresh token. The relay refused its handshake, so no app could reach it.
+The host now has its own session, and a dead credential heals with no new
+pairing.
+
+1. The app does not send its own `refresh_token` any more. Its
+   `account_authentication` carries `access_token`, `user_id`, `supabase_url`,
+   `anon_key` and `expires_at` only.
+2. Host → app: `{"type": "host_session_request", "reason": "<text>"}`. The host
+   sends it when it does not hold a live session of its own. At most once per
+   30 s. An old app ignores the unknown type.
+3. The app answers: it calls `POST /v2/agents/host-session` on the API server
+   with its own bearer token. The server signs the same account in once more
+   (magic-link hash, no email) and returns a new pair. The app sends that pair as
+   `account_authentication` with `"session_kind": "host"` and `refresh_token`.
+   The app does not keep the pair.
+4. The host stores a `session_kind: host` pair in `account.json` and refreshes it
+   itself, also while an app is attached. It does not report the rotation
+   (`account_session_rotated` is for an app-owned pair only). A frame without
+   `session_kind: host` never replaces a live host session.
+5. Heal channel. When GoTrue refuses the host's refresh token (HTTP 400, 401 or
+   403), the host stops offering the dead token. A paired host parks on the relay
+   pairing door with `pairing_channel = base64url(HMAC-SHA256(channel_key,
+   "cowork/host/heal-channel/v1/" + channel_id))` (43 characters, no padding).
+   When the relay closes an unclaimed park after 5 minutes, the host parks again
+   on the same channel. Every 10 minutes it tries the dead refresh token once more.
+6. The app derives the same value from its stored pairing. On a reconnect where
+   the presence snapshot does not show the host online, the app sends one
+   `cowork_pair_claim` with that value. A refusal changes nothing. A claim makes
+   the host an ordinary executor of the account, the controller session runs as
+   usual, and steps 1 to 3 give the host a new session.
+
+The relay does not change and gets no new power. The heal channel is a bearer
+capability for one parked socket, like a first-pairing channel. Whoever claims
+it only gets a route. The host acts only on frames that pass the
+controller-session handshake (the app's device signature and the channel-key
+MAC), and a new token arrives only inside a sealed frame.
+
+Code: `agents/host/src/chuk_agents_host/host_credential.py`,
+`lib/services/agents/agents_heal_channel.dart`,
+`lib/services/agents/agents_host_session.dart`, API server
+`routers/cowork/cowork_host_session.py`.
 
 ### `regenerate` on `task` (NEW, additive)
 
@@ -351,7 +399,10 @@ the new pair to the app so both sides hold the same pair again, whoever refreshe
 - Sent as soon as a controller is attached after the rotation; while none is,
   it is kept pending and re-sent on the next connect until acknowledged.
 - Ack = the app sends an `account_authentication` frame whose `refresh_token`
-  equals the rotated one (its normal (re-)provision after adopting the pair).
+  or `access_token` equals the rotated one (its normal (re-)provision after
+  adopting the pair). A new app sends no refresh token, so the access token is
+  its ack. A host that takes a `session_kind: "host"` session drops the pending
+  rotation: it is not on the app's session any more.
   Idempotent: last one wins; a frame that changes nothing writes nothing.
 - The app adopts the pair (`setSession`) and writes it to its pairing store, so
   a reinstall does not come back with the dead token. It never treats this as

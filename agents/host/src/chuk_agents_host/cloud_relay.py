@@ -30,6 +30,14 @@ pipe is new, so a malicious relay still cannot MITM.
    The unauthenticated path runs **once per host, ever**: a stored token always
    wins over a pairing channel.
 
+**Three.** A paired host whose account token died (GoTrue refused the refresh
+token) has no credential the relay accepts, and no app can reach it to hand it
+a new one. So it parks again, on a *heal channel* derived from the channel key
+the paired app also holds (:mod:`chuk_agents_host.host_credential`). The paired
+app claims that channel with its own account and re-provisions the host over
+the sealed channel. The wire is the first-pairing door, unchanged; only the
+meaning differs, so a heal channel that expires is simply dialled again.
+
 **The parked lifecycle.** A socket authenticated with a pairing channel is
 *parked*: until a logged-in account claims that channel the relay lets it send
 **only** ``{"type":"ping"}`` and refuses anything else with
@@ -245,6 +253,7 @@ class CloudRelayTransport:
         base_url: str = DEFAULT_RELAY_BASE_URL,
         token_provider: Callable[[], str | None] | None = None,
         pairing_channel_provider: Callable[[], str | None] | None = None,
+        heal_channel_provider: Callable[[], str | None] | None = None,
         on_controller_event: ControllerEvent | None = None,
         on_pairing_expired: Callable[[], None] | None = None,
         logger: Callable[[str], None] | None = None,
@@ -256,6 +265,7 @@ class CloudRelayTransport:
         self._base_url = base_url
         self._token_provider = token_provider or (lambda: None)
         self._pairing_channel_provider = pairing_channel_provider or (lambda: None)
+        self._heal_channel_provider = heal_channel_provider or (lambda: None)
         self._on_controller_event = on_controller_event
         self._on_pairing_expired = on_pairing_expired
         self._log = logger or (lambda _msg: None)
@@ -273,13 +283,19 @@ class CloudRelayTransport:
     def credential(self) -> tuple[str, str]:
         """``(kind, value)`` for this connect: ``("token", jwt)`` when an account
         token is stored, else ``("pairing_channel", id)``. A stored token always
-        wins — the unauthenticated path is used once per host, ever."""
+        wins — the unauthenticated path is used once per host, ever.
+
+        ``("heal_channel", id)`` is the last resort of a paired host whose token
+        died: park where the paired app can find it and renew the session."""
         token = self._token_provider()
         if isinstance(token, str) and token:
             return "token", token
         channel = self._pairing_channel_provider()
         if isinstance(channel, str) and channel:
             return "pairing_channel", channel
+        heal = self._heal_channel_provider()
+        if isinstance(heal, str) and heal:
+            return "heal_channel", heal
         raise CloudRelayError(
             "no account token and no pairing channel: nothing to authenticate with"
         )
@@ -289,15 +305,17 @@ class CloudRelayTransport:
         frame = auth_frame(
             device_id=self._device_id,
             token=value if kind == "token" else None,
-            pairing_channel=value if kind == "pairing_channel" else None,
+            pairing_channel=value if kind in ("pairing_channel", "heal_channel") else None,
         )
         url = self.url
         # The credential itself is never logged: one is a live account JWT, the
         # other is the pairing bearer capability.
-        self._log(
-            f"dialling the cloud relay at {url} as executor "
-            f"({'account token' if kind == 'token' else 'pairing channel'})"
-        )
+        label = {
+            "token": "account token",
+            "pairing_channel": "pairing channel",
+            "heal_channel": "heal channel",
+        }[kind]
+        self._log(f"dialling the cloud relay at {url} as executor ({label})")
         ws = self._connect(url, open_timeout=self._open_timeout)
         try:
             ws.send(json.dumps(frame, separators=(",", ":")))
@@ -314,11 +332,18 @@ class CloudRelayTransport:
         # ``auth_ok`` carries extra fields on the pairing path
         # (``mode``, ``expires_in``). Read what is useful, ignore the rest: the
         # server may grow the frame and this client must not care.
-        parked = kind == "pairing_channel" or reply.get("mode") == "pairing"
+        heal = kind == "heal_channel"
+        parked = kind in ("pairing_channel", "heal_channel") or reply.get("mode") == "pairing"
         expires_in = reply.get("expires_in")
         if not isinstance(expires_in, (int, float)) or isinstance(expires_in, bool):
             expires_in = None
-        if parked:
+        if heal:
+            self._log(
+                "cloud relay parked this host on its heal channel: the account "
+                "session is dead, so it waits for a paired app to renew it"
+                + (f" (parked for {expires_in:g}s, then again)" if expires_in else "")
+            )
+        elif parked:
             self._log(
                 "cloud relay parked this host on its pairing channel"
                 + (f"; the code dies in {expires_in:g}s" if expires_in else "")
@@ -339,6 +364,7 @@ class CloudRelayTransport:
             # until the relay says an account claimed the channel.
             claimed=not parked,
             expires_in=expires_in if parked else None,
+            heal=heal,
         )
         # The same hello the loopback relay gets, as the first payload: it tells a
         # controller already on the channel that the executor is here.
@@ -364,6 +390,7 @@ class CloudRelayLink:
         join_message: dict[str, Any] | None = None,
         claimed: bool = True,
         expires_in: float | None = None,
+        heal: bool = False,
     ) -> None:
         # ``join_message`` here is the built hello dict, not the protocol helper
         # of the same name — the transport builds it and hands it over.
@@ -380,13 +407,16 @@ class CloudRelayLink:
         self._claimed = claimed
         self._pending: list[dict[str, Any]] = []
         self._expired = False
+        # Parked on the heal channel, not on a first-pairing code: nobody has a
+        # code to scan, and an expiry means "park again", not "print a new code".
+        self._heal = heal
         self._warning: threading.Timer | None = None
         # Every frame off this socket reports what became of it. The pipe is the
         # first place a lost message can disappear, and until this existed a
         # frame that arrived and was ignored looked exactly like a frame that
         # never arrived (see :mod:`chuk_agents_host.relay_ledger`).
         self._frames = InboundFrameLog(self._log)
-        if not claimed and expires_in and expires_in > EXPIRY_WARNING_LEAD_SECONDS:
+        if not claimed and not heal and expires_in and expires_in > EXPIRY_WARNING_LEAD_SECONDS:
             self._warning = threading.Timer(
                 expires_in - EXPIRY_WARNING_LEAD_SECONDS, self._warn_expiring
             )
@@ -451,7 +481,10 @@ class CloudRelayLink:
             self._claimed = True
             pending, self._pending = self._pending, []
         self._cancel_warning()
-        self._log("cloud relay: an account claimed the pairing channel")
+        if self._heal:
+            self._log("cloud relay: a paired app claimed the heal channel")
+        else:
+            self._log("cloud relay: an account claimed the pairing channel")
         for message in pending:
             self._send_wrapped(message)
         self._controller_joined_if_absent()
@@ -465,6 +498,11 @@ class CloudRelayLink:
             self._expired = True
             self._pending.clear()
         self._cancel_warning()
+        if self._heal:
+            # Nothing to mint: the heal channel is derived, so the host simply
+            # parks on it again when the relay closes this socket.
+            self._log("no paired app came to renew the session in time; parking again")
+            return
         self._log("the pairing code expired unused; minting a fresh one")
         if self._on_pairing_expired is None:
             return
