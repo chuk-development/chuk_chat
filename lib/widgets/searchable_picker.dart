@@ -15,6 +15,7 @@
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/settings_search_bar.dart';
@@ -52,15 +53,31 @@ class PickerOption<T> {
 ///
 /// The search field appears once there are [searchThreshold] options or more;
 /// below that it would be one more thing to read past.
+///
+/// On a phone the list opens as a bottom sheet instead. An anchored panel
+/// there covered the controls around it, clipped its first and last rows and
+/// did not say what was being picked; the sheet has room for the whole list
+/// and carries [title] on top.
 Future<T?> showSearchablePicker<T>(
   BuildContext anchorContext, {
   required List<PickerOption<T>> options,
   String? hintText,
+  String? title,
   double width = 320,
   double maxHeight = 360,
   int searchThreshold = 7,
 }) {
   final ThemeData theme = Theme.of(anchorContext);
+  final bool searchable = options.length >= searchThreshold;
+  if (kPlatformMobile) {
+    return _showPickerSheet<T>(
+      anchorContext,
+      options: options,
+      hintText: hintText ?? 'Search',
+      title: title,
+      searchable: searchable,
+    );
+  }
   return showAnchoredMenu<T>(
     anchorContext,
     color: theme.m3.surfaceContainerHigh,
@@ -73,9 +90,69 @@ Future<T?> showSearchablePicker<T>(
         hintText: hintText ?? 'Search',
         width: width,
         maxHeight: maxHeight,
-        searchable: options.length >= searchThreshold,
+        searchable: searchable,
       ),
     ],
+  );
+}
+
+Future<T?> _showPickerSheet<T>(
+  BuildContext context, {
+  required List<PickerOption<T>> options,
+  required String hintText,
+  required String? title,
+  required bool searchable,
+}) {
+  final ThemeData theme = Theme.of(context);
+  return showModalBottomSheet<T>(
+    context: context,
+    useRootNavigator: true,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: theme.m3.surfaceContainerHigh,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+    ),
+    builder: (sheetContext) {
+      final MediaQueryData media = MediaQuery.of(sheetContext);
+      return Padding(
+        // Lift the sheet above the keyboard while the search field is used.
+        padding: EdgeInsets.only(bottom: media.viewInsets.bottom),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: media.size.height * 0.75),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (title != null)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                    child: Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                Flexible(
+                  child: _PickerPanel<T>(
+                    options: options,
+                    hintText: hintText,
+                    width: null,
+                    maxHeight: null,
+                    searchable: searchable,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
   );
 }
 
@@ -90,8 +167,12 @@ class _PickerPanel<T> extends StatefulWidget {
 
   final List<PickerOption<T>> options;
   final String hintText;
-  final double width;
-  final double maxHeight;
+
+  /// Null fills the available width (the bottom sheet).
+  final double? width;
+
+  /// Null leaves the height to the parent (the bottom sheet caps it).
+  final double? maxHeight;
   final bool searchable;
 
   @override
@@ -128,7 +209,9 @@ class _PickerPanelState<T> extends State<_PickerPanel<T>> {
         children: [
           if (widget.searchable)
             Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+              padding: widget.width == null
+                ? const EdgeInsets.fromLTRB(16, 0, 16, 4)
+                : const EdgeInsets.fromLTRB(8, 8, 8, 4),
               child: SettingsSearchBar(
                 controller: _search,
                 hintText: widget.hintText,
@@ -148,9 +231,13 @@ class _PickerPanelState<T> extends State<_PickerPanel<T>> {
                     ),
                   )
                 : ConstrainedBox(
-                    constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                    constraints: BoxConstraints(
+                      maxHeight: widget.maxHeight ?? double.infinity,
+                    ),
                     child: ListView.separated(
-                      padding: const EdgeInsets.fromLTRB(6, 6, 6, 6),
+                      padding: widget.width == null
+                          ? const EdgeInsets.fromLTRB(10, 6, 10, 12)
+                          : const EdgeInsets.fromLTRB(6, 6, 6, 6),
                       shrinkWrap: true,
                       itemCount: matches.length,
                       separatorBuilder: (_, _) => const SizedBox(height: 2),

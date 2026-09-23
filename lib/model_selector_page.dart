@@ -1419,6 +1419,7 @@ class _ProviderPill extends StatelessWidget {
     final String? picked = await showSearchablePicker<String>(
       anchorContext,
       hintText: 'Search providers',
+      title: 'Provider · ${ChatModeSelector.stripLabPrefix(model.name)}',
       width: 320,
       options: <PickerOption<String>>[
         PickerOption<String>(
@@ -1750,6 +1751,7 @@ class _ModePickerPanel extends StatelessWidget {
       context,
       label: label,
       hintText: 'Search providers',
+      title: '${data.title} · Provider',
       onSelected: data.onPickProvider,
       options: [
         for (final provider in data.providers)
@@ -1775,6 +1777,7 @@ class _ModePickerPanel extends StatelessWidget {
       context,
       label: label,
       hintText: 'Search models',
+      title: '${data.title} · Model',
       onSelected: data.onPickModel,
       options: [
         for (final model in models)
@@ -1797,6 +1800,7 @@ class _ModePickerPanel extends StatelessWidget {
       context,
       label: ChatModeService.reasoningLabel(data.reasoningEffort),
       subtle: true,
+      title: '${data.title} · Reasoning',
       onSelected: data.onPickReasoning,
       options: [
         for (final level in data.reasoningLevels)
@@ -1819,6 +1823,7 @@ class _ModePickerPanel extends StatelessWidget {
     required List<PickerOption<T>> options,
     required ValueChanged<T> onSelected,
     String? hintText,
+    String? title,
     bool subtle = false,
   }) {
     final theme = Theme.of(context);
@@ -1831,6 +1836,7 @@ class _ModePickerPanel extends StatelessWidget {
             anchorContext,
             options: options,
             hintText: hintText,
+            title: title,
           );
           if (picked != null) onSelected(picked);
         },

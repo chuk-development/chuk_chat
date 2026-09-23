@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
@@ -19,8 +20,26 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   String? get selectedProviderSlug;
   set selectedProviderSlug(String? value);
 
+  /// The active chat mode. Hosts without modes resolve like custom mode:
+  /// only the per-model pin applies.
+  ChatMode get chatMode => ChatMode.custom;
+
   /// Optional chat override. Unscoped legacy hosts retain account defaults.
   String? get modelSelectionChatId => null;
+
+  /// The provider the active Fast or Thinking mode pins for [modelId], or
+  /// null when the mode is custom, runs another model, or pins nothing.
+  ///
+  /// A mode's own provider wins over the per-model pin: Fast and Thinking
+  /// can run the same model through different providers, and the per-model
+  /// pin would otherwise silently replace the one picked for the mode.
+  Future<String?> modeProviderSlugFor(String modelId) async {
+    final ChatMode mode = chatMode;
+    if (mode == ChatMode.custom || modelId.isEmpty) return null;
+    final ModeConfig config = await ChatModeService.loadConfig(mode);
+    if (config.modelId != modelId || config.providerSlug.isEmpty) return null;
+    return config.providerSlug;
+  }
 
   bool get modelSupportsImageInput =>
       ChatUiHelpers.modelSupportsImageInput(selectedModelId);
@@ -34,12 +53,17 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     bool forceFromPrefs = false,
   }) async {
     final chatId = modelSelectionChatId;
+    final ChatMode requestedMode = chatMode;
+    // A later chat, mode or model switch makes this lookup obsolete; its
+    // result must not overwrite the provider of the newer selection.
+    bool isStale() =>
+        !mounted ||
+        modelSelectionChatId != chatId ||
+        chatMode != requestedMode ||
+        selectedModelId != modelId;
     if (chatId != null) {
       final choice = await ChatModelSelectionService.instance.load(chatId);
-      if (!mounted ||
-          modelSelectionChatId != chatId ||
-          selectedModelId != modelId)
-        return;
+      if (isStale()) return;
       if (choice != null && choice.modelId == modelId) {
         if (selectedProviderSlug != choice.providerSlug) {
           setState(() => selectedProviderSlug = choice.providerSlug);
@@ -51,6 +75,17 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
       if (selectedProviderSlug != null) {
         setState(() {
           selectedProviderSlug = null;
+        });
+      }
+      return;
+    }
+
+    final String? modeSlug = await modeProviderSlugFor(modelId);
+    if (isStale()) return;
+    if (modeSlug != null) {
+      if (selectedProviderSlug != modeSlug) {
+        setState(() {
+          selectedProviderSlug = modeSlug;
         });
       }
       return;
@@ -72,10 +107,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
 
     final String? loadedSlug =
         await UserPreferencesService.loadSelectedProvider(modelId);
-    if (!mounted ||
-        modelSelectionChatId != chatId ||
-        selectedModelId != modelId)
-      return;
+    if (isStale()) return;
     if (selectedProviderSlug != loadedSlug) {
       setState(() {
         selectedProviderSlug = loadedSlug;
@@ -95,8 +127,16 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     }
     if (selectedModelId.isEmpty) return null;
 
-    String? slug =
-        (selectedProviderSlug != null && selectedProviderSlug!.isNotEmpty)
+    // Re-read the mode's provider at send time: the cached slug can be stale
+    // when the provider was changed in settings while this chat stayed open.
+    String? slug = await modeProviderSlugFor(selectedModelId);
+    if (!mounted) return null;
+    if (slug != null && selectedProviderSlug != slug) {
+      setState(() {
+        selectedProviderSlug = slug;
+      });
+    }
+    slug ??= (selectedProviderSlug != null && selectedProviderSlug!.isNotEmpty)
         ? selectedProviderSlug
         : null;
 
