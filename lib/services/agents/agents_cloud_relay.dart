@@ -331,6 +331,16 @@ class AgentsCloudRelaySocket implements RelaySocket {
   /// How long a heal claim may take before the reconnect goes on without it.
   static const Duration _healClaimTimeout = Duration(seconds: 5);
 
+  /// True while a reconnect is renewing a parked host through its heal
+  /// channel. The shell shows a short neutral status for it; it says nothing
+  /// about which host or channel.
+  static ValueListenable<bool> get healInProgress => _healInProgress;
+  static final ValueNotifier<bool> _healInProgress = ValueNotifier<bool>(false);
+
+  /// Lets a widget test show the heal status without a relay.
+  @visibleForTesting
+  static set debugHealInProgress(bool value) => _healInProgress.value = value;
+
   /// One-shot waiters for a handshake / claim answer.
   Completer<Map<String, dynamic>>? _awaiting;
   bool Function(Map<String, dynamic> frame)? _awaitingMatch;
@@ -517,6 +527,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
       online = null;
     }
     if (online != null && online.contains(target)) return;
+    _healInProgress.value = true;
     try {
       // Short: the relay answers a claim at once, and a heal attempt must not
       // hold up an ordinary reconnect.
@@ -536,6 +547,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
     } on TimeoutException {
       // The relay did not answer the claim; the reconnect goes on as before.
     } finally {
+      _healInProgress.value = false;
       // A claim that timed out leaves its waiter armed. The socket stays open
       // now, so a stale waiter would swallow a later error frame.
       _awaiting = null;

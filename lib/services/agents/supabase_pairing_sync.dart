@@ -90,31 +90,67 @@ class SupabasePairingSync {
   /// when the encryption key is unavailable, or when the ciphertext cannot be
   /// decrypted or parsed (for example a row written under a different password
   /// era). The caller then falls back to the local store or a fresh pairing.
-  Future<AgentsStoredPairing?> loadEncryptedPairing() async {
-    try {
-      if (!SupabaseService.isInitialized) return null;
-      final user = SupabaseService.auth.currentUser;
-      if (user == null) return null;
+  /// [readEncryptedPairing] says which of those it was.
+  Future<AgentsStoredPairing?> loadEncryptedPairing() async =>
+      (await readEncryptedPairing()).pairing;
 
-      final row = await SupabaseService.client
+  /// The same read as [loadEncryptedPairing], with the reason when there is no
+  /// record. The restore supervisor shows the reason to the user ("Looking for
+  /// your computer…" is not "Add your computer"). Never throws.
+  Future<AgentsCloudPairingRead> readEncryptedPairing() async {
+    if (!SupabaseService.isInitialized) {
+      return const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noSession);
+    }
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      return const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noSession);
+    }
+    final Map<String, dynamic>? row;
+    try {
+      row = await SupabaseService.client
           .from(table)
           .select(columnCiphertext)
           .eq(columnUserId, user.id)
           .maybeSingle();
-      if (row == null) return null;
-
-      final ciphertext = row[columnCiphertext] as String?;
-      if (ciphertext == null || ciphertext.isEmpty) return null;
-
-      if (!await _ensureEncryptionKey()) return null;
-
-      final plaintext = await EncryptionService.decrypt(ciphertext);
-      return AgentsStoredPairing.tryParse(plaintext);
     } catch (error) {
       if (kDebugMode) {
-        debugPrint('⚠️ [AgentsPairingSync] load returned null: $error');
+        debugPrint(
+          '⚠️ [AgentsPairingSync] read failed: ${error.runtimeType}',
+        );
       }
-      return null;
+      return const AgentsCloudPairingRead(AgentsCloudPairingOutcome.network);
+    }
+    final ciphertext = row?[columnCiphertext] as String?;
+    if (ciphertext == null || ciphertext.isEmpty) {
+      return const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noRecord);
+    }
+    try {
+      if (!await _ensureEncryptionKey()) {
+        return const AgentsCloudPairingRead(
+          AgentsCloudPairingOutcome.keyLocked,
+        );
+      }
+    } catch (_) {
+      return const AgentsCloudPairingRead(AgentsCloudPairingOutcome.keyLocked);
+    }
+    try {
+      final plaintext = await EncryptionService.decrypt(ciphertext);
+      final pairing = AgentsStoredPairing.tryParse(plaintext);
+      if (pairing == null) {
+        return const AgentsCloudPairingRead(
+          AgentsCloudPairingOutcome.decryptFailed,
+        );
+      }
+      return AgentsCloudPairingRead(AgentsCloudPairingOutcome.found, pairing);
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint(
+          '⚠️ [AgentsPairingSync] decrypt failed: ${error.runtimeType}',
+        );
+      }
+      return const AgentsCloudPairingRead(
+        AgentsCloudPairingOutcome.decryptFailed,
+      );
     }
   }
 
@@ -143,4 +179,36 @@ class SupabasePairingSync {
     if (EncryptionService.hasKey) return true;
     return EncryptionService.tryLoadKey();
   }
+}
+
+/// How a read of the encrypted mirror ended.
+enum AgentsCloudPairingOutcome {
+  /// A record was read and decrypted.
+  found,
+
+  /// No Supabase client or no signed-in user yet.
+  noSession,
+
+  /// The account has no mirrored record: this account never added a computer.
+  noRecord,
+
+  /// A record exists, but the account key is not unlocked yet.
+  keyLocked,
+
+  /// The read did not reach Supabase (offline, timeout, server error).
+  network,
+
+  /// A record exists, but it cannot be decrypted or parsed with this key.
+  decryptFailed,
+}
+
+/// One read of the encrypted mirror: the record, or why there is none.
+@immutable
+class AgentsCloudPairingRead {
+  const AgentsCloudPairingRead(this.outcome, [this.pairing]);
+
+  final AgentsCloudPairingOutcome outcome;
+
+  /// Non-null only when [outcome] is [AgentsCloudPairingOutcome.found].
+  final AgentsStoredPairing? pairing;
 }
