@@ -63,13 +63,18 @@ import 'package:chuk_chat/widgets/agents_thread_header.dart';
 ///
 /// All transport lives behind [AgentsRelayController], so the UI is the same
 /// whether it drives a real socket or a fake in a widget test.
+/// `--dart-define=AGENTS_DEV_HOST=ws://127.0.0.1:8787` turns the manual
+/// host and pairing-code fields on for a local developer run. Empty (every
+/// normal build) keeps them out of the app.
+const String kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST');
+
 class AgentsThreadView extends StatefulWidget {
   const AgentsThreadView({
     super.key,
     required this.controllerBuilder,
     required this.sessionSource,
     this.pairingStore,
-    this.defaultHostUrl = 'ws://127.0.0.1:8787',
+    this.devHostUrl = kAgentsDevHostUrl,
     this.threadKey = 'default',
     this.fileSaver = const DownloadsAgentFileSaver(),
     this.onRunStateChanged,
@@ -109,8 +114,12 @@ class AgentsThreadView extends StatefulWidget {
   /// (the legacy behaviour, used by widget tests that inject a fake controller).
   final AgentsPairingStore? pairingStore;
 
-  /// Prefilled host URL for a local run.
-  final String defaultHostUrl;
+  /// A developer's escape hatch, never the product path: with a non-empty
+  /// value the connect bar also shows a host address and a pairing-code field
+  /// for a same-machine host. Defaults to the `AGENTS_DEV_HOST` dart-define,
+  /// which no release build sets, so users see no address, port or code
+  /// field — pairing is the QR code, restored from the cloud after sign-in.
+  final String devHostUrl;
 
   /// The executor-side session this view talks to (§4: many threads per agent),
   /// and the imported screen's chat id.
@@ -319,7 +328,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _hostController = TextEditingController(text: widget.defaultHostUrl);
+    _hostController = TextEditingController(text: widget.devHostUrl);
     // The link's fan-out outlives every controller, so this one subscription
     // survives reconnects. It carries only what this view still owns: the
     // approval prompt and the live `run_ack`.
@@ -792,7 +801,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         await controller.provisionAccount(session);
       }
     } catch (error) {
-      if (mounted) setState(() => _localError = '$error');
+      if (mounted) setState(() => _localError = _connectionFailureText(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -824,7 +833,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final host = _hostController.text.trim();
     final code = _codeController.text.trim();
     if (host.isEmpty || code.isEmpty) {
-      setState(() => _localError = 'Enter both a host URL and a pairing code.');
+      setState(() => _localError = 'Enter both a host and a pairing code.');
       return;
     }
     setState(() {
@@ -843,7 +852,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     } catch (error) {
       // The pairing failure is already reflected in controller.state; a
       // provisioning failure is surfaced here.
-      if (mounted) setState(() => _localError = '$error');
+      if (mounted) setState(() => _localError = _pairingFailureText(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -927,6 +936,29 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (error is AgentsCloudRelayException) return error.message;
     return 'That did not work. Make sure Agents is running on your computer, '
         'then scan the code again.';
+  }
+
+  /// The same for a reconnect of a computer that is already paired.
+  static String _connectionFailureText(Object error) {
+    if (error is AgentsCloudRelayException) return error.message;
+    return _kComputerAway;
+  }
+
+  static const String _kComputerAway =
+      'Your computer is not reachable right now. Make sure it is on and '
+      'Agents is running there.';
+
+  /// What the connect bar says about the transport. The relay's own detail
+  /// ("Bad state: Host closed the connection during pairing", a socket
+  /// error) is for a log, not for a person, so it is never shown.
+  String? _connectionBanner(AgentsRelayState state) {
+    if (_localError != null) return _localError;
+    return switch (state.phase) {
+      AgentsRelayPhase.error when _storedPairing == null =>
+        'Pairing did not work. Scan the code on your computer again.',
+      AgentsRelayPhase.error || AgentsRelayPhase.closed => _kComputerAway,
+      _ => null,
+    };
   }
 
   Future<void> _openPairingScreen() async {
@@ -1844,12 +1876,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   Widget _buildConnectBar(BuildContext context, AgentsRelayState state) {
     final theme = Theme.of(context);
-    final banner =
-        _localError ??
-        (state.phase == AgentsRelayPhase.error ? state.detail : null) ??
-        (state.phase == AgentsRelayPhase.closed
-            ? (state.detail ?? 'Disconnected')
-            : null);
+    final banner = _connectionBanner(state);
     // Already paired once: no code form. A compact reconnect + forget bar.
     if (widget.pairingStore != null && _storedPairing != null) {
       return _buildReconnectBar(context, banner);
@@ -1865,14 +1892,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Text(
-                'Connect to a host to start chatting.',
+                'Add your computer to start chatting.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: theme.hintColor),
               ),
             ),
-            // The one path a person is meant to take: scan the code the
-            // computer shows. Everything below it is the developer's
-            // same-machine path and is on its way out.
+            // The one path a person takes: scan the code the computer shows.
+            // A computer paired before is restored from the account after
+            // sign-in and never shows this bar.
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: FilledButton.icon(
@@ -1902,57 +1929,60 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                   ],
                 ),
               ),
-            // The same-machine developer path, and only that: a release build
-            // shows no address, no port and no code field. A phone reaches its
-            // host through the relay, and the QR above is the whole flow.
-            if (kDebugMode)
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    flex: 5,
-                    child: TextField(
-                      controller: _hostController,
-                      enabled: !_busy,
-                      decoration: const InputDecoration(
-                        labelText: 'Host',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 4,
-                    child: TextField(
-                      controller: _codeController,
-                      enabled: !_busy,
-                      autofocus: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Pairing code',
-                        hintText: 'chan1234-428913',
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onSubmitted: (_) => _connect(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _busy ? null : _connect,
-                    child: _busy
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Text('Connect'),
-                  ),
-                ],
-              ),
+            // The developer's same-machine path, only with AGENTS_DEV_HOST set
+            // at build time. No product build shows an address, a port or a
+            // code field.
+            if (widget.devHostUrl.isNotEmpty) _buildDevConnectRow(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDevConnectRow() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Expanded(
+          flex: 5,
+          child: TextField(
+            controller: _hostController,
+            enabled: !_busy,
+            decoration: const InputDecoration(
+              labelText: 'Host',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          flex: 4,
+          child: TextField(
+            controller: _codeController,
+            enabled: !_busy,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Pairing code',
+              hintText: 'chan1234-428913',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            onSubmitted: (_) => _connect(),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: _busy ? null : _connect,
+          child: _busy
+              ? const SizedBox(
+                  height: 18,
+                  width: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Connect'),
+        ),
+      ],
     );
   }
 
@@ -1965,7 +1995,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         banner ??
         (reconnecting
             ? 'Reconnecting…'
-            : 'Paired with ${_storedPairing!.peerDeviceId}. Not connected.');
+            : 'Your computer is not connected.');
     return SafeArea(
       top: false,
       child: Padding(

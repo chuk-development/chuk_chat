@@ -202,12 +202,25 @@ class _AgentsPairingPageState extends State<AgentsPairingPage> {
           alignment: Alignment.bottomCenter,
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Text(
-              'Point the camera at the code on your computer.',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: Colors.white,
-                shadows: const <Shadow>[Shadow(blurRadius: 8)],
+            // A flat scrim keeps the hint readable over the camera image. No
+            // blurred text shadow: that reads as a glow.
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Text(
+                  'Point the camera at the code on your computer.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.white,
+                  ),
+                ),
               ),
             ),
           ),

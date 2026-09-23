@@ -106,6 +106,7 @@ void main() {
     List<bool>? runStates,
     VoidCallback? onOpenModelScreen,
     bool phoneLayout = false,
+    String devHostUrl = '',
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -117,6 +118,7 @@ void main() {
       _app(
         AgentsThreadView(
           phoneLayout: phoneLayout,
+          devHostUrl: devHostUrl,
           controllerBuilder: () async => controller,
           sessionSource: const _FakeSessionSource(),
           threadKey: threadKey,
@@ -182,13 +184,30 @@ void main() {
   testWidgets('shows the connect affordance when disconnected', (tester) async {
     await pumpView(tester);
 
-    // A compact connect bar, not a dominating form: default host prefilled,
-    // a pairing-code field, and a Connect button.
-    expect(find.text('ws://127.0.0.1:8787'), findsOneWidget);
-    expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
-    expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
+    // The one product path is the QR code. No address, no port, no code
+    // field and no transport wording.
+    expect(
+      find.byKey(const ValueKey<String>('agents-add-computer')),
+      findsOneWidget,
+    );
+    expect(find.text('Add your computer to start chatting.'), findsOneWidget);
+    expect(find.textContaining('ws://'), findsNothing);
+    expect(find.textContaining('127.0.0.1'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Host'), findsNothing);
+    expect(find.widgetWithText(TextField, 'Pairing code'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Connect'), findsNothing);
     // Local history remains readable before a host is available.
     expect(find.byType(ChukChatUIDesktop), findsOneWidget);
+  });
+
+  testWidgets('the manual host fields exist only behind the dev define', (
+    tester,
+  ) async {
+    await pumpView(tester, devHostUrl: 'ws://127.0.0.1:8787');
+
+    expect(find.text('ws://127.0.0.1:8787'), findsOneWidget);
+    expect(find.widgetWithText(TextField, 'Pairing code'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
   });
 
   testWidgets('connecting shows nothing but the header dot', (tester) async {
@@ -220,14 +239,37 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
-    expect(find.text('Pairing failed (macMismatch)'), findsOneWidget);
+    // A sentence a person can act on, never the relay's raw detail.
+    expect(
+      find.text('Pairing did not work. Scan the code on your computer again.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('macMismatch'), findsNothing);
+  });
+
+  testWidgets('a raw transport error never reaches the screen', (
+    tester,
+  ) async {
+    final controller = await pumpView(tester);
+    controller.set(
+      const AgentsRelayState(
+        phase: AgentsRelayPhase.closed,
+        detail: 'Bad state: Host closed the connection during pairing',
+      ),
+    );
+    await tester.pump();
+
+    expect(find.textContaining('Bad state'), findsNothing);
+    expect(find.textContaining('Host closed'), findsNothing);
   });
 
   testWidgets('tapping Connect runs connect, provisions, and shows the chat', (
     tester,
   ) async {
-    final controller = await pumpView(tester);
+    final controller = await pumpView(
+      tester,
+      devHostUrl: 'ws://127.0.0.1:8787',
+    );
 
     await tester.enterText(
       find.widgetWithText(TextField, 'Pairing code'),
@@ -497,10 +539,13 @@ void main() {
       await tester.pump();
       await tester.pumpAndSettle();
 
-      // The trust is gone and the code connect form is back.
+      // The trust is gone and the way to add the computer is back.
       expect(await store.loadPairing(), isNull);
-      expect(find.widgetWithText(FilledButton, 'Connect'), findsOneWidget);
-      expect(find.text('Connect to a host to start chatting.'), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey<String>('agents-add-computer')),
+        findsOneWidget,
+      );
+      expect(find.text('Add your computer to start chatting.'), findsOneWidget);
     });
   });
 

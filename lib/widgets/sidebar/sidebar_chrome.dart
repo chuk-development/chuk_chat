@@ -22,7 +22,6 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/sidebar/hover_marquee_text.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
-import 'package:chuk_chat/constants.dart';
 
 /// The colour the sidebar panel is painted in — the same step off the page
 /// that a floating card takes in the chat.
@@ -980,16 +979,10 @@ class _SbChatTileBody extends StatelessWidget {
           Container(
             width: 7,
             height: 7,
+            // A flat dot. No halo: the design has no glow anywhere.
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: theme.colorScheme.primary,
-              boxShadow: [
-                BoxShadow(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.5),
-                  blurRadius: 4,
-                  spreadRadius: 1,
-                ),
-              ],
             ),
           ),
         ],
