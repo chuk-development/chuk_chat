@@ -529,10 +529,12 @@ def test_host_and_executor_frames_share_sequence_after_reconnect(tmp_path):
     host.start()
     try:
         first = ControllerDouble(host.url, host.channel_id, host.pairing_code)
-        events = first.run("say done", timeout=5.0)
+        # The same 15 s budget every other pairing here has: 5 s ran out on a
+        # loaded machine while the run was still streaming.
+        events = first.run("say done", timeout=15.0)
         assert events[-1]["type"] == "done"
         second = ControllerDouble(host.url, host.channel_id, reconnect_trust=first.trust())
-        events = second.run("say done again", timeout=5.0)
+        events = second.run("say done again", timeout=15.0)
         assert events[-1]["type"] == "done"
         assert any(e.get("text") == "host notice" for e in events)
     finally:

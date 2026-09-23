@@ -11,7 +11,7 @@ config = load_config()                       # $AGENTS_HOME/config.toml
 config.sandbox.image                          # typed, never a str | None surprise
 get_value(config, "model.default")
 config = set_value(config, "model.default", "claude-opus-5")
-save_config(config, "~/.agents/config.toml")  # 0600, atomic, lossless
+save_config(config)                           # $AGENTS_HOME/config.toml, 0600, atomic
 ```
 
 Precedence, for every setting, with no exceptions:
@@ -44,6 +44,12 @@ from .loader import (
     set_value,
     to_toml,
 )
+from .state_home import (
+    STATE_DIRNAME,
+    default_state_home,
+    locate_state_home,
+    resolve_state_home,
+)
 from .schema import (
     ALL_FIELDS,
     CONFIG_VERSION,
@@ -64,6 +70,7 @@ from .schema import (
     RelayConfig,
     SandboxConfig,
     SkillsConfig,
+    TraceConfig,
     VncConfig,
 )
 
@@ -96,9 +103,14 @@ __all__ = [
     "SandboxConfig",
     "Setting",
     "SkillsConfig",
+    "TraceConfig",
     "VncConfig",
     "config_home",
+    "default_state_home",
+    "locate_state_home",
     "migrate_state_home",
+    "resolve_state_home",
+    "STATE_DIRNAME",
     "default_config_path",
     "export_environ",
     "get_value",

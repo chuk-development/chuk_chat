@@ -965,6 +965,7 @@ class Executor:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop.clear()
+        self._prepare_state_file()
         self._start_worker()
         self._thread = threading.Thread(
             target=self._serve, name=f"executor-{self._name}", daemon=True
@@ -979,6 +980,23 @@ class Executor:
                 logger.info("woke %d background job(s) that ended while the host was down", swept)
         except Exception as exc:  # noqa: BLE001
             logger.info("job sweep failed: %s", type(exc).__name__)
+
+    def _prepare_state_file(self) -> None:
+        """Create or migrate the state file now, not on the first task.
+
+        Opening a store runs the schema script, the additive ``runs`` column
+        migrations and the search-index backfill, and a new file is switched to
+        WAL, which costs several fsyncs. Paid lazily, all of that landed on the
+        serve thread inside the first task frame, so on a busy disk the first
+        question after a start sat there for seconds before it became a run.
+        A failure here is not fatal: every later open retries the same steps.
+        """
+        if not self._db_path:
+            return
+        try:
+            StateStore(self._db_path).close()
+        except Exception as exc:  # noqa: BLE001 — never keep the executor from starting
+            logger.info("state file not prepared at start: %s", type(exc).__name__)
 
     def stop(self, *, join_timeout: float = 5.0) -> None:
         """Signal both loops, join them, and release the sandbox.

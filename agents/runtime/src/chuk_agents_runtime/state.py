@@ -28,6 +28,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from .search import ensure_fts_schema, register_functions, search_messages
+from .sqlite_tuning import tune_connection
 from .tool_events import tool_event_fields
 
 _SCHEMA = """
@@ -267,6 +268,10 @@ class StateStore:
                 self._path, isolation_level=None, timeout=5.0
             )
             conn.row_factory = sqlite3.Row
+            # See sqlite_tuning: no fsync per commit, no checkpoint per close.
+            # Without it a fresh file's ~30 schema statements and every close
+            # held the executor's serve thread for seconds on a busy disk.
+            tune_connection(conn)
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
             conn.execute("PRAGMA busy_timeout=5000;")

@@ -1,4 +1,4 @@
-"""``cowork-host`` console entry point.
+"""``agents-host`` console entry point (``cowork-host`` is an alias).
 
 Three subcommands, matching how the plan says a host is set up (§5: "install =
 one shell script + ``connect``"):
@@ -34,6 +34,7 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
+from chuk_agents_config import locate_state_home, resolve_state_home
 from chuk_agents_runtime import DEFAULT_MODEL_ID, MockModelClient
 
 from .cloud_relay import DEFAULT_RELAY_BASE_URL
@@ -42,6 +43,16 @@ from .identity import HOST_DEVICE_ID
 from .pairing_store import HostPairingStore
 from .pairing_uri import qr_lines
 from .service import UNIT_NAME, SystemdUserService, user_unit_path
+
+WORKSPACE_HELP = (
+    f"host state directory (default $AGENTS_HOME, else "
+    f"$XDG_DATA_HOME/chuk-agents = {DEFAULT_WORKSPACE}). A legacy ~/.cowork, "
+    "or host files at the top of ~/.agents, are moved there once by run/connect"
+)
+
+#: The commands that own the state and may move a legacy directory. The others
+#: only read it, so they look where it is now and never move anything.
+_STATE_OWNERS = ("run", "connect")
 
 #: How long ``connect`` waits for the app before giving up, in seconds.
 DEFAULT_CONNECT_TIMEOUT = 600.0
@@ -113,8 +124,8 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
     )
     parser.add_argument(
         "--workspace",
-        default=os.environ.get("AGENTS_HOME", DEFAULT_WORKSPACE),
-        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $AGENTS_HOME)",
+        default=None,
+        help=WORKSPACE_HELP,
     )
     parser.add_argument(
         "--model",
@@ -166,7 +177,7 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         help="DEVELOPER SWITCH, off by default: write a JSONL run trace that "
         "says which segment of a slow turn was slow (us, the transport or the "
-        "provider). Read it back with  cowork-host trace --last. Same as "
+        "provider). Read it back with  agents-host trace --last. Same as "
         "AGENTS_TRACE=1",
     )
     parser.add_argument(
@@ -193,7 +204,7 @@ def _add_common_arguments(parser: argparse.ArgumentParser) -> None:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="cowork-host",
+        prog="agents-host",
         description="Run the Agents platform locally: a blind localhost relay, "
         "an agent, and the pairing initiator — no production relay.",
     )
@@ -232,8 +243,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument(
         "--workspace",
-        default=os.environ.get("AGENTS_HOME", DEFAULT_WORKSPACE),
-        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $AGENTS_HOME)",
+        default=None,
+        help=WORKSPACE_HELP,
     )
 
     doctor_parser = sub.add_parser(
@@ -244,8 +255,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     doctor_parser.add_argument(
         "--workspace",
-        default=os.environ.get("AGENTS_HOME", DEFAULT_WORKSPACE),
-        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $AGENTS_HOME)",
+        default=None,
+        help=WORKSPACE_HELP,
     )
     doctor_parser.add_argument(
         "--quick",
@@ -259,7 +270,7 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Print the attribution of a traced run — prepare, connect, "
         "provider wait, provider stream, tools, retries — and then the phase "
         "timeline. Starts nothing and opens no port. Turn tracing on first with "
-        "cowork-host run --trace (or AGENTS_TRACE=1).",
+        "agents-host run --trace (or AGENTS_TRACE=1).",
     )
     trace_parser.add_argument(
         "run_id",
@@ -280,8 +291,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     trace_parser.add_argument(
         "--workspace",
-        default=os.environ.get("AGENTS_HOME", DEFAULT_WORKSPACE),
-        help=f"host workspace directory (default {DEFAULT_WORKSPACE}, or $AGENTS_HOME)",
+        default=None,
+        help=WORKSPACE_HELP,
     )
     trace_parser.add_argument(
         "--trace-dir",
@@ -309,7 +320,7 @@ def normalize_argv(argv: list[str]) -> list[str]:
 
 
 def _log(message: str) -> None:
-    print(f"[cowork-host] {message}", flush=True)
+    print(f"[agents-host] {message}", flush=True)
 
 
 # --------------------------------------------------------------------------
@@ -372,7 +383,7 @@ def _start_tracing(args: argparse.Namespace) -> None:
     _log(
         "  content tracing "
         + ("ON (messages are written, scrubbed)" if settings.content else "off (structure only)")
-        + f"; read it back with  cowork-host trace --last --trace-dir {Path(path).parent}"
+        + f"; read it back with  agents-host trace --last --trace-dir {Path(path).parent}"
     )
 
 
@@ -466,7 +477,7 @@ def _print_banner(host: LocalHost, *, qr: bool = True, qr_invert: bool = True) -
             flush=True,
         )
         print(
-            "  To pair a different device, run  cowork-host connect --pair "
+            "  To pair a different device, run  agents-host connect --pair "
             "(or delete paired.json in the workspace). That mints one fresh "
             "code and stops the current device.",
             flush=True,
@@ -556,7 +567,7 @@ def cmd_connect(
             "device (the current one stops working):",
             flush=True,
         )
-        print("      cowork-host connect --pair", flush=True)
+        print("      agents-host connect --pair", flush=True)
         return 0
 
     svc = service if service is not None else SystemdUserService()
@@ -601,7 +612,7 @@ def cmd_connect(
         print("", flush=True)
         print(
             f"  Not paired: no app completed pairing within {args.timeout:g}s. "
-            "Run  cowork-host connect  again.",
+            "Run  agents-host connect  again.",
             flush=True,
         )
 
@@ -615,7 +626,7 @@ def cmd_connect(
     elif paired and not manage_service:
         print(
             "  No systemd service is installed here. Keep the host running with:"
-            "\n      cowork-host run",
+            "\n      agents-host run",
             flush=True,
         )
     return 0 if paired else 1
@@ -647,7 +658,7 @@ def cmd_status(
     )
     if not paired:
         out("")
-        out("  Pair the app once:   cowork-host connect")
+        out("  Pair the app once:   agents-host connect")
     out("")
     return 0
 
@@ -660,8 +671,8 @@ def cmd_status(
 TRACE_HOW_TO = (
     "  No trace file yet. Tracing is a developer switch and it is off by default.\n"
     "  Turn it on and run the host again:\n"
-    "      cowork-host run --trace          (or: AGENTS_TRACE=1 cowork-host run)\n"
-    "  Then:  cowork-host trace --last"
+    "      agents-host run --trace          (or: AGENTS_TRACE=1 agents-host run)\n"
+    "  Then:  agents-host trace --last"
 )
 
 
@@ -692,7 +703,7 @@ def _print_run_table(rows: list[dict], out: Callable[..., Any]) -> None:
             f"{row['reason']}"
         )
     out("")
-    out("  Print one:  cowork-host trace <run id prefix>      (or --last)")
+    out("  Print one:  agents-host trace <run id prefix>      (or --last)")
     out("")
 
 
@@ -727,7 +738,7 @@ def cmd_trace(args: argparse.Namespace, *, out: Callable[..., Any] = print) -> i
     lines = read_lines(source, run_id=run_id)
     if not lines:
         out(f"  No run in {source} starts with '{run_id}'.")
-        out("  List what is there:  cowork-host trace --list")
+        out("  List what is there:  agents-host trace --list")
         return 1
     out(waterfall(lines))
     return 0
@@ -738,10 +749,25 @@ def cmd_trace(args: argparse.Namespace, *, out: Callable[..., Any] = print) -> i
 # --------------------------------------------------------------------------
 
 
+def workspace_for(command: str, explicit: str | None) -> str:
+    """The state directory one command works on.
+
+    ``--workspace`` wins, then ``$AGENTS_HOME`` (or ``$COWORK_HOME``), then the
+    default. ``run`` and ``connect`` own the state, so they move a legacy
+    directory into the default first; ``status``, ``doctor`` and ``trace``
+    only look, and find the state wherever it is now. Both answers are the
+    same directory once the move has happened.
+    """
+    if command in _STATE_OWNERS:
+        return str(resolve_state_home(explicit, logger=_log))
+    return str(locate_state_home(explicit))
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(normalize_argv(list(sys.argv[1:] if argv is None else argv)))
     command = getattr(args, "command", None) or "run"
+    args.workspace = workspace_for(command, getattr(args, "workspace", None))
     if command == "connect":
         return cmd_connect(args)
     if command == "status":

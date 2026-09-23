@@ -21,7 +21,7 @@ config = load_config()                         # $AGENTS_HOME/config.toml
 config.sandbox.image                           # typed
 get_value(config, "model.default")
 config = set_value(config, "model.default", "claude-opus-5")
-save_config(config, "~/.agents/config.toml")   # 0600, atomic, lossless
+save_config(config)                            # $AGENTS_HOME/config.toml, 0600, atomic
 ```
 
 ## Precedence
@@ -46,7 +46,8 @@ config = load_config(overrides={"model.default": "claude-opus-5"})
 
 ## The file
 
-`$AGENTS_HOME/config.toml`, default `~/.agents/config.toml`. It is parsed with
+`$AGENTS_HOME/config.toml`, default `~/.local/share/chuk-agents/config.toml`
+(`$XDG_DATA_HOME/chuk-agents`; not `~/.agents`, which other tools share). It is parsed with
 the standard library's `tomllib`; this package has no third-party dependency.
 
 ```toml
@@ -166,7 +167,7 @@ that is in neither list, so this table cannot fall behind the code.
 
 | environment variable | config key | type | default | meaning |
 | --- | --- | --- | --- | --- |
-| `AGENTS_HOME` | `paths.home` | string | `~/.agents` | The host state directory: the agent workspaces, the logs, the account store, the encrypted vault and this configuration file itself. |
+| `AGENTS_HOME` | `paths.home` | string | `~/.local/share/chuk-agents` | The host state directory (`COWORK_HOME` is still read after it): the agent workspaces, the logs, the account store, the encrypted vault and this configuration file itself. |
 | `AGENTS_SANDBOX_KIND` | `sandbox.kind` | `auto`, `local`, `docker` | `auto` | Which backend runs the agent's commands. |
 | `AGENTS_SANDBOX_IMAGE` | `sandbox.image` | string | *(empty)* | The container image every sandbox starts from. |
 | `AGENTS_SANDBOX_IMAGE_DIGEST` | `sandbox.image_digest` | string | *(empty)* | A `sha256:...` digest the image must have. |
@@ -228,6 +229,12 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_APPROVAL_WAIT_SECONDS` | `limits.approval_wait_seconds` | number | `600.0` | How long an approval prompt waits for the user before it gives up and denies. |
 | `AGENTS_SECRET_REQUEST_TIMEOUT_SECONDS` | `limits.secret_request_timeout_seconds` | number | `600.0` | How long a request for a credential waits before every open name is reported missing. |
 | `AGENTS_JOB_TIMEOUT_SECONDS` | `limits.job_timeout_seconds` | number | `86400.0` | The fallback cap on one background job started from the shell tools. |
+| `AGENTS_HEARTBEAT_SECONDS` | `limits.heartbeat_seconds` | number | `10.0` | How often a running turn sends a `heartbeat` event to the app. `0` turns it off. |
+| `AGENTS_TRACE` | `trace.enabled` | boolean | `false` | Developer switch: write a JSONL run trace (structure only). Same as `agents-host run --trace`. |
+| `AGENTS_TRACE_CONTENT` | `trace.content` | boolean | `false` | Developer switch: also trace message content, scrubbed. Implies `trace.enabled`. |
+| `AGENTS_TRACE_DIR` | `trace.directory` | string | *(empty)* | Where the trace goes; empty means `<state directory>/trace`. |
+| `AGENTS_TRACE_MAX_BYTES` | `trace.max_bytes` | integer | `16777216` | The size at which the trace file rolls over. |
+| `AGENTS_TRACE_BACKUPS` | `trace.backups` | integer | `3` | How many rolled-over trace files are kept. |
 | `AGENTS_TRIGGERS_PATH` | `automation.triggers_path` | string | `.agents/automations/triggers.jsonl` | The file a watcher appends a trigger line to. |
 | `AGENTS_AVD` | `emulator.avd` | string | `cowork_x64` | The name of the virtual device, created on first start. |
 | `AGENTS_AVD_IMAGE` | `emulator.image` | string | `system-images;android-36;google_apis;x86_64` | The system image the device is created from. |

@@ -137,7 +137,11 @@ def test_four_retries_replay_the_question_once(tmp_path):
     finally:
         store.close()
 
-    assert [e for e in events if e["type"] == "user"] == [
+    users = [e for e in events if e["type"] == "user"]
+    # A replayed row carries its time (runtime test_replay_timestamps); the
+    # point here is that there is exactly ONE user bubble, not the stamp.
+    assert all(isinstance(e.pop("created_at"), float) for e in users)
+    assert users == [
         {"type": "user", "text": "why", "replay": True, "mid": events[0]["mid"]}
     ]
     assert [e["text"] for e in events if e["type"] == "delta"] == ["e"]
