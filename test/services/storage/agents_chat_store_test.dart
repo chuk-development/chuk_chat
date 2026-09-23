@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 List<Map<String, dynamic>> rows(List<List<String>> turns) =>
     <Map<String, dynamic>>[
@@ -14,6 +15,9 @@ List<Map<String, dynamic>> rows(List<List<String>> turns) =>
     ];
 
 void main() {
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {

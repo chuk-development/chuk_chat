@@ -31,6 +31,7 @@ import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubble;
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../support/fake_relay_controller.dart';
 
@@ -86,6 +87,9 @@ void main() {
   // flag-off test process.
   setUp(() => debugAgentsChatCoreOverride = true);
   tearDown(() => debugAgentsChatCoreOverride = null);
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{});
     await VerboseService.instance.setEnabled(false);

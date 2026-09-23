@@ -27,6 +27,7 @@ import 'package:chuk_chat/services/notifications/run_notifications.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 import '../services/notifications/local_notifications_test.dart' show FakeBackend;
 import '../support/fake_relay_controller.dart';
@@ -66,6 +67,9 @@ void main() {
   // flag-off test process.
   setUp(() => debugAgentsChatCoreOverride = true);
   tearDown(() => debugAgentsChatCoreOverride = null);
+  // These tests model the Agents build: Agents threads take the Agents
+  // store and queue (ChatOrigin). Tests run with FEATURE_AGENTS off.
+  ChatOrigin.agentsEnabled = true;
   late FakeBackend backend;
   late List<String?> consumedSessions;
 

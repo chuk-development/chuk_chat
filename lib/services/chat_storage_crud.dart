@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:cryptography/cryptography.dart';
@@ -393,14 +394,27 @@ class ChatStorageCrud {
       return;
     }
 
-    // AGENTS: the read key, not the live session. On a cold start the app
-    // paints long before gotrue has its session back off disk, and upstream's
-    // `currentUser == null` branch CLEARED the map — it threw away the very
-    // rows the thread was about to paint from. The remembered id keeps the
-    // cache readable; with no id at all the map is left exactly as it is,
-    // because an empty map is not the same statement as "no chats".
-    final userId = await AgentsChatStore.resolveCacheUserId();
-    if (userId == null) return;
+    final String userId;
+    if (ChatOrigin.agentsEnabled) {
+      // AGENTS: the read key, not the live session. On a cold start the app
+      // paints long before gotrue has its session back off disk, and
+      // upstream's `currentUser == null` branch CLEARED the map — it threw
+      // away the very rows the thread was about to paint from. The remembered
+      // id keeps the cache readable; with no id at all the map is left
+      // exactly as it is, because an empty map is not the same statement as
+      // "no chats".
+      final cacheUserId = await AgentsChatStore.resolveCacheUserId();
+      if (cacheUserId == null) return;
+      userId = cacheUserId;
+    } else {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null) {
+        ChatStorageState.chatsById.clear();
+        ChatStorageState.notifyChanges();
+        return;
+      }
+      userId = user.id;
+    }
 
     try {
       // Migrate from old encrypted cache if needed
@@ -900,9 +914,13 @@ class ChatStorageCrud {
         status: status,
         queueId: m['queueId'] as String?,
         messageId: m['messageId'] as String?,
-        sentAt: m['sentAt']?.toString(),
-        startedAt: m['startedAt']?.toString(),
-        generationMs: m['generationMs']?.toString(),
+        // AGENTS: the Agents transcript carries these timings; upstream's
+        // save drops them, so they are kept only with FEATURE_AGENTS on.
+        sentAt: ChatOrigin.agentsEnabled ? m['sentAt']?.toString() : null,
+        startedAt: ChatOrigin.agentsEnabled ? m['startedAt']?.toString() : null,
+        generationMs: ChatOrigin.agentsEnabled
+            ? m['generationMs']?.toString()
+            : null,
         // Answer-version pager: the variant archive and the active index must
         // survive persist + reload. The UI map stores `variants` as a JSON
         // string and `activeVariant` as a stringified int, so parse the latter
