@@ -554,6 +554,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Request focus if sidebar closed
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      composerFocusNode.canRequestFocus = !widget.isSidebarExpanded;
       if (!widget.isSidebarExpanded) {
         composerFocusNode.requestFocus();
       }
@@ -636,6 +637,13 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void didUpdateWidget(covariant ChukChatUIMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // While the sidebar covers the chat the composer must not hold or take
+    // focus. Otherwise a menu, dialog or page that closes over the sidebar
+    // hands focus back to the composer and the keyboard pops up unasked.
+    if (widget.isSidebarExpanded != oldWidget.isSidebarExpanded) {
+      if (widget.isSidebarExpanded) composerFocusNode.unfocus();
+      composerFocusNode.canRequestFocus = !widget.isSidebarExpanded;
+    }
     // ID-BASED: Only react when the actual chat ID changes
     if (widget.selectedChatId != oldWidget.selectedChatId) {
       if (kDebugMode) {
@@ -3087,7 +3095,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             builder: (context) => GestureDetector(
               behavior: HitTestBehavior.translucent,
               onTap: () {
-                FocusScope.of(context).unfocus();
+                // Unfocus the node itself, not the scope: a scope unfocus
+                // keeps the composer in the route's focus history, and the
+                // next closing menu or dialog gives it focus back.
+                FocusManager.instance.primaryFocus?.unfocus();
               },
               child: Stack(
                 children: [

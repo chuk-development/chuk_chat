@@ -442,12 +442,9 @@ void main() {
       await tester.pump();
       await tester.pump();
 
-      // The options button carries Material's minimum touch target, so a
-      // near miss cannot land on the tile underneath it.
-      expect(
-        tester.getSize(find.byTooltip('Chat options').first),
-        const Size(48, 48),
-      );
+      // No three-dot button: long-press is the only way into the chat menu,
+      // so the menu always opens at the pressed row.
+      expect(find.byTooltip('Chat options'), findsNothing);
 
       expect(find.text('Gamma chat'), findsOneWidget);
       await tester.tap(find.widgetWithText(SbGroupHeader, 'Pinned'));

@@ -39,6 +39,7 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
 
   /// The active chat mode. Every mode carries its own model, provider and
   /// reasoning level, so switching modes swaps all four at once.
+  @override
   ChatMode chatMode = ChatModeService.fallbackMode;
 
   /// The active mode's reasoning level (`none` … `xhigh`, `none` = off).
@@ -286,10 +287,10 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     });
     ModelSelectionDropdown.selectedModelNotifier.value = config.modelId;
     await UserPreferencesService.saveSelectedModel(config.modelId);
-    // The per-model provider pin is owned by the model screen. Read it here
-    // rather than overwrite it, and fall back to the mode's stored provider
-    // only when nothing is pinned. Awaited so it cannot race the unawaited
-    // read the model-selection listener starts from the notifier above.
+    // Fast and Thinking keep their own provider, which the lookup below
+    // prefers; the per-model pin applies only in custom mode or when the mode
+    // pins nothing. Awaited so it cannot race the unawaited read the
+    // model-selection listener starts from the notifier above.
     if (!mounted) return;
     await loadProviderSlugForModel(config.modelId, forceFromPrefs: true);
     if (mounted && (selectedProviderSlug ?? '').isEmpty) {
