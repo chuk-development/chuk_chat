@@ -26,7 +26,7 @@ import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
-import 'package:chuk_chat/pages/sandbox_management_page.dart';
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
@@ -143,7 +143,7 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(l.settings, style: titleTextStyle),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
           ExpressiveSectionHeader('Account'),
           ExpressiveGroup(
@@ -226,7 +226,6 @@ class _SettingsPageState extends State<SettingsPage> {
                 icon: Icons.build_circle_outlined,
                 title: l.toolCalling,
                 subtitle: l.toolCallingSubtitle,
-                trailing: const _Badge('On', tone: BadgeTone.success),
                 onTap: () {
                   Navigator.push(
                     context,
@@ -271,10 +270,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   ),
                   child: _SettingsRow(
                     icon: Icons.graphic_eq_rounded,
-                    title: 'Assistent',
-                    subtitle:
-                        'Chuk Chat als Assistent des Geräts: über jeder App, '
-                        'sieht den Bildschirm, startet Navigation',
+                    title: l.assistantSurface,
+                    subtitle: l.assistantSurfaceSubtitle,
                     onTap: () {
                       Navigator.push(
                         context,
@@ -285,20 +282,18 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
-              // Fix C: the standalone GitHub entry was removed and the
-              // GitHub connection now lives inside SandboxManagementPage —
-              // the GitHub token is only ever used by `git`/`gh` inside the
-              // sandbox, so the entry point belongs there.
+              // The GitHub token backs the GitHub MCP connector, so the
+              // entry point is shown together with the connectors.
+              if (kFeatureMcp)
               _SettingsRow(
-                icon: Icons.developer_board,
-                title: 'Sandboxes',
-                subtitle:
-                    'See and stop running code-execution containers (max 2)',
+                icon: Icons.code,
+                title: 'GitHub',
+                subtitle: 'Connect GitHub for the GitHub connector',
                 onTap: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const SandboxManagementPage(),
+                      builder: (_) => const GitHubConnectionPage(),
                     ),
                   );
                 },
@@ -822,7 +817,6 @@ class _SettingsRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String? subtitle;
-  final Widget? trailing;
   final VoidCallback onTap;
 
   const _SettingsRow({
@@ -830,7 +824,6 @@ class _SettingsRow extends StatelessWidget {
     required this.title,
     required this.onTap,
     this.subtitle,
-    this.trailing,
   });
 
   @override
@@ -838,7 +831,6 @@ class _SettingsRow extends StatelessWidget {
     icon: icon,
     title: title,
     subtitle: subtitle,
-    trailing: trailing,
     onTap: onTap,
   );
 }

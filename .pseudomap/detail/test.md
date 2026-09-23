@@ -1,13 +1,11 @@
-# test · Signatures
+# test · Signaturen
 
 ## test/chat_cache_no_eager_full_read_test.dart  (80 Z.)
-
 - L17 `File _lib(String relative)`
 - L19 `Iterable<File> _dartFilesIn(String directory)`
 - L29 `void main()`
 
 ## test/fastlane_metadata_test.dart  (162 Z.)
-
 - L10 `_metadataRoot = 'fastlane/metadata/android'`
 - L13 `_titleLimit = 30`  — Play's own limits for a store listing.
 - L14 `_shortDescriptionLimit = 80`
@@ -21,7 +19,6 @@
 - L54 `void main()`
 
 ## test/local_chat_cache_compression_test.dart  (271 Z.)
-
 - L16 `class _FakePathProvider extends PathProviderPlatform with MockPlatformInterfaceMixin`
   - L18 `_FakePathProvider(this.dir)`
   - L20 `final String dir`
@@ -32,15 +29,12 @@
 - L50 `void main()`
 
 ## test/token_activity_stats_test.dart  (424 Z.)
-
 - L8 `UsageLogEntry _entry(DateTime? createdAt, {int tokens = 10})`  — Minimal usage entry for the stats math: only [createdAt] and the token
 - L22 `DateTime _d(int year, int month, int day)`  — A local-date midnight, so tests never depend on the machine timezone.
 - L24 `void main()`
 
 ## test/tray_action_bus_test.dart  (30 Z.)
-
 - L5 `void main()`
 
 ## test/verify_languages.dart  (19 Z.)
-
 - L4 `void main()`

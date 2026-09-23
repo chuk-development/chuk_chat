@@ -50,7 +50,6 @@ void main() {
         source: source,
         now: clock,
         reconnectGrace: const Duration(milliseconds: 100),
-        sinkGrace: const Duration(milliseconds: 50),
       );
 
   test('leaves a token with life left alone', () async {
@@ -120,81 +119,6 @@ void main() {
     expect(await s.refreshIfDue(), isTrue);
     expect(reconnects, 0);
     expect(source.refreshCalls, 1);
-  });
-
-  test('announces a freshly minted token to the sinks', () async {
-    // A socket authenticates once, at its handshake. Unless the mint is
-    // announced it serves the rest of its life with the old token — which is
-    // how a live connection ended up asking a billing question with a token
-    // that had expired.
-    final source = _Source(session(exp: now + 30));
-    final announced = <String>[];
-    final s = scheduler(source)
-      ..addTokenSink((token) async => announced.add(token));
-
-    expect(await s.refreshIfDue(), isTrue);
-    expect(announced, <String>['a1+']);
-  });
-
-  test('announces a token adopted from the host', () async {
-    final source = _Source(session(exp: now + 30));
-    final announced = <String>[];
-    final s = scheduler(source)
-      ..hostAttached = false
-      ..reconnectHost = () async {
-        source.adopt(session(exp: now + 3600, access: 'a-host'));
-      }
-      ..addTokenSink((token) async => announced.add(token));
-
-    expect(await s.refreshIfDue(), isTrue);
-    expect(source.refreshCalls, 0);
-    expect(announced, <String>['a-host']);
-  });
-
-  test('announces nothing when no token was minted', () async {
-    final source = _Source(session(exp: now + 20 * 60));
-    final announced = <String>[];
-    final s = scheduler(source)
-      ..addTokenSink((token) async => announced.add(token));
-
-    expect(await s.refreshIfDue(), isFalse);
-    expect(announced, isEmpty);
-  });
-
-  test('a sink that throws costs neither the refresh nor the session',
-      () async {
-    final source = _Source(session(exp: now + 30));
-    final reached = <String>[];
-    final s = scheduler(source)
-      ..addTokenSink((token) async => throw StateError('socket gone'))
-      ..addTokenSink((token) async => reached.add(token));
-
-    expect(await s.refreshIfDue(), isTrue);
-    // The sink after the broken one still hears about the token, and the
-    // session is exactly where the refresh left it.
-    expect(reached, <String>['a1+']);
-    expect(source.current()?.accessToken, 'a1+');
-  });
-
-  test('a sink that never returns does not hold the scheduler', () async {
-    final source = _Source(session(exp: now + 30));
-    final s = scheduler(source)
-      ..addTokenSink((token) => Completer<void>().future);
-
-    expect(await s.refreshIfDue(), isTrue);
-    expect(source.current()?.accessToken, 'a1+');
-  });
-
-  test('the same sink registers once', () {
-    final source = _Source(session(exp: now + 30));
-    Future<void> sink(String token) async {}
-    final s = scheduler(source)
-      ..addTokenSink(sink)
-      ..addTokenSink(sink);
-
-    expect(s.tokenSinkCount, 1);
-    s.removeTokenSink(sink);
-    expect(s.tokenSinkCount, 0);
   });
 
   test('never runs two refreshes at once', () async {

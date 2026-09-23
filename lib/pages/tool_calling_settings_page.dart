@@ -172,8 +172,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return 7;
       case ToolCategory.google:
         return 8;
-      case ToolCategory.sandbox:
-        return 12;
       case ToolCategory.mcp:
         return 13;
     }
@@ -198,8 +196,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catSlack;
       case ToolCategory.google:
         return l.catGoogleCalGmail;
-      case ToolCategory.sandbox:
-        return l.catSandbox;
       case ToolCategory.mcp:
         return 'Connectors';
     }
@@ -223,8 +219,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return Icons.chat_outlined;
       case ToolCategory.google:
         return Icons.event_outlined;
-      case ToolCategory.sandbox:
-        return Icons.code_outlined;
       case ToolCategory.mcp:
         return Icons.extension_outlined;
     }
@@ -249,8 +243,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
         return l.catSlackDesc;
       case ToolCategory.google:
         return l.catGoogleCalGmailDesc;
-      case ToolCategory.sandbox:
-        return l.catSandboxDesc;
       case ToolCategory.mcp:
         return 'Tools from the servers you connected';
     }
@@ -393,17 +385,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     'search_chats',
   };
 
-  // The six sandbox tools are one capability to a user — they collapse into a
-  // single "Code sandbox" switch that flips them together.
-  static const Set<String> _sandboxTools = {
-    'code_run',
-    'sandbox_list',
-    'sandbox_read',
-    'sandbox_write',
-    'sandbox_reset',
-    'send_file_to_user',
-  };
-
   // Artifacts is one always-on capability (manager + schema), shown as a single
   // non-toggleable row rather than two internal tools.
   static const Set<String> _artifactTools = {
@@ -427,10 +408,9 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           if (tool.type != ToolType.builtin) {
             return false;
           }
-          // Infra tools are hidden; sandbox + artifact tools are represented by
-          // their own collapsed rows, not listed individually.
+          // Infra tools are hidden; artifact tools are represented by their
+          // own collapsed row, not listed individually.
           if (_hiddenTools.contains(tool.name) ||
-              _sandboxTools.contains(tool.name) ||
               _artifactTools.contains(tool.name)) {
             return false;
           }
@@ -534,9 +514,8 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
     return widgets;
   }
 
-  /// Artifacts and the sandbox are each one capability to the user, not a pile
-  /// of internal tools. Render Artifacts as a single always-on row and the six
-  /// sandbox tools as one switch that flips them together.
+  /// Artifacts are one capability to the user, not a pile of internal tools.
+  /// Render them as a single always-on row.
   void _appendCollapsedInfraRows(List<Widget> widgets, AppLocalizations l) {
     final rows = <Widget>[];
 
@@ -550,33 +529,6 @@ class _ToolCallingSettingsPageState extends State<ToolCallingSettingsPage> {
           value: true,
           alwaysOn: true,
           onChanged: (_) {},
-        ),
-      );
-    }
-
-    final registeredSandbox = _toolExecutor.allRegisteredTools
-        .where((t) => t.type == ToolType.builtin && _sandboxTools.contains(t.name))
-        .map((t) => t.name)
-        .toList(growable: false);
-    if (registeredSandbox.isNotEmpty) {
-      // One switch, six underlying tools — legacy installs may have them in
-      // mixed on/off states, so the row reads as ON only when every registered
-      // sandbox tool is on, and flipping it normalizes them all together.
-      final sandboxOn = registeredSandbox.every(_toolExecutor.isToolEnabled);
-      rows.add(
-        _ToolRow(
-          icon: Icons.terminal_outlined,
-          iconEnabled: sandboxOn,
-          title: l.toolCodeSandbox,
-          subtitle: l.toolCodeSandboxSubtitle,
-          value: sandboxOn,
-          onChanged: (value) async {
-            for (final name in registeredSandbox) {
-              await _toolExecutor.setToolEnabled(name, value);
-            }
-            if (!mounted) return;
-            setState(() {});
-          },
         ),
       );
     }

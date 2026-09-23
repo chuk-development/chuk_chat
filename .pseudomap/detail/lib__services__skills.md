@@ -1,7 +1,6 @@
-# lib/services/skills · Signatures
+# lib/services/skills · Signaturen
 
 ## lib/services/skills/skill_frontmatter_parser.dart  (241 Z.)
-
 - L24 `class SkillParseException implements Exception`  — Thrown when a SKILL.md violates the spec.
   - L25 `const SkillParseException(this.message, {this.field})`
   - L27 `final String message`
@@ -17,7 +16,6 @@
 - L232 `String? _optionalString(YamlMap parsed, String field)`
 
 ## lib/services/skills/skill_registry.dart  (115 Z.)
-
 - L24 `class SkillRegistry`
   - L25 `const SkillRegistry._()`
   - L27 `static List<Skill> _userSkills = const []`
@@ -36,7 +34,6 @@
   - L110 `static void resetForTest()`
 
 ## lib/services/skills/skills_catalog_service.dart  (418 Z.)
-
 - L30 `class CatalogSkill`  — One entry in the catalog manifest.
   - L31 `const CatalogSkill({ required this.name, required this.description, required this.path, required this.hash, this.license, this.allowedTools = const [], this.resources = const [], this.enabled = true, })`
   - L42 `final String name`
@@ -91,7 +88,6 @@
   - L413 `static void resetForTest()`
 
 ## lib/services/skills/user_skills_service.dart  (397 Z.)
-
 - L38 `class UserSkillException implements Exception`  — Thrown for storage-level failures. Spec violations surface as
   - L39 `const UserSkillException(this.message)`
   - L41 `final String message`

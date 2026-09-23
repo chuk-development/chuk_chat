@@ -119,6 +119,9 @@ abstract final class HugeIcons {
   static const HugeIconData paintBoard = HugeIconData('paint-board');
   static const HugeIconData pdf01 = HugeIconData('pdf01');
   static const HugeIconData pen01 = HugeIconData('pen01');
+  static const HugeIconData pencilEdit02 = HugeIconData(
+    'pencil-edit02',
+  );
   static const HugeIconData playCircle = HugeIconData('play-circle');
   static const HugeIconData plus = HugeIconData('plus');
   static const HugeIconData plusSign = HugeIconData('plus-sign');

@@ -1,7 +1,6 @@
-# lib/constants · Signatures
+# lib/constants · Signaturen
 
 ## lib/constants/file_constants.dart  (185 Z.)
-
 - L6 `class FileConstants`  — Shared constants for file handling across the application.
   - L7 `FileConstants._()`
   - L11 `static const int maxFileSizeBytes = 10 * 1024 * 1024`  — Maximum file size allowed for non-image uploads (10MB)

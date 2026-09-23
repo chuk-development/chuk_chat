@@ -27,10 +27,8 @@ places a build can happen, and two of them already exist:
 1. **This machine** — `cd android && bundle exec fastlane build_aab`. Fine for
    Android and Linux. This is the fastest loop.
 2. **GitHub Actions** — two workflows:
-   - `.github/workflows/screenshots.yml` runs on every push to `master` that
-     touches `lib/`, regenerates the listing images and commits them back. It
-     needs **no secrets at all**, because rendering widgets needs no Supabase
-     and no signing key.
+   - `.github/workflows/build-cross-platform.yml` builds and publishes the
+     cross-platform release. This is the one a normal release uses.
    - `.github/workflows/play-store.yml` is triggered by hand
      (`workflow_dispatch`) and runs the upload lanes. This is where a release
      should come from: the runner is clean and the secrets live in the repo
@@ -139,12 +137,70 @@ Two paths. Both write into
 `fastlane/metadata/android/<locale>/images/phoneScreenshots/`, which is
 the tree `supply` uploads from.
 
-### Generated (default, no hardware)
+### Real device (default)
 
-This is the one that runs itself: `.github/workflows/screenshots.yml` renders
-them on every push to `master` that touches the UI and commits the result, so
-the README and both store listings stay in step with the build.
+The store screenshots are captured on a real device or the emulator with
+`scripts/device_screenshots.sh`, and committed by hand. They show the real
+status bar, the real font stack and real chat content — which is what the
+listing is supposed to promise.
 
+There is **no workflow that regenerates them.** The old `screenshots.yml`
+rendered widgets headlessly and committed the result on every push to
+`master`, which overwrote every hand-made capture. It is gone. Recapture the
+screenshots when the UI changes, before cutting a release.
+
+Rules for a capture, so nothing private ends up in a store listing:
+
+- Sign in with a throwaway account, or clear the chat list first.
+- Put the status bar in demo mode, so the clock, the battery and the
+  notification icons are fixed and say nothing about the device:
+  ```bash
+  adb shell settings put global sysui_demo_allowed 1
+  adb shell am broadcast -a com.android.systemui.demo -e command enter
+  adb shell am broadcast -a com.android.systemui.demo -e command clock -e hhmm 1200
+  adb shell am broadcast -a com.android.systemui.demo -e command battery -e level 100 -e plugged false
+  adb shell am broadcast -a com.android.systemui.demo -e command notifications -e visible false
+  adb shell am broadcast -a com.android.systemui.demo -e command network -e wifi show -e level 4 -e mobile false
+  # when done: adb shell am broadcast -a com.android.systemui.demo -e command exit
+  ```
+- No real names, no e-mail address, no account menu, no API key, no file path
+  that carries a user name.
+- **Never capture the sidebar.** It lists real chat titles. On the phone the
+  app starts with it closed; on the desktop keep it collapsed.
+
+The full loop, from a booted emulator to the committed listing images:
+
+```bash
+./scripts/device_screenshots.sh --demo on      # freeze the status bar
+# Drive the app to the screen you want (by hand, or with `adb shell input
+# tap/text`), then capture it once per locale:
+./scripts/device_screenshots.sh 01_chat en-US  # -> fastlane/screenshots_raw/en-US/
+./scripts/device_screenshots.sh 01_chat de-DE  # the German listing needs its own
+./scripts/frame_screenshots.sh                 # raw -> framed 1080x1920
+./scripts/feature_graphic.sh                   # rebuild the 1024x500 banner
+flutter test test/fastlane_metadata_test.dart  # sizes and counts Play accepts
+```
+
+`feature_graphic.sh` reads `01_chat.png` from every locale it builds, so
+capture that one for each locale before running it.
+
+`fastlane/screenshots_raw/<locale>/` holds the untouched captures, outside the
+metadata tree, so re-framing always starts from the original and neither
+`supply` nor F-Droid sees two copies of every image.
+`scripts/frame_screenshots.sh` puts each capture in a rounded body with the
+accent hairline on the brand gradient, at the capture's own resolution — a
+1440x3120 phone capture becomes a 1648x3296 listing image, with no downscaling — the canvas widens where it has to, because Play wants the long side at most twice the short one; `scripts/feature_graphic.sh` builds the
+feature graphic out of the wordmark, the slogan and the first capture.
+
+The README screenshots of the desktop app come from
+`scripts/desktop_screenshots.sh`, which launches the prebuilt Linux release
+bundle on an Xvfb display at 2400x1350 and captures the window, so no title
+bar and no other window can reach the image. An X11 capture of the real desktop returns black while the monitor is
+asleep, and it would also catch the user's own windows.
+
+### Generated (fallback, no hardware)
+
+The headless harness still exists for when there is no device at hand:
 
 ```bash
 flutter test test_screenshots          # or: fastlane screenshots

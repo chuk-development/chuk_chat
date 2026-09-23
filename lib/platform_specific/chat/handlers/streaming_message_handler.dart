@@ -704,7 +704,7 @@ class StreamingMessageHandler {
                 contentBlocks.addAll(appendedBlocks);
 
                 // Append side-effect blocks produced by tools this round
-                // (e.g. send_file_to_user -> sandboxArtifact). These ride
+                // (e.g. a places lookup -> `<map>` block). These ride
                 // after the tool-calls block they came from so the user
                 // sees the artifact right next to the call that produced it.
                 final producedThisRound = loopResult.producedBlocks;
@@ -762,6 +762,16 @@ class StreamingMessageHandler {
                   await _releaseForegroundKeepAlive();
                   return;
                 }
+
+                // Persist this pass's images before the loop moves on. The
+                // next pass builds its own tool-call list, so an image
+                // generated here is otherwise never written to storage and
+                // the chat keeps only the provider's temporary URL.
+                await _processToolImages(
+                  loopResult.toolCalls,
+                  placeholderIndex,
+                  chatId,
+                );
 
                 final next = loopResult.nextStep!;
                 await _updateForegroundNotification(
@@ -899,7 +909,7 @@ class StreamingMessageHandler {
                 );
               }
 
-              // Append any side-effect blocks (e.g. sandboxArtifact) carried
+              // Append any side-effect blocks (e.g. a `<map>` block) carried
               // on the final-answer loop result. They may arrive here if a
               // producing tool ran in the same pass that emitted the final
               // text instead of continuing the loop.
@@ -1252,6 +1262,17 @@ class StreamingMessageHandler {
     }
   }
 
+  /// Images already persisted for the message being streamed, so a second
+  /// pass reports the whole set rather than replacing it with its own.
+  ///
+  /// Keyed by chat as well as by position: a new chat reuses the same message
+  /// index, and the accumulator would otherwise carry the previous chat's
+  /// pictures into it.
+  String? _imageTurnChatId;
+  int? _imageTurnIndex;
+  final List<String> _turnImagePaths = <String>[];
+  final List<Map<String, dynamic>> _turnImageMetas = <Map<String, dynamic>>[];
+
   /// Download tool-generated images, encrypt, and persist to Supabase storage.
   Future<void> _processToolImages(
     List<ToolCall> toolCalls,
@@ -1275,14 +1296,31 @@ class StreamingMessageHandler {
 
       if (imageResult.imagePaths.isEmpty || _isDisposed) return;
 
+      if (_imageTurnIndex != index || _imageTurnChatId != chatId) {
+        _imageTurnIndex = index;
+        _imageTurnChatId = chatId;
+        _turnImagePaths.clear();
+        _turnImageMetas.clear();
+      }
+      for (int i = 0; i < imageResult.imagePaths.length; i++) {
+        final String path = imageResult.imagePaths[i];
+        if (_turnImagePaths.contains(path)) continue;
+        _turnImagePaths.add(path);
+        _turnImageMetas.add(
+          i < imageResult.imageMetas.length
+              ? imageResult.imageMetas[i]
+              : <String, dynamic>{'source': 'generated'},
+        );
+      }
+
       final updatedToolCallsJson = jsonEncode(
         imageResult.toolCalls.map((c) => c.toJson()).toList(),
       );
-      final imageMetasJson = jsonEncode(imageResult.imageMetas);
+      final imageMetasJson = jsonEncode(_turnImageMetas);
 
       onToolImagesProcessed?.call(
         index,
-        imageResult.imagePaths,
+        List<String>.from(_turnImagePaths),
         imageMetasJson,
         imageResult.imageCostEur,
         imageResult.imageGeneratedAt,

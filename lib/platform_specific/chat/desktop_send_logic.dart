@@ -480,14 +480,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   ? displayContent
                   : '$prefix$displayContent';
 
+              // updateAiMessage already pins to the bottom, so pinning again
+              // here jumped the list twice per chunk.
               updateAiMessage(
                 placeholderIndex,
                 fullDisplay,
                 reasoning,
                 activeChatId,
               );
-              // Follow the answer as it streams in, but only while pinned.
-              pinToBottomDuringStream();
             }
           },
           onComplete: (finalContent, finalReasoning, tps) {
@@ -540,7 +540,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   contentBlocks.addAll(roundResult.blocks);
 
                   // Append side-effect blocks produced by tools this round
-                  // (e.g. send_file_to_user -> sandboxArtifact).
+                  // (e.g. a places lookup -> `<map>` block).
                   if (loopResult.producedBlocks.isNotEmpty) {
                     contentBlocks.addAll(loopResult.producedBlocks);
                   }
@@ -576,6 +576,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       },
                     );
                   }
+
+                  // Persist this pass's images before the loop moves on:
+                  // the next pass builds its own tool-call list, so an image
+                  // generated here would otherwise never reach storage.
+                  await _processToolImages(
+                    loopResult.toolCalls,
+                    placeholderIndex,
+                    chatIdForStream,
+                  );
 
                   final next = loopResult.nextStep!;
                   await Future<void>.delayed(Duration.zero);
@@ -685,7 +694,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   );
                 }
 
-                // Append side-effect blocks (e.g. sandboxArtifact) produced
+                // Append side-effect blocks (e.g. a `<map>` block) produced
                 // in the final-answer pass.
                 if (loopResult.producedBlocks.isNotEmpty) {
                   contentBlocks.addAll(loopResult.producedBlocks);
@@ -1762,7 +1771,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         );
                     contentBlocks2.addAll(roundResult.blocks);
 
-                    // Append side-effect blocks (e.g. sandboxArtifact)
+                    // Append side-effect blocks (e.g. a `<map>` block)
                     // produced by tools this round.
                     if (loopResult.producedBlocks.isNotEmpty) {
                       contentBlocks2.addAll(loopResult.producedBlocks);
@@ -1799,6 +1808,14 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         },
                       );
                     }
+
+                    // Same as the pass above: images are written to
+                    // storage per pass, not only at the end of the turn.
+                    await _processToolImages(
+                      loopResult.toolCalls,
+                      placeholderIndex,
+                      chatIdForStream,
+                    );
 
                     final next = loopResult.nextStep!;
                     await Future<void>.delayed(Duration.zero);
@@ -1916,7 +1933,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     );
                   }
 
-                  // Append side-effect blocks (e.g. sandboxArtifact) produced
+                  // Append side-effect blocks (e.g. a `<map>` block) produced
                   // in the final-answer pass.
                   if (loopResult.producedBlocks.isNotEmpty) {
                     contentBlocks2.addAll(loopResult.producedBlocks);
@@ -2386,7 +2403,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
 
     if (mounted) {
-      scrollChatToBottom();
+      settleScrollToBottomIfSticky();
       Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
       unawaited(persistChat());
 

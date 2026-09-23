@@ -1,7 +1,6 @@
-# lib/assistant · Signatures
+# lib/assistant · Signaturen
 
 ## lib/assistant/assistant_bridge.dart  (327 Z.)
-
 - L13 `class AssistantBridge`  — Untyped wrappers around the native assistant channel.
   - L14 `AssistantBridge._()`
   - L16 `static const MethodChannel _channel = MethodChannel('chuk/assistant')`
@@ -48,7 +47,6 @@
   - L320 `static Future<Map<String, dynamic>> spotifySearch(String query)`  — Opens Spotify (or web fallback) on a search results page for [query].
 
 ## lib/assistant/assistant_cards.dart  (382 Z.)
-
 - L10 `class AssistantCardView extends StatelessWidget`  — Renders one [AssistantCard]. Every colour comes from the running theme, so
   - L11 `const AssistantCardView({super.key, required this.card})`
   - L13 `final AssistantCard card`
@@ -90,7 +88,6 @@
   - L363 `Widget build(BuildContext context)`
 
 ## lib/assistant/assistant_config.dart  (84 Z.)
-
 - L8 `kAssistantModelId = 'z-ai/glm-5.3-flash'`  — The model the assistant surface runs on. Hard-wired on purpose: the overlay
 - L11 `kAssistantProviderSlug = 'fireworks/serverless'`  — Provider pin that goes with [kAssistantModelId].
 - L28 `kAssistantReasoningEffort = 'low'`  — Reasoning level for the assistant turn.
@@ -109,7 +106,6 @@
   - L79 `static Future<void> save(AssistantSettings settings)`
 
 ## lib/assistant/assistant_microphone.dart  (284 Z.)
-
 - L19 `class AssistantMicrophone`  — Continuous microphone capture with energy-based endpointing.
   - L20 `AssistantMicrophone({required this.onUtterance, this.onLevel})`
   - L23 `final void Function(Uint8List wav) onUtterance`  — One complete utterance as a 16 kHz mono WAV file.
@@ -158,7 +154,6 @@
 - L279 `void _writeAscii(ByteData buffer, int offset, String value)`
 
 ## lib/assistant/assistant_overlay.dart  (674 Z.)
-
 - L19 `Route<void> buildAssistantOverlayRoute()`  — Transparent, instant route for the assistant surface.
 - L28 `assistantOverlayRouteName = '/assistant-overlay'`  — The initial route the native assist activity starts Flutter on.
 - L30 `class AssistantOverlayPage extends StatefulWidget`
@@ -226,7 +221,6 @@
   - L666 `bool shouldRepaint(covariant _WavePainter old)`
 
 ## lib/assistant/assistant_result.dart  (141 Z.)
-
 - L10 `sealed class AssistantCard`  — A visual result the assistant surface renders next to (or instead of) the
   - L11 `const AssistantCard()`
 - L15 `@immutable class AssistantPlace`  — One place from the Brave Local proxy.
@@ -273,7 +267,6 @@
   - L139 `final AssistantCard? card`  — Optional visual result. Null for tools with nothing worth drawing.
 
 ## lib/assistant/assistant_session.dart  (510 Z.)
-
 - L19 `enum AssistantPhase`  — Where one assistant turn currently stands.
   - L20 `starting`
   - L21 `listening`
@@ -335,7 +328,6 @@
   - L508 `final String? error`
 
 ## lib/assistant/assistant_tools.dart  (874 Z.)
-
 - L15 `class AssistantToolRuntime`  — Everything a tool handler may use besides its own arguments.
   - L16 `const AssistantToolRuntime({ required this.serverUrl, required this.serverHeaders, required this.describeScreenshot, required this.language, this.httpClient, })`
   - L25 `final String serverUrl`  — Base URL of the API proxy, e.g. `https://api.chuk.chat`.

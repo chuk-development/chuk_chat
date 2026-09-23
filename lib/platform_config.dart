@@ -39,10 +39,13 @@ const bool kFeatureVoiceMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
-/// Workspaces — custom AI personas with system prompts, files, and memory settings
+/// Workspaces — custom AI personas with system prompts, files, and memory
+/// settings. Off: the feature earned its place in nobody's day, so it is
+/// hidden rather than removed. Nothing is deleted in Supabase — flipping the
+/// flag back brings every workspace back with it.
 const bool kFeatureWorkspaces = bool.fromEnvironment(
   'FEATURE_WORKSPACES',
-  defaultValue: true,
+  defaultValue: false,
 );
 
 /// Artifacts - editable code/markdown/HTML/technical drawing panels alongside chat

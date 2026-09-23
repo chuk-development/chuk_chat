@@ -34,6 +34,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
@@ -43,9 +44,9 @@ import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
+import 'package:chuk_chat/pages/github_connection_page.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/pricing_page.dart';
-import 'package:chuk_chat/pages/sandbox_management_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
@@ -245,13 +246,14 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           keywords: 'skills agent skills procedures abilities fähigkeiten',
           builder: (_) => const SkillsSettingsPage(),
         ),
-        _SettingsDest(
-          id: 'sandboxes',
-          icon: Icons.developer_board,
-          label: 'Sandboxes',
-          keywords: 'sandbox sandboxes code execution container docker runtime',
-          builder: (_) => const SandboxManagementPage(),
-        ),
+        if (kFeatureMcp)
+          _SettingsDest(
+            id: 'github',
+            icon: Icons.code,
+            label: 'GitHub',
+            keywords: 'github git repository connector token',
+            builder: (_) => const GitHubConnectionPage(),
+          ),
       ]),
       // Agents's own destinations: about the machine the agent runs on, which
       // is what chuk_chat has no equivalent for.
@@ -369,10 +371,14 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     }
     if (_compact) {
       setState(() => _compactPageId = dest.id);
+      OnboardingTourController.instance.notifySettingsSection(dest.id);
       return;
     }
     if (dest.id == _selectedId) return;
     setState(() => _selectedId = dest.id);
+    // Nothing is pushed here, so the tour's navigator observer sees nothing:
+    // the modal has to say which pane it opened.
+    OnboardingTourController.instance.notifySettingsSection(dest.id);
   }
 
   @override
@@ -637,8 +643,9 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 filled: true,
                 fillColor: m3.surfaceContainerHigh,
                 contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                // A pill, like every other search field in the app.
                 border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(kRadiusField),
+                  borderRadius: BorderRadius.circular(999),
                   borderSide: BorderSide.none,
                 ),
               ),
@@ -667,7 +674,8 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
     final Color fg = selected ? cs.onSecondaryContainer : cs.onSurface;
     final Color iconColor = dest.tone ?? (selected ? cs.onSecondaryContainer : m3.onSurfaceVariant);
 
-    return Padding(
+    final String? tourSlot = _tourSlotFor(dest.id);
+    final Widget row = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
       child: Material(
         color: selected ? cs.secondaryContainer : Colors.transparent,
@@ -710,6 +718,29 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
         ),
       ),
     );
+
+    if (tourSlot == null) return row;
+    return KeyedSubtree(
+      key: TourKeyRegistry.instance.keyFor(tourSlot),
+      child: row,
+    );
+  }
+
+  /// The tour points at the same destinations here as on the phone, so the
+  /// rail rows carry the phone tiles' slots.
+  static String? _tourSlotFor(String id) {
+    switch (id) {
+      case 'model':
+        return TourSlots.settingsModelSelectionTile;
+      case 'pricing':
+        return TourSlots.settingsPricingTile;
+      case 'identity':
+        return TourSlots.settingsAiIdentityTile;
+      case 'assistant':
+        return TourSlots.kSettingsAssistantTile;
+      default:
+        return null;
+    }
   }
 
   Widget _buildRailFooter(BuildContext context, AppLocalizations l) {

@@ -1,0 +1,35 @@
+# The web image needs lib/, assets/, vendor/, pubspec*. Everything else only
+# inflates the build context and busts the layer cache on unrelated changes.
+.git
+.github
+.beads
+.dart_tool
+.pseudomap
+build/
+_scratch/
+coverage/
+android/
+ios/
+macos/
+windows/
+# pubspec declares windows/runner/resources/app_icon.ico as an asset, so the
+# web bundle needs that one file even though the rest of the platform is out.
+!windows/runner/resources/
+linux/
+test/
+test_screenshots/
+integration_test/
+docs/
+fastlane/
+tasks/
+tool/
+scripts/
+*.md
+*.apk
+*.aab
+*.deb
+*.rpm
+*.AppImage
+.env
+.env.*
+!.env.example

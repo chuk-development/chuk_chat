@@ -91,6 +91,9 @@ Map<String, dynamic> specChartDocument() => <String, dynamic>{
 };
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   testWidgets('a table document draws its cells in the thread', (tester) async {
     await tester.binding.setSurfaceSize(const Size(400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));

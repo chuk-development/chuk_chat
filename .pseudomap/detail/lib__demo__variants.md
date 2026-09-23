@@ -1,7 +1,6 @@
-# lib/demo/variants · Signatures
+# lib/demo/variants · Signaturen
 
 ## lib/demo/variants/variant_1_minimal.dart  (83 Z.)
-
 - L8 `class VariantMinimal extends StatelessWidget`
   - L9 `final List<DemoChat> chats`
   - L10 `final String? selectedId`
@@ -11,7 +10,6 @@
   - L22 `Widget build(BuildContext context)`
 
 ## lib/demo/variants/variant_2_glass.dart  (126 Z.)
-
 - L8 `class VariantGlass extends StatelessWidget`
   - L9 `final List<DemoChat> chats`
   - L10 `final String? selectedId`
@@ -21,7 +19,6 @@
   - L22 `Widget build(BuildContext context)`
 
 ## lib/demo/variants/variant_3_dense.dart  (114 Z.)
-
 - L8 `class VariantDense extends StatelessWidget`
   - L9 `final List<DemoChat> chats`
   - L10 `final String? selectedId`
@@ -31,7 +28,6 @@
   - L22 `Widget build(BuildContext context)`
 
 ## lib/demo/variants/variant_4_playful.dart  (160 Z.)
-
 - L8 `class VariantPlayful extends StatelessWidget`
   - L9 `final List<DemoChat> chats`
   - L10 `final String? selectedId`
@@ -41,7 +37,6 @@
   - L22 `Widget build(BuildContext context)`
 
 ## lib/demo/variants/variant_5_bento.dart  (112 Z.)
-
 - L8 `class VariantBento extends StatelessWidget`
   - L9 `final List<DemoChat> chats`
   - L10 `final String? selectedId`
@@ -51,7 +46,6 @@
   - L22 `Widget build(BuildContext context)`
 
 ## lib/demo/variants/variant_6_final.dart  (142 Z.)
-
 - L13 `class VariantFinal extends StatelessWidget`
   - L14 `final List<DemoChat> chats`
   - L15 `final String? selectedId`

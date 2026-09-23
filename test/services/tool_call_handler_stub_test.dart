@@ -10,6 +10,9 @@ import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   const sessionKey = 'thread-1';
   final handler = ToolCallHandler();
   final ledger = AgentsRunLedger.instance;

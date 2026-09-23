@@ -66,5 +66,4 @@ enum ToolCategory {
   slack, // Slack messaging
   google, // Google Calendar + Gmail
   mcp, // Tools from connected remote MCP servers
-  sandbox, // Code execution sandbox (Python/shell + files)
 }

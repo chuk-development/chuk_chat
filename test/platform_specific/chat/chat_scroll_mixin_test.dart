@@ -135,6 +135,43 @@ void main() {
     await tester.pump();
     expect(position.pixels, moveTo(position.maxScrollExtent));
   });
+
+  testWidgets('the end of an answer settles at the bottom while it still grows',
+      (tester) async {
+    final state = await pumpHarness(tester);
+    state.jumpToEnd();
+    await tester.pumpAndSettle();
+
+    // The last token has arrived; the layout has not finished. Code blocks and
+    // images keep growing the extent for a few more frames.
+    state.finishStream();
+    for (int i = 0; i < 4; i++) {
+      state.growWithoutPinning();
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+
+    final position = state.scrollController.position;
+    expect(position.pixels, moveTo(position.maxScrollExtent),
+        reason: 'a reader who followed the answer should end at its end');
+  });
+
+  testWidgets('a reader who scrolled up is not dragged down at the end',
+      (tester) async {
+    final state = await pumpHarness(tester);
+    state.jumpToEnd();
+    await tester.pumpAndSettle();
+
+    await tester.drag(find.byType(ListView), const Offset(0, 150));
+    await tester.pumpAndSettle();
+    expect(state.isStickyBottom, isFalse);
+    final double held = state.scrollController.position.pixels;
+
+    state.finishStream();
+    await tester.pumpAndSettle();
+
+    expect(state.scrollController.position.pixels, moveTo(held));
+  });
 }
 
 /// `pixels` lands on the extent within a sub-pixel of it.
@@ -169,6 +206,17 @@ class _HarnessState extends State<_Harness> with ChatScrollMixin<_Harness> {
   void streamOneMoreRow() {
     setState(() => rows += 1);
     pinToBottomDuringStream();
+  }
+
+  /// More content without the streaming pin — what async-sized children do
+  /// after the last token.
+  void growWithoutPinning() {
+    setState(() => rows += 1);
+  }
+
+  /// The end of the answer, as the chat screens handle it.
+  void finishStream() {
+    settleScrollToBottomIfSticky();
   }
 
   void jumpToEnd() {

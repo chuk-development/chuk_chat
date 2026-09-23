@@ -1,7 +1,6 @@
-# lib/theme · Signatures
+# lib/theme · Signaturen
 
 ## lib/theme/theme_presets.dart  (365 Z.)
-
 - L27 `@immutable class ThemeVariant`  — One complete look: palette + contrast + font, for a single brightness.
   - L29 `const ThemeVariant({ required this.accent, required this.iconFg, required this.bg, this.contrast = kDefaultContrast, this.uiFont = kDefaultUiFontFamily, })`
   - L38 `final Color accent`  — Accent / primary colour.

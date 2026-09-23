@@ -237,6 +237,10 @@ class _AnchoredMenuRoute<T> extends PopupRoute<T> {
         borderRadius: BorderRadius.circular(borderRadius + pad),
         border: Border.all(color: border, width: 2),
       ),
+      // A list that runs to the frame's edge must be cut by the frame's
+      // corners. Without this the last row is sliced off square and the
+      // panel reads as a rendering fault rather than as a scroller.
+      clipBehavior: Clip.antiAlias,
       child: child,
     );
   }

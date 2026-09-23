@@ -17,8 +17,10 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthState;
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
+import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/session_refresh_scheduler.dart';
@@ -42,6 +44,23 @@ class MultiplexSession {
   static MultiplexConnection? _current;
   static String? _currentChatId;
   static Timer? _idleCloseTimer;
+
+  /// Subscription that forwards every newly obtained Supabase access token
+  /// to the open socket. The server authenticates `/v2/ws` once, at the
+  /// handshake, so without this the socket keeps using the token it was
+  /// opened with until it ages out and per-user reads start failing with
+  /// `PGRST303 JWT expired`.
+  static StreamSubscription<AuthState>? _authSubscription;
+
+  /// Raised *before* `listen()` is called, not after it returns.
+  ///
+  /// `Supabase.auth.onAuthStateChange` emits its initial event
+  /// synchronously on subscribe, so the handler can run while `listen()` is
+  /// still on the stack and `_authSubscription` is still null. Guarding on
+  /// the subscription alone would let anything reached from that handler —
+  /// or a second `prewarm` / `openForChat` in the same turn — arm a second
+  /// subscription, which would then deliver every token twice.
+  static bool _authBridgeArmed = false;
 
   /// Per-chatId tracker for the in-flight chat stream. Lets
   /// [chatForChat] cancel a previous stream before opening a new one so
@@ -68,7 +87,7 @@ class MultiplexSession {
   /// reuses the existing socket; the per-request `chat_id` lives in the
   /// chat payload, not in the transport.
   static Future<void> openForChat(String chatId) async {
-    _registerTokenSink();
+    _ensureAuthBridge();
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = chatId;
@@ -95,7 +114,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
-      onAuthRefreshNeeded: refreshTokenForServer,
+      freshTokenProvider: _freshTokenProvider,
     );
 
     try {
@@ -124,7 +143,7 @@ class MultiplexSession {
   /// scheduled to idle-close so a prewarm that's never used doesn't leak a
   /// permanently-open connection.
   static Future<void> prewarm() async {
-    _registerTokenSink();
+    _ensureAuthBridge();
     final existing = _current;
     if (existing != null) {
       // A socket that hasn't heard from the server in a while was probably
@@ -160,7 +179,7 @@ class MultiplexSession {
     final connection = MultiplexConnection(
       baseUrl: ApiConfigService.apiBaseUrl,
       accessTokenProvider: _tokenProvider,
-      onAuthRefreshNeeded: refreshTokenForServer,
+      freshTokenProvider: _freshTokenProvider,
     );
     try {
       await connection.ensureReady();
@@ -234,6 +253,9 @@ class MultiplexSession {
 
   /// Tear down the connection immediately. Used on logout.
   static Future<void> shutdown() async {
+    unawaited(_authSubscription?.cancel());
+    _authSubscription = null;
+    _authBridgeArmed = false;
     _idleCloseTimer?.cancel();
     _idleCloseTimer = null;
     _currentChatId = null;
@@ -279,7 +301,9 @@ class MultiplexSession {
       // Caller should have checked MultiplexSession.current first.
       // Surface as a stream-shaped error so callers don't crash.
       final controller = StreamController<ChatStreamEvent>();
-      controller.add(const ChatStreamEvent.error('Multiplex session not open'));
+      controller.add(
+        const ChatStreamEvent.error('Multiplex session not open'),
+      );
       controller.add(const ChatStreamEvent.done());
       unawaited(controller.close());
       return controller.stream;
@@ -328,44 +352,42 @@ class MultiplexSession {
     late final StreamSubscription<ChatStreamEvent> subscription;
     final tracker = _ActiveChatStream(controller: outbound);
 
-    subscription = connection
-        .chat(payload: payload)
-        .listen(
-          (event) {
-            if (outbound.isClosed) return;
-            outbound.add(event);
-            if (event is DoneEvent) {
-              // Stream finished cleanly — drop from tracker so the next
-              // send for the same chat starts fresh without trying to
-              // cancel an already-finished stream.
-              if (identical(_activeChatStreams[chatId], tracker)) {
-                _activeChatStreams.remove(chatId);
-              }
-              unawaited(outbound.close());
-            }
-          },
-          onError: (Object error, StackTrace stackTrace) {
-            if (outbound.isClosed) return;
-            outbound.add(ChatStreamEvent.error(error.toString()));
-            outbound.add(const ChatStreamEvent.done());
-            if (identical(_activeChatStreams[chatId], tracker)) {
-              _activeChatStreams.remove(chatId);
-            }
-            unawaited(outbound.close());
-          },
-          onDone: () {
-            if (outbound.isClosed) return;
-            // Defensive — if the source closed without DoneEvent ensure
-            // the wrapper closes too. Listener's DoneEvent path normally
-            // handles this; this is the safety net.
-            outbound.add(const ChatStreamEvent.done());
-            if (identical(_activeChatStreams[chatId], tracker)) {
-              _activeChatStreams.remove(chatId);
-            }
-            unawaited(outbound.close());
-          },
-          cancelOnError: false,
-        );
+    subscription = connection.chat(payload: payload).listen(
+      (event) {
+        if (outbound.isClosed) return;
+        outbound.add(event);
+        if (event is DoneEvent) {
+          // Stream finished cleanly — drop from tracker so the next
+          // send for the same chat starts fresh without trying to
+          // cancel an already-finished stream.
+          if (identical(_activeChatStreams[chatId], tracker)) {
+            _activeChatStreams.remove(chatId);
+          }
+          unawaited(outbound.close());
+        }
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (outbound.isClosed) return;
+        outbound.add(ChatStreamEvent.error(error.toString()));
+        outbound.add(const ChatStreamEvent.done());
+        if (identical(_activeChatStreams[chatId], tracker)) {
+          _activeChatStreams.remove(chatId);
+        }
+        unawaited(outbound.close());
+      },
+      onDone: () {
+        if (outbound.isClosed) return;
+        // Defensive — if the source closed without DoneEvent ensure
+        // the wrapper closes too. Listener's DoneEvent path normally
+        // handles this; this is the safety net.
+        outbound.add(const ChatStreamEvent.done());
+        if (identical(_activeChatStreams[chatId], tracker)) {
+          _activeChatStreams.remove(chatId);
+        }
+        unawaited(outbound.close());
+      },
+      cancelOnError: false,
+    );
 
     tracker.subscription = subscription;
     _activeChatStreams[chatId] = tracker;
@@ -408,73 +430,89 @@ class MultiplexSession {
   }
 
   static Future<String?> _tokenProvider() async {
-    final session = SupabaseService.auth.currentSession;
-    return session?.accessToken;
+    try {
+      final session = SupabaseService.auth.currentSession;
+      return session?.accessToken;
+    } catch (_) {
+      // Supabase not initialised (early startup / tests).
+      return null;
+    }
   }
 
-  // --- keeping the open socket's token alive --------------------------------
-
-  static bool _tokenSinkRegistered = false;
-
-  /// Subscribe to the app's token mints, once, from the two places that open
-  /// a connection. Done from this side so the scheduler keeps knowing nothing
-  /// about transports.
-  static void _registerTokenSink() {
-    if (_tokenSinkRegistered) return;
-    _tokenSinkRegistered = true;
-    SessionRefreshScheduler.instance.addTokenSink(pushAccessToken);
+  /// Token source for a mid-connection handover. Forces a Supabase refresh
+  /// so the socket gets a genuinely newer token, not the expiring one that
+  /// made the server ask in the first place.
+  ///
+  /// Returns null when no token can be obtained. That is not an auth
+  /// failure — the caller keeps the session and retries later. This method
+  /// never signs anyone out.
+  ///
+  /// With Agents the Supabase refresh token is single-use and SHARED with the
+  /// paired host, so whether a new token is minted stays the
+  /// [SessionRefreshScheduler]'s decision: this asks it, it does not force.
+  /// The server's ask is a hint, and the request that carried it was served.
+  /// The auth bridge below hands the socket whatever the scheduler mints.
+  static Future<String?> _freshTokenProvider() async {
+    try {
+      if (kFeatureAgents) {
+        await SessionRefreshScheduler.instance.refreshIfDue();
+      } else {
+        final session = await SupabaseService.refreshSession();
+        if (session != null) return session.accessToken;
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] fresh token refresh failed: $e');
+      }
+    }
+    try {
+      return SupabaseService.auth.currentSession?.accessToken;
+    } catch (_) {
+      return null;
+    }
   }
 
-  /// Hand a freshly minted access token to the live `/v2/ws` socket.
+  /// Subscribe once to Supabase auth events so every new access token is
+  /// pushed onto the open socket. Idempotent and best-effort: if Supabase
+  /// is not initialised yet the bridge simply is not armed, and the next
+  /// handshake still picks up a current token.
+  static void _ensureAuthBridge() {
+    if (_authBridgeArmed) return;
+    _authBridgeArmed = true;
+    try {
+      _authSubscription = SupabaseService.auth.onAuthStateChange.listen(
+        (AuthState state) {
+          final token = state.session?.accessToken;
+          // No session here means a sign-out, which this bridge does not
+          // handle and must never cause.
+          if (token == null || token.isEmpty) return;
+          pushAuthToken(token);
+        },
+        onError: (Object error) {
+          if (kDebugMode) {
+            debugPrint('⚠️ [MultiplexSession] auth bridge error: $error');
+          }
+        },
+      );
+    } catch (e) {
+      // Supabase is not up yet. Lower the flag so a later call retries;
+      // the next handshake reads a current token regardless.
+      _authBridgeArmed = false;
+      if (kDebugMode) {
+        debugPrint('⚠️ [MultiplexSession] auth bridge not armed: $e');
+      }
+    }
+  }
+
+  /// Hand [token] to every open multiplex connection. There is exactly one
+  /// (`_current`) by design — one socket carries everything.
   ///
-  /// The socket authenticated once, at its handshake, and keeps that identity
-  /// for the whole connection — which is how an app left open long enough
-  /// asked a live socket a billing question with an expired token and was
-  /// told the credits were spent. This replaces the identity in place.
-  ///
-  /// Never throws and never reports: no socket, a dead sink, a server that
-  /// refuses or stays silent all leave the connection on the token it has and
-  /// the local session exactly as it was.
-  static Future<void> pushAccessToken(String token) async {
-    if (token.isEmpty) return;
+  /// Fire-and-forget and failure-tolerant: a socket that refuses the token,
+  /// or is not there at all, keeps the user signed in.
+  static void pushAuthToken(String? token) {
     final connection = _current;
     if (connection == null) return;
-    try {
-      connection.sendAuthRefresh(token);
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [MultiplexSession] auth_refresh not sent: $e');
-      }
-    }
-  }
-
-  /// The server said the socket's token is nearly dead
-  /// (`auth_refresh_needed`). Ask for a refresh right now instead of waiting
-  /// for the scheduler's next tick, then push whatever token the app holds —
-  /// the push is a no-op when the socket already carries it.
-  ///
-  /// Whether a NEW token is actually minted stays the scheduler's decision:
-  /// the Supabase refresh token is single-use and shared with the paired host
-  /// (see [SessionRefreshScheduler]), so this asks, it does not force. The
-  /// server's frame is a hint and the request that carried it was served, so
-  /// there is nothing here to recover from and nothing to surface.
-  static Future<void> refreshTokenForServer() async {
-    try {
-      await SessionRefreshScheduler.instance.refreshIfDue();
-    } catch (e) {
-      if (kDebugMode) {
-        debugPrint('⚠️ [MultiplexSession] refresh on server hint failed: $e');
-      }
-    }
-    String? token;
-    try {
-      token = SupabaseService.auth.currentSession?.accessToken;
-    } catch (_) {
-      token = null; // Supabase not initialised (tests, early startup).
-    }
-    if (token != null && token.isNotEmpty) {
-      await pushAccessToken(token);
-    }
+    unawaited(connection.updateAuthToken(token));
   }
 }
 

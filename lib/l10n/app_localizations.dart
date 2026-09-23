@@ -63,6 +63,9 @@ class AppLocalizations {
   String get skillsYours => _get('skillsYours');
   String get skillsYoursEmpty => _get('skillsYoursEmpty');
   String get skillsBuiltin => _get('skillsBuiltin');
+  String get skillsSearchHint => _get('skillsSearchHint');
+  String skillsNoMatches(String query) =>
+      _get('skillsNoMatches').replaceAll('{query}', query);
   String get skillNew => _get('skillNew');
   String get skillEdit => _get('skillEdit');
   String get skillDeleteTitle => _get('skillDeleteTitle');
@@ -70,6 +73,8 @@ class AppLocalizations {
       _get('skillDeleteBody').replaceAll('{name}', name);
   String get skillEditorHint => _get('skillEditorHint');
   String get skillSaveFailed => _get('skillSaveFailed');
+  String get assistantSurface => _get('assistantSurface');
+  String get assistantSurfaceSubtitle => _get('assistantSurfaceSubtitle');
   String get developerOptions => _get('developerOptions');
   String get developerOptionsSubtitle => _get('developerOptionsSubtitle');
   String get modelSelection => _get('modelSelection');
@@ -229,8 +234,6 @@ class AppLocalizations {
   String get toolAlwaysOn => _get('toolAlwaysOn');
   String get toolArtifacts => _get('toolArtifacts');
   String get toolArtifactsSubtitle => _get('toolArtifactsSubtitle');
-  String get toolCodeSandbox => _get('toolCodeSandbox');
-  String get toolCodeSandboxSubtitle => _get('toolCodeSandboxSubtitle');
   String get toolGroupCodeArtifacts => _get('toolGroupCodeArtifacts');
   String get connectors => _get('connectors');
   String get loadingToolSettings => _get('loadingToolSettings');
@@ -243,7 +246,6 @@ class AppLocalizations {
   String get catGitHub => _get('catGitHub');
   String get catSlack => _get('catSlack');
   String get catGoogleCalGmail => _get('catGoogleCalGmail');
-  String get catSandbox => _get('catSandbox');
   String get catSearchWebDesc => _get('catSearchWebDesc');
   String get catUtilitiesDesc => _get('catUtilitiesDesc');
   String get catMapsLocationDesc => _get('catMapsLocationDesc');
@@ -252,7 +254,6 @@ class AppLocalizations {
   String get catGitHubDesc => _get('catGitHubDesc');
   String get catSlackDesc => _get('catSlackDesc');
   String get catGoogleCalGmailDesc => _get('catGoogleCalGmailDesc');
-  String get catSandboxDesc => _get('catSandboxDesc');
   String get connect => _get('connect');
   String get disconnect => _get('disconnect');
   String disconnectCategory(String label) =>
@@ -587,6 +588,17 @@ class AppLocalizations {
   // ── Model selector ─────────────────────────────────────────
   String get models => _get('models');
   String get searchModels => _get('searchModels');
+  String get modelProvider => _get('modelProvider');
+  String get chooseProvider => _get('chooseProvider');
+  String get modelPromptCustom => _get('modelPromptCustom');
+  String get fastMode => _get('fastMode');
+  String get thinkingMode => _get('thinkingMode');
+  String availableModels(int count) =>
+      (count == 1 ? _get('availableModelsOne') : _get('availableModelsMany'))
+          .replaceAll('{count}', count.toString());
+  String modelsFound(int count) =>
+      (count == 1 ? _get('modelsFoundOne') : _get('modelsFoundMany'))
+          .replaceAll('{count}', count.toString());
   String modelError(String error) =>
       _get('modelError').replaceAll('{error}', error);
 

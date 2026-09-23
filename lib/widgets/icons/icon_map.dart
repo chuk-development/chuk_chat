@@ -72,6 +72,10 @@ final Map<int, HugeIconData> _map = <int, HugeIconData>{
   Icons.add_rounded.codePoint: HugeIcons.plusSign,
   Icons.remove.codePoint: HugeIcons.remove01,
   Icons.remove_rounded.codePoint: HugeIcons.remove01,
+  // New chat, wherever it appears: the sidebar card, the folded rail, the
+  // phone's top bar. One glyph, so the three cannot drift apart.
+  Icons.edit_square.codePoint: HugeIcons.pencilEdit02,
+  Icons.edit_note.codePoint: HugeIcons.pencilEdit02,
   Icons.edit.codePoint: HugeIcons.edit02,
   Icons.edit_rounded.codePoint: HugeIcons.edit02,
   Icons.edit_outlined.codePoint: HugeIcons.edit02,

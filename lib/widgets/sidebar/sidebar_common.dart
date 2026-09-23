@@ -67,15 +67,30 @@ String sidebarDisplayName(ProfileRecord? profile) {
 
 /// The destinations shared by both sidebars, with a platform-owned search
 /// entry because mobile morphs that card into a field while desktop does not.
+///
+/// New chat leads the block, on the row the collapsed rail puts its own
+/// new-chat icon on: the panel folds and unfolds without the one command
+/// people use most moving anywhere.
 List<Widget> buildSidebarNavigationCards({
   required BuildContext context,
   required bool showWorkspaces,
   required VoidCallback onWorkspacesTapped,
   required VoidCallback onMediaTapped,
+  required VoidCallback onNewChatTapped,
   required Widget searchEntry,
+  /// The phone keeps its one new-chat action in the head bar, so the list
+  /// there starts at Media. The desktop keeps the row because its collapsed
+  /// rail is built from these same rows.
+  bool showNewChat = true,
 }) {
   final l = AppLocalizations.of(context);
   return <Widget>[
+    if (showNewChat)
+      SbNavCard(
+        icon: Icons.edit_square,
+        label: l?.newChat ?? 'New chat',
+        onTap: onNewChatTapped,
+      ),
     if (kFeatureWorkspaces && showWorkspaces)
       SbNavCard(
         icon: Icons.folder_rounded,
@@ -121,15 +136,11 @@ mixin SidebarStateCommon<T extends StatefulWidget> on State<T> {
     scrollController.addListener(onScrollForAutoLoad);
     isOfflineMode = !NetworkStatusService.isOnline;
     unawaited(loadSidebarProfile());
-    _chatUpdatesSubscription = ChatStorageService.changes.listen((
-      changedChatId,
-    ) {
+    _chatUpdatesSubscription = ChatStorageService.changes.listen((_) {
       if (!mounted) return;
-      if (changedChatId == null) {
-        unawaited(applyChatFilter());
-      } else {
-        setState(() {});
-      }
+      // The filtered list holds immutable StoredChat snapshots. A rebuild
+      // alone keeps rendering the old title after a single-chat rename.
+      unawaited(applyChatFilter());
     });
     NetworkStatusService.isOnlineListenable.addListener(
       onSidebarNetworkStatusChanged,

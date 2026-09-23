@@ -1,11 +1,13 @@
 // lib/platform_specific/sidebar_desktop.dart
 //
-// The desktop sidebar reads as a stack of blocks in the app's settings
-// language: an account card, a navigation block, then one block of chats per
-// time group under its own quiet header, and a bar at the foot carrying the
-// search field and the two round actions. Everything above the foot scrolls
-// as one column, so a short window spends its height on chats rather than on
-// fixed chrome.
+// The desktop sidebar is laid out exactly like the phone one: a floating bar
+// at the head carrying the app name and the new-chat button, a navigation
+// block whose Search row turns into the field, one block of chats per time
+// group under its own quiet header, and a floating account line at the foot.
+// Both bars are cards over the list rather than bands boxing it in, so the
+// chats keep the panel's full height and run past the chrome on every side.
+// What differs from the phone is only what a mouse brings: hover actions, a
+// right-click menu, and a synchronous filter.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -18,7 +20,6 @@ import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/streaming_manager.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
-import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/widgets/credit_display.dart';
@@ -35,9 +36,6 @@ class SidebarDesktop extends StatefulWidget {
   final Function() onNewChatTapped;
   final Future<void> Function(String chatId)? onChatDeleted;
 
-  /// Folds the sidebar back to the mini rail. Null hides the profile card's
-  /// collapse button, for a host that has no such state.
-  final VoidCallback? onCollapseTapped;
   final String? selectedChatId;
   final bool isCompactMode;
   final bool showWorkspacesButton;
@@ -50,7 +48,6 @@ class SidebarDesktop extends StatefulWidget {
     required this.onMediaTapped,
     required this.onNewChatTapped,
     this.onChatDeleted,
-    this.onCollapseTapped,
     required this.selectedChatId,
     required this.isCompactMode,
     required this.showWorkspacesButton,
@@ -62,6 +59,9 @@ class SidebarDesktop extends StatefulWidget {
 
 class _SidebarDesktopState extends State<SidebarDesktop>
     with SidebarStateCommon<SidebarDesktop> {
+  /// True while the Search row shows the field instead of the nav card.
+  bool _searchActive = false;
+
   @override
   Future<void> Function(String chatId)? get onChatDeletedCallback =>
       widget.onChatDeleted;
@@ -78,20 +78,33 @@ class _SidebarDesktopState extends State<SidebarDesktop>
     _filterDesktopChats(); // Filter cached chats immediately for instant UI
     // Chat loading handled by main.dart - we only listen to changes stream
     searchController.addListener(_onDesktopSearchChanged);
+    searchFocus.addListener(_onSearchFocusChanged);
     initSidebarCommon();
   }
 
   @override
   void dispose() {
+    searchFocus.removeListener(_onSearchFocusChanged);
     searchController.removeListener(_onDesktopSearchChanged);
     disposeSidebarCommon();
     super.dispose();
   }
 
-  // The Search nav card doesn't open a second field — it hands the caret to
-  // the one already sitting in the bottom bar.
+  /// Opens the search row and puts the caret in it. The row folds back into
+  /// the plain nav card once the field is empty and no longer focused, so an
+  /// abandoned search does not sit there forever.
   void _focusDesktopSearch() {
-    searchFocus.requestFocus();
+    setState(() => _searchActive = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) searchFocus.requestFocus();
+    });
+  }
+
+  void _onSearchFocusChanged() {
+    if (searchFocus.hasFocus) return;
+    if (searchController.text.isNotEmpty) return;
+    if (!mounted) return;
+    setState(() => _searchActive = false);
   }
 
   void _onDesktopSearchChanged() {
@@ -150,54 +163,139 @@ class _SidebarDesktopState extends State<SidebarDesktop>
 
   @override
   Widget build(BuildContext context) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    final Color accent = Theme.of(context).colorScheme.primary;
-    final Color sidebarBg = Theme.of(context).cardColor.darken(0.03);
+    final ThemeData theme = Theme.of(context);
+    final Color iconFg = theme.resolvedIconColor;
+    final Color accent = theme.colorScheme.primary;
+    final Color sidebarBg = sbPanelBackground(context);
 
-    // Hamburger stays anchored to the top-left always — brand text starts
-    // just to the right of it so the two share the same baseline.
+    // Hamburger stays anchored to the top-left of the window, on top of this
+    // panel — the brand text starts just right of it, and the head bar is as
+    // tall as the hamburger's box so the two share one centre line.
     final double brandLeftPadding = kFixedLeftPadding + kMenuButtonHeight + 4;
+
+    // The pinned block: its rows are known before the list is built, so the
+    // list can leave exactly their height free at the top.
+    final List<Widget> navCards = _buildDesktopNavigationCards();
+    final double navBlockBottom =
+        kSbNavBlockTop + navCards.length * kSbNavRowStep - kSbCardGap;
+    const double topChromeHeight = kMenuButtonHeight;
+    const double bottomChromeHeight = 54.0;
+    const double topInset = kTopInitialSpacing;
+    const double bottomInset = 10.0;
 
     return Container(
       color: sidebarBg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
         children: [
-          // Top spacer matches the hamburger's `top` offset.
-          SizedBox(height: kTopInitialSpacing),
-
-          // Brand row is exactly kMenuButtonHeight tall and vertically centred
-          // — that puts "Chuk Chat" on the same baseline as the hamburger.
-          SizedBox(
-            height: kMenuButtonHeight,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(brandLeftPadding, 0, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: BrandWordmark(color: iconFg),
+          Positioned.fill(
+            // No scrollbar: the desktop default draws one over the cards,
+            // and the list already says where it stands through its group
+            // headers.
+            child: ScrollConfiguration(
+              behavior: ScrollConfiguration.of(
+                context,
+              ).copyWith(scrollbars: false),
+              child: CustomScrollView(
+                controller: scrollController,
+                slivers: <Widget>[
+                  SliverToBoxAdapter(
+                    // Room for the head bar and the pinned navigation block,
+                    // both of which float over this list rather than scroll
+                    // with it. The chats start under them and run behind
+                    // them on the way up.
+                    child: SizedBox(height: navBlockBottom + 6),
+                  ),
+                  ..._buildDesktopSlivers(iconFg, accent),
+                  const SliverToBoxAdapter(
+                    child: SizedBox(height: bottomChromeHeight + bottomInset),
+                  ),
+                ],
               ),
             ),
           ),
 
-          Expanded(
-            child: CustomScrollView(
-              controller: scrollController,
-              slivers: _buildDesktopSlivers(iconFg, accent),
+          // The navigation block is chrome, not a list item: the three
+          // destinations stay where they are and the chats disappear under
+          // them, the way the head bar above already works.
+          Positioned(
+            top: kSbNavBlockTop,
+            left: 0,
+            right: 0,
+            child: SbBlock(joinTop: true, children: navCards),
+          ),
+
+          // The head of the sidebar names the app, and nothing else: the
+          // one action that starts something, a new chat, is the first card
+          // of the block below — the row the collapsed rail keeps it on.
+          Positioned(
+            top: topInset,
+            left: kSbBlockInset,
+            right: kSbBlockInset,
+            child: SbFloatingBar(
+              // The block below starts flush against this bar, so the two
+              // read as one run: round on top, tight at the joint.
+              borderRadius: const BorderRadius.only(
+                topLeft: Radius.circular(kSbCardRadius),
+                topRight: Radius.circular(kSbCardRadius),
+                bottomLeft: Radius.circular(kSbCardJointRadius),
+                bottomRight: Radius.circular(kSbCardJointRadius),
+              ),
+              child: SizedBox(
+                height: topChromeHeight,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(brandLeftPadding - 8, 0, 6, 0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: BrandWordmark(color: iconFg),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
           ),
 
-          const UpdateBanner(),
-
-          KeyedSubtree(
-            key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
-            child: SbBottomBar(
-              leading: SbSearchField(
-                controller: searchController,
-                focusNode: searchFocus,
-                onClear: _clearDesktopSearch,
-              ),
-              onSettings: widget.onSettingsTapped,
-              onNewChat: widget.onNewChatTapped,
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const UpdateBanner(),
+                KeyedSubtree(
+                  key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      kSbBlockInset,
+                      6,
+                      kSbBlockInset,
+                      bottomInset,
+                    ),
+                    child: SbAccountLine(
+                      name: sidebarDisplayName(profile),
+                      onTap: widget.onSettingsTapped,
+                      onSettings: widget.onSettingsTapped,
+                      balance: BalanceBadge(
+                        textStyle: TextStyle(
+                          color: accent,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        placeholderStyle: TextStyle(
+                          color: theme.m3.onSurfaceVariant,
+                          fontSize: 13,
+                        ),
+                        padding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -210,46 +308,6 @@ class _SidebarDesktopState extends State<SidebarDesktop>
   List<Widget> _buildDesktopSlivers(Color iconFg, Color accent) {
     return buildSidebarChatSlivers(
       leadingSlivers: <Widget>[
-        const SliverToBoxAdapter(child: SizedBox(height: 6)),
-        SliverToBoxAdapter(
-          child: SbBlock(
-            children: [
-              SbProfileCard(
-                name: sidebarDisplayName(profile),
-                onTap: widget.onSettingsTapped,
-                onCollapse: widget.onCollapseTapped,
-                subtitle: BalanceBadge(
-                  textStyle: TextStyle(
-                    color: accent,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                  ),
-                  placeholderStyle: TextStyle(
-                    color: Theme.of(context).m3.onSurfaceVariant,
-                    fontSize: 13,
-                  ),
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 10)),
-        SliverToBoxAdapter(
-          child: SbBlock(
-            children: buildSidebarNavigationCards(
-              context: context,
-              showWorkspaces: widget.showWorkspacesButton,
-              onWorkspacesTapped: widget.onWorkspacesTapped,
-              onMediaTapped: widget.onMediaTapped,
-              searchEntry: SbNavCard(
-                icon: Icons.search_rounded,
-                label: AppLocalizations.of(context)?.search ?? 'Search',
-                onTap: _focusDesktopSearch,
-              ),
-            ),
-          ),
-        ),
         if (isOfflineMode)
           SliverToBoxAdapter(
             child: SbOfflineNotice(
@@ -264,20 +322,57 @@ class _SidebarDesktopState extends State<SidebarDesktop>
       accent: accent,
       emptyTextColor: iconFg.withValues(alpha: 0.5),
       itemBuilder: (chat, index, length) => Padding(
-        padding: EdgeInsets.fromLTRB(
+        padding: const EdgeInsets.fromLTRB(
+          kSbBlockInset,
+          kSbCardGap,
           kSbBlockInset,
           0,
-          kSbBlockInset,
-          index == length - 1 ? 0 : kSbCardGap,
         ),
-        child: _buildDesktopChatItem(
-          chat,
-          onTap: () => _selectDesktopChat(chat),
-          onDelete: () => confirmAndDeleteSidebarChat(chat),
-          accentColor: accent,
-          iconFgColor: iconFg,
+        child: SbCardShape(
+          radius: sbBlockRadiusFor(index: index + 1, length: length + 1),
+          child: _buildDesktopChatItem(
+            chat,
+            onTap: () => _selectDesktopChat(chat),
+            onDelete: () => confirmAndDeleteSidebarChat(chat),
+            accentColor: accent,
+            iconFgColor: iconFg,
+          ),
         ),
       ),
+    );
+  }
+
+  /// The navigation block. The Search row is the field itself once it is
+  /// open, so the sidebar never holds two places to type a query.
+  List<Widget> _buildDesktopNavigationCards() {
+    final Widget searchEntry = _searchActive
+        ? SbCard(
+            // Its own, even corners rather than the block's: a ring that
+            // runs round two tight joints and two wide corners reads as a
+            // drawing mistake, not as a field.
+            outlined: true,
+            radius: kSbCardRadius,
+            padding: EdgeInsets.zero,
+            minHeight: kSbNavCardHeight,
+            child: SbSearchField(
+              controller: searchController,
+              focusNode: searchFocus,
+              transparent: true,
+              onClear: _clearDesktopSearch,
+            ),
+          )
+        : SbNavCard(
+            icon: Icons.search_rounded,
+            label: AppLocalizations.of(context)?.search ?? 'Search',
+            onTap: _focusDesktopSearch,
+          );
+    return buildSidebarNavigationCards(
+      context: context,
+      showWorkspaces: widget.showWorkspacesButton,
+      onWorkspacesTapped: widget.onWorkspacesTapped,
+      onMediaTapped: widget.onMediaTapped,
+      onNewChatTapped: widget.onNewChatTapped,
+      searchEntry: searchEntry,
     );
   }
 
@@ -325,7 +420,6 @@ class _SidebarDesktopState extends State<SidebarDesktop>
               context,
               pos,
               chat,
-              accentColor: accentColor,
               iconFgColor: iconFgColor,
               onDelete: onDelete,
             ),
@@ -367,7 +461,6 @@ class _SidebarDesktopState extends State<SidebarDesktop>
               onPressed: () => _openChatActionsMenu(
                 btnContext,
                 chat,
-                accentColor: accentColor,
                 iconFgColor: iconFgColor,
                 onDelete: onDelete,
               ),
@@ -384,7 +477,6 @@ class _SidebarDesktopState extends State<SidebarDesktop>
   void _openChatActionsMenu(
     BuildContext btnContext,
     StoredChat chat, {
-    required Color accentColor,
     required Color iconFgColor,
     VoidCallback? onDelete,
   }) {
@@ -405,11 +497,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
         overlayBox.size.width - bottomRight.dx,
         overlayBox.size.height - bottomRight.dy,
       ),
-      items: _buildMenuItems(
-        chat,
-        accentColor: accentColor,
-        iconFgColor: iconFgColor,
-      ),
+      items: _buildMenuItems(iconFgColor: iconFgColor),
     ).then((value) {
       if (value != null) {
         _handleMenuSelection(value, chat, onDelete);
@@ -437,27 +525,10 @@ class _SidebarDesktopState extends State<SidebarDesktop>
   }
 
   // Build menu items for both the three-dot button and the right-click menu.
-  List<PopupMenuEntry<String>> _buildMenuItems(
-    StoredChat chat, {
-    required Color accentColor,
-    required Color iconFgColor,
-  }) {
-    final bool isPinned = chat.isStarred;
+  List<PopupMenuEntry<String>> _buildMenuItems({required Color iconFgColor}) {
+    // No pin entry here: the tile carries the pin as a one-click toggle on
+    // hover, and the same action twice in one row is one too many.
     return [
-      PopupMenuItem(
-        value: 'pin',
-        child: Row(
-          children: [
-            AppIcon(
-              isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
-              color: isPinned ? accentColor : iconFgColor,
-              size: 20,
-            ),
-            const SizedBox(width: 12),
-            Text(isPinned ? 'Unpin' : 'Pin'),
-          ],
-        ),
-      ),
       PopupMenuItem(
         value: 'edit',
         child: Row(
@@ -493,7 +564,6 @@ class _SidebarDesktopState extends State<SidebarDesktop>
     BuildContext context,
     Offset position,
     StoredChat chat, {
-    required Color accentColor,
     required Color iconFgColor,
     VoidCallback? onDelete,
   }) {
@@ -505,11 +575,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
         position.dx + 1,
         position.dy + 1,
       ),
-      items: _buildMenuItems(
-        chat,
-        accentColor: accentColor,
-        iconFgColor: iconFgColor,
-      ),
+      items: _buildMenuItems(iconFgColor: iconFgColor),
     ).then((value) {
       if (value != null) {
         _handleMenuSelection(value, chat, onDelete);

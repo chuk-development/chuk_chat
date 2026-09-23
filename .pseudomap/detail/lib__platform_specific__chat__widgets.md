@@ -1,7 +1,6 @@
-# lib/platform_specific/chat/widgets · Signatures
+# lib/platform_specific/chat/widgets · Signaturen
 
-## lib/platform_specific/chat/widgets/chat_message_list_item.dart  (163 Z.)
-
+## lib/platform_specific/chat/widgets/chat_message_list_item.dart  (172 Z.)
 - L17 `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
   - L18 `const ChatMessageListItem({ super.key, required this.messages, required this.index, required this.data, required this.uuid, required this.maxWidth, required this.activeChatId, required this.flyInKey, required this.showToolCalls, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, required this.isEditing, required this.actions, required this.userMessageActions, required this.onSwitchVariant, this.onAskUserAnswer, this.onConnectMcpServer, this.onContinueGeneration, })`
   - L40 `final List<Map<String, String>> messages`
@@ -25,7 +24,6 @@
   - L60 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/chat/widgets/fullscreen_composer.dart  (149 Z.)
-
 - L26 `Future<String?> showFullscreenComposer( BuildContext context, { required String initialText, })`  — Opens the message being written on a screen of its own.
 - L38 `class _FullscreenComposerPage extends StatefulWidget`
   - L39 `const _FullscreenComposerPage({required this.initialText})`
@@ -40,7 +38,6 @@
   - L74 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/chat/widgets/mobile_chat_widgets.dart  (346 Z.)
-
 - L14 `Widget buildTinyIconButton({ IconData? icon, String? svgAssetPath, required VoidCallback? onTap, required bool isActive, required Color color, double buttonSize = 38, double cornerRadius = 12, double iconSize = 18, String? semanticsId, })`  — Build a tiny icon button widget
 - L61 `Widget buildTinyActionButton({ IconData? icon, String? svgAssetPath, required VoidCallback onTap, required Color color, bool isLoading = false, double buttonSize = 40, double iconSize = 16, String? semanticsId, })`  — Build a tiny action button widget (for send, etc.)
 - L122 `Widget buildAttachmentSheetOption({ required BuildContext context, required IconData icon, required String label, required VoidCallback onTap, required bool isEnabled, })`  — Build attachment sheet option (for bottom sheet)

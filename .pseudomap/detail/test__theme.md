@@ -1,7 +1,6 @@
-# test/theme · Signatures
+# test/theme · Signaturen
 
 ## test/theme/theme_presets_test.dart  (194 Z.)
-
 - L12 `class _Recorder`  — Captures every setter call so a test can assert what a preset applied.
   - L13 `Brightness? themeMode`
   - L14 `Color? accent`

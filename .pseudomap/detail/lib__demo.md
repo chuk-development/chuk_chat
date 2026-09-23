@@ -1,7 +1,6 @@
-# lib/demo · Signatures
+# lib/demo · Signaturen
 
 ## lib/demo/app_palette.dart  (63 Z.)
-
 - L3 `class AppPalette`
   - L4 `final bool isDark`
   - L5 `final Color bg`
@@ -20,7 +19,6 @@
   - L49 `static const light = AppPalette._( isDark: false, bg: Color(0xFFF6F7FB), surfaceLow: Color(0xFFFFFFFF), surface: Color(0xFFFFFFFF), surfaceHigh: Color(0xFFEFF1F6), fg: Color(0xFF1A1C22), muted: Color(0xFF5F6571), hairline: Color(0xFFE2E5EC), accent: Color(0xFF285DA9), accentSubtle: Color(0x33285DA9), accentText: Color(0xFF285DA9), )`
 
 ## lib/demo/demo_data.dart  (182 Z.)
-
 - L3 `class DemoChat`
   - L4 `final String id`
   - L5 `final String title`
@@ -52,7 +50,6 @@
   - L173 `const SidebarCallbacks({ required this.onChatTap, required this.onNewChat, required this.onSettings, required this.onMedia, required this.onWorkspaces, required this.onSearch, })`
 
 ## lib/demo/shared_widgets.dart  (645 Z.)
-
 - L10 `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + name. Trailing widget on the right.
   - L11 `final Widget? trailing`
   - L12 `final EdgeInsets padding`
@@ -145,7 +142,6 @@
   - L640 `factory ChatSplit.from(List<DemoChat> chats)`
 
 ## lib/demo/sidebar_demo_main.dart  (589 Z.)
-
 - L15 `kSidebarWidth = 320`
 - L17 `void main()`
 - L21 `class SidebarDemoApp extends StatefulWidget`

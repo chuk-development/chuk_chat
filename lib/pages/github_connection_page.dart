@@ -1,9 +1,8 @@
 // lib/pages/github_connection_page.dart
 //
-// Per-user GitHub OAuth Device Flow — lets the AI use `git` and `gh`
-// inside the sandbox under the user's identity. Token never lives
-// on this device; api-server stores it encrypted and injects it into
-// the sandbox on demand.
+// Per-user GitHub OAuth Device Flow — backs the GitHub MCP connector
+// under the user's identity. Token never lives on this device;
+// api-server stores it encrypted and uses it server-side.
 
 import 'dart:async';
 
@@ -212,7 +211,7 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
         onRefresh: _refreshStatus,
         child: SettingsListView(
           physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
           children: [
             _intro(scheme),
             const SizedBox(height: 20),
@@ -253,9 +252,9 @@ class _GitHubConnectionPageState extends State<GitHubConnectionPage> {
           ),
           const SizedBox(height: 8),
           Text(
-            'Connect your GitHub account so the AI can clone your private '
-            'repositories, make commits, and open pull requests inside the '
-            'code sandbox. Your token is encrypted on our server and only '
+            'Connect your GitHub account so the AI can work with issues, '
+            'pull requests and code search on your repositories through the '
+            'GitHub connector. Your token is encrypted on our server and only '
             'used when you ask the AI to do something with GitHub.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),

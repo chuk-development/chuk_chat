@@ -13,6 +13,7 @@ import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
+import 'package:chuk_chat/widgets/settings_search_bar.dart';
 // Carries both PlatformException and the Uint8List the icon cache hands back.
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -91,6 +92,20 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
         title: const Text('Connectors'),
+        // Pinned under the header, like the models page: the list scrolls
+        // behind it instead of carrying the field away with it.
+        bottom: PinnedSettingsSearchBar(
+          controller: _search,
+          hintText: 'Search connectors…',
+          textInputAction: TextInputAction.search,
+          onChanged: (_) => setState(() {
+            _registryHits = const [];
+            _searchingRegistry = false;
+            _searchedQuery = null;
+            _inFlightQuery = null;
+          }),
+          onSubmitted: (_) => _searchRegistry(),
+        ),
       ),
       body: ValueListenableBuilder<Set<String>>(
         valueListenable: McpService.unreachable,
@@ -124,25 +139,41 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             return (d != null && d.isNotEmpty) ? d : null;
           }
 
+          // The query searches what is connected as well. A reader looking
+          // for "canva" wants the one they already added, not only the ones
+          // they could add — and with nothing of theirs matching, the
+          // Connected section drops out instead of standing there empty.
+          final List<McpConnection> visibleConnections = _query.isEmpty
+              ? connections
+              : connections
+                    .where(
+                      (c) =>
+                          c.name.toLowerCase().contains(_query) ||
+                          c.description.toLowerCase().contains(_query) ||
+                          (subtitleFor(c) ?? '').toLowerCase().contains(_query),
+                    )
+                    .toList(growable: false);
+
           return SettingsListView(
+            extraHeaderInset: kSettingsSearchBarHeight,
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
             children: [
-              Text(
-                'Connectors let the assistant use tools and data from other '
-                'services.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.resolvedIconColor.withValues(alpha: 0.7),
+              if (_query.isEmpty) ...[
+                Text(
+                  'Connectors let the assistant use tools and data from other '
+                  'services.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.resolvedIconColor.withValues(alpha: 0.7),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 16),
-              _searchField(theme),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
+              ],
 
-              if (connections.isNotEmpty) ...[
+              if (visibleConnections.isNotEmpty) ...[
                 const ExpressiveSectionHeader('Connected'),
                 ExpressiveGroup(
                   children: [
-                    for (final connection in connections)
+                    for (final connection in visibleConnections)
                       _row(
                         url: connection.url,
                         icon: connection.iconUrl,
@@ -245,31 +276,6 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
             ],
           );
         },
-        ),
-      ),
-    );
-  }
-
-  Widget _searchField(ThemeData theme) {
-    return TextField(
-      controller: _search,
-      onChanged: (_) => setState(() {
-        _registryHits = const [];
-        _searchingRegistry = false;
-        _searchedQuery = null;
-        _inFlightQuery = null;
-      }),
-      onSubmitted: (_) => _searchRegistry(),
-      decoration: InputDecoration(
-        hintText: 'Search connectors…',
-        prefixIcon: const AppIcon(Icons.search),
-        filled: true,
-        fillColor: theme.colorScheme.surfaceContainerHighest.withValues(
-          alpha: 0.4,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(26),
-          borderSide: BorderSide.none,
         ),
       ),
     );

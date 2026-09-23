@@ -1,7 +1,6 @@
-# scripts · Signatures
+# scripts · Signaturen
 
 ## scripts/generate_icons.py  (270 Z.)
-
 - L10 `def draw_chat_brain_icon(size, line_width_ratio=0.08, padding_ratio=0.05)`  — Draw a chat bubble with brain icon (Material You style)
 - L142 `def generate_android_icons()`  — Generate Android launcher icons (mipmap)
 - L161 `def generate_ios_icons()`  — Generate iOS app icons
@@ -9,7 +8,6 @@
 - L214 `def generate_adaptive_icon()`  — Generate Android Adaptive Icon (foreground + background)
 
 ## scripts/generate_wordmark_svg.py  (185 Z.)
-
 - L30 `REPO = Path(__file__).resolve().parent.parent`
 - L31 `OUT = REPO / "assets" / "wordmark.svg"`
 - L33 `def find_font(filename, fc_pattern)`  — Locate a Liberation Mono face: known Debian path, else fc-match.

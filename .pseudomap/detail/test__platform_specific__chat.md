@@ -1,7 +1,6 @@
-# test/platform_specific/chat · Signatures
+# test/platform_specific/chat · Signaturen
 
 ## test/platform_specific/chat/chat_scroll_mixin_test.dart  (194 Z.)
-
 - L13 `void main()`  — Auto-scroll during streaming.
 - L141 `Matcher moveTo(double target)`  — `pixels` lands on the extent within a sub-pixel of it.
 - L143 `class _Harness extends StatefulWidget`
@@ -17,11 +16,9 @@
   - L179 `Widget build(BuildContext context)`
 
 ## test/platform_specific/chat/chat_ui_helpers_test.dart  (701 Z.)
-
 - L14 `void main()`
 
 ## test/platform_specific/chat/regen_variant_seed_test.dart  (187 Z.)
-
 - L10 `class _Host extends StatefulWidget`
   - L11 `const _Host()`
   - L13 `State<_Host> createState()`

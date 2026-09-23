@@ -1,8 +1,12 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/services/agents/thread_preview_store.dart';
+import 'package:chuk_chat/models/content_block.dart';
 
 void main() {
+  // Agents delivers files as file blocks; decode them as the Agents build
+  // does (the default follows FEATURE_AGENTS, which tests leave off).
+  ContentBlock.decodesFileBlocks = true;
   test('the preview is the last line that says something', () {
     final store = ThreadPreviewStore();
     store.noteRows('t1', <Map<String, dynamic>>[

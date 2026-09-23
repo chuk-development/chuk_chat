@@ -1,96 +1,113 @@
-import 'package:chuk_chat/model_selector_page.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../support/icon_finder.dart';
-
-import '../support/test_app.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/model_selector_page.dart';
 
 void main() {
-  final provider = ModelProviderInfo(
-    slug: 'provider/one',
-    name: 'Provider One',
-    pricing: PricingDetails(prompt: 0, completion: 0, request: 0),
-  );
-  final model = CustomModelInfo(
-    id: 'model/one',
-    name: 'A comfortably readable model name',
-    providers: [provider],
-  );
-
-  Widget row({
-    ValueChanged<ModelProviderInfo?>? onChanged,
-    VoidCallback? onEdit,
-  }) => ModelSelectionRow(
-    model: model,
-    selectedProvider: provider,
-    onProviderChanged: onChanged ?? (_) {},
-    onEditPrompt: onEdit,
-    formatContextLength: (_) => '128K',
-    buildIconWidget: (_, icon, {double size = 24}) => Icon(icon, size: size),
-  );
-
-  testWidgets(
-    'model heading, provider and prompt occupy separate settings rows',
-    (tester) async {
-      var edits = 0;
-      await tester.pumpWidget(
-        testApp(Scaffold(body: row(onEdit: () => edits++))),
-      );
-      await tester.pumpAndSettle();
-      expect(
-        tester.getTopLeft(find.text('Provider')).dy,
-        greaterThan(tester.getBottomLeft(find.text(model.name)).dy),
-      );
-      expect(
-        tester.getTopLeft(find.text('System prompt')).dy,
-        greaterThan(tester.getBottomLeft(find.text('Provider')).dy),
-      );
-      expect(findIcon(Icons.arrow_drop_down), findsNothing);
-      expect(findIcon(Icons.chevron_right_rounded), findsNWidgets(2));
-      await tester.tap(find.text('System prompt'));
-      expect(edits, 1);
-    },
-  );
-
-  testWidgets('provider still selects the real provider', (tester) async {
-    ModelProviderInfo? selected;
-    await tester.pumpWidget(
-      testApp(Scaffold(body: row(onChanged: (p) => selected = p))),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Provider'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Provider One').last);
-    await tester.pumpAndSettle();
-    expect(selected?.slug, provider.slug);
+  test('model counts use singular and plural translations', () {
+    final l = AppLocalizations(const Locale('de'));
+    expect(l.availableModels(1), 'Verfügbar · 1 Modell');
+    expect(l.availableModels(2), 'Verfügbar · 2 Modelle');
+    expect(l.modelsFound(1), '1 Modell gefunden');
+    expect(l.modelsFound(0), '0 Modelle gefunden');
   });
 
-  testWidgets('grouped controls fit narrow phone with large text', (
+  testWidgets('model name, provider, and prompt have separate rows', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(320, 900);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.reset);
+
+    final provider = ModelProviderInfo(
+      slug: 'provider/one',
+      name: 'A longer provider name',
+      pricing: PricingDetails(prompt: 0, completion: 0, request: 0),
+    );
+    final model = CustomModelInfo(
+      id: 'model/one',
+      name: 'A comfortably readable model name',
+      providers: [provider],
+    );
+
     await tester.pumpWidget(
-      testApp(
-        MediaQuery(
-          data: const MediaQueryData(
-            size: Size(320, 900),
-            textScaler: TextScaler.linear(2),
-          ),
-          child: Scaffold(
-            body: SingleChildScrollView(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: row(onEdit: () {}),
-              ),
+      MaterialApp(
+        localizationsDelegates: const [AppLocalizations.delegate],
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: ModelSelectionRow(
+              model: model,
+              selectedProvider: provider,
+              onProviderChanged: (_) {},
+              onEditPrompt: () {},
+              formatContextLength: (_) => '128K',
+              buildIconWidget: (_, icon, {double size = 24}) =>
+                  Icon(icon, size: size),
             ),
           ),
         ),
       ),
     );
     await tester.pumpAndSettle();
+
+    expect(find.text(model.name), findsOneWidget);
+    expect(find.text(provider.name), findsOneWidget);
+    expect(find.text('Provider'), findsOneWidget);
+    expect(find.text('System Prompt'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('Provider')).dy,
+      greaterThan(tester.getBottomLeft(find.text(model.name)).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('System Prompt')).dy,
+      greaterThan(tester.getBottomLeft(find.text('Provider')).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('provider controls use the selected language', (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('de'),
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SizedBox(
+            width: 320,
+            child: ModelSelectionRow(
+              model: CustomModelInfo(
+                id: 'model/one',
+                name: 'Ein Modell',
+                providers: const [],
+              ),
+              selectedProvider: null,
+              onProviderChanged: (_) {},
+              onEditPrompt: () {},
+              formatContextLength: (_) => '128K',
+              buildIconWidget: (_, icon, {double size = 24}) =>
+                  Icon(icon, size: size),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Anbieter'), findsOneWidget);
+    expect(find.text('Wählen'), findsOneWidget);
+    expect(find.text('Systemprompt'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -18,9 +18,9 @@ class _SpyController extends RemoteFrameBufferController {
 
   @override
   void pointer({
-    required final int x,
-    required final int y,
-    final Set<int> buttons = const <int>{},
+    required int x,
+    required int y,
+    Set<int> buttons = const <int>{},
   }) {
     final List<int> b = buttons.toList()..sort();
     events.add('p $x,$y $b');
@@ -28,15 +28,15 @@ class _SpyController extends RemoteFrameBufferController {
 
   @override
   void click({
-    required final int x,
-    required final int y,
-    final int button = 1,
+    required int x,
+    required int y,
+    int button = 1,
   }) {
     events.add('c $x,$y b$button');
   }
 
   @override
-  void key({required final bool down, required final int key}) {
+  void key({required bool down, required int key}) {
     events.add('k $key ${down ? 'down' : 'up'}');
   }
 
@@ -85,7 +85,7 @@ Future<void> _pinch(WidgetTester tester, double factor) async {
   await tester.pump();
   const int steps = 4;
   for (int i = 1; i <= steps; i++) {
-    final double reach = half + (half * factor - half) * i / steps;
+    double reach = half + (half * factor - half) * i / steps;
     await left.moveTo(centre - Offset(reach, 0));
     await right.moveTo(centre + Offset(reach, 0));
     await tester.pump();

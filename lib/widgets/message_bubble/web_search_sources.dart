@@ -9,6 +9,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:url_launcher/url_launcher.dart';
+import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// One parsed hit from a web_search result.
@@ -276,23 +277,12 @@ class _Favicon extends StatelessWidget {
       color: muted,
     );
 
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(5),
-      child: SizedBox(
-        width: size,
-        height: size,
-        child: host.isEmpty
-            ? Center(child: fallback)
-            : Image.network(
-                'https://www.google.com/s2/favicons?domain=$host&sz=64',
-                width: size,
-                height: size,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Center(child: fallback),
-                loadingBuilder: (context, child, progress) =>
-                    progress == null ? child : Center(child: fallback),
-              ),
-      ),
-    );
+    if (host.isEmpty) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(5),
+        child: SizedBox(width: size, height: size, child: Center(child: fallback)),
+      );
+    }
+    return FaviconImage(host: host, size: size, fallbackColor: muted);
   }
 }
