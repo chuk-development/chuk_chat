@@ -111,6 +111,7 @@ class OfflineSendExecutor {
             case MetaEvent():
             case TpsEvent():
             case ToolCallsEvent():
+            case HeartbeatEvent():
               break;
           }
           if (sawError) break;

@@ -577,6 +577,7 @@ Rules:
           case MetaEvent():
           case TpsEvent():
           case ToolCallsEvent():
+          case HeartbeatEvent():
             // Ignore these for title generation
             break;
         }
