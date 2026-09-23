@@ -119,6 +119,7 @@ void main() {
         const ToolCallsEvent([
           NativeToolCall(id: 'call_1', name: 'get_time', arguments: '{}'),
         ]),
+        const HeartbeatEvent(seq: 1),
         const ErrorEvent('err'),
         const DoneEvent(),
       ];
@@ -140,6 +141,8 @@ void main() {
             types.add('tps');
           case ToolCallsEvent():
             types.add('tool_calls');
+          case HeartbeatEvent():
+            types.add('heartbeat');
           case ErrorEvent():
             types.add('error');
           case DoneEvent():
@@ -157,6 +160,7 @@ void main() {
           'meta',
           'tps',
           'tool_calls',
+          'heartbeat',
           'error',
           'done',
         ]),
