@@ -61,6 +61,7 @@ import 'package:chuk_chat/services/settings/theme_controller.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/settings_sync_service.dart';
 import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
@@ -158,8 +159,10 @@ Future<void> main() async {
   await initChatStorageCache();
 
   // Chat storage as in chuk_chat (bead cowork-sha): follow the auth session to
-  // load the local chat cache and start the cloud sync.
-  AgentsChatStorageBootstrap.start();
+  // load the local chat cache and start the cloud sync. Agents only: with the
+  // flag off upstream's SessionManager / AppInitializationService do this,
+  // and upstream's main has no such call.
+  if (agentsChatCore) AgentsChatStorageBootstrap.start();
 
   // Load the verbose-view flag once at startup, so the first frame shows the
   // right view. The service is safe to read before this, but an early load

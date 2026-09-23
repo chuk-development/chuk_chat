@@ -12,12 +12,14 @@
 //   [AgentsChatStore]: a host-authoritative REPLACE into memory, the SQLite
 //   cache and an encrypted upsert of `cowork_chats`. Such a thread may arrive
 //   with no cloud at all (offline, a widget test, a fresh install), so its
-//   read answers from memory first and never throws.
+//   read answers from memory first, then SQLite, then `cowork_chats`, and
+//   never throws. Its delete removes the `cowork_chats` row.
 //
-// The cloud sync only knows `encrypted_chats`. So an Agents thread is never
-// merged from it and never removed locally because that table lacks it.
-// The three list loaders are no-ops and deleteChat is memory-only while there
-// is no Supabase client at all (upstream throws).
+// chuk_chat's cloud sync only knows `encrypted_chats`. So an Agents thread is
+// never merged from it and never removed locally because that table lacks
+// it; `AgentsChatStore.pullFromCloud` polls `cowork_chats` instead. The three
+// list loaders are no-ops and deleteChat is memory-only while there is no
+// Supabase client at all (upstream throws).
 //
 // Facade for chat storage functionality.
 // Re-exports all chat storage components for backward compatibility.
@@ -159,9 +161,16 @@ class ChatStorageService {
   debugCrudUpdate = ChatStorageCrud.updateChat;
 
   /// Delete a chat and its associated images from storage
-  /// AGENTS: with no Supabase client the chat is dropped from memory only
-  /// (upstream throws before it touches anything).
+  /// AGENTS: an Agents thread is deleted from `cowork_chats` (and the SQLite
+  /// cache and the outbox) through [AgentsChatStore.deleteThread]; upstream's
+  /// delete targets `encrypted_chats`, which never holds it. With no
+  /// Supabase client a chat is dropped from memory only (upstream throws
+  /// before it touches anything).
   static Future<void> deleteChat(String chatId) async {
+    if (ChatOrigin.isAgentsThread(chatId)) {
+      await AgentsChatStore.deleteThread(chatId);
+      return;
+    }
     if (ChatOrigin.agentsEnabled && !AgentsChatStore.cloudAvailable) {
       ChatStorageState.markDeleted(chatId);
       ChatStorageState.chatsById.remove(chatId);

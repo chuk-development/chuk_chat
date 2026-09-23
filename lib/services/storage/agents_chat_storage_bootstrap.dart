@@ -34,7 +34,8 @@ class AgentsChatStorageBootstrap {
   @visibleForTesting
   static Duration flushInterval = const Duration(seconds: 30);
 
-  /// Test seam: what a flush does. Defaults to [AgentsChatStore.flushOutbox].
+  /// Test seam: what a tick does. Defaults to [AgentsChatStore.flushOutbox]
+  /// followed by [AgentsChatStore.pullFromCloud].
   @visibleForTesting
   static Future<void> Function()? flushHook;
 
@@ -89,12 +90,30 @@ class AgentsChatStorageBootstrap {
     _activeUserId = null;
   }
 
-  /// Flushes the cloud outbox now (on sign-in, and every [flushInterval]).
+  /// Flushes the cloud outbox now (on sign-in, and every [flushInterval]),
+  /// then pulls every Agents thread whose `cowork_chats` row is newer than
+  /// this device's copy. chuk_chat's `ChatSyncService` polls
+  /// `encrypted_chats` only; this is the same poll for the Agents table.
   static Future<void> flushNow() async {
     final hook = flushHook;
     if (hook != null) return hook();
-    await AgentsChatStore.flushOutbox();
+    // One tick at a time: a slow pull must not be overlapped by the next
+    // tick, which would fetch and decrypt the same rows again.
+    final running = _inFlight;
+    if (running != null) return running;
+    final run = () async {
+      await AgentsChatStore.flushOutbox();
+      await AgentsChatStore.pullFromCloud();
+    }();
+    _inFlight = run;
+    try {
+      await run;
+    } finally {
+      if (identical(_inFlight, run)) _inFlight = null;
+    }
   }
+
+  static Future<void>? _inFlight;
 
   static void _startFlushing() {
     _flushTimer?.cancel();
