@@ -46,7 +46,12 @@ extension _MessageBubbleChrome on _MessageBubbleState {
         ),
         if (hasSources) ...[
           const SizedBox(width: 6),
-          _buildSourcesBar(sources),
+          // On a phone the full five-icon pill leaves the pager too little
+          // room and clips its next arrow, so show fewer icons next to it.
+          _buildSourcesBar(
+            sources,
+            maxIcons: hasPager && kPlatformMobile ? 2 : 5,
+          ),
         ],
       ],
     );
@@ -153,9 +158,13 @@ extension _MessageBubbleChrome on _MessageBubbleState {
     return sources;
   }
 
-  /// The bottom-right pill: a strip of up to five favicons and a "N sources"
-  /// count. Tapping opens the full, scrollable list.
-  Widget _buildSourcesBar(List<AgentActivitySource> sources) {
+  /// The bottom-right pill: a strip of up to [maxIcons] favicons and a
+  /// "N sources" count. Tapping opens the full, scrollable list.
+  Widget _buildSourcesBar(
+    List<AgentActivitySource> sources, {
+    int maxIcons = 5,
+  }) {
+    final int iconCount = sources.length < maxIcons ? sources.length : maxIcons;
     final colorScheme = Theme.of(context).colorScheme;
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     return InkWell(
@@ -178,9 +187,9 @@ extension _MessageBubbleChrome on _MessageBubbleState {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (int i = 0; i < sources.length && i < 5; i++)
+            for (int i = 0; i < iconCount; i++)
               Padding(
-                padding: EdgeInsets.only(right: i < 4 ? 4.0 : 0),
+                padding: EdgeInsets.only(right: i < iconCount - 1 ? 4.0 : 0),
                 child: _buildFavicon(
                   sources[i].host,
                   colorScheme,

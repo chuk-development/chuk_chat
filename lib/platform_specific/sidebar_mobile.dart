@@ -543,7 +543,7 @@ class _SidebarMobileState extends State<SidebarMobile>
     final String title = isLocked
         ? 'Locked encrypted chat'
         : deriveSidebarChatTitle(chat);
-    void openMenu([Offset? at]) => _showChatOptionsMenu(
+    void openMenu(Offset at) => _showChatOptionsMenu(
       chat,
       at: at,
       onDelete: onDelete,
@@ -559,34 +559,10 @@ class _SidebarMobileState extends State<SidebarMobile>
       onTap: isLocked
           ? () => showLockedSidebarChatDialog(accentColor: accentColor)
           : onTap,
-      // The menu opens under the finger, not at the bottom of the screen.
-      // The three-dot button is the second, visible way into the same menu.
+      // The menu opens under the finger. Long-press is the only way in: a
+      // three-dot button had no finger position, so its menu always opened
+      // at the same fixed spot, whatever chat it belonged to.
       onLongPressAt: isLocked ? null : openMenu,
-      trailing: isLocked
-          ? null
-          // The glyph stays small, but the box around it is Material's 48 px
-          // minimum: it sits right beside the tile's own tap area, and a
-          // near miss on a smaller target opens the chat instead of the
-          // sheet.
-          : SizedBox(
-              width: 48,
-              height: 48,
-              child: IconButton(
-                icon: AppIcon(
-                  Icons.more_horiz_rounded,
-                  size: 18,
-                  color: theme.m3.onSurfaceVariant,
-                ),
-                padding: EdgeInsets.zero,
-                splashRadius: 24,
-                tooltip: 'Chat options',
-                constraints: const BoxConstraints.tightFor(
-                  width: 48,
-                  height: 48,
-                ),
-                onPressed: () => openMenu(),
-              ),
-            ),
     );
   }
 
