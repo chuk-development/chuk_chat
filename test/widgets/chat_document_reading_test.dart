@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+
 import 'package:chuk_chat/widgets/chat_document_view.dart';
 import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
@@ -192,6 +194,10 @@ List<String> _pastRightEdge(WidgetTester tester, Finder root) {
 }
 
 void main() {
+  // Chat documents are an Agents feature, and so is the table they draw.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
+
   for (final double scale in <double>[1.0, 1.3]) {
     testWidgets(
       'a markdown document fits the phone column at text scale $scale',

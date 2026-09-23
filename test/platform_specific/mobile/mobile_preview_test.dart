@@ -8,6 +8,8 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
@@ -147,6 +149,9 @@ void main() {
   });
 
   testWidgets('the message bubbles', (tester) async {
+    // The Agents bubbles: kinds, run corners and the stamp.
+    debugAgentsChatCoreOverride = true;
+    addTearDown(() => debugAgentsChatCoreOverride = null);
     // The bubbles on their own, so the corner geometry, the colours per kind
     // and the stamp can be read without the rest of the chat screen.
     await pumpPhone(

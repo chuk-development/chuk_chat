@@ -1,8 +1,7 @@
 // Two destination lists. With Agents off, upstream's list whole. With Agents
 // on, the Agents app's own list ([_agentsGroups]): its 'Agents' group, its
 // connectors and developer pages under lib/pages/settings/, and none of the
-// hosted-account rows. Kept from Agents on both: the minimum tap target on
-// the nav rows.
+// hosted-account rows, plus the minimum tap target on the nav rows.
 // lib/pages/desktop_settings_modal.dart
 //
 // Desktop settings as a modal popup over the chat UI — a proper desktop
@@ -778,10 +777,11 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           onTap: () => _onSelect(dest),
           child: Container(
             // A 20 dp icon inside 10 dp of padding is a 40 dp row: too small
-            // to hit, on the phone as much as under a mouse.
-            constraints: const BoxConstraints(
-              minHeight: kMinInteractiveDimension,
-            ),
+            // to hit, on the phone as much as under a mouse. Agents only:
+            // chuk_chat keeps upstream's 40 dp rows.
+            constraints: agentsChatCore
+                ? const BoxConstraints(minHeight: kMinInteractiveDimension)
+                : null,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [
@@ -852,9 +852,9 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           borderRadius: BorderRadius.circular(kRadiusRow),
           onTap: _logout,
           child: Container(
-            constraints: const BoxConstraints(
-              minHeight: kMinInteractiveDimension,
-            ),
+            constraints: agentsChatCore
+                ? const BoxConstraints(minHeight: kMinInteractiveDimension)
+                : null,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             child: Row(
               children: [

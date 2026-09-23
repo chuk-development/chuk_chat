@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
@@ -42,6 +43,10 @@ class ChatModeSelector extends StatelessWidget {
   /// The Agents thread's menus: the original app's filled tiles at the menu
   /// radius, with no frame. Off, upstream's framed picker is kept.
   final bool agentsMenus;
+
+  /// Menu rows one touch target high: the Agents build. chuk_chat keeps
+  /// upstream's 40 dp rows and 30 dp section headers.
+  bool get _agentsLook => agentsMenus || agentsChatCore;
 
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
@@ -388,7 +393,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: MobileLayout.minTouchTarget,
+      height: _agentsLook ? MobileLayout.minTouchTarget : 30,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         label.toUpperCase(),
@@ -415,7 +420,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       value: value,
-      height: MobileLayout.minTouchTarget,
+      height: _agentsLook ? MobileLayout.minTouchTarget : 40,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,

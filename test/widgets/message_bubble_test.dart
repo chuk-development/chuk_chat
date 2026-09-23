@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+
 import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -35,6 +37,10 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
   group('automation wake', () {
+    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('renders as one quiet line, never as a user bubble', (
       tester,
     ) async {
@@ -111,6 +117,10 @@ void main() {
   });
 
   group('message clock', () {
+    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     testWidgets('a user message with a timestamp shows HH:mm', (tester) async {
       await tester.pumpWidget(
         _wrap(
@@ -189,6 +199,10 @@ void main() {
   });
 
   group('stamp', () {
+    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+    setUp(() => debugAgentsChatCoreOverride = true);
+    tearDown(() => debugAgentsChatCoreOverride = null);
+
     // The queue mark is the only thing next to the time: whether the message
     // is still waiting on this device. There are no delivery ticks.
     test('queueMarkFor marks only what is still on this device', () {

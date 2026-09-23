@@ -153,6 +153,12 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         : preserved;
   }
 
+  /// Whether this bubble wears the Agents look: filled bubbles, run-shaped
+  /// corners and the clock stamp. Upstream chuk_chat (`FEATURE_AGENTS` off)
+  /// keeps its own bubble exactly — an outlined accent pill for the user and
+  /// no bubble at all for the answer — and nothing Agents-only is drawn.
+  bool get _agentsLook => agentsChatCore || widget.messengerMode;
+
   /// Where this bubble sits in a run of messages from the same sender. Drives
   /// which corners are rounded, so a run reads as one connected group.
   BubblePosition get _bubblePosition => bubblePositionFromFlags(
@@ -327,11 +333,14 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // A fired automation reaches the thread as a user turn because that is how
     // the host submits it. It is not a person talking, so it never gets a
     // bubble.
-    final AutomationWake? wake = parseAutomationWake(widget.message);
+    final AutomationWake? wake = _agentsLook
+        ? parseAutomationWake(widget.message)
+        : null;
     if (wake != null) return _buildAutomationWakeLine(context, wake);
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
+    final bool agentsLook = _agentsLook;
 
     final double effectiveMaxWidth =
         widget.maxWidth ??
@@ -344,37 +353,57 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // Expressive geometry: big rounding everywhere, a small radius only where
     // the next bubble of the same sender is stacked against it.
-    final Color fill = accentColor;
-    final Color onFill = Theme.of(context).colorScheme.onPrimary;
+    // Upstream's user bubble: the accent at 80 %, its text in the page's icon
+    // colour, a hairline border and a tail corner on the run's last bubble.
+    final Color fill = agentsLook
+        ? accentColor
+        : Theme.of(context).scaffoldBackgroundColor;
+    final Color onFill = agentsLook
+        ? Theme.of(context).colorScheme.onPrimary
+        : iconFgColor;
     // A user's images never render inside the bubble (see the classic
     // layout): they hang above it, as their own block of the same run.
     final bool hasImagesAbove =
         widget.images != null &&
         widget.images!.isNotEmpty &&
         _stripAttachmentHeaderForUser(widget.message).trim().isNotEmpty;
-    final BoxDecoration decoration = BoxDecoration(
-      color: fill,
-      borderRadius: bubbleRadius(
-        true,
-        // With an image above it the bubble closes the run but no longer
-        // opens it.
-        hasImagesAbove
-            ? bubblePositionFromFlags(
-                startsNewGroup: false,
-                endsGroup: widget.endsGroup,
-              )
-            : _bubblePosition,
-      ),
-    );
+    final BoxDecoration decoration = !agentsLook
+        ? BoxDecoration(
+            color: accentColor.withValues(alpha: .8),
+            borderRadius: BorderRadius.only(
+              topLeft: const Radius.circular(16),
+              topRight: const Radius.circular(16),
+              bottomLeft: const Radius.circular(16),
+              bottomRight: Radius.circular(widget.endsGroup ? 5 : 16),
+            ),
+            border: Border.all(color: iconFgColor.withValues(alpha: .3)),
+          )
+        : BoxDecoration(
+            color: fill,
+            borderRadius: bubbleRadius(
+              true,
+              // With an image above it the bubble closes the run but no longer
+              // opens it.
+              hasImagesAbove
+                  ? bubblePositionFromFlags(
+                      startsNewGroup: false,
+                      endsGroup: widget.endsGroup,
+                    )
+                  : _bubblePosition,
+            ),
+          );
 
     final Widget bubbleContent = Container(
-      margin: EdgeInsets.only(
-        // An image the user sent hangs directly above this bubble and is part
-        // of the same run, so only the image carries the run's gap then.
-        top: hasImagesAbove
-            ? kBubbleGapInGroup
-            : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
-      ),
+      margin: !agentsLook
+          ? EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2)
+          : EdgeInsets.only(
+              // An image the user sent hangs directly above this bubble and is
+              // part of the same run, so only the image carries the run's gap
+              // then.
+              top: hasImagesAbove
+                  ? kBubbleGapInGroup
+                  : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+            ),
       padding: containerPadding,
       decoration: decoration,
       clipBehavior: Clip.antiAlias,
@@ -395,7 +424,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             hasVisibleToolCalls: false,
           ),
           // Time + ticks, in the corner of the bubble itself.
-          if (!_stampRidesInText)
+          if (agentsLook && !_stampRidesInText)
             ?_buildBubbleFooter(
               context: context,
               isUser: true,
@@ -433,7 +462,10 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            if (hasUserImages)
+            if (hasUserImages && !agentsLook) ...[
+              _buildFramedUserImageGrid(_buildImagesGrid(widget.images!)),
+              const SizedBox(height: 2),
+            ] else if (hasUserImages)
               Padding(
                 padding: EdgeInsets.only(
                   top: bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
@@ -448,7 +480,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             // The stamp in the bubble already marks a queued or failed send.
             // The row below stays only for a failure, because it carries the
             // Retry action and the error text.
-            if (widget.status == ChatMessageStatus.failed)
+            // Upstream has no stamp, so its row shows a queued send too.
+            if (widget.status == ChatMessageStatus.failed ||
+                (!agentsLook && widget.status == ChatMessageStatus.pending))
               _buildStatusIndicator(context),
           ],
         ),
@@ -490,6 +524,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     final Color accentColor = Theme.of(context).colorScheme.primary;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
+    final bool agentsLook = _agentsLook;
 
     final double effectiveMaxWidth =
         widget.maxWidth ??
@@ -529,12 +564,20 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // A coworker's turn gets a real bubble now, and its colour says what the
     // turn IS: prose, work, a delivery, or a break-off (see bubble_kind.dart).
-    final AgentBubbleColors colors = agentBubbleColors(
-      Theme.of(context).colorScheme,
-      widget.messengerMode && widget.status != ChatMessageStatus.interrupted
-          ? AgentBubbleKind.answer
-          : _agentBubbleKind,
-    );
+    // Upstream draws the answer straight on the page: no fill, the page's
+    // icon colour for the text.
+    final AgentBubbleColors colors = agentsLook
+        ? agentBubbleColors(
+            Theme.of(context).colorScheme,
+            widget.messengerMode &&
+                    widget.status != ChatMessageStatus.interrupted
+                ? AgentBubbleKind.answer
+                : _agentBubbleKind,
+          )
+        : AgentBubbleColors(
+            Theme.of(context).scaffoldBackgroundColor,
+            iconFgColor,
+          );
 
     // The body is built BEFORE the bubble, because the body is what decides
     // whether there is a bubble at all. The quiet toggles filter blocks out
@@ -631,19 +674,25 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       // The run gap is the bubble's own, unless a sender label opens the run:
       // then the label carries it, so a named run in a room keeps exactly the
       // rhythm an unnamed run has (see [MessageBubble.senderLabel]).
-      margin: EdgeInsets.only(
-        top: widget.senderLabel != null
-            ? 0
-            : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
-      ),
-      padding: EdgeInsets.symmetric(
-        horizontal: widget.messengerMode ? 15 : 14,
-        vertical: widget.messengerMode ? 9 : 10,
-      ),
-      decoration: BoxDecoration(
-        color: colors.fill,
-        borderRadius: bubbleRadius(false, blockPosition(0)),
-      ),
+      margin: !agentsLook
+          ? EdgeInsets.only(top: widget.startsNewGroup ? 10 : 2, bottom: 2)
+          : EdgeInsets.only(
+              top: widget.senderLabel != null
+                  ? 0
+                  : bubbleGapAbove(startsNewGroup: widget.startsNewGroup),
+            ),
+      padding: !agentsLook
+          ? const EdgeInsets.symmetric(horizontal: 0, vertical: 2)
+          : EdgeInsets.symmetric(
+              horizontal: widget.messengerMode ? 15 : 14,
+              vertical: widget.messengerMode ? 9 : 10,
+            ),
+      decoration: !agentsLook
+          ? null
+          : BoxDecoration(
+              color: colors.fill,
+              borderRadius: bubbleRadius(false, blockPosition(0)),
+            ),
       clipBehavior: Clip.none,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -656,7 +705,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           // cowork-wsev). The failure stays in the tool list, which the user
           // opens when they want it.
           // The time only: a coworker's bubble carries no ticks.
-          if (!_stampRidesInText)
+          if (agentsLook && !_stampRidesInText)
             ?_buildBubbleFooter(
               context: context,
               isUser: false,
@@ -1475,7 +1524,13 @@ extension _MessageBubbleLayout on _MessageBubbleState {
           style: TextStyle(
             color: iconFgColor,
             fontSize: _chatFontSize,
-            fontFamily: _chatFontFamily,
+            // Upstream leaves the system font null here (the platform font),
+            // where the Agents look falls back to Arimo.
+            fontFamily: _agentsLook
+                ? _chatFontFamily
+                : resolveChatFontFamily(
+                    AppThemeService.instance.chatFontFamily,
+                  ),
             height: 1.38,
           ),
         ),
