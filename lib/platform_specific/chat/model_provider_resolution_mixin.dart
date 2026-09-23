@@ -20,8 +20,9 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   String? get selectedProviderSlug;
   set selectedProviderSlug(String? value);
 
-  /// The active chat mode (host-provided).
-  ChatMode get chatMode;
+  /// The active chat mode. Hosts without modes resolve like custom mode:
+  /// only the per-model pin applies.
+  ChatMode get chatMode => ChatMode.custom;
 
   /// Optional chat override. Unscoped legacy hosts retain account defaults.
   String? get modelSelectionChatId => null;
