@@ -154,14 +154,16 @@ class AuthService {
         await PasswordRevisionService.clearCachedRevision(userId: userId);
       }
       await SupabaseService.auth.signOut();
+      // The parsed message texts (plaintext) kept for fast rebuilds belong
+      // to the user who just left. Cleared first, so a failing teardown
+      // below cannot leave them behind.
+      MarkdownMessage.clearCaches();
       // Tear down the multiplexed /v2/ws connection so the new user (or
       // re-auth) gets a fresh socket with their token. Best-effort —
       // never blocks signOut on a hung socket teardown.
       await MultiplexSession.shutdown();
       // The cached plan belongs to the user who just left.
       UserStatusService.clear();
-      // So do the parsed message texts (plaintext) kept for fast rebuilds.
-      MarkdownMessage.clearCaches();
       // Web: drop the local plaintext chat cache on logout. The next login
       // (e.g. after a password reset) then starts clean, so chats encrypted
       // with an old key correctly surface as locked. Native intentionally

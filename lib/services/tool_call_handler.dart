@@ -1157,7 +1157,12 @@ class ToolCallHandler {
       if (!repeatableLookupToolNames.contains(prior.name)) continue;
       final result = prior.result;
       if (result == null) continue;
-      priorResults[toolCallIdentityKey(prior.name, prior.arguments)] = result;
+      // The first real result stands; a repeat answered from here must not
+      // replace it with its own "[REPEATED CALL]" copy.
+      priorResults.putIfAbsent(
+        toolCallIdentityKey(prior.name, prior.arguments),
+        () => result,
+      );
     }
     bool isRepeat(EnforcedToolCall call) =>
         !call.arguments.containsKey(_kMalformedArgumentsKey) &&

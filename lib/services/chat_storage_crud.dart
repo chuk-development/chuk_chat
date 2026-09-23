@@ -1097,8 +1097,15 @@ class ChatStorageCrud {
     // update carries newer messages and must still be written. Rethrowing it
     // here dropped every save queued behind one timeout — a tool turn saves
     // once per round, so one slow write lost all the rounds after it.
-    final pending = ChatStorageState.pendingSaves[chatId];
-    if (pending != null) {
+    // Another waiter may claim the slot while this one waits, so wait until
+    // it is free. A slot this update already waited for is finished even if
+    // nobody removed it, so it never makes this loop spin.
+    final waited = <Completer<StoredChat?>>{};
+    for (
+      var pending = ChatStorageState.pendingSaves[chatId];
+      pending != null && waited.add(pending);
+      pending = ChatStorageState.pendingSaves[chatId]
+    ) {
       try {
         await pending.future;
       } catch (_) {
@@ -1120,7 +1127,10 @@ class ChatStorageCrud {
       completer.completeError(e);
       rethrow;
     } finally {
-      ChatStorageState.pendingSaves.remove(chatId);
+      // Only this update's own slot: a later update may already hold it.
+      if (identical(ChatStorageState.pendingSaves[chatId], completer)) {
+        ChatStorageState.pendingSaves.remove(chatId);
+      }
       // Keep in savingChats for a bit longer to block realtime events
       Future.delayed(const Duration(seconds: 2), () {
         ChatStorageState.savingChats.remove(chatId);
