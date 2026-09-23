@@ -5,10 +5,18 @@ proves the thing that broke in the field: asked for a script, the model printed
 it in a code fence and wrote nothing to disk, because the system prompt never
 told it that tools exist. Only a real model can prove that is fixed.
 
-It is env-gated, so it is skipped by default and never spends credits in a
-normal ``pytest`` run. Provide EITHER a token pair (preferred — no password
-ever touches this process) or email + password for the one-time GoTrue login:
+It is env-gated: it runs ONLY with ``AGENTS_LIVE=1``. Without it the test is
+skipped before anything is read, so a normal ``pytest`` run never spends
+credits, never reaches the network and never touches the app's session. (It
+used to run whenever the repo ``.env`` had the Supabase keys and the desktop app
+was signed in, and then refreshed the app's rotating token, which can sign the
+app out.) Reusing the desktop app's session needs a second opt-in,
+``AGENTS_LIVE_USE_APP_SESSION=1``, for exactly that reason.
 
+Provide EITHER a token pair (preferred — no password ever touches this
+process) or email + password for the one-time GoTrue login:
+
+    export AGENTS_LIVE=1
     # token (read from a logged-in client)
     export AGENTS_LIVE_ACCESS_TOKEN=... AGENTS_LIVE_REFRESH_TOKEN=...
     # or credentials
@@ -40,6 +48,14 @@ from chuk_agents_runtime import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+
+#: The one switch that lets this module run at all.
+LIVE_ENV = "AGENTS_LIVE"
+
+pytestmark = pytest.mark.skipif(
+    os.environ.get(LIVE_ENV) != "1",
+    reason=f"live model test: set {LIVE_ENV}=1 (plus credentials) to run it",
+)
 
 
 def _from_env_file(name: str) -> str | None:
@@ -101,8 +117,13 @@ def _session() -> SupabaseSession:
     if not supabase_url or not anon_key:
         pytest.skip("no SUPABASE_URL / SUPABASE_ANON_KEY")
 
-    # Preferred: reuse the session the user already signed in with in the app.
-    from_app = _tokens_from_app_storage()
+    # Reuse the session the user signed in with in the app, but only when asked:
+    # refreshing it rotates the app's refresh token under the running app.
+    from_app = (
+        _tokens_from_app_storage()
+        if os.environ.get("AGENTS_LIVE_USE_APP_SESSION") == "1"
+        else None
+    )
     if from_app is not None:
         access, refresh = from_app
         return SupabaseSession(
