@@ -2135,13 +2135,20 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Messenger mode queues more than one message: all of them go back,
     // in the order they were typed, as one text. Without a queue this is
     // the pending message alone, as upstream.
-    final bool restore = composerController.text.trim().isEmpty;
-    final restored = queuedMessagesForComposer(pending, _queuedFollowUps);
+    // A draft typed meanwhile is kept as upstream does; but a queue of
+    // several messages must not be lost to it, so with follow-ups the queued
+    // text goes after the draft.
+    final String draft = composerController.text;
+    final bool hadQueue = _queuedFollowUps.isNotEmpty;
+    final queued = queuedMessagesForComposer(pending, _queuedFollowUps);
     _queuedFollowUps.clear();
+    final String? restored = draft.trim().isEmpty
+        ? queued
+        : (hadQueue ? '$draft\n\n$queued' : null);
     if (mounted) {
       setState(() {
         _pendingMessageText = null;
-        if (restore) {
+        if (restored != null) {
           composerController.text = restored;
           composerController.selection = TextSelection.collapsed(
             offset: restored.length,
