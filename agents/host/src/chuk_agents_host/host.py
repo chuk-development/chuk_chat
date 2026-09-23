@@ -133,6 +133,21 @@ def _agent_dirname(agent_id: str, limit: int = 32) -> str:
     return f"{slug}-{digest}"
 
 
+def _legacy_workspace_roots(state_home: Path) -> tuple[str, ...]:
+    """The directories under which an unlabelled container is this host's.
+
+    A container from before the ``cowork.owner`` label carries only its
+    workspace mount. It is this host's when that mount lies under the host's
+    state directory. Both spellings are kept, because the mount label is an
+    ``abspath`` and the state directory can sit behind a symlink.
+    """
+    roots: list[str] = []
+    for candidate in (os.path.abspath(str(state_home)), str(state_home.resolve())):
+        if candidate not in roots:
+            roots.append(candidate)
+    return tuple(roots)
+
+
 class LocalHost:
     """One local host: relay + roster + pairing + supervised executor."""
 
@@ -248,9 +263,16 @@ class LocalHost:
             # a lambda that ignored it would bind-mount the host agent's
             # workspace into EVERY coworker's container, so two coworkers would
             # read and write each other's files even with two containers.
+            # Owned by THIS host (its state directory), so the start-up reaper
+            # removes only this host's leftovers and never the live containers
+            # of another host on the same machine (bead chuk_chat-6mg). A
+            # container from before the owner label is this host's when its
+            # workspace mount lies under this state directory.
             self._containers = ContainerSupervisor(
                 workspace_resolver=self._workspace_for_agent,
                 image=self._sandbox_image,
+                owner=str(self._workspace.resolve()),
+                legacy_workspace_roots=_legacy_workspace_roots(self._workspace),
             )
         # The environments handed out per agent, so one agent keeps ONE box
         # across its turns. The host agent's own environment is built when the

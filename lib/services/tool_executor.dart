@@ -186,7 +186,11 @@ class ToolExecutor {
 
     // Defer Supabase sync to avoid blocking UI at startup.
     // Local prefs are already loaded above — tools work immediately.
-    unawaited(_deferredSupabaseSync(prefs));
+    // Without a Supabase client there is no user to sync for, so no 5 s timer
+    // is armed at all (it outlived a widget test's tree and failed it).
+    if (SupabaseService.isInitialized) {
+      unawaited(_deferredSupabaseSync(prefs));
+    }
   }
 
   Future<void> _deferredSupabaseSync(SharedPreferences prefs) async {

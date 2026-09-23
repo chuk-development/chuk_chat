@@ -227,7 +227,10 @@ def test_labels_are_set_and_a_task_scoped_container_is_torn_down():
 
 def test_default_container_survives_cleanup_and_the_reaper_collects_it():
     agent = unique_agent()
-    env = DockerEnvironment(image=IMAGE, agent_id=agent)
+    # Owned by this test only: a machine-wide reap here would remove the
+    # user's live agent containers too (bead chuk_chat-6mg).
+    owner = f"pytest-owner-{agent}"
+    env = DockerEnvironment(image=IMAGE, agent_id=agent, owner=owner)
     try:
         assert env.run("true").ok
         env.cleanup()
@@ -235,7 +238,7 @@ def test_default_container_survives_cleanup_and_the_reaper_collects_it():
         assert find_agent_container(agent_id=agent) is not None
 
         # A fresh Manager with nothing live reaps it as an orphan.
-        reaped = reap_orphans(active_session_ids=set())
+        reaped = reap_orphans(active_session_ids=set(), owner=owner)
         assert any(agent in name for name in reaped), reaped
         assert find_agent_container(agent_id=agent) is None
     finally:
@@ -244,10 +247,11 @@ def test_default_container_survives_cleanup_and_the_reaper_collects_it():
 
 def test_reaper_keeps_a_container_whose_session_is_live():
     agent = unique_agent()
-    env = DockerEnvironment(image=IMAGE, agent_id=agent)
+    owner = f"pytest-owner-{agent}"
+    env = DockerEnvironment(image=IMAGE, agent_id=agent, owner=owner)
     try:
         assert env.run("true").ok
-        reaped = reap_orphans(active_session_ids={env.session_id})
+        reaped = reap_orphans(active_session_ids={env.session_id}, owner=owner)
         assert all(agent not in name for name in reaped)
         assert find_agent_container(agent_id=agent) is not None
     finally:

@@ -117,6 +117,89 @@ def test_the_docker_backend_labels_a_container_per_coworker(tmp_path):
     assert mounts["local:amber:1"] != mounts["local:blue:2"]
 
 
+def test_a_host_start_reaps_only_its_own_containers(tmp_path):
+    """Bead chuk_chat-6mg: a second host must not kill the first one's boxes.
+
+    Two hosts share one (fake) docker. The first host's coworker has a live
+    container. Starting the reaper of a second host, as a test run or a second
+    instance does, leaves it alone. The first host's own restart does reap its
+    leftover, and so does it for an old unlabelled container under its own
+    state directory, but not for one under another directory.
+    """
+    cli = _FakeCli()
+    users = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path / "users"),
+        channel_id="users",
+        agent_name="users-agent",
+        model_factory_override=lambda: None,
+        sandbox_kind="docker",
+    )
+    users._containers.cli = cli
+    _register(users, "local:amber:1", "amber")
+    try:
+        users._environment_for("local:amber:1")._ensure_container()
+    finally:
+        users._roster.close()
+        users._coworker_names.close()
+    assert len(cli.containers) == 1
+    # Two old containers from before the owner label: one under the user's
+    # state directory, one under some other directory.
+    cli.containers.append({
+        "id": "legacy-users",
+        "name": "agents-legacy-users",
+        "labels": {
+            "cowork.managed": "true",
+            "cowork.session": "old",
+            "cowork.workspace": str(tmp_path / "users" / "agents" / "x"),
+        },
+    })
+    cli.containers.append({
+        "id": "legacy-elsewhere",
+        "name": "agents-legacy-elsewhere",
+        "labels": {
+            "cowork.managed": "true",
+            "cowork.session": "old",
+            "cowork.workspace": str(tmp_path / "elsewhere" / "x"),
+        },
+    })
+
+    second = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path / "second"),
+        channel_id="second",
+        agent_name="second-agent",
+        model_factory_override=lambda: None,
+        sandbox_kind="docker",
+    )
+    second._containers.cli = cli
+    try:
+        second._reap_orphan_containers()
+    finally:
+        second._roster.close()
+        second._coworker_names.close()
+    assert sorted(c["id"] for c in cli.containers) == [
+        "cid-1", "legacy-elsewhere", "legacy-users",
+    ]
+
+    # The user's host restarts: its own leftovers go, the foreign one stays.
+    again = LocalHost(
+        port=0,
+        workspace_dir=str(tmp_path / "users"),
+        channel_id="users",
+        agent_name="users-agent",
+        model_factory_override=lambda: None,
+        sandbox_kind="docker",
+    )
+    again._containers.cli = cli
+    try:
+        again._reap_orphan_containers()
+    finally:
+        again._roster.close()
+        again._coworker_names.close()
+    assert [c["id"] for c in cli.containers] == ["legacy-elsewhere"]
+
+
 class _FakeCli(DockerCli):
     """A ``DockerCli`` that records ``run``/``ps`` instead of calling docker."""
 
@@ -160,5 +243,12 @@ class _FakeCli(DockerCli):
             return CliResult(cid + "\n", "", 0)
         if verb == "inspect":
             return CliResult("", "", 0)
+        if verb == "rm":
+            target = args[-1]
+            before = len(self.containers)
+            self.containers = [
+                c for c in self.containers if target not in (c["id"], c["name"])
+            ]
+            return CliResult("", "", 0 if len(self.containers) < before else 1)
         _ = parse_labels  # imported for symmetry with the sandbox tests
         return CliResult("", "", 0)
