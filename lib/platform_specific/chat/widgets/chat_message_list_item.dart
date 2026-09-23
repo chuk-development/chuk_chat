@@ -36,6 +36,7 @@ class ChatMessageListItem extends StatelessWidget {
     this.onConnectMcpServer,
     this.onContinueGeneration,
     this.messengerMode = false,
+    this.agentsRuns = false,
     this.reaction,
     this.onReaction,
     this.onReply,
@@ -66,6 +67,11 @@ class ChatMessageListItem extends StatelessWidget {
   /// same as before.
   final bool messengerMode;
 
+  /// Agents's bubble runs: a day change or a pause longer than
+  /// kBubbleGroupPause also starts a new run, not only a change of sender.
+  /// Both Agents layouts set it; upstream's chat does not.
+  final bool agentsRuns;
+
   /// The reader's own reaction on this message, if any.
   final String? reaction;
 
@@ -86,9 +92,14 @@ class ChatMessageListItem extends StatelessWidget {
     final bool nextIsUser = index == messages.length - 1
         ? data.isUser
         : (messages[index + 1]['sender'] ?? 'ai') == 'user';
-    final bool startsNewGroup = index == 0 || previousIsUser != data.isUser;
-    final bool endsGroup =
-        index == messages.length - 1 || nextIsUser != data.isUser;
+    // The Agents thread breaks a bubble run on a day change and on a long
+    // pause too, as the original app did (chat_ui_helpers).
+    final bool startsNewGroup = agentsRuns
+        ? messageStartsRun(messages, index)
+        : index == 0 || previousIsUser != data.isUser;
+    final bool endsGroup = agentsRuns
+        ? messageEndsRun(messages, index)
+        : index == messages.length - 1 || nextIsUser != data.isUser;
     final String uiKey = ChatUiHelpers.stableUiKey(messages[index], uuid);
 
     // True from the moment Send is pressed, not only once the server stream
@@ -109,7 +120,9 @@ class ChatMessageListItem extends StatelessWidget {
       isUser: data.isUser,
       startsNewGroup: startsNewGroup,
       endsGroup: endsGroup,
-      maxWidth: data.isUser ? maxWidth * 0.8 : maxWidth,
+      // Agents's user bubble is narrower (0.72, the original app's
+      // messenger width); upstream keeps 0.8.
+      maxWidth: data.isUser ? maxWidth * (messengerMode ? 0.72 : 0.8) : maxWidth,
       isReasoningStreaming: data.isReasoningStreaming || forceLive,
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,

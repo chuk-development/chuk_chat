@@ -62,6 +62,7 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -92,6 +93,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
 import 'package:chuk_chat/ui/expressive/day_divider.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// What the plus menu can start.
@@ -304,6 +306,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       !kIsWeb &&
       defaultTargetPlatform != TargetPlatform.android &&
       defaultTargetPlatform != TargetPlatform.iOS;
+
+  /// [_mayAutoFocusComposer] for the Agents thread only. Upstream's chat
+  /// (messenger mode off) keeps its own focus rule unchanged.
+  bool get _mayFocusOnLoad => !widget.messengerMode || _mayAutoFocusComposer;
+
+  /// Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
+  /// but the Agents composer offers them, as the original app did.
+  bool get _workspacesEnabled => kFeatureWorkspaces || widget.messengerMode;
 
   late final VoidCallback _modelSelectionListener;
 
@@ -757,8 +767,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     composerController.addListener(_onControllerChanged);
 
     // Request focus if sidebar closed — never on a phone, see
-    // [_mayAutoFocusComposer]. Agents's rule, kept.
-    if (_mayAutoFocusComposer) {
+    // [_mayAutoFocusComposer] in the Agents thread. Agents's rule, kept.
+    if (_mayFocusOnLoad) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!widget.isSidebarExpanded) {
           composerFocusNode.requestFocus();
@@ -834,7 +844,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       unawaited(_loadSystemPrompt());
       unawaited(NetworkStatusService.quickCheck());
       // Load projects for workspace selection feature
-      if (kFeatureWorkspaces) {
+      if (_workspacesEnabled) {
         unawaited(WorkspaceStorageService.loadFromCache());
       }
     });
@@ -1225,7 +1235,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Opening an existing chat should *start* at the bottom, not animate.
     scrollChatToBottom(force: true, animate: false);
     // Use captured sidebar state to prevent focus when sidebar was open
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad &&
+        !sidebarWasExpanded &&
+        !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -1253,7 +1265,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         showScrollToBottom = false;
       });
       scrollChatToBottom(force: true, animate: false);
-      if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+      if (_mayFocusOnLoad &&
+          !sidebarWasExpanded &&
+          !widget.isSidebarExpanded) {
         composerFocusNode.requestFocus();
       }
       return;
@@ -1334,7 +1348,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       showScrollToBottom = false;
     });
     scrollChatToBottom(force: true, animate: false);
-    if (!sidebarWasExpanded && !widget.isSidebarExpanded) {
+    if (_mayFocusOnLoad &&
+        !sidebarWasExpanded &&
+        !widget.isSidebarExpanded) {
       composerFocusNode.requestFocus();
     }
   }
@@ -1562,7 +1578,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           icon: Icons.attach_file,
           label: l10n.files,
         ),
-        if (kFeatureWorkspaces)
+        if (_workspacesEnabled)
           _composerMenuRow(
             value: _AttachChoice.workspace,
             iconFg: iconFg,
@@ -1649,8 +1665,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       // The attach and workspace menus are read against the chat behind
       // them, the same as the model picker, so they keep the frame that says
-      // where the list ends.
-      outlined: true,
+      // where the list ends. The Agents thread keeps the original app's
+      // menu instead: filled tiles, no frame, the menu radius.
+      outlined: !widget.messengerMode,
+      borderRadius: widget.messengerMode ? kMenuOuterRadius : 18,
     );
   }
 
@@ -2699,7 +2717,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     var resolvedPrompt = basePrompt;
 
     // If a workspace is active, prepend workspace context
-    if (_selectedWorkspaceId != null && kFeatureWorkspaces) {
+    if (_selectedWorkspaceId != null && _workspacesEnabled) {
       try {
         final projectContext =
             await WorkspaceMessageService.buildProjectSystemMessage(
@@ -3428,24 +3446,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                   // where the day changes, like a messenger.
                                   // A row with no timestamp gets none. The
                                   // rules live in chat_ui_helpers.
-                                  //
-                                  // Dropped with the switch to upstream's
-                                  // shared row widget: Agents also broke a
-                                  // bubble RUN on a day change and on a pause
-                                  // longer than kBubbleGroupPause
-                                  // (messageStartsRun / messageEndsRun, still
-                                  // in chat_ui_helpers). ChatMessageListItem
-                                  // derives startsNewGroup/endsGroup from the
-                                  // sender alone and takes no override, so
-                                  // reinstating it means giving that widget
-                                  // the two flags.
+                                  // The bubble RUN breaks on the same rules
+                                  // (ChatMessageListItem.agentsRuns).
                                   final DateTime? rowDay = messageRowTime(
                                     _messages[i],
                                   );
-                                  final bool opensDay = messageOpensDay(
-                                    i == 0 ? null : _messages[i - 1],
-                                    _messages[i],
-                                  );
+                                  // Agents only: upstream's chat draws no
+                                  // day chips.
+                                  final bool opensDay =
+                                      widget.messengerMode &&
+                                      messageOpensDay(
+                                        i == 0 ? null : _messages[i - 1],
+                                        _messages[i],
+                                      );
                                   final Widget row = ChatMessageListItem(
                                     key: isPinned ? pinnedTopKey : null,
                                     messages: _messages,
@@ -3484,6 +3497,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                         ? () => _continueGenerationAt(i)
                                         : null,
                                     messengerMode: widget.messengerMode,
+                                    agentsRuns: widget.messengerMode,
                                     reaction: widget.messengerMode
                                         ? ChatReactionService.instance.peek(
                                             _messengerChatKey,
@@ -3615,7 +3629,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // has already taken the keyboard out of the
                                 // insets, so reading them here always said
                                 // "no keyboard".
-                                if (!composerFocusNode.hasFocus &&
+                                // The Agents thread keeps the original app's
+                                // line: its wording, and it folds away with
+                                // the focus instead of popping.
+                                if (widget.messengerMode)
+                                  _buildMessengerDisclaimer(iconFg)
+                                else if (!composerFocusNode.hasFocus &&
                                     MediaQuery.viewInsetsOf(context).bottom <
                                         80) ...[
                                   const SizedBox(height: 8),
@@ -3654,6 +3673,33 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
         ],
       ),
+    );
+  }
+
+  /// The AI notice under the Agents composer, as in the original app.
+  ///
+  /// It is for the reader who is looking at the thread, not for the one who
+  /// is typing: with the keyboard up it eats a line of the little room that
+  /// is left, so it goes with the focus and comes back with it. Focus, not
+  /// viewInsets: the hosting Scaffold strips viewInsets from this subtree.
+  Widget _buildMessengerDisclaimer(Color iconFg) {
+    return AnimatedSize(
+      duration: kExpressiveShort,
+      curve: kExpressiveDecelerate,
+      alignment: Alignment.topCenter,
+      child: composerFocusNode.hasFocus
+          ? const SizedBox(width: double.infinity, height: 0)
+          : Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(
+                AppLocalizations.of(context)!.agentsAiDisclaimer,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: iconFg.withValues(alpha: 0.7),
+                  fontSize: 11,
+                ),
+              ),
+            ),
     );
   }
 
@@ -3707,6 +3753,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
           onOpenModelScreen: openModelScreen,
+          agentsMenus: widget.messengerMode,
         ),
       ),
     );
@@ -3743,7 +3790,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final Color bg = theme.scaffoldBackgroundColor;
     final Color accent = theme.colorScheme.primary;
     final bool hasAttachments = _fileHandler.hasAttachments;
-    final bool showStopAction = _isCurrentChatStreaming || _isSendingMessage;
+    // The Agents thread never turns send into a red stop: working is said by
+    // the typing line in the thread, and a send while it works is queued.
+    // That is the original app's composer.
+    final bool showStopAction =
+        !widget.messengerMode && (_isCurrentChatStreaming || _isSendingMessage);
     final bool hasTypedText = composerController.text.trim().isNotEmpty;
     final bool hasText = hasTypedText || hasAttachments;
     final bool showVoiceModeAction = !hasText && kFeatureVoiceMode;
@@ -3779,7 +3830,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 onRemove: removeComposerAttachment,
               ),
             ),
-          if (messageActionsHandler.isEditing)
+          if (messageActionsHandler.isEditing && widget.messengerMode)
+            ChatEditNotice(onCancel: cancelEditMessage)
+          else if (messageActionsHandler.isEditing)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.edit,
@@ -3869,6 +3922,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           right: 6,
                         ),
                         isDense: true,
+                        // The Agents thread keeps the original app's small
+                        // expand glyph inside the field; upstream's sits in
+                        // the microphone's slot below.
+                        suffixIcon:
+                            widget.messengerMode && _showFullscreenButton
+                            ? GestureDetector(
+                                onTap: _openFullscreenEditor,
+                                child: Padding(
+                                  padding: const EdgeInsets.only(left: 4),
+                                  child: AppIcon(
+                                    Icons.open_in_full_rounded,
+                                    size: 14,
+                                    color: iconFg.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                              )
+                            : null,
+                        suffixIconConstraints: widget.messengerMode
+                            ? const BoxConstraints(minWidth: 24, minHeight: 24)
+                            : null,
                       ),
                       cursorColor: accent,
                       cursorWidth: 1.5,
@@ -3905,7 +3978,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               ),
               const SizedBox(width: ComposerMetrics.targetGap),
               _buildModelControl(isCompactMode: isCompactMode, iconFg: iconFg),
-              if (kFeatureWorkspaces && _selectedWorkspaceId != null) ...[
+              if (_workspacesEnabled && _selectedWorkspaceId != null) ...[
                 const SizedBox(width: ComposerMetrics.targetGap),
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
@@ -3934,7 +4007,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   semanticsId: 'mic_button',
                 ),
                 const SizedBox(width: ComposerMetrics.targetGap),
-              ] else if (_showFullscreenButton && !showStopAction) ...[
+              ] else if (!widget.messengerMode &&
+                  _showFullscreenButton &&
+                  !showStopAction) ...[
                 // Takes the microphone's slot: the microphone only shows with
                 // an empty field and this only with a long one, so the two
                 // never want the place at the same time. Out here instead of

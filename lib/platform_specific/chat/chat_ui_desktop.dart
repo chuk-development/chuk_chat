@@ -117,6 +117,11 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// screen, so both paths land in the same redesigned settings surface.
   final Future<void> Function()? onOpenModelSettings;
 
+  /// The Agents thread hosts this screen (agents_thread_view). On, the
+  /// original Agents app's look is kept: day chips and bubble runs in the
+  /// list, its AI notice, its composer menus. Off, upstream's chat as is.
+  final bool agentsThread;
+
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
     super.key,
@@ -144,6 +149,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.showToolCalls = true,
     this.autoSendVoiceTranscription = false,
     this.onOpenModelSettings,
+    this.agentsThread = false,
   });
 
   @override
@@ -1839,25 +1845,18 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                             // live in chat_ui_helpers.
                                             final DateTime? rowDay =
                                                 messageRowTime(_messages[i]);
+                                            // Agents only: upstream's chat
+                                            // draws no day chips. The bubble
+                                            // RUN breaks on the same rules
+                                            // (ChatMessageListItem.agentsRuns).
                                             final bool opensDay =
+                                                widget.agentsThread &&
                                                 messageOpensDay(
                                                   i == 0
                                                       ? null
                                                       : _messages[i - 1],
                                                   _messages[i],
                                                 );
-                                            // Dropped with the switch to
-                                            // upstream's shared row widget:
-                                            // Agents also broke a bubble RUN on
-                                            // a day change and on a pause
-                                            // longer than kBubbleGroupPause
-                                            // (messageStartsRun / messageEndsRun,
-                                            // still in chat_ui_helpers).
-                                            // ChatMessageListItem derives
-                                            // startsNewGroup/endsGroup from the
-                                            // sender alone and takes no
-                                            // override, so reinstating it means
-                                            // giving that widget the two flags.
                                             final Widget
                                             row = ChatMessageListItem(
                                               messages: _messages,
@@ -1865,6 +1864,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                               data: data,
                                               uuid: _uuid,
                                               maxWidth: expandedInputWidth,
+                                              agentsRuns: widget.agentsThread,
                                               activeChatId: _activeChatId,
                                               flyInKey: _flyInKey,
                                               showToolCalls:
@@ -1997,7 +1997,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    AppLocalizations.of(context)!.aiDisclaimer,
+                                    widget.agentsThread
+                                        ? AppLocalizations.of(
+                                            context,
+                                          )!.agentsAiDisclaimer
+                                        : AppLocalizations.of(
+                                            context,
+                                          )!.aiDisclaimer,
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       color: iconFg.withValues(alpha: 0.7),
@@ -2484,6 +2490,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
           onOpenModelScreen: openModelScreen,
+          agentsMenus: widget.agentsThread,
         ),
       ),
     );

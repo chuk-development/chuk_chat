@@ -1719,6 +1719,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         onOpenModelSettings: widget.onOpenModelScreen == null
             ? null
             : () async => widget.onOpenModelScreen!(),
+        agentsThread: true,
       );
     }
     return ChukChatUIMobile(

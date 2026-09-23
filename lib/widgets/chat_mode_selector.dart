@@ -16,6 +16,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 class ChatModeSelector extends StatelessWidget {
@@ -35,7 +36,12 @@ class ChatModeSelector extends StatelessWidget {
     this.onReasoningEffortChanged,
     this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
+    this.agentsMenus = false,
   });
+
+  /// The Agents thread's menus: the original app's filled tiles at the menu
+  /// radius, with no frame. Off, upstream's framed picker is kept.
+  final bool agentsMenus;
 
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
@@ -475,8 +481,10 @@ class ChatModeSelector extends StatelessWidget {
       alignRight: alignRight,
       besideAnchor: besideAnchor,
       // This is the model picker, a list being read against the chat behind
-      // it — it keeps the frame that says where the list ends.
-      outlined: true,
+      // it — it keeps the frame that says where the list ends. Not in the
+      // Agents thread, see [agentsMenus].
+      outlined: !agentsMenus,
+      borderRadius: agentsMenus ? kMenuOuterRadius : 18,
     );
   }
 

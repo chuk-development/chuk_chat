@@ -12,6 +12,7 @@ import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// How the relay looks to the reader. Not the phase enum: the header only
 /// cares about the three states that read differently, so a new transport
@@ -435,6 +436,8 @@ class AgentsThreadHeader extends StatelessWidget {
                 ],
                 color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
                 borderColor: iconFg.withValues(alpha: 0.3),
+                // The Agents menu radius; the shared default is upstream's.
+                borderRadius: kMenuOuterRadius,
               );
           picked?.onPressed();
         },

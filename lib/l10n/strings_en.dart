@@ -197,6 +197,9 @@ const Map<String, String> stringsEn = {
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
   'aiDisclaimer': 'You\'re chatting with an AI/LLM — it can be wrong. Check key info.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'You\'re chatting with an AI — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────

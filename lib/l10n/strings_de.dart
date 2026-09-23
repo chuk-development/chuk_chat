@@ -188,6 +188,9 @@ const Map<String, String> stringsDe = {
   'newWorkspace': 'Neuer Arbeitsbereich',
   'editedAt': 'Bearbeitet {date}',
   'aiDisclaimer': 'Du chattest mit einer KI/LLM — Fehler möglich, Wichtiges prüfen.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'Du chattest mit einer KI — Fehler möglich, Wichtiges prüfen.',
   'archive': 'Archivieren',
 
   // ── Tool calling page ──────────────────────────────────────
