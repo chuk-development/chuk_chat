@@ -7,6 +7,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
 
 void main() {
@@ -14,7 +15,7 @@ void main() {
   // does (the default follows FEATURE_AGENTS, which tests leave off).
   ContentBlock.decodesFileBlocks = true;
   const sessionKey = 'thread-1';
-  final handler = ToolCallHandler();
+  final handler = AgentsToolCallHandler.instance;
   final ledger = AgentsRunLedger.instance;
 
   setUp(() {

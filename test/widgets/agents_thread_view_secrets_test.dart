@@ -20,6 +20,7 @@ import 'package:chuk_chat/services/secrets/secrets_store.dart';
 import 'package:chuk_chat/services/secrets/secrets_sync.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../support/fake_relay_controller.dart';
 
@@ -81,6 +82,10 @@ List<(String, int, String?)> _flat(List<(Map<String, String>, int, String?)> xs)
 String _j(Map<String, String> m) => jsonEncode(SplayTreeMap<String, String>.of(m));
 
 void main() {
+  // The Agents chat core (host-run tools, relay transport), selected for this
+  // flag-off test process.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
   late _MemoryStore secretsBackend;
 
   setUp(() async {

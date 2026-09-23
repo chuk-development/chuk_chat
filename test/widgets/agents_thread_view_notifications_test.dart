@@ -26,6 +26,7 @@ import 'package:chuk_chat/services/notifications/local_notifications.dart';
 import 'package:chuk_chat/services/notifications/run_notifications.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../services/notifications/local_notifications_test.dart' show FakeBackend;
 import '../support/fake_relay_controller.dart';
@@ -61,6 +62,10 @@ Widget _app(Widget child) => MaterialApp(
     );
 
 void main() {
+  // The Agents chat core (host-run tools, relay transport), selected for this
+  // flag-off test process.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
   late FakeBackend backend;
   late List<String?> consumedSessions;
 

@@ -19,7 +19,7 @@ class StreamingManager extends StreamingManagerBase {
       const <NativeToolCall>[];
 
   /// Agents: the host's canonical final answer (`FinalContentEvent`, emitted by
-  /// `websocket_chat_service.dart`). It REPLACES the streamed deltas instead of
+  /// `agents_chat_transport.dart`). It REPLACES the streamed deltas instead of
   /// appending to them, and it is published at once — the coalesced delta flush
   /// may not have fired yet and completion clears the live notifier right after,
   /// so a throttled update would lose the answer. Upstream's base has no branch

@@ -1,4 +1,4 @@
-// A slow answer is not an error.
+// A slow answer is not an error — in an Agents build.
 //
 // `StreamingManager` used to arm a flat 60-second idle timer: no event of any
 // kind for a minute and it tore the stream down with "No response received —
@@ -20,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/streaming_manager_io.dart';
 
 /// One run under test: the input the host would write to, and everything the
@@ -62,6 +63,12 @@ class _Rig {
 }
 
 void main() {
+  // This is the Agents behaviour. Tests run with FEATURE_AGENTS off, where the
+  // upstream 60-second idle timeout applies (streaming_idle_timeout_test.dart),
+  // so the silence watch is switched on through the manager's test seam.
+  setUp(() => debugAgentsChatCoreOverride = true);
+  tearDown(() => debugAgentsChatCoreOverride = null);
+
   testWidgets('silence ends nothing, however long it lasts', (tester) async {
     final rig = _Rig('silent-prefill');
     await rig.start();
