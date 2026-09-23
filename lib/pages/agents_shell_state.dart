@@ -213,6 +213,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     // names — so the restore is not one shot at startup: it watches the roster
     // and lands as soon as its target exists (bead cowork-8yb).
     _roster.addListener(_onRosterChanged);
+    // A thread whose history loads (cache, cloud, host replay) tells the roster
+    // when its coworker was last active, if nothing has yet.
+    _historySub = ChatStorageState.changes.listen(_seedActivityFromHistory);
     unawaited(_loadLastSelection());
     // Auto-link at startup. Started after the first frame so the app's sign-in
     // / key-unlock flow (which gates showing this shell) has a head start, but
@@ -344,7 +347,35 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   void _onRosterChanged() {
     if (!mounted) return;
+    _seedActivityFromHistory();
     _autoSelect();
+  }
+
+  StreamSubscription<String?>? _historySub;
+
+  /// Fills in "last active" from the history the app already holds, for every
+  /// thread that has no time yet. Before, the roster only learned a time from a
+  /// live event, so after a restart every coworker read "no activity yet" next
+  /// to a full conversation. The time is the newest message's own timestamp,
+  /// never an invented one. History that old is not news: a thread the user
+  /// never marked read gets its read mark at the same time, so seeding does
+  /// not light up every coworker as unread.
+  void _seedActivityFromHistory([String? onlyKey]) {
+    if (!mounted) return;
+    for (final AgentsAgent agent in _roster.agents) {
+      for (final AgentsThreadInfo thread in agent.threads) {
+        if (onlyKey != null && thread.key != onlyKey) continue;
+        if (thread.lastActivity != null) continue;
+        final when = newestMessageTime(
+          ChatStorageState.chatsById[thread.key]?.messagesOrNull,
+        );
+        if (when == null) continue;
+        if (_readMarks.lastRead(thread.key) == null) {
+          unawaited(_readMarks.markRead(thread.key, when: when));
+        }
+        _roster.markActivity(agent.id, thread.key, when);
+      }
+    }
   }
 
   /// Lands on a thread without waiting for the user.
@@ -394,6 +425,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     }
     _hostLifecycle?.dispose();
     _roster.removeListener(_onRosterChanged);
+    _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
     _pairingRestore?.reason.removeListener(_onRestoreReason);
@@ -970,4 +1002,19 @@ mixin AgentsShellHost on State<MessengerShell> {
       ),
     );
   }
+}
+
+/// The newest timestamp among [messages] (`sentAt`, else `startedAt`), or
+/// null when none carries one.
+@visibleForTesting
+DateTime? newestMessageTime(List<ChatMessage>? messages) {
+  if (messages == null) return null;
+  DateTime? newest;
+  for (final ChatMessage message in messages) {
+    final DateTime? at = DateTime.tryParse(
+      message.sentAt ?? message.startedAt ?? '',
+    )?.toLocal();
+    if (at != null && (newest == null || at.isAfter(newest))) newest = at;
+  }
+  return newest;
 }
