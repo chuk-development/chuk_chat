@@ -225,7 +225,7 @@ def test_missing_trace_file_explains_how_to_turn_it_on(capsys, tmp_path):
     code = main(["trace", "--list", "--workspace", str(tmp_path)])
     out = capsys.readouterr().out
     assert code == 1
-    assert "cowork-host run --trace" in out
+    assert "agents-host run --trace" in out
     assert "AGENTS_TRACE=1" in out
 
 

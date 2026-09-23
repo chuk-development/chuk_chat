@@ -96,12 +96,13 @@ class PathsConfig:
     """Where Agents keeps its own state on this machine."""
 
     home: str = setting(
-        "~/.agents",
+        "~/.local/share/chuk-agents",
         env="AGENTS_HOME",
         doc=(
             "The host state directory: the agent workspaces, the logs, the "
             "account store, the encrypted vault and this configuration file "
-            "itself. A leading ``~`` is expanded. The file's own location is "
+            "itself. The default follows ``$XDG_DATA_HOME``; it is not "
+            "``~/.agents``, which other tools share. A leading ``~`` is expanded. The file's own location is "
             "settled before the file is read, so setting this key inside the "
             "file moves the state directory for everything else but not the "
             "file that said so; move the file with ``$AGENTS_HOME`` or an "

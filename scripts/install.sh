@@ -6,9 +6,23 @@
 #                   once. Nothing is changed until every check passes, so a
 #                   missing prerequisite can never leave a half-install behind.
 #   2. image      — build the agent base image (agents/sandbox/docker/Dockerfile).
-#   3. dirs       — create $AGENTS_HOME and its subdirectories.
-#   4. env        — sync the Python environment with uv and install a launcher.
+#   3. dirs       — create the state directory (0700). The host fills it.
+#   4. env        — sync the Python environment with uv and install the
+#                   launchers ``agents-host`` and ``cowork-host`` (an alias).
 #   5. service    — write the systemd **user** unit, enable and start it.
+#                   ``Restart=always`` + ``WantedBy=default.target``: it starts
+#                   with the user manager. Add ``--enable-linger`` (or run
+#                   ``loginctl enable-linger``) so that happens at boot, not only
+#                   at the first login.
+#
+# The state directory is ``$XDG_DATA_HOME/chuk-agents`` (``~/.local/share/
+# chuk-agents``). Not ``~/.agents``: other tools (the ``skills`` CLI) own that
+# one. A legacy ``~/.cowork``, or host files at the top of ``~/.agents``, are
+# moved there by the host on its first start, so the pairing survives.
+#
+# No secret is written into the unit. The host takes the Supabase URL and anon
+# key from the account token the app provisions; optional overrides go into
+# ``~/.config/chuk-agents/host.env``, which the unit reads if it exists.
 #
 # It is idempotent: every step checks the current state first, and running the
 # script twice changes nothing the second time. Use --dry-run to see the plan.
@@ -19,15 +33,18 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd)"
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(CDPATH= cd -- "${SCRIPT_DIR}/.." && pwd)"
 UNIT_TEMPLATE="${SCRIPT_DIR}/agents-manager.service"
 UNIT_NAME="agents-manager.service"
 
 # ---------------------------------------------------------------------------
 # Defaults (override with flags or the environment)
 # ---------------------------------------------------------------------------
-AGENTS_HOME="${AGENTS_HOME:-${HOME}/.agents}"
+DEFAULT_STATE_DIR="${XDG_DATA_HOME:-${HOME}/.local/share}/chuk-agents"
+case "${XDG_DATA_HOME:-}" in /*|'') ;; *) DEFAULT_STATE_DIR="${HOME}/.local/share/chuk-agents" ;; esac
+AGENTS_HOME="${AGENTS_HOME:-${COWORK_HOME:-${DEFAULT_STATE_DIR}}}"
+BIN_DIR="${HOME}/.local/bin"
 IMAGE_TAG="${AGENTS_SANDBOX_IMAGE:-agents-base:latest}"
 PULL_IMAGE=""
 RUNTIME="${AGENTS_RUNTIME:-}"
@@ -40,12 +57,16 @@ DO_SERVICE=1
 DO_START=1
 INSTALL_RUNTIME=0
 FORCE_REBUILD=0
+ENABLE_LINGER=0
 
 usage() {
     cat <<'EOF'
 Usage: install.sh [options]
 
-  --prefix DIR        install root for state and the launcher (default ~/.agents)
+  --prefix DIR        the host state directory (default $AGENTS_HOME, else
+                      ~/.local/share/chuk-agents); --state-dir is the same
+  --bin-dir DIR       where the agents-host / cowork-host launchers go
+                      (default ~/.local/bin)
   --tag REF           image tag to build (default agents-base:latest)
   --image REF         pull this prebuilt image and tag it, instead of building
   --runtime BIN       container runtime to use (default: docker, else podman)
@@ -57,21 +78,30 @@ Usage: install.sh [options]
   --no-env            skip creating the Python environment
   --no-service        do not touch systemd (the unit file is still written)
   --no-start          install and enable the service but do not start it
+  --enable-linger     run 'loginctl enable-linger' so the service starts at
+                      boot, before anybody logs in
   --dry-run           print every action, change nothing
   -h, --help          this text
 
 After a successful install, pair the phone once:
 
-    cowork-host connect
+    agents-host connect
 
-From then on the systemd user service runs the host automatically.
+(cowork-host is the same command under its old name.) From then on the
+systemd user service runs the host automatically, and restarts it when it
+stops. To start it at boot without a login, once:
+
+    loginctl enable-linger "$USER"
 EOF
 }
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --prefix) AGENTS_HOME="${2:?--prefix needs a directory}"; shift 2 ;;
-        --prefix=*) AGENTS_HOME="${1#*=}"; shift ;;
+        --prefix|--state-dir) AGENTS_HOME="${2:?$1 needs a directory}"; shift 2 ;;
+        --prefix=*|--state-dir=*) AGENTS_HOME="${1#*=}"; shift ;;
+        --bin-dir) BIN_DIR="${2:?--bin-dir needs a directory}"; shift 2 ;;
+        --bin-dir=*) BIN_DIR="${1#*=}"; shift ;;
+        --enable-linger) ENABLE_LINGER=1; shift ;;
         --tag) IMAGE_TAG="${2:?--tag needs a reference}"; shift 2 ;;
         --tag=*) IMAGE_TAG="${1#*=}"; shift ;;
         --image) PULL_IMAGE="${2:?--image needs a reference}"; shift 2 ;;
@@ -98,12 +128,12 @@ case "${SANDBOX_KIND}" in
     *) printf 'install.sh: --sandbox must be docker or local, got %s\n' "${SANDBOX_KIND}" >&2; exit 2 ;;
 esac
 
-BIN_DIR="${AGENTS_HOME}/bin"
-LAUNCHER="${BIN_DIR}/cowork-host"
+LAUNCHER="${BIN_DIR}/agents-host"
+ALIAS_LAUNCHER="${BIN_DIR}/cowork-host"
 UNIT_DIR="${XDG_CONFIG_HOME:-${HOME}/.config}/systemd/user"
 UNIT_PATH="${UNIT_DIR}/${UNIT_NAME}"
 HOST_PROJECT="${REPO_ROOT}/agents/host"
-VENV_BIN="${HOST_PROJECT}/.venv/bin/cowork-host"
+VENV_BIN="${HOST_PROJECT}/.venv/bin/agents-host"
 
 # ---------------------------------------------------------------------------
 # Output helpers
@@ -204,7 +234,7 @@ if [ "${DO_SERVICE}" -eq 1 ]; then
     [ -f "${UNIT_TEMPLATE}" ] || problem "unit template ${UNIT_TEMPLATE} is missing"
     if ! command -v systemctl >/dev/null 2>&1; then
         problem "systemctl not found: this host has no systemd.
-      Re-run with --no-service and start 'cowork-host run' yourself."
+      Re-run with --no-service and start 'agents-host run' yourself."
     elif ! systemctl --user show-environment >/dev/null 2>&1; then
         problem "the systemd **user** instance is not reachable (no session bus).
       Enable it (sudo loginctl enable-linger ${USER:-$(id -un)}) and log in again,
@@ -222,7 +252,8 @@ check_writable_parent() {
     done
     [ -w "${parent}" ] || problem "${label}: ${parent} is not writable by $(id -un)"
 }
-check_writable_parent "${AGENTS_HOME}" "install prefix"
+check_writable_parent "${AGENTS_HOME}" "state directory"
+check_writable_parent "${BIN_DIR}/x" "launcher directory"
 if [ "${DO_SERVICE}" -eq 1 ]; then
     check_writable_parent "${UNIT_DIR}" "systemd user unit directory"
 fi
@@ -259,8 +290,10 @@ fi
 # ---------------------------------------------------------------------------
 # 3. Directories
 # ---------------------------------------------------------------------------
-step 3/5 "directories under ${AGENTS_HOME}"
-for dir in "${AGENTS_HOME}" "${AGENTS_HOME}/agents" "${AGENTS_HOME}/logs" "${BIN_DIR}"; do
+step 3/5 "directories"
+# Only the state directory itself: the host creates what it needs inside, and
+# moves a legacy state into it on its first start.
+for dir in "${AGENTS_HOME}" "${BIN_DIR}"; do
     if [ -d "${dir}" ]; then
         say "exists: ${dir}"
     else
@@ -268,8 +301,10 @@ for dir in "${AGENTS_HOME}" "${AGENTS_HOME}/agents" "${AGENTS_HOME}/logs" "${BIN
         run mkdir -p "${dir}"
     fi
 done
-# The workspace holds the channel key and the device seed; keep it to the owner.
-run chmod 700 "${AGENTS_HOME}"
+# The state directory holds the channel key and the device seed; owner only.
+if [ "${DRY_RUN}" -eq 1 ] || [ "$(stat -c '%a' -- "${AGENTS_HOME}" 2>/dev/null)" != "700" ]; then
+    run chmod 700 "${AGENTS_HOME}"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Python environment + launcher
@@ -305,15 +340,31 @@ LAUNCHER_BODY="#!/usr/bin/env bash
 set -euo pipefail
 exec \"${VENV_BIN}\" \"\$@\""
 write_file "${LAUNCHER}" 0755 "${LAUNCHER_BODY}"
-say "launcher: ${LAUNCHER}"
+ALIAS_BODY="#!/usr/bin/env bash
+# Generated by agents install.sh — the pre-rename name of agents-host.
+exec \"${LAUNCHER}\" \"\$@\""
+write_file "${ALIAS_LAUNCHER}" 0755 "${ALIAS_BODY}"
+say "launcher: ${LAUNCHER} (alias: ${ALIAS_LAUNCHER})"
+case ":${PATH}:" in
+    *":${BIN_DIR}:"*) ;;
+    *) warn "${BIN_DIR} is not on PATH; call ${LAUNCHER} by its full path, or add it to PATH" ;;
+esac
 
 # ---------------------------------------------------------------------------
 # 5. systemd user service
 # ---------------------------------------------------------------------------
 step 5/5 "systemd user service"
+# The default state directory is not written into the unit: the host resolves
+# it itself, and only then moves a legacy ~/.cowork or ~/.agents state into it
+# (an explicit path is used as given and never migrated into).
+if [ "${AGENTS_HOME}" = "${DEFAULT_STATE_DIR}" ]; then
+    WORKSPACE_ARG=""
+else
+    WORKSPACE_ARG="--workspace ${AGENTS_HOME} "
+fi
 UNIT_BODY="$(sed \
     -e "s|@EXEC@|${LAUNCHER}|g" \
-    -e "s|@AGENTS_HOME@|${AGENTS_HOME}|g" \
+    -e "s|@WORKSPACE_ARG@|${WORKSPACE_ARG}|g" \
     -e "s|@IMAGE@|${IMAGE_TAG}|g" \
     -e "s|@SANDBOX_KIND@|${SANDBOX_KIND}|g" \
     -- "${UNIT_TEMPLATE}")"
@@ -335,6 +386,17 @@ else
         run systemctl --user restart "${UNIT_NAME}"
     else
         run systemctl --user start "${UNIT_NAME}"
+    fi
+    # Boot without a login: a user manager only starts at boot when lingering is
+    # on. Without it the service starts at the first login and not before.
+    LINGER="$(loginctl show-user "${USER:-$(id -un)}" -p Linger --value 2>/dev/null || true)"
+    if [ "${LINGER}" = "yes" ]; then
+        say "linger: on (the service starts at boot, no login needed)"
+    elif [ "${ENABLE_LINGER}" -eq 1 ]; then
+        run loginctl enable-linger "${USER:-$(id -un)}"
+    else
+        say "linger: off. The service starts at your first login, not at boot."
+        say "  To start it at boot:  loginctl enable-linger ${USER:-$(id -un)}   (or re-run with --enable-linger)"
     fi
 fi
 

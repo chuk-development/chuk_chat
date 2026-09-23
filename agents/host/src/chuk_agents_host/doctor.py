@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from chuk_agents_config import locate_state_home
+
 from .identity import HOST_DEVICE_ID
 from .pairing_store import HostPairingStore
 
@@ -181,7 +183,7 @@ def check_pairing(workspace: str) -> Check:
             "pairing",
             False,
             "no device is paired",
-            "run  cowork-host connect  and scan the code with the app",
+            "run  agents-host connect  and scan the code with the app",
         )
     return Check("pairing", True, f"a device is paired with {HOST_DEVICE_ID}")
 
@@ -255,8 +257,6 @@ def print_report(checks: list[Check], out: Callable[..., None] = print) -> int:
 
 
 def cmd_doctor(args, out: Callable[..., None] = print) -> int:
-    workspace = getattr(args, "workspace", None) or os.environ.get(
-        "AGENTS_HOME", str(Path.home() / ".agents")
-    )
+    workspace = getattr(args, "workspace", None) or str(locate_state_home())
     checks = run_checks(str(workspace), deep=not getattr(args, "quick", False))
     return print_report(checks, out)
