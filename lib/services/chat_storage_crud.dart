@@ -963,7 +963,10 @@ class ChatStorageCrud {
       return await updateChat(effectiveChatId, messagesMaps);
     }
 
-    final completer = Completer<StoredChat?>();
+    // Only a concurrent save for the same chat listens to this future. Mark
+    // it handled, so a failed save with no one waiting does not also surface
+    // as an "Unhandled Exception": the caller gets the error from the rethrow.
+    final completer = Completer<StoredChat?>()..future.ignore();
     ChatStorageState.pendingSaves[effectiveChatId] = completer;
     ChatStorageState.savingChats.add(effectiveChatId);
 
@@ -1089,12 +1092,23 @@ class ChatStorageCrud {
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
   ) async {
-    // If there's already a pending save for this chat, wait for it then try again
-    if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-      await ChatStorageState.pendingSaves[chatId]!.future;
+    // If there's already a pending save for this chat, wait for it then try
+    // again. Its failure belongs to its own caller, which already got it: this
+    // update carries newer messages and must still be written. Rethrowing it
+    // here dropped every save queued behind one timeout — a tool turn saves
+    // once per round, so one slow write lost all the rounds after it.
+    final pending = ChatStorageState.pendingSaves[chatId];
+    if (pending != null) {
+      try {
+        await pending.future;
+      } catch (_) {
+        // Reported to the caller of that save; see above.
+      }
     }
 
-    final completer = Completer<StoredChat?>();
+    // See [saveChat]: handled here, so a failure with no waiter is not
+    // reported twice.
+    final completer = Completer<StoredChat?>()..future.ignore();
     ChatStorageState.pendingSaves[chatId] = completer;
     ChatStorageState.savingChats.add(chatId);
 
