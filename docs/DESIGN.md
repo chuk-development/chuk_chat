@@ -352,3 +352,22 @@ panes, dense rows, hover states, keyboard control.
 - The phone layout (below the desktop breakpoint) is not changed by this
   section.
 - `FEATURE_AGENTS` off: the chuk_chat desktop is not changed by this section.
+
+### 14.10 Where it lives
+
+- The frame, the pane widths, the keyboard and the right pane:
+  `lib/pages/agents_desktop_layout.dart` (a part of the messenger shell).
+  Widths, the folded roster and the open details pane persist per device.
+- The numbers above: `lib/widgets/agents_desktop/desktop_metrics.dart`. The
+  bar button, the hairline, the resize handle and the pane header:
+  `desktop_controls.dart`. The quick switcher, the hover toolbar and the
+  centred dialogs sit next to them.
+- The roster: `lib/widgets/agent_roster_view.dart` (desktop only; the phone
+  inbox is `MobileAgentList`). The title bar: the non-dense shape of
+  `AgentsThreadHeader`. The composer: `_buildAgentsComposer` in
+  `chat_ui_desktop.dart`, only for `agentsThread`.
+- The desktop menu shape is switched on by `MenuDensity`, which only the
+  desktop body puts in the tree. A menu or dialog opened from inside it
+  captures it; nothing outside it changes.
+- Tests: `test/widgets/agents_desktop_shell_test.dart`, plus the desktop
+  cases in the roster, header, shell and thread view tests.
