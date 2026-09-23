@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/utils/client_platform.dart';
@@ -57,59 +59,86 @@ class PasswordChangeService {
         )
         .toList();
 
-    // Load system prompt snapshot for migration
-    String? systemPromptSnapshot;
+    // AGENTS: no Agents cloud write may land between the snapshot and the
+    // re-encrypt (an older snapshot would overwrite it, or it would be sealed
+    // with the old key). Writes wait in the outbox until the key is settled.
+    final pauseAgents = ChatOrigin.agentsEnabled;
+    if (pauseAgents) await AgentsChatStore.pauseCloudWrites();
     try {
-      systemPromptSnapshot = await UserPreferencesService.loadSystemPrompt();
-    } catch (_) {
-      // If loading fails, we'll just skip system prompt migration
-      systemPromptSnapshot = null;
-    }
+      // AGENTS: the Agents threads live in `cowork_chats`, sealed with the same
+      // key. `reencryptChats` only rewrites `encrypted_chats`, so without this
+      // every Agents cloud copy would be unreadable after the change. Nothing
+      // is read from that table with the Agents flag off.
+      List<AgentsCloudThread>? agentsSnapshot;
+      if (ChatOrigin.agentsEnabled) {
+        try {
+          agentsSnapshot = await AgentsChatStore.snapshotCloudThreads();
+        } catch (error) {
+          throw PasswordChangeException(
+            'Could not read your agent threads to re-encrypt them: $error',
+          );
+        }
+      }
 
-    try {
-      await _rotateEncryptionForPasswordChange(
-        chatsSnapshot: chatsSnapshot,
-        systemPromptSnapshot: systemPromptSnapshot,
-        fromPassword: trimmedCurrent,
-        toPassword: trimmedNew,
-      );
-    } on StateError catch (error) {
-      throw PasswordChangeException(error.message);
-    } catch (error) {
-      throw PasswordChangeException(
-        'Failed to prepare encrypted chats for the new password: $error',
-      );
-    }
+      // Load system prompt snapshot for migration
+      String? systemPromptSnapshot;
+      try {
+        systemPromptSnapshot = await UserPreferencesService.loadSystemPrompt();
+      } catch (_) {
+        // If loading fails, we'll just skip system prompt migration
+        systemPromptSnapshot = null;
+      }
 
-    try {
-      await SupabaseService.auth.updateUser(
-        UserAttributes(
-          password: trimmedNew,
-          data: {'pw_change_client': clientPlatformName()},
-        ),
-      );
-    } on AuthException catch (error) {
-      final restored = await _tryRestoreEncryption(
-        chatsSnapshot: chatsSnapshot,
-        systemPromptSnapshot: systemPromptSnapshot,
-        currentPassword: trimmedNew,
-        previousPassword: trimmedCurrent,
-      );
-      final reason = restored
-          ? 'Supabase rejected the password change: ${error.message}'
-          : 'Supabase rejected the password change and the encrypted data could not be restored: ${error.message}';
-      throw PasswordChangeException(reason);
-    } catch (error) {
-      final restored = await _tryRestoreEncryption(
-        chatsSnapshot: chatsSnapshot,
-        systemPromptSnapshot: systemPromptSnapshot,
-        currentPassword: trimmedNew,
-        previousPassword: trimmedCurrent,
-      );
-      final reason = restored
-          ? 'Failed to update password: $error'
-          : 'Failed to update password and the encrypted data could not be restored: $error';
-      throw PasswordChangeException(reason);
+      try {
+        await _rotateEncryptionForPasswordChange(
+          chatsSnapshot: chatsSnapshot,
+          agentsSnapshot: agentsSnapshot,
+          systemPromptSnapshot: systemPromptSnapshot,
+          fromPassword: trimmedCurrent,
+          toPassword: trimmedNew,
+        );
+      } on StateError catch (error) {
+        throw PasswordChangeException(error.message);
+      } catch (error) {
+        throw PasswordChangeException(
+          'Failed to prepare encrypted chats for the new password: $error',
+        );
+      }
+
+      try {
+        await SupabaseService.auth.updateUser(
+          UserAttributes(
+            password: trimmedNew,
+            data: {'pw_change_client': clientPlatformName()},
+          ),
+        );
+      } on AuthException catch (error) {
+        final restored = await _tryRestoreEncryption(
+          chatsSnapshot: chatsSnapshot,
+          agentsSnapshot: agentsSnapshot,
+          systemPromptSnapshot: systemPromptSnapshot,
+          currentPassword: trimmedNew,
+          previousPassword: trimmedCurrent,
+        );
+        final reason = restored
+            ? 'Supabase rejected the password change: ${error.message}'
+            : 'Supabase rejected the password change and the encrypted data could not be restored: ${error.message}';
+        throw PasswordChangeException(reason);
+      } catch (error) {
+        final restored = await _tryRestoreEncryption(
+          chatsSnapshot: chatsSnapshot,
+          agentsSnapshot: agentsSnapshot,
+          systemPromptSnapshot: systemPromptSnapshot,
+          currentPassword: trimmedNew,
+          previousPassword: trimmedCurrent,
+        );
+        final reason = restored
+            ? 'Failed to update password: $error'
+            : 'Failed to update password and the encrypted data could not be restored: $error';
+        throw PasswordChangeException(reason);
+      }
+    } finally {
+      if (pauseAgents) await AgentsChatStore.resumeCloudWrites();
     }
 
     try {
@@ -130,6 +159,7 @@ class PasswordChangeService {
 
   Future<void> _rotateEncryptionForPasswordChange({
     required List<StoredChat> chatsSnapshot,
+    required List<AgentsCloudThread>? agentsSnapshot,
     required String? systemPromptSnapshot,
     required String fromPassword,
     required String toPassword,
@@ -140,6 +170,9 @@ class PasswordChangeService {
       migrateWithNewKey: () async {
         // Re-encrypt chats with new key
         await ChatStorageService.reencryptChats(chatsSnapshot);
+        if (agentsSnapshot != null) {
+          await AgentsChatStore.reencryptCloudThreads(agentsSnapshot);
+        }
 
         // Re-encrypt system prompt with new key if it exists
         if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
@@ -149,6 +182,9 @@ class PasswordChangeService {
       rollbackWithOldKey: () async {
         // Rollback chats to old key
         await ChatStorageService.reencryptChats(chatsSnapshot);
+        if (agentsSnapshot != null) {
+          await AgentsChatStore.reencryptCloudThreads(agentsSnapshot);
+        }
 
         // Rollback system prompt to old key if it exists
         if (systemPromptSnapshot != null && systemPromptSnapshot.isNotEmpty) {
@@ -160,6 +196,7 @@ class PasswordChangeService {
 
   Future<bool> _tryRestoreEncryption({
     required List<StoredChat> chatsSnapshot,
+    required List<AgentsCloudThread>? agentsSnapshot,
     required String? systemPromptSnapshot,
     required String currentPassword,
     required String previousPassword,
@@ -167,6 +204,7 @@ class PasswordChangeService {
     try {
       await _rotateEncryptionForPasswordChange(
         chatsSnapshot: chatsSnapshot,
+        agentsSnapshot: agentsSnapshot,
         systemPromptSnapshot: systemPromptSnapshot,
         fromPassword: currentPassword,
         toPassword: previousPassword,

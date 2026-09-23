@@ -15,6 +15,7 @@ from chuk_agents_sandbox import (
     LABEL_AGENT,
     LABEL_IMAGE,
     LABEL_MANAGED,
+    LABEL_OWNER,
     LABEL_SESSION,
     LABEL_TASK,
     LABEL_WORKSPACE,
@@ -144,6 +145,7 @@ def container(
     workspace: str | None = None,
     image: str | None = None,
     managed: bool = True,
+    owner: str | None = None,
 ) -> dict:
     labels = {}
     if managed:
@@ -155,6 +157,8 @@ def container(
         labels[LABEL_WORKSPACE] = workspace
     if image:
         labels[LABEL_IMAGE] = image
+    if owner:
+        labels[LABEL_OWNER] = owner
     return {"id": cid, "name": f"agents-{agent}", "state": state, "labels": labels}
 
 
@@ -373,6 +377,102 @@ def test_reaper_never_touches_containers_it_does_not_manage():
     reaped = reap_orphans(active_session_ids=set(), cli=cli)
     assert reaped == ["agents-a1"]
     assert [c["id"] for c in cli.containers] == ["user-1"]
+
+
+# --------------------------------------------------- reaper, owner-scoped
+# Bead chuk_chat-6mg: every host start used to remove EVERY managed container
+# on the machine. A second host (a test run, a second instance) then killed
+# the user's live agent containers. With an owner, a host reaps only its own.
+
+
+def test_reaper_with_an_owner_leaves_another_hosts_containers_alone():
+    cli = FakeCli(
+        [
+            container(cid="mine", agent="a1", session="dead", owner="/home/me/.agents"),
+            container(cid="theirs", agent="a2", session="dead", owner="/tmp/pytest-1"),
+        ]
+    )
+    reaped = reap_orphans(active_session_ids=set(), cli=cli, owner="/home/me/.agents")
+    assert reaped == ["agents-a1"]
+    assert [c["id"] for c in cli.containers] == ["theirs"]
+
+
+def test_reaper_with_an_owner_keeps_its_own_live_sessions():
+    cli = FakeCli(
+        [
+            container(cid="c1", agent="a1", session="alive", owner="/o"),
+            container(cid="c2", agent="a2", session="dead", owner="/o"),
+        ]
+    )
+    reaped = reap_orphans(active_session_ids={"alive"}, cli=cli, owner="/o")
+    assert reaped == ["agents-a2"]
+    assert [c["id"] for c in cli.containers] == ["c1"]
+
+
+def test_reaper_takes_an_unlabelled_old_container_only_under_its_own_workspace():
+    """Before the owner label, a container is attributed by its workspace mount."""
+    cli = FakeCli(
+        [
+            container(cid="old-mine", agent="a1", session="s", workspace="/home/me/.agents/agents/ada-1"),
+            container(cid="old-theirs", agent="a2", session="s", workspace="/tmp/pytest-7/agents/bob-2"),
+            # A sibling directory that only shares a prefix is not "under" it.
+            container(cid="old-prefix", agent="a3", session="s", workspace="/home/me/.agents-other/x"),
+            # No owner and no workspace: nobody can claim it, so nobody reaps it.
+            container(cid="old-anon", agent="a4", session="s"),
+        ]
+    )
+    reaped = reap_orphans(
+        active_session_ids=set(),
+        cli=cli,
+        owner="/home/me/.agents",
+        legacy_workspace_roots=("/home/me/.agents",),
+    )
+    assert reaped == ["agents-a1"]
+    assert sorted(c["id"] for c in cli.containers) == ["old-anon", "old-prefix", "old-theirs"]
+
+
+def test_a_labelled_owner_wins_over_the_workspace_path():
+    """Another host's container is never reaped, wherever its workspace is."""
+    cli = FakeCli(
+        [
+            container(cid="c1", agent="a1", session="s", owner="/other", workspace="/o/agents/a1"),
+        ]
+    )
+    reaped = reap_orphans(
+        active_session_ids=set(), cli=cli, owner="/o", legacy_workspace_roots=("/o",)
+    )
+    assert reaped == []
+    assert len(cli.containers) == 1
+
+
+def test_owned_by_decides_on_label_then_on_workspace():
+    from chuk_agents_sandbox import ContainerInfo, owned_by
+
+    def info(labels):
+        return ContainerInfo(id="c", name="n", state="running", labels=labels)
+
+    assert owned_by(info({LABEL_OWNER: "/o"}), "/o")
+    assert not owned_by(info({LABEL_OWNER: "/x"}), "/o", ("/o",))
+    assert owned_by(info({LABEL_WORKSPACE: "/o"}), "/o", ("/o",))
+    assert owned_by(info({LABEL_WORKSPACE: "/o/agents/a"}), "/o", ("/o/",))
+    assert not owned_by(info({LABEL_WORKSPACE: "/o2/a"}), "/o", ("/o",))
+    assert not owned_by(info({}), "/o", ("/o",))
+
+
+def test_an_environment_with_an_owner_labels_its_container():
+    cli = FakeCli()
+    env = DockerEnvironment(agent_id="a1", cli=cli, owner="/home/me/.agents")
+    env._ensure_container()
+    assert cli.containers[0]["labels"][LABEL_OWNER] == "/home/me/.agents"
+    # ...and its own reaper, on the next start, recognises it.
+    reaped = reap_orphans(active_session_ids=set(), cli=cli, owner="/home/me/.agents")
+    assert len(reaped) == 1
+
+
+def test_an_environment_without_an_owner_carries_no_owner_label():
+    cli = FakeCli()
+    DockerEnvironment(agent_id="a1", cli=cli)._ensure_container()
+    assert LABEL_OWNER not in cli.containers[0]["labels"]
 
 
 def test_find_agent_container_prefers_a_running_one():

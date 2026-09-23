@@ -67,12 +67,20 @@ class ContainerSupervisor(AgentSupervisor):
     :func:`roster_workspace_resolver` for the normal case, or a lambda in tests.
     ``env_factory`` exists purely as a seam: production leaves it alone,
     tests substitute a fake environment and assert the lifecycle without docker.
+
+    ``owner`` names the host this supervisor works for (its state directory).
+    Every container it creates is labelled with it, and :meth:`reap_orphans`
+    only removes containers of that owner — plus old unlabelled ones whose
+    workspace lies under ``legacy_workspace_roots``. Without an owner the
+    reaper is machine-wide, which is only safe for a single host per machine.
     """
 
     workspace_resolver: WorkspaceResolver = lambda _agent_id: None
     image: str | None = None
     cli: DockerCli | None = None
     env_factory: Callable[..., BaseEnvironment] | None = None
+    owner: str | None = None
+    legacy_workspace_roots: tuple[str, ...] = ()
     _envs: dict[str, BaseEnvironment] = field(default_factory=dict, init=False)
     _states: dict[str, RuntimeState] = field(default_factory=dict, init=False)
 
@@ -86,13 +94,16 @@ class ContainerSupervisor(AgentSupervisor):
     # ------------------------------------------------------------------ #
     def _new_env(self, agent_id: str, task_id: str) -> BaseEnvironment:
         factory = self.env_factory or DockerEnvironment
-        return factory(
-            agent_id=agent_id,
-            task_id=task_id,
-            image=self.image,
-            workdir=self.workspace_resolver(agent_id),
-            cli=self.cli,
-        )
+        kwargs: dict[str, object] = {
+            "agent_id": agent_id,
+            "task_id": task_id,
+            "image": self.image,
+            "workdir": self.workspace_resolver(agent_id),
+            "cli": self.cli,
+        }
+        if self.owner:
+            kwargs["owner"] = self.owner
+        return factory(**kwargs)
 
     def environment(self, agent_id: str) -> BaseEnvironment:
         """The agent's session environment, created (but not started) on demand."""
@@ -214,8 +225,19 @@ class ContainerSupervisor(AgentSupervisor):
 
         At startup (nothing tracked yet) this clears every container a killed
         previous Manager left behind — the case the plan calls out explicitly.
+        With an :attr:`owner` it only looks at that owner's containers, so the
+        containers of another host on the same machine stay alive.
         """
-        return reap_orphans(active_session_ids=self.live_session_ids(), cli=self.cli)
+        if not self.owner:
+            return reap_orphans(
+                active_session_ids=self.live_session_ids(), cli=self.cli
+            )
+        return reap_orphans(
+            active_session_ids=self.live_session_ids(),
+            cli=self.cli,
+            owner=self.owner,
+            legacy_workspace_roots=self.legacy_workspace_roots,
+        )
 
     def shutdown(self) -> None:
         """Release every handle. Default-task containers survive by design."""
