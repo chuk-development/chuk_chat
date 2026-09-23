@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
@@ -35,6 +36,17 @@ class _MemoryStore implements AgentsSecureKeyValueStore {
   Future<void> write(String key, String value) async => map[key] = value;
   @override
   Future<void> delete(String key) async => map.remove(key);
+}
+
+/// A host that answers the panel's first look and then fails a refresh.
+class _FailingRefreshSource extends FakeAgentControlSource {
+  bool failNext = false;
+
+  @override
+  Future<void> refresh(String sessionKey) async {
+    if (failNext) throw StateError('host said: secret-detail-123');
+    return super.refresh(sessionKey);
+  }
 }
 
 class _Session implements AccountSessionSource {
@@ -69,6 +81,7 @@ void main() {
     List<String> agents = const <String>['amber', 'cobalt', 'jade'],
     LocalRoomSource? rooms,
     Size size = const Size(1400, 900),
+    AgentControlSource? controlSource,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -87,6 +100,7 @@ void main() {
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
           roomSource: roomSource,
+          controlSource: controlSource,
           onSignOut: () {},
         ),
       ),
@@ -241,6 +255,26 @@ void main() {
       expect(rosterRect(tester).width, kDeskRosterDefault + 40);
       expect(rightPane, findsOneWidget);
     });
+  });
+
+  testWidgets('a failing Refresh in the details pane says so, without the '
+      'error text', (tester) async {
+    final _FailingRefreshSource source = _FailingRefreshSource();
+    await pumpDesktop(tester, controlSource: source);
+    await shortcut(tester, LogicalKeyboardKey.period);
+
+    source.failNext = true;
+    await tester.tap(
+      find.descendant(of: rightPane, matching: find.byTooltip('Refresh')),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(
+      find.textContaining('Could not refresh the details'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('secret-detail-123'), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   group('roster (§14.3)', () {

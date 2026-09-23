@@ -102,6 +102,7 @@ import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 import 'package:chuk_chat/services/settings/theme_controller.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';

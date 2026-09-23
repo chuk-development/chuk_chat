@@ -488,7 +488,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               DeskIconButton(
                 icon: Icons.refresh,
                 tooltip: 'Refresh',
-                onPressed: () => _controlSource.refresh(sessionKey),
+                onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
               ),
               DeskIconButton(
                 icon: Icons.close,
@@ -511,6 +511,25 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         ],
       ),
     );
+  }
+
+  /// Refresh in the details pane. A host that cannot answer says so; the
+  /// error itself is not shown or logged — it may carry host detail.
+  Future<void> _deskRefreshDetails(String sessionKey) async {
+    final ScaffoldMessengerState? messenger = ScaffoldMessenger.maybeOf(
+      context,
+    );
+    try {
+      await _controlSource.refresh(sessionKey);
+    } catch (_) {
+      if (!mounted || messenger == null) return;
+      AppNotifications.showOn(
+        messenger,
+        'Could not refresh the details. Try again in a moment.',
+        kind: AppNotificationKind.error,
+        duration: const Duration(seconds: 4),
+      );
+    }
   }
 
   /// Control Rooms in the right pane: the room list under the pane header.

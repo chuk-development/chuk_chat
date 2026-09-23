@@ -973,6 +973,7 @@ class _SectionHeader extends StatefulWidget {
 
 class _SectionHeaderState extends State<_SectionHeader> {
   bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
@@ -996,15 +997,22 @@ class _SectionHeaderState extends State<_SectionHeader> {
                 ),
               ),
               if (widget.onAdd != null)
-                AnimatedOpacity(
-                  duration: const Duration(milliseconds: 120),
-                  opacity: _hovered ? 1 : 0,
-                  child: DeskIconButton(
-                    icon: Icons.add_rounded,
-                    size: 22,
-                    glyph: 16,
-                    tooltip: widget.addTooltip ?? 'Add',
-                    onPressed: widget.onAdd,
+                // Shown under the pointer, and while the keyboard is on it:
+                // an invisible focus stop would be a trap.
+                Focus(
+                  canRequestFocus: false,
+                  skipTraversal: true,
+                  onFocusChange: (bool f) => setState(() => _focused = f),
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 120),
+                    opacity: _hovered || _focused ? 1 : 0,
+                    child: DeskIconButton(
+                      icon: Icons.add_rounded,
+                      size: 22,
+                      glyph: 16,
+                      tooltip: widget.addTooltip ?? 'Add',
+                      onPressed: widget.onAdd,
+                    ),
                   ),
                 ),
             ],
@@ -1024,6 +1032,7 @@ class _HoverTile extends StatefulWidget {
     this.selected = false,
     this.onSecondaryTapUp,
     this.onHover,
+    this.onContextMenu,
   });
 
   final Widget child;
@@ -1033,12 +1042,17 @@ class _HoverTile extends StatefulWidget {
   final GestureTapUpCallback? onSecondaryTapUp;
   final ValueChanged<bool>? onHover;
 
+  /// The row's menu from the keyboard (the Menu key, Shift+F10) — what a
+  /// right click opens with the mouse.
+  final VoidCallback? onContextMenu;
+
   @override
   State<_HoverTile> createState() => _HoverTileState();
 }
 
 class _HoverTileState extends State<_HoverTile> {
   bool _hovered = false;
+  bool _focused = false;
 
   void _setHover(bool value) {
     if (_hovered == value) return;
@@ -1052,47 +1066,63 @@ class _HoverTileState extends State<_HoverTile> {
     final Color fill = widget.selected
         ? scheme.secondaryContainer
         : (_hovered ? scheme.surfaceContainerHigh : Colors.transparent);
-    return MouseRegion(
-      cursor: widget.onTap == null
-          ? SystemMouseCursors.basic
-          : SystemMouseCursors.click,
-      onEnter: (_) => _setHover(true),
-      onExit: (_) => _setHover(false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        onSecondaryTapUp: widget.onSecondaryTapUp,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 90),
-          height: widget.height,
-          decoration: BoxDecoration(
-            color: fill,
-            borderRadius: BorderRadius.circular(kDeskControlRadius),
-          ),
-          child: Stack(
-            children: <Widget>[
-              Positioned.fill(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: kDeskRowPadH),
-                  child: widget.child,
-                ),
-              ),
-              // The selected row's accent bar on its left edge.
-              if (widget.selected)
-                Positioned(
-                  key: const ValueKey<String>('roster-selected-bar'),
-                  left: 0,
-                  top: 8,
-                  bottom: 8,
-                  width: kDeskSelectedBar,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: scheme.primary,
-                      borderRadius: BorderRadius.circular(2),
+    // Keyboard: Tab reaches the row, Enter or Space opens it, the Menu key
+    // opens its menu, and a ring shows where the focus is. The pointer path
+    // is unchanged.
+    return DeskFocusable(
+      onActivate: widget.onTap,
+      onContextMenu: widget.onContextMenu,
+      onFocusHighlight: (bool on) => setState(() => _focused = on),
+      child: MouseRegion(
+        cursor: widget.onTap == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        onEnter: (_) => _setHover(true),
+        onExit: (_) => _setHover(false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.onTap,
+          onSecondaryTapUp: widget.onSecondaryTapUp,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 90),
+            height: widget.height,
+            decoration: BoxDecoration(
+              color: fill,
+              borderRadius: BorderRadius.circular(kDeskControlRadius),
+            ),
+            foregroundDecoration: _focused
+                ? BoxDecoration(
+                    borderRadius: BorderRadius.circular(kDeskControlRadius),
+                    border: Border.all(color: scheme.primary, width: 2),
+                  )
+                : null,
+            child: Stack(
+              children: <Widget>[
+                Positioned.fill(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: kDeskRowPadH,
                     ),
+                    child: widget.child,
                   ),
                 ),
-            ],
+                // The selected row's accent bar on its left edge.
+                if (widget.selected)
+                  Positioned(
+                    key: const ValueKey<String>('roster-selected-bar'),
+                    left: 0,
+                    top: 8,
+                    bottom: 8,
+                    width: kDeskSelectedBar,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: scheme.primary,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1190,6 +1220,7 @@ class _AgentRowState extends State<_AgentRow> {
           onHover: (bool value) => setState(() => _hovered = value),
           onSecondaryTapUp: (TapUpDetails d) =>
               unawaited(widget.onMenu(rowContext, d.globalPosition)),
+          onContextMenu: () => unawaited(widget.onMenu(rowContext, null)),
           child: Row(
             children: <Widget>[
               AgentFace(
@@ -1275,6 +1306,7 @@ class _RoomRowState extends State<_RoomRow> {
           onHover: (bool value) => setState(() => _hovered = value),
           onSecondaryTapUp: (TapUpDetails d) =>
               unawaited(widget.onMenu(rowContext, d.globalPosition)),
+          onContextMenu: () => unawaited(widget.onMenu(rowContext, null)),
           child: Row(
             children: <Widget>[
               SizedBox(

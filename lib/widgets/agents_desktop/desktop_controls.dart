@@ -52,13 +52,14 @@ class DeskIconButton extends StatefulWidget {
 
 class _DeskIconButtonState extends State<DeskIconButton> {
   bool _hovered = false;
+  bool _focused = false;
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme scheme = Theme.of(context).colorScheme;
     final Color fill = widget.selected
         ? scheme.secondaryContainer
-        : (_hovered && widget.onPressed != null
+        : ((_hovered || _focused) && widget.onPressed != null
               ? scheme.surfaceContainerHigh
               : Colors.transparent);
     final Color base = widget.selected
@@ -72,30 +73,99 @@ class _DeskIconButtonState extends State<DeskIconButton> {
       child: Tooltip(
         message: widget.tooltip,
         waitDuration: const Duration(milliseconds: 400),
-        child: MouseRegion(
-          cursor: widget.onPressed == null
-              ? SystemMouseCursors.basic
-              : SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: widget.onPressed,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 120),
-              curve: Curves.easeOutCubic,
-              width: widget.size,
-              height: widget.size,
-              decoration: BoxDecoration(
-                color: fill,
-                borderRadius: BorderRadius.circular(kDeskControlRadius),
+        // Keyboard: Tab reaches the button, Enter or Space presses it, and a
+        // ring shows where the focus is. The pointer path below is as it was.
+        child: DeskFocusable(
+          onActivate: widget.onPressed,
+          onFocusHighlight: (bool on) => setState(() => _focused = on),
+          child: MouseRegion(
+            cursor: widget.onPressed == null
+                ? SystemMouseCursors.basic
+                : SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: widget.onPressed,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 120),
+                curve: Curves.easeOutCubic,
+                width: widget.size,
+                height: widget.size,
+                decoration: BoxDecoration(
+                  color: fill,
+                  borderRadius: BorderRadius.circular(kDeskControlRadius),
+                  border: _focused
+                      ? Border.all(color: scheme.primary, width: 2)
+                      : null,
+                ),
+                alignment: Alignment.center,
+                child: AppIcon(widget.icon, size: widget.glyph, color: glyph),
               ),
-              alignment: Alignment.center,
-              child: AppIcon(widget.icon, size: widget.glyph, color: glyph),
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Opens a context menu from the keyboard (the Menu key, Shift+F10).
+class DeskContextMenuIntent extends Intent {
+  const DeskContextMenuIntent();
+}
+
+/// The keyboard half of a desktop control: a focus stop that Enter and Space
+/// activate (the app's [ActivateIntent] shortcuts), and that reports when its
+/// focus ring should show — only while the keyboard is driving, never after a
+/// click. [onContextMenu] adds the Menu key and Shift+F10.
+///
+/// It does not take the pointer: the caller keeps its own hover and tap
+/// handling, so a mouse behaves exactly as before.
+class DeskFocusable extends StatelessWidget {
+  const DeskFocusable({
+    super.key,
+    required this.child,
+    required this.onActivate,
+    required this.onFocusHighlight,
+    this.onContextMenu,
+  });
+
+  final Widget child;
+  final VoidCallback? onActivate;
+  final ValueChanged<bool> onFocusHighlight;
+  final VoidCallback? onContextMenu;
+
+  @override
+  Widget build(BuildContext context) {
+    return FocusableActionDetector(
+      enabled: onActivate != null,
+      mouseCursor: MouseCursor.defer,
+      onShowFocusHighlight: onFocusHighlight,
+      shortcuts: onContextMenu == null
+          ? null
+          : const <ShortcutActivator, Intent>{
+              SingleActivator(LogicalKeyboardKey.contextMenu):
+                  DeskContextMenuIntent(),
+              SingleActivator(LogicalKeyboardKey.f10, shift: true):
+                  DeskContextMenuIntent(),
+            },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(
+          onInvoke: (ActivateIntent _) {
+            onActivate?.call();
+            return null;
+          },
+        ),
+        if (onContextMenu != null)
+          DeskContextMenuIntent: CallbackAction<DeskContextMenuIntent>(
+            onInvoke: (DeskContextMenuIntent _) {
+              onContextMenu!.call();
+              return null;
+            },
+          ),
+      },
+      child: child,
     );
   }
 }
