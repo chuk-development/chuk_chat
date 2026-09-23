@@ -9,6 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/utils/favicon.dart';
@@ -276,9 +277,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final Color color = entry.hasError
         ? theme.colorScheme.error.withValues(alpha: 0.85)
         : muted;
-    final Color railColor = theme.colorScheme.onSurface.withValues(
-      alpha: 0.15,
-    );
+    final Color railColor = theme.colorScheme.onSurface.withValues(alpha: 0.15);
 
     final content = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -409,7 +408,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     final detail = entry.detail;
 
     if (detail == null) {
-      return Text(entry.label, style: baseStyle, overflow: TextOverflow.ellipsis);
+      return Text(
+        entry.label,
+        style: baseStyle,
+        overflow: TextOverflow.ellipsis,
+      );
     }
 
     // The query or URL is the part worth reading, so it carries more
@@ -434,10 +437,7 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
 
   /// The pages a step found, as chips that scroll sideways — the row must
   /// never push the message wider than the bubble.
-  Widget _buildSourceChips(
-    ThemeData theme,
-    List<AgentActivitySource> sources,
-  ) {
+  Widget _buildSourceChips(ThemeData theme, List<AgentActivitySource> sources) {
     return SizedBox(
       height: 30,
       child: ListView.separated(

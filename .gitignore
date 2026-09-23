@@ -3,9 +3,7 @@
 *.log
 *.pyc
 *.swp
-*.backup
 .DS_Store
-.claude/scheduled_tasks.lock
 .atom/
 .build/
 .buildlog/
@@ -33,7 +31,6 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
-/android/build/
 /coverage/
 
 # Symbolication related
@@ -65,8 +62,10 @@ debian/
 rpm/
 AppDir/
 
-# Build tools (downloaded automatically) — root only, do not match vendored tools/ dirs
-/tools/
+# Merge note: upstream ignored `/tools/` here (downloaded build tools). The
+# Agents tree ships a real, tracked `tools/` directory (agents-browser-bridge,
+# agents-extension-mcp, chat_ui_manifest.txt), so the line is gone. Ignore the
+# downloaded tool by name if it ever comes back.
 
 # Generated files
 combined_code_for_llm.txt
@@ -153,3 +152,38 @@ session.txt
 .pseudomap/.lock
 .pseudomap/cache.json
 .pseudomap/index.json
+
+# --- Agents ----------------------------------------------------------------
+# Golden-diff output from a failing image comparison (flutter_test writes it
+# next to the test); never committed.
+test/**/failures/
+
+# Python subsystems under agents/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.uv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+agents/**/dist/
+agents/**/build/
+
+# SQLite runtime files of the host/manager (upstream already ignores *.db)
+*.db-wal
+*.db-shm
+
+.env.live
+
+# Host boot log written by agents/host/ on every start; not source. `.prev` is
+# the previous boot, rotated by the same writer.
+.hostlive
+.hostlive.prev
+
+# Claude Code session id files (never commit)
+**/session.txt
+
+# Loose verification scratch a session dropped in the root instead of `_scratch/`.
+_scratch_*

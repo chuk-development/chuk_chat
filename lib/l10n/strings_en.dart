@@ -54,6 +54,7 @@ const Map<String, String> stringsEn = {
   'about': 'About',
   'aboutSubtitle': 'Version details and open source licenses',
   'logout': 'Logout',
+  'logoutFailed': 'Could not log out. Please try again.',
   'noChatsToExport': 'No chats to export',
   'copiedToClipboard': 'Copied to clipboard',
   'savedToPath': 'Saved to {path}',
@@ -102,7 +103,7 @@ const Map<String, String> stringsEn = {
   'themeContrastStrength': 'Separation strength',
   'themeContrastSubtitle':
       'How strongly cards and outlines stand out from the background. '
-          'Higher is crisper.',
+      'Higher is crisper.',
   'themeFonts': 'Fonts',
   'interfaceFont': 'Interface font',
   'interfaceFontSubtitle': 'Menus, settings and buttons.',
@@ -185,8 +186,7 @@ const Map<String, String> stringsEn = {
   'dynamicColor': 'Material You',
   'dynamicColorSubtitle':
       'Use your system colors and follow theme changes automatically',
-  'colorDynamicNote':
-      'Set automatically by your system Material You palette.',
+  'colorDynamicNote': 'Set automatically by your system Material You palette.',
   'customHexColor': 'Custom Hex Color (#RRGGBB)',
   'pickCustomColor': 'Pick custom color',
   'pickAColor': 'Pick a color',
@@ -198,6 +198,9 @@ const Map<String, String> stringsEn = {
   'newWorkspace': 'New Workspace',
   'editedAt': 'Edited {date}',
   'aiDisclaimer': 'You\'re chatting with an AI/LLM — it can be wrong. Check key info.',
+  // The Agents thread's line: the original app's wording.
+  'agentsAiDisclaimer':
+      'You\'re chatting with an AI — it can be wrong. Check key info.',
   'archive': 'Archive',
 
   // ── Tool calling page ──────────────────────────────────────
@@ -566,6 +569,7 @@ const Map<String, String> stringsEn = {
   // ── Chat UI ────────────────────────────────────────────────
   'askMeAnything': 'Ask me anything !',
   'queuedLabel': 'Queued',
+  'queuedMessagesCount': '{count} messages queued',
   'editYourMessage': 'Edit your message...',
   'addMessageOrDocs': 'Add a message or send documents',
   'micAccessFailed': 'Mic access failed',

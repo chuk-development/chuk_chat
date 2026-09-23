@@ -1,0 +1,156 @@
+/// A group room, app-side (§16.1). Several coworkers in one conversation.
+///
+/// This mirrors the manager's `GroupRoom`: an ordered set of members, with no
+/// ceiling on how many. The app holds only what it needs to show and to build
+/// one — an id, a
+/// name, and the members as (agent id, handle) pairs. The orchestration (turn
+/// order, the round and message caps) lives on the host; the app never runs a
+/// room itself, so nothing here duplicates that logic.
+library;
+
+import 'package:flutter/foundation.dart';
+
+/// One coworker in a room: the agent id the app tracks and the handle it is
+/// mentioned by.
+@immutable
+class AgentsRoomMember {
+  const AgentsRoomMember({required this.agentId, required this.handle});
+
+  final String agentId;
+  final String handle;
+
+  @override
+  bool operator ==(Object other) =>
+      other is AgentsRoomMember &&
+      other.agentId == agentId &&
+      other.handle == handle;
+
+  @override
+  int get hashCode => Object.hash(agentId, handle);
+}
+
+/// A group room the app knows about: an id, a name, and its members in order.
+/// Mirrors the manager's `GroupRoom`; the orchestration (turn order, caps) lives
+/// on the host, so this holds only what the app shows.
+@immutable
+class AgentsRoom {
+  const AgentsRoom({
+    required this.id,
+    required this.name,
+    required this.members,
+    this.agentToAgent = true,
+  });
+
+  final String id;
+  final String name;
+  final List<AgentsRoomMember> members;
+
+  /// Whether the coworkers may pull each other in by writing `@handle`
+  /// (`agent_to_agent`, WIRE_CONTRACT). True is what a room has always done, so
+  /// an old room and an old host both keep behaving exactly as before; false
+  /// means every member answers the user and nobody answers a coworker.
+  final bool agentToAgent;
+
+  /// The members' handles, in room order — the "everyone speaks" sequence.
+  List<String> get handles => <String>[for (final m in members) m.handle];
+
+  AgentsRoom copyWith({
+    String? name,
+    List<AgentsRoomMember>? members,
+    bool? agentToAgent,
+  }) => AgentsRoom(
+    id: id,
+    name: name ?? this.name,
+    members: members ?? this.members,
+    agentToAgent: agentToAgent ?? this.agentToAgent,
+  );
+}
+
+/// What the create-room form produces: a name and the chosen members. It is not
+/// a live room yet — the host makes it real — so it carries no id.
+@immutable
+class AgentsRoomDraft {
+  const AgentsRoomDraft({
+    required this.name,
+    required this.members,
+    this.agentToAgent = true,
+  });
+
+  final String name;
+  final List<AgentsRoomMember> members;
+
+  /// The policy the form chose; see [AgentsRoom.agentToAgent]. Defaults to the
+  /// behaviour a room has always had, so a caller that knows nothing about the
+  /// switch still builds the room the user expects.
+  final bool agentToAgent;
+}
+
+/// One agent turn in a room exchange, as the app shows it. Mirrors the manager's
+/// `RoomTurn`: which round it belonged to, who spoke, and what they said.
+@immutable
+class AgentsRoomTurn {
+  const AgentsRoomTurn({
+    required this.round,
+    required this.agentId,
+    required this.handle,
+    required this.text,
+  });
+
+  final int round;
+  final String agentId;
+  final String handle;
+  final String text;
+}
+
+/// Why a room exchange ended, as the host reported it. The strings match the
+/// manager's `RoomSession`/`RoomRunner` stop reasons so the UI never invents a
+/// state the host did not send.
+enum AgentsRoomStop {
+  /// No unanswered @mention was left — the exchange ran itself out.
+  noMoreMentions,
+
+  /// The three-round cap was hit.
+  roundsExhausted,
+
+  /// The ten-message-per-send cap was hit.
+  messagesExhausted,
+
+  /// The user stopped it.
+  stopped,
+
+  /// A member's turn crashed.
+  turnFailed,
+
+  /// The host does not have this room (it was never synced, or was deleted on
+  /// the host). The app can re-create it and try again.
+  noSuchRoom,
+
+  /// The room's `agent_to_agent` policy is off, so a coworker's @mention of
+  /// another coworker was not followed — the exchange ends after everyone has
+  /// answered the user.
+  agentToAgentOff;
+
+  /// Parse the wire string, or null for one this build does not know.
+  static AgentsRoomStop? fromWire(String? reason) => switch (reason) {
+    'no_more_mentions' => AgentsRoomStop.noMoreMentions,
+    'rounds_exhausted' => AgentsRoomStop.roundsExhausted,
+    'messages_exhausted' => AgentsRoomStop.messagesExhausted,
+    'stopped' => AgentsRoomStop.stopped,
+    'turn_failed' => AgentsRoomStop.turnFailed,
+    'no_such_room' => AgentsRoomStop.noSuchRoom,
+    'agent_to_agent_off' => AgentsRoomStop.agentToAgentOff,
+    _ => null,
+  };
+
+  /// A short human line for the thread footer.
+  String get label => switch (this) {
+    AgentsRoomStop.noMoreMentions => 'Everyone has weighed in',
+    AgentsRoomStop.roundsExhausted => 'Reached the round limit',
+    AgentsRoomStop.messagesExhausted => 'Reached the message limit',
+    AgentsRoomStop.stopped => 'Stopped',
+    AgentsRoomStop.turnFailed => 'A coworker\'s turn failed',
+    AgentsRoomStop.noSuchRoom => 'This room is not on your host yet',
+    AgentsRoomStop.agentToAgentOff =>
+      'Coworkers do not reply to each other here',
+  };
+}

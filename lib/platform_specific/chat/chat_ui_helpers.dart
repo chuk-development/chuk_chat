@@ -16,11 +16,15 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/workspace_message_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
+    show kBubbleGroupPause;
 import 'package:chuk_chat/widgets/message_bubble.dart'
     show DocumentAttachment, ImageMeta;
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
@@ -109,42 +113,92 @@ class MessageRenderData {
 /// A surface keeps one instance and clears it whenever it replaces the active
 /// message list. Cache keys are the raw JSON payloads, so an updated field
 /// naturally gets a new decoded entry during streaming.
+///
+/// In the Agents build every instance reads and writes ONE process-wide set
+/// of maps. There the chat screen is mounted again on every agent switch, so a
+/// cache owned by the screen died with it and every switch decoded every tool
+/// call again. The keys are the raw payloads, so an entry can never belong to
+/// the wrong message; [clear] leaves the shared maps alone, and their size is
+/// bounded like the per-screen maps, only higher.
 class MessageRenderCache {
-  final Map<String, List<String>?> _images = <String, List<String>?>{};
-  final Map<String, List<DocumentAttachment>?> _attachments =
-      <String, List<DocumentAttachment>?>{};
-  final Map<String, List<ToolCall>?> _toolCalls = <String, List<ToolCall>?>{};
-  final Map<String, List<ContentBlock>?> _contentBlocks =
-      <String, List<ContentBlock>?>{};
+  MessageRenderCache()
+    : _shared = agentsChatCore,
+      _maps = agentsChatCore ? _sharedMaps : _MessageRenderMaps() {
+    // The shared maps hold one account's decoded plaintext: a screen that
+    // mounts for another user starts them empty.
+    if (_shared) {
+      final String? user = CurrentUser.id;
+      if (user != _sharedOwner) {
+        _sharedOwner = user;
+        _sharedMaps.clear();
+      }
+    }
+  }
+
+  final bool _shared;
+  final _MessageRenderMaps _maps;
+
+  static final _MessageRenderMaps _sharedMaps = _MessageRenderMaps();
+  static String? _sharedOwner;
+
+  /// Entries per shared map before it is emptied: four agents with a long
+  /// thread each fit, a whole day of switching does not grow without bound.
+  static const int _sharedMaxEntries = 1200;
+
+  /// Empties the shared maps. For tests.
+  @visibleForTesting
+  static void debugClearShared() => _sharedMaps.clear();
 
   MessageRenderData build({
     required List<Map<String, String>> messages,
     required int index,
     required bool isStreaming,
   }) {
-    ChatUiHelpers.trimCachesIfNeeded(<Map<dynamic, dynamic>>[
-      _images,
-      _attachments,
-      _toolCalls,
-      _contentBlocks,
-    ]);
+    final List<Map<dynamic, dynamic>> maps = <Map<dynamic, dynamic>>[
+      _maps.images,
+      _maps.attachments,
+      _maps.toolCalls,
+      _maps.contentBlocks,
+    ];
+    if (_shared) {
+      for (final map in maps) {
+        if (map.length > _sharedMaxEntries) map.clear();
+      }
+    } else {
+      ChatUiHelpers.trimCachesIfNeeded(maps);
+    }
     return ChatUiHelpers.buildMessageRenderData(
       raw: messages[index],
       index: index,
       messageCount: messages.length,
       isStreaming: isStreaming,
-      imagesCache: _images,
-      attachmentsCache: _attachments,
-      toolCallsCache: _toolCalls,
-      contentBlocksCache: _contentBlocks,
+      imagesCache: _maps.images,
+      attachmentsCache: _maps.attachments,
+      toolCallsCache: _maps.toolCalls,
+      contentBlocksCache: _maps.contentBlocks,
     );
   }
 
   void clear() {
-    _images.clear();
-    _attachments.clear();
-    _toolCalls.clear();
-    _contentBlocks.clear();
+    if (_shared) return;
+    _maps.clear();
+  }
+}
+
+/// The four decode maps behind a [MessageRenderCache].
+class _MessageRenderMaps {
+  final Map<String, List<String>?> images = <String, List<String>?>{};
+  final Map<String, List<DocumentAttachment>?> attachments =
+      <String, List<DocumentAttachment>?>{};
+  final Map<String, List<ToolCall>?> toolCalls = <String, List<ToolCall>?>{};
+  final Map<String, List<ContentBlock>?> contentBlocks =
+      <String, List<ContentBlock>?>{};
+
+  void clear() {
+    images.clear();
+    attachments.clear();
+    toolCalls.clear();
+    contentBlocks.clear();
   }
 }
 
@@ -523,6 +577,9 @@ class ChatUiHelpers {
     if (message.messageId != null && message.messageId!.isNotEmpty) {
       map['messageId'] = message.messageId!;
     }
+    if (message.sentAt != null && message.sentAt!.isNotEmpty) {
+      map['sentAt'] = message.sentAt!;
+    }
     // The turn's clock survives reload: without these two, a reloaded answer
     // loses the request timestamp and its recorded duration, so the header
     // falls back to the tool-call stamps for a turn that had already timed
@@ -581,6 +638,7 @@ class ChatUiHelpers {
   static const List<String> kVariantArchiveOnlyKeys = <String>[
     'messageId',
     'startedAt',
+    'sentAt',
   ];
 
   /// Build a variant snapshot of one assistant message's swappable content.
@@ -659,7 +717,9 @@ class ChatUiHelpers {
     var modified = false;
 
     final toolCallsJson = message['toolCalls'];
-    if (toolCallsJson != null && toolCallsJson.isNotEmpty) {
+    if (toolCallsJson != null &&
+        toolCallsJson.isNotEmpty &&
+        !_knownWithoutStaleCalls(toolCallsJson)) {
       try {
         final decoded = jsonDecode(toolCallsJson);
         if (decoded is List) {
@@ -672,13 +732,17 @@ class ChatUiHelpers {
               toolCalls.map((call) => call.toJson()).toList(),
             );
             modified = true;
+          } else {
+            _rememberWithoutStaleCalls(toolCallsJson);
           }
         }
       } catch (_) {}
     }
 
     final contentBlocksJson = message['contentBlocks'];
-    if (contentBlocksJson != null && contentBlocksJson.isNotEmpty) {
+    if (contentBlocksJson != null &&
+        contentBlocksJson.isNotEmpty &&
+        !_knownWithoutStaleCalls(contentBlocksJson)) {
       try {
         final decoded = jsonDecode(contentBlocksJson);
         if (decoded is List) {
@@ -702,12 +766,46 @@ class ChatUiHelpers {
               blocks.map((block) => block.toJson()).toList(),
             );
             modified = true;
+          } else {
+            _rememberWithoutStaleCalls(contentBlocksJson);
           }
         }
       } catch (_) {}
     }
 
     return modified;
+  }
+
+  /// Payloads (`toolCalls` or `contentBlocks` JSON) already decoded once and
+  /// found to hold no running or pending call.
+  ///
+  /// The recovery above runs over every message of a chat each time the chat
+  /// is loaded, and decodes every payload to look. Its answer depends on the
+  /// payload string alone, so a payload that had nothing to heal never has,
+  /// and the next load of the same chat (in the Agents build: every agent
+  /// switch) can skip the decode. Only the "nothing to heal" answer is kept.
+  ///
+  /// The payloads are plaintext of one account, so the set is emptied when the
+  /// signed-in user changes ([_withoutStaleCallsOwner]).
+  static final Set<String> _withoutStaleCalls = <String>{};
+  static const int _withoutStaleCallsMax = 4000;
+  static String? _withoutStaleCallsOwner;
+
+  static bool _knownWithoutStaleCalls(String json) {
+    final String? user = CurrentUser.id;
+    if (user != _withoutStaleCallsOwner) {
+      _withoutStaleCallsOwner = user;
+      _withoutStaleCalls.clear();
+      return false;
+    }
+    return _withoutStaleCalls.contains(json);
+  }
+
+  static void _rememberWithoutStaleCalls(String json) {
+    if (_withoutStaleCalls.length >= _withoutStaleCallsMax) {
+      _withoutStaleCalls.clear();
+    }
+    _withoutStaleCalls.add(json);
   }
 
   static bool _finalizeStaleToolCallsForRecovery(List<ToolCall> toolCalls) {
@@ -1118,10 +1216,11 @@ class ChatUiHelpers {
         isStreaming && index == messageCount - 1 && isAiMessage;
     // The turn's own clock. `startedAt` is stamped on the placeholder and
     // `generationMs` when the answer is saved, so a running turn counts up
-    // from the first and a finished one shows the second unchanged.
-    final DateTime? turnStartedAt = isAiMessage
-        ? DateTime.tryParse(raw['startedAt'] ?? '')
-        : null;
+    // from the first and a finished one shows the second unchanged. A user
+    // message stamps it as it is created, which is what its bubble clock
+    // shows; only the assistant's copy also drives the live counter, and
+    // that reads it only while a turn streams.
+    final DateTime? turnStartedAt = DateTime.tryParse(raw['startedAt'] ?? '');
     final int? workedForMs = isAiMessage
         ? int.tryParse(raw['generationMs'] ?? '')
         : null;
@@ -1240,3 +1339,78 @@ class ChatUiHelpers {
     );
   }
 }
+
+/// Message grouping — the one place that decides which rows form a run.
+///
+/// A messenger draws a run of consecutive messages from one sender as ONE
+/// group: the touching corners go small, the gap inside the run goes tight.
+/// Both chat screens used to derive that from the sender alone, so a run kept
+/// running across a day divider and across a two-hour pause, and the divider
+/// ended up inside a connected group. The divider and the flags now read the
+/// same rules from here.
+///
+/// The clock of a row: what the day divider and the bubble stamp show. A row
+/// carries `sentAt` when the client wrote it and `startedAt` when the turn
+/// began; a replayed row can carry neither.
+///
+/// Memoized per stamp: every row build asks for its own time and its
+/// neighbours' (day divider, run start, run end), and each answer is a parse
+/// plus a local-time conversion — which on Linux is a time-zone lookup in
+/// libc. A [DateTime] is immutable, so the same string always gives the same
+/// answer.
+DateTime? messageRowTime(Map<String, String> raw) =>
+    _rowTimeFor(raw['sentAt'] ?? raw['startedAt'] ?? '');
+
+const int _kRowTimeCacheCap = 4096;
+final Map<String, DateTime?> _rowTimeCache = <String, DateTime?>{};
+final Map<String, int> _rowLocalDayCache = <String, int>{};
+
+DateTime? _rowTimeFor(String stamp) {
+  if (stamp.isEmpty) return null;
+  if (_rowTimeCache.containsKey(stamp)) return _rowTimeCache[stamp];
+  if (_rowTimeCache.length >= _kRowTimeCacheCap) _rowTimeCache.clear();
+  return _rowTimeCache[stamp] = DateTime.tryParse(stamp);
+}
+
+/// The local calendar day of a row's stamp as `yyyymmdd`, or null when the
+/// row is undated. Memoized like [messageRowTime].
+int? _rowLocalDay(Map<String, String> raw) {
+  final String stamp = raw['sentAt'] ?? raw['startedAt'] ?? '';
+  final int? cached = _rowLocalDayCache[stamp];
+  if (cached != null) return cached;
+  final DateTime? time = _rowTimeFor(stamp);
+  if (time == null) return null;
+  final DateTime local = time.toLocal();
+  if (_rowLocalDayCache.length >= _kRowTimeCacheCap) _rowLocalDayCache.clear();
+  return _rowLocalDayCache[stamp] =
+      local.year * 10000 + local.month * 100 + local.day;
+}
+
+/// Whether a day divider is drawn above [row]. An undated row gets none — an
+/// undated message is no evidence of a day.
+bool messageOpensDay(Map<String, String>? previous, Map<String, String> row) {
+  final int? day = _rowLocalDay(row);
+  if (day == null) return false;
+  final int? before = previous == null ? null : _rowLocalDay(previous);
+  return before == null || before != day;
+}
+
+/// Whether the row at [index] opens a new run: it is the first row, the sender
+/// changed, a day divider sits above it, or the sender paused for longer than
+/// [kBubbleGroupPause].
+bool messageStartsRun(List<Map<String, String>> messages, int index) {
+  if (index <= 0) return true;
+  final Map<String, String> previous = messages[index - 1];
+  final Map<String, String> row = messages[index];
+  if ((previous['sender'] ?? 'ai') != (row['sender'] ?? 'ai')) return true;
+  if (messageOpensDay(previous, row)) return true;
+  final DateTime? before = messageRowTime(previous);
+  final DateTime? now = messageRowTime(row);
+  if (before == null || now == null) return false;
+  return now.difference(before).abs() > kBubbleGroupPause;
+}
+
+/// Whether the row at [index] closes its run: the last row, or the next row
+/// opens a new one.
+bool messageEndsRun(List<Map<String, String>> messages, int index) =>
+    index >= messages.length - 1 || messageStartsRun(messages, index + 1);

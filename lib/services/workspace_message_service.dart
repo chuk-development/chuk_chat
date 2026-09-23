@@ -1,4 +1,8 @@
 // lib/services/workspace_message_service.dart
+// MERGE NOTE: the Agents build stubbed this file (empty project context) —
+// its host owned the system prompt. Upstream's real builder is kept. The stub's
+// injectProjectContext() is gone: upstream removed it after the d31526a pin and
+// nothing calls it.
 import 'package:chuk_chat/models/workspace_model.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';

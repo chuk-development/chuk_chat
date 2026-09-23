@@ -8,6 +8,8 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
@@ -42,6 +44,56 @@ const Set<String> _readOnlyToolNames = <String>{
   'find_tools',
   'view_chat_images',
 };
+
+/// Read-only lookups whose result does not change within one turn: the same
+/// call with the same arguments returns the same data. A repeat of such a
+/// call is answered from the result the turn already holds instead of being
+/// run again. `get_time` is left out (the time moves on) and `find_tools`
+/// too (its result updates the discovered tool set).
+@visibleForTesting
+const Set<String> repeatableLookupToolNames = <String>{
+  'web_search',
+  'web_crawl',
+  'search_places',
+  'search_restaurants',
+  'geocode',
+  'get_route',
+  'weather',
+  'search_chats',
+  'calculate',
+  'view_chat_images',
+};
+
+/// Prefix of a tool result that was answered from an identical earlier call
+/// in the same turn instead of being run again.
+@visibleForTesting
+const String kRepeatedToolCallNote =
+    '[REPEATED CALL] This exact call already ran in this turn. The result '
+    'below is the one it returned then. Do not call it again; answer the user '
+    'from it.';
+
+/// Added to [kRepeatedToolCallNote] on the round that closes the tools.
+@visibleForTesting
+const String kToolsClosedNote =
+    'Tools are now closed for this turn. Write the final answer for the user '
+    'from the results you have.';
+
+/// A key that is equal for two calls with the same name and the same
+/// arguments, whatever the order of the argument keys.
+@visibleForTesting
+String toolCallIdentityKey(String name, Map<String, dynamic> arguments) =>
+    '$name ${jsonEncode(_canonicalJson(arguments))}';
+
+Object? _canonicalJson(Object? value) {
+  if (value is Map) {
+    final keys = value.keys.map((k) => k.toString()).toList()..sort();
+    return <String, Object?>{
+      for (final key in keys) key: _canonicalJson(value[key]),
+    };
+  }
+  if (value is List) return value.map(_canonicalJson).toList();
+  return value;
+}
 
 
 class ToolLoopSession {
@@ -105,6 +157,15 @@ class ToolLoopSession {
   int deferredActionRecoveryAttempts = 0;
   int nonFinalTurnRecoveryAttempts = 0;
   int factCheckRecoveryAttempts = 0;
+
+  /// Rounds whose every call repeated a lookup this turn already held. The
+  /// first is answered from the held results with a note; a second means the
+  /// model ignored the note, and the tools close (see [toolsClosed]).
+  int repeatedLookupRounds = 0;
+
+  /// Set when the model kept repeating lookups it already had. The next pass
+  /// goes out with no tool definitions, so the model can only answer.
+  bool toolsClosed = false;
 
   /// The tool-grounded candidate answer captured just before a fact-check
   /// ([VERIFY]) pass, plus its reasoning. The verify pass keeps this as the
@@ -352,7 +413,12 @@ class ToolCallHandler {
   }
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();
-  factory ToolCallHandler() => _instance;
+
+  /// The build picks the loop. With `FEATURE_AGENTS` off this is upstream's
+  /// client-side tool loop below; with it on, the host runs every tool and
+  /// [AgentsToolCallHandler] only folds the host's run into the reply.
+  factory ToolCallHandler() =>
+      agentsChatCore ? AgentsToolCallHandler.instance : _instance;
 
   final ToolExecutor _toolExecutor = ToolExecutor();
   static const int _maxEmptyFinalRecoveryAttempts = 3;
@@ -498,7 +564,9 @@ class ToolCallHandler {
   /// applies. Mirrors the prompt build: `notes` is withheld when memory is
   /// disabled so it can never be invoked to overwrite/delete memory.
   List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session) {
-    if (!session.toolCallingEnabled || !session.nativeToolCalling) {
+    if (!session.toolCallingEnabled ||
+        !session.nativeToolCalling ||
+        session.toolsClosed) {
       return const <Map<String, dynamic>>[];
     }
     return _toolExecutor.allTools
@@ -1080,6 +1148,72 @@ class ToolCallHandler {
       );
     }
 
+    // Results this turn already holds, keyed by call identity. A read-only
+    // lookup repeated with the same arguments is answered from here instead
+    // of being run again (see [repeatableLookupToolNames]).
+    final priorResults = <String, String>{};
+    for (final prior in session.toolCalls) {
+      if (prior.status != ToolCallStatus.completed) continue;
+      if (!repeatableLookupToolNames.contains(prior.name)) continue;
+      final result = prior.result;
+      if (result == null) continue;
+      // The first real result stands; a repeat answered from here must not
+      // replace it with its own "[REPEATED CALL]" copy.
+      priorResults.putIfAbsent(
+        toolCallIdentityKey(prior.name, prior.arguments),
+        () => result,
+      );
+    }
+    bool isRepeat(EnforcedToolCall call) =>
+        !call.arguments.containsKey(_kMalformedArgumentsKey) &&
+        priorResults.containsKey(
+          toolCallIdentityKey(call.name, call.arguments),
+        );
+
+    // A fact-check pass that asks only for data the turn already holds has
+    // nothing new to check against. Keep the grounded candidate, exactly as
+    // an [OK] would. Without this a model can re-run the same lookup until
+    // the safety limit: "what is the weather in Kiel" ran `weather` twenty
+    // times and ended in the safety-limit apology instead of the answer it
+    // had already written.
+    final bool onlyRepeats =
+        enforceResult.validCalls.isNotEmpty &&
+        enforceResult.validCalls.every(isRepeat);
+    final pendingCandidate = session.factCheckCandidate;
+    if (pendingCandidate != null && onlyRepeats) {
+      final candidateReasoning = session.factCheckCandidateReasoning;
+      session.factCheckCandidate = null;
+      session.factCheckCandidateReasoning = '';
+      return ToolLoopResult.finalAnswer(
+        content: pendingCandidate,
+        reasoning: candidateReasoning,
+        toolCalls: _cloneToolCalls(session.toolCalls),
+      );
+    }
+
+    // Outside a fact-check the same model can do it before it ever answers:
+    // one `weather` call, then the same call again on every pass. The first
+    // such round is answered from the held results with a note. If the model
+    // asks yet again, the tools close: the results still go back (a native
+    // tool call needs its tool message), but the next pass carries no tool
+    // definitions, so the model can only answer. Should it still ask after
+    // that, the turn ends with the safety-limit message instead of looping.
+    bool closingTools = false;
+    if (onlyRepeats) {
+      if (session.toolsClosed) {
+        return ToolLoopResult.finalAnswer(
+          content: _buildSafetyLimitMessage(session),
+          reasoning: effectiveReasoning,
+          toolCalls: _cloneToolCalls(session.toolCalls),
+        );
+      }
+      session.repeatedLookupRounds++;
+      if (session.repeatedLookupRounds >= 2) {
+        session.toolsClosed = true;
+        closingTools = true;
+      }
+    }
+
     final uiCallsById = <String, ToolCall>{};
     for (int i = 0; i < enforceResult.validCalls.length; i++) {
       final call = enforceResult.validCalls[i];
@@ -1117,6 +1251,7 @@ class ToolCallHandler {
         // being run, so starting it here would execute it anyway and leave
         // an unawaited future behind.
         if (call.arguments.containsKey(_kMalformedArgumentsKey)) continue;
+        if (isRepeat(call)) continue;
         inFlight[call.callId] = _toolExecutor.execute(
           call.name,
           call.arguments,
@@ -1139,6 +1274,12 @@ class ToolCallHandler {
             'was not run. Send the call again with complete arguments. '
             'Received: ${call.arguments[_kMalformedArgumentsKey]}';
         isError = true;
+      } else if (isRepeat(call)) {
+        rawResult =
+            '$kRepeatedToolCallNote'
+            '${closingTools ? ' $kToolsClosedNote' : ''}\n\n'
+            '${priorResults[toolCallIdentityKey(call.name, call.arguments)]}';
+        isError = false;
       } else {
         try {
           final executionResult =

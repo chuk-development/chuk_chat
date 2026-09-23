@@ -1,3 +1,9 @@
+// Merge note: upstream's chrome (Scaffold + FloatingAppBar) is kept over
+// Agents's ExpressiveScreen. Agents's own work is kept on top, with
+// FEATURE_AGENTS on only: both dropdowns open the house anchored menu, and the
+// "Full log" switch is added. Without the flag the page is upstream's.
+// Agents had also deleted upstream's auto-title rows and the Downloads row
+// because its product has neither; the merged app has both, so they stay.
 // lib/pages/customization_page.dart
 import 'dart:async';
 
@@ -17,6 +23,10 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class CustomizationPage extends StatefulWidget {
   final AppShellConfig config;
@@ -42,6 +52,15 @@ class _CustomizationPageState extends State<CustomizationPage> {
   late bool _selectedIncludeToolResultsInHistory;
   // Language selection state
   late String _selectedLocale;
+
+  /// The languages the picker offers, in the order it shows them.
+  static const Map<String, String> _localeNames = <String, String>{
+    'en': 'English',
+    'de': 'Deutsch',
+    'es': 'Español',
+    'fr': 'Français',
+    'pt': 'Português',
+  };
   // Auto title generation state
   bool _autoGenerateTitles = false;
   bool _isLoadingTitleSetting = true;
@@ -240,30 +259,40 @@ class _CustomizationPageState extends State<CustomizationPage> {
                 icon: Icons.language,
                 title: l.language,
                 subtitle: l.languageSubtitle,
-                trailing: DropdownButtonHideUnderline(
-                  child: DropdownButton<String>(
-                    icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
-                    value: _selectedLocale,
-                    dropdownColor: m3.surfaceContainerHigh,
-                    borderRadius: kBorderRadiusMenu,
-                    focusColor: Colors.transparent,
-                    items: const [
-                      DropdownMenuItem(value: 'en', child: Text('English')),
-                      DropdownMenuItem(value: 'de', child: Text('Deutsch')),
-                      DropdownMenuItem(value: 'es', child: Text('Español')),
-                      DropdownMenuItem(value: 'fr', child: Text('Français')),
-                      DropdownMenuItem(value: 'pt', child: Text('Português')),
-                    ],
-                    onChanged: (String? value) {
-                      if (value != null && value != _selectedLocale) {
-                        setState(() {
-                          _selectedLocale = value;
-                        });
-                        widget.config.setUiLocale(value);
-                      }
-                    },
-                  ),
-                ),
+                // The Agents build opens the house anchored menu; chuk_chat
+                // keeps upstream's Material dropdown.
+                trailing: !agentsChatCore
+                    ? DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          icon: const AppIcon(
+                            Icons.keyboard_arrow_down_rounded,
+                          ),
+                          value: _selectedLocale,
+                          dropdownColor: m3.surfaceContainerHigh,
+                          borderRadius: kBorderRadiusMenu,
+                          focusColor: Colors.transparent,
+                          items: [
+                            for (final MapEntry<String, String> entry
+                                in _localeNames.entries)
+                              DropdownMenuItem(
+                                value: entry.key,
+                                child: Text(entry.value),
+                              ),
+                          ],
+                          onChanged: (String? value) {
+                            if (value != null && value != _selectedLocale) {
+                              setState(() {
+                                _selectedLocale = value;
+                              });
+                              widget.config.setUiLocale(value);
+                            }
+                          },
+                        ),
+                      )
+                    : MenuAnchorButton(
+                        label: _localeNames[_selectedLocale] ?? _selectedLocale,
+                        onTap: _pickLocale,
+                      ),
               ),
             ],
           ),
@@ -393,36 +422,50 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     ),
                     const SizedBox(height: 10),
                     ExpressiveField(
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<String>(
-                          icon: const AppIcon(Icons.keyboard_arrow_down_rounded),
-                          value: _selectedChatFontFamily,
-                          isExpanded: true,
-                          dropdownColor: m3.surfaceContainerHigh,
-                          borderRadius: kBorderRadiusMenu,
-                          // The default focus tint is a full-bleed rectangle
-                          // drawn behind the rounded container — it is what
-                          // makes a focused dropdown look square. The
-                          // container already carries the shape.
-                          focusColor: Colors.transparent,
-                          items: kSupportedChatFontFamilies
-                              .map((id) => DropdownMenuItem<String>(
-                                    value: id,
-                                    child: Text(_fontFamilyLabel(id, l)),
-                                  ))
-                              .toList(),
-                          onChanged: (String? value) {
-                            if (value == null ||
-                                value == _selectedChatFontFamily) {
-                              return;
-                            }
-                            setState(() {
-                              _selectedChatFontFamily = value;
-                            });
-                            widget.config.setChatFontFamily(value);
-                          },
-                        ),
-                      ),
+                      child: !agentsChatCore
+                          ? DropdownButtonHideUnderline(
+                              child: DropdownButton<String>(
+                                icon: const AppIcon(
+                                  Icons.keyboard_arrow_down_rounded,
+                                ),
+                                value: _selectedChatFontFamily,
+                                isExpanded: true,
+                                dropdownColor: m3.surfaceContainerHigh,
+                                borderRadius: kBorderRadiusMenu,
+                                // The default focus tint is a full-bleed
+                                // rectangle drawn behind the rounded
+                                // container — it is what makes a focused
+                                // dropdown look square. The container
+                                // already carries the shape.
+                                focusColor: Colors.transparent,
+                                items: kSupportedChatFontFamilies
+                                    .map(
+                                      (id) => DropdownMenuItem<String>(
+                                        value: id,
+                                        child: Text(_fontFamilyLabel(id, l)),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (String? value) {
+                                  if (value == null ||
+                                      value == _selectedChatFontFamily) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    _selectedChatFontFamily = value;
+                                  });
+                                  widget.config.setChatFontFamily(value);
+                                },
+                              ),
+                            )
+                          : MenuAnchorButton(
+                              label: _fontFamilyLabel(
+                                _selectedChatFontFamily,
+                                l,
+                              ),
+                              expand: true,
+                              onTap: _pickChatFontFamily,
+                            ),
                     ),
                     const SizedBox(height: 12),
                     ExpressiveField(
@@ -577,6 +620,30 @@ class _CustomizationPageState extends State<CustomizationPage> {
             ],
           ),
 
+          // AGENTS: whether a thread shows every command, MCP call and browser
+          // step, or just the answer (docs/PRODUCT_PHILOSOPHY.md). Default off.
+          // Agents put this where it had deleted upstream's auto-title rows;
+          // the merged app keeps both, so it sits next to them instead.
+          if (agentsChatCore) ExpressiveSectionHeader('Detail'),
+          if (agentsChatCore)
+            ListenableBuilder(
+              listenable: VerboseService.instance,
+              builder: (context, _) => ExpressiveGroup(
+                children: [
+                  ExpressiveSwitchRow(
+                    icon: Icons.terminal_outlined,
+                    title: 'Full log',
+                    subtitle:
+                        'Show every command, tool call and browser step in the '
+                        'thread, not just the answer.',
+                    value: VerboseService.instance.enabled,
+                    onChanged: (bool value) =>
+                        VerboseService.instance.setEnabled(value),
+                  ),
+                ],
+              ),
+            ),
+
           // Downloads: nav row into DownloadSettingsPage.
           ExpressiveSectionHeader(l.downloads),
           ExpressiveGroup(
@@ -631,6 +698,56 @@ class _CustomizationPageState extends State<CustomizationPage> {
         ],
       ),
     );
+  }
+
+  /// Opens the house menu on the language anchor. The answer goes through
+  /// the same body the dropdown's `onChanged` had.
+  Future<void> _pickLocale(BuildContext anchorContext) async {
+    final String? value = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      items: <PopupMenuEntry<String>>[
+        for (final MapEntry<String, String> entry in _localeNames.entries)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: entry.key,
+            child: MenuActionRow(
+              label: entry.value,
+              selected: entry.key == _selectedLocale,
+            ),
+          ),
+      ],
+    );
+    if (!mounted || value == null || value == _selectedLocale) return;
+    setState(() {
+      _selectedLocale = value;
+    });
+    widget.config.setUiLocale(value);
+  }
+
+  Future<void> _pickChatFontFamily(BuildContext anchorContext) async {
+    final AppLocalizations l = AppLocalizations.of(anchorContext)!;
+    final String? value = await showAnchoredMenu<String>(
+      anchorContext,
+      color: Theme.of(anchorContext).colorScheme.surfaceContainerHigh,
+      minWidth: 260,
+      items: <PopupMenuEntry<String>>[
+        for (final String id in kSupportedChatFontFamilies)
+          PopupMenuItem<String>(
+            padding: EdgeInsets.zero,
+            value: id,
+            child: MenuActionRow(
+              label: _fontFamilyLabel(id, l),
+              selected: id == _selectedChatFontFamily,
+            ),
+          ),
+      ],
+    );
+    if (!mounted || value == null || value == _selectedChatFontFamily) return;
+    setState(() {
+      _selectedChatFontFamily = value;
+    });
+    widget.config.setChatFontFamily(value);
   }
 
   String _fontFamilyLabel(String id, AppLocalizations l) {

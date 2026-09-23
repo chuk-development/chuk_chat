@@ -115,7 +115,9 @@ class LocalChatCacheService {
           );
         }
         if (oldVersion < 4) {
-          await db.execute('ALTER TABLE chat_cache ADD COLUMN search_text TEXT');
+          await db.execute(
+            'ALTER TABLE chat_cache ADD COLUMN search_text TEXT',
+          );
           await _compressExistingPayloads(db);
           needsVacuum = true;
         }
@@ -237,6 +239,25 @@ class LocalChatCacheService {
       'key': key,
       'value': value,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Write [value] under [key] only when the key holds nothing yet. Returns
+  /// true when this call wrote it. The check and the write run in one
+  /// transaction, so a newer value another writer stored in between is never
+  /// overwritten — which is what a one-time migration of an old copy needs.
+  static Future<bool> kvSetIfAbsent(String key, String value) async {
+    final db = await _getDb();
+    return db.transaction((txn) async {
+      final rows = await txn.query(
+        'kv_cache',
+        columns: ['key'],
+        where: 'key = ?',
+        whereArgs: [key],
+      );
+      if (rows.isNotEmpty) return false;
+      await txn.insert('kv_cache', {'key': key, 'value': value});
+      return true;
+    });
   }
 
   /// Delete a cached value by key.
@@ -835,9 +856,7 @@ class LocalChatCacheService {
     if (stored is List<int>) {
       return utf8.decode(_payloadCodec.decode(stored));
     }
-    throw StateError(
-      'Unsupported payload storage type: ${stored.runtimeType}',
-    );
+    throw StateError('Unsupported payload storage type: ${stored.runtimeType}');
   }
 
   static Map<String, dynamic> _toDbRow(

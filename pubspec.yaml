@@ -24,6 +24,10 @@ environment:
 # 2.x still hands its palette back as a `material_ui` ColorScheme; main.dart
 # imports material_ui directly and converts it to a Flutter ColorScheme.
 #
+# Merge note: the Agents tree capped dynamic_color <2.0.0, permission_handler
+# <13.0.0 and flutter_secure_storage at ^10.0.0. All three caps are dropped here
+# in favour of upstream's higher versions — compileSdk 37 above is exactly the
+# reason those caps existed, and the app ships on upstream's versions.
 # file_picker 13 (`PlatformFile.length()` is now `Future<int?>`) needed the
 # vendored markdraw's `file_picker <13` cap widened to `<14`; markdraw calls no
 # file_picker API (see vendor/markdraw/lib/src/ui/markdraw_file_handler.dart).
@@ -42,6 +46,8 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  # Pinned by flutter_localizations; `any` lets pub pick the matching build.
+  intl: any
 
   cupertino_icons: ^1.0.8
   flutter_riverpod: ^3.4.2  # State management for chat runtime / streaming (perf re-architecture)
@@ -73,7 +79,7 @@ dependencies:
   # major version on its whole voice-input path. The surface answers in
   # writing, so no speech-synthesis package is pulled in.
   url_launcher: ^6.3.0
-  path_provider: ^2.1.4
+  path_provider: ^2.1.6  # Agents needs >=2.1.6; upstream asked for ^2.1.4
   markdown_widget: ^2.3.2+8
   markdown: ^7.3.0
   flutter_math_fork: ^0.7.2
@@ -119,6 +125,43 @@ dependencies:
   markdraw:
     path: vendor/markdraw
 
+  # --- Agents platform -------------------------------------------------------
+  # Everything below came in with the Agents tree. Nothing above depends on it;
+  # the app builds without the Agents feature, but these are what it needs when
+  # FEATURE_AGENTS is on.
+
+  # Material motion: the container transform that grows a chat out of its
+  # inbox row, and the shared-axis transition between filters. Used by the
+  # expressive UI layer (lib/ui/expressive/**).
+  animations: ^2.0.11
+
+  # The agent's screen on phones and tablets: noVNC runs inside this WebView
+  # and decodes Tight/ZRLE, which the pure-Dart client cannot (bead
+  # cowork-dvsw). The official plugin, not an alternative: it needs nothing
+  # more than a page load, a JavaScript channel and a navigation guard, and it
+  # uses the system WebView, so it adds no engine to the APK. Desktop keeps
+  # the Dart client below — this plugin has no Linux implementation.
+  webview_flutter: ^4.14.1
+  # Vendored fork of flutter_rfb 0.6.2 (third_party/flutter_rfb): the clipboard
+  # sync is stripped out so the VNC tunnel carries strictly RFB derived from
+  # user input + the render loop — no local-clipboard exfil into the sandbox and
+  # no writing the sandbox clipboard back onto the host. dart_rfb stays from pub.
+  flutter_rfb:
+    path: third_party/flutter_rfb
+  # Direct dependency so app tests can exercise the Tight decoder
+  # (third_party/dart_rfb) against real x11vnc vectors.
+  dart_rfb:
+    path: third_party/dart_rfb
+
+  # The QR scanner the mobile pairing screen opens with. Android/iOS/macOS/web
+  # only — there is no Linux or Windows implementation, so every use is gated
+  # on the platform and the code field is what desktop gets.
+  mobile_scanner: ^7.4.0
+
+  # Push wake-up for the agent host.
+  firebase_core: ^4.1.1
+  firebase_messaging: ^16.0.3
+
 # super_native_extensions (via markdraw -> super_clipboard) caps device_info_plus
 # at <12.0.0, which pins win32 to 5.x and blocks file_picker 12, share_plus 13,
 # package_info_plus 10 and geolocator 14.0.3. It only reads
@@ -140,6 +183,20 @@ flutter:
     - assets/wordmark.svg
     - assets/icons/
     - assets/icons/hugeicons/
+    # The agent's-screen viewer page and the noVNC client it drives. Served to
+    # the WebView by the loopback server in lib/widgets/vnc_local_server.dart,
+    # never fetched from the network. Asset folders are not recursive, so
+    # every subfolder of the vendored library is listed by hand.
+    - assets/vnc/
+    - assets/novnc/
+    - assets/novnc/core/
+    - assets/novnc/core/crypto/
+    - assets/novnc/core/decoders/
+    - assets/novnc/core/input/
+    - assets/novnc/core/util/
+    - assets/novnc/vendor/pako/
+    - assets/novnc/vendor/pako/lib/utils/
+    - assets/novnc/vendor/pako/lib/zlib/
     - assets/icons/chuk_chat_tray_brand.png
     - assets/mcp_icons/
     - web/icons/Icon-512.png

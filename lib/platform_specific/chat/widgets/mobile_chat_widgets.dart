@@ -3,7 +3,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+// Agents imported ui/expressive/icon_map.dart and ui/expressive/waveform.dart
+// here. Both are byte copies of the widgets/ files below, so importing both
+// would make AppIcon and LiveWaveform ambiguous.
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -73,9 +77,11 @@ Widget buildTinyActionButton({
   // under a Theme, and threading one through would touch all of them.
   final result = Builder(
     builder: (BuildContext context) {
-      final Color foregroundColor = Theme.of(
-        context,
-      ).accentButtonForeground(color);
+      // Agents keeps the original app's one glyph rule for this button
+      // (luminance over 0.5 is black); upstream's goes through the theme.
+      final Color foregroundColor = agentsChatCore
+          ? (color.computeLuminance() > 0.5 ? Colors.black : Colors.white)
+          : Theme.of(context).accentButtonForeground(color);
             return Material(
           color: Colors.transparent,
           child: InkWell(

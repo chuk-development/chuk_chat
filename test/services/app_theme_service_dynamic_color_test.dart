@@ -151,4 +151,14 @@ void main() {
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool('dynamicColorEnabled'), true);
   });
+
+  test('a debounced sync with Supabase never initialised does not throw',
+      () async {
+    // The theme and customization syncs fire from a 500 ms timer. Before the
+    // guard, that timer read `SupabaseService.auth` and threw into whichever
+    // test happened to be running — the file's old flake.
+    service.setThemeMode(Brightness.light);
+    service.setShowReasoningTokens(true);
+    await Future<void>.delayed(const Duration(milliseconds: 700));
+  });
 }

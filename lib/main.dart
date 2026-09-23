@@ -1,8 +1,27 @@
 // lib/main.dart
+//
+// Merge note (Agents into chuk_chat). Both sides had written their own app
+// entry, so this file is neither side's copy: it is upstream's startup with
+// the Agents startup and the Agents home grafted onto it.
+//   * upstream keeps: the log deduper, certificate pinning, the offline retry
+//     manager, the window-close handler, developer options, diagnostics, the
+//     core-service init, the session manager, the settings sync on resume and
+//     at startup, the system tray, the completion notifications, the
+//     onboarding gate, the navigator key and tour observer, ProviderScope,
+//     and the dynamic_color 2.x `material_ui` conversion.
+//   * Agents keeps: setting an expired session aside before gotrue sees it,
+//     the awaited Supabase init, the local chat-storage bootstrap, the verbose
+//     flag, its own notifications, the ThemeController bridge with the
+//     `theme_mode_v1` migration, AppLifecycleObserver, and its AuthGate ->
+//     MessengerShell home.
+// One thing could not be kept as it stood, and is commented at its site: the
+// app state's own WidgetsBindingObserver (AppLifecycleObserver does that job
+// now, and registering both would fire every lifecycle callback twice).
+
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dynamic_color/dynamic_color.dart';
@@ -11,12 +30,16 @@ import 'package:dynamic_color/dynamic_color.dart';
 // primary/surface/onSurface downstream, so convert to a Flutter ColorScheme at
 // the callsite and keep the rest of the app on the framework type.
 import 'package:material_ui/material_ui.dart' as mui;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/assistant/assistant_overlay.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
-
 import 'package:chuk_chat/models/app_shell_config.dart';
+import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper.dart';
 import 'package:chuk_chat/utils/certificate_pinning_register.dart'
     as cert_register;
 import 'package:chuk_chat/services/api_config_service.dart';
@@ -26,20 +49,24 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
-import 'package:chuk_chat/services/settings_sync_service.dart';
-import 'package:chuk_chat/services/session_manager_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
+import 'package:chuk_chat/services/session_manager_service.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
+import 'package:chuk_chat/services/settings/theme_controller.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
+import 'package:chuk_chat/services/settings_sync_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_storage_bootstrap.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
-import 'package:chuk_chat/platform_specific/root_wrapper.dart';
-import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Collapse consecutive identical debug log lines into a single line with a
 /// `(×N)` count, so spammy repeats (e.g. "[Lifecycle] App resumed" firing
@@ -95,8 +122,54 @@ Future<void> main() async {
     debugPrint('[API] Using server: ${ApiConfigService.apiBaseUrl}');
   }
 
+  // Bead cowork-2n1: an expired persisted session is set aside BEFORE gotrue
+  // sees it. Refreshing it blindly would fail (and log the user out) when the
+  // paired host rotated the pair while the app was away; AuthGate recovers
+  // the session through the host instead. Must run before any Supabase init.
+  // Agents only: without a paired host there is nobody to recover through,
+  // and upstream chuk_chat lets gotrue refresh the expired session itself.
+  if (kFeatureAgents) await SessionStash.setAsideExpiredSession();
+
+  // Agents awaits the Supabase init here so the stash decision above is in
+  // force before the first frame. The call is idempotent, so upstream's
+  // background `initializeCoreServices()` below still does the rest of its
+  // work (model capabilities, encryption key preload) and just skips this.
+  //
+  // This await is also what lets the merged app keep ONE auth gate. Upstream's
+  // gate began with `AppInitializationService.waitForSupabase()` because its
+  // main() started Supabase unawaited, so the gate could mount before there
+  // was an auth client to read; the Agents gate reads
+  // `SupabaseService.isInitialized` once in initState and would take "not
+  // ready" for "signed out". Initialising before runApp removes that window,
+  // so the Agents gate is safe here and keeps its own extra behaviour (the
+  // expired-pair recovery above).
+  //
+  // The failure mode upstream's gate also covered — Supabase never comes up,
+  // e.g. a build with no credentials — is covered by this catch instead: the
+  // app still starts, and the gate finds no session and shows the login page,
+  // which is exactly what upstream's `ready == false` branch did. Crashing
+  // here would leave a black app.
+  try {
+    await SupabaseService.initialize();
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('⚠️ [Main] Supabase init failed: $error');
+    }
+  }
+
   // Keep chat storage cache deterministic to avoid early access races.
   await initChatStorageCache();
+
+  // Chat storage as in chuk_chat (bead cowork-sha): follow the auth session to
+  // load the local chat cache and start the cloud sync. Agents only: with the
+  // flag off upstream's SessionManager / AppInitializationService do this,
+  // and upstream's main has no such call.
+  if (agentsChatCore) AgentsChatStorageBootstrap.start();
+
+  // Load the verbose-view flag once at startup, so the first frame shows the
+  // right view. The service is safe to read before this, but an early load
+  // avoids a flip on the first paint.
+  await VerboseService.instance.load();
 
   // Persistent offline queue + retry manager. Await init before wiring
   // retry/executor so the drain loop never observes an uninitialized queue.
@@ -144,32 +217,52 @@ Future<void> main() async {
     ),
   );
 
-  // Initialize core services (Supabase, etc.) in background
+  // WS-7: "answer ready" toasts (local plugin, Linux included) and the push
+  // token row. Best-effort: without Firebase keys push stays off, the app is
+  // unchanged.
+  unawaited(AgentsNotifications.instance.initialize());
+
+  // Initialize core services (model capabilities, encryption preload, …) in
+  // background.
   unawaited(AppInitializationService.instance.initializeCoreServices());
 
   // Use default theme immediately - load preferences async after first frame.
   // ProviderScope hosts the Riverpod container for the chat runtime / streaming
   // state introduced by the chat-UI performance re-architecture.
-  runApp(const ProviderScope(child: ChukChatApp()));
+  runApp(const ProviderScope(child: AgentsApp()));
 }
 
-class ChukChatApp extends StatefulWidget {
-  const ChukChatApp({super.key});
+class AgentsApp extends StatefulWidget {
+  const AgentsApp({super.key});
 
   @override
-  State<ChukChatApp> createState() => _ChukChatAppState();
+  State<AgentsApp> createState() => _AgentsAppState();
 }
 
-class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
+class _AgentsAppState extends State<AgentsApp> {
   static final GlobalKey<NavigatorState> navigatorKey =
       GlobalKey<NavigatorState>();
 
   // Services
+  /// The single source of truth for theme, accent, fonts, UI scale and the
+  /// customization switches.
   final AppThemeService _themeService = AppThemeService.instance;
   final AppLifecycleService _lifecycleService = AppLifecycleService.instance;
   final SessionManagerService _sessionManager = SessionManagerService.instance;
   final AppInitializationService _initService =
       AppInitializationService.instance;
+
+  /// Kept alive only as a bridge: the settings pages that are still Agents's
+  /// own (`settings_page`, `theme_settings_page`) read and write the theme
+  /// through this notifier. It is fed from [_themeService] in both directions,
+  /// so either surface can drive the theme.
+  // TODO(WS-2): delete `services/settings/theme_controller.dart` with the old
+  // settings pages, once chuk_chat's `theme_page` replaces them.
+  final ThemeController _theme = ThemeController();
+
+  /// Guards the two-way bridge against feeding a change straight back.
+  bool _bridging = false;
+
   late final DateTime _appStartedAt;
   Timer? _resumeSettingsSyncTimer;
   DateTime? _lastResumeSettingsSyncAt;
@@ -183,11 +276,16 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _appStartedAt = DateTime.now();
-    WidgetsBinding.instance.addObserver(this);
+    // Merge note: upstream made this state a WidgetsBindingObserver and fed
+    // `handleLifecycleState` from `didChangeAppLifecycleState`. The Agents
+    // side moved that wire into the AppLifecycleObserver widget in `build`
+    // (testable without booting the app), so the state no longer observes the
+    // binding itself — registering both would fire every callback twice.
     _lifecycleService.addOnResumeCallback(_syncSettingsInBackground);
 
     // Listen to theme changes
     _themeService.addListener(_onThemeChanged);
+    _theme.addListener(_onThemeControllerChanged);
 
     // Initialize after first frame (session manager needs Supabase ready)
     WidgetsBinding.instance.addPostFrameCallback((_) => _initializeApp());
@@ -215,7 +313,58 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
   }
 
   void _onThemeChanged() {
+    _pushServiceIntoController();
     if (mounted) setState(() {});
+  }
+
+  void _pushServiceIntoController() {
+    final mode = _themeService.themeMode == Brightness.dark
+        ? ThemeMode.dark
+        : ThemeMode.light;
+    if (_theme.value == mode) return;
+    _bridging = true;
+    _theme.value = mode;
+    _bridging = false;
+  }
+
+  void _onThemeControllerChanged() {
+    if (_bridging) return;
+    final brightness = switch (_theme.value) {
+      ThemeMode.light => Brightness.light,
+      ThemeMode.dark => Brightness.dark,
+      ThemeMode.system => PlatformDispatcher.instance.platformBrightness,
+    };
+    if (_themeService.themeMode == brightness) return;
+    _themeService.setThemeMode(brightness);
+  }
+
+  /// One-shot migration off Agents's own `theme_mode_v1` preference.
+  ///
+  /// The old key holds a [ThemeMode] name (`system` / `light` / `dark`).
+  /// [AppThemeService] stores a [Brightness], so `system` is resolved once
+  /// against the platform brightness at migration time. The key is deleted
+  /// afterwards so the migration never runs twice.
+  Future<void> _migrateLegacyThemeMode() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      const legacyKey = 'theme_mode_v1';
+      final raw = prefs.getString(legacyKey);
+      if (raw == null) return;
+
+      final Brightness resolved;
+      switch (raw) {
+        case 'light':
+          resolved = Brightness.light;
+        case 'dark':
+          resolved = Brightness.dark;
+        default:
+          resolved = PlatformDispatcher.instance.platformBrightness;
+      }
+      _themeService.setThemeMode(resolved);
+      await prefs.remove(legacyKey);
+    } catch (_) {
+      // A failed migration just leaves the imported default in place.
+    }
   }
 
   void _onPasswordMismatch() {
@@ -313,35 +462,38 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
     // because the initial auth event fires synchronously and triggers
     // loadFromSupabaseAsync() — which would race with loadFromPrefs().
     await _themeService.loadFromPrefs();
+    // Agents's one-shot `theme_mode_v1` migration rides here, in the same
+    // window: after the prefs are in, before anything cross-device lands.
+    await _migrateLegacyThemeMode();
     if (!mounted) return;
+    _pushServiceIntoController();
 
     // Initialize session manager now that Supabase is ready and local
     // theme is loaded. This subscribes to onAuthStateChange and handles
     // user session initialization (chat loading, sync, theme from Supabase).
+    // Its auth event is what pulls the cross-device theme; Agents called
+    // `loadFromSupabaseAsync()` here itself, which would now be a second,
+    // racing pull of the same values.
     _sessionManager.initialize(onPasswordMismatch: _onPasswordMismatch);
 
     // Defer non-critical startup work so first interaction stays responsive.
     _scheduleStartupSettingsSync();
     _initializeNotificationsInBackground();
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
     _resumeSettingsSyncTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
     _lifecycleService.removeOnResumeCallback(_syncSettingsInBackground);
     _themeService.removeListener(_onThemeChanged);
+    _theme.removeListener(_onThemeControllerChanged);
+    _theme.dispose();
     _lifecycleService.dispose();
     _sessionManager.dispose();
     _themeService.dispose();
     unawaited(SystemTrayService.instance.dispose());
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    super.didChangeAppLifecycleState(state);
-    _lifecycleService.handleLifecycleState(state);
   }
 
   /// True when this Flutter engine was started by the Android assist
@@ -354,79 +506,111 @@ class _ChukChatAppState extends State<ChukChatApp> with WidgetsBindingObserver {
       assistantOverlayRouteName;
 
   /// The app home: auth gate, onboarding gate, then the shell.
-  Widget _buildHome() => AuthGate(
-    loadingBuilder: (context) =>
-        const Scaffold(body: Center(child: CircularProgressIndicator())),
-    signedOutBuilder: (context) => const LoginPage(),
-    signedInBuilder: (context) {
-      final config = _buildShellConfig();
-      return _OnboardingFirstLaunchGate(
-        shellConfig: config,
-        child: RootWrapper(config: config),
-      );
-    },
+  ///
+  /// Two merge decisions live here.
+  ///
+  /// The gate: one gate, the Agents one. Upstream's gate did two things —
+  /// wait for a background Supabase init before reading the session, and show
+  /// the signed-out UI when that init failed. main() now awaits the init (and
+  /// catches its failure), so neither is left for the gate to do, and the
+  /// Agents gate adds the expired-pair recovery on top. A user with no host
+  /// paired is unaffected: with nothing set aside the gate reads gotrue and
+  /// goes straight to the shell or the login page, and if their stored session
+  /// HAD expired the recovery finds no pairing, refreshes the stored token
+  /// against gotrue directly — what gotrue would have done anyway — and falls
+  /// through to the login page when gotrue refuses it. No host is ever
+  /// required to reach the app.
+  ///
+  /// The shell: Agents's MessengerShell when the app is built with
+  /// `--dart-define=FEATURE_AGENTS=true`, upstream's RootWrapper otherwise —
+  /// the split the runbook asks for. The onboarding tour is chuk_chat's and
+  /// walks chuk_chat's screens; the Agents app never had one, so it wraps only
+  /// the chuk_chat shell.
+  Widget _buildHome(AppShellConfig shellConfig) => AuthGate(
+    themeController: _theme,
+    buildLogin: (_) => const LoginPage(),
+    buildShell: (_) => kFeatureAgents
+        ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
+        : _OnboardingFirstLaunchGate(
+            shellConfig: shellConfig,
+            child: RootWrapper(config: shellConfig),
+          ),
   );
 
   @override
   Widget build(BuildContext context) {
-    // DynamicColorBuilder exposes the platform's Material You palette (when
-    // available) and rebuilds automatically when the system colours change,
-    // so the app follows wallpaper/accent changes live when the user has
-    // enabled dynamic colour.
-    return DynamicColorBuilder(
-      builder: (mui.ColorScheme? lightDynamic, mui.ColorScheme? darkDynamic) {
-        return MaterialApp(
-          navigatorKey: navigatorKey,
-          navigatorObservers: [OnboardingTourController.navigatorObserver],
-          title: 'Chuk Chat',
-          debugShowCheckedModeBanner: false,
-          theme: _themeService.buildTheme(
-            lightDynamic: _toFlutterScheme(lightDynamic, Brightness.light),
-            darkDynamic: _toFlutterScheme(darkDynamic, Brightness.dark),
-          ),
-          locale: Locale(_themeService.uiLocale),
-          supportedLocales: AppLocalizations.supportedLocales,
-          localizationsDelegates: const [
-            AppLocalizations.delegate,
-            GlobalMaterialLocalizations.delegate,
-            GlobalWidgetsLocalizations.delegate,
-            GlobalCupertinoLocalizations.delegate,
-          ],
-          builder: (context, child) {
-            if (child == null) return const SizedBox.shrink();
+    // The app-level lifecycle wire. The chat UI registers resume and pause
+    // callbacks on `AppLifecycleService`, and nothing in Agents ever called
+    // `handleLifecycleState` — no widget observed the binding at app level, so
+    // those callbacks never fired.
+    return AppLifecycleObserver(
+      // DynamicColorBuilder exposes the platform's Material You palette (when
+      // available) and rebuilds automatically when the system colours change,
+      // so the app follows wallpaper/accent changes live when the user has
+      // enabled dynamic colour.
+      child: DynamicColorBuilder(
+        builder: (mui.ColorScheme? lightDynamic, mui.ColorScheme? darkDynamic) {
+          // chuk_chat hands its shell config straight to the shell
+          // (`RootWrapper(config: …)`); so does Agents, through AuthGate's
+          // shell builder (bead cowork-8y2). Rebuilt with the app, so a theme
+          // change reaches the shell like any other rebuild.
+          final AppShellConfig shellConfig = _buildShellConfig();
+          return MaterialApp(
+            navigatorKey: navigatorKey,
+            navigatorObservers: [OnboardingTourController.navigatorObserver],
+            title: 'Chuk Chat',
+            debugShowCheckedModeBanner: false,
+            theme: _themeService.buildTheme(
+              lightDynamic: _toFlutterScheme(lightDynamic, Brightness.light),
+              darkDynamic: _toFlutterScheme(darkDynamic, Brightness.dark),
+            ),
+            locale: Locale(_themeService.uiLocale),
+            supportedLocales: AppLocalizations.supportedLocales,
+            localizationsDelegates: const [
+              AppLocalizations.delegate,
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            builder: (context, child) {
+              if (child == null) return const SizedBox.shrink();
 
-            // Apply user-chosen UI scale to all text in the app via MediaQuery.
-            // This is the safest scaling approach — it doesn't break layout
-            // calculations the way Transform.scale would.
-            return MediaQuery(
-              data: MediaQuery.of(
-                context,
-              ).copyWith(textScaler: TextScaler.linear(_themeService.uiScale)),
-              child: child,
-            );
-          },
-          // The Android assist activity starts this engine on
-          // [assistantOverlayRouteName] and the surface has to be the ONLY
-          // route: `SystemNavigator.pop()` then finishes the activity and the
-          // app underneath comes back, instead of popping to a page below.
-          //
-          // Reading the engine's initial route and swapping `home` does that.
-          // Routing it through `onGenerateInitialRoutes` does NOT — `home:`
-          // and `onGenerateInitialRoutes:` are mutually exclusive, and moving
-          // the app home into the latter renders a permanently black app (a
-          // release build on a Pixel showed nothing but the system bars).
-          home: _isAssistantLaunch
-              ? const AssistantOverlayPage()
-              : _buildHome(),
-        );
-      },
+              // Apply user-chosen UI scale to all text in the app via
+              // MediaQuery. This is the safest scaling approach — it doesn't
+              // break layout calculations the way Transform.scale would.
+              return MediaQuery(
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: TextScaler.linear(_themeService.uiScale),
+                ),
+                child: child,
+              );
+            },
+            // The Android assist activity starts this engine on
+            // [assistantOverlayRouteName] and the surface has to be the ONLY
+            // route: `SystemNavigator.pop()` then finishes the activity and the
+            // app underneath comes back, instead of popping to a page below.
+            //
+            // Reading the engine's initial route and swapping `home` does that.
+            // Routing it through `onGenerateInitialRoutes` does NOT — `home:`
+            // and `onGenerateInitialRoutes:` are mutually exclusive, and moving
+            // the app home into the latter renders a permanently black app (a
+            // release build on a Pixel showed nothing but the system bars).
+            home: _isAssistantLaunch
+                ? const AssistantOverlayPage()
+                : _buildHome(shellConfig),
+          );
+        },
+      ),
     );
   }
 
   /// Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
   /// a Flutter [ColorScheme]. Only the roles the theme reads are relevant, but
   /// we fill every required constructor field so the result is a valid scheme.
-  ColorScheme? _toFlutterScheme(mui.ColorScheme? scheme, Brightness brightness) {
+  ColorScheme? _toFlutterScheme(
+    mui.ColorScheme? scheme,
+    Brightness brightness,
+  ) {
     if (scheme == null) return null;
     return ColorScheme(
       brightness: brightness,

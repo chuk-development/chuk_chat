@@ -1,7 +1,13 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The Agents tree declared this feature android:required="false" (its QR
+         pairing screen falls back to typing the code). Upstream ships it as
+         required, so the shipped filter is kept; widen it if Agents pairing
+         must reach camera-less devices. -->
     <uses-feature android:name="android.hardware.camera" />
     <uses-feature android:name="android.hardware.camera.autofocus" />
+    <!-- CAMERA is also what the Agents QR pairing screen scans with. -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
@@ -130,6 +136,16 @@
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
             android:resource="@drawable/ic_notification" />
+        <!-- Colour behind that icon, and the channel a background push lands
+             in. The id must stay equal to kAgentsNotificationChannelId in
+             lib/services/notifications/local_notifications.dart, which is what
+             creates the channel. -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/agents_notification" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="cowork_answer_ready" />
         <!-- Foreground service for AI streaming -->
         <service
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"

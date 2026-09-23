@@ -2,6 +2,11 @@
 // `kv_cache` through LocalChatCacheService — model catalogue cache, MCP
 // connections and the sidebar title list all moved there out of
 // SharedPreferences. Points the cache DB at a throwaway temp dir per test.
+//
+// path_provider_platform_interface and plugin_platform_interface come in
+// transitively with path_provider; they are test-only plumbing, so they are
+// not declared as direct dependencies.
+// ignore_for_file: depend_on_referenced_packages
 
 import 'dart:io';
 

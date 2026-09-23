@@ -432,6 +432,10 @@ FEATURE_PAYMENTS_DIRECT="${FEATURE_PAYMENTS_DIRECT:-true}"
 #   FEATURE_LINUX_KEYRING  costs 10s+ of startup stall on every single run
 FEATURE_LINUX_KEYRING="${FEATURE_LINUX_KEYRING:-false}"
 
+# Agents (= CoWork): off by default, the app is plain chuk_chat. On, the app is
+# the Agents messenger. A build flag, not a runtime switch.
+FEATURE_AGENTS="${FEATURE_AGENTS:-false}"
+
 # Desktop-only; the tray plugin has nothing to attach to on Android/iOS.
 case "$TARGET" in
   android*|ios*)
@@ -448,7 +452,7 @@ ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
   FEATURE_SERVER_TOOLS FEATURE_SKILLS
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
-  FEATURE_LINUX_KEYRING
+  FEATURE_LINUX_KEYRING FEATURE_AGENTS
 )
 
 for _flag in "${ALL_FEATURE_FLAGS[@]}"; do

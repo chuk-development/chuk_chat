@@ -8,6 +8,16 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+// Firebase (push notifications) is optional: the plugin is applied only when
+// android/app/google-services.json is present. Without the file the build is
+// unchanged and the app runs with push off (Firebase.initializeApp() fails
+// and services/notifications/push_service.dart treats that as "no push").
+// To turn push on: drop google-services.json from the Firebase console into
+// android/app/ — nothing else changes.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 // Keystore configuration priority:
 // 1. Environment variables (for CI/CD: GitHub Actions, etc.)
 // 2. key.properties file (for local development)
@@ -66,6 +76,25 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // Keep APKs to the ABIs Flutter was asked for. Flutter's
+        // --target-platform limits the Dart/engine output, but transitive
+        // Android libraries may still ship their prebuilt binaries for every
+        // ABI unless Gradle filters them. The phone is arm64 and the local
+        // emulator is x86_64, so follow the request instead of pinning one ABI.
+        val abiForTarget = mapOf(
+            "android-arm" to "armeabi-v7a",
+            "android-arm64" to "arm64-v8a",
+            "android-x64" to "x86_64",
+        )
+        val requestedAbis = (project.findProperty("target-platform") as String?)
+            ?.split(",")
+            ?.mapNotNull { abiForTarget[it.trim()] }
+            ?.takeIf { it.isNotEmpty() }
+            ?: listOf("arm64-v8a")
+        ndk {
+            abiFilters += requestedAbis
+        }
     }
 
     signingConfigs {

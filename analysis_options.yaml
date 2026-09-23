@@ -24,6 +24,9 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # Vendored fork of flutter_rfb — upstream code with its own analysis_options
+    # and pre-existing deprecation infos we do not own. It carries its own lints.
+    - third_party/**
 
 linter:
   # The lint rules applied to this project can be customized in the

@@ -11,6 +11,8 @@ import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
+import 'package:chuk_chat/services/storage/agents_chat_store.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 import 'package:cryptography/cryptography.dart';
@@ -392,21 +394,36 @@ class ChatStorageCrud {
       return;
     }
 
-    final user = SupabaseService.auth.currentUser;
-    if (user == null) {
-      ChatStorageState.chatsById.clear();
-      ChatStorageState.notifyChanges();
-      return;
+    final String userId;
+    if (ChatOrigin.agentsEnabled) {
+      // AGENTS: the read key, not the live session. On a cold start the app
+      // paints long before gotrue has its session back off disk, and
+      // upstream's `currentUser == null` branch CLEARED the map — it threw
+      // away the very rows the thread was about to paint from. The remembered
+      // id keeps the cache readable; with no id at all the map is left
+      // exactly as it is, because an empty map is not the same statement as
+      // "no chats".
+      final cacheUserId = await AgentsChatStore.resolveCacheUserId();
+      if (cacheUserId == null) return;
+      userId = cacheUserId;
+    } else {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null) {
+        ChatStorageState.chatsById.clear();
+        ChatStorageState.notifyChanges();
+        return;
+      }
+      userId = user.id;
     }
 
     try {
       // Migrate from old encrypted cache if needed
-      if (await LocalChatCacheService.hasOldEncryptedCache(user.id)) {
+      if (await LocalChatCacheService.hasOldEncryptedCache(userId)) {
         if (!EncryptionService.hasKey) {
           await EncryptionService.tryLoadKey();
         }
         if (EncryptionService.hasKey) {
-          await LocalChatCacheService.migrateFromEncrypted(user.id);
+          await LocalChatCacheService.migrateFromEncrypted(userId);
         } else if (kDebugMode) {
           debugPrint(
             '⚠️ [ChatStorage] Cannot migrate cache: encryption key unavailable',
@@ -419,7 +436,7 @@ class ChatStorageCrud {
       // opened (see [loadFullChat]). Reading every payload here is what
       // made startup pull the whole history into memory, and on Android
       // it exceeded what a single platform-channel result can allocate.
-      final rows = await LocalChatCacheService.loadMeta(user.id);
+      final rows = await LocalChatCacheService.loadMeta(userId);
       if (rows.isEmpty) {
         if (kDebugMode) {
           debugPrint('📦 [ChatStorage] Cache empty');
@@ -897,6 +914,13 @@ class ChatStorageCrud {
         status: status,
         queueId: m['queueId'] as String?,
         messageId: m['messageId'] as String?,
+        // AGENTS: the Agents transcript carries these timings; upstream's
+        // save drops them, so they are kept only with FEATURE_AGENTS on.
+        sentAt: ChatOrigin.agentsEnabled ? m['sentAt']?.toString() : null,
+        startedAt: ChatOrigin.agentsEnabled ? m['startedAt']?.toString() : null,
+        generationMs: ChatOrigin.agentsEnabled
+            ? m['generationMs']?.toString()
+            : null,
         // Answer-version pager: the variant archive and the active index must
         // survive persist + reload. The UI map stores `variants` as a JSON
         // string and `activeVariant` as a stringified int, so parse the latter
@@ -939,7 +963,10 @@ class ChatStorageCrud {
       return await updateChat(effectiveChatId, messagesMaps);
     }
 
-    final completer = Completer<StoredChat?>();
+    // Only a concurrent save for the same chat listens to this future. Mark
+    // it handled, so a failed save with no one waiting does not also surface
+    // as an "Unhandled Exception": the caller gets the error from the rethrow.
+    final completer = Completer<StoredChat?>()..future.ignore();
     ChatStorageState.pendingSaves[effectiveChatId] = completer;
     ChatStorageState.savingChats.add(effectiveChatId);
 
@@ -1065,12 +1092,30 @@ class ChatStorageCrud {
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
   ) async {
-    // If there's already a pending save for this chat, wait for it then try again
-    if (ChatStorageState.pendingSaves.containsKey(chatId)) {
-      await ChatStorageState.pendingSaves[chatId]!.future;
+    // If there's already a pending save for this chat, wait for it then try
+    // again. Its failure belongs to its own caller, which already got it: this
+    // update carries newer messages and must still be written. Rethrowing it
+    // here dropped every save queued behind one timeout — a tool turn saves
+    // once per round, so one slow write lost all the rounds after it.
+    // Another waiter may claim the slot while this one waits, so wait until
+    // it is free. A slot this update already waited for is finished even if
+    // nobody removed it, so it never makes this loop spin.
+    final waited = <Completer<StoredChat?>>{};
+    for (
+      var pending = ChatStorageState.pendingSaves[chatId];
+      pending != null && waited.add(pending);
+      pending = ChatStorageState.pendingSaves[chatId]
+    ) {
+      try {
+        await pending.future;
+      } catch (_) {
+        // Reported to the caller of that save; see above.
+      }
     }
 
-    final completer = Completer<StoredChat?>();
+    // See [saveChat]: handled here, so a failure with no waiter is not
+    // reported twice.
+    final completer = Completer<StoredChat?>()..future.ignore();
     ChatStorageState.pendingSaves[chatId] = completer;
     ChatStorageState.savingChats.add(chatId);
 
@@ -1082,7 +1127,10 @@ class ChatStorageCrud {
       completer.completeError(e);
       rethrow;
     } finally {
-      ChatStorageState.pendingSaves.remove(chatId);
+      // Only this update's own slot: a later update may already hold it.
+      if (identical(ChatStorageState.pendingSaves[chatId], completer)) {
+        ChatStorageState.pendingSaves.remove(chatId);
+      }
       // Keep in savingChats for a bit longer to block realtime events
       Future.delayed(const Duration(seconds: 2), () {
         ChatStorageState.savingChats.remove(chatId);

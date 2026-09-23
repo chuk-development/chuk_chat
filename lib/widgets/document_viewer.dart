@@ -2,9 +2,11 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/app_notification.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/huge_icon.dart';
+import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
-import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Document viewer for markdown-converted files
 class DocumentViewer extends StatefulWidget {
@@ -41,46 +43,45 @@ class _DocumentViewerState extends State<DocumentViewer> {
   }
 
   void _copyToClipboard() {
-    Clipboard.setData(ClipboardData(text: widget.markdownContent));AppNotifications.show(context, 'Content copied to clipboard', duration: Duration(seconds: 2));
+    Clipboard.setData(ClipboardData(text: widget.markdownContent));
+    AppNotifications.show(
+      context,
+      'Content copied to clipboard',
+      duration: const Duration(seconds: 2),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final iconColor = Theme.of(context).colorScheme.onSurface;
     final bgColor = Theme.of(context).scaffoldBackgroundColor;
 
-    return Scaffold(
+    return ExpressiveScreen(
       backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(widget.fileName, style: TextStyle(color: iconColor)),
-        leading: IconButton(
-          icon: AppIcon(Icons.close, color: iconColor),
-          onPressed: () => Navigator.of(context).pop(),
-          tooltip: 'Close',
-        ),
-        actions: [
-          if (!_isEditing)
-            IconButton(
-              icon: AppIcon(Icons.copy, color: iconColor),
-              onPressed: _copyToClipboard,
-              tooltip: 'Copy to clipboard',
-            ),
-          IconButton(
-            icon: AppIcon(
-              _isEditing ? Icons.visibility : Icons.edit,
-              color: iconColor,
-            ),
-            onPressed: () {
-              setState(() {
-                _isEditing = !_isEditing;
-              });
-            },
-            tooltip: _isEditing ? 'View mode' : 'Edit mode',
+      title: widget.fileName,
+      actions: <Widget>[
+        if (!_isEditing)
+          ExpressiveIconButton(
+            hugeIcon: HugeIcons.copy01,
+            onTap: _copyToClipboard,
+            tooltip: 'Copy to clipboard',
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        ExpressiveIconButton(
+          hugeIcon: _isEditing ? HugeIcons.view : HugeIcons.edit02,
+          onTap: () {
+            setState(() {
+              _isEditing = !_isEditing;
+            });
+          },
+          tooltip: _isEditing ? 'View mode' : 'Edit mode',
+        ),
+      ],
+      builder: (BuildContext context) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          16,
+          MediaQuery.paddingOf(context).top + 16,
+          16,
+          MediaQuery.paddingOf(context).bottom + 16,
+        ),
         child: _isEditing ? _buildEditView() : _buildMarkdownView(),
       ),
     );

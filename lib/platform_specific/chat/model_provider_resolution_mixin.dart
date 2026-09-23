@@ -5,6 +5,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/user_preferences_service.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
 
 /// Shared model → provider-slug resolution for the desktop and mobile chat UIs.
 ///
@@ -21,6 +22,9 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
 
   /// The active chat mode (host-provided).
   ChatMode get chatMode;
+
+  /// Optional chat override. Unscoped legacy hosts retain account defaults.
+  String? get modelSelectionChatId => null;
 
   /// The provider the active Fast or Thinking mode pins for [modelId], or
   /// null when the mode is custom, runs another model, or pins nothing.
@@ -47,11 +51,25 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
     String modelId, {
     bool forceFromPrefs = false,
   }) async {
+    final chatId = modelSelectionChatId;
     final ChatMode requestedMode = chatMode;
-    // A later mode or model switch makes this lookup obsolete; its result
-    // must not overwrite the provider of the newer selection.
+    // A later chat, mode or model switch makes this lookup obsolete; its
+    // result must not overwrite the provider of the newer selection.
     bool isStale() =>
-        !mounted || chatMode != requestedMode || selectedModelId != modelId;
+        !mounted ||
+        modelSelectionChatId != chatId ||
+        chatMode != requestedMode ||
+        selectedModelId != modelId;
+    if (chatId != null) {
+      final choice = await ChatModelSelectionService.instance.load(chatId);
+      if (isStale()) return;
+      if (choice != null && choice.modelId == modelId) {
+        if (selectedProviderSlug != choice.providerSlug) {
+          setState(() => selectedProviderSlug = choice.providerSlug);
+        }
+        return;
+      }
+    }
     if (modelId.isEmpty) {
       if (selectedProviderSlug != null) {
         setState(() {
@@ -86,9 +104,8 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
       }
     }
 
-    final String? loadedSlug = await UserPreferencesService.loadSelectedProvider(
-      modelId,
-    );
+    final String? loadedSlug =
+        await UserPreferencesService.loadSelectedProvider(modelId);
     if (isStale()) return;
     if (selectedProviderSlug != loadedSlug) {
       setState(() {
@@ -101,6 +118,12 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// cache, prefs, and the static in-memory providers list, and resolving the
   /// "auto cheapest" sentinel at send time. Returns null if nothing resolves.
   Future<String?> ensureProviderSlugForCurrentModel() async {
+    final chatId = modelSelectionChatId;
+    if (chatId != null) {
+      final choice = await ChatModelSelectionService.instance.load(chatId);
+      if (choice != null) return choice.providerSlug;
+      if (!mounted || modelSelectionChatId != chatId) return null;
+    }
     if (selectedModelId.isEmpty) return null;
 
     // Re-read the mode's provider at send time: the cached slug can be stale
@@ -112,8 +135,7 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
         selectedProviderSlug = slug;
       });
     }
-    slug ??=
-        (selectedProviderSlug != null && selectedProviderSlug!.isNotEmpty)
+    slug ??= (selectedProviderSlug != null && selectedProviderSlug!.isNotEmpty)
         ? selectedProviderSlug
         : null;
 

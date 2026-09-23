@@ -18,7 +18,10 @@ String sanitizeStreamError(Object error) {
   }
 
   // Collapse control/non-printable bytes that make the error look garbled.
-  var msg = error.toString().replaceAll(RegExp(r'[\x00-\x1F\x7F]+'), ' ').trim();
+  var msg = error
+      .toString()
+      .replaceAll(RegExp(r'[\x00-\x1F\x7F]+'), ' ')
+      .trim();
 
   // A base64 / data-URL fragment leaked into the error — don't surface it.
   if (msg.contains('data:image/') ||

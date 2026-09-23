@@ -2,6 +2,10 @@
 
 Guidelines for AI coding agents working in the **chuk_chat** Flutter codebase.
 
+> The Agents tree shipped `AGENTS.md` as a symlink to `CLAUDE.md`. It stays a
+> real file here, because this one has content `CLAUDE.md` does not. Read
+> `CLAUDE.md` as well — the Agents platform rules live there.
+
 ## Build / Test / Lint Commands
 
 ```bash

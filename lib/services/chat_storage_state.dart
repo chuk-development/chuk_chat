@@ -4,7 +4,10 @@ import 'dart:async';
 
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/chat_titles_prefs_cleanup.dart';
+import 'package:chuk_chat/services/mcp/mcp_store.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
@@ -15,6 +18,30 @@ SharedPreferences? sharedPrefsInstance;
 /// Pre-initialize SharedPreferences at app startup for instant cache access
 Future<void> initChatStorageCache() async {
   sharedPrefsInstance ??= await SharedPreferences.getInstance();
+  _scheduleLegacyPrefsCleanup();
+}
+
+bool _legacyPrefsCleanupScheduled = false;
+
+/// Delay before the one-time prefs cleanup runs, so it stays off the startup
+/// path (the first frame, the auth restore, the sidebar load).
+const Duration _kLegacyPrefsCleanupDelay = Duration(seconds: 3);
+
+/// Move the two big blobs that used to live in SharedPreferences into the
+/// SQLite kv_cache, once, in every build: the per-account sidebar title lists
+/// and the MCP connection list. On Linux the prefs file is rewritten whole and
+/// synchronously on every setX, so each byte left there is paid on every
+/// settings write. Both steps are a cheap in-memory check once nothing is
+/// left to move, and neither throws.
+void _scheduleLegacyPrefsCleanup() {
+  if (_legacyPrefsCleanupScheduled) return;
+  _legacyPrefsCleanupScheduled = true;
+  unawaited(
+    Future<void>.delayed(_kLegacyPrefsCleanupDelay, () async {
+      await ChatTitlesPrefsCleanup.run(prefs: sharedPrefsInstance);
+      await McpStore.migrateLegacyPrefs();
+    }),
+  );
 }
 
 /// kv_cache key holding the sidebar title list for [userId].
@@ -144,8 +171,16 @@ class ChatStorageState {
   // the user was in another chat — must float to the top, matching the
   // time buckets in the sidebar which also key off updatedAt. Opening a chat
   // does not touch updatedAt, so only a real update re-orders it.
+  //
+  // AGENTS: an Agents thread shares [chatsById] (and the SQLite cache) with
+  // chuk_chat's chats but is not one of them. It is left out here, so the
+  // chuk_chat sidebar, the export, the password reset counts and the
+  // password change snapshot only ever see chuk_chat chats. With the Agents
+  // flag off [ChatOrigin.isAgentsThread] is always false: upstream's list.
   static List<StoredChat> get savedChats {
-    final list = chatsById.values.toList();
+    final list = chatsById.values
+        .where((chat) => !ChatOrigin.isAgentsThread(chat.id))
+        .toList();
     list.sort((a, b) {
       final aTime = a.updatedAt ?? a.createdAt;
       final bTime = b.updatedAt ?? b.createdAt;

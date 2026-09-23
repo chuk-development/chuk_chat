@@ -137,7 +137,10 @@ class RoundContentBlockService {
     // into the round's reasoning and emit NO text block, so it renders
     // collapsed in the tool-call bar instead of the message body.
     if (foldInterimIntoReasoning) {
-      final roundReasoning = _mergeReasoning(baseRoundReasoning, normalizedInterim);
+      final roundReasoning = _mergeReasoning(
+        baseRoundReasoning,
+        normalizedInterim,
+      );
       final blocks = <ContentBlock>[];
       if (roundReasoning.isNotEmpty &&
           !_lastReasoningMatches(existingBlocks, roundReasoning)) {
@@ -262,6 +265,10 @@ class RoundContentBlockService {
           if (!_toolCallEqual(aCalls[i], bCalls[i])) return false;
         }
         return true;
+      case ContentBlockType.sandboxArtifact:
+        // Compare by storage path — same encrypted ciphertext path means
+        // the same artifact, regardless of incidental metadata drift.
+        return a.sandboxArtifact?.storagePath == b.sandboxArtifact?.storagePath;
     }
   }
 
@@ -301,7 +308,10 @@ class RoundContentBlockService {
   /// Merge provider reasoning with folded interim prose into one reasoning
   /// string, dropping empties and avoiding a doubled copy when one already
   /// contains the other.
-  static String _mergeReasoning(String providerReasoning, String foldedInterim) {
+  static String _mergeReasoning(
+    String providerReasoning,
+    String foldedInterim,
+  ) {
     final a = providerReasoning.trim();
     final b = foldedInterim.trim();
     if (a.isEmpty) return b;

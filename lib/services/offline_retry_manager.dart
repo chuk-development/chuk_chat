@@ -1,4 +1,12 @@
 // lib/services/offline_retry_manager.dart
+// MERGE NOTE: both retries live here now. Upstream's is connectivity-driven:
+// a registered SendExecutor replays the persisted offline queue with backoff.
+// The Agents one is host-driven: a paired thread flushes its own outbox, an
+// unpaired one asks the transport to go get the host, and the executor is never
+// used because the run belongs to the host (a second producer would double the
+// turn). With FEATURE_AGENTS off retryNow() is upstream's drain only. With it
+// on, a mounted thread view's registrations run first, then the persisted
+// queue (chuk_chat chats only) drains as upstream's does.
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -6,6 +14,7 @@ import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/queued_message.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_queue_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/utils/exponential_backoff.dart';
 
 /// Outcome of a send executor call.
@@ -21,6 +30,13 @@ class SendExecutorResult {
 /// classified failure.
 typedef SendExecutor = Future<SendExecutorResult> Function(QueuedMessage msg);
 
+/// Agents: sends everything queued for the thread it was registered for, and
+/// answers how many prompts went out.
+typedef OutboxFlush = Future<int> Function();
+
+/// Agents: gets the transport to try the host again, from scratch.
+typedef HostReconnect = Future<void> Function();
+
 /// Lifecycle event for retry attempts. Mostly useful for diagnostics + UI
 /// notifications (snack bars, badges).
 enum OfflineRetryEventType {
@@ -29,6 +45,10 @@ enum OfflineRetryEventType {
   failedNonRetryable,
   failedDeferred,
   noExecutor,
+  // The Agents retry reports on the whole thread, not on one queue entry.
+  succeeded,
+  failed,
+  exhausted,
 }
 
 class OfflineRetryEvent {
@@ -64,6 +84,17 @@ class OfflineRetryManager {
 
   void Function()? _listener;
 
+  /// Agents: set while a thread view is paired, cleared when it is not. Null
+  /// therefore means "no host on the other end right now", which is what turns
+  /// Retry into a reconnect.
+  OutboxFlush? _flush;
+  HostReconnect? _reconnect;
+  String? _sessionKey;
+
+  /// Agents: one retry at a time. The button is easy to hit twice, and two
+  /// flushes of the same queue would send the same prompt twice.
+  bool _busy = false;
+
   /// Wire up the connectivity listener. Safe to call multiple times.
   void init() {
     if (_initialized) return;
@@ -89,8 +120,124 @@ class OfflineRetryManager {
     _executor = executor;
   }
 
+  /// Agents: called by the thread view on the `paired` transition, and with
+  /// null when the socket goes away again.
+  void registerFlush(String sessionKey, OutboxFlush? flush) {
+    if (flush == null) {
+      // Only the owner of the current registration may clear it, so a view
+      // being disposed cannot silence the one that just replaced it.
+      if (_sessionKey != null && _sessionKey != sessionKey) return;
+      _flush = null;
+      _sessionKey = null;
+      return;
+    }
+    _flush = flush;
+    _sessionKey = sessionKey;
+  }
+
+  /// Agents: called by the thread view for its whole life; it is what Retry
+  /// falls back to when nothing is paired.
+  void registerReconnect(HostReconnect? reconnect) {
+    _reconnect = reconnect;
+  }
+
   /// Manual trigger — UI "Retry" buttons call this.
-  Future<void> retryNow() => _retryAll();
+  ///
+  /// AGENTS: with FEATURE_AGENTS off this is upstream's queue drain and
+  /// nothing else. With it on, a mounted Agents thread view also gets the
+  /// press: flush its outbox while the host is paired, otherwise go and get
+  /// the host. The persisted queue only holds chuk_chat chats
+  /// (`OfflineSendCoordinator` routes by chat kind), so it is drained as well
+  /// whenever it holds anything; an Agents view in front must not strand a
+  /// chuk_chat message.
+  Future<void> retryNow() async {
+    if (!ChatOrigin.agentsEnabled) return _retryAll();
+    final OutboxFlush? flush = _flush;
+    final HostReconnect? reconnect = _reconnect;
+    if (flush == null && reconnect == null) {
+      if (_executor != null) return _retryAll();
+      // No Agents thread and no executor: drain anyway if anything is queued,
+      // so upstream's `noExecutor` report still happens.
+      if (await _hasQueuedMessages()) return _retryAll();
+      _emitThreadEvent(OfflineRetryEventType.started, chatId: '');
+      _emitThreadEvent(
+        OfflineRetryEventType.exhausted,
+        chatId: '',
+        error: 'No host connection to retry on.',
+      );
+      return;
+    }
+
+    await _retryAgentsThread(flush, reconnect);
+    if (_executor != null && await _hasQueuedMessages()) await _retryAll();
+  }
+
+  Future<void> _retryAgentsThread(
+    OutboxFlush? flush,
+    HostReconnect? reconnect,
+  ) async {
+    if (_busy) return;
+    _busy = true;
+    final String chatId = _sessionKey ?? '';
+    _emitThreadEvent(OfflineRetryEventType.started, chatId: chatId);
+    try {
+      if (flush != null) {
+        final int sent = await flush();
+        if (kDebugMode) {
+          debugPrint('[agents-retry] flushed $sent queued prompt(s)');
+        }
+        _emitThreadEvent(OfflineRetryEventType.succeeded, chatId: chatId);
+        return;
+      }
+      if (reconnect == null) {
+        // Nothing is mounted that could reach a host. The prompt stays queued;
+        // the next pairing sends it.
+        _emitThreadEvent(
+          OfflineRetryEventType.exhausted,
+          chatId: chatId,
+          error: 'No host connection to retry on.',
+        );
+        return;
+      }
+      await reconnect();
+      _emitThreadEvent(OfflineRetryEventType.succeeded, chatId: chatId);
+    } catch (error) {
+      _emitThreadEvent(
+        OfflineRetryEventType.failed,
+        chatId: chatId,
+        error: '$error',
+      );
+    } finally {
+      _busy = false;
+    }
+  }
+
+  /// Whether the persisted queue holds anything. A queue that cannot even be
+  /// opened (no platform channels in a widget test, web) counts as empty.
+  Future<bool> _hasQueuedMessages() async {
+    try {
+      return await OfflineQueueService.instance.count() > 0;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _emitThreadEvent(
+    OfflineRetryEventType type, {
+    required String chatId,
+    String? error,
+  }) {
+    _emit(
+      OfflineRetryEvent(
+        type: type,
+        // The Agents queue is per thread, not per message: a retry asks for
+        // the whole thread's backlog, so there is no single entry to name.
+        queueId: '',
+        chatId: chatId.isEmpty ? null : chatId,
+        error: error,
+      ),
+    );
+  }
 
   Stream<OfflineRetryEvent> get events => _events.stream;
 
@@ -197,6 +344,7 @@ class OfflineRetryManager {
   }
 
   @visibleForTesting
+  Future<void> debugRetryAll() => retryNow();
 
   @visibleForTesting
   void debugReset() {
@@ -208,6 +356,10 @@ class OfflineRetryManager {
     _executor = null;
     _retrying = false;
     _wasOnline = true;
+    _flush = null;
+    _reconnect = null;
+    _sessionKey = null;
+    _busy = false;
   }
 }
 

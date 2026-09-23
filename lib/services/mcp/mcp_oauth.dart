@@ -143,8 +143,8 @@ class McpOAuth {
 
   final http.Client _http;
 
-  static const String clientName = 'Chuk Chat';
-  static const String clientUri = 'https://chat.chuk.chat';
+  static const String clientName = 'Agents';
+  static const String clientUri = 'https://agents.chuk.chat';
 
   // ─── Discovery ─────────────────────────────────────────────────────────
 
@@ -202,7 +202,8 @@ class McpOAuth {
     final path = issuer.path.replaceAll(RegExp(r'/+$'), '');
     return <Uri>[
       issuer.replace(path: '/.well-known/oauth-authorization-server$path'),
-      if (path.isNotEmpty) issuer.replace(path: '$path/.well-known/openid-configuration'),
+      if (path.isNotEmpty)
+        issuer.replace(path: '$path/.well-known/openid-configuration'),
       issuer.replace(path: '/.well-known/openid-configuration$path'),
       issuer.replace(path: '/.well-known/oauth-authorization-server'),
     ];
@@ -220,8 +221,9 @@ class McpOAuth {
     }
 
     final issuers = <String>[
-      ...?(resourceMetadata?['authorization_servers'] as List?)
-          ?.map((e) => e.toString()),
+      ...?(resourceMetadata?['authorization_servers'] as List?)?.map(
+        (e) => e.toString(),
+      ),
       // Servers that skip the metadata document usually are their own
       // authorization server.
       serverUrl.origin,
@@ -229,8 +231,9 @@ class McpOAuth {
 
     final scopes = <String>[
       ...challengeScopes(wwwAuthenticate),
-      ...?(resourceMetadata?['scopes_supported'] as List?)
-          ?.map((e) => e.toString()),
+      ...?(resourceMetadata?['scopes_supported'] as List?)?.map(
+        (e) => e.toString(),
+      ),
     ];
 
     for (final issuer in issuers) {
@@ -393,7 +396,9 @@ class McpOAuth {
       );
     }
     if (params['state'] != request.state) {
-      throw const McpAuthException('The sign-in answer did not match the request.');
+      throw const McpAuthException(
+        'The sign-in answer did not match the request.',
+      );
     }
     final error = params['error'];
     if (error != null) {

@@ -135,7 +135,7 @@ class PasswordRevisionService {
   static bool get _usePrefsBackend =>
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.macOS ||
-       defaultTargetPlatform == TargetPlatform.linux);
+          defaultTargetPlatform == TargetPlatform.linux);
 
   static Future<SharedPreferences> _prefs() async {
     _prefsCache ??= await SharedPreferences.getInstance();

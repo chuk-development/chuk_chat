@@ -1,4 +1,8 @@
 // lib/services/streaming_transcription_service.dart
+// MERGE NOTE: the Agents build stubbed this file (connect() -> false, every
+// other entry point inert) because it had no transcription socket and voice
+// mode was off. Upstream's real streaming client is kept; the stub's public
+// isConnected getter is gone with it (no caller, and upstream never had one).
 //
 // Streams audio to the server via WebSocket as the user speaks,
 // eliminating the upload latency that occurs with the traditional

@@ -138,7 +138,12 @@ class ChatRuntime {
 
   /// Mark the start of a send: user message + assistant placeholder are
   /// already in [messages]; record the placeholder index and flip flags.
-  void beginStream({required int placeholderIndex, required String modelId, String? provider, VoidCallback? cancelHandler}) {
+  void beginStream({
+    required int placeholderIndex,
+    required String modelId,
+    String? provider,
+    VoidCallback? cancelHandler,
+  }) {
     this.placeholderIndex = placeholderIndex;
     this.modelId = modelId;
     this.provider = provider;

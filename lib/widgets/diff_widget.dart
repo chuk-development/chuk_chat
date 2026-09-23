@@ -4,16 +4,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
+
 enum _LineType { added, removed, context }
 
 class _DiffLine {
-  _DiffLine(
-    this.type,
-    this.text, {
-    this.counterpart,
-    this.oldNo,
-    this.newNo,
-  });
+  _DiffLine(this.type, this.text, {this.counterpart, this.oldNo, this.newNo});
   final _LineType type;
   final String text;
 
@@ -136,10 +131,22 @@ class _DiffWidgetState extends State<DiffWidget> {
           ops[k + 1].$2 == _LineType.added) {
         oldNo++;
         newNo++;
-        result.add(_DiffLine(_LineType.removed, text,
-            counterpart: ops[k + 1].$1, oldNo: oldNo));
-        result.add(_DiffLine(_LineType.added, ops[k + 1].$1,
-            counterpart: text, newNo: newNo));
+        result.add(
+          _DiffLine(
+            _LineType.removed,
+            text,
+            counterpart: ops[k + 1].$1,
+            oldNo: oldNo,
+          ),
+        );
+        result.add(
+          _DiffLine(
+            _LineType.added,
+            ops[k + 1].$1,
+            counterpart: text,
+            newNo: newNo,
+          ),
+        );
         k += 2;
       } else if (type == _LineType.removed) {
         oldNo++;
@@ -217,8 +224,10 @@ class _DiffWidgetState extends State<DiffWidget> {
     final merged = <_Span>[];
     for (final s in spans) {
       if (merged.isNotEmpty && merged.last.changed == s.changed) {
-        merged[merged.length - 1] =
-            _Span(merged.last.text + s.text, changed: s.changed);
+        merged[merged.length - 1] = _Span(
+          merged.last.text + s.text,
+          changed: s.changed,
+        );
       } else {
         merged.add(s);
       }
@@ -254,8 +263,9 @@ class _DiffWidgetState extends State<DiffWidget> {
     final addedCount = lines.where((l) => l.type == _LineType.added).length;
     final removedCount = lines.where((l) => l.type == _LineType.removed).length;
 
-    final borderColor =
-        isDark ? const Color(0xFF2D3748) : const Color(0xFFD0D7DE);
+    final borderColor = isDark
+        ? const Color(0xFF2D3748)
+        : const Color(0xFFD0D7DE);
     // No tinted header — keep it flat so it blends with the surrounding
     // tool card instead of adding a colored (blue) bar.
     const headerBg = Colors.transparent;
@@ -276,10 +286,11 @@ class _DiffWidgetState extends State<DiffWidget> {
             onTap: () => setState(() => _expanded = !_expanded),
             borderRadius: topRadius,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration:
-                  BoxDecoration(color: headerBg, borderRadius: topRadius),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: headerBg,
+                borderRadius: topRadius,
+              ),
               child: Row(
                 children: [
                   Text(
@@ -321,8 +332,9 @@ class _DiffWidgetState extends State<DiffWidget> {
           if (_expanded) ...[
             Divider(height: 1, thickness: 1, color: borderColor),
             ClipRRect(
-              borderRadius:
-                  const BorderRadius.vertical(bottom: Radius.circular(7)),
+              borderRadius: const BorderRadius.vertical(
+                bottom: Radius.circular(7),
+              ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -364,26 +376,24 @@ class _DiffWidgetState extends State<DiffWidget> {
     switch (line.type) {
       case _LineType.added:
         lineBg = isDark ? const Color(0xFF0F2318) : const Color(0xFFE6FFEC);
-        baseColor =
-            isDark ? const Color(0xFF7EE787) : const Color(0xFF1A7F37);
+        baseColor = isDark ? const Color(0xFF7EE787) : const Color(0xFF1A7F37);
         prefix = '+';
         break;
       case _LineType.removed:
         lineBg = isDark ? const Color(0xFF290D0D) : const Color(0xFFFFEBE9);
-        baseColor =
-            isDark ? const Color(0xFFFF7B72) : const Color(0xFFCF222E);
+        baseColor = isDark ? const Color(0xFFFF7B72) : const Color(0xFFCF222E);
         prefix = '-';
         break;
       case _LineType.context:
         lineBg = Colors.transparent;
-        baseColor =
-            isDark ? const Color(0xFF8B9BB4) : const Color(0xFF57606A);
+        baseColor = isDark ? const Color(0xFF8B9BB4) : const Color(0xFF57606A);
         prefix = ' ';
         break;
     }
 
-    final gutterColor =
-        isDark ? const Color(0xFF566072) : const Color(0xFF8C959F);
+    final gutterColor = isDark
+        ? const Color(0xFF566072)
+        : const Color(0xFF8C959F);
 
     final hasPair = line.counterpart != null && line.type != _LineType.context;
     final spans = hasPair ? _wordDiff(line.text, line.counterpart!) : null;
@@ -461,8 +471,8 @@ class _DiffWidgetState extends State<DiffWidget> {
                               : Colors.transparent,
                           decoration:
                               (span.changed && line.type == _LineType.removed)
-                                  ? TextDecoration.lineThrough
-                                  : TextDecoration.none,
+                              ? TextDecoration.lineThrough
+                              : TextDecoration.none,
                           decorationColor: baseColor,
                         ),
                       ),

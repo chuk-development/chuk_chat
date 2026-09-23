@@ -1,3 +1,7 @@
+// Agents wrapped this page in ExpressiveScreen instead of Scaffold +
+// FloatingAppBar. Same intent — a floating header with the list running
+// underneath — so upstream's chrome is kept and the ExpressiveScreen variant
+// is dropped. Both sides made the identical Icon -> AppIcon change.
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';

@@ -8,6 +8,16 @@ import 'package:chuk_chat/services/skills/builtin_skills.g.dart';
 import 'package:chuk_chat/services/skills/skill_frontmatter_parser.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import '../helpers/icon_finder.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
+import 'package:chuk_chat/services/skills/agents_skill.dart';
+import 'package:chuk_chat/services/skills/skill_settings_sync.dart';
+import 'package:chuk_chat/services/skills/skills_source.dart';
+import '../services/skills/skills_source_test.dart'
+    show FakeMirror, FakeSkillsController;
+// Two findIcon() helpers exist in this tree; the Agents group wants the one
+// that also matches a plain Material Icon, so it takes a prefix.
+import '../support/icon_finder.dart' as expressive;
 
 Widget _host(Widget child) => MaterialApp(
   localizationsDelegates: const [AppLocalizations.delegate],
@@ -26,6 +36,14 @@ const Skill _userSkill = Skill(
   source: SkillSource.user,
   id: 'row-1',
 );
+
+AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true}) =>
+    AgentsSkill.fromPayload(<String, dynamic>{
+      'name': name,
+      'description': 'Does $name.',
+      'source': source,
+      'enabled': enabled,
+    })!;
 
 void main() {
   tearDown(SkillRegistry.resetForTest);
@@ -199,6 +217,140 @@ void main() {
       await tester.pumpWidget(_host(const SkillEditorPage(skill: _userSkill)));
       await tester.pump();
       expect(find.text('Edit skill'), findsOneWidget);
+    });
+  });
+
+  // Agents's own skills screen: the host's list, one switch per skill. It is a
+  // different screen from the one above, under a different name — see the note
+  // in lib/pages/skills_settings_page.dart.
+  group('AgentsSkillsSettingsPage', () {
+
+    final source = SkillsSource.instance;
+    late FakeSkillsController controller;
+
+    setUp(() {
+      source.reset(mirror: FakeMirror(stored: <String, bool>{}));
+      AgentsRelayLink.instance.reset();
+      controller = FakeSkillsController();
+      AgentsRelayLink.instance.bind(controller);
+    });
+
+    tearDown(() {
+      source.reset(mirror: const NoopSkillSettingsMirror());
+      AgentsRelayLink.instance.reset();
+    });
+
+    Future<void> pump(WidgetTester tester) async {
+      await tester.pumpWidget(const MaterialApp(home: AgentsSkillsSettingsPage()));
+      await tester.pump();
+    }
+
+    testWidgets('asks the host for the list on open and waits', (tester) async {
+      await pump(tester);
+      expect(controller.listRequests, 1);
+      expect(find.text('Waiting for the host…'), findsOneWidget);
+      expect(find.byType(Switch), findsNothing);
+    });
+
+    testWidgets('shows the host list in two sections with one switch each',
+        (tester) async {
+      await pump(tester);
+      controller.emit(AgentsRelaySkillsList(
+        skills: [
+          _skill('automations', source: 'builtin', enabled: false),
+          _skill('youtube-transcript'),
+          _skill('deploy'),
+        ],
+        errors: const ['ws/skills/broken/SKILL.md: no YAML frontmatter'],
+      ));
+      await tester.pump();
+
+      expect(find.text('Built in'), findsOneWidget);
+      expect(find.text('Workspace'), findsOneWidget);
+      expect(find.text('youtube-transcript'), findsOneWidget);
+      expect(find.text('Does deploy.'), findsOneWidget);
+      expect(find.byType(Switch), findsNWidgets(3));
+      expect(find.textContaining('no YAML frontmatter'), findsOneWidget);
+
+      final off = tester.widget<Switch>(find.descendant(
+        of: find.byKey(const ValueKey<String>('skill-automations')),
+        matching: find.byType(Switch),
+      ));
+      expect(off.value, isFalse);
+    });
+
+    testWidgets('each section says what it is, and every row carries its mark',
+        (tester) async {
+      await pump(tester);
+      controller.emit(AgentsRelaySkillsList(skills: [
+        _skill('automations', source: 'builtin'),
+        _skill('youtube-transcript'),
+      ]));
+      await tester.pump();
+
+      // Why a section is what it is, not only its label.
+      // Anchored on what the caption has to say, not on how the app is named.
+      expect(find.textContaining('the sandbox terminal'), findsOneWidget);
+      expect(find.textContaining('under skills/'), findsOneWidget);
+
+      // The mark on the row repeats the section, so a scrolled row still reads.
+      Finder markOf(String name) => find.descendant(
+            of: find.byKey(ValueKey<String>('skill-$name')),
+            matching: expressive.findIcon(Icons.verified_outlined),
+          );
+      expect(markOf('automations'), findsOneWidget);
+      expect(markOf('youtube-transcript'), findsNothing);
+      expect(
+        find.descendant(
+          of: find.byKey(const ValueKey<String>('skill-youtube-transcript')),
+          matching: expressive.findIcon(Icons.folder_outlined),
+        ),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the section follows the host source, never the skill name',
+        (tester) async {
+      // youtube-transcript is seeded from the repository, but it is a workspace
+      // skill: the host says so, and the page must not second-guess a name.
+      await pump(tester);
+      controller.emit(AgentsRelaySkillsList(skills: [
+        _skill('youtube-transcript'),
+      ]));
+      await tester.pump();
+
+      expect(find.text('Workspace'), findsOneWidget);
+      expect(find.text('Built in'), findsNothing);
+    });
+
+    testWidgets('a switch sends skill_control and the reply settles the row',
+        (tester) async {
+      await pump(tester);
+      controller.emit(AgentsRelaySkillsList(skills: [_skill('deploy')]));
+      await tester.pump();
+
+      await tester.tap(find.byType(Switch));
+      await tester.pump();
+      expect(controller.controls, [('deploy', 'disable')]);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+
+      controller.emit(AgentsRelaySkillsList(skills: [_skill('deploy', enabled: false)]));
+      await tester.pump();
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    });
+
+    testWidgets('an empty host list says so once the host answered', (tester) async {
+      await pump(tester);
+      controller.emit(const AgentsRelaySkillsList(skills: []));
+      await tester.pump();
+      expect(find.textContaining('The host has no skills'), findsOneWidget);
+    });
+
+    testWidgets('without a skills-capable controller the page says offline',
+        (tester) async {
+      AgentsRelayLink.instance.reset();
+      await pump(tester);
+      expect(find.textContaining('Not connected to the host'), findsOneWidget);
     });
   });
 }

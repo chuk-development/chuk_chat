@@ -70,6 +70,7 @@ class ChatMessage {
     this.status,
     this.queueId,
     this.messageId,
+    this.sentAt,
     this.startedAt,
     this.generationMs,
     this.variants,
@@ -95,6 +96,7 @@ class ChatMessage {
       status: _statusFromString(json['status'] as String?),
       queueId: json['queueId'] as String?,
       messageId: json['messageId'] as String?,
+      sentAt: json['sentAt']?.toString(),
       startedAt: json['startedAt']?.toString(),
       generationMs: json['generationMs']?.toString(),
       variants: json['variants'] as String?,
@@ -143,6 +145,10 @@ class ChatMessage {
   /// creation was introduced).
   final String? messageId;
 
+  /// Actual message timestamp (ISO-8601), independent of the run-duration
+  /// clock. Null for historical messages whose host supplied no timestamp.
+  final String? sentAt;
+
   /// When the request for this answer went out, ISO-8601. Stamped on the
   /// placeholder, so the header can count from the send rather than from
   /// the first tool call.
@@ -179,8 +185,7 @@ class ChatMessage {
   String get sender => role == 'assistant' ? 'ai' : role;
 
   /// Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
-  ChatMessageStatus get effectiveStatus =>
-      status ?? ChatMessageStatus.sent;
+  ChatMessageStatus get effectiveStatus => status ?? ChatMessageStatus.sent;
 
   /// Wire string for [status] (`null` when unset), matching the persisted
   /// `status` field so raw-map bridges can round-trip it without duplicating
@@ -205,6 +210,7 @@ class ChatMessage {
     ChatMessageStatus? status,
     String? queueId,
     String? messageId,
+    String? sentAt,
     String? startedAt,
     String? generationMs,
     String? variants,
@@ -228,6 +234,7 @@ class ChatMessage {
       status: status ?? this.status,
       queueId: queueId ?? this.queueId,
       messageId: messageId ?? this.messageId,
+      sentAt: sentAt ?? this.sentAt,
       startedAt: startedAt ?? this.startedAt,
       generationMs: generationMs ?? this.generationMs,
       variants: variants ?? this.variants,
@@ -259,6 +266,7 @@ class ChatMessage {
     if (_statusToString(status) != null) 'status': _statusToString(status),
     if (queueId != null && queueId!.isNotEmpty) 'queueId': queueId,
     if (messageId != null && messageId!.isNotEmpty) 'messageId': messageId,
+    if (sentAt != null && sentAt!.isNotEmpty) 'sentAt': sentAt,
     if (startedAt != null && startedAt!.isNotEmpty) 'startedAt': startedAt,
     if (generationMs != null && generationMs!.isNotEmpty)
       'generationMs': generationMs,

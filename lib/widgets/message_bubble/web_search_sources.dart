@@ -7,6 +7,7 @@
 // source cards: a favicon, the title, the host, and a bit of snippet text.
 
 import 'package:flutter/material.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -133,8 +134,10 @@ class WebSearchSourcesCard extends StatelessWidget {
     final Uri? uri = Uri.tryParse(url);
     if (uri == null) return;
     try {
-      final bool launched =
-          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      final bool launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
       if (!launched) {
         await launchUrl(uri, mode: LaunchMode.platformDefault);
       }
@@ -268,7 +271,11 @@ class _Favicon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const double size = 20;
-    final Widget fallback = AppIcon(Icons.public_rounded, size: 14, color: muted);
+    final Widget fallback = AppIcon(
+      Icons.public_rounded,
+      size: 14,
+      color: muted,
+    );
 
     if (host.isEmpty) {
       return ClipRRect(

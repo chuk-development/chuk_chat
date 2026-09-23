@@ -10,6 +10,7 @@ import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/models/chat_model.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
@@ -1075,7 +1076,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
 
   double _effectiveButtonWidth(double maxAvailableWidth) {
     if (widget.isCompactMode) {
-      return 32.0;
+      return MobileLayout.minTouchTarget;
     }
 
     if (maxAvailableWidth.isFinite && maxAvailableWidth > 48.0) {
@@ -1128,7 +1129,9 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
     final Color bgColor = Theme.of(context).scaffoldBackgroundColor;
     final Color iconFgColor = Theme.of(context).resolvedIconColor;
 
-    final double effectiveWidth = widget.isCompactMode ? 32.0 : buttonWidth;
+    final double effectiveWidth = widget.isCompactMode
+        ? MobileLayout.minTouchTarget
+        : buttonWidth;
 
     return MouseRegion(
       onEnter: (_) => _isHovered.value = true,
@@ -1136,11 +1139,12 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
       child: ValueListenableBuilder<bool>(
         valueListenable: _isHovered,
         builder: (context, hovered, child) {
-          // Compact mode: 32x32 circle matching icon buttons
+          // Compact mode: a full 48 dp target, the same box every other icon
+          // button in the composer keeps.
           if (widget.isCompactMode) {
             return Container(
-              width: 32,
-              height: 32,
+              width: MobileLayout.minTouchTarget,
+              height: MobileLayout.minTouchTarget,
               decoration: BoxDecoration(
                 color: hovered
                     ? iconFgColor.withValues(alpha: 0.1)
@@ -1162,7 +1166,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
               duration: const Duration(milliseconds: 150),
               curve: Curves.easeOutCubic,
               padding: const EdgeInsets.only(left: 10, right: 12),
-              height: 36,
+              height: MobileLayout.minTouchTarget,
               decoration: BoxDecoration(
                 color: hovered
                     ? iconFgColor.withValues(alpha: 0.08)
@@ -1314,7 +1318,7 @@ class _ModelSelectionDropdownState extends State<ModelSelectionDropdown>
                 final selected = _selectedModelId == model.value;
                 return PopupMenuItem<String>(
                   value: model.value,
-                  height: 40,
+                  height: MobileLayout.minTouchTarget,
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: Row(
                     children: [

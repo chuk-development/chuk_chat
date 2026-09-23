@@ -1,3 +1,6 @@
+// Agents stubbed this screen out (`ComingSoonPage(title: 'Usage')`) because
+// token accounting belongs to the hosted API. The merged app keeps upstream's
+// real usage screen; the stub is dropped.
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';

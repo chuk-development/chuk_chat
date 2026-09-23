@@ -7,9 +7,15 @@
 // the same on a phone as on a laptop. Servers that need a package to be run
 // locally are deliberately absent — they cannot work on a phone.
 //
-// The rest of the world is reachable through [search], which queries the
-// official MCP registry, and through "add by URL", which needs no catalogue
+// The rest of the world is reachable through [searchMcpRegistry], which queries
+// the official MCP registry, and through "add by URL", which needs no catalogue
 // entry at all.
+//
+// Ported verbatim from chuk_chat so the connector list is identical. The one
+// difference is where the sign-in and the tool discovery run: on Agents the
+// host (the local Python backend) connects to each server, not the device —
+// see McpService and McpStore. The catalogue data (names, URLs, descriptions,
+// icons, auth kinds) is unchanged.
 
 import 'dart:convert';
 
@@ -83,11 +89,7 @@ class McpCatalogueEntry {
   final String? websiteUrl;
 
   /// The two documents the reader agrees to by connecting. Filled in by
-  /// hand for the offered connectors, because no server publishes them:
-  /// RFC 9728 reserves `resource_tos_uri` and `resource_policy_uri` in the
-  /// protected-resource metadata, and every server checked leaves both out.
-  /// Each address here was fetched and answered 200 —
-  /// `mcp_legal_links_live_test.dart` keeps it that way.
+  /// hand for the offered connectors, because no server publishes them.
   final String? termsUrl;
   final String? privacyUrl;
 
@@ -123,8 +125,8 @@ class McpCatalogueEntry {
   /// Empty for OAuth and app-session connectors.
   final List<McpCredentialField> credentials;
 
-  /// The logo. Servers rarely publish one in `serverInfo.icons`, so the
-  /// site's own favicon is the fallback that works for every host.
+  /// The logo. Servers rarely publish one, so the site's own favicon is the
+  /// fallback that works for every host.
   String get icon => iconUrl ?? faviconFor(url);
 
   static String faviconFor(String url) => faviconCandidates(url).first;
@@ -139,7 +141,8 @@ class McpCatalogueEntry {
     return <String>[
       'https://www.google.com/s2/favicons?domain=$brand&sz=128',
       'https://icons.duckduckgo.com/ip3/$brand.ico',
-      if (brand != host) 'https://www.google.com/s2/favicons?domain=$host&sz=128',
+      if (brand != host)
+        'https://www.google.com/s2/favicons?domain=$host&sz=128',
     ];
   }
 
@@ -149,10 +152,6 @@ class McpCatalogueEntry {
     final parts = host.split('.');
     if (parts.length <= 2) return host;
     // Service subdomains that only say which service of the brand this is.
-    // `ai` and `mail` join the list so `ai.todoist.net` and `mail.<brand>.com`
-    // resolve to the brand instead of a subdomain a favicon service does not
-    // know. Only the first label is stripped, so a host like
-    // `mcp.mail.superhuman.com` still needs an explicit iconUrl.
     const strip = {'mcp', 'api', 'www', 'server', 'app', 'ai', 'mail'};
     if (strip.contains(parts.first)) return parts.sublist(1).join('.');
     return host;
@@ -278,9 +277,7 @@ List<McpCatalogueEntry> firstPartyConnectors() => <McpCatalogueEntry>[
 ///
 /// They must also register clients dynamically (RFC 7591): no client id is
 /// baked into this app, so a server that expects a pre-registered one
-/// cannot be connected and must not be listed. GitHub used to be the known
-/// case; it is now reachable through [firstPartyConnectors] instead.
-/// `mcp_endpoints_live_test.dart` checks the rest against the real servers.
+/// cannot be connected and must not be listed.
 const List<McpCatalogueEntry> kMcpCatalogue = [
   // ─── Recommended ───────────────────────────────────────────────────────
   McpCatalogueEntry(
@@ -446,9 +443,6 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     // `mcp.mail.superhuman.com` keeps a `mail.` label after the first strip,
     // so the favicon fallback lands on a wrong icon — pin the real logo.
     iconUrl: 'https://www.google.com/s2/favicons?domain=superhuman.com&sz=128',
-    // Connectable via dynamic registration, but the account behind the sign-in
-    // needs a Superhuman Business plan with Ask AI enabled — a rejected token
-    // is the server's to explain, not ours to gate.
     description:
         'Search mail, draft and send replies, and manage your calendar. '
         'Needs a Superhuman Business plan.',
@@ -603,11 +597,6 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     publisher: 'godaddy.com',
     iconUrl: 'https://www.google.com/s2/favicons?domain=godaddy.com&sz=128',
   ),
-  // Namecheap is deliberately not offered. Its dynamic client registration
-  // accepts the request but hands back a fixed redirect-URI allowlist (Cursor,
-  // Claude, VS Code, ChatGPT and a few more) and drops the loopback address we
-  // listen on, so the sign-in always lands on the server's own error page. See
-  // McpOAuth.register, which fails such a server fast instead of hanging.
   McpCatalogueEntry(
     id: 'resend',
     name: 'Resend',
@@ -784,7 +773,6 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     category: 'Finance',
     description: 'Trading, quotes, positions and portfolio.',
     publisher: 'robinhood.com',
-    // `agent.robinhood.com` → robinhood.com favicon resolves fine, pinned for safety.
     iconUrl: 'https://www.google.com/s2/favicons?domain=robinhood.com&sz=128',
   ),
   McpCatalogueEntry(
@@ -792,7 +780,8 @@ const List<McpCatalogueEntry> kMcpCatalogue = [
     name: 'S&P Global',
     url: 'https://kfinance.kensho.com/integrations/mcp',
     category: 'Finance',
-    description: 'Company financials and market intelligence (Kensho Kfinance).',
+    description:
+        'Company financials and market intelligence (Kensho Kfinance).',
     publisher: 'spglobal.com',
     // Endpoint lives on kfinance.kensho.com — pin the S&P Global logo.
     iconUrl: 'https://www.google.com/s2/favicons?domain=spglobal.com&sz=128',
@@ -878,11 +867,6 @@ String? namespaceDomain(String serverName) {
 /// Whether [remoteUrl] is served by the same domain that publishes
 /// [serverName] — the check that separates a company's own server from a
 /// stranger's server that merely mentions the company.
-///
-/// `io.github.<user>` namespaces are refused outright. They prove only that
-/// someone holds a GitHub account, and the endpoint behind them can point
-/// anywhere, so a reader searching for "notion" could be handed a look-alike
-/// that collects the sign-in instead.
 bool isFirstPartyRemote(String serverName, String remoteUrl) {
   final namespace = serverName.split('/').first.trim().toLowerCase();
   if (namespace.startsWith('io.github.')) return false;
@@ -906,12 +890,9 @@ bool _isCurrentRegistryEntry(Object? meta) {
 
 /// Search the official MCP registry for anything not in the catalogue.
 ///
-/// Only entries with a remote endpoint come back: a package that has to be
-/// run locally is of no use to this app. Of those, only the ones the
-/// publishing domain serves itself survive [isFirstPartyRemote] — the
-/// registry is open to anyone, so an unfiltered list is a list of
-/// look-alikes waiting to be signed in to. Pass [firstPartyOnly] as false
-/// to see the rest.
+/// Only entries with a remote endpoint come back, and of those only the ones
+/// the publishing domain serves itself survive [isFirstPartyRemote]. Pass
+/// [firstPartyOnly] as false to see the rest.
 Future<List<McpCatalogueEntry>> searchMcpRegistry(
   String query, {
   http.Client? httpClient,
@@ -939,8 +920,7 @@ Future<List<McpCatalogueEntry>> searchMcpRegistry(
 
     final results = <McpCatalogueEntry>[];
     // The registry answers with every published version of a server, so the
-    // same connector arrives several times over. Keeping the first is enough:
-    // ids are what the rest of the app connects by.
+    // same connector arrives several times over. Keeping the first is enough.
     final seen = <String>{};
     for (final entry in servers) {
       final server = entry is Map ? entry['server'] : null;
@@ -950,7 +930,8 @@ Future<List<McpCatalogueEntry>> searchMcpRegistry(
       final remotes = server['remotes'];
       if (remotes is! List) continue;
       final remote = remotes.cast<Object?>().firstWhere(
-        (r) => r is Map && (r['type'] == 'streamable-http' || r['type'] == 'sse'),
+        (r) =>
+            r is Map && (r['type'] == 'streamable-http' || r['type'] == 'sse'),
         orElse: () => null,
       );
       if (remote is! Map) continue;

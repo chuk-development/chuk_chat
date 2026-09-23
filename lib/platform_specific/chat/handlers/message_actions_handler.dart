@@ -26,8 +26,7 @@ class MessageActionsHandler {
   /// reads the raw `text` field. Anything the UI hides — `<tool_call>` blocks,
   /// `<artifact>` blocks, provider special tokens — was therefore pasted into
   /// other apps.
-  static String _forExport(String text) =>
-      stripToolCallBlocksForDisplay(text);
+  static String _forExport(String text) => stripToolCallBlocksForDisplay(text);
 
   /// Copy text to clipboard
   Future<void> copyToClipboard(String rawText, {String? label}) async {
