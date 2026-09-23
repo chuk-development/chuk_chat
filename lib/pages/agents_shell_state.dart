@@ -843,6 +843,10 @@ mixin AgentsShellHost on State<MessengerShell> {
     if (_selectedAgentId == agentId) {
       setState(() {
         _selectedAgentId = null;
+        // The thread belonged to the deleted agent. Without this the pane
+        // kept showing its chat after the last agent was gone, instead of
+        // the empty state.
+        _selectedThreadKey = '';
         _showThreadOnNarrow = false;
         _selectionIsAuto = true;
       });

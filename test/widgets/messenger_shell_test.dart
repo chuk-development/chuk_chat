@@ -9,6 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 import '../support/icon_finder.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
@@ -1365,6 +1366,9 @@ void main() {
     expect(controller.removedMembers, [(a.id, amberId)]);
     expect(rooms.byId(b.id), isNull);
     expect(rooms.byId(a.id)!.members.length, 2);
+    // amber was the only agent: the pane falls to the empty state instead of
+    // still showing the deleted agent's chat.
+    expect(find.byType(AgentsStatusPanel), findsOneWidget);
   });
 
   testWidgets('removing a member from the sheet syncs removeRoomMember', (
