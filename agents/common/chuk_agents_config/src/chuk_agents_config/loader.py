@@ -61,6 +61,12 @@ from .errors import (
     ConfigProblem,
 )
 from .fields import CoercionError, FieldSpec, coerce_env, coerce_value, format_env_value
+from .state_home import (
+    HOME_ENV,
+    LEGACY_HOME_ENV,
+    default_state_home,
+    migrate_state_home,
+)
 from .schema import (
     ALL_FIELDS,
     CONFIG_VERSION,
@@ -83,8 +89,8 @@ __all__ = [
     "to_toml",
 ]
 
-#: The state directory when nothing says otherwise.
-DEFAULT_HOME = "~/.agents"
+#: The state directory when nothing says otherwise (``$XDG_DATA_HOME`` moves it).
+DEFAULT_HOME = "~/.local/share/chuk-agents"
 #: The file inside it.
 CONFIG_FILENAME = "config.toml"
 
@@ -134,89 +140,25 @@ def warn_legacy_env(current: str, legacy: str) -> None:
     )
 
 
-# -- the state directory, moved once ----------------------------------------
+# -- the state directory ----------------------------------------------------
 
-#: The environment variable that moves the state directory.
-HOME_ENV = "AGENTS_HOME"
-#: Its pre-rename spelling, read after it for one release.
-LEGACY_HOME_ENV = "COWORK_HOME"  # rename: keep
-
-#: The pre-rename name of the state directory. It holds the device seed, the
-#: account token and the secret vault, so it is moved, never re-created: a
-#: host that loses it makes every paired device pair again.
-LEGACY_HOME_NAME = ".cowork"  # rename: keep
-#: The name it is moved to.
-STATE_HOME_NAME = ".agents"
-
-_MIGRATED: set[str] = set()
-
-
-def migrate_state_home(target: Path) -> Path:
-    """The pre-rename state directory becomes :data:`STATE_HOME_NAME`, once.
-
-    Called with the path the renamed code wants. If that path already exists
-    there is nothing to do. If it does not, and the same directory under
-    :data:`LEGACY_HOME_NAME` does, the old one is moved to the new one and a
-    symlink from the old name to the new one is left behind, so a shell alias,
-    a systemd unit or a script that still uses the old name keeps working.
-
-    Anything that goes wrong is reported and ignored: a failed migration must
-    not stop the host from starting, and the caller still gets a usable path.
-
-    Returns ``target``, so the call can wrap the expression that produced it.
-    """
-    if target.name != STATE_HOME_NAME:
-        return target
-    key = str(target)
-    if key in _MIGRATED:
-        return target
-    _MIGRATED.add(key)
-    legacy = target.with_name(LEGACY_HOME_NAME)
-    try:
-        if target.exists() or target.is_symlink():
-            return target
-        if not legacy.is_dir() or legacy.is_symlink():
-            return target
-        os.replace(legacy, target)
-        try:
-            legacy.symlink_to(target, target_is_directory=True)
-        except OSError as error:  # pragma: no cover - platform dependent
-            warnings.warn(
-                f"moved {legacy} to {target} but could not leave a symlink"
-                f" behind: {error}",
-                RuntimeWarning,
-                stacklevel=2,
-            )
-        else:
-            warnings.warn(
-                f"the state directory moved from {legacy} to {target};"
-                f" {legacy} is now a symlink and will be removed in a later"
-                " release",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-    except OSError as error:  # pragma: no cover - filesystem dependent
-        warnings.warn(
-            f"could not move {legacy} to {target}: {error}",
-            RuntimeWarning,
-            stacklevel=2,
-        )
-    return target
+# Where it is and how the pre-rename one is moved: see :mod:`.state_home`.
 
 
 # -- where the file is -------------------------------------------------------
 
 
 def config_home(environ: Mapping[str, str] | None = None) -> Path:
-    """The state directory: ``$AGENTS_HOME``, else ``~/.agents``."""
+    """The state directory: ``$AGENTS_HOME``, else ``$COWORK_HOME``, else
+    ``$XDG_DATA_HOME/chuk-agents``.
+
+    Read-only: it never moves a legacy directory. The host process does that,
+    once, with :func:`chuk_agents_config.state_home.resolve_state_home`.
+    """
     env = os.environ if environ is None else environ
-    raw = (env.get(HOME_ENV) or "").strip()
-    if not raw:
-        legacy = (env.get(LEGACY_HOME_ENV) or "").strip()
-        if legacy:
-            warn_legacy_env(HOME_ENV, LEGACY_HOME_ENV)
-            raw = legacy
-    return migrate_state_home(Path(raw or DEFAULT_HOME).expanduser())
+    if not (env.get(HOME_ENV) or "").strip() and (env.get(LEGACY_HOME_ENV) or "").strip():
+        warn_legacy_env(HOME_ENV, LEGACY_HOME_ENV)
+    return default_state_home(env)
 
 
 def default_config_path(environ: Mapping[str, str] | None = None) -> Path:

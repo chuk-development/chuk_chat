@@ -63,7 +63,56 @@ def test_run_defaults_sandbox_from_the_environment(monkeypatch):
 def test_run_defaults_workspace_from_agents_home(monkeypatch):
     monkeypatch.setenv("AGENTS_HOME", "/srv/agents")
     parser = cli_module._build_parser()
-    assert parser.parse_args(["run"]).workspace == "/srv/agents"
+    assert parser.parse_args(["run"]).workspace is None
+    for command in ("run", "connect", "status", "doctor", "trace"):
+        assert cli_module.workspace_for(command, None) == "/srv/agents"
+
+
+def test_cowork_home_still_moves_the_workspace(monkeypatch):
+    monkeypatch.delenv("AGENTS_HOME", raising=False)
+    monkeypatch.setenv("COWORK_HOME", "/srv/legacy")
+    assert cli_module.workspace_for("run", None) == "/srv/legacy"
+    assert cli_module.workspace_for("status", None) == "/srv/legacy"
+
+
+def test_an_explicit_workspace_wins(monkeypatch):
+    monkeypatch.setenv("AGENTS_HOME", "/srv/agents")
+    assert cli_module.workspace_for("run", "/srv/explicit") == "/srv/explicit"
+
+
+def _fake_home(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    home.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("AGENTS_HOME", raising=False)
+    monkeypatch.delenv("COWORK_HOME", raising=False)
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    return home
+
+
+def test_status_and_run_read_the_same_pairing(tmp_path, monkeypatch):
+    """The owner's machine: ~/.cowork paired, ~/.agents holds only skills.
+
+    ``status`` must see the pairing before the move, and ``run`` must move it
+    to the dedicated directory, after which ``status`` reads it there.
+    """
+    home = _fake_home(tmp_path, monkeypatch)
+    write_trust(home / ".cowork")
+    (home / ".cowork" / "host_device.key").write_text("seed", encoding="utf-8")
+    (home / ".agents" / "skills" / "pdf").mkdir(parents=True)
+    (home / ".agents" / ".skill-lock.json").write_text("{}", encoding="utf-8")
+
+    before = cli_module.workspace_for("status", None)
+    assert is_paired(before)
+    assert (home / ".cowork").is_dir() and not (home / ".cowork").is_symlink()
+
+    moved = cli_module.workspace_for("run", None)
+    assert moved == str(home / ".local" / "share" / "chuk-agents")
+    assert is_paired(moved)
+    assert cli_module.workspace_for("status", None) == moved
+    assert cli_module.workspace_for("connect", None) == moved
+    assert (home / ".agents" / "skills" / "pdf").is_dir()
+    assert (home / ".agents" / ".skill-lock.json").is_file()
 
 
 # ------------------------------------------------------------- pair state
@@ -301,7 +350,7 @@ def test_status_of_an_unpaired_host_points_at_connect(tmp_path):
     )
     body = "\n".join(lines)
     assert "Paired:" in body and "no" in body
-    assert "cowork-host connect" in body
+    assert "agents-host connect" in body
 
 
 # -------------------------------------------------------------- service

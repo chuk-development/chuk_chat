@@ -67,7 +67,7 @@ from .protocol import ROLE_CONTROLLER
 from .relay import EVENT_JOIN, EVENT_LEAVE, LocalRelay
 from .transport import LocalRelayTransport
 from .room_agents import RoomAgentPool
-from chuk_agents_config import migrate_state_home
+from chuk_agents_config import resolve_state_home
 
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
@@ -82,7 +82,10 @@ from .serve import TaskServer
 # without the app's ``run_ack`` before it is announced as finished while away.
 RUN_ACK_TIMEOUT_SECONDS = float(os.environ.get("AGENTS_RUN_ACK_TIMEOUT_SECONDS", "15") or 15)
 
-DEFAULT_WORKSPACE = "~/.agents"
+#: For help texts only. The real default is resolved by
+#: :func:`chuk_agents_config.resolve_state_home`: ``$AGENTS_HOME``, else
+#: ``$XDG_DATA_HOME/chuk-agents``. Not ``~/.agents``: other tools own that one.
+DEFAULT_WORKSPACE = "~/.local/share/chuk-agents"
 KEY_VERSION = 1
 
 #: The two pipes the party can run on (docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md).
@@ -115,7 +118,7 @@ class LocalHost:
         self,
         *,
         port: int = 8787,
-        workspace_dir: str = DEFAULT_WORKSPACE,
+        workspace_dir: str | None = None,
         model_id: str = DEFAULT_MODEL_ID,
         provider_slug: str | None = None,
         reasoning_effort: str | None = None,
@@ -173,12 +176,11 @@ class LocalHost:
         # executor so ``appSession`` MCP connectors authenticate server-side.
         self._session: SupabaseSession | None = None
 
-        # The pre-rename state directory is moved here, once, before
-        # anything reads the device seed, the account token or the
-        # secret vault.
-        self._workspace = migrate_state_home(
-            Path(workspace_dir).expanduser()
-        )
+        # ``None`` is the default state directory. A legacy one (``~/.cowork``,
+        # or host files at the top of ``~/.agents``) is moved there, once,
+        # before anything reads the device seed, the account token or the
+        # secret vault. An explicit path is used as given.
+        self._workspace = resolve_state_home(workspace_dir, logger=self._log)
         self._agents_dir = self._workspace / "agents"
         self._agents_dir.mkdir(parents=True, exist_ok=True)
         self._roster_path = str(self._workspace / "roster.db")
