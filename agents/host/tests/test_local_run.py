@@ -167,6 +167,10 @@ class ControllerDouble:
                 elif kind == "frame":
                     self.raw_result_frames.append(msg["frame"])
                     payload = self._open(msg["frame"])
+                    if payload.get("type") == "host_session_request":
+                        # This double plays an app that cannot mint a host
+                        # session; such an app ignores the request.
+                        continue
                     results.append(payload)
                     if payload.get("type") == "error":
                         return results
