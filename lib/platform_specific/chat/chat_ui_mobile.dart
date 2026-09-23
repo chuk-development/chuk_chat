@@ -3550,8 +3550,12 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           // above the composer either: the mark belongs in
                           // the middle of the window, which is where the eye
                           // looks for it.
+                          // The Agents thread keeps the original app's
+                          // placement, a little above centre.
                           child: Align(
-                            alignment: Alignment.center,
+                            alignment: widget.messengerMode
+                                ? const Alignment(0.0, -0.3)
+                                : Alignment.center,
                             // The alpha lives in the tint colour instead of
                             // an Opacity widget: Opacity pushes an offscreen
                             // save layer on every paint, and cacheWidth stops

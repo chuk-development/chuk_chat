@@ -521,16 +521,18 @@ class _AgentsAppState extends State<AgentsApp> {
   ///
   /// The shell: Agents's MessengerShell when the app is built with
   /// `--dart-define=FEATURE_AGENTS=true`, upstream's RootWrapper otherwise —
-  /// the split the runbook asks for. The onboarding gate wraps both.
+  /// the split the runbook asks for. The onboarding tour is chuk_chat's and
+  /// walks chuk_chat's screens; the Agents app never had one, so it wraps only
+  /// the chuk_chat shell.
   Widget _buildHome(AppShellConfig shellConfig) => AuthGate(
     themeController: _theme,
     buildLogin: (_) => const LoginPage(),
-    buildShell: (_) => _OnboardingFirstLaunchGate(
-      shellConfig: shellConfig,
-      child: kFeatureAgents
-          ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
-          : RootWrapper(config: shellConfig),
-    ),
+    buildShell: (_) => kFeatureAgents
+        ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
+        : _OnboardingFirstLaunchGate(
+            shellConfig: shellConfig,
+            child: RootWrapper(config: shellConfig),
+          ),
   );
 
   @override
