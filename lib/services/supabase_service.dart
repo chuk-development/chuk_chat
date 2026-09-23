@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/platform_config.dart' show kFeatureAgents;
 import 'package:chuk_chat/services/auth_trace.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/session_refresh_scheduler.dart';
@@ -61,14 +62,15 @@ class SupabaseService {
         // Agents-only (bead cowork-2n1): the app's refresh must respect the
         // paired host, which shares the single-use refresh token. gotrue's
         // own timer cannot know about the host; SessionRefreshScheduler does,
-        // and it refreshes on its own when no relay is in use.
-        autoRefreshToken: false,
+        // and it refreshes on its own when no relay is in use. Without
+        // Agents there is no host, and gotrue refreshes as in chuk_chat.
+        autoRefreshToken: !kFeatureAgents,
       ),
     );
 
     _initialized = true;
     initializedListenable.value = true;
-    SessionRefreshScheduler.instance.start();
+    if (kFeatureAgents) SessionRefreshScheduler.instance.start();
   }
 
   static GoTrueClient get auth => client.auth;
