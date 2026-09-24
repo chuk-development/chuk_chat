@@ -266,3 +266,108 @@ Never a picture the agent drew, never a second bar widget.
 6. Does content scroll behind the bars, or stop under them?
 7. Does an open thread still show the coworker's accent?
 8. Tests for the layout, not only for the logic?
+
+## 14. Desktop (wide window, Agents)
+
+The phone layout is done and stays as it is. This section is only for the
+desktop layout of Agents (`FEATURE_AGENTS=true`, desktop platform). A desktop
+window must look like a desktop app, not like a phone that got wider. The
+model is a desktop messenger (Slack, Linear, the Claude desktop app): fixed
+panes, dense rows, hover states, keyboard control.
+
+### 14.1 Frame: three panes, no floating chrome
+
+- **Left pane: the roster.** Always docked, resizable (220–360 px, default
+  264 px), collapsible to a 56 px rail. It holds the app name, a search field,
+  the sections "Agents" and "Rooms", and the account row at the bottom.
+- **Centre pane: the thread.** A title bar of 48 px at the top, the transcript
+  in the middle, the composer at the bottom.
+- **Right pane: details.** The agent panel (model, tokens, runtime, sandbox,
+  skills) is a docked, resizable pane (300–420 px), opened and closed from the
+  title bar. It is not an overlay drawer. It pushes the thread; it does not
+  cover it.
+- Panes are divided by a 1 px hairline in `outlineVariant`. No floating pills
+  in the corners, no veil under the title bar: the title bar is part of the
+  frame.
+
+### 14.2 Title bar (centre pane)
+
+- Left: agent face (24 px), name (titleSmall, w600), status line below or
+  beside it in labelSmall ("Working", "Ready", "Offline").
+- Right: icon buttons of 32 px with a 20 px glyph, 4 px apart, each with a
+  tooltip that names the action and its shortcut. Order: call, screen, files,
+  details pane toggle, more (…). Same shape and fill for every button: no
+  button has its own dark square.
+
+### 14.3 Rows (roster)
+
+- Row height 36 px (agent) / 32 px (room), 8 px horizontal padding, face 24 px.
+- Hover: `surfaceContainerHigh`. Selected: `secondaryContainer` with a 3 px
+  accent bar on the left edge. Unread: bold name plus a small dot, no big badge.
+- Right click opens the context menu (rename, pin, hide, delete). The "…"
+  button appears on hover only.
+
+### 14.4 Transcript
+
+- Reading measure stays 720 px, centred in the centre pane.
+- Message actions (copy, retry, branch) appear on hover over the message, in a
+  small toolbar at the top right of the message. They are not a permanent pill
+  under every message.
+- Day chips and bubble runs as on the phone.
+
+### 14.5 Composer
+
+- Docked at the bottom of the centre pane, same width as the transcript.
+  Corner radius 12, not a pill. One line high when empty, grows to 40 % of the
+  pane height, then scrolls.
+- Attach, mode/model and mic are 28 px icon buttons inside the field, on the
+  bottom row. Send is a 28 px filled button.
+- A hint line under it: "Enter to send · Shift+Enter for a new line".
+
+### 14.6 Dialogs and menus
+
+- New agent, new room, rename, delete: centred dialogs (max 480 px wide),
+  never full-screen sheets.
+- Menus are the `MenuTileGroup` menus (radius 26 on the phone). On the desktop
+  they use radius 12 and 32 px rows, because they open under a mouse pointer.
+
+### 14.7 Keyboard
+
+- Ctrl+K: quick switcher (agents and rooms, type to filter).
+- Ctrl+N: new agent. Ctrl+Shift+N: new room.
+- Ctrl+1 … Ctrl+9: open the n-th agent in the roster.
+- Ctrl+. : toggle the details pane. Ctrl+B: collapse the roster.
+- Esc: close the open menu, dialog or pane.
+- Up in an empty composer: edit the last own message.
+
+### 14.8 Density and type
+
+- Body text 14 px (the user's chat font size still applies to message text).
+- Controls use the compact visual density of Flutter's desktop default.
+- Same colours, fonts, agent faces and accent as the phone. No glow, no
+  coloured shadow, no gradient on a control (see §8).
+
+### 14.9 Rules that do not change
+
+- The phone layout (below the desktop breakpoint) is not changed by this
+  section.
+- `FEATURE_AGENTS` off: the chuk_chat desktop is not changed by this section.
+
+### 14.10 Where it lives
+
+- The frame, the pane widths, the keyboard and the right pane:
+  `lib/pages/agents_desktop_layout.dart` (a part of the messenger shell).
+  Widths, the folded roster and the open details pane persist per device.
+- The numbers above: `lib/widgets/agents_desktop/desktop_metrics.dart`. The
+  bar button, the hairline, the resize handle and the pane header:
+  `desktop_controls.dart`. The quick switcher, the hover toolbar and the
+  centred dialogs sit next to them.
+- The roster: `lib/widgets/agent_roster_view.dart` (desktop only; the phone
+  inbox is `MobileAgentList`). The title bar: the non-dense shape of
+  `AgentsThreadHeader`. The composer: `_buildAgentsComposer` in
+  `chat_ui_desktop.dart`, only for `agentsThread`.
+- The desktop menu shape is switched on by `MenuDensity`, which only the
+  desktop body puts in the tree. A menu or dialog opened from inside it
+  captures it; nothing outside it changes.
+- Tests: `test/widgets/agents_desktop_shell_test.dart`, plus the desktop
+  cases in the roster, header, shell and thread view tests.

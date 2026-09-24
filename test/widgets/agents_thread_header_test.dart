@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
+import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 
 /// The header only ever gets the width its parent has, so every test states
@@ -38,35 +40,23 @@ void main() {
     expect(find.byTooltip('Connected'), findsOneWidget);
   });
 
-  testWidgets(
-    'a connection that is down colours the dot and says so on hover',
-    (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          const AgentsThreadHeader(
-            title: 'Marta',
-            subtitle: 'release manager',
-            connection: AgentsThreadConnection.down,
-          ),
+  testWidgets('a connection that is down says so on hover', (tester) async {
+    await tester.pumpWidget(
+      _wrap(
+        const AgentsThreadHeader(
+          title: 'Marta',
+          subtitle: 'release manager',
+          connection: AgentsThreadConnection.down,
         ),
-      );
+      ),
+    );
 
-      // Still no status line anywhere: the connection is not the user's job.
-      expect(find.text('Offline'), findsNothing);
-      expect(find.text('release manager'), findsOneWidget);
-      expect(find.byTooltip('Offline'), findsOneWidget);
-      expect(
-        iconColor(
-          tester,
-          find.descendant(
-            of: find.byTooltip('Offline'),
-            matching: findIcon(Icons.circle),
-          ),
-        ),
-        Theme.of(tester.element(find.text('Marta'))).colorScheme.error,
-      );
-    },
-  );
+    // Still no status line about the socket: the connection is not the
+    // user's job. The subject's tooltip says it.
+    expect(find.text('Offline'), findsNothing);
+    expect(find.text('release manager'), findsOneWidget);
+    expect(find.byTooltip('Offline'), findsOneWidget);
+  });
 
   testWidgets('the automation chip names the run and toggles the cards', (
     tester,
@@ -194,13 +184,14 @@ void main() {
     );
   });
 
-  testWidgets('a floating bar sits on the top veil, not on a solid band', (
+  testWidgets('the desktop bar is 48 px, solid, with a hairline under it', (
     tester,
   ) async {
     await tester.pumpWidget(
       _wrap(const AgentsThreadHeader(title: 'Marta', floating: true)),
     );
 
+    // Part of the frame (docs/DESIGN.md §14.1): no veil, no gradient.
     final Finder veil = find.descendant(
       of: find.byType(AgentsThreadHeader),
       matching: find.byWidgetPredicate(
@@ -210,10 +201,57 @@ void main() {
             (w.decoration as BoxDecoration).gradient != null,
       ),
     );
-    expect(veil, findsOneWidget);
+    expect(veil, findsNothing);
     expect(
       tester.getSize(find.byType(AgentsThreadHeader)).height,
-      AgentsThreadHeader.barHeight + AgentsThreadHeader.veilFade,
+      kDeskBarHeight,
     );
+    expect(
+      find.descendant(
+        of: find.byType(AgentsThreadHeader),
+        matching: find.byType(DeskHairline),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('bar buttons are 32 px and a toggle that is on is filled', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _wrap(
+        AgentsThreadHeader(
+          title: 'Marta',
+          actions: <AgentsThreadAction>[
+            AgentsThreadAction(
+              icon: Icons.view_sidebar_outlined,
+              tooltip: 'Details',
+              selected: true,
+              onPressed: () {},
+            ),
+          ],
+          menuActions: <AgentsThreadAction>[
+            AgentsThreadAction(
+              icon: Icons.copy_all_rounded,
+              tooltip: 'Copy Debug Chat',
+              onPressed: () {},
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final DeskIconButton details = tester.widget<DeskIconButton>(
+      find.ancestor(
+        of: find.byTooltip('Details'),
+        matching: find.byType(DeskIconButton),
+      ),
+    );
+    expect(details.selected, isTrue);
+    expect(details.size, 32);
+    expect(details.glyph, 20);
+    // The menu action is not a button of its own: it waits behind "…".
+    expect(find.byTooltip('Copy Debug Chat'), findsNothing);
+    expect(find.byTooltip('More actions'), findsOneWidget);
   });
 }

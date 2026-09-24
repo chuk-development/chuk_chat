@@ -26,6 +26,7 @@ class RoomListView extends StatelessWidget {
     this.onRename,
     this.onManageMembers,
     this.selectedRoomId,
+    this.showHeader = true,
   });
 
   final RoomSource source;
@@ -48,6 +49,10 @@ class RoomListView extends StatelessWidget {
 
   final String? selectedRoomId;
 
+  /// The list's own "Rooms" title row. The desktop pane has a header of its
+  /// own and turns it off.
+  final bool showHeader;
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -57,8 +62,10 @@ class RoomListView extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _header(context),
-            const Divider(height: 1),
+            if (showHeader) ...[
+              _header(context),
+              const Divider(height: 1),
+            ],
             Expanded(
               child: rooms.isEmpty
                   ? _emptyState(context)
