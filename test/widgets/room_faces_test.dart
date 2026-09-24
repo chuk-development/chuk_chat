@@ -324,8 +324,13 @@ void main() {
         tester.getTopLeft(find.text('ops')).dx,
         moreOrLessEquals(tester.getTopLeft(find.text('Amber')).dx, epsilon: 0.5),
       );
+      // Control Rooms and New room are in the roster's New menu.
+      await tester.tap(find.byTooltip('New'));
+      await tester.pumpAndSettle();
       expect(find.text('Control Rooms'), findsOneWidget);
       expect(find.text('New room'), findsOneWidget);
+      await tester.tapAt(Offset.zero);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('ops'));
       await tester.pumpAndSettle();

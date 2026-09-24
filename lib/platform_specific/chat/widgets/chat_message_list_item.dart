@@ -6,6 +6,7 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/widgets/agents_desktop/message_hover_actions.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -41,7 +42,13 @@ class ChatMessageListItem extends StatelessWidget {
     this.onReaction,
     this.onReply,
     this.onEditRequested,
+    this.hoverActions = false,
   });
+
+  /// The Agents desktop transcript (docs/DESIGN.md §14.4): the message's
+  /// actions show in a small toolbar at its top right while the pointer is on
+  /// it, instead of as a permanent pill under it. Off everywhere else.
+  final bool hoverActions;
 
   final List<Map<String, String>> messages;
   final int index;
@@ -108,8 +115,7 @@ class ChatMessageListItem extends StatelessWidget {
     final ChatRuntime? liveRuntime = activeChatId == null
         ? null
         : ChatRuntimeRegistry.instance.lookup(activeChatId!);
-    final bool isLastAiMessage =
-        !data.isUser && index == messages.length - 1;
+    final bool isLastAiMessage = !data.isUser && index == messages.length - 1;
     final bool forceLive =
         isLastAiMessage && (liveRuntime?.isSending.value ?? false);
 
@@ -122,7 +128,9 @@ class ChatMessageListItem extends StatelessWidget {
       endsGroup: endsGroup,
       // Agents's user bubble is narrower (0.72, the original app's
       // messenger width); upstream keeps 0.8.
-      maxWidth: data.isUser ? maxWidth * (messengerMode ? 0.72 : 0.8) : maxWidth,
+      maxWidth: data.isUser
+          ? maxWidth * (messengerMode ? 0.72 : 0.8)
+          : maxWidth,
       isReasoningStreaming: data.isReasoningStreaming || forceLive,
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,
@@ -139,8 +147,10 @@ class ChatMessageListItem extends StatelessWidget {
       imageCostEur: data.imageCostEur,
       imageGeneratedAt: data.imageGeneratedAt,
       attachments: data.attachments,
-      actions: actions,
-      userMessageActions: userMessageActions,
+      actions: hoverActions ? const <MessageBubbleAction>[] : actions,
+      userMessageActions: hoverActions
+          ? const <MessageBubbleAction>[]
+          : userMessageActions,
       isEditing: isEditing,
       showReasoningTokens: showReasoningTokens,
       showModelInfo: showModelInfo,
@@ -181,22 +191,24 @@ class ChatMessageListItem extends StatelessWidget {
         isLastAiMessage &&
         (data.isStreamingMessage || runtime.isSending.value);
     if (wrapForStream) {
-      return RepaintBoundary(
-        child: ValueListenableBuilder<StreamingLive?>(
-          valueListenable: runtime.streamingLive,
-          builder: (context, live, _) {
-            final bool matches = live != null && live.index == index;
-            final String text = matches
-                ? live.text.trimRight()
-                : data.displayText;
-            final String rawReasoning = matches
-                ? live.reasoning
-                : data.reasoning;
-            final String? reasoning = rawReasoning.trim().isEmpty
-                ? null
-                : rawReasoning;
-            return buildBubble(text, reasoning);
-          },
+      return _withHoverActions(
+        RepaintBoundary(
+          child: ValueListenableBuilder<StreamingLive?>(
+            valueListenable: runtime.streamingLive,
+            builder: (context, live, _) {
+              final bool matches = live != null && live.index == index;
+              final String text = matches
+                  ? live.text.trimRight()
+                  : data.displayText;
+              final String rawReasoning = matches
+                  ? live.reasoning
+                  : data.reasoning;
+              final String? reasoning = rawReasoning.trim().isEmpty
+                  ? null
+                  : rawReasoning;
+              return buildBubble(text, reasoning);
+            },
+          ),
         ),
       );
     }
@@ -205,10 +217,20 @@ class ChatMessageListItem extends StatelessWidget {
         ? null
         : data.reasoning;
     final Widget bubble = buildBubble(data.displayText, reasoning);
-    return RepaintBoundary(
-      child: data.isUser && uiKey == flyInKey
-          ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
-          : bubble,
+    return _withHoverActions(
+      RepaintBoundary(
+        child: data.isUser && uiKey == flyInKey
+            ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
+            : bubble,
+      ),
+    );
+  }
+
+  Widget _withHoverActions(Widget row) {
+    if (!hoverActions) return row;
+    return MessageHoverActions(
+      actions: data.isUser ? userMessageActions : actions,
+      child: row,
     );
   }
 }

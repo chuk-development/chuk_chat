@@ -465,7 +465,8 @@ mixin AgentsShellHost on State<MessengerShell> {
     // hardcoded fallback for the case where no localization is reachable (the
     // callback can fire after this shell is gone).
     final String product =
-        (mounted ? AppLocalizations.of(context)?.chukChat : null) ?? 'Chuk Chat';
+        (mounted ? AppLocalizations.of(context)?.chukChat : null) ??
+        'Chuk Chat';
     if (agentId == null) return product;
     return _roster.byId(agentId)?.name ?? product;
   }
@@ -632,7 +633,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     double topInset = 0,
     bool phone = false,
     List<AgentsThreadAction> actions = const <AgentsThreadAction>[],
+    List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[],
     double leadingInset = 0,
+    void Function(AgentsAgent agent)? onOpenSubject,
   }) {
     final agent = _selectedAgent;
     return AgentsThreadView(
@@ -665,9 +668,10 @@ mixin AgentsShellHost on State<MessengerShell> {
       title: agent?.name,
       subtitle: agent?.role,
       headerAgent: agent,
-      onOpenAgentProfile: _openAgentProfile,
+      onOpenAgentProfile: onOpenSubject ?? _openAgentProfile,
       onOpenAgentScreen: _openAgentScreenOrNull,
       actions: actions,
+      menuActions: menuActions,
       leadingInset: leadingInset,
       topInset: topInset,
       phoneLayout: phone,
@@ -724,8 +728,9 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// open still pushes `RoomThreadPage` as its own route, so the agent thread
   /// and its live socket stay mounted underneath — a room never disturbs the
   /// one-to-one connection.
-  Widget _buildRoomList() => RoomListView(
+  Widget _buildRoomList({bool showHeader = true}) => RoomListView(
     source: _rooms,
+    showHeader: showHeader,
     onCreate: _openRoomCreate,
     onSelect: _openRoom,
     onDelete: _deleteRoom,
@@ -736,9 +741,8 @@ mixin AgentsShellHost on State<MessengerShell> {
   Future<void> _openRoomCreate() async {
     // Only coworkers the app can actually name can join a room.
     final agents = _roster.visibleAgents;
-    await showModalBottomSheet<void>(
+    await showAgentsSheetOrDialog<void>(
       context: context,
-      isScrollControlled: true,
       builder: (sheetContext) => RoomCreateSheet(
         agents: agents,
         onCancel: () => Navigator.of(sheetContext).pop(),
@@ -762,51 +766,60 @@ mixin AgentsShellHost on State<MessengerShell> {
     );
   }
 
+  /// Opens a room. The phone pushes it as its own route, so the agent thread
+  /// and its live socket stay mounted underneath — a room never disturbs the
+  /// one-to-one connection. The desktop layout overrides this and shows the
+  /// room in its centre pane instead.
   void _openRoom(String roomId) {
     final room = _rooms.byId(roomId);
     if (room == null) return;
-    final controller = _controller.value;
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
           appBar: AppBar(title: Text(room.name)),
-          // With a live socket the room streams over it (RoomThreadPage keeps
-          // only its own room's frames); without one — the thread view has not
-          // built the transport yet — it shows an honest waiting state. Driving
-          // a room is still the host-gated step; the page renders whatever
-          // turns the host sends.
-          body: controller == null
-              ? RoomThreadView(
-                  roomName: room.name,
-                  userMessage: 'Connect your host to start this room.',
-                  turns: const <AgentsRoomTurn>[],
-                  members: room.members,
-                )
-              : RoomThreadPage(
-                  roomId: room.id,
-                  roomName: room.name,
-                  members: room.members,
-                  // The roster only supplies the display name and role the
-                  // mention picker shows. A member with no matching agent still
-                  // gets a row, labelled by its handle.
-                  agents: _roster.agents,
-                  userMessage: 'Message the room to start.',
-                  inbound: controller.inbound,
-                  // Re-bind to the new socket on a reconnect: the page follows
-                  // _controller, re-subscribes to the fresh inbound and re-runs
-                  // onReady (re-create + re-request history) automatically.
-                  rebind: _controller,
-                  // Read the live controller each time, not the one captured at
-                  // open, so a send after a reconnect goes to the new socket.
-                  onSend: (message) =>
-                      _controller.value?.sendRoomTask(room.id, message),
-                  onReady: () {
-                    final c = _controller.value;
-                    if (c != null) _onRoomOpened(c, room);
-                  },
-                ),
+          body: _buildRoomBody(room),
         ),
       ),
+    );
+  }
+
+  /// A room's conversation, for the phone route and the desktop centre pane.
+  Widget _buildRoomBody(AgentsRoom room) {
+    final controller = _controller.value;
+    // With a live socket the room streams over it (RoomThreadPage keeps only
+    // its own room's frames); without one — the thread view has not built the
+    // transport yet — it shows an honest waiting state. Driving a room is
+    // still the host-gated step; the page renders whatever turns the host
+    // sends.
+    if (controller == null) {
+      return RoomThreadView(
+        roomName: room.name,
+        userMessage: 'Connect your host to start this room.',
+        turns: const <AgentsRoomTurn>[],
+        members: room.members,
+      );
+    }
+    return RoomThreadPage(
+      roomId: room.id,
+      roomName: room.name,
+      members: room.members,
+      // The roster only supplies the display name and role the mention picker
+      // shows. A member with no matching agent still gets a row, labelled by
+      // its handle.
+      agents: _roster.agents,
+      userMessage: 'Message the room to start.',
+      inbound: controller.inbound,
+      // Re-bind to the new socket on a reconnect: the page follows
+      // _controller, re-subscribes to the fresh inbound and re-runs onReady
+      // (re-create + re-request history) automatically.
+      rebind: _controller,
+      // Read the live controller each time, not the one captured at open, so
+      // a send after a reconnect goes to the new socket.
+      onSend: (message) => _controller.value?.sendRoomTask(room.id, message),
+      onReady: () {
+        final c = _controller.value;
+        if (c != null) _onRoomOpened(c, room);
+      },
     );
   }
 
@@ -815,15 +828,10 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// while the host was offline, so the host has it before any task or history
   /// request lands. Then ask for its stored history.
   void _onRoomOpened(AgentsRelayController controller, AgentsRoom room) {
-    controller.createRoom(
-      room.id,
-      room.name,
-      <Map<String, String>>[
-        for (final m in room.members)
-          <String, String>{'agent_id': m.agentId, 'handle': m.handle},
-      ],
-      agentToAgent: room.agentToAgent,
-    );
+    controller.createRoom(room.id, room.name, <Map<String, String>>[
+      for (final m in room.members)
+        <String, String>{'agent_id': m.agentId, 'handle': m.handle},
+    ], agentToAgent: room.agentToAgent);
     controller.requestRoomHistory(room.id);
   }
 
@@ -839,9 +847,8 @@ mixin AgentsShellHost on State<MessengerShell> {
         for (final a in _roster.visibleAgents)
           if (!inRoom.contains(a.id)) a,
       ];
-      showModalBottomSheet<void>(
+      showAgentsSheetOrDialog<void>(
         context: ctx,
-        isScrollControlled: true,
         builder: (sheetContext) => RoomMembersSheet(
           room: room,
           candidates: candidates,
@@ -1002,26 +1009,6 @@ mixin AgentsShellHost on State<MessengerShell> {
     return controller;
   }
 
-  void _openControlDrawer() => _scaffoldKey.currentState?.openEndDrawer();
-
-  Widget? _buildControlDrawer(BuildContext context) {
-    final agent = _selectedAgent;
-    if (agent == null) return null;
-    return Drawer(
-      width: 360,
-      child: SafeArea(
-        child: AgentControlPanel(
-          agent: agent,
-          source: _controlSource,
-          onScheduleSubmitted: (spec) {
-            // The schedule is real and it is the user's, but it runs in the app's
-            // record only: nothing installs it on the host yet.
-            _roster.setSchedule(agent.id, spec);
-          },
-        ),
-      ),
-    );
-  }
 }
 
 /// The newest timestamp among [messages] (`sentAt`, else `startedAt`), or

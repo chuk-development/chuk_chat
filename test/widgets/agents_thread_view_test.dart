@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -256,9 +258,7 @@ void main() {
     expect(find.textContaining('macMismatch'), findsNothing);
   });
 
-  testWidgets('a raw transport error never reaches the screen', (
-    tester,
-  ) async {
+  testWidgets('a raw transport error never reaches the screen', (tester) async {
     final controller = await pumpView(tester);
     controller.set(
       const AgentsRelayState(
@@ -547,7 +547,9 @@ void main() {
       final (_, store) = await pumpPersistent(tester, hostAway: true);
       await letTheReconnectsFail(tester);
 
-      await tester.tap(find.byKey(const ValueKey<String>('agents-reconnect-more')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-reconnect-more')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remove this computer…'));
       await tester.pumpAndSettle();
@@ -564,7 +566,9 @@ void main() {
       // has tried and failed to reconnect on its own.
       await letTheReconnectsFail(tester);
 
-      await tester.tap(find.byKey(const ValueKey<String>('agents-reconnect-more')));
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-reconnect-more')),
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Remove this computer…'));
       await tester.pumpAndSettle();
@@ -1075,11 +1079,14 @@ void main() {
           final Type screenType = phone ? ChukChatUIMobile : ChukChatUIDesktop;
           final State before = tester.state(find.byType(screenType));
 
-          String composerText() =>
-              tester.widget<TextField>(find.byType(TextField).first)
-                  .controller!
-                  .text;
-          await tester.enterText(find.byType(TextField).first, 'half a thought');
+          String composerText() => tester
+              .widget<TextField>(find.byType(TextField).first)
+              .controller!
+              .text;
+          await tester.enterText(
+            find.byType(TextField).first,
+            'half a thought',
+          );
           await tester.pump();
           expect(composerText(), 'half a thought');
 
@@ -1125,6 +1132,136 @@ void main() {
       expect(AgentsReplayLoader.instance.cursorFor('thread-1'), 3);
 
       // The remount left the imported screen's own idle-close timer behind.
+      await _flushIdleTimers(tester);
+    });
+
+    // --- the desktop transcript and composer (docs/DESIGN.md §14.4-14.5) ---
+
+    testWidgets(
+      'message actions show in a toolbar on hover, not under every message',
+      (tester) async {
+        final controller = await pumpPaired(tester);
+        controller.emit(
+          const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
+        );
+        controller.emit(const AgentsRelayUser('do the thing', mid: 1));
+        controller.emit(
+          const AgentsRelayDelta('all set', replay: true, mid: 2),
+        );
+        controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+        await tester.pumpAndSettle();
+
+        const Key toolbar = ValueKey<String>('message-hover-toolbar');
+        // No permanent pill: nothing until the pointer is on a message.
+        expect(find.byKey(toolbar), findsNothing);
+        final List<MessageBubble> bubbles = tester
+            .widgetList<MessageBubble>(find.byType(MessageBubble))
+            .toList();
+        expect(bubbles, isNotEmpty);
+        for (final MessageBubble bubble in bubbles) {
+          expect(bubble.actions, isEmpty);
+          expect(bubble.userMessageActions, isEmpty);
+        }
+
+        final TestGesture mouse = await tester.createGesture(
+          kind: PointerDeviceKind.mouse,
+        );
+        addTearDown(mouse.removePointer);
+        await mouse.addPointer(location: Offset.zero);
+        await mouse.moveTo(
+          tester.getCenter(find.textContaining('all set').first),
+        );
+        await tester.pumpAndSettle();
+        expect(find.byKey(toolbar), findsOneWidget);
+        // Top right of the message.
+        final Rect bar = tester.getRect(find.byKey(toolbar));
+        final Rect answer = tester.getRect(
+          find
+              .ancestor(
+                of: find.textContaining('all set').first,
+                matching: find.byType(MessageBubble),
+              )
+              .first,
+        );
+        expect(bar.right, moreOrLessEquals(answer.right, epsilon: 1));
+        expect(bar.top, lessThan(answer.top + 30));
+
+        await mouse.moveTo(const Offset(5, 5));
+        await tester.pumpAndSettle();
+        expect(find.byKey(toolbar), findsNothing);
+        await _flushIdleTimers(tester);
+      },
+    );
+
+    testWidgets('Up in an empty composer edits the last own message', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayUser('do the thing', mid: 1));
+      controller.emit(const AgentsRelayDelta('all set', replay: true, mid: 2));
+      controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      await tester.pumpAndSettle();
+
+      final Finder field = find.descendant(
+        of: find.byKey(const ValueKey<String>('agents-desktop-composer')),
+        matching: find.byType(TextField),
+      );
+      await tester.tap(field);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.pumpAndSettle();
+
+      expect(tester.widget<TextField>(field).controller!.text, 'do the thing');
+      expect(find.textContaining('Editing message'), findsOneWidget);
+      // Esc leaves the edit again.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.textContaining('Editing message'), findsNothing);
+      await _flushIdleTimers(tester);
+    });
+
+    testWidgets('the desktop composer is docked: radius 12, 28 px controls, '
+        'and the Enter hint under it', (tester) async {
+      await pumpPaired(tester);
+
+      final Finder box = find.byKey(
+        const ValueKey<String>('agents-desktop-composer'),
+      );
+      expect(box, findsOneWidget);
+      final BoxDecoration decoration =
+          tester.widget<Container>(box).decoration! as BoxDecoration;
+      expect(decoration.borderRadius, BorderRadius.circular(12));
+      expect(decoration.gradient, isNull);
+      expect(decoration.boxShadow, isNull);
+      expect(
+        tester.getSize(
+          find.byKey(const ValueKey<String>('agents-composer-send')),
+        ),
+        const Size(28, 28),
+      );
+      for (final String tooltip in <String>['Attach files', 'Dictate']) {
+        expect(
+          tester.getSize(
+            find.descendant(
+              of: find.byTooltip(tooltip),
+              matching: find.byType(AnimatedContainer),
+            ),
+          ),
+          const Size(28, 28),
+          reason: tooltip,
+        );
+      }
+      expect(
+        find.text('Enter to send · Shift+Enter for a new line'),
+        findsOneWidget,
+      );
+      // Docked at the bottom even with no messages, at most 720 px wide.
+      final Rect rect = tester.getRect(box);
+      expect(rect.width, lessThanOrEqualTo(720));
+      expect(rect.bottom, greaterThan(900 - 60));
       await _flushIdleTimers(tester);
     });
 

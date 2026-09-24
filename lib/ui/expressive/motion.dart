@@ -300,6 +300,7 @@ class ExpressiveButton extends StatelessWidget {
     this.color,
     this.onColor,
     this.tonal = false,
+    this.dense = false,
   });
 
   final IconData? icon;
@@ -308,6 +309,10 @@ class ExpressiveButton extends StatelessWidget {
   final Color? color;
   final Color? onColor;
   final bool tonal;
+
+  /// The desktop size (docs/DESIGN.md §14.8): a 36 px button for a dialog
+  /// under a mouse pointer instead of the 52 px thumb target.
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
@@ -319,20 +324,22 @@ class ExpressiveButton extends StatelessWidget {
     return MorphTap(
       onTap: onTap,
       color: bg,
-      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
+      padding: dense
+          ? const EdgeInsets.symmetric(horizontal: 16, vertical: 9)
+          : const EdgeInsets.symmetric(horizontal: 26, vertical: 16),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[
-            AppIcon(icon, color: fg, size: 20),
-            const SizedBox(width: 10),
+            AppIcon(icon, color: fg, size: dense ? 16 : 20),
+            SizedBox(width: dense ? 8 : 10),
           ],
           Text(
             label,
             style: TextStyle(
               color: fg,
               fontWeight: FontWeight.w700,
-              fontSize: 15,
+              fontSize: dense ? 14 : 15,
             ),
           ),
         ],

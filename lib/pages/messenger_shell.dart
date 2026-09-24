@@ -47,16 +47,14 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -103,9 +101,15 @@ import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/notifications/notification_router.dart';
 import 'package:chuk_chat/services/settings/theme_controller.dart';
-import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
+import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
+import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
+import 'package:chuk_chat/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/room_faces.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
@@ -117,6 +121,7 @@ import 'package:chuk_chat/widgets/room_thread_page.dart';
 import 'package:chuk_chat/widgets/room_thread_view.dart';
 
 part 'agents_shell_state.dart';
+part 'agents_desktop_layout.dart';
 
 /// The messenger: coworkers down the left, the selected thread in the middle,
 /// Control Rooms on the right, the agent's browser as a full-screen route, the
@@ -212,28 +217,7 @@ class MessengerShell extends StatefulWidget {
 }
 
 class _MessengerShellState extends State<MessengerShell>
-    with AgentsShellHost, SingleTickerProviderStateMixin {
-  /// Keep the upstream desktop breakpoint; smaller windows use the phone UI.
-  static const double _compactBreakpoint = 600;
-
-  /// chuk's desktop sidebar width outside compact mode.
-  static const double _sidebarWidth = 320;
-
-  /// chuk's panel geometry: the chat keeps at least this much, a panel needs at
-  /// least this much, and a list panel is capped here.
-  static const double _minChatWidth = 300;
-  static const double _minPanelWidth = 320;
-  static const double _listPanelWidth = 400;
-
-  // chuk's root_wrapper_desktop state, same names.
-  bool _isSidebarExpanded = false;
-  bool _hasOpenedSidebar = false;
-
-  /// 'rooms' | null — chuk's `_activePanel` ('projects'). The agent's browser
-  /// is not a panel any more (Bead cowork-vzm): it opens as a full-screen
-  /// route from the one top-right button.
-  String? _activePanel;
-
+    with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProviderStateMixin {
   /// Whether the agent has a browser open, derived from the live transport's
   /// frames (see [BrowserPresence]). Rebuilt on every reconnect; null while
   /// there is no transport. The "Agent's browser" button exists only while
@@ -245,8 +229,6 @@ class _MessengerShellState extends State<MessengerShell>
   // Read by handlers that run after build (the same trick chuk's settings
   // modal uses for `_compact`): which layout the last frame chose.
   bool _isPhone = false;
-  bool _isCompact = false;
-  double _lastWidth = 0;
 
   /// The chat-open travel (see [_buildPhoneBody]). One explicit controller,
   /// because an implicit tween starts in the very frame that mounts the thread
@@ -289,6 +271,7 @@ class _MessengerShellState extends State<MessengerShell>
   void initState() {
     super.initState();
     _hostInit();
+    _deskInit();
     _push.addStatusListener(_onPushStatus);
     _controller.addListener(_onControllerForBrowser);
   }
@@ -312,6 +295,7 @@ class _MessengerShellState extends State<MessengerShell>
     _controller.removeListener(_onControllerForBrowser);
     _browserPresence?.dispose();
     _browserPresence = null;
+    _deskDispose();
     _hostDispose();
     super.dispose();
   }
@@ -395,9 +379,6 @@ class _MessengerShellState extends State<MessengerShell>
       _selectedAgentId = agentId;
       _selectedThreadKey = threadKey;
       _showThreadOnNarrow = true;
-      // In the compact band the open sidebar covers the chat; picking a
-      // coworker is the request to see its thread, so the sidebar folds.
-      if (_isCompact && _isSidebarExpanded) _isSidebarExpanded = false;
     });
   }
 
@@ -412,19 +393,12 @@ class _MessengerShellState extends State<MessengerShell>
   VoidCallback? get _openAgentScreenOrNull =>
       _browserOpen ? _openBrowserView : null;
 
-  void _toggleSidebar() {
-    setState(() {
-      if (!_isSidebarExpanded) _hasOpenedSidebar = true;
-      _isSidebarExpanded = !_isSidebarExpanded;
-    });
-  }
-
   // --- the four surfaces -----------------------------------------------------
 
   /// Control Rooms: the right panel on a desktop window, a route on a phone.
   void _openRooms() {
     if (!_isPhone) {
-      _togglePanel('rooms');
+      _deskToggleRightPane('rooms');
       return;
     }
     Navigator.of(context).push(
@@ -458,26 +432,6 @@ class _MessengerShellState extends State<MessengerShell>
     }
   }
 
-  /// chuk's `_openWorkspacesPage` / `_openMediaPage`: the same id toggles the
-  /// panel off, another id switches it.
-  void _togglePanel(String id) {
-    setState(() {
-      if (_activePanel == id) {
-        _activePanel = null;
-        return;
-      }
-      _activePanel = id;
-      // No room for both next to the chat: fold the sidebar rather than let
-      // the panel be dropped silently (see the library doc).
-      if (_isSidebarExpanded &&
-          _lastWidth - _sidebarWidth - _minChatWidth < _minPanelWidth) {
-        _isSidebarExpanded = false;
-      }
-    });
-  }
-
-  void _closePanel() => setState(() => _activePanel = null);
-
   /// A coworker's profile page: the face, the state, the brief, and everything
   /// the user can set or manage about it. Reached from the chat header pill, the
   /// inbox row menu and the desktop roster row.
@@ -487,9 +441,9 @@ class _MessengerShellState extends State<MessengerShell>
       final chatKey = agent.id == _selectedAgentId
           ? _selectedThreadKey
           : (agent.threads.isEmpty ? null : agent.threads.first.key);
-      void open(Widget page) => Navigator.of(
-        context,
-      ).push<void>(MaterialPageRoute<void>(builder: (_) => page));
+      void open(Widget page) =>
+          Navigator.of(context)
+              .push<void>(MaterialPageRoute<void>(builder: (_) => page));
       open(
         MobileAgentsSettingsPage(
           agentId: agent.id,
@@ -562,6 +516,7 @@ class _MessengerShellState extends State<MessengerShell>
   /// chuk's settings entry: the modal over the chat on a desktop window
   /// (`showDesktopSettingsModal`), the hub as a route on a phone
   /// (`SettingsPage`). Both take the `AppShellConfig` handed down the tree.
+  @override
   void _openSettings() {
     final config = widget.shellConfig;
     if (config == null) return;
@@ -619,14 +574,13 @@ class _MessengerShellState extends State<MessengerShell>
           final double width = constraints.maxWidth;
           final bool phone = MobileLayout.isPhoneWidth(width);
           _isPhone = phone;
-          _isCompact = !phone && width < _compactBreakpoint;
-          _lastWidth = width;
           final agent = _selectedAgent;
 
           return Scaffold(
             key: _scaffoldKey,
-            endDrawer: phone ? null : _buildControlDrawer(context),
-            endDrawerEnableOpenDragGesture: !phone,
+            // No end drawer any more: the agent controls are the desktop's
+            // docked details pane (docs/DESIGN.md §14.1).
+            endDrawerEnableOpenDragGesture: false,
             body: phone
                 ? _buildPhoneBody(context, agent)
                 : _buildDesktopBody(context, width, agent),
@@ -636,277 +590,21 @@ class _MessengerShellState extends State<MessengerShell>
     );
   }
 
-  /// chuk's `_RootWrapperDesktopState.build`, slot for slot.
-  Widget _buildDesktopBody(
-    BuildContext context,
-    double screenWidth,
-    AgentsAgent? agent,
-  ) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    final bool isCompactMode = _isCompact;
-
-    final double sidebarVisibleWidth = isCompactMode
-        ? screenWidth * 0.85
-        : _sidebarWidth;
-    final double effectiveSidebarWidth = math.min(
-      screenWidth,
-      sidebarVisibleWidth,
-    );
-    final bool showContent = !isCompactMode || !_isSidebarExpanded;
-
-    // Right panel width for Control Rooms. Minimum chat width of 300 px
-    // required to show a panel; the room list caps at 400 px — chuk's list
-    // split.
-    final double sidebarWidth = _isSidebarExpanded ? effectiveSidebarWidth : 0;
-    final double availableForPanel = screenWidth - sidebarWidth - _minChatWidth;
-    final double panelWidth = availableForPanel >= _minPanelWidth
-        ? math.min(_listPanelWidth, availableForPanel)
-        : 0;
-    final bool showPanel =
-        _activePanel != null && !isCompactMode && panelWidth > 0;
-
-    return Stack(
-      children: [
-        // Always keep the chat area in the tree: it owns the socket, and a
-        // GlobalKey removal/insertion would rebuild it. Hide via Offstage when
-        // the sidebar covers the full screen in compact mode.
-        Positioned.fill(
-          left: (!isCompactMode && _isSidebarExpanded)
-              ? effectiveSidebarWidth
-              : 0,
-          right: showPanel ? panelWidth : 0,
-          child: Offstage(
-            offstage: !showContent,
-            child: _buildThread(
-              actions: _threadActions(agent),
-              // The hamburger, and the mini rail under it, are painted over
-              // the chat: the header keeps their column clear so a title never
-              // starts underneath them. With the sidebar open they sit over the
-              // sidebar instead, and the header needs nothing.
-              leadingInset: _isSidebarExpanded
-                  ? 0
-                  : kFixedLeftPadding + kMenuButtonHeight,
-            ),
-          ),
-        ),
-
-        // Right panel (Control Rooms)
-        if (showPanel)
-          Positioned(
-            right: 0,
-            top: 0,
-            bottom: 0,
-            width: panelWidth,
-            child: _buildPanel(context, iconFg),
-          ),
-
-        // The sidebar. Lazy-mounted in chuk; it starts open here, so it is in
-        // the tree from the first frame.
-        if (_isSidebarExpanded || _hasOpenedSidebar)
-          Positioned(
-            left: _isSidebarExpanded ? 0 : -effectiveSidebarWidth,
-            top: 0,
-            bottom: 0,
-            width: effectiveSidebarWidth,
-            child: AnimatedOpacity(
-              opacity: _isSidebarExpanded ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 200),
-              child: IgnorePointer(
-                ignoring: !_isSidebarExpanded,
-                child: AgentRosterView(
-                  source: _roster,
-                  readMarks: _readMarks,
-                  profiles: _agentProfiles,
-                  selectedAgentId: _selectedAgentId,
-                  selectedThreadKey: _selectedThreadKey,
-                  onSelect: _select,
-                  onOpenProfile: _openAgentProfile,
-                  onAddAgent: _openOnboarding,
-                  onDeleteAgent: _deleteAgent,
-                  onRenameAgent: _renameAgent,
-                  // Rooms are rows in this same list now. Control Rooms stays
-                  // where it was — this is a second, primary way in, not a
-                  // replacement for the page that manages them.
-                  rooms: _rooms,
-                  onOpenRoom: _openRoom,
-                  onCreateRoom: _openRoomCreate,
-                  onOpenRooms: _openRooms,
-                  // No browser row in the sidebar (cowork-vzm): the top-right
-                  // button is the one way in, and only while a browser is open.
-                  onOpenSettings: widget.shellConfig == null
-                      ? null
-                      : _openSettings,
-                ),
-              ),
-            ),
-          ),
-
-        // Hamburger menu — stays anchored at the top-left, never moves. Sized
-        // 48×40 like chuk's so its splash matches the mini-rail icons below.
-        Positioned(
-          top:
-              kTopInitialSpacing +
-              (kMenuButtonHeight - kButtonVisualHeight) / 2,
-          left: kFixedLeftPadding,
-          child: SizedBox(
-            width: kMenuButtonHeight,
-            height: kButtonVisualHeight,
-            child: IconButton(
-              icon: AppIcon(Icons.menu_rounded, color: iconFg, size: 24),
-              padding: EdgeInsets.zero,
-              visualDensity: VisualDensity.standard,
-              constraints: const BoxConstraints.tightFor(
-                width: kMenuButtonHeight,
-                height: kButtonVisualHeight,
-              ),
-              onPressed: _toggleSidebar,
-            ),
-          ),
-        ),
-
-        // Mini rail — visible only when the sidebar is collapsed. Each icon's
-        // visual centre lines up with the matching rail row in the open
-        // sidebar: brand row kMenuButtonHeight (48) tall, then rows of
-        // kButtonVisualHeight (40).
-        if (!_isSidebarExpanded) ..._buildMiniRail(iconFg, agent),
-      ],
-    );
+  /// The agent controls: the details pane on a desktop window. The phone
+  /// reaches them through the profile page instead.
+  void _openControlDrawer() {
+    if (_isPhone) return;
+    _deskShowRightPane('details');
   }
 
-  /// chuk's `_buildMiniRail`, with Agents's two slots: New coworker and Control
-  /// Rooms. The agent's browser lives only in the top-right row (cowork-vzm).
-  List<Widget> _buildMiniRail(Color iconFg, AgentsAgent? agent) {
-    final List<Widget> items = [];
-    int rowIndex = 0;
-    Widget railIcon({
-      required IconData icon,
-      required String tooltip,
-      required VoidCallback onPressed,
-    }) {
-      final double top =
-          kTopInitialSpacing +
-          kMenuButtonHeight +
-          rowIndex * kButtonVisualHeight;
-      rowIndex++;
-      return Positioned(
-        top: top,
-        left: kFixedLeftPadding,
-        child: SizedBox(
-          width: kMenuButtonHeight,
-          height: kButtonVisualHeight,
-          child: IconButton(
-            icon: AppIcon(icon, color: iconFg, size: 24),
-            padding: EdgeInsets.zero,
-            visualDensity: VisualDensity.standard,
-            constraints: const BoxConstraints.tightFor(
-              width: kMenuButtonHeight,
-              height: kButtonVisualHeight,
-            ),
-            tooltip: tooltip,
-            onPressed: onPressed,
-          ),
-        ),
-      );
+  /// A room: in the centre pane on a desktop window, a route on a phone.
+  @override
+  void _openRoom(String roomId) {
+    if (!_isPhone) {
+      _deskOpenRoom(roomId);
+      return;
     }
-
-    items.add(
-      railIcon(
-        icon: Icons.person_add_alt,
-        tooltip: 'New agent',
-        onPressed: _openOnboarding,
-      ),
-    );
-    items.add(
-      railIcon(
-        icon: Icons.groups_outlined,
-        tooltip: 'Control Rooms',
-        onPressed: _openRooms,
-      ),
-    );
-    return items;
-  }
-
-  /// The shell's actions on the open thread. They used to float over the chat
-  /// in a row of their own at chuk's top-right anchor; they now go into the
-  /// thread's own header, which owns the glyph size, the hit box and the
-  /// spacing, so they cannot drift apart from the thread's own buttons.
-  /// Copy full chat stays last — chuk's own slot. "Agent's browser" is there
-  /// only while the agent has a browser open ([_browserOpen]); the button is
-  /// the only way in.
-  List<AgentsThreadAction> _threadActions(AgentsAgent? agent) {
-    return <AgentsThreadAction>[
-      if (agent != null)
-        AgentsThreadAction(
-          icon: Icons.tune,
-          onPressed: _openControlDrawer,
-          tooltip: 'Agent controls',
-        ),
-      AgentsThreadAction(
-        icon: Icons.groups_outlined,
-        onPressed: _openRooms,
-        tooltip: 'Control Rooms',
-      ),
-      AgentsThreadAction(
-        icon: Icons.copy_all_rounded,
-        onPressed: _copyFullChat,
-        tooltip: 'Copy Debug Chat',
-      ),
-    ];
-  }
-
-  /// chuk's right panel: the same container, header (icon, title, close) and
-  /// content slot. Control Rooms embeds the room list (a room still opens as
-  /// its own route, so `rebind` keeps working).
-  Widget _buildPanel(BuildContext context, Color iconFg) {
-    // A Material paints the background (chuk uses a coloured Container; the
-    // room list's ListTiles need a Material to paint their ink on, so the
-    // colour moves there and the DecoratedBox keeps only the border).
-    return Material(
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          border: Border(
-            left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
-          ),
-        ),
-        child: Column(
-          children: [
-            // Panel header with close button
-            Container(
-              height: 56,
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: iconFg.withValues(alpha: 0.1)),
-                ),
-              ),
-              child: Row(
-                children: [
-                  AppIcon(Icons.groups_outlined, color: iconFg),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Control Rooms',
-                    style: TextStyle(
-                      color: iconFg,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    icon: AppIcon(Icons.close, color: iconFg),
-                    onPressed: _closePanel,
-                    tooltip: 'Close',
-                  ),
-                ],
-              ),
-            ),
-            // Panel content
-            Expanded(child: _buildRoomList()),
-          ],
-        ),
-      ),
-    );
+    super._openRoom(roomId);
   }
 
   /// The phone layout (docs/MOBILE_GROKBOT_STRUCTURE.md, cowork-c6): the

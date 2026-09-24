@@ -11,7 +11,6 @@
 
 import 'package:flutter/material.dart';
 
-
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
@@ -38,11 +37,16 @@ class ChatModeSelector extends StatelessWidget {
     this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
     this.agentsMenus = false,
+    this.flat = false,
   });
 
   /// The Agents thread's menus: the original app's filled tiles at the menu
   /// radius, with no frame. Off, upstream's framed picker is kept.
   final bool agentsMenus;
+
+  /// The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
+  /// a small corner and a hover fill, like every other button on that row.
+  final bool flat;
 
   /// Menu rows one touch target high: the Agents build. chuk_chat keeps
   /// upstream's 40 dp rows and 30 dp section headers.
@@ -177,19 +181,22 @@ class ChatModeSelector extends StatelessWidget {
       label: 'Mode: $pillLabel',
       child: InkWell(
         onTap: () => _openModeMenu(context),
-        borderRadius: BorderRadius.circular(height / 2),
+        borderRadius: BorderRadius.circular(flat ? 8 : height / 2),
+        hoverColor: flat ? theme.colorScheme.surfaceContainerHigh : null,
         child: Container(
           height: height,
           padding: EdgeInsets.symmetric(
-            horizontal: showLabel ? height * 0.25 : height * 0.30,
+            horizontal: flat ? 8 : (showLabel ? height * 0.25 : height * 0.30),
           ),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(height / 2),
-            border: Border.all(
-              color: iconFg.withValues(alpha: 0.3),
-              width: 1.8,
-            ),
-          ),
+          decoration: flat
+              ? null
+              : BoxDecoration(
+                  borderRadius: BorderRadius.circular(height / 2),
+                  border: Border.all(
+                    color: iconFg.withValues(alpha: 0.3),
+                    width: 1.8,
+                  ),
+                ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -231,6 +238,7 @@ class ChatModeSelector extends StatelessWidget {
         // reached through the model-and-reasoning menu.
         for (final option in const <ChatMode>[ChatMode.fast, ChatMode.thinking])
           _menuRow<_MenuChoice>(
+            dense: MenuDensity.isDense(context),
             value: _MenuChoice.mode(option),
             iconFg: iconFg,
             icon: iconFor(option),
@@ -239,6 +247,7 @@ class ChatModeSelector extends StatelessWidget {
           ),
         if (_hasDeeperMenu)
           _menuRow<_MenuChoice>(
+            dense: MenuDensity.isDense(context),
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
             icon: iconFor(ChatMode.custom),
@@ -318,6 +327,7 @@ class ChatModeSelector extends StatelessWidget {
       if (showModels)
         for (final model in models)
           _menuRow<_DeeperChoice>(
+            dense: MenuDensity.isDense(context),
             value: _DeeperChoice.model(model.id),
             iconFg: iconFg,
             label: stripLabPrefix(model.name),
@@ -325,6 +335,7 @@ class ChatModeSelector extends StatelessWidget {
           ),
       if (onOpenModelScreen != null)
         _menuRow<_DeeperChoice>(
+          dense: MenuDensity.isDense(context),
           value: const _DeeperChoice.openScreen(),
           iconFg: iconFg,
           icon: Icons.add,
@@ -373,6 +384,7 @@ class ChatModeSelector extends StatelessWidget {
         _headerRow<String>(iconFg: iconFg, label: 'Reasoning'),
         for (final level in reasoningLevels)
           _menuRow<String>(
+            dense: MenuDensity.isDense(rowContext),
             value: level,
             iconFg: iconFg,
             label: ChatModeService.reasoningLabel(level),
@@ -417,10 +429,14 @@ class ChatModeSelector extends StatelessWidget {
     IconData? icon,
     bool isSelected = false,
     Widget? trailing,
+    bool dense = false,
   }) {
     return PopupMenuItem<T>(
       value: value,
-      height: _agentsLook ? MobileLayout.minTouchTarget : 40,
+      // The Agents desktop menu (docs/DESIGN.md §14.6): 32 px rows.
+      height: dense
+          ? kMenuDenseRowHeight
+          : (_agentsLook ? MobileLayout.minTouchTarget : 40),
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,

@@ -1,9 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import '../support/icon_finder.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
@@ -14,9 +15,14 @@ import 'package:chuk_chat/widgets/agent_avatar.dart';
 import 'package:chuk_chat/widgets/agent_roster_view.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
+
+  setUp(() => DesktopRosterPins.instance.reset());
 
   testWidgets('Chuk Chat brand has no C logo', (tester) async {
     await tester.pumpWidget(
@@ -29,9 +35,9 @@ void main() {
         ),
       ),
     );
-    final brand = tester.widget<SbBrand>(find.byType(SbBrand));
-    expect(brand.label, 'Chuk Chat');
-    expect(brand.showLogo, isFalse);
+    // The frozen wordmark, no separate C logo next to it.
+    expect(find.byType(BrandWordmark), findsOneWidget);
+    expect(find.byType(SbBrand), findsNothing);
   });
 
   Future<List<(String, String)>> pumpRoster(
@@ -42,6 +48,7 @@ void main() {
     VoidCallback? onAddAgent,
     VoidCallback? onOpenRooms,
     VoidCallback? onOpenSettings,
+    AgentReadMarks? readMarks,
   }) async {
     final picks = <(String, String)>[];
     await tester.pumpWidget(
@@ -54,6 +61,7 @@ void main() {
             onAddAgent: onAddAgent,
             onOpenRooms: onOpenRooms,
             onOpenSettings: onOpenSettings,
+            readMarks: readMarks,
             now: () => now,
             onSelect: (agentId, threadKey) => picks.add((agentId, threadKey)),
           ),
@@ -64,34 +72,40 @@ void main() {
     return picks;
   }
 
-  testWidgets('the rail rows and the footer gear are chuk\'s slots', (
+  testWidgets('the New menu and the account row reach their surfaces', (
     tester,
   ) async {
-    var rooms = 0, settings = 0;
+    var rooms = 0, settings = 0, added = 0;
     final source = LocalAgentRosterSource()..addAgent(name: 'amber-otter');
     await pumpRoster(
       tester,
       source,
+      onAddAgent: () => added++,
       onOpenRooms: () => rooms++,
       onOpenSettings: () => settings++,
     );
 
-    // Browser is available from the chat only, never duplicated in the rail.
+    await tester.tap(find.byTooltip('New'));
+    await tester.pumpAndSettle();
+    // A desktop menu: the shortcuts are printed next to the rows.
+    expect(find.text('Ctrl+N'), findsOneWidget);
     await tester.tap(find.text('Control Rooms'));
+    await tester.pumpAndSettle();
     expect(find.text("Agent's browser"), findsNothing);
     await tester.tap(find.byTooltip('Settings'));
     expect((rooms, settings), (1, 1));
-    // The pill itself opens settings too, like chuk's name pill.
+    // The account row itself opens settings too.
     await tester.tap(find.text('Account'));
     expect(settings, 2);
+    expect(added, 0);
   });
 
-  testWidgets('without callbacks the rail rows and the footer are absent', (
+  testWidgets('without callbacks the New menu and the account row are absent', (
     tester,
   ) async {
     await pumpRoster(tester, LocalAgentRosterSource()..addAgent(name: 'jade'));
 
-    expect(find.text('Control Rooms'), findsNothing);
+    expect(find.byTooltip('New'), findsNothing);
     expect(find.text("Agent's browser"), findsNothing);
     expect(find.byTooltip('Settings'), findsNothing);
     expect(find.text('Account'), findsNothing);
@@ -130,18 +144,28 @@ void main() {
       now.subtract(const Duration(minutes: 5)),
     );
 
-    await pumpRoster(tester, source);
+    // Read up to now: a time, not the unread dot, is what the row shows.
+    final marks = AgentReadMarks();
+    // Not awaited: the write waits on a debounce timer the test never runs.
+    unawaited(marks.markRead(busy.threads.first.key, when: now));
+    await pumpRoster(tester, source, readMarks: marks);
 
     expect(find.text('cowork-host'), findsOneWidget);
     expect(find.text('amber-otter'), findsOneWidget);
     expect(find.text('cobalt-lynx'), findsOneWidget);
-    // The host agent has seen nothing yet: it says so, it does not show a time.
-    expect(
-      find.textContaining('ready for a task · no activity yet'),
-      findsOneWidget,
+    // A working agent says so; the others show when they last did
+    // something, and nothing at all when nothing happened yet — never a time
+    // the app made up.
+    Finder inRow(String id, Finder f) => find.descendant(
+      of: find.byKey(ValueKey<String>('agent-tile-$id')),
+      matching: f,
     );
-    expect(find.textContaining('working · 5m ago'), findsOneWidget);
-    expect(find.textContaining('scheduled · no activity yet'), findsOneWidget);
+    expect(inRow(busy.id, find.text('working')), findsOneWidget);
+    expect(find.textContaining('no activity yet'), findsNothing);
+    expect(inRow(scheduled.id, find.text('')), findsOneWidget);
+    source.markRunning(busy.id, false);
+    await tester.pumpAndSettle();
+    expect(inRow(busy.id, find.text('5m')), findsOneWidget);
     expect(scheduled.activity, AgentActivity.scheduled);
   });
 
@@ -253,19 +277,173 @@ void main() {
     });
   });
 
-  group('role (§16.1)', () {
-    testWidgets('a role shows under the name; no role means no extra line', (
+  group('dense rows (docs/DESIGN.md §14.3)', () {
+    testWidgets('an agent row is one 36 px line with a 24 px face', (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(9));
-      source.addAgent(name: 'amber-otter', role: 'researcher');
-      source.addAgent(name: 'cobalt-lynx');
+      final a = source.addAgent(name: 'amber-otter', role: 'researcher');
       await pumpRoster(tester, source);
 
-      expect(find.text('researcher'), findsOneWidget);
-      // The second agent has no role, so only the one label exists.
-      expect(find.text('amber-otter'), findsOneWidget);
+      final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
+      expect(tester.getSize(row).height, 36);
+      // No second line on the desktop: the role lives in the details pane.
+      expect(find.text('researcher'), findsNothing);
+      expect(
+        tester
+            .widget<AgentFace>(
+              find.descendant(of: row, matching: find.byType(AgentFace)),
+            )
+            .size,
+        24,
+      );
+    });
+
+    testWidgets('the selected row is filled and carries the accent bar', (
+      tester,
+    ) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      final a = source.addAgent(name: 'amber-otter');
+      final b = source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(
+        tester,
+        source,
+        selectedAgentId: a.id,
+        selectedThreadKey: a.threads.single.key,
+      );
+      Finder bar(String id) => find.descendant(
+        of: find.byKey(ValueKey<String>('agent-tile-$id')),
+        matching: find.byKey(const ValueKey<String>('roster-selected-bar')),
+      );
+      expect(bar(a.id), findsOneWidget);
+      expect(bar(b.id), findsNothing);
+      expect(tester.getSize(bar(a.id)).width, 3);
+    });
+
+    testWidgets('the "…" shows on hover only, and opens the row menu', (
+      tester,
+    ) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      final a = source.addAgent(name: 'amber-otter');
+      await pumpRoster(tester, source);
+      final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
+      final Finder more = find.descendant(
+        of: row,
+        matching: find.byTooltip('More'),
+      );
+      expect(more, findsNothing);
+
+      final TestGesture mouse = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
+      );
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(row));
+      await tester.pumpAndSettle();
+      expect(more, findsOneWidget);
+      await tester.tap(more);
+      await tester.pumpAndSettle();
+      expect(find.text('Pin'), findsOneWidget);
+      expect(find.text('Hide'), findsOneWidget);
+    });
+
+    testWidgets('unread is the bold name and a dot, no count', (tester) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      final a = source.addAgent(name: 'amber-otter');
+      source.markActivity(a.id, a.threads.single.key, now);
+      final marks = AgentReadMarks();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: AgentRosterView(
+              source: source,
+              readMarks: marks,
+              now: () => now,
+              onSelect: (_, _) {},
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
+      expect(marks.isUnread(source.byId(a.id)!), isTrue);
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.byKey(const ValueKey<String>('roster-unread-dot')),
+        ),
+        findsOneWidget,
+      );
+      final Text name = tester.widget<Text>(
+        find.descendant(of: row, matching: find.text('amber-otter')),
+      );
+      expect(name.style?.fontWeight, FontWeight.w700);
+    });
+
+    testWidgets('Pin in the context menu moves the agent to the top', (
+      tester,
+    ) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      source.addAgent(name: 'amber-otter');
+      final b = source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+      double y(String name) => tester.getCenter(find.text(name)).dy;
+      expect(y('amber-otter'), lessThan(y('cobalt-lynx')));
+
+      await tester.tap(
+        find.byKey(ValueKey<String>('agent-tile-${b.id}')),
+        buttons: kSecondaryButton,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Pin'));
+      await tester.pumpAndSettle();
+      expect(y('cobalt-lynx'), lessThan(y('amber-otter')));
+      expect(
+        desktopRosterOrder(
+          source.visibleAgents,
+          DesktopRosterPins.instance.ids,
+        ).first.id,
+        b.id,
+      );
+    });
+
+    testWidgets('the search field filters agents by name', (tester) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      source.addAgent(name: 'amber-otter');
+      source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+      await tester.enterText(find.byType(TextField), 'cob');
+      await tester.pumpAndSettle();
+      expect(find.text('amber-otter'), findsNothing);
       expect(find.text('cobalt-lynx'), findsOneWidget);
+    });
+
+    testWidgets('folded, the roster is a rail of faces with tooltips', (
+      tester,
+    ) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      final a = source.addAgent(name: 'amber-otter');
+      final picks = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: 56,
+              child: AgentRosterView(
+                source: source,
+                collapsed: true,
+                onToggleCollapsed: () {},
+                onSelect: (id, _) => picks.add(id),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('amber-otter'), findsNothing);
+      expect(find.byTooltip('amber-otter'), findsOneWidget);
+      await tester.tap(find.byKey(ValueKey<String>('rail-agent-${a.id}')));
+      expect(picks, <String>[a.id]);
     });
   });
 
@@ -295,23 +473,24 @@ void main() {
       // The local agent's menu has Delete. The row is scoped by its own key:
       // the tile is no longer a ListTile since the sidebar moved onto chuk's
       // chrome, but it is still exactly one row per agent.
-      final localMenu = find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${local.id}')),
-        matching: findIcon(Icons.more_vert),
-      );
-      await tester.tap(localMenu);
+      final localMenu = find.byKey(ValueKey<String>('agent-tile-${local.id}'));
+      await tester.tap(localMenu, buttons: kSecondaryButton);
       await tester.pumpAndSettle();
       expect(find.text('Delete'), findsOneWidget);
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
+      // A delete asks first, in a centred dialog.
+      expect(deleted, isEmpty);
+      expect(find.text('Delete amber-otter?'), findsOneWidget);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-confirm-button')),
+      );
+      await tester.pumpAndSettle();
       expect(deleted, hasLength(1));
 
       // The host agent's menu has no Delete.
-      final hostMenu = find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
-        matching: findIcon(Icons.more_vert),
-      );
-      await tester.tap(hostMenu);
+      final hostMenu = find.byKey(ValueKey<String>('agent-tile-${host.id}'));
+      await tester.tap(hostMenu, buttons: kSecondaryButton);
       await tester.pumpAndSettle();
       expect(find.text('Delete'), findsNothing);
       expect(find.text('Hide'), findsOneWidget);
@@ -340,10 +519,8 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.tap(
-        find.descendant(
-          of: find.byKey(ValueKey<String>('agent-tile-${host.id}')),
-          matching: findIcon(Icons.more_vert),
-        ),
+        find.byKey(ValueKey<String>('agent-tile-${host.id}')),
+        buttons: kSecondaryButton,
       );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Rename'));
@@ -390,10 +567,8 @@ void main() {
 
       Future<void> openDialog() async {
         await tester.tap(
-          find.descendant(
-            of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-            matching: findIcon(Icons.more_vert),
-          ),
+          find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+          buttons: kSecondaryButton,
         );
         await tester.pumpAndSettle();
         await tester.tap(find.text('Rename'));
@@ -443,10 +618,8 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(
-        find.descendant(
-          of: find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
-          matching: findIcon(Icons.more_vert),
-        ),
+        find.byKey(ValueKey<String>('agent-tile-${agent.id}')),
+        buttons: kSecondaryButton,
       );
       await tester.pumpAndSettle();
       expect(find.text('Rename'), findsNothing);
@@ -598,46 +771,53 @@ void main() {
 
       expect(find.text('amber-otter'), findsOneWidget);
 
-      // Open the first row's menu and hide it.
-      await tester.tap(findIcon(Icons.more_vert).first);
+      // Open the first row's context menu and hide it.
+      await tester.tap(
+        find.byKey(ValueKey<String>('agent-tile-${source.agents.first.id}')),
+        buttons: kSecondaryButton,
+      );
       await tester.pumpAndSettle();
       await tester.tap(find.text('Hide'));
       await tester.pumpAndSettle();
 
       expect(source.hiddenIds, hasLength(1));
-      // Hidden is a labelled bucket now (chuk's section mechanic), so the
-      // label and its count are two Texts and the rows are already visible —
-      // no expand step before Unhide.
-      expect(find.text('Hidden'), findsOneWidget);
+      // Hidden is a folded section at the bottom: open it, then Unhide.
+      expect(find.text('Hidden · 1'), findsOneWidget);
+      await tester.tap(find.text('Hidden · 1'));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(TextButton, 'Unhide'));
       await tester.pumpAndSettle();
 
       expect(source.hiddenIds, isEmpty);
-      expect(find.text('Hidden'), findsNothing);
+      expect(find.textContaining('Hidden'), findsNothing);
     });
   });
 
-  group('working bucket (§16.1)', () {
-    // The old "Active now" avatar strip is gone; running agents are their own
-    // labelled section instead, which is the same answer to "is anything
-    // running" without a second place that shows the same truth.
-    testWidgets('is labelled only while an agent is working', (tester) async {
+  group('working (§16.1)', () {
+    testWidgets('a row says "working" only while its agent works', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(7));
       final a = source.addAgent(name: 'amber-otter');
       source.addAgent(name: 'cobalt-lynx');
       await pumpRoster(tester, source);
 
-      expect(find.text('Working'), findsNothing);
-      expect(find.text('Ready'), findsOneWidget);
+      expect(find.text('working'), findsNothing);
 
       source.markRunning(a.id, true);
       await tester.pumpAndSettle();
-      expect(find.text('Working'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(ValueKey<String>('agent-tile-${a.id}')),
+          matching: find.text('working'),
+        ),
+        findsOneWidget,
+      );
 
       source.markRunning(a.id, false);
       await tester.pumpAndSettle();
-      expect(find.text('Working'), findsNothing);
+      expect(find.text('working'), findsNothing);
     });
   });
 
