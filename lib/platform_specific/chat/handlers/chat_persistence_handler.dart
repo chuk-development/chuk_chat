@@ -61,12 +61,19 @@ class ChatPersistenceHandler {
   /// [silent] - If true, don't call onChatIdAssigned callback.
   /// Use silent=true when persisting an old chat in the background while
   /// user has already moved to a new chat (e.g., in newChat()).
+  ///
+  /// [commit] - Whether this save also goes to the cloud. Every save lands
+  /// on this device first (memory + SQLite). Pass false for a checkpoint
+  /// inside a running turn (a tool round, an auto-save tick): the turn's
+  /// last save, with [commit] true, writes the chat to the cloud once.
+  /// A user action outside a turn keeps the default.
   Future<StoredChat?> persistChat({
     required List<Map<String, String>> messages,
     String? chatId,
     bool waitForCompletion = false,
     bool isOffline = false,
     bool silent = false,
+    bool commit = true,
   }) async {
     if (messages.isEmpty) return null;
 
@@ -94,6 +101,7 @@ class ChatPersistenceHandler {
       chatId,
       isOffline: isOffline,
       silent: silent,
+      commit: commit,
     );
 
     if (waitForCompletion) {
@@ -156,113 +164,114 @@ class ChatPersistenceHandler {
     String? chatId, {
     required bool isOffline,
     bool silent = false,
+    bool commit = true,
   }) async {
     // CRITICAL: Capture chatId at the start to prevent race conditions
     final String? chatIdAtStart = chatId;
 
-    try {
-      // CRITICAL: Never persist a recently deleted chat — it would resurrect it
-      if (chatId != null && ChatStorageState.wasRecentlyDeleted(chatId)) {
-        if (kDebugMode) {
-          debugPrint(
-            '🚫 [ChatPersistence] Skipping persist for deleted chat: $chatId',
-          );
-        }
-        return null;
-      }
-
-      // Check if chat actually exists in storage
-      final bool chatExists =
-          chatId != null &&
-          ChatStorageService.savedChats.any((chat) => chat.id == chatId);
-
-      // If chatId is provided but chat doesn't exist in storage, we need to INSERT not UPDATE
-      final stored = chatExists
-          ? await ChatStorageService.updateChat(chatId, messagesCopy)
-          : await ChatStorageService.saveChat(messagesCopy, chatId: chatId);
-
-      if (stored == null) {
-        if (kDebugMode) {
-          debugPrint(
-            '❌ [ChatPersistence] Failed: ChatStorageService returned null',
-          );
-        }
-        return null;
-      }
-
-      // Notify about chat ID assignment (unless silent mode)
-      // Silent mode is used when persisting old chat in background after user moved to new chat
-      if (!silent && (chatIdAtStart == null || chatIdAtStart != stored.id)) {
-        onChatIdAssigned?.call(stored.id);
-      }
-
-      return stored;
-    } catch (error, stackTrace) {
-      final String errorStr = error.toString().toLowerCase();
+    // CRITICAL: Never persist a recently deleted chat — it would resurrect it
+    if (chatId != null && ChatStorageState.wasRecentlyDeleted(chatId)) {
       if (kDebugMode) {
-        debugPrint('❌ [ChatPersistence] Exception: $error');
-      }
-      if (kDebugMode) {
-        debugPrint('Stack trace: $stackTrace');
-      }
-
-      // Don't show errors for network issues or when offline
-      if (NetworkStatusService.isNetworkError(error) || isOffline) {
-        if (kDebugMode) {
-          debugPrint(
-            '🌐 [ChatPersistence] Network/offline error (expected when offline)',
-          );
-        }
-        // Silently fail - chats will sync when back online
-        return null;
-      }
-
-      // Check if it's a permission/auth error
-      if (errorStr.contains('permission') ||
-          errorStr.contains('access') ||
-          errorStr.contains('denied') ||
-          errorStr.contains('unauthorized')) {
-        if (kDebugMode) {
-          debugPrint('🔒 [ChatPersistence] Permission/auth error');
-        }
-
-        // Check if we actually have a valid session
-        final session = SupabaseService.auth.currentSession;
-        if (session == null) {
-          if (kDebugMode) {
-            debugPrint('❌ [ChatPersistence] No session found');
-          }
-          onShowSnackBar?.call('Please sign in to save chats');
-        } else {
-          if (kDebugMode) {
-            debugPrint(
-              '⚠️ [ChatPersistence] Has session but permission denied - RLS policy issue?',
-            );
-          }
-        }
-        return null;
-      }
-
-      // Check if it's an encryption error
-      if (errorStr.contains('encryption') || errorStr.contains('key')) {
-        if (kDebugMode) {
-          debugPrint('🔐 [ChatPersistence] Encryption error');
-        }
-        onShowSnackBar?.call(
-          'Error saving chat. Your messages are still visible.',
+        debugPrint(
+          '🚫 [ChatPersistence] Skipping persist for deleted chat: $chatId',
         );
-        return null;
-      }
-
-      // For other errors, log but don't show to user (too disruptive)
-      if (kDebugMode) {
-        debugPrint('⚠️ [ChatPersistence] Unknown error type: $errorStr');
       }
       return null;
     }
+
+    final StoredChat? local;
+    try {
+      local = await ChatStorageService.saveLocal(messagesCopy, chatId: chatId);
+    } catch (error) {
+      _reportSaveError(error, isOffline: isOffline);
+      return null;
+    }
+    if (local == null) return null;
+
+    // Notify about chat ID assignment (unless silent mode). The id exists
+    // from the local save on, whether or not the cloud write below lands.
+    // Silent mode is used when persisting old chat in background after user moved to new chat
+    if (!silent && (chatIdAtStart == null || chatIdAtStart != local.id)) {
+      onChatIdAssigned?.call(local.id);
+    }
+
+    if (!commit) return local;
+
+    try {
+      return await ChatStorageService.syncChat(local.id, messagesCopy) ?? local;
+    } catch (error) {
+      // The chat is saved on this device and stays dirty: the next flush
+      // (app start, background, network back) writes it.
+      _reportSaveError(error, isOffline: isOffline);
+      return local;
+    }
   }
 
-  /// Update a specific message in storage for a background chat
+  void _reportSaveError(Object error, {required bool isOffline}) {
+    final String errorStr = error.toString().toLowerCase();
+    if (kDebugMode) {
+      debugPrint('❌ [ChatPersistence] Exception: $error');
+    }
+
+    // Don't show errors for network issues or when offline
+    if (NetworkStatusService.isNetworkError(error) || isOffline) {
+      if (kDebugMode) {
+        debugPrint(
+          '🌐 [ChatPersistence] Network/offline error (expected when offline)',
+        );
+      }
+      // Silently fail - the chat is dirty and syncs when back online
+      return;
+    }
+
+    // Check if it's a permission/auth error
+    if (errorStr.contains('permission') ||
+        errorStr.contains('access') ||
+        errorStr.contains('denied') ||
+        errorStr.contains('unauthorized')) {
+      if (kDebugMode) {
+        debugPrint('🔒 [ChatPersistence] Permission/auth error');
+      }
+
+      // Check if we actually have a valid session
+      final session = SupabaseService.auth.currentSession;
+      if (session == null) {
+        if (kDebugMode) {
+          debugPrint('❌ [ChatPersistence] No session found');
+        }
+        onShowSnackBar?.call('Please sign in to save chats');
+      } else {
+        if (kDebugMode) {
+          debugPrint(
+            '⚠️ [ChatPersistence] Has session but permission denied - RLS policy issue?',
+          );
+        }
+      }
+      return;
+    }
+
+    // Check if it's an encryption error
+    if (errorStr.contains('encryption') || errorStr.contains('key')) {
+      if (kDebugMode) {
+        debugPrint('🔐 [ChatPersistence] Encryption error');
+      }
+      onShowSnackBar?.call(
+        'Error saving chat. Your messages are still visible.',
+      );
+      return;
+    }
+
+    // For other errors, log but don't show to user (too disruptive)
+    if (kDebugMode) {
+      debugPrint('⚠️ [ChatPersistence] Unknown error type: $errorStr');
+    }
+  }
+
+  /// Update a specific message in storage for a background chat.
+  ///
+  /// These patches are stream checkpoints, so they are saved on this device
+  /// only. Pass [commit] true for the patch that ends a turn: the chat then
+  /// also goes to the cloud, once.
   Future<void> updateBackgroundChatMessage({
     required String chatId,
     required int messageIndex,
@@ -277,6 +286,7 @@ class ChatPersistenceHandler {
     String? tps,
     String? status,
     bool immediate = false,
+    bool commit = false,
   }) async {
     final key = '$chatId:$messageIndex';
     final existing =
@@ -293,7 +303,8 @@ class ChatPersistenceHandler {
       ..imageCostEur = imageCostEur ?? existing.imageCostEur
       ..imageGeneratedAt = imageGeneratedAt ?? existing.imageGeneratedAt
       ..tps = tps ?? existing.tps
-      ..status = status ?? existing.status;
+      ..status = status ?? existing.status
+      ..commit = existing.commit || commit;
 
     _pendingBackgroundUpdates[key] = existing;
 
@@ -321,7 +332,9 @@ class ChatPersistenceHandler {
     void retry() {
       if (pending.attempts >= _maxBackgroundRetries) return;
       pending.attempts++;
-      _pendingBackgroundUpdates.putIfAbsent(key, () => pending);
+      final queued = _pendingBackgroundUpdates.putIfAbsent(key, () => pending);
+      // A newer patch took the slot meanwhile: it must still end the turn.
+      queued.commit = queued.commit || pending.commit;
       _backgroundUpdateTimers.remove(key)?.cancel();
       _backgroundUpdateTimers[key] = Timer(
         _backgroundRetryDelay,
@@ -417,7 +430,14 @@ class ChatPersistenceHandler {
         messages[pending.messageIndex]['status'] = pending.status;
       }
 
-      await ChatStorageService.updateChat(pending.chatId, messages);
+      final local = await ChatStorageService.saveLocal(
+        messages,
+        chatId: pending.chatId,
+      );
+      if (pending.commit && local != null) {
+        // A failed cloud write leaves the chat dirty for the next flush.
+        await ChatStorageService.syncChat(local.id, messages);
+      }
     } catch (e) {
       if (kDebugMode) {
         debugPrint('⚠️ [ChatPersistence] Background update failed: $e');
@@ -442,4 +462,5 @@ class _PendingBackgroundUpdate {
   String? tps;
   int attempts = 0;
   String? status;
+  bool commit = false;
 }

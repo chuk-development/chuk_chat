@@ -35,6 +35,7 @@ export 'package:chuk_chat/services/chat_storage_state.dart'
     show initChatStorageCache;
 
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_crud.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_sidebar.dart';
@@ -136,14 +137,52 @@ class ChatStorageService {
       : debugCrudSave(messagesMaps, chatId: chatId);
 
   /// Update an existing chat.
+  /// A chat that was only saved locally so far has no cloud row yet; it is
+  /// inserted instead.
   /// AGENTS: an Agents thread takes the same replace as [saveChat];
   /// upstream's UPDATE would refuse a row the cloud does not hold yet.
   static Future<StoredChat?> updateChat(
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
+  ) {
+    if (ChatOrigin.isAgentsThread(chatId)) {
+      return AgentsChatStore.replaceThread(chatId, messagesMaps);
+    }
+    return ChatDirtyStore.isPendingInsert(chatId)
+        ? debugCrudSave(messagesMaps, chatId: chatId)
+        : debugCrudUpdate(chatId, messagesMaps);
+  }
+
+  /// Save a chat on this device only: memory, the SQLite cache and a dirty
+  /// mark, no network. This is the save for every checkpoint inside a turn
+  /// (tool rounds, stream ticks, auto-save). The chat reaches the cloud with
+  /// [syncChat] at the end of the turn, or with [flushDirty]. A new chat
+  /// ([chatId] null) gets its id here.
+  /// AGENTS: an Agents thread is replaced through [AgentsChatStore], which
+  /// has its own outbox.
+  static Future<StoredChat?> saveLocal(
+    List<Map<String, dynamic>> messagesMaps, {
+    String? chatId,
+  }) => ChatOrigin.isAgentsThread(chatId)
+      ? AgentsChatStore.replaceThread(chatId!, messagesMaps)
+      : debugCrudSaveLocal(messagesMaps, chatId: chatId);
+
+  /// End of a turn: write [messagesMaps], which [saveLocal] stored a moment
+  /// ago, to the cloud. One INSERT for a new chat, else one UPDATE. On
+  /// success the chat is no longer dirty; on failure it stays dirty and the
+  /// next [flushDirty] retries it.
+  /// AGENTS: an Agents thread was already replaced by [saveLocal].
+  static Future<StoredChat?> syncChat(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
   ) => ChatOrigin.isAgentsThread(chatId)
-      ? AgentsChatStore.replaceThread(chatId, messagesMaps)
-      : debugCrudUpdate(chatId, messagesMaps);
+      ? Future<StoredChat?>.value(ChatStorageState.getChatById(chatId))
+      : updateChat(chatId, messagesMaps);
+
+  /// Write every chat whose local copy is ahead of the cloud, once: at app
+  /// start after sign-in, when the app goes to the background, and when the
+  /// network comes back.
+  static Future<void> flushDirty() => debugFlushDirty();
 
   /// Test seams: upstream's write into `encrypted_chats`. A test swaps them
   /// to see which store a chat reaches without a network.
@@ -159,6 +198,14 @@ class ChatStorageService {
     List<Map<String, dynamic>> messagesMaps,
   )
   debugCrudUpdate = ChatStorageCrud.updateChat;
+  @visibleForTesting
+  static Future<StoredChat?> Function(
+    List<Map<String, dynamic>> messagesMaps, {
+    String? chatId,
+  })
+  debugCrudSaveLocal = ChatStorageCrud.saveLocal;
+  @visibleForTesting
+  static Future<void> Function() debugFlushDirty = ChatStorageCrud.flushDirty;
 
   /// Delete a chat and its associated images from storage
   /// AGENTS: an Agents thread is deleted from `cowork_chats` (and the SQLite
@@ -199,9 +246,17 @@ class ChatStorageService {
   // MUTATIONS (delegated to ChatStorageMutations)
   // ============================================================================
 
-  /// Set chat starred status
-  static Future<void> setChatStarred(String chatId, bool isStarred) =>
-      ChatStorageMutations.setChatStarred(chatId, isStarred);
+  /// Set chat starred status. A chat the cloud does not hold yet is starred
+  /// locally; its insert carries the star.
+  static Future<void> setChatStarred(String chatId, bool isStarred) async {
+    final chat = ChatStorageState.getChatById(chatId);
+    if (chat != null && ChatDirtyStore.isPendingInsert(chatId)) {
+      ChatStorageState.chatsById[chatId] = chat.copyWith(isStarred: isStarred);
+      ChatStorageState.notifyChanges(chatId);
+      return;
+    }
+    await ChatStorageMutations.setChatStarred(chatId, isStarred);
+  }
 
   /// Rename a chat
   static Future<void> renameChat(String chatId, String newName) async {
@@ -217,6 +272,22 @@ class ChatStorageService {
     // If still not found after loading, the chat doesn't exist
     if (chat == null) {
       throw StateError('Chat not found: $chatId');
+    }
+
+    // A chat whose local copy is ahead of the cloud (a turn is running, or
+    // its cloud save failed) is renamed locally. Its next cloud save carries
+    // the name: renaming it in the cloud now would rewrite the whole payload
+    // once more, and fail for a chat the cloud does not hold yet.
+    if (!ChatOrigin.isAgentsThread(chatId) && ChatDirtyStore.isDirty(chatId)) {
+      ChatStorageState.chatsById[chatId] = chat.copyWith(
+        customName: newName,
+        title: newName,
+      );
+      await saveLocal(
+        chat.messages.map((m) => m.toJson()).toList(),
+        chatId: chatId,
+      );
+      return;
     }
 
     await ChatStorageMutations.renameChat(chatId, newName);

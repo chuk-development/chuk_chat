@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -61,6 +62,15 @@ class AppLifecycleService extends ChangeNotifier {
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
         _handlePaused();
+    }
+
+    // The app may be killed from here on. Write every chat whose local copy
+    // is ahead of the cloud (a turn saves only locally until it ends). Not on
+    // `inactive`: a notification shade or a system dialog is not a leave.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      unawaited(ChatStorageService.flushDirty());
     }
   }
 

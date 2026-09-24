@@ -208,6 +208,10 @@ class ChatSyncService {
       return;
     }
 
+    // Chats saved locally while the network was gone are written once it is
+    // back (see the flush below).
+    var cameBackOnline = false;
+
     // If we think we're offline, do a fresh probe — the user may have
     // restored connectivity (e.g. turned off flight mode) and the cached
     // status is stale.
@@ -241,6 +245,7 @@ class ChatSyncService {
       if (kDebugMode) {
         debugPrint('🟢 [ChatSync] Back online! Resuming sync...');
       }
+      cameBackOnline = true;
     }
 
     final user = SupabaseService.auth.currentUser;
@@ -260,6 +265,14 @@ class ChatSyncService {
     int newCount = 0;
 
     try {
+      // First sync after sign-in, or the network is back: write every chat
+      // whose local copy is ahead of the cloud (a turn that ended while
+      // offline, an app killed mid-turn) before reading the cloud state, so
+      // the pull below sees them.
+      if (!_hasCompletedFirstSync || cameBackOnline) {
+        await ChatStorageService.flushDirty();
+      }
+
       // On first sync after startup, sync titles from network
       // This ensures we have the latest titles without full payload fetch
       if (!_hasCompletedFirstSync) {

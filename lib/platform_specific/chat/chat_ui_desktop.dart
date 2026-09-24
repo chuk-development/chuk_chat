@@ -1133,9 +1133,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
     // BACKGROUND STREAMING: If current chat is streaming, snapshot messages
     // to StreamingManager so the stream can persist correctly when complete.
-    if (chatIdToSave != null &&
+    final bool oldChatTurnRunning =
+        chatIdToSave != null &&
         (_streamingManager.isStreaming(chatIdToSave) ||
-            _isSendingForChat(chatIdToSave))) {
+            _isSendingForChat(chatIdToSave));
+    if (chatIdToSave != null && oldChatTurnRunning) {
       if (messagesToSave != null) {
         _streamingManager.setBackgroundMessages(
           chatIdToSave,
@@ -1187,6 +1189,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
               .toList(),
           chatId: chatIdToSave,
           silent: true,
+          // A turn still running there writes the cloud when it ends.
+          commit: !oldChatTurnRunning,
         ),
       );
     }
@@ -1584,23 +1588,30 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   // In-memory cache for resolved Base64 images (storage path -> data URL)
 
+  /// [commit] false: a checkpoint inside a running turn, saved on this
+  /// device only. See [ChatPersistenceHandler.persistChat].
   @override
-  Future<void> persistChat({bool waitForCompletion = false}) async {
+  Future<void> persistChat({
+    bool waitForCompletion = false,
+    bool commit = true,
+  }) async {
     if (_messages.isEmpty) return;
     await persistenceHandler.persistChat(
       messages: _messages.map((m) => Map<String, String>.from(m)).toList(),
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
+      commit: commit,
     );
   }
 
   /// Persist chat with a specific chatId (for background streaming to correct chat)
-  void _persistChatWithId(String chatId) {
+  void _persistChatWithId(String chatId, {bool commit = true}) {
     if (_messages.isEmpty) return;
     unawaited(
       persistenceHandler.persistChat(
         messages: _messages.map((m) => Map<String, String>.from(m)).toList(),
         chatId: chatId,
+        commit: commit,
       ),
     );
   }
@@ -1609,14 +1620,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// Used when user has switched away from a streaming chat
   void _persistChatWithIdAndMessages(
     String chatId,
-    List<Map<String, dynamic>> messages,
-  ) {
+    List<Map<String, dynamic>> messages, {
+    bool commit = true,
+  }) {
     if (messages.isEmpty) return;
     unawaited(
       persistenceHandler.persistChat(
         messages: messages.map((m) => Map<String, String>.from(m)).toList(),
         chatId: chatId,
         silent: true,
+        commit: commit,
       ),
     );
   }

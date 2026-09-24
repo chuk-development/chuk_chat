@@ -1430,6 +1430,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final messagesToSave = _messages.isNotEmpty
         ? _messages.map((m) => Map<String, String>.from(m)).toList()
         : null;
+    // A turn still running in the chat being left writes the cloud itself
+    // when it ends; the save below is then a local checkpoint.
+    final bool oldChatTurnRunning =
+        chatIdToSave != null &&
+        (_streamingHandler.isChatStreaming(chatIdToSave) ||
+            (ChatRuntimeRegistry.instance
+                    .lookup(chatIdToSave)
+                    ?.isSending
+                    .value ??
+                false));
 
     // Nothing is pinned in an empty chat, and the room the pin reserved must
     // go with it or the fresh chat opens with a screen of blank space.
@@ -1479,6 +1489,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               waitForCompletion: false,
               isOffline: _isOffline,
               silent: true,
+              commit: !oldChatTurnRunning,
             )
             .catchError((error) {
               if (kDebugMode) {
@@ -1867,7 +1878,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           toolCallsJson,
         );
       });
-      unawaited(persistChat());
+      unawaited(persistChat(commit: false));
       return;
     }
 
@@ -1922,7 +1933,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         message['toolCalls'] = toolCallsJson;
         _messages[index] = message;
       });
-      unawaited(persistChat());
+      unawaited(persistChat(commit: false));
     } else if (!isActiveChat) {
       unawaited(
         persistenceHandler
@@ -2150,6 +2161,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 reasoning: reasoning,
                 status: 'sent',
                 immediate: true,
+                // The turn ends here: this patch writes the cloud.
+                commit: true,
               )
               .catchError((error) {
                 if (kDebugMode) {
@@ -2568,13 +2581,15 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       return;
     }
 
-    // Immediately create chat in Supabase for reliable chat ID assignment
+    // Save the chat before the turn starts, for a reliable chat ID. On this
+    // device only: the cloud gets the chat once, when the turn ends.
     // Use the captured chatIdForThisMessage to ensure consistency
     final storedChat = await persistenceHandler.persistChat(
       messages: _messages,
       chatId: chatIdForThisMessage,
       waitForCompletion: true,
       isOffline: _isOffline,
+      commit: false,
     );
 
     // Check if widget was disposed during persist operation
@@ -3021,8 +3036,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       placeholderIndex = _messages.length - 1;
     });
 
-    // Persist immediately after editing - chat ID is now guaranteed to exist
-    unawaited(persistChat());
+    // Persist immediately after editing - chat ID is now guaranteed to exist.
+    // On this device only: the resend's turn writes the cloud when it ends.
+    unawaited(persistChat(commit: false));
     scrollChatToBottom(force: true);
 
     // Resolve system prompt with workspace context (if any)
@@ -3261,13 +3277,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     ChatUiHelpers.openComingSoonFeature(context, featureName);
   }
 
+  /// [commit] false: a checkpoint inside a running turn, saved on this
+  /// device only. See [ChatPersistenceHandler.persistChat].
   @override
-  Future<StoredChat?> persistChat({bool waitForCompletion = false}) async {
+  Future<StoredChat?> persistChat({
+    bool waitForCompletion = false,
+    bool commit = true,
+  }) async {
     return await persistenceHandler.persistChat(
       messages: _messages,
       chatId: _activeChatId,
       waitForCompletion: waitForCompletion,
       isOffline: _isOffline,
+      commit: commit,
     );
   }
 

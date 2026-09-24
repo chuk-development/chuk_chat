@@ -3,6 +3,7 @@
 import 'dart:async';
 
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/chat_titles_prefs_cleanup.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
@@ -136,6 +137,32 @@ class ChatStorageState {
   static final Map<String, Completer<StoredChat?>> pendingSaves =
       <String, Completer<StoredChat?>>{};
 
+  /// Newest update requested per chat, with the outcome its caller gets.
+  /// An update that finds a newer one queued behind it skips its own write
+  /// and hands its caller the newer one's outcome: the newer one carries the
+  /// newer messages. Every write rewrites the whole encrypted payload in
+  /// Postgres, so a tool turn that saves once per round burned the Disk IO
+  /// budget.
+  static final Map<String, ({int seq, Completer<StoredChat?> outcome})>
+  latestUpdate = <String, ({int seq, Completer<StoredChat?> outcome})>{};
+  static int _updateSeq = 0;
+  static int nextUpdateSeq() => ++_updateSeq;
+
+  /// SHA-256 of the plaintext payload this device last wrote per chat, and
+  /// the `updated_at` that write returned. A save with the same digest while
+  /// the stored chat still carries that `updated_at` changes nothing; once
+  /// anything else replaces the chat, its `updated_at` differs and the save
+  /// is written.
+  static final Map<String, ({String digest, DateTime? updatedAt})> lastWrite =
+      <String, ({String digest, DateTime? updatedAt})>{};
+
+  /// SHA-256 of the plaintext payload of the copy in [chatsById] per chat,
+  /// and that copy's `updated_at`, as a local save or a cloud write left it.
+  /// A local save of the same payload while the chat still carries that
+  /// `updated_at` changes nothing and is skipped.
+  static final Map<String, ({String digest, DateTime? updatedAt})> localDigest =
+      <String, ({String digest, DateTime? updatedAt})>{};
+
   /// Track recently deleted chat IDs to prevent sync/persist from resurrecting them.
   /// Entries are auto-cleared after [_deletedChatTtl] to avoid unbounded growth.
   static final Set<String> recentlyDeletedChats = <String>{};
@@ -145,6 +172,8 @@ class ChatStorageState {
   /// Mark a chat as recently deleted (prevents sync from re-adding it).
   static void markDeleted(String chatId) {
     recentlyDeletedChats.add(chatId);
+    lastWrite.remove(chatId);
+    localDigest.remove(chatId);
     _deletedChatTimers[chatId]?.cancel();
     _deletedChatTimers[chatId] = Timer(_deletedChatTtl, () {
       recentlyDeletedChats.remove(chatId);
@@ -262,6 +291,10 @@ class ChatStorageState {
     activeMessageChatId = null;
     savingChats.clear();
     pendingSaves.clear();
+    latestUpdate.clear();
+    lastWrite.clear();
+    localDigest.clear();
+    ChatDirtyStore.reset();
     for (final timer in _deletedChatTimers.values) {
       timer.cancel();
     }

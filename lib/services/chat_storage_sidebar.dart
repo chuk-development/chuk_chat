@@ -4,6 +4,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
@@ -212,14 +213,18 @@ class ChatStorageSidebar {
   /// it showed an empty conversation, and the store's removal watcher threw
   /// its replay cursor away with it. `ChatStorageService.removeChatLocally`
   /// already keeps Agents threads for the full sync; this is the same rule for
-  /// the title sync.
+  /// the title sync. A dirty chat is not gone either: the cloud may not
+  /// hold it yet, and the next flush writes it.
   @visibleForTesting
   static Set<String> idsGoneFromServer(
     Iterable<String> localIds,
     Set<String> serverIds,
   ) => <String>{
     for (final id in localIds)
-      if (!serverIds.contains(id) && !ChatOrigin.isAgentsThread(id)) id,
+      if (!serverIds.contains(id) &&
+          !ChatOrigin.isAgentsThread(id) &&
+          !ChatDirtyStore.isDirty(id))
+        id,
   };
 
   /// Sync titles from network and update cache (runs in background)
@@ -335,6 +340,8 @@ class ChatStorageSidebar {
       // Process decrypted chats
       for (final chat in decryptedChats) {
         if (chat == null) continue;
+        // The local copy is ahead of this cloud row, title included.
+        if (ChatDirtyStore.isDirty(chat.id)) continue;
         final existing = ChatStorageState.chatsById[chat.id];
 
         if (existing == null) {
