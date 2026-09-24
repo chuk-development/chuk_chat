@@ -1,7 +1,9 @@
 #include "my_application.h"
 
+#include <errno.h>
 #include <fcntl.h>
 #include <flutter_linux/flutter_linux.h>
+#include <glib/gstdio.h>
 #ifdef GDK_WINDOWING_X11
 #include <gdk/gdkx.h>
 #endif
@@ -67,6 +69,33 @@ void release_single_instance_lock() {
   flock(g_single_instance_lock_fd, LOCK_UN);
   close(g_single_instance_lock_fd);
   g_single_instance_lock_fd = -1;
+}
+
+// Builds before the switch to APPLICATION_ID "dev.chuk.chat" used the Flutter
+// template id. path_provider names the support and cache directories after
+// the application id, so the chat cache, settings and login would look lost.
+// Move the old directory once, before the engine starts and any plugin opens
+// a file in it. After that the old name is never read again.
+constexpr char kLegacyApplicationId[] = "com.example.chuk_chat";
+
+void move_legacy_dir(const gchar* base_dir) {
+  g_autofree gchar* old_path =
+      g_build_filename(base_dir, kLegacyApplicationId, nullptr);
+  g_autofree gchar* new_path =
+      g_build_filename(base_dir, APPLICATION_ID, nullptr);
+  if (!g_file_test(old_path, G_FILE_TEST_IS_DIR) ||
+      g_file_test(new_path, G_FILE_TEST_EXISTS)) {
+    return;
+  }
+  if (g_rename(old_path, new_path) != 0) {
+    g_printerr("chuk_chat: could not move %s to %s: %s\n", old_path, new_path,
+               g_strerror(errno));
+  }
+}
+
+void migrate_legacy_app_dirs() {
+  move_legacy_dir(g_get_user_data_dir());
+  move_legacy_dir(g_get_user_cache_dir());
 }
 }  // namespace
 
@@ -181,6 +210,8 @@ static gboolean my_application_local_command_line(GApplication* application, gch
     *exit_status = 0;
     return TRUE;
   }
+
+  migrate_legacy_app_dirs();
 
   g_application_activate(application);
   *exit_status = 0;

@@ -8,5 +8,5 @@ Type=Application
 Categories=Network;Chat;InstantMessaging;
 Keywords=chat;ai;encryption;messaging;supabase;
 StartupNotify=true
-StartupWMClass=chuk_chat
+StartupWMClass=dev.chuk.chat
 Terminal=false
