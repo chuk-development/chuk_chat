@@ -25,3 +25,6 @@ PROTOCOL only:
 If the only fix I can think of requires reading what the words say, stop — the
 boundary I want is almost always available structurally (channel, delimiter,
 round outcome).
+
+## 2026-09-24 Antwortformate
+- "Schoenerer Output" heisst: statisch bessere Darstellung der Modell-Antwort (Typografie, Layout, Markup), NICHT interaktive Widgets. Bei vagen UI-Wuenschen erst klaeren, ob statisch oder interaktiv gemeint ist.

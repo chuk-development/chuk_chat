@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<link rel="icon" href="data:,">
+<title>chuk_chat · Antworten, die besser aussehen als Markdown</title>
+<style>
+:root{
+  --bg:#F4F1EC;--surface:#FBF9F6;--s2:#EFEBE4;--s3:#E5E0D7;--on:#1E1C19;--on2:#3C3832;--muted:#6B665E;--faint:#9A948A;
+  --outline:#DDD6CB;--hair:#E6E0D6;--rule:#1E1C19;
+  --accent:#2F5EA8;--accent-soft:#DCE5F5;--on-accent-soft:#122E5C;--accent-ink:#2F5EA8;
+  --ok:#2E7D43;--ok-soft:#D3EDD9;--warn:#8A5A00;--warn-soft:#FBE7BF;--bad:#B3261E;--bad-soft:#F8DAD6;
+  --term:#1C1B19;--term-on:#E8E4DC;--term-dim:#8E887E;
+  --serif:"Iowan Old Style","Charter","Bitstream Charter","Source Serif 4","Source Serif Pro","Noto Serif",Georgia,Cambria,serif;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans","Helvetica Neue",Arial,system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","JetBrains Mono","Cascadia Mono",Menlo,Consolas,monospace;
+}
+[data-theme=dark]{
+  --bg:#141311;--surface:#1C1A18;--s2:#24221F;--s3:#2F2C28;--on:#EDE9E2;--on2:#D3CEC5;--muted:#A49E94;--faint:#7C766D;
+  --outline:#35312C;--hair:#2C2925;--rule:#EDE9E2;
+  --accent:#A9C4F5;--accent-soft:#233450;--on-accent-soft:#D6E3FB;--accent-ink:#A9C4F5;
+  --ok:#7FD79A;--ok-soft:#173622;--warn:#FFC860;--warn-soft:#3A2D0E;--bad:#FFB4AB;--bad-soft:#44211D;
+  --term:#0E0D0C;--term-on:#E8E4DC;--term-dim:#7C766D;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--on);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased;overflow-wrap:break-word}
+code,pre,kbd{font-family:var(--mono)}
+a{color:var(--accent-ink)}
+.wrap{max-width:860px;margin:0 auto;padding:0 14px}
+
+/* ---------- page head ---------- */
+.mast{padding:22px 0 6px}
+.mast-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.kicker{font:700 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.theme{width:44px;height:44px;flex:none;border:0;border-radius:15px;background:var(--s2);color:var(--on);display:grid;place-items:center;cursor:pointer}
+.theme svg{width:21px;height:21px}
+.theme .moon{display:none}[data-theme=dark] .theme .moon{display:block}[data-theme=dark] .theme .sun{display:none}
+h1{font:600 34px/1.06 var(--serif);letter-spacing:-.02em;margin:16px 0 12px}
+h1 em{font-style:italic;color:var(--accent-ink)}
+.lede{font-size:16px;color:var(--on2);margin:0 0 14px;max-width:60ch}
+.rules{display:grid;gap:0;margin:18px 0 4px;border-top:2px solid var(--rule)}
+.rules div{display:grid;grid-template-columns:28px 1fr;gap:8px;padding:10px 0;border-bottom:1px solid var(--hair);font-size:14px;color:var(--on2)}
+.rules b{font:600 20px/1 var(--serif);color:var(--accent-ink)}
+.rules strong{color:var(--on)}
+
+/* ---------- section heads ---------- */
+.sec{padding:30px 0 6px}
+.sec h2{font:600 24px/1.15 var(--serif);letter-spacing:-.01em;margin:6px 0 8px}
+.sec > p{color:var(--on2);margin:0 0 12px;max-width:62ch}
+
+/* ---------- syntax list ---------- */
+.syn{margin:6px 0 0}
+.syn h3{font:700 11px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:22px 0 0;padding-bottom:8px;border-bottom:2px solid var(--rule)}
+.syn-i{display:grid;grid-template-columns:1fr;gap:4px;padding:11px 0;border-bottom:1px solid var(--hair)}
+.syn-i code{font-size:12.5px;background:var(--s2);border-radius:7px;padding:3px 7px;justify-self:start;white-space:pre-wrap;color:var(--on)}
+.syn-i span{font-size:14px;color:var(--on2)}
+.syn-i small{display:block;color:var(--muted);font-size:12.5px}
+@media(min-width:700px){.syn-i{grid-template-columns:minmax(230px,300px) 1fr;gap:14px;align-items:baseline}}
+.stream-rules{margin:14px 0 0;padding:0;list-style:none;counter-reset:s}
+.stream-rules li{counter-increment:s;position:relative;padding:8px 0 8px 30px;border-bottom:1px solid var(--hair);font-size:14px;color:var(--on2)}
+.stream-rules li::before{content:counter(s);position:absolute;left:0;top:7px;font:600 17px/1.2 var(--serif);color:var(--accent-ink)}
+.stream-rules code{font-size:12.5px;background:var(--s2);border-radius:5px;padding:1px 5px;color:var(--on)}
+
+/* ---------- index ---------- */
+.toc{list-style:none;margin:10px 0 0;padding:0;columns:2;column-gap:18px}
+.toc li{break-inside:avoid;padding:5px 0;border-bottom:1px solid var(--hair);font-size:14px}
+.toc a{text-decoration:none;color:var(--on)}
+.toc b{font:600 13px var(--mono);color:var(--accent-ink);margin-right:6px}
+
+/* ---------- example ---------- */
+.ex{padding:34px 0 8px;border-top:1px solid var(--outline);margin-top:26px;scroll-margin-top:8px}
+.ex-head{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;align-items:baseline;margin-bottom:14px}
+.ex-no{font:600 40px/0.9 var(--serif);color:var(--accent-ink);grid-row:span 2}
+.ex-cat{font:700 11px/1.2 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ex-q{font:600 20px/1.2 var(--serif);margin:0}
+.pair{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media(min-width:820px){.pair{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:start}}
+.col-label{display:flex;justify-content:space-between;align-items:baseline;margin:0 4px 7px;font:700 11px/1 var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.col-label .n{font:500 11px var(--mono);letter-spacing:0;text-transform:none}
+.col.new .col-label span:first-child{color:var(--accent-ink)}
+
+/* phone frame */
+.phone{max-width:390px;margin:0 auto;background:var(--surface);border:1px solid var(--outline);border-radius:22px;overflow:hidden}
+.bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--hair);font-size:12px;color:var(--muted)}
+.bar i{width:18px;height:18px;border-radius:6px;background:var(--on);display:grid;place-items:center;font:700 10px/1 var(--sans);font-style:normal;color:var(--surface)}
+.bar .m{margin-left:auto;background:var(--s2);border-radius:999px;padding:2px 9px;font-size:11px}
+.chat{padding:14px 14px 18px}
+.u{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-bottom:14px}
+.u p{margin:0;max-width:86%;background:var(--accent-soft);color:var(--on-accent-soft);padding:9px 13px;border-radius:22px 22px 7px 22px;font-size:14.5px;line-height:1.4}
+.u .photo{width:62%;border-radius:22px 22px 7px 22px;overflow:hidden;display:block}
+.u .photo svg{display:block;width:100%;height:auto}
+.a{position:relative}
+.col.old .a{max-height:640px;overflow:hidden}
+.col.old .a.cut::after{content:"";position:absolute;left:0;right:0;bottom:0;height:120px;background:linear-gradient(to bottom,transparent,var(--surface) 85%)}
+.cutnote{display:none;text-align:center;font-size:12px;color:var(--muted);margin-top:-2px}
+.a.cut + .cutnote{display:block}
+
+/* ---------- "Heute": today's Markdown look ---------- */
+.md{font-size:14.5px;line-height:1.55;color:var(--on)}
+.md p{margin:0 0 10px}
+.md h2,.md h3,.md h4{font:700 16px/1.3 var(--sans);margin:16px 0 6px}
+.md h3{font-size:15px}.md h4{font-size:14.5px}
+.md ul,.md ol{margin:0 0 10px;padding-left:22px}
+.md li{margin:2px 0}
+.md hr{border:0;border-top:1px solid var(--outline);margin:14px 0}
+.md code{font-size:12.5px;background:var(--s2);padding:1px 5px;border-radius:5px}
+.md pre{background:var(--s2);border-radius:10px;padding:10px 12px;overflow-x:auto;margin:0 0 10px}
+.md pre code{background:none;padding:0}
+.md blockquote{margin:0 0 10px;padding-left:10px;border-left:3px solid var(--outline);color:var(--muted)}
+.md-table{overflow-x:auto;margin:0 0 12px;border:1px solid var(--outline);border-radius:8px}
+.md table{border-collapse:collapse;font-size:13px;white-space:nowrap}
+.md th,.md td{padding:6px 10px;border-bottom:1px solid var(--outline);text-align:left}
+.md th{background:var(--s2);font-weight:700}
+.md tr:last-child td{border-bottom:0}
+.md a{text-decoration:underline}
+
+/* ---------- "Neu": the rich format ---------- */
+.r{font-size:15px;line-height:1.5;color:var(--on)}
+.r > * + *{margin-top:18px}
+.r p{margin:0}
+.r p + p{margin-top:8px}
+.r ul,.r ol{margin:0;padding-left:20px}
+.r code{font-size:12.5px;background:var(--s2);padding:1px 5px;border-radius:5px}
+.r strong{font-weight:700}
+
+/* pills */
+.pill{display:inline-flex;align-items:center;gap:5px;height:20px;padding:0 8px;border-radius:999px;font:700 10.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;white-space:nowrap;vertical-align:1px;background:var(--accent-soft);color:var(--on-accent-soft)}
+.pill.ok{background:var(--ok-soft);color:var(--ok)}
+.pill.bad{background:var(--bad-soft);color:var(--bad)}
+.pill.warn{background:var(--warn-soft);color:var(--warn)}
+.pill.ok::before,.pill.bad::before,.pill.warn::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+sup.fn{font:700 10px/1 var(--sans);color:var(--accent-ink);margin-left:1px;vertical-align:super}
+
+/* hero */
+.r-hero{padding-bottom:14px;border-bottom:1px solid var(--hair)}
+.r-hero .hv{font:600 46px/1 var(--serif);letter-spacing:-.025em;font-variant-numeric:lining-nums tabular-nums}
+.r-hero .hv .unit{font:600 19px/1 var(--sans);letter-spacing:0;color:var(--muted);margin:0 7px 0 4px}
+.r-hero .hv.word{font-size:40px}
+.r-hero .hv .pill{height:34px;padding:0 15px;font-size:15px;vertical-align:8px}
+.r-hero .hv .pill::before{width:9px;height:9px}
+.r-hero .hs{margin-top:9px;font-size:15.5px;line-height:1.45;color:var(--on2)}
+
+/* tl;dr */
+.r-tldr{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:baseline}
+.r-tldr b{font:700 10.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);border:1.5px solid currentColor;border-radius:6px;padding:4px 6px}
+.r-tldr span{font:500 18px/1.35 var(--serif);color:var(--on)}
+
+/* block frame: editorial rule + small caps title */
+.r-block{border-top:2px solid var(--rule);padding-top:9px}
+.r-title{font:700 10.5px/1.2 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.r-block.open{border-bottom:1px dashed var(--outline);padding-bottom:6px}
+
+/* spec sheet */
+.r-spec dl{margin:0}
+.r-spec .row{display:grid;grid-template-columns:minmax(84px,38%) 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--hair);align-items:baseline}
+.r-spec .row:last-child{border-bottom:0}
+.r-spec dt{font-size:12.5px;color:var(--muted)}
+.r-spec dd{margin:0;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;justify-content:space-between;font-size:14.5px}
+.r-spec dd .v{flex:1 1 auto}
+.num{font-weight:650;font-variant-numeric:tabular-nums}
+.unit{font-size:.82em;color:var(--muted);margin-left:2px}
+
+/* vs */
+.r-vs .vs-head{display:grid;grid-template-columns:1fr auto 1fr;align-items:end;gap:8px;padding-bottom:10px;border-bottom:1px solid var(--hair)}
+.vs-name{font:600 18px/1.15 var(--serif)}
+.vs-name.b{text-align:right}
+.vs-score{display:block;font:600 34px/1 var(--serif);font-variant-numeric:tabular-nums;color:var(--faint);margin-top:4px}
+.vs-name.lead .vs-score{color:var(--accent-ink)}
+.vs-mid{font:600 12px/1 var(--sans);color:var(--muted);letter-spacing:.1em;padding-bottom:9px}
+.vs-row{display:grid;grid-template-columns:1fr 1fr;column-gap:14px;padding:8px 0 9px;border-bottom:1px solid var(--hair)}
+.vs-k{grid-column:1/-1;text-align:center;font:700 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.vs-v{font-size:14.5px;font-variant-numeric:tabular-nums;color:var(--on2);position:relative}
+.vs-v.b{text-align:right}
+.vs-v.win{font-weight:700;color:var(--on)}
+.vs-v.lose{color:var(--faint)}
+.vs-v.win::after{content:"";display:inline-block;width:0;height:0;border:5px solid transparent;vertical-align:1px}
+.vs-v.a.win::after{border-right:7px solid var(--accent);border-left:0;margin-left:7px}
+.vs-v.b.win::before{content:"";display:inline-block;width:0;height:0;border:5px solid transparent;border-left:7px solid var(--accent);border-right:0;margin-right:7px;vertical-align:1px}
+.vs-v.b.win::after{display:none}
+.vs-fazit{margin-top:10px;font:italic 500 16px/1.4 var(--serif);color:var(--on)}
+
+/* pro / con */
+.r-procon .pc{display:grid;grid-template-columns:1fr 1fr;gap:0}
+.pc-col + .pc-col{border-left:1px solid var(--hair);padding-left:12px}
+.pc-col:first-child{padding-right:12px}
+.pc-h{display:flex;align-items:center;gap:7px;font:700 13px/1.2 var(--sans);margin-bottom:6px}
+.pc-h i{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:700 15px/1 var(--sans);font-style:normal;flex:none}
+.pc-col.p .pc-h i{background:var(--accent);color:var(--surface)}
+.pc-col.c .pc-h i{border:1.5px solid var(--muted);color:var(--muted)}
+.pc-col ul{list-style:none;padding:0;margin:0}
+.pc-col li{font-size:13.5px;line-height:1.35;padding:6px 0;border-top:1px solid var(--hair);color:var(--on2)}
+
+/* steps */
+.r-steps ol{list-style:none;margin:0;padding:0}
+.st{position:relative;padding:0 0 14px 38px}
+.st::before{content:"";position:absolute;left:12px;top:26px;bottom:2px;width:2px;background:var(--hair)}
+.st:last-child::before{display:none}
+.st-n{position:absolute;left:0;top:0;width:26px;height:26px;border-radius:50%;border:2px solid var(--accent);color:var(--accent-ink);display:grid;place-items:center;font:700 12.5px/1 var(--sans)}
+.st-t{font-weight:650;font-size:15px;line-height:1.35;padding-top:2px}
+.st-b{font-size:13.5px;color:var(--on2);margin-top:4px}
+.term{margin-top:7px;background:var(--term);color:var(--term-on);border-radius:10px;padding:8px 11px;font:12.5px/1.5 var(--mono)}
+.term div{padding-left:1.25em;text-indent:-1.25em;overflow-wrap:anywhere}
+.term s{text-decoration:none;color:var(--term-dim);user-select:none}
+.st-w{margin-top:7px;font-size:13px;color:var(--warn);display:flex;gap:6px;align-items:baseline}
+.st-w::before{content:"!";flex:none;width:16px;height:16px;border-radius:50%;background:var(--warn-soft);display:grid;place-items:center;font:800 11px/1 var(--sans)}
+
+/* calc: a written-out Rechenweg */
+.r-calc .cl{padding:9px 0 10px;border-bottom:1px solid var(--hair)}
+.r-calc .cl:last-child{border-bottom:0}
+.cl-l{font:700 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--muted);margin-bottom:5px}
+.cl-e{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font:15px/1.35 var(--mono);font-variant-numeric:tabular-nums}
+.cl-e .x{color:var(--on2)}
+.cl-e .eq{color:var(--faint)}
+.cl-e .res{font-weight:700;white-space:nowrap}
+.cl.total .res{font:700 21px/1.1 var(--serif);border-bottom:3px double var(--accent);padding-bottom:1px}
+.cl-n{margin-top:5px;font:italic 14px/1.3 var(--serif);color:var(--accent-ink)}
+.cl-n::before{content:"↳ ";font-style:normal}
+
+/* timeline */
+.r-timeline ol{list-style:none;margin:0;padding:0}
+.tl{position:relative;display:grid;grid-template-columns:74px 1fr;gap:12px;padding:0 0 12px}
+.tl::before{content:"";position:absolute;left:84px;top:14px;bottom:-2px;width:1.5px;background:var(--hair)}
+.tl:last-child::before{display:none}
+.tl-d{font:500 12px/1.6 var(--mono);color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.tl-t{position:relative;padding-left:14px;font-size:14px;line-height:1.45}
+.tl-t::before{content:"";position:absolute;left:-7px;top:6px;width:9px;height:9px;border-radius:50%;background:var(--surface);border:2px solid var(--faint)}
+.tl.hi .tl-t{font-weight:650}
+.tl.hi .tl-t::before{background:var(--accent);border-color:var(--accent)}
+.tl.hi .tl-d{color:var(--accent-ink);font-weight:700}
+
+/* places */
+.r-places ol{list-style:none;margin:0;padding:0}
+.pl{display:grid;grid-template-columns:34px 1fr;gap:10px;padding:11px 0;border-bottom:1px solid var(--hair)}
+.pl:last-child{border-bottom:0}
+.pl-n{font:600 26px/1 var(--serif);color:var(--faint);font-variant-numeric:tabular-nums}
+.pl-k{font:700 10px/1.2 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--accent-ink)}
+.pl-name{font:600 18px/1.2 var(--serif);margin:3px 0 3px}
+.pl-l{font-size:13.5px;color:var(--on2);line-height:1.4}
+.pl-h{margin-top:5px;display:inline-flex;align-items:center;gap:5px;font:12px/1 var(--mono);color:var(--muted)}
+.pl-h svg{width:12px;height:12px}
+
+/* news */
+.nw{padding:10px 0;border-bottom:1px solid var(--hair)}
+.nw:last-child{border-bottom:0}
+.nw-k{font:700 10px/1.2 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--muted)}
+.nw-h{font:650 15.5px/1.3 var(--sans);margin:4px 0 3px}
+.nw-d{font-size:13.5px;color:var(--on2);line-height:1.4}
+.nw.lead{padding-top:4px}
+.nw.lead .nw-h{font:600 22px/1.18 var(--serif);letter-spacing:-.01em;margin:6px 0 6px}
+.nw.lead .nw-k{color:var(--accent-ink)}
+.nw.lead .nw-d{font-size:14.5px}
+
+/* bars */
+.br{padding:6px 0}
+.br-top{display:flex;justify-content:space-between;gap:10px;font-size:13.5px;color:var(--on2)}
+.br-top b{font-variant-numeric:tabular-nums;font-weight:650;color:var(--on)}
+.br-track{height:10px;border-radius:5px;background:var(--s2);margin-top:4px;overflow:hidden}
+.br-fill{height:100%;border-radius:5px;background:var(--faint)}
+.br.hi .br-fill{background:var(--accent)}
+.br.hi .br-top{color:var(--on);font-weight:650}
+
+/* scale strip */
+.sc{position:relative;padding:44px 0 0}
+.sc-strip{height:14px;border-radius:7px;border:1px solid var(--outline)}
+.sc-mark{position:absolute;top:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;white-space:nowrap}
+.sc-mark b{font:700 11px/1 var(--sans);letter-spacing:.06em;text-transform:uppercase;background:var(--on);color:var(--surface);padding:5px 8px;border-radius:6px}
+.sc-mark i{width:0;height:0;border:6px solid transparent;border-top:8px solid var(--on);border-bottom:0;margin-top:0}
+.sc-mark s{text-decoration:none;display:block;width:2px;height:20px;background:var(--on);margin-top:-1px}
+.sc-ticks{position:relative;height:44px;margin-top:4px}
+.sc-t{position:absolute;top:0;transform:translateX(-50%);text-align:center;font-size:11.5px;line-height:1.2;color:var(--on2);white-space:nowrap}
+.sc-t::before{content:"";display:block;width:1px;height:6px;background:var(--muted);margin:0 auto 3px}
+.sc-t.low{top:20px}
+.sc-t.low::before{height:26px;margin-top:-20px}
+.sc-t em{display:block;font:11px var(--mono);font-style:normal;color:var(--muted)}
+.sc-t.edge-l{transform:none;text-align:left}.sc-t.edge-l::before{margin-left:0}
+.sc-t.edge-r{transform:translateX(-100%);text-align:right}.sc-t.edge-r::before{margin-right:0}
+
+/* layers diagram */
+.ly{display:grid}
+.ly-band{border-radius:12px;background:var(--s2);padding:9px 12px;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.ly-band b{font:600 16px/1.2 var(--serif)}
+.ly-band span{font-size:13px;color:var(--on2);text-align:right}
+.ly-arrow{display:flex;align-items:center;gap:8px;padding:5px 0 5px 18px;font-size:12px;color:var(--muted)}
+.ly-arrow::before{content:"";width:2px;height:18px;background:var(--outline)}
+.ly-arrow code{font-size:12px;background:none;border:1px solid var(--outline);border-radius:6px;padding:2px 7px;color:var(--on)}
+.ly-arrow.last code{background:var(--accent);border-color:var(--accent);color:var(--surface);font-weight:700}
+.ly-seg{font:700 10px/1 var(--sans);letter-spacing:.11em;text-transform:uppercase;color:var(--accent-ink);margin:8px 0 6px}
+
+/* note / warn */
+.r-note{border-left:3px solid var(--accent);padding:2px 0 2px 12px}
+.r-note.warn{border-left-color:var(--warn)}
+.r-note b{display:block;font:700 10px/1.2 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:3px}
+.r-note.warn b{color:var(--warn)}
+.r-note div{font-size:14px;color:var(--on2)}
+
+/* divider "Details" */
+.r-divider{display:flex;align-items:center;gap:10px;font:700 10.5px/1 var(--sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.r-divider::after{content:"";flex:1;height:1px;background:var(--outline)}
+.r-details{font-size:14px;color:var(--on2)}
+.r-details > * + *{margin-top:12px}
+
+/* pull quote */
+.r-quote{margin:0;padding:6px 0 0;text-align:left}
+.r-quote blockquote{margin:0;font:italic 500 23px/1.25 var(--serif);letter-spacing:-.01em;color:var(--on)}
+.r-quote blockquote::before{content:"\201E";display:block;font:700 44px/0.5 var(--serif);color:var(--accent-ink);height:18px}
+.r-quote figcaption{margin-top:8px;font-size:12.5px;color:var(--muted)}
+
+/* footnotes */
+.r-notes{list-style:none;margin:0;padding:10px 0 0;border-top:1px solid var(--hair);font-size:12px;color:var(--muted)}
+.r-notes li{display:flex;gap:6px}
+.r-notes li b{color:var(--accent-ink);font-weight:700}
+
+/* half-streamed */
+.r-pending{color:var(--muted);font-family:var(--mono);font-size:13px}
+.caret{display:inline-block;width:8px;height:15px;background:var(--accent);vertical-align:-2px;margin-left:2px;animation:bl 1s steps(2,start) infinite}
+@keyframes bl{to{visibility:hidden}}
+@media (prefers-reduced-motion:reduce){.caret{animation:none}}
+
+/* markup disclosure */
+details.src{max-width:390px;margin:10px auto 0;border:1px solid var(--outline);border-radius:14px;background:var(--surface)}
+details.src summary{cursor:pointer;list-style:none;padding:11px 14px;font-size:13px;font-weight:600;color:var(--on2);display:flex;justify-content:space-between;gap:10px}
+details.src summary::-webkit-details-marker{display:none}
+details.src summary::after{content:"+";font:600 16px/1 var(--sans);color:var(--muted)}
+details.src[open] summary::after{content:"−"}
+details.src pre{margin:0;padding:12px 14px 14px;border-top:1px solid var(--hair);font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-wrap:anywhere;color:var(--on)}
+.tok-d{color:var(--accent-ink);font-weight:700}
+.tok-p{color:var(--ok)}
+.tok-c{color:var(--muted)}
+
+.foot{margin:44px 0 40px;padding-top:16px;border-top:2px solid var(--rule);font-size:13.5px;color:var(--muted)}
+.foot a{font-weight:600}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="mast-row">
+    <span class="kicker">chuk_chat · Konzept · Antwortformat</span>
+    <button class="theme" id="theme" type="button" aria-label="Hell/Dunkel umschalten">
+      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.6 4.6l1.6 1.6M17.8 17.8l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.6 19.4l1.6-1.6M17.8 6.2l1.6-1.6"/></svg>
+      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+    </button>
+  </div>
+  <h1>Antworten, die <em>besser aussehen</em> als Markdown</h1>
+  <p class="lede">Kein Klick, kein Regler, kein zweiter Modell-Aufruf. Das Modell schreibt die Antwort in einem Durchgang in einem erweiterten Markdown. Die App setzt sie wie ein Datenblatt oder eine Magazinseite.</p>
+  <div class="rules">
+    <div><b>1</b><span><strong>Statisch.</strong> Alles ist auf einen Blick lesbar. Nichts wartet auf eine Eingabe.</span></div>
+    <div><b>2</b><span><strong>Zeilenbasiert.</strong> Halb gestreamt rendert es schon richtig. Ohne Renderer bleibt es lesbarer Text.</span></div>
+    <div><b>3</b><span><strong>Günstig.</strong> Kein JSON, keine Klammern, keine Escapes. Im Schnitt weniger Zeichen als die Markdown-Antwort.</span></div>
+  </div>
+</header>
+
+<section class="sec" id="syntax">
+  <span class="kicker">Referenz</span>
+  <h2>Die Syntax</h2>
+  <p>Normales Markdown gilt weiter. Dazu kommen acht Zeilen-Regeln und zwölf Blöcke. Es gibt nur drei Trennzeichen: <code>:</code> trennt Schlüssel und Wert, <code>|</code> trennt Spalten, <code>-&gt;</code> zeigt ein Ergebnis.</p>
+  <div class="syn" id="syn"></div>
+  <h3 class="kicker" style="margin:26px 0 0;padding-bottom:8px;border-bottom:2px solid var(--rule)">Regeln fürs Streamen</h3>
+  <ol class="stream-rules">
+    <li>Eine Zeile wird erst gesetzt, wenn ihr Zeilenumbruch da ist. Bis dahin steht sie als grauer Text da.</li>
+    <li><code>::: name</code> öffnet einen Block. Er rendert sofort mit den Zeilen, die schon da sind. <code>:::</code> schließt ihn. Fehlt das, schließt ihn der nächste Block oder das Ende der Nachricht.</li>
+    <li>Blöcke werden nicht verschachtelt. Ein Fehler kostet höchstens eine Zeile, nie die ganze Antwort.</li>
+    <li>Ein unbekannter Block oder eine kaputte Zeile wird als normales Markdown gezeigt. <code>{</code> ohne <code>}</code> bleibt Text.</li>
+  </ol>
+</section>
+
+<section class="sec">
+  <span class="kicker">Zwölf echte Fragetypen</span>
+  <h2>Heute gegen Neu</h2>
+  <p>Die Fragen kommen aus der Analyse von 939 eigenen Chats, gekürzt und ohne private Daten. „Heute“ ist eine typische Markdown-Antwort, so wie die App sie jetzt zeigt. „Neu“ ist derselbe Inhalt im neuen Format. Unter jeder neuen Antwort steht der Text, den das Modell dafür streamt.</p>
+  <ol class="toc" id="toc"></ol>
+</section>
+
+<main id="examples">
+
+<!-- 01 -->
+<article class="ex" data-cat="Modell-Fakt" data-q="ist minimax m2.7 open weight?">
+<script type="text/markdown" class="md">
+**Kurz gesagt: Nein** – MiniMax M2.7 ist aktuell **nicht** als Open-Weight-Modell verfügbar.
+
+## 🔍 Hintergrund
+
+MiniMax hat in der Vergangenheit mehrere Modelle veröffentlicht. Einige davon waren Open-Weight, andere nur über die API verfügbar:
+
+- **MiniMax-M1**: Open-Weight (Apache 2.0), veröffentlicht auf Hugging Face
+- **MiniMax-M2**: Open-Weight, MIT-Lizenz
+- **MiniMax-M2.5**: Open-Weight, MIT-Lizenz
+- **MiniMax-M2.7**: nur über die offizielle API und Partner wie OpenRouter
+
+## 📊 Übersicht
+
+| Modell | Open-Weight | Lizenz | Kontext | Zugang | Veröffentlicht |
+|---|---|---|---|---|---|
+| M1 | ✅ Ja | Apache 2.0 | 1M | HF, API | 2025-06 |
+| M2 | ✅ Ja | MIT | 200k | HF, API | 2025-10 |
+| M2.5 | ✅ Ja | MIT | 200k | HF, API | 2026-01 |
+| M2.7 | ❌ Nein | proprietär | 200k | nur API | 2026-03 |
+
+## 💡 Was bedeutet das für dich?
+
+- Du kannst M2.7 **nicht lokal** betreiben
+- Du brauchst einen API-Key
+- Wenn du lokal hosten willst, nimm **M2.5**
+
+## ⚠️ Hinweis
+
+Die Lage kann sich ändern. MiniMax hat früher Gewichte teils mit Verzögerung veröffentlicht. Prüfe am besten die offizielle Hugging-Face-Seite.
+
+Ich hoffe, das hilft dir weiter! Sag Bescheid, wenn du mehr wissen willst. 😊
+</script>
+<script type="text/plain" class="cd">
+>> Nein | MiniMax M2.7 gibt es nur per API. Die Gewichte sind nicht veröffentlicht.[^1]
+
+::: spec MiniMax M2.7
+Status: {-NUR API}
+Lizenz: proprietär
+Kontext: 200.000 Token
+Zugang: MiniMax-API, OpenRouter
+:::
+
+::: timeline Die offenen Vorgänger
+2025-06: M1 {OPEN-WEIGHT} Apache 2.0
+2025-10: M2 {OPEN-WEIGHT} MIT
+2026-01: M2.5 {OPEN-WEIGHT} MIT
+*2026-03: M2.7 {-NUR API}
+:::
+
+::: note Lokal hosten?
+Nimm M2.5. Das ist die neueste offene Version.
+:::
+
+[^1]: huggingface.co/MiniMaxAI, Stand 04/2026
+</script>
+</article>
+
+<!-- 02 -->
+<article class="ex" data-cat="Hardware · passt das?" data-q="passt eine Samsung 990 Pro 2 TB in mein ThinkPad T14 Gen 1?">
+<script type="text/markdown" class="md">
+Ja, die **Samsung 990 Pro 2 TB** passt grundsätzlich in das **ThinkPad T14 Gen 1**! 🎉
+
+### Kompatibilität im Detail
+
+Das T14 Gen 1 hat folgende Spezifikationen für den Speicher:
+
+* **Formfaktor:** M.2 2280
+* **Schnittstelle:** PCIe NVMe
+* **PCIe-Generation:** PCIe 3.0 x4
+* **Maximale Kapazität:** offiziell bis 2 TB
+
+Die Samsung 990 Pro hat:
+
+* **Formfaktor:** M.2 2280 ✅
+* **Schnittstelle:** PCIe 4.0 x4 NVMe
+* **Lesegeschwindigkeit:** bis 7.450 MB/s
+
+### ⚠️ Wichtig zu beachten
+
+1. **Geschwindigkeit:** Da das T14 Gen 1 nur PCIe 3.0 unterstützt, läuft die SSD mit maximal ca. **3.500 MB/s**. Du zahlst also für Geschwindigkeit, die du nicht nutzen kannst.
+2. **Kühlkörper:** Kaufe die Version **ohne Heatsink**, die Version mit Kühlkörper ist zu dick.
+3. **Wärme:** Die 990 Pro kann warm werden, das ist aber im Normalbetrieb kein Problem.
+
+### 💰 Alternative
+
+Wenn du Geld sparen willst, reicht eine PCIe-3.0-SSD wie die **Samsung 970 EVO Plus** völlig aus – du merkst im Alltag keinen Unterschied.
+
+### Fazit
+
+| Kriterium | T14 Gen 1 | 990 Pro | Passt? |
+|---|---|---|---|
+| Formfaktor | M.2 2280 | M.2 2280 | ✅ |
+| Schnittstelle | PCIe 3.0 x4 | PCIe 4.0 x4 | ✅ (abwärtskompatibel) |
+| Kapazität | bis 2 TB | 2 TB | ✅ |
+| Bauhöhe | Single-sided | Single-sided (ohne Heatsink) | ✅ |
+</script>
+<script type="text/plain" class="cd">
+>> {+PASST} | Die 990 Pro 2 TB passt in das T14 Gen 1. Sie läuft dort aber nur mit PCIe-3.0-Tempo.
+
+::: spec Slot gegen SSD
+Formfaktor: M.2 2280 {+PASST}
+Schnittstelle: PCIe 4.0 an 3.0 x4 {+PASST}
+Kapazität: 2 TB {+PASST}
+Bauhöhe: nur ohne Heatsink {!ACHTUNG}
+:::
+
+::: bars Lesen in MB/s
+990 Pro, Datenblatt: 7450
+*990 Pro im T14 Gen 1: 3500
+970 EVO Plus im T14 Gen 1: 3500
+:::
+
+::: note Spartipp
+Gleiches Tempo für weniger Geld: In diesem Laptop reicht eine PCIe-3.0-SSD.
+:::
+</script>
+</article>
+
+<!-- 03 -->
+<article class="ex" data-cat="Vergleich A gegen B" data-q="T14 Gen 1 (i7-10510U) vs T480s (i5-8350U), CPU-mäßig?">
+<script type="text/markdown" class="md">
+Hier ist ein detaillierter Vergleich der beiden Laptops in Bezug auf die CPU-Leistung:
+
+## 🖥️ Lenovo ThinkPad T14 Gen 1 vs. T480s
+
+### Prozessoren
+
+- **T14 Gen 1**: Intel Core i7-10510U (Comet Lake, 10. Generation)
+- **T480s**: Intel Core i5-8350U (Kaby Lake Refresh, 8. Generation)
+
+### 📊 Vergleichstabelle
+
+| Merkmal | T14 Gen 1 (i7-10510U) | T480s (i5-8350U) | Unterschied | Gewinner |
+|---|---|---|---|---|
+| Kerne/Threads | 4/8 | 4/8 | gleich | – |
+| Basistakt | 1,8 GHz | 1,7 GHz | +0,1 GHz | T14 |
+| Turbo | 4,9 GHz | 3,6 GHz | +1,3 GHz | **T14** |
+| Cache | 8 MB | 6 MB | +2 MB | T14 |
+| TDP | 15 W | 15 W | gleich | – |
+| Geekbench 6 Single | ~1.450 | ~1.150 | +26 % | **T14** |
+| Geekbench 6 Multi | ~3.900 | ~3.400 | +15 % | **T14** |
+| Preis (gebraucht) | ~280 € | ~220 € | +60 € | T480s |
+
+### Fazit
+
+Der **T14 Gen 1** ist CPU-seitig klar schneller, vor allem im Single-Core dank des höheren Turbotakts. Im Multi-Core ist der Unterschied geringer, weil beide CPUs 4 Kerne haben und bei 15 W TDP schnell drosseln.
+
+Wenn dir CPU-Leistung wichtig ist, nimm den **T14 Gen 1**. Wenn du Geld sparen willst, ist der **T480s** immer noch ein solides Gerät.
+</script>
+<script type="text/plain" class="cd">
+>> T14 Gen 1 | Pro Kern rund 25 % schneller, im Multicore rund 15 %. Gebraucht kostet er etwa 60 € mehr.
+
+::: vs T14 Gen 1 | T480s
+CPU: i7-10510U | i5-8350U
+Generation: *10. Gen | 8. Gen
+Kerne / Threads: 4 / 8 | 4 / 8
+Turbo: *4,9 GHz | 3,6 GHz
+Cache: *8 MB | 6 MB
+Geekbench 6 Single: *~1.450 | ~1.150
+Geekbench 6 Multi: *~3.900 | ~3.400
+Preis gebraucht: ~280 € | *~220 €
+= Der T14 ist schneller. Beide drosseln bei 15 W, darum ist der Abstand im Multicore klein.
+:::
+</script>
+</article>
+
+<!-- 04 -->
+<article class="ex" data-cat="Umrechnen" data-q="59 lbs in bar">
+<script type="text/markdown" class="md">
+Um **59 lbs** in **bar** umzurechnen, muss man zuerst klären, was gemeint ist. „lbs“ ist eigentlich eine Einheit für **Masse** (Pfund), während **bar** eine Einheit für **Druck** ist. Wahrscheinlich meinst du **psi** (pounds per square inch), also Pfund pro Quadratzoll, was z. B. bei Reifendruck üblich ist.
+
+## Umrechnung psi → bar
+
+Die Formel lautet:
+
+**1 psi = 0,0689476 bar**
+
+Also:
+
+59 psi × 0,0689476 = **4,068 bar**
+
+## Ergebnis
+
+➡️ **59 psi ≈ 4,07 bar**
+
+## Zum Vergleich
+
+| psi | bar |
+|---|---|
+| 30 | 2,07 |
+| 35 | 2,41 |
+| 40 | 2,76 |
+| 50 | 3,45 |
+| 59 | 4,07 |
+| 60 | 4,14 |
+
+Falls du tatsächlich **Masse** meinst: 59 lbs = 26,76 kg – das lässt sich aber nicht in bar umrechnen.
+</script>
+<script type="text/plain" class="cd">
+>> 4,07 bar | Aus 59 psi. „lbs“ meint hier Pfund pro Quadratzoll, zum Beispiel beim Reifendruck.
+
+::: calc
+Faktor = 1 psi = 0,0689476 bar
+Druck = 59 × 0,0689476 = **4,07 bar**   // gerundet auf zwei Stellen
+:::
+
+::: note Falls Masse gemeint war
+59 lbs sind 26,8 kg. Masse lässt sich nicht in bar umrechnen.
+:::
+</script>
+</article>
+
+<!-- 05 -->
+<article class="ex" data-cat="Rechnen · Akku" data-q="10.000 mAh bei 3,7 V, wie viel Wh ist das und wie lange läuft mein Router (6 W) damit?">
+<script type="text/markdown" class="md">
+Gute Frage! Lass uns das Schritt für Schritt berechnen. 🔋
+
+## 1. Energie in Wattstunden
+
+Die Formel lautet:
+
+**Wh = mAh × V ÷ 1000**
+
+Also: 10.000 mAh × 3,7 V ÷ 1000 = **37 Wh**
+
+## 2. Verluste berücksichtigen
+
+Powerbanks wandeln die 3,7 V der Zelle in 5 V oder 12 V um. Dabei gehen etwa 10–20 % verloren. Wir rechnen mit 85 % Wirkungsgrad:
+
+37 Wh × 0,85 = **31,5 Wh** nutzbar
+
+## 3. Laufzeit
+
+Dein Router braucht 6 W:
+
+31,5 Wh ÷ 6 W = **5,25 Stunden**
+
+Das sind ungefähr **5 Stunden und 15 Minuten**.
+
+## 📊 Laufzeit bei anderen Verbrauchern
+
+| Verbrauch | Laufzeit |
+|---|---|
+| 3 W | ~10,5 h |
+| 6 W | ~5,25 h |
+| 10 W | ~3,2 h |
+| 20 W | ~1,6 h |
+
+## ⚠️ Wichtig
+
+Die meisten Router brauchen **12 V**. Du brauchst also eine Powerbank mit USB-C Power Delivery und ein **12-V-Triggerkabel**.
+</script>
+<script type="text/plain" class="cd">
+>> 5 h 15 min | Der Akku hat 37 Wh. Nach Wandlerverlust reicht das für einen 6-W-Router gut fünf Stunden.
+
+::: calc
+Energie = 10 Ah × 3,7 V = 37 Wh
+Nutzbar = 37 Wh × 0,85 = 31,5 Wh   // ca. 15 % gehen im Wandler verloren
+Laufzeit = 31,5 Wh ÷ 6 W = **5,25 h**   // 0,25 h sind 15 min
+:::
+
+::: bars Laufzeit in Stunden je Verbrauch
+3 W: 10,5
+*6 W, dein Router: 5,25
+10 W: 3,2
+20 W: 1,6
+:::
+
+::: warn
+Router laufen meist mit 12 V. Du brauchst eine Powerbank mit USB-C PD und ein 12-V-Triggerkabel.
+:::
+</script>
+</article>
+
+<!-- 06 -->
+<article class="ex" data-cat="Linux · Anleitung" data-q="linux mint, platte ist mit luks verschlüsselt. wie komm ich vom live-usb an meine daten?">
+<script type="text/markdown" class="md">
+Kein Problem! Hier ist eine Schritt-für-Schritt-Anleitung, wie du deine LUKS-verschlüsselte Festplatte von einem Live-USB-Stick aus entsperrst und einbindest.
+
+## Schritt 1: Live-USB booten
+
+Starte deinen Rechner vom Linux-Mint-Live-USB.
+
+## Schritt 2: Terminal öffnen
+
+Öffne ein Terminal mit `Strg + Alt + T`.
+
+## Schritt 3: Partition finden
+
+Führe folgenden Befehl aus:
+
+```
+lsblk -f
+```
+
+Suche nach der Partition mit dem Typ **crypto_LUKS**. Bei den meisten Systemen ist das `/dev/nvme0n1p3` oder `/dev/sda3`.
+
+## Schritt 4: Partition entsperren
+
+```
+sudo cryptsetup open /dev/nvme0n1p3 daten
+```
+
+Gib dein Passwort ein.
+
+## Schritt 5: LVM aktivieren
+
+Linux Mint nutzt bei Verschlüsselung LVM. Aktiviere die Volumes:
+
+```
+sudo vgchange -ay
+```
+
+## Schritt 6: Einhängen
+
+```
+sudo mount /dev/mapper/vgmint-root /mnt
+```
+
+## Schritt 7: Daten sichern
+
+Jetzt findest du deine Dateien unter `/mnt/home/`.
+
+## ⚠️ Wichtig
+
+- Achte darauf, die **richtige Partition** zu wählen!
+- Wenn `vgmint` nicht existiert, prüfe mit `sudo lvs` den Namen.
+
+## Zum Schluss
+
+sudo umount /mnt
+sudo cryptsetup close daten
+</script>
+<script type="text/plain" class="cd">
+tl;dr: Partition finden, mit cryptsetup öffnen, LVM aktivieren, nach /mnt einhängen.
+
+::: steps
+1. Vom Live-USB starten, Terminal öffnen
+2. Die verschlüsselte Partition finden
+$ lsblk -f
+Gesucht ist der Typ crypto_LUKS, meist nvme0n1p3.
+3. Entsperren
+$ sudo cryptsetup open /dev/nvme0n1p3 daten
+! Passwort der Festplatte, nicht das Login-Passwort
+4. LVM-Volumes aktivieren
+$ sudo vgchange -ay
+5. Einhängen
+$ sudo mount /dev/mapper/vgmint-root /mnt
+Deine Dateien liegen jetzt unter /mnt/home.
+6. Danach sauber trennen
+$ sudo umount /mnt
+$ sudo cryptsetup close daten
+:::
+
+::: warn
+Meldet cryptsetup „not a valid LUKS device“, ist es die falsche Partition. Nichts formatieren.
+:::
+</script>
+</article>
+
+<!-- 07 -->
+<article class="ex" data-cat="Recht · Ja oder Nein" data-q="brauche ich für meine eigene website ein impressum?">
+<script type="text/markdown" class="md">
+Das ist eine gute und wichtige Frage! Die Antwort lautet: **Es kommt darauf an.** ⚖️
+
+## Rechtliche Grundlage
+
+Die Impressumspflicht ist in Deutschland in **§ 5 DDG** (Digitale-Dienste-Gesetz, früher § 5 TMG) geregelt. Sie gilt für alle „geschäftsmäßigen, in der Regel gegen Entgelt angebotenen digitalen Dienste“.
+
+## Wann brauchst du ein Impressum?
+
+- Wenn du auf deiner Website **Werbung** schaltest (z. B. Google AdSense)
+- Wenn du **Affiliate-Links** nutzt
+- Wenn du Produkte oder Dienstleistungen **anbietest**
+- Wenn dein Portfolio dazu dient, **Aufträge** zu bekommen
+- Wenn du ein **Kleingewerbe** oder eine freiberufliche Tätigkeit hast
+
+## Wann brauchst du keins?
+
+- Bei rein **privaten** Seiten, z. B. für Familie und Freunde
+- Bei **passwortgeschützten** Seiten, die nur ein kleiner Kreis sieht
+
+## Was muss ins Impressum?
+
+1. Vollständiger Name
+2. Ladungsfähige Anschrift (kein Postfach!)
+3. E-Mail-Adresse
+4. Ein weiterer schneller Kontaktweg (z. B. Telefon)
+5. ggf. Umsatzsteuer-ID
+
+## ⚠️ Risiken
+
+Ein fehlendes oder fehlerhaftes Impressum kann **abgemahnt** werden. Die Kosten liegen oft bei mehreren hundert Euro.
+
+**Hinweis:** Dies ist keine Rechtsberatung. Wende dich im Zweifel an einen Anwalt.
+</script>
+<script type="text/plain" class="cd">
+>> Meistens ja | Pflicht, sobald die Seite geschäftsmäßig ist. Schon Werbung oder ein Link zum eigenen Angebot reicht.[^1]
+
+::: procon Pflicht | Keine Pflicht
++ Blog mit Werbung oder Affiliate-Links
++ Portfolio, das Aufträge bringen soll
++ Seite eines Kleingewerbes
+- Rein private Familienseite
+- Seite mit Passwort, nur für Freunde
+:::
+
+::: spec Was hinein muss
+Name: Vor- und Nachname
+Adresse: ladungsfähig, kein Postfach
+Kontakt: E-Mail plus ein zweiter schneller Weg
+USt-IdNr.: nur wenn vorhanden
+:::
+
+::: warn
+Fehlt es, drohen Abmahnungen. Üblich sind einige hundert Euro Anwaltskosten.
+:::
+
+[^1]: § 5 Digitale-Dienste-Gesetz (DDG), gilt seit Mai 2024
+</script>
+</article>
+
+<!-- 08 -->
+<article class="ex" data-cat="Orte" data-q="was kann man heute in kiel machen?">
+<script type="text/markdown" class="md">
+Hier sind einige Ideen, was du heute in **Kiel** unternehmen kannst! 🌊
+
+## 🏖️ Draußen
+
+- **Kiellinie**: Die Kiellinie ist eine beliebte Uferpromenade an der Kieler Förde. Hier kannst du spazieren gehen, Schiffe beobachten und ein Fischbrötchen essen. Sie ist rund 3 km lang und immer zugänglich.
+- **Laboe & Marine-Ehrenmal**: Mit der Fähre erreichst du Laboe in etwa einer Stunde. Dort kannst du auf den Turm des Marine-Ehrenmals steigen (geöffnet ca. 9:30–18 Uhr) und hast eine tolle Aussicht.
+- **Botanischer Garten**: Der Botanische Garten der Uni Kiel hat Tropenhäuser und ein Alpinum. Der Eintritt ist frei. Geöffnet ca. 9–18 Uhr.
+
+## 🏛️ Drinnen
+
+- **Aquarium GEOMAR**: Das Aquarium liegt direkt an der Kiellinie. Besonders beliebt ist die Seehund-Fütterung. Geöffnet 9–18 Uhr.
+- **Kunsthalle zu Kiel**: Moderne und zeitgenössische Kunst, mit Café. Geöffnet 10–18 Uhr.
+
+## 📋 Übersicht
+
+| Ort | Art | Öffnungszeiten | Eintritt | Wetter | Dauer |
+|---|---|---|---|---|---|
+| Kiellinie | Promenade | immer | frei | ☀️ | 1–2 h |
+| Aquarium GEOMAR | Aquarium | 9–18 | ca. 5 € | ☀️🌧️ | 1 h |
+| Kunsthalle | Museum | 10–18 | ca. 8 € | 🌧️ | 2 h |
+| Laboe | Ausflug | 9:30–18 | ca. 7 € | ☀️ | halber Tag |
+| Botanischer Garten | Garten | 9–18 | frei | ☀️🌧️ | 1–2 h |
+
+## 💡 Tipp
+
+Wenn das Wetter gut ist, würde ich die Kiellinie mit dem Aquarium kombinieren. Bei Regen ist die Kunsthalle eine gute Wahl.
+
+Viel Spaß in Kiel! 😊
+</script>
+<script type="text/plain" class="cd">
+tl;dr: Bei Sonne an die Förde, bei Regen in die Kunsthalle.
+
+::: places Kiel, heute
+Kiellinie | Promenade · draußen | 3 km am Wasser, Schiffe schauen, Fischbrötchen | immer offen · frei
+Aquarium GEOMAR | Aquarium · 1 Stunde | Direkt an der Kiellinie, mit Seehundbecken | 9–18 Uhr
+Kunsthalle zu Kiel | Museum · bei Regen | Moderne Kunst, Café im Haus | 10–18 Uhr
+Laboe + Marine-Ehrenmal | Ausflug · halber Tag | Mit der Fähre in rund 1 Stunde, Aussicht vom Turm | 9:30–18 Uhr
+Botanischer Garten | Garten · ruhig | Tropenhäuser und Alpinum | 9–18 Uhr · frei
+:::
+</script>
+</article>
+
+<!-- 09 -->
+<article class="ex" data-cat="Nachrichten" data-q="current tech news">
+<script type="text/markdown" class="md">
+Hier sind die aktuellen Tech-News:
+
+## 🤖 KI
+
+- **Neue Open-Weight-Modelle**: Zwei neue Modelle erreichen auf SWE-Bench fast das Niveau der großen API-Modelle. (Quelle: The Decoder)
+- **EU AI Act**: Die EU verschiebt Teile des AI Act. Die Pflichten für Allzweck-Modelle kommen später als geplant. (Quelle: heise)
+
+## 💾 Hardware
+
+- **Speicherpreise**: DDR5 und NVMe-SSDs kosten rund 20 % mehr als im Frühjahr. (Quelle: ComputerBase)
+
+## 🐧 Open Source
+
+- **Linux 6.17**: Der neue Kernel ist fertig und bringt bessere Unterstützung für ARM-Laptops. (Quelle: LWN)
+
+## 📌 Fazit
+
+Die Woche steht klar im Zeichen von KI-Regulierung und steigenden Hardwarepreisen. Möchtest du zu einer der Nachrichten mehr Details?
+</script>
+<script type="text/plain" class="cd">
+::: news Tech, 24. September
+Offene Modelle holen beim Coding auf | The Decoder · heute | Zwei neue Open-Weight-Modelle erreichen auf SWE-Bench fast das Niveau der großen API-Modelle.
+EU verschiebt Teile des AI Act | heise · heute | Die Pflichten für Allzweck-Modelle kommen später als geplant.
+Speicher wird teurer | ComputerBase · gestern | DDR5 und NVMe-SSDs kosten rund 20 % mehr als im Frühjahr.
+Linux 6.17 ist fertig | LWN · gestern | Bessere Unterstützung für ARM-Laptops.
+:::
+</script>
+</article>
+
+<!-- 10 -->
+<article class="ex" data-cat="Konzept erklären" data-q="wie funktioniert ein compiler?">
+<script type="text/markdown" class="md">
+Ein Compiler ist ein Programm, das Quellcode in eine ausführbare Datei übersetzt. Dabei durchläuft er mehrere Phasen:
+
+## 1. Lexikalische Analyse (Lexer)
+
+Der Lexer liest den Quelltext Zeichen für Zeichen und zerlegt ihn in **Tokens**. Aus `int x = 2 + 3;` werden zum Beispiel die Tokens `int`, `x`, `=`, `2`, `+`, `3`, `;`.
+
+## 2. Syntaxanalyse (Parser)
+
+Der Parser prüft, ob die Tokens der Grammatik der Sprache entsprechen, und baut einen **abstrakten Syntaxbaum (AST)**.
+
+## 3. Semantische Analyse
+
+Hier wird geprüft, ob das Programm *sinnvoll* ist: Sind Variablen deklariert? Passen die Typen?
+
+## 4. Zwischencode und Optimierung
+
+Der Compiler erzeugt eine **Zwischendarstellung (IR)** und optimiert sie. Zum Beispiel wird `2 + 3` schon beim Kompilieren zu `5` (Constant Folding).
+
+## 5. Codegenerierung
+
+Aus der IR entsteht Maschinencode bzw. **Assembly** für die Ziel-CPU.
+
+## 6. Linken
+
+Der Linker verbindet den erzeugten Objektcode mit Bibliotheken zu einer **ausführbaren Datei**.
+
+## Zusammenfassung
+
+| Phase | Eingabe | Ausgabe | Beispiel-Tool |
+|---|---|---|---|
+| Lexer | Quelltext | Tokens | flex |
+| Parser | Tokens | AST | bison |
+| Semantik | AST | geprüfter AST | – |
+| Optimierung | IR | optimierte IR | LLVM opt |
+| Codegen | IR | Assembly | LLVM llc |
+| Linker | Objektdateien | Executable | ld |
+
+Man unterscheidet außerdem zwischen **Frontend** (Lexer bis Semantik) und **Backend** (Optimierung bis Codegen). Das ist der Grund, warum LLVM so viele Sprachen unterstützt.
+</script>
+<script type="text/plain" class="cd">
+tl;dr: Ein Compiler übersetzt in Schichten. Jede Schicht macht aus dem Text ein genaueres Bild, bis am Ende Maschinencode steht.
+
+::: layers Vom Quelltext zur Datei
+Quelltext: das, was du schreibst -> int x = 2 + 3;
+Lexer: zerlegt den Text in Wörter -> Tokens
+Parser: baut aus den Wörtern einen Baum -> AST
+Semantik: prüft Namen und Typen -> geprüfter AST
+Optimierer: rechnet vor, streicht Totes -> IR, 2 + 3 wird 5
+Codegen: wählt Befehle für die CPU -> Assembly
+Linker: fügt alles zu einer Datei -> Executable
+:::
+
+--- Details
+
+Lexer bis Semantik heißen **Frontend**: Sie verstehen die Sprache. Optimierer und Codegen heißen **Backend**: Sie verstehen die CPU.
+
+Darum bringt LLVM viele Sprachen auf viele CPUs. Jede Sprache braucht nur ihr eigenes Frontend.
+</script>
+</article>
+
+<!-- 11 -->
+<article class="ex" data-cat="Person · wer ist" data-q="wer ist der echte typ von der story von dumb money?">
+<script type="text/markdown" class="md">
+Der „echte Typ“ hinter der Geschichte von **Dumb Money** ist **Keith Gill**.
+
+## Wer ist Keith Gill?
+
+Keith Gill ist ein US-amerikanischer Finanzanalyst und Investor. Bekannt wurde er unter den Namen:
+
+- **Roaring Kitty** (YouTube)
+- **DeepFuckingValue** (Reddit, r/wallstreetbets)
+
+Er arbeitete als Finanz-Trainer bei der Versicherung MassMutual.
+
+## Die GameStop-Geschichte
+
+- 2019 kaufte er GameStop-Aktien und Optionen für rund 53.000 $
+- Er teilte seine Analysen auf YouTube und Reddit
+- Im Januar 2021 kam es zum **Short Squeeze**, sein Depot stieg auf über 40 Mio. $
+- Im Februar 2021 musste er vor dem US-Kongress aussagen. Berühmt ist sein Satz: *„I like the stock.“*
+
+## Der Film
+
+**Dumb Money** (2023) erzählt die Geschichte. Keith Gill wird von **Paul Dano** gespielt.
+
+## Heute
+
+Im Mai 2024 meldete er sich kurz zurück, und die GameStop-Aktie sprang erneut stark an.
+</script>
+<script type="text/plain" class="cd">
+>> Keith Gill | US-Finanzanalyst. Als „Roaring Kitty“ hat er 2021 den GameStop-Hype mit ausgelöst.
+
+::: spec
+Online-Namen: Roaring Kitty, DeepFuckingValue
+Beruf damals: Finanz-Trainer bei MassMutual
+Im Film: gespielt von Paul Dano
+:::
+
+::: timeline
+2019: kauft GameStop-Aktien für rund 53.000 $
+*2021-01: Short Squeeze, sein Depot steigt auf über 40 Mio. $
+2021-02: Anhörung im US-Kongress
+2023-09: Kinostart von „Dumb Money“
+2024-05: kurzes Comeback, die Aktie springt wieder
+:::
+
+> I like the stock.
+> — Keith Gill vor dem US-Kongress, Februar 2021
+</script>
+</article>
+
+<!-- 12 -->
+<article class="ex" data-cat="Foto-Analyse" data-q="ist die lampe warmweiß?" data-photo="lamp">
+<script type="text/markdown" class="md">
+Basierend auf dem Foto lässt sich Folgendes sagen:
+
+Das Licht der Lampe wirkt **gelblich-orange**, und die weiße Wand dahinter erscheint cremig. Die Schatten sind weich und warm getönt. Das sind typische Merkmale von **warmweißem Licht**.
+
+### Farbtemperaturen im Überblick
+
+| Bezeichnung | Kelvin | Wirkung |
+|---|---|---|
+| Kerzenlicht | ~1.800–2.200 K | sehr warm |
+| Warmweiß | 2.700–3.000 K | gemütlich |
+| Neutralweiß | 3.300–5.300 K | sachlich |
+| Tageslichtweiß | > 5.300 K | kühl, bläulich |
+
+### Einschätzung
+
+Ich schätze die Farbtemperatur auf etwa **2.700 K**, also **warmweiß**. ✅
+
+Beachte aber: Kameras gleichen den Weißabgleich automatisch aus, daher kann die echte Farbtemperatur etwas abweichen (etwa ±300 K).
+</script>
+<script type="text/plain" class="cd">
+>> Ja, warmweiß | Etwa 2.700 K. Das Licht wirkt gelblich wie eine alte Glühbirne.
+
+::: scale 1800–6500 K
+2000: Kerze
+2700: Warmweiß
+4000: Neutralweiß
+6500: Tageslicht
+@ 2700: deine Lampe
+:::
+
+::: spec Woran man es sieht
+Wand: weiß, wirkt aber cremig-gelb
+Schatten: weich und warm getönt
+Unsicherheit: ±300 K, die Kamera gleicht Weiß aus
+:::
+</script>
+</article>
+
+</main>
+
+<section class="sec" id="stream">
+  <span class="kicker">Robustheit</span>
+  <h2>Halb gestreamt</h2>
+  <p>Dieselbe Antwort wie in Beispiel 03, nach etwa 60 % der Zeichen angehalten. Der Block ist offen, die letzte Zeile ist noch nicht fertig. Trotzdem steht schon ein sauberes Bild da. Ein halbes <code>&lt;compare&gt;{"items":[…</code> mit JSON zeigt an dieser Stelle noch gar nichts.</p>
+  <div class="pair" id="streampair"></div>
+</section>
+
+<footer class="foot">
+  Die Inhalte der Beispiele zeigen das Format. Sie sind nicht geprüft, Nachrichten und Öffnungszeiten sind erfunden.<br>
+  <a href="interaktiv.html">alte interaktive Demo</a>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- theme ---------- */
+  var root = document.documentElement;
+  var stored = null;
+  try { stored = localStorage.getItem('af-theme'); } catch (e) { /* private mode */ }
+  var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  root.setAttribute('data-theme', stored || (prefersDark ? 'dark' : 'light'));
+  document.getElementById('theme').addEventListener('click', function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('af-theme', next); } catch (e) { /* ignore */ }
+  });
+
+  /* ---------- helpers ---------- */
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+  function fmtCount(n) { return n.toLocaleString('de-DE'); }
+
+  // Plain Markdown inline: code, bold, italic, links.
+  function inlineMd(s) {
+    var codes = [];
+    var h = esc(s).replace(/`([^`]+)`/g, function (m, c) { codes.push(c); return '\u0000' + (codes.length - 1) + '\u0000'; });
+    h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    h = h.replace(/(^|[^*\w])\*([^*\s][^*]*?)\*(?!\w)/g, '$1<em>$2</em>');
+    h = h.replace(/\[([^\]^][^\]]*)\]\(([^)]+)\)/g, '<a>$1</a>');
+    return h.replace(/\u0000(\d+)\u0000/g, function (m, i) { return '<code>' + codes[+i] + '</code>'; });
+  }
+
+  // Rich inline = Markdown inline + {pills} + [^n] footnote refs.
+  var TONES = { '+': 'ok', '-': 'bad', '!': 'warn' };
+  function pill(body) {
+    var t = TONES[body.charAt(0)];
+    var text = t ? body.slice(1) : body;
+    return '<span class="pill' + (t ? ' ' + t : '') + '">' + text + '</span>';
+  }
+  function inlineRich(s) {
+    var h = inlineMd(s);
+    h = h.replace(/\{([+\-!]?[^{}]{1,40})\}/g, function (m, b) { return pill(b.trim()); });
+    return h.replace(/\[\^(\d+)\]/g, '<sup class="fn">$1</sup>');
+  }
+
+  // Number + unit typography: "3.500 MB/s" -> big number, small unit.
+  function numUnit(s) {
+    var m = /^\s*(~|≈|ca\.\s)?(\d[\d.,:]*)(\s*)([^\d{}].{0,14})?$/.exec(s);
+    if (!m || /[{*`]/.test(s)) return inlineRich(s);
+    return '<span class="num">' + esc((m[1] || '') + m[2]) + '</span>' + (m[4] ? '<span class="unit">' + esc(m[4]) + '</span>' : '');
+  }
+
+  function splitKV(l) {
+    var i = l.indexOf(': ');
+    if (i < 0) return [null, l.trim()];
+    return [l.slice(0, i).trim(), l.slice(i + 2).trim()];
+  }
+  function star(s) {
+    s = s.trim();
+    if (s.charAt(0) === '*' && s.charAt(1) !== '*') return { win: true, s: s.slice(1).trim() };
+    return { win: false, s: s };
+  }
+  function cols(s) { return s.split('|').map(function (x) { return x.trim(); }); }
+  function pullPills(s) {
+    var ps = [];
+    var text = s.replace(/\s*\{([+\-!]?[^{}]{1,40})\}/g, function (m, b) { ps.push(pill(b.trim())); return ''; }).trim();
+    return { text: text, pills: ps.join(' ') };
+  }
+  function parseNum(s) {
+    var m = /-?\d[\d.]*(,\d+)?/.exec(s);
+    if (!m) return NaN;
+    return parseFloat(m[0].replace(/\./g, '').replace(',', '.'));
+  }
+  function title(arg) { return arg ? '<h4 class="r-title">' + inlineRich(arg) + '</h4>' : ''; }
+
+  /* ---------- Markdown block renderer (the "Heute" look) ---------- */
+  function renderMd(src, inl) {
+    inl = inl || inlineMd;
+    var L = src.replace(/\r/g, '').split('\n');
+    var out = [], i = 0, m;
+    var isList = function (l) { return /^\s*([-*+]|\d+[.)])\s+/.test(l); };
+    while (i < L.length) {
+      var l = L[i];
+      if (/^```/.test(l)) {
+        var buf = []; i++;
+        while (i < L.length && !/^```/.test(L[i])) { buf.push(L[i]); i++; }
+        i++;
+        out.push('<pre><code>' + esc(buf.join('\n')) + '</code></pre>');
+        continue;
+      }
+      if ((m = /^(#{1,4})\s+(.*)$/.exec(l))) {
+        var n = Math.min(m[1].length + 1, 4);
+        out.push('<h' + n + '>' + inl(m[2]) + '</h' + n + '>'); i++; continue;
+      }
+      if (/^\s*(-{3,}|\*{3,})\s*$/.test(l)) { out.push('<hr>'); i++; continue; }
+      if (/^\s*\|/.test(l)) {
+        var rows = [];
+        while (i < L.length && /^\s*\|/.test(L[i])) { rows.push(L[i]); i++; }
+        var body = rows.filter(function (r) { return !/^[\s|:-]+$/.test(r); }).map(function (r) {
+          return r.trim().replace(/^\||\|$/g, '').split('|').map(function (c) { return c.trim(); });
+        });
+        var t = '<div class="md-table"><table>';
+        body.forEach(function (cells, ri) {
+          var tag = ri === 0 ? 'th' : 'td';
+          t += '<tr>' + cells.map(function (c) { return '<' + tag + '>' + inl(c) + '</' + tag + '>'; }).join('') + '</tr>';
+        });
+        out.push(t + '</table></div>');
+        continue;
+      }
+      if (isList(l)) {
+        var ordered = /^\s*\d/.test(l), items = [];
+        while (i < L.length && (isList(L[i]) || (/^\s{2,}\S/.test(L[i]) && items.length))) {
+          if (isList(L[i])) items.push(L[i].replace(/^\s*([-*+]|\d+[.)])\s+/, ''));
+          else items[items.length - 1] += ' ' + L[i].trim();
+          i++;
+        }
+        var tagL = ordered ? 'ol' : 'ul';
+        out.push('<' + tagL + '>' + items.map(function (x) { return '<li>' + inl(x) + '</li>'; }).join('') + '</' + tagL + '>');
+        continue;
+      }
+      if (/^>\s?/.test(l)) {
+        var q = [];
+        while (i < L.length && /^>\s?/.test(L[i])) { q.push(L[i].replace(/^>\s?/, '')); i++; }
+        out.push('<blockquote>' + inl(q.join(' ')) + '</blockquote>');
+        continue;
+      }
+      if (!l.trim()) { i++; continue; }
+      var p = [];
+      while (i < L.length && L[i].trim() && !/^(```|#{1,4}\s|\s*\||>\s?)/.test(L[i]) && !isList(L[i])) { p.push(L[i].trim()); i++; }
+      out.push('<p>' + inl(p.join(' ')) + '</p>');
+    }
+    return out.join('');
+  }
+
+  /* ---------- rich blocks ---------- */
+  var BLOCKS = {
+    spec: function (arg, lines) {
+      var rows = lines.map(function (l) {
+        var kv = splitKV(l);
+        if (kv[0] === null) return '<div class="row"><dd style="grid-column:1/-1"><span class="v">' + inlineRich(kv[1]) + '</span></dd></div>';
+        var pp = pullPills(kv[1]);
+        return '<div class="row"><dt>' + inlineRich(kv[0]) + '</dt><dd><span class="v">' + numUnit(pp.text) + '</span>' + pp.pills + '</dd></div>';
+      }).join('');
+      return '<section class="r-block r-spec">' + title(arg) + '<dl>' + rows + '</dl></section>';
+    },
+
+    vs: function (arg, lines) {
+      var names = cols(arg || 'A | B');
+      var wins = [0, 0], rows = '', fazit = '';
+      lines.forEach(function (l) {
+        if (/^=\s?/.test(l)) { fazit = l.replace(/^=\s?/, ''); return; }
+        var kv = splitKV(l);
+        var vals = cols(kv[1]).map(star);
+        var w = vals[0] && vals[0].win ? 0 : (vals[1] && vals[1].win ? 1 : -1);
+        if (w >= 0) wins[w]++;
+        var cell = function (v, k) {
+          if (!v) return '<div class="vs-v ' + k + '"></div>';
+          var cls = w < 0 ? '' : (v.win ? ' win' : ' lose');
+          return '<div class="vs-v ' + k + cls + '">' + inlineRich(v.s) + '</div>';
+        };
+        rows += '<div class="vs-row">' + (kv[0] ? '<div class="vs-k">' + inlineRich(kv[0]) + '</div>' : '') + cell(vals[0], 'a') + cell(vals[1], 'b') + '</div>';
+      });
+      var lead = wins[0] === wins[1] ? -1 : (wins[0] > wins[1] ? 0 : 1);
+      var head = '<div class="vs-head">' +
+        '<div class="vs-name a' + (lead === 0 ? ' lead' : '') + '">' + inlineRich(names[0] || '') + '<span class="vs-score">' + wins[0] + '</span></div>' +
+        '<div class="vs-mid">PUNKTE</div>' +
+        '<div class="vs-name b' + (lead === 1 ? ' lead' : '') + '">' + inlineRich(names[1] || '') + '<span class="vs-score">' + wins[1] + '</span></div></div>';
+      return '<section class="r-block r-vs">' + head + rows + (fazit ? '<p class="vs-fazit">' + inlineRich(fazit) + '</p>' : '') + '</section>';
+    },
+
+    procon: function (arg, lines) {
+      var t = cols(arg || 'Pro | Contra');
+      var p = [], c = [];
+      lines.forEach(function (l) {
+        if (/^\+\s?/.test(l)) p.push(l.replace(/^\+\s?/, ''));
+        else if (/^[-−]\s?/.test(l)) c.push(l.replace(/^[-−]\s?/, ''));
+        else p.push(l);
+      });
+      var col = function (cls, glyph, head, items) {
+        return '<div class="pc-col ' + cls + '"><div class="pc-h"><i>' + glyph + '</i>' + inlineRich(head || '') + '</div><ul>' +
+          items.map(function (x) { return '<li>' + inlineRich(x) + '</li>'; }).join('') + '</ul></div>';
+      };
+      return '<section class="r-block r-procon"><div class="pc">' + col('p', '+', t[0], p) + col('c', '−', t[1], c) + '</div></section>';
+    },
+
+    steps: function (arg, lines) {
+      var steps = [], cur = null, m;
+      lines.forEach(function (l) {
+        if ((m = /^(\d+)[.)]\s+(.*)$/.exec(l))) { cur = { n: m[1], t: m[2], parts: [] }; steps.push(cur); return; }
+        if (!cur) { cur = { n: String(steps.length + 1), t: '', parts: [] }; steps.push(cur); }
+        if ((m = /^\$\s?(.*)$/.exec(l))) {
+          var last = cur.parts[cur.parts.length - 1];
+          if (last && last.k === 'cmd') last.v.push(m[1]); else cur.parts.push({ k: 'cmd', v: [m[1]] });
+        } else if ((m = /^!\s?(.*)$/.exec(l))) cur.parts.push({ k: 'warn', v: m[1] });
+        else cur.parts.push({ k: 'txt', v: l });
+      });
+      var html = steps.map(function (s) {
+        var parts = s.parts.map(function (p) {
+          if (p.k === 'cmd') return '<div class="term">' + p.v.map(function (c) { return '<div><s>$ </s>' + esc(c) + '</div>'; }).join('') + '</div>';
+          if (p.k === 'warn') return '<div class="st-w">' + inlineRich(p.v) + '</div>';
+          return '<div class="st-b">' + inlineRich(p.v) + '</div>';
+        }).join('');
+        return '<li class="st"><span class="st-n">' + esc(s.n) + '</span><div class="st-t">' + inlineRich(s.t) + '</div>' + parts + '</li>';
+      }).join('');
+      return '<section class="r-block r-steps">' + title(arg) + '<ol>' + html + '</ol></section>';
+    },
+
+    calc: function (arg, lines) {
+      var html = lines.map(function (l) {
+        var note = '', i = l.indexOf('//');
+        if (i >= 0) { note = l.slice(i + 2).trim(); l = l.slice(0, i).trim(); }
+        var parts = l.split(/\s=\s/);
+        var label = parts.length > 1 ? parts[0] : '';
+        var res = parts[parts.length - 1];
+        var expr = parts.length > 2 ? parts.slice(1, -1).join(' = ') : '';
+        var total = /\*\*/.test(res);
+        res = res.replace(/\*\*/g, '');
+        return '<div class="cl' + (total ? ' total' : '') + '">' +
+          (label ? '<div class="cl-l">' + inlineRich(label) + '</div>' : '') +
+          '<div class="cl-e"><span class="x">' + esc(expr) + (expr ? ' <span class="eq">=</span>' : '') + '</span><span class="res">' + esc(res) + '</span></div>' +
+          (note ? '<div class="cl-n">' + inlineRich(note) + '</div>' : '') + '</div>';
+      }).join('');
+      return '<section class="r-block r-calc">' + title(arg || 'Rechenweg') + html + '</section>';
+    },
+
+    timeline: function (arg, lines) {
+      var html = lines.map(function (l) {
+        var s = star(l), kv = splitKV(s.s);
+        return '<li class="tl' + (s.win ? ' hi' : '') + '"><span class="tl-d">' + esc(kv[0] || '') + '</span><span class="tl-t">' + inlineRich(kv[1]) + '</span></li>';
+      }).join('');
+      return '<section class="r-block r-timeline">' + title(arg || 'Zeitleiste') + '<ol>' + html + '</ol></section>';
+    },
+
+    places: function (arg, lines) {
+      var clock = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+      var html = lines.map(function (l, i) {
+        var f = cols(l.replace(/^[-*]\s+/, ''));
+        return '<li class="pl"><span class="pl-n">' + String(i + 1).padStart(2, '0') + '</span><div>' +
+          (f[1] ? '<div class="pl-k">' + inlineRich(f[1]) + '</div>' : '') +
+          '<div class="pl-name">' + inlineRich(f[0]) + '</div>' +
+          (f[2] ? '<div class="pl-l">' + inlineRich(f[2]) + '</div>' : '') +
+          (f[3] ? '<span class="pl-h">' + clock + esc(f[3]) + '</span>' : '') + '</div></li>';
+      }).join('');
+      return '<section class="r-block r-places">' + title(arg) + '<ol>' + html + '</ol></section>';
+    },
+
+    news: function (arg, lines) {
+      var html = lines.map(function (l, i) {
+        var f = cols(l.replace(/^[-*]\s+/, ''));
+        return '<article class="nw' + (i === 0 ? ' lead' : '') + '">' +
+          (f[1] ? '<div class="nw-k">' + inlineRich(f[1]) + '</div>' : '') +
+          '<div class="nw-h">' + inlineRich(f[0]) + '</div>' +
+          (f[2] ? '<div class="nw-d">' + inlineRich(f[2]) + '</div>' : '') + '</article>';
+      }).join('');
+      return '<section class="r-block r-news">' + title(arg) + html + '</section>';
+    },
+
+    bars: function (arg, lines) {
+      var items = lines.map(function (l) { var s = star(l), kv = splitKV(s.s); return { hi: s.win, k: kv[0] || '', v: kv[1], n: parseNum(kv[1]) }; });
+      var max = Math.max.apply(null, items.map(function (x) { return isNaN(x.n) ? 0 : x.n; }).concat([1]));
+      var html = items.map(function (x) {
+        var w = isNaN(x.n) ? 0 : Math.max(2, x.n / max * 100);
+        return '<div class="br' + (x.hi ? ' hi' : '') + '"><div class="br-top"><span>' + inlineRich(x.k) + '</span><b>' + esc(x.v) + '</b></div>' +
+          '<div class="br-track"><div class="br-fill" style="width:' + w.toFixed(1) + '%"></div></div></div>';
+      }).join('');
+      return '<section class="r-block r-bars">' + title(arg) + html + '</section>';
+    },
+
+    scale: function (arg, lines) {
+      var m = /(\d[\d.]*)\s*[–-]\s*(\d[\d.]*)\s*(.*)/.exec(arg || '');
+      var lo = m ? parseNum(m[1]) : 0, hi = m ? parseNum(m[2]) : 100, unit = m ? m[3].trim() : '';
+      var pos = function (v) { return Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)); };
+      var fmt = function (v) { return v.toLocaleString('de-DE') + (unit ? ' ' + unit : ''); };
+      var ticks = '', marks = '', k = 0;
+      lines.forEach(function (l) {
+        var mk = /^@\s*(.*)$/.exec(l);
+        var kv = splitKV(mk ? mk[1] : l), v = parseNum(kv[0] || ''), p = pos(v);
+        if (isNaN(v)) return;
+        if (mk) {
+          marks += '<div class="sc-mark" style="left:' + p.toFixed(1) + '%"><b>' + inlineRich(kv[1]) + '</b><i></i><s></s></div>';
+        } else {
+          var edge = p < 8 ? ' edge-l' : (p > 92 ? ' edge-r' : '');
+          ticks += '<div class="sc-t' + (k % 2 ? ' low' : '') + edge + '" style="left:' + p.toFixed(1) + '%">' + inlineRich(kv[1]) + '<em>' + esc(fmt(v)) + '</em></div>';
+          k++;
+        }
+      });
+      var grad = /^k$/i.test(unit)
+        ? 'linear-gradient(90deg,#FF8A1F ' + pos(1800) + '%,#FFB86B ' + pos(2700) + '%,#FFE4C2 ' + pos(3500) + '%,#FFF6EC ' + pos(4500) + '%,#E9F0FF ' + pos(6500) + '%)'
+        : 'linear-gradient(90deg,var(--s2),var(--accent))';
+      return '<section class="r-block r-scale"><div class="sc">' + marks + '<div class="sc-strip" style="background:' + grad + '"></div><div class="sc-ticks">' + ticks + '</div></div></section>';
+    },
+
+    layers: function (arg, lines) {
+      var html = lines.map(function (l, i) {
+        var out = '', j = l.indexOf('->');
+        if (j >= 0) { out = l.slice(j + 2).trim(); l = l.slice(0, j).trim(); }
+        var kv = splitKV(l);
+        return '<div class="ly-band"><b>' + inlineRich(kv[0] || kv[1]) + '</b><span>' + (kv[0] ? inlineRich(kv[1]) : '') + '</span></div>' +
+          (out ? '<div class="ly-arrow' + (i === lines.length - 1 ? ' last' : '') + '"><code>' + esc(out) + '</code></div>' : '');
+      }).join('');
+      return '<section class="r-block r-layers">' + title(arg) + '<div class="ly">' + html + '</div></section>';
+    },
+
+    note: function (arg, lines, warn) {
+      return '<aside class="r-note' + (warn ? ' warn' : '') + '"><b>' + inlineRich(arg || (warn ? 'Achtung' : 'Hinweis')) + '</b><div>' + inlineRich(lines.join(' ')) + '</div></aside>';
+    },
+    warn: function (arg, lines) { return BLOCKS.note(arg, lines, true); }
+  };
+
+  function renderBlock(b, open) {
+    var lines = b.lines.filter(function (l) { return l.trim(); });
+    var fn = BLOCKS[b.name];
+    var html = fn ? fn(b.arg, lines) : '<section class="r-block">' + title(b.arg || b.name) + renderMd(lines.join('\n'), inlineRich) + '</section>';
+    return open ? html.replace(/^<(section|aside) class="/, '<$1 class="open ') : html;
+  }
+
+  function hero(s) {
+    var i = s.indexOf(' | ');
+    var v = i < 0 ? s : s.slice(0, i), sub = i < 0 ? '' : s.slice(i + 3);
+    var vHtml, cls = 'hv';
+    if (/^\{[^{}]+\}$/.test(v.trim())) vHtml = inlineRich(v.trim());
+    else {
+      if (/^\s*[~≈]?\d/.test(v) && !/[{*`]/.test(v)) {
+        // "5 h 15 min" -> numbers big, units small, in reading order.
+        vHtml = v.trim().split(/(\d[\d.,:]*)/).filter(Boolean).map(function (p) {
+          return /^\d/.test(p) ? esc(p) : '<span class="unit">' + esc(p.trim()) + '</span>';
+        }).join('');
+      } else { vHtml = inlineRich(v); cls += ' word'; }
+    }
+    return '<div class="r-hero"><div class="' + cls + '">' + vHtml + '</div>' + (sub ? '<div class="hs">' + inlineRich(sub) + '</div>' : '') + '</div>';
+  }
+
+  /* ---------- the rich renderer ---------- */
+  function renderRich(src, opts) {
+    opts = opts || {};
+    var lines = src.replace(/\r/g, '').split('\n');
+    var pending = '';
+    if (opts.streaming) pending = lines.pop();
+    var out = [], notes = [], para = [], quote = [], block = null, detailsAt = -1, m;
+    function flushPara() { if (para.length) { out.push(renderMd(para.join('\n'), inlineRich)); para = []; } }
+    function flushQuote() {
+      if (!quote.length) return;
+      var cap = '', body = quote.filter(function (q) { if (/^[—–]\s?|^--\s/.test(q)) { cap = q.replace(/^([—–]|--)\s?/, ''); return false; } return true; });
+      out.push('<figure class="r-quote"><blockquote>' + inlineRich(body.join(' ')) + '</blockquote>' + (cap ? '<figcaption>' + inlineRich(cap) + '</figcaption>' : '') + '</figure>');
+      quote = [];
+    }
+    function flushAll() { flushPara(); flushQuote(); }
+
+    lines.forEach(function (l) {
+      if (block) {
+        if (/^:::\s*$/.test(l)) { out.push(renderBlock(block)); block = null; return; }
+        if (/^:::\s*\S/.test(l)) { out.push(renderBlock(block)); block = null; }
+        else { block.lines.push(l); return; }
+      }
+      if (quote.length && !/^>\s?/.test(l)) flushQuote();
+      if ((m = /^:::\s*([A-Za-z]+)\s*(.*)$/.exec(l))) { flushAll(); block = { name: m[1].toLowerCase(), arg: m[2].trim(), lines: [] }; return; }
+      if (/^:::\s*$/.test(l)) return;
+      if ((m = /^>>\s*(.*)$/.exec(l))) { flushAll(); out.push(hero(m[1])); return; }
+      if ((m = /^tl;?dr:\s*(.*)$/i.exec(l))) { flushAll(); out.push('<div class="r-tldr"><b>Kurz</b><span>' + inlineRich(m[1]) + '</span></div>'); return; }
+      if ((m = /^\[\^(\d+)\]:\s*(.*)$/.exec(l))) { flushAll(); notes.push([m[1], m[2]]); return; }
+      if ((m = /^---\s*(\S.*)$/.exec(l))) { flushAll(); out.push('<div class="r-divider">' + inlineRich(m[1]) + '</div>'); detailsAt = out.length; return; }
+      if ((m = /^>\s?(.*)$/.exec(l))) { flushPara(); quote.push(m[1]); return; }
+      para.push(l);
+    });
+    if (block) out.push(renderBlock(block, opts.streaming));
+    flushAll();
+    if (detailsAt >= 0 && detailsAt < out.length) out.push('<div class="r-details">' + out.splice(detailsAt).join('') + '</div>');
+    if (notes.length) out.push('<ol class="r-notes">' + notes.map(function (n) { return '<li><b>' + esc(n[0]) + '</b><span>' + inlineRich(n[1]) + '</span></li>'; }).join('') + '</ol>');
+    if (opts.streaming) out.push('<p class="r-pending">' + esc(pending) + '<span class="caret"></span></p>');
+    return out.join('');
+  }
+
+  /* ---------- light syntax colouring for the source view ---------- */
+  function highlight(src) {
+    return src.split('\n').map(function (l) {
+      var h = esc(l);
+      if (/^:::/.test(l) || /^&gt;&gt;/.test(h) || /^tl;?dr:/i.test(l) || /^---\s*\S/.test(l) || /^\[\^\d+\]:/.test(l)) {
+        h = h.replace(/^(:::\s*[A-Za-z]*|&gt;&gt;|tl;?dr:|---|\[\^\d+\]:)/i, '<span class="tok-d">$1</span>');
+      } else if (/^(\$|!|\+|-|@|\*|=|\d+\.)\s?/.test(l)) {
+        h = h.replace(/^(\$|!|\+|-|@|\*|=|\d+\.)/, '<span class="tok-d">$1</span>');
+      }
+      h = h.replace(/(\{[+\-!]?[^{}]{1,40}\})/g, '<span class="tok-p">$1</span>');
+      h = h.replace(/(\/\/.*)$/, '<span class="tok-c">$1</span>');
+      return h;
+    }).join('\n');
+  }
+
+  /* ---------- syntax reference ---------- */
+  var SYN = [
+    ['Zeilen', [
+      ['>> Wert | Satz', 'Antwortzeile: ein großes Wort oder eine große Zahl, darunter ein Satz.', 'Ohne Renderer: „4,07 bar | Aus 59 psi.“'],
+      ['tl;dr: Satz', 'Kurz-Zeile, die eine Aussage vorn.', 'Ohne Renderer: bekanntes Kürzel'],
+      ['{OPEN-WEIGHT} {+PASST} {-NEIN} {!ACHTUNG}', 'Status-Pille im Text: neutral, gut, schlecht, Vorsicht.', 'Ohne Renderer: Wort in Klammern'],
+      ['*Wert', 'Sieger-Marke in vs, bars und timeline.', 'Ohne Renderer: ein Sternchen'],
+      ['[^1]  und  [^1]: Quelle', 'Fußnote. Die Quellen stehen klein am Ende.', 'Ohne Renderer: Markdown-Fußnote'],
+      ['> Zitat\n> — Wer, wann', 'Pull-Quote in großer Schrift.', 'Ohne Renderer: Markdown-Zitat'],
+      ['--- Details', 'Trenner: oben das Kurze, darunter kleiner die Details.', 'Ohne Renderer: Linie mit Wort'],
+      ['… // Notiz', 'Randnotiz zu einer Rechenzeile in calc.', 'Ohne Renderer: Kommentar'],
+    ]],
+    ['Blöcke', [
+      ['::: spec Titel\nSchlüssel: Wert', 'Datenblatt mit Zahl-Einheit-Satz. Pillen rücken nach rechts.', ''],
+      ['::: vs A | B\nMerkmal: a | *b\n= Fazit', 'Gegenüberstellung. Sieger pro Zeile, Punktestand oben, Fazit unten.', ''],
+      ['::: procon Links | Rechts\n+ …\n- …', 'Zwei Spalten: dafür und dagegen, Pflicht und keine Pflicht.', ''],
+      ['::: steps\n1. Schritt\n$ befehl\n! Warnung', 'Nummerierter Pfad. Befehle als Terminal-Zeilen.', ''],
+      ['::: calc\nName = Rechnung = Ergebnis', 'Rechenweg. Ein Ergebnis in **…** wird doppelt unterstrichen.', ''],
+      ['::: timeline Titel\nDatum: Ereignis', 'Zeitleiste. *Datum hebt einen Punkt hervor.', ''],
+      ['::: places Titel\nName | Art | Satz | Zeiten', 'Ortsliste mit Nummer, Name, Art, Zeile und Zeiten.', ''],
+      ['::: news Titel\nSchlagzeile | Quelle · Zeit | Satz', 'Nachrichten. Die erste Meldung wird zum Aufmacher.', ''],
+      ['::: bars Titel\nName: Zahl', 'Balkenvergleich, auf den größten Wert skaliert.', ''],
+      ['::: scale 1800–6500 K\n2700: Name\n@ 2750: Marke', 'Skala mit Strichen und einer Marke. Bei K ein Farbverlauf.', ''],
+      ['::: layers Titel\nSchicht: Satz -> Ergebnis', 'Schichtendiagramm für „wie funktioniert X“.', ''],
+      ['::: note Titel  /  ::: warn', 'Hinweis oder Warnung mit Randlinie.', ''],
+    ]]
+  ];
+  document.getElementById('syn').innerHTML = SYN.map(function (g) {
+    return '<h3>' + g[0] + '</h3>' + g[1].map(function (r) {
+      return '<div class="syn-i"><code>' + esc(r[0]) + '</code><span>' + inlineMd(r[1]) + (r[2] ? '<small>' + esc(r[2]) + '</small>' : '') + '</span></div>';
+    }).join('');
+  }).join('');
+
+  /* ---------- examples ---------- */
+  var LAMP = '<svg viewBox="0 0 240 180" role="img" aria-label="Foto: Tischlampe vor einer Wand">' +
+    '<defs><radialGradient id="lw" cx="50%" cy="46%" r="70%"><stop offset="0" stop-color="#FFD9A0"/><stop offset=".45" stop-color="#C98F52"/><stop offset="1" stop-color="#4A3120"/></radialGradient>' +
+    '<linearGradient id="ls" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE3B8"/><stop offset="1" stop-color="#F2B872"/></linearGradient></defs>' +
+    '<rect width="240" height="180" fill="url(#lw)"/><rect y="140" width="240" height="40" fill="#3A2718"/>' +
+    '<path d="M86 52h68l16 44H70z" fill="url(#ls)"/><rect x="116" y="96" width="8" height="40" fill="#2A1D12"/><ellipse cx="120" cy="140" rx="28" ry="6" fill="#2A1D12"/></svg>';
+
+  var toc = [];
+  var arts = document.querySelectorAll('article.ex');
+  arts.forEach(function (art, i) {
+    var no = String(i + 1).padStart(2, '0');
+    var md = art.querySelector('script.md').textContent.replace(/^\s*\n/, '').replace(/\s+$/, '');
+    var cd = art.querySelector('script.cd').textContent.replace(/^\s*\n/, '').replace(/\s+$/, '');
+    var q = art.getAttribute('data-q'), cat = art.getAttribute('data-cat');
+    art.id = 'ex' + no;
+    toc.push('<li><a href="#ex' + no + '"><b>' + no + '</b>' + esc(cat) + '</a></li>');
+    var user = '<div class="u">' + (art.getAttribute('data-photo') === 'lamp' ? '<span class="photo">' + LAMP + '</span>' : '') + '<p>' + esc(q) + '</p></div>';
+    var bar = '<div class="bar"><i>c</i>chuk<span class="m">Kimi K2</span></div>';
+    art.innerHTML =
+      '<div class="ex-head"><span class="ex-no">' + no + '</span><span class="ex-cat">' + esc(cat) + '</span><h3 class="ex-q">' + esc(q) + '</h3></div>' +
+      '<div class="pair">' +
+        '<div class="col old"><div class="col-label"><span>Heute · Markdown</span><span class="n">' + fmtCount(md.length) + ' Zeichen</span></div>' +
+          '<div class="phone">' + bar + '<div class="chat">' + user + '<div class="a md">' + renderMd(md) + '</div><div class="cutnote">… Antwort geht weiter</div></div></div></div>' +
+        '<div class="col new"><div class="col-label"><span>Neu</span><span class="n">' + fmtCount(cd.length) + ' Zeichen</span></div>' +
+          '<div class="phone">' + bar + '<div class="chat">' + user + '<div class="a r">' + renderRich(cd) + '</div></div></div>' +
+          '<details class="src"><summary>Was das Modell ausgibt</summary><pre>' + highlight(cd) + '</pre></details></div>' +
+      '</div>';
+  });
+  document.getElementById('toc').innerHTML = toc.join('');
+
+  // Fade out long "Heute" answers so the pair stays comparable.
+  document.querySelectorAll('.col.old .a').forEach(function (a) {
+    if (a.scrollHeight > a.clientHeight + 4) a.classList.add('cut');
+  });
+
+  /* ---------- half-streamed demo ---------- */
+  var ex3 = arts[2].querySelector('.col.new pre').textContent;
+  var cutAt = Math.round(ex3.length * 0.6);
+  var partial = ex3.slice(0, cutAt);
+  var jsonPartial = '<compare>{"title":"T14 Gen 1 vs T480s","items":[{"name":"T14 Gen 1"},{"name":"T480s"}],"rows":[{"k":"CPU","v":["i7-10510U","i5-8350U"]},{"k":"Generation","v":["10. Gen","8. G';
+  var bar2 = '<div class="bar"><i>c</i>chuk<span class="m">schreibt …</span></div>';
+  document.getElementById('streampair').innerHTML =
+    '<div class="col old"><div class="col-label"><span>Heute · JSON-Tag, halb da</span><span class="n">wartet auf &lt;/compare&gt;</span></div>' +
+      '<div class="phone">' + bar2 + '<div class="chat"><div class="a md"><p style="font-family:var(--mono);font-size:12.5px;color:var(--muted);overflow-wrap:anywhere">' + esc(jsonPartial) + '</p></div></div></div></div>' +
+    '<div class="col new"><div class="col-label"><span>Neu · nach ' + fmtCount(cutAt) + ' von ' + fmtCount(ex3.length) + ' Zeichen</span><span class="n">Block offen</span></div>' +
+      '<div class="phone">' + bar2 + '<div class="chat"><div class="a r">' + renderRich(partial, { streaming: true }) + '</div></div></div></div>';
+}());
+</script>
+</body>
+</html>
