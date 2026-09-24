@@ -16,11 +16,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/current_user.dart';
+import 'package:chuk_chat/utils/answer_blocks_parser.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
 import 'package:chuk_chat/utils/phone_linkify.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
 import 'package:chuk_chat/widgets/chuk_table_classic.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+
+part 'answer_blocks.dart';
 
 /// Lays [overlay] on top of [base] field by field.
 ///
@@ -110,12 +113,14 @@ BoxDecoration _bulletDecoration(int depth, Color color) {
   }
 }
 
-/// One slice of a message: either plain markdown or a GFM table block.
+/// One slice of a message: plain markdown, a GFM table block, or an answer
+/// block (`::: steps`, `::: timeline`, `::: scale`, a `> [!NOTE]` alert).
 class _MdSegment {
-  const _MdSegment(this.text, {required this.isTable, this.table});
+  const _MdSegment(this.text, {required this.isTable, this.table, this.block});
   final String text;
   final bool isTable;
   final ParsedTable? table;
+  final AnswerBlockSegment? block;
 }
 
 /// Splits raw markdown into alternating plain-markdown and table segments so
@@ -167,7 +172,7 @@ class _MdParseCache {
     final List<_MdSegment>? hit = _segments[text];
     if (hit != null) return hit;
     final List<_MdSegment> built = List<_MdSegment>.unmodifiable(
-      _splitMarkdownTables(text),
+      _splitSegments(text),
     );
     if (keep) _put(_segments, text, built);
     return built;
@@ -226,6 +231,21 @@ List<Widget> _buildMarkdownWidgets(
             Text.rich(span.build()),
       ),
   ];
+}
+
+/// Answer blocks first, then the tables inside the Markdown between them.
+/// Both splits skip fenced code, so a `:::` or a `|` in code stays code.
+List<_MdSegment> _splitSegments(String text) {
+  final List<_MdSegment> out = <_MdSegment>[];
+  for (final AnswerSegment seg in splitAnswerBlocks(text)) {
+    switch (seg) {
+      case AnswerTextSegment(:final String text):
+        out.addAll(_splitMarkdownTables(text));
+      case AnswerBlockSegment():
+        out.add(_MdSegment('', isTable: false, block: seg));
+    }
+  }
+  return out;
 }
 
 List<_MdSegment> _splitMarkdownTables(String text) {
@@ -293,6 +313,7 @@ class MarkdownMessage extends StatefulWidget {
     this.wrapWithSelectionArea = true,
     this.paragraphFontSize,
     this.paragraphHeight,
+    this.paragraphFontWeight,
     this.fontFamily,
   });
 
@@ -320,6 +341,9 @@ class MarkdownMessage extends StatefulWidget {
   final bool wrapWithSelectionArea;
   final double? paragraphFontSize;
   final double? paragraphHeight;
+
+  /// Weight of paragraph text. Answer blocks use it for step titles.
+  final FontWeight? paragraphFontWeight;
   final String? fontFamily;
 
   @override
@@ -330,12 +354,17 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
   List<Widget>? _cachedContent;
   Brightness? _lastBrightness;
 
+  /// Links, inline code chips and the answer blocks paint in the accent, so
+  /// a new accent without a brightness change must rebuild too.
+  Color? _lastAccent;
+
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final ThemeData theme = Theme.of(context);
     final Brightness currentBrightness = theme.brightness;
-    if (_lastBrightness != currentBrightness) {
+    if (_lastBrightness != currentBrightness ||
+        _lastAccent != theme.colorScheme.primary) {
       _rebuildCache();
     }
   }
@@ -347,6 +376,8 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         widget.textColor != oldWidget.textColor ||
         widget.backgroundColor != oldWidget.backgroundColor ||
         widget.paragraphFontSize != oldWidget.paragraphFontSize ||
+        widget.paragraphHeight != oldWidget.paragraphHeight ||
+        widget.paragraphFontWeight != oldWidget.paragraphFontWeight ||
         widget.fontFamily != oldWidget.fontFamily) {
       // A text that changes under a live bubble is a stream in progress: parse
       // it, but do not keep the partial in the shared parse cache.
@@ -511,10 +542,11 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
 
     // Heading sizes are derived from the reading size instead of taken from
     // the text theme. The theme sizes are not monotonic — `titleSmall` (h4) is
-    // smaller than `bodyLarge` (h5) — so `#### x` used to render smaller than
-    // `##### x`. Deriving them also lets the headings follow the chat font
-    // size the user picked.
-    double? headingSize(double factor) => agents ? baseFontSize * factor : null;
+    // smaller than `bodyLarge` (h5), and `titleMedium` (h3) is no bigger than
+    // h5 — so `#### x` used to render smaller than `##### x`. Deriving them
+    // also lets the headings follow the chat font size the user picked. Both
+    // builds use it: the inverted hierarchy was a bug, not an upstream look.
+    double headingSize(double factor) => baseFontSize * factor;
 
     final MarkdownConfig config = MarkdownConfig(
       configs: [
@@ -524,12 +556,14 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
                 color: widget.textColor,
                 height: widget.paragraphHeight ?? 1.45,
                 fontSize: widget.paragraphFontSize ?? 14,
+                fontWeight: widget.paragraphFontWeight,
                 fontFamily: proseFontFamily,
               )) ??
               TextStyle(
                 color: widget.textColor,
                 height: widget.paragraphHeight ?? 1.45,
                 fontSize: widget.paragraphFontSize ?? 14,
+                fontWeight: widget.paragraphFontWeight,
                 fontFamily: proseFontFamily,
               ),
         ),
@@ -784,18 +818,19 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
           generator: (e, config, visitor) =>
               _SafeCodeBlockNode(e, config.pre, visitor),
         ),
-        if (agents) ...[
-          SpanNodeGeneratorWithTag(
-            tag: MarkdownTag.a.name,
-            generator: (e, config, visitor) =>
-                AccentLinkNode(e.attributes, config.a, accentColor),
-          ),
-          SpanNodeGeneratorWithTag(
-            tag: MarkdownTag.code.name,
-            generator: (e, config, visitor) =>
-                InlineCodeNode(e.textContent, inlineCodeStyle),
-          ),
-        ],
+        // Both builds: without these nodes a themed paragraph style swallows
+        // the inline style, so `code` lost its monospace font and chip and a
+        // link in a heading dropped to body size (see [_overlayStyle]).
+        SpanNodeGeneratorWithTag(
+          tag: MarkdownTag.a.name,
+          generator: (e, config, visitor) =>
+              AccentLinkNode(e.attributes, config.a, accentColor),
+        ),
+        SpanNodeGeneratorWithTag(
+          tag: MarkdownTag.code.name,
+          generator: (e, config, visitor) =>
+              InlineCodeNode(e.textContent, inlineCodeStyle),
+        ),
         SpanNodeGeneratorWithTag(
           tag: _latexTag,
           generator: (e, config, visitor) =>
@@ -823,6 +858,32 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       widget.text,
       keep: keepParse,
     )) {
+      final AnswerBlockSegment? block = segment.block;
+      if (block != null) {
+        try {
+          builtWidgets.add(
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: _buildAnswerBlock(
+                block,
+                _AnswerBlockStyle(
+                  textColor: widget.textColor,
+                  backgroundColor: widget.backgroundColor,
+                  accent: accentColor,
+                  fontFamily: proseFontFamily,
+                  baseFontSize: baseFontSize,
+                ),
+              ),
+            ),
+          );
+        } catch (error) {
+          if (kDebugMode) {
+            debugPrint('Answer block error: ${error.runtimeType}');
+          }
+          builtWidgets.add(Text(block.lines.join('\n'), style: fallbackStyle));
+        }
+        continue;
+      }
       if (segment.isTable && segment.table != null) {
         builtWidgets.add(
           agents
@@ -885,6 +946,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         : builtWidgets;
 
     _lastBrightness = theme.brightness;
+    _lastAccent = theme.colorScheme.primary;
   }
 
   Color _codeBackground() {
