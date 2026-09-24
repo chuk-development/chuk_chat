@@ -62,4 +62,48 @@ void main() {
     expect(uncaught, isEmpty);
     expect(ChatStorageState.pendingSaves.containsKey(chatId), isFalse);
   });
+
+  group('Disk IO: fewer whole-payload rewrites', () {
+    final stored = StoredChat(
+      id: chatId,
+      messages: const [],
+      createdAt: DateTime.utc(2026, 9, 24),
+      isStarred: false,
+    );
+
+    setUp(() => ChatStorageState.chatsById[chatId] = stored);
+    tearDown(() {
+      ChatStorageState.chatsById.remove(chatId);
+      ChatStorageState.latestUpdate.remove(chatId);
+      ChatStorageState.lastWrite.remove(chatId);
+    });
+
+    test('a skipped update reports the newer write\'s outcome', () async {
+      final earlier = Completer<StoredChat?>()..future.ignore();
+      ChatStorageState.pendingSaves[chatId] = earlier;
+
+      final older = ChatStorageCrud.updateChat(chatId, messages)..ignore();
+      final newer = ChatStorageCrud.updateChat(chatId, messages)..ignore();
+      earlier.complete(null);
+
+      // Only the newer update writes, and fails (no Supabase in a test). The
+      // older one did not write, so its caller must see that failure too
+      // rather than a success for messages that were never saved.
+      Object? newerError;
+      Object? olderError;
+      try {
+        await newer;
+      } catch (e) {
+        newerError = e;
+      }
+      try {
+        await older;
+      } catch (e) {
+        olderError = e;
+      }
+      expect(newerError, isNotNull);
+      expect(olderError, same(newerError));
+      expect(ChatStorageState.latestUpdate.containsKey(chatId), isFalse);
+    });
+  });
 }

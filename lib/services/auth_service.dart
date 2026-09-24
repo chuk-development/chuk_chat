@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
@@ -153,6 +154,14 @@ class AuthService {
       if (userId != null) {
         await PasswordRevisionService.clearCachedRevision(userId: userId);
       }
+      // Chats saved only on this device (a turn whose cloud write failed)
+      // get one last try while the session still exists. Bounded: an offline
+      // sign-out must not hang, and the marks stay on disk for the next
+      // sign-in of this account.
+      await ChatStorageService.flushDirty().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {},
+      );
       await SupabaseService.auth.signOut();
       // The parsed message texts (plaintext) kept for fast rebuilds belong
       // to the user who just left. Cleared first, so a failing teardown

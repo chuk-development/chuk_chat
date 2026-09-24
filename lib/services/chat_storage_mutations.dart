@@ -87,9 +87,7 @@ class ChatStorageMutations {
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select(
-          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
-        );
+        .select('id, created_at, is_starred, updated_at, encrypted_title');
 
     if (updatedRows.isEmpty) {
       throw StateError('Chat was not found or access is denied.');
@@ -150,7 +148,7 @@ class ChatStorageMutations {
           .update({'encrypted_payload': encryptedPayload})
           .eq('id', chat.id)
           .eq('user_id', user.id)
-          .select('id, encrypted_payload, created_at, is_starred, updated_at');
+          .select('id, created_at, is_starred, updated_at');
 
       if (updatedRows.isNotEmpty) {
         final updatedRow = updatedRows.first;

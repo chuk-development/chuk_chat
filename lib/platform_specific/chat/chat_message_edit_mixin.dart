@@ -79,7 +79,10 @@ mixin ChatMessageEditMixin<W extends StatefulWidget>
     bool isRegenerate = false,
   });
 
-  Future<void> persistChat({bool waitForCompletion = false});
+  Future<void> persistChat({
+    bool waitForCompletion = false,
+    bool commit = true,
+  });
 
   // --- Hooks for the real platform differences -----------------------------
 

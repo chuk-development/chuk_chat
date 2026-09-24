@@ -6,6 +6,7 @@
 import 'dart:async';
 
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -310,6 +311,8 @@ class ChatPreloadService {
         final chatPayload = await deserializePayloadAsync(decrypted);
         final row = validRows[j];
         final chatId = row['id'] as String;
+        // The cache row of a dirty chat is newer than the cloud row.
+        if (ChatDirtyStore.isDirty(chatId)) continue;
 
         // Preserve the sidebar entry's title if we already have one.
         final existing = ChatStorageState.chatsById[chatId];

@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart'
     show kChatPayloadVersion, saveTitlesToCache;
 import 'package:chuk_chat/services/chat_storage_state.dart';
@@ -156,6 +157,9 @@ class ChatStorageSync {
       return;
     }
 
+    // Skip if the local copy is ahead of the cloud: the cloud row is older.
+    if (ChatDirtyStore.isDirty(chatId)) return;
+
     // Skip if we're currently saving this chat (to avoid conflicts)
     if (ChatStorageState.savingChats.contains(chatId)) {
       if (kDebugMode) {
@@ -285,6 +289,7 @@ class ChatStorageSync {
         }
         return false;
       }
+      if (ChatDirtyStore.isDirty(chatId)) return false;
       if (ChatStorageState.savingChats.contains(chatId)) {
         if (kDebugMode) {
           debugPrint(
@@ -434,8 +439,12 @@ class ChatStorageSync {
 
   /// Remove a chat from local state only (without database operation).
   /// Called by ChatSyncService when a chat was deleted on another device.
+  ///
+  /// A dirty chat is kept: the cloud may not hold it yet, or not its newest
+  /// messages, and the next flush writes it.
   static void removeChatLocally(String chatId) {
     if (!ChatStorageState.chatsById.containsKey(chatId)) return;
+    if (ChatDirtyStore.isDirty(chatId)) return;
 
     if (kDebugMode) {
       debugPrint('🗑️ [ChatStorage] Removing locally deleted chat: $chatId');

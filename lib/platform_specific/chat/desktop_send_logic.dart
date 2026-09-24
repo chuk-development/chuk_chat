@@ -161,7 +161,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         );
       }
 
-      unawaited(persistChat());
+      unawaited(persistChat(commit: false));
 
       // Prepare to send the edited message
       final String originalUserInput = trimmedText;
@@ -311,6 +311,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _finalizeAiMessage(
           placeholderIndex,
           'Session expired. Please sign in again.',
+          commit: true,
         );
         return;
       }
@@ -325,6 +326,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         _finalizeAiMessage(
           placeholderIndex,
           'Authentication failed. Please sign in again.',
+          commit: true,
         );
         return;
       }
@@ -564,7 +566,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     if (mounted) {
                       setState(() {});
                     }
-                    _persistChatWithId(chatIdForStream);
+                    _persistChatWithId(chatIdForStream, commit: false);
                   } else {
                     _persistBackgroundAssistant(
                       chatIdForStream,
@@ -574,6 +576,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                         'reasoning': finalReasoning,
                         'contentBlocks': contentBlocksJson,
                       },
+                      commit: false,
                     );
                   }
 
@@ -1008,11 +1011,15 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
   /// taken), rebuilds from the stored chat so a finished turn is never
   /// silently dropped — the root cause behind "answer missing / half" on
   /// desktop.
+  ///
+  /// [commit] false for a tool-round checkpoint: saved on this device only.
+  /// The turn's final call writes the chat to the cloud.
   void _persistBackgroundAssistant(
     String chatId,
     int placeholderIndex,
     Map<String, String?> updates, {
     bool foldVariant = false,
+    bool commit = true,
   }) {
     List<Map<String, dynamic>>? messages = _streamingManager
         .getBackgroundMessages(chatId);
@@ -1088,7 +1095,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (_streamingManager.hasBackgroundMessages(chatId)) {
       _streamingManager.setBackgroundMessages(chatId, target);
     }
-    _persistChatWithIdAndMessages(chatId, target);
+    _persistChatWithIdAndMessages(chatId, target, commit: commit);
   }
 
   /// Show dialog when API returns 402 (free messages exhausted)
@@ -1594,14 +1601,18 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         // Only persist if still viewing the same chat
         // If user switched, _messages belongs to a different chat!
         if (_activeChatId == chatIdForStream) {
-          _persistChatWithId(chatIdForStream);
+          _persistChatWithId(chatIdForStream, commit: false);
         } else {
           // Get background messages and persist those instead
           final backgroundMsgs = _streamingManager.getBackgroundMessages(
             chatIdForStream,
           );
           if (backgroundMsgs != null) {
-            _persistChatWithIdAndMessages(chatIdForStream, backgroundMsgs);
+            _persistChatWithIdAndMessages(
+              chatIdForStream,
+              backgroundMsgs,
+              commit: false,
+            );
           }
         }
       });
@@ -1796,7 +1807,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       if (mounted) {
                         setState(() {});
                       }
-                      _persistChatWithId(chatIdForStream);
+                      _persistChatWithId(chatIdForStream, commit: false);
                     } else {
                       _persistBackgroundAssistant(
                         chatIdForStream,
@@ -1806,6 +1817,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                           'reasoning': finalReasoning,
                           'contentBlocks': contentBlocksJson,
                         },
+                        commit: false,
                       );
                     }
 
@@ -2225,7 +2237,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           toolCallsJson,
         );
       });
-      _persistChatWithId(chatId);
+      _persistChatWithId(chatId, commit: false);
       return;
     }
 
@@ -2238,7 +2250,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         toolCallsJson,
       );
       _streamingManager.setBackgroundMessages(chatId, backgroundMsgs);
-      _persistChatWithIdAndMessages(chatId, backgroundMsgs);
+      _persistChatWithIdAndMessages(chatId, backgroundMsgs, commit: false);
     }
   }
 
@@ -2276,7 +2288,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         ),
       );
       _streamingManager.setBackgroundMessages(chatId, backgroundMsgs);
-      _persistChatWithIdAndMessages(chatId, backgroundMsgs);
+      _persistChatWithIdAndMessages(chatId, backgroundMsgs, commit: false);
     }
   }
 
@@ -2340,7 +2352,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 imageResult.imageGeneratedAt!;
           }
           backgroundMsgs[index]['toolCalls'] = updatedToolCallsJson;
-          _persistChatWithIdAndMessages(chatId, backgroundMsgs);
+          _persistChatWithIdAndMessages(chatId, backgroundMsgs, commit: false);
         }
       }
     } catch (error) {
@@ -2350,11 +2362,16 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     }
   }
 
+  /// Saves the chat on this device only: every caller that ends a turn
+  /// writes the cloud right after, with the fields it adds after this call
+  /// (content blocks, tool images). A caller with nothing to add passes
+  /// [commit] true.
   void _finalizeAiMessage(
     int index,
     String content, {
     String? reasoning,
     double? tps,
+    bool commit = false,
   }) {
     _autoSaveTimer?.cancel();
     // Streaming ended: drop the per-token live snapshot so the finalized
@@ -2405,7 +2422,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (mounted) {
       settleScrollToBottomIfSticky();
       Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
-      unawaited(persistChat());
+      unawaited(persistChat(commit: commit));
 
       // Drain the message queue — if the user typed while AI was responding.
       _drainPendingMessage();

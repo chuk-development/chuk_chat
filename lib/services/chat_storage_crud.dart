@@ -5,6 +5,7 @@ import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
@@ -15,8 +16,10 @@ import 'package:chuk_chat/services/storage/agents_chat_store.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
+import 'package:crypto/crypto.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 /// Handles CRUD operations for chat storage: save, update, delete, load.
 class ChatStorageCrud {
@@ -276,6 +279,9 @@ class ChatStorageCrud {
         customName: chatPayload.customName,
         title: resolvedTitle,
       );
+
+      // A local copy ahead of the cloud is newer whatever the clocks say.
+      if (ChatDirtyStore.isDirty(chatId)) return;
 
       // Only update if remote is newer
       final current = ChatStorageState.chatsById[chatId];
@@ -639,15 +645,22 @@ class ChatStorageCrud {
         }
       }
 
-      // Clear and rebuild the chats map
-      ChatStorageState.chatsById.clear();
+      // Clear and rebuild the chats map. A chat whose local copy is ahead of
+      // the cloud (or not in it yet) keeps that copy.
+      final localAhead = <String, StoredChat>{
+        for (final id in ChatDirtyStore.ids)
+          id: ?ChatStorageState.chatsById[id],
+      };
+      ChatStorageState.chatsById
+        ..clear()
+        ..addAll(localAhead);
 
       // Cache rows are metadata only: build sidebar entries and let each
       // chat hydrate from the cache when it is opened.
       if (loadedFromCache) {
         for (final row in rows) {
           final chat = _sidebarChatFromCacheRow(row);
-          if (chat != null) {
+          if (chat != null && !localAhead.containsKey(chat.id)) {
             ChatStorageState.chatsById[chat.id] = chat;
           }
         }
@@ -680,7 +693,7 @@ class ChatStorageCrud {
 
       final firstChats = await _decryptChatRowsBatch(firstBatch);
       for (final chat in firstChats) {
-        if (chat != null) {
+        if (chat != null && !ChatDirtyStore.isDirty(chat.id)) {
           ChatStorageState.chatsById[chat.id] = chat;
         }
       }
@@ -704,7 +717,7 @@ class ChatStorageCrud {
         }
         final remainingChats = await _decryptChatRowsBatch(remainingBatch);
         for (final chat in remainingChats) {
-          if (chat != null) {
+          if (chat != null && !ChatDirtyStore.isDirty(chat.id)) {
             ChatStorageState.chatsById[chat.id] = chat;
           }
         }
@@ -783,7 +796,12 @@ class ChatStorageCrud {
         for (final row in supabaseRows) {
           final chatId = row['id'] as String;
           final chat = ChatStorageState.chatsById[chatId];
-          if (chat == null || !chat.isFullyLoaded) {
+          // A dirty chat's cache row is newer than this cloud row; counting
+          // it as skipped also keeps replaceAll from dropping a row the cloud
+          // does not hold yet.
+          if (chat == null ||
+              !chat.isFullyLoaded ||
+              ChatDirtyStore.isDirty(chatId)) {
             skippedCount++;
             continue;
           }
@@ -931,7 +949,196 @@ class ChatStorageCrud {
     }).toList();
   }
 
-  /// Save a new chat to Supabase
+  // ==========================================================================
+  // LOCAL-FIRST SAVES
+  //
+  // A turn saves its chat many times (per tool round, per stream checkpoint).
+  // Those saves go to [saveLocal]: memory, the SQLite cache and a dirty mark,
+  // no network. The cloud gets the chat once, at the end of the turn, through
+  // [saveChat]/[updateChat]; whatever stays dirty is written by [flushDirty].
+  // ==========================================================================
+
+  /// Chat id -> the newest cache row waiting to be written, and the writer
+  /// working through them. One writer per chat keeps the rows in order, and
+  /// a row that is replaced before its turn is never written.
+  static final Map<String, Map<String, dynamic>> _pendingLocalRows =
+      <String, Map<String, dynamic>>{};
+  static final Map<String, Future<void>> _localRowWriters =
+      <String, Future<void>>{};
+
+  static Future<void> _writeLocalRow(
+    String userId,
+    String chatId,
+    Map<String, dynamic> row,
+  ) {
+    _pendingLocalRows[chatId] = row;
+    return _localRowWriters[chatId] ??= () async {
+      try {
+        for (
+          var next = _pendingLocalRows.remove(chatId);
+          next != null;
+          next = _pendingLocalRows.remove(chatId)
+        ) {
+          try {
+            await LocalChatCacheService.upsert(userId, next);
+          } catch (e) {
+            // The chat stays dirty and in memory; the flush writes the cloud
+            // from there, and the next save writes this row again.
+            if (kDebugMode) {
+              debugPrint('⚠️ [ChatStorage] Cache write failed for $chatId: $e');
+            }
+          }
+        }
+      } finally {
+        _localRowWriters.remove(chatId);
+      }
+    }();
+  }
+
+  static String? _customNameOf(StoredChat? chat) {
+    final name = chat?.customName?.trim();
+    return name != null && name.isNotEmpty ? name : null;
+  }
+
+  /// The plaintext payload of a chat. The one encoding for the cache, the
+  /// cloud and the digests that compare them.
+  static String _payloadJson(List<ChatMessage> messages, String? customName) {
+    return jsonEncode({
+      'v': kChatPayloadVersion,
+      'messages': messages.map((m) => m.toJson()).toList(),
+      'customName': ?customName,
+    });
+  }
+
+  static String _digest(String payloadJson) =>
+      sha256.convert(utf8.encode(payloadJson)).toString();
+
+  /// Save [messagesMaps] on this device only: memory (sidebar, search and
+  /// reopening the chat read it), the SQLite cache and a dirty mark. No
+  /// network. A new chat gets its id here; the cloud row is inserted with
+  /// its first cloud save. Returns null for a deleted chat or no messages.
+  static Future<StoredChat?> saveLocal(
+    List<Map<String, dynamic>> messagesMaps, {
+    String? chatId,
+  }) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null) {
+      throw StateError('User must be signed in to store chats.');
+    }
+    final id = chatId ?? ChatStorageState.uuid.v4();
+    if (ChatStorageState.wasRecentlyDeleted(id)) return null;
+
+    final messages = _mapToChatMessages(messagesMaps);
+    if (messages.isEmpty) return null;
+
+    final existing = ChatStorageState.chatsById[id];
+    final customName = _customNameOf(existing);
+    final payloadJson = _payloadJson(messages, customName);
+    final digest = _digest(payloadJson);
+
+    // The same messages as the copy in memory: nothing to save. A stream
+    // checkpoint or an auto-save tick often carries nothing new.
+    final known = ChatStorageState.localDigest[id];
+    if (existing != null &&
+        existing.isFullyLoaded &&
+        known != null &&
+        known.digest == digest &&
+        known.updatedAt == existing.updatedAt) {
+      return existing;
+    }
+
+    final now = DateTime.now().toUtc();
+    final title = customName ?? extractTitleFromMessages(messages);
+    final chat = existing == null
+        ? StoredChat(
+            id: id,
+            messages: messages,
+            createdAt: now,
+            updatedAt: now,
+            isStarred: false,
+            title: title.isNotEmpty ? title : null,
+          )
+        : existing.copyWith(
+            messages: messages,
+            updatedAt: now,
+            title: title.isNotEmpty ? title : null,
+          );
+
+    // The cloud still holds what this device last wrote there, so that
+    // write stays the one to compare the next cloud save against.
+    final lastWrite = ChatStorageState.lastWrite[id];
+    if (existing != null &&
+        lastWrite != null &&
+        lastWrite.updatedAt == existing.updatedAt) {
+      ChatStorageState.lastWrite[id] = (
+        digest: lastWrite.digest,
+        updatedAt: now,
+      );
+    }
+
+    ChatStorageState.chatsById[id] = chat;
+    ChatStorageState.localDigest[id] = (digest: digest, updatedAt: now);
+    ChatStorageState.notifyChanges(id);
+
+    // Mark first, then write the row: a kill in between leaves a dirty mark
+    // over the previous row, which is harmless; the reverse would leave a
+    // newer row that nothing ever sends to the cloud.
+    await ChatDirtyStore.markDirty(
+      user.id,
+      id,
+      pendingInsert: existing == null,
+    );
+
+    // Web keeps its cache in SharedPreferences, which must not take a whole
+    // payload on every checkpoint. There the dirty copy lives in memory.
+    if (!kIsWeb) {
+      await _writeLocalRow(
+        user.id,
+        id,
+        LocalChatCacheService.buildPlaintextRow(
+          id: id,
+          payload: payloadJson,
+          createdAt: chat.createdAt.toUtc().toIso8601String(),
+          isStarred: chat.isStarred,
+          updatedAt: now.toIso8601String(),
+          title: chat.title,
+        ),
+      );
+    }
+    return chat;
+  }
+
+  /// Write every chat whose local copy is ahead of the cloud, once. A chat
+  /// whose write fails stays dirty for the next flush.
+  /// Never throws: a chat that cannot be written now waits for the next
+  /// flush, and there is nothing the user has to act on.
+  static Future<void> flushDirty() async {
+    try {
+      final user = SupabaseService.auth.currentUser;
+      if (user == null) return;
+      await ChatDirtyStore.flush(user.id, _pushLocalCopy);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [ChatStorage] Dirty flush failed: $e');
+      }
+    }
+  }
+
+  /// Write the local copy of [chatId] to the cloud: memory, else the cache.
+  static Future<void> _pushLocalCopy(String chatId) async {
+    if (ChatStorageState.wasRecentlyDeleted(chatId)) return;
+    var chat = ChatStorageState.chatsById[chatId];
+    if (chat == null || !chat.isFullyLoaded) {
+      chat = await loadFullChat(chatId);
+    }
+    final messages = chat?.messagesOrNull;
+    // No local copy at all (web after a reload): nothing to send.
+    if (messages == null || messages.isEmpty) return;
+    await saveChat(messages.map((m) => m.toJson()).toList(), chatId: chatId);
+  }
+
+  /// Save a chat to Supabase: INSERT a chat the cloud does not hold yet,
+  /// else UPDATE it (see [updateChat]).
   static Future<StoredChat?> saveChat(
     List<Map<String, dynamic>> messagesMaps, {
     String? chatId,
@@ -945,24 +1152,33 @@ class ChatStorageCrud {
       );
     }
 
-    // If there's already a pending save for this chat, wait for it
-    if (ChatStorageState.pendingSaves.containsKey(effectiveChatId)) {
+    // Let a write of this chat that is under way land first. It may be the
+    // insert that creates the row, and then this save is an update. Its
+    // failure belongs to its own caller.
+    final pending = ChatStorageState.pendingSaves[effectiveChatId];
+    if (pending != null) {
       if (kDebugMode) {
         debugPrint(
           '⏳ [ChatStorage] Waiting for pending save: $effectiveChatId',
         );
       }
-      return await ChatStorageState.pendingSaves[effectiveChatId]!.future;
+      try {
+        await pending.future;
+      } catch (_) {}
     }
 
-    // If chat already exists, update it instead
-    if (ChatStorageState.chatsById.containsKey(effectiveChatId)) {
+    // A chat the cloud already holds is updated instead. A chat made on
+    // this device and only saved locally so far is in memory too, but its
+    // row still has to be inserted.
+    if (ChatStorageState.chatsById.containsKey(effectiveChatId) &&
+        !ChatDirtyStore.isPendingInsert(effectiveChatId)) {
       if (kDebugMode) {
         debugPrint('🔄 [ChatStorage] Chat exists, updating: $effectiveChatId');
       }
       return await updateChat(effectiveChatId, messagesMaps);
     }
 
+    final rev = ChatDirtyStore.revision(effectiveChatId);
     // Only a concurrent save for the same chat listens to this future. Mark
     // it handled, so a failed save with no one waiting does not also surface
     // as an "Unhandled Exception": the caller gets the error from the rethrow.
@@ -971,14 +1187,19 @@ class ChatStorageCrud {
     ChatStorageState.savingChats.add(effectiveChatId);
 
     try {
-      final result = await _doSaveChat(messagesMaps, effectiveChatId);
+      final result = await _doSaveChat(messagesMaps, effectiveChatId, rev);
       completer.complete(result);
       return result;
     } catch (e) {
       completer.completeError(e);
       rethrow;
     } finally {
-      ChatStorageState.pendingSaves.remove(effectiveChatId);
+      if (identical(
+        ChatStorageState.pendingSaves[effectiveChatId],
+        completer,
+      )) {
+        ChatStorageState.pendingSaves.remove(effectiveChatId);
+      }
       // Keep in savingChats for a bit longer to block realtime events
       Future.delayed(const Duration(seconds: 2), () {
         ChatStorageState.savingChats.remove(effectiveChatId);
@@ -989,6 +1210,7 @@ class ChatStorageCrud {
   static Future<StoredChat?> _doSaveChat(
     List<Map<String, dynamic>> messagesMaps,
     String effectiveChatId,
+    int rev,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -1010,15 +1232,15 @@ class ChatStorageCrud {
       return null;
     }
 
-    final payloadJson = jsonEncode({
-      'v': kChatPayloadVersion,
-      'messages': messages.map((m) => m.toJson()).toList(),
-    });
+    // A chat saved locally first may already carry a name and a star.
+    final local = ChatStorageState.chatsById[effectiveChatId];
+    final customName = _customNameOf(local);
+    final payloadJson = _payloadJson(messages, customName);
 
     final encryptedPayload = await EncryptionService.encrypt(payloadJson);
 
     // Extract and encrypt title separately for fast sidebar loading
-    final title = extractTitleFromMessages(messages);
+    final title = customName ?? extractTitleFromMessages(messages);
     final encryptedTitle = title.isNotEmpty
         ? await EncryptionService.encrypt(title)
         : null;
@@ -1035,55 +1257,100 @@ class ChatStorageCrud {
       'encrypted_payload': encryptedPayload,
       ...?encryptedTitle == null ? null : {'encrypted_title': encryptedTitle},
       if (imagePaths.isNotEmpty) 'image_paths': imagePaths,
+      if (local?.isStarred == true) 'is_starred': true,
     };
 
-    final inserted = await SupabaseService.client
-        .from('encrypted_chats')
-        .insert(insertData)
-        .select(
-          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
-        )
-        .single()
-        .timeout(const Duration(seconds: 15));
+    final Map<String, dynamic> inserted;
+    try {
+      inserted = await SupabaseService.client
+          .from('encrypted_chats')
+          .insert(insertData)
+          .select('id, created_at, is_starred, updated_at, encrypted_title')
+          .single()
+          .timeout(const Duration(seconds: 15));
+    } on PostgrestException catch (e) {
+      // 23505: the row exists. An earlier insert landed and only its answer
+      // was lost (a timeout on a flaky network). Update it instead.
+      if (e.code != '23505') rethrow;
+      return _doUpdateChat(effectiveChatId, messagesMaps, rev);
+    }
 
-    final String finalId = inserted['id'] as String;
-    final chat = StoredChat.fromRow(inserted, messages, title: title);
+    final chat = await _applyCloudWrite(
+      userId: user.id,
+      chatId: inserted['id'] as String,
+      rev: rev,
+      row: inserted,
+      messages: messages,
+      payloadJson: payloadJson,
+      customName: customName,
+      title: title,
+    );
 
-    // Add to our map - this is the ONLY place we add new chats
-    ChatStorageState.chatsById[finalId] = chat;
-    ChatStorageState.notifyChanges(finalId);
+    if (kDebugMode) {
+      debugPrint(
+        '✅ [ChatStorage] Saved new chat: ${chat.id} (${messages.length} messages)',
+      );
+    }
+
+    return chat;
+  }
+
+  /// Take a successful cloud write of the messages of local revision [rev]
+  /// into memory and the cache, and clear the dirty mark. If a newer local
+  /// save came in while the write ran, memory and the cache already hold
+  /// newer messages: they are kept, and the chat stays dirty.
+  static Future<StoredChat> _applyCloudWrite({
+    required String userId,
+    required String chatId,
+    required int rev,
+    required Map<String, dynamic> row,
+    required List<ChatMessage> messages,
+    required String payloadJson,
+    required String? customName,
+    required String title,
+  }) async {
+    final chat = StoredChat.fromRow(
+      row,
+      messages,
+      customName: customName,
+      title: title.isNotEmpty ? title : null,
+    );
+    final digest = _digest(payloadJson);
+    ChatStorageState.lastWrite[chatId] = (
+      digest: digest,
+      updatedAt: chat.updatedAt,
+    );
+
+    if (ChatDirtyStore.revision(chatId) != rev) {
+      await ChatDirtyStore.markSynced(userId, chatId, rev);
+      return ChatStorageState.chatsById[chatId] ?? chat;
+    }
+
+    // Update in our map - this is the ONLY place a cloud write lands
+    ChatStorageState.chatsById[chatId] = chat;
+    ChatStorageState.localDigest[chatId] = (
+      digest: digest,
+      updatedAt: chat.updatedAt,
+    );
+    ChatStorageState.notifyChanges(chatId);
 
     // Cache plaintext row (NOT the encrypted Supabase row)
     unawaited(
-      LocalChatCacheService.upsert(
-        user.id,
+      _writeLocalRow(
+        userId,
+        chatId,
         LocalChatCacheService.buildPlaintextRow(
-          id: finalId,
+          id: chatId,
           payload: payloadJson,
-          createdAt: inserted['created_at'] as String,
-          isStarred: (inserted['is_starred'] as bool?) ?? false,
-          updatedAt: inserted['updated_at'] as String?,
+          createdAt: row['created_at'] as String,
+          isStarred: (row['is_starred'] as bool?) ?? false,
+          updatedAt: row['updated_at'] as String?,
           title: title.isNotEmpty ? title : null,
         ),
       ),
     );
 
-    // Log with title for debugging
-    final displayTitle = title.length > 50
-        ? '${title.substring(0, 50)}...'
-        : title;
-    if (kDebugMode) {
-      debugPrint('✅ [ChatStorage] Saved new chat: $finalId');
-    }
-    if (kDebugMode) {
-      debugPrint('   📝 Title: "$displayTitle"');
-    }
-    if (kDebugMode) {
-      debugPrint(
-        '   📊 Messages: ${messages.length} (${messages.where((m) => m.role == "user").length} user, ${messages.where((m) => m.role == "assistant").length} assistant)',
-      );
-    }
-
+    await ChatDirtyStore.markSynced(userId, chatId, rev);
     return chat;
   }
 
@@ -1100,6 +1367,33 @@ class ChatStorageCrud {
     // Another waiter may claim the slot while this one waits, so wait until
     // it is free. A slot this update already waited for is finished even if
     // nobody removed it, so it never makes this loop spin.
+    //
+    // The local revision is taken now: these are the messages of that
+    // revision, whatever is saved locally while this update waits.
+    final rev = ChatDirtyStore.revision(chatId);
+    final seq = ChatStorageState.nextUpdateSeq();
+    final outcome = Completer<StoredChat?>()..future.ignore();
+    ChatStorageState.latestUpdate[chatId] = (seq: seq, outcome: outcome);
+    try {
+      final result = await _queueUpdate(chatId, messagesMaps, seq, rev);
+      outcome.complete(result);
+      return result;
+    } catch (e) {
+      outcome.completeError(e);
+      rethrow;
+    } finally {
+      if (ChatStorageState.latestUpdate[chatId]?.seq == seq) {
+        ChatStorageState.latestUpdate.remove(chatId);
+      }
+    }
+  }
+
+  static Future<StoredChat?> _queueUpdate(
+    String chatId,
+    List<Map<String, dynamic>> messagesMaps,
+    int seq,
+    int rev,
+  ) async {
     final waited = <Completer<StoredChat?>>{};
     for (
       var pending = ChatStorageState.pendingSaves[chatId];
@@ -1113,6 +1407,12 @@ class ChatStorageCrud {
       }
     }
 
+    // A newer update for this chat is queued: it writes the newer messages,
+    // so this one's write would only be overwritten a moment later. Its
+    // caller gets the newer one's outcome, failure included.
+    final latest = ChatStorageState.latestUpdate[chatId];
+    if (latest != null && latest.seq > seq) return latest.outcome.future;
+
     // See [saveChat]: handled here, so a failure with no waiter is not
     // reported twice.
     final completer = Completer<StoredChat?>()..future.ignore();
@@ -1120,7 +1420,7 @@ class ChatStorageCrud {
     ChatStorageState.savingChats.add(chatId);
 
     try {
-      final result = await _doUpdateChat(chatId, messagesMaps);
+      final result = await _doUpdateChat(chatId, messagesMaps, rev);
       completer.complete(result);
       return result;
     } catch (e) {
@@ -1141,6 +1441,7 @@ class ChatStorageCrud {
   static Future<StoredChat?> _doUpdateChat(
     String chatId,
     List<Map<String, dynamic>> messagesMaps,
+    int rev,
   ) async {
     final user = SupabaseService.auth.currentUser;
     if (user == null) {
@@ -1164,21 +1465,20 @@ class ChatStorageCrud {
 
     // Preserve existing customName
     final existingChat = ChatStorageState.chatsById[chatId];
-    final String? existingCustomName = existingChat?.customName;
-    final String? normalizedCustomName =
-        existingCustomName?.trim().isNotEmpty == true
-        ? existingCustomName!.trim()
-        : null;
+    final String? normalizedCustomName = _customNameOf(existingChat);
 
-    final Map<String, dynamic> payloadMap = {
-      'v': kChatPayloadVersion,
-      'messages': messages.map((m) => m.toJson()).toList(),
-    };
-    if (normalizedCustomName != null) {
-      payloadMap['customName'] = normalizedCustomName;
+    final payloadJson = _payloadJson(messages, normalizedCustomName);
+    // Title and image paths derive from the payload, so an equal payload on
+    // an unchanged row means an equal row: skip the write.
+    final digest = _digest(payloadJson);
+    final lastWrite = ChatStorageState.lastWrite[chatId];
+    if (existingChat != null &&
+        lastWrite != null &&
+        lastWrite.digest == digest &&
+        lastWrite.updatedAt == existingChat.updatedAt) {
+      await ChatDirtyStore.markSynced(user.id, chatId, rev);
+      return existingChat;
     }
-
-    final payloadJson = jsonEncode(payloadMap);
     final encryptedPayload = await EncryptionService.encrypt(payloadJson);
 
     // Extract and encrypt title separately for fast sidebar loading
@@ -1202,43 +1502,29 @@ class ChatStorageCrud {
         })
         .eq('id', chatId)
         .eq('user_id', user.id)
-        .select(
-          'id, encrypted_payload, created_at, is_starred, updated_at, encrypted_title',
-        )
+        .select('id, created_at, is_starred, updated_at, encrypted_title')
         .timeout(const Duration(seconds: 15));
 
     if (updatedRows.isEmpty) {
+      // The row is gone: the chat was deleted on another device. The delete
+      // wins; without the dirty mark the next sync removes the chat here too
+      // instead of the flush retrying it for ever.
+      if (!ChatDirtyStore.isPendingInsert(chatId)) {
+        await ChatDirtyStore.forget(user.id, chatId);
+      }
       throw StateError('Chat not found or access denied.');
     }
 
-    final updatedRow = updatedRows.first;
-    final chat = StoredChat.fromRow(
-      updatedRow,
-      messages,
+    return _applyCloudWrite(
+      userId: user.id,
+      chatId: chatId,
+      rev: rev,
+      row: updatedRows.first,
+      messages: messages,
+      payloadJson: payloadJson,
       customName: normalizedCustomName,
-      title: title.isNotEmpty ? title : null,
+      title: title,
     );
-
-    // Update in our map - this is the ONLY place we update chats
-    ChatStorageState.chatsById[chatId] = chat;
-    ChatStorageState.notifyChanges(chatId);
-
-    // Cache plaintext row (NOT the encrypted Supabase row)
-    unawaited(
-      LocalChatCacheService.upsert(
-        user.id,
-        LocalChatCacheService.buildPlaintextRow(
-          id: chatId,
-          payload: payloadJson,
-          createdAt: updatedRow['created_at'] as String,
-          isStarred: (updatedRow['is_starred'] as bool?) ?? false,
-          updatedAt: updatedRow['updated_at'] as String?,
-          title: title.isNotEmpty ? title : null,
-        ),
-      ),
-    );
-
-    return chat;
   }
 
   /// Delete a chat and its associated images from storage
@@ -1314,6 +1600,7 @@ class ChatStorageCrud {
     }
 
     ChatStorageState.notifyChanges(chatId);
+    unawaited(ChatDirtyStore.forget(user.id, chatId));
     unawaited(LocalChatCacheService.delete(user.id, chatId));
 
     // Update title cache to remove the deleted chat
