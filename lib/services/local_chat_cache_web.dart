@@ -255,6 +255,47 @@ class LocalChatCacheService {
   /// No-op on web (no migration needed).
   static Future<void> ensureMigrated(String userId) async {}
 
+  /// Native only (the background upgrade of old rows to v3). The web cache
+  /// keeps its rows as JSON text and is rebuilt from the cloud.
+  static Future<({Map<String, dynamic> row, int storedLength, bool framed})?>
+  loadRawById(String userId, String chatId) async => null;
+
+  /// Native only (the maintenance screen's local part). The web cache is
+  /// JSON text rebuilt from the cloud; there is nothing to upgrade.
+  static Future<List<String>> idsNeedingPayloadUpgrade(String userId) async =>
+      const <String>[];
+
+  /// Native only; the web has no database file to back up.
+  static Future<String> backupDatabase() async =>
+      throw UnsupportedError('No cache database on the web');
+
+  /// Native only, see [backupDatabase].
+  static Future<void> restoreBackup() async =>
+      throw UnsupportedError('No cache database on the web');
+
+  /// Native only, see [backupDatabase].
+  static Future<void> deleteBackup() async {}
+
+  /// Native only, see [backupDatabase].
+  static Future<bool> hasBackup() async => false;
+
+  /// Native only, see [idsNeedingPayloadUpgrade].
+  static Future<bool> updateUpdatedAtIfEqual(
+    String userId,
+    String chatId, {
+    required String expected,
+    required String value,
+  }) async => false;
+
+  /// Native only, see [loadRawById].
+  static Future<bool> replacePayloadIfUnchanged(
+    String userId,
+    String chatId, {
+    required String payload,
+    required String? expectedUpdatedAt,
+    required int expectedStoredLength,
+  }) async => false;
+
   static Future<void> clear(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_storageKeyPrefix$userId');

@@ -65,6 +65,7 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
+import 'package:chuk_chat/widgets/chat_maintenance_gate.dart';
 import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
 
@@ -529,12 +530,16 @@ class _AgentsAppState extends State<AgentsApp> {
   Widget _buildHome(AppShellConfig shellConfig) => AuthGate(
     themeController: _theme,
     buildLogin: (_) => const LoginPage(),
-    buildShell: (_) => kFeatureAgents
-        ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
-        : _OnboardingFirstLaunchGate(
-            shellConfig: shellConfig,
-            child: RootWrapper(config: shellConfig),
-          ),
+    // The chat maintenance gate holds the shell back while the one-time
+    // rewrite of the chats to payload v3 runs (docs/CHAT_PAYLOAD_FORMAT.md).
+    buildShell: (_) => ChatMaintenanceGate(
+      child: kFeatureAgents
+          ? MessengerShell(themeController: _theme, shellConfig: shellConfig)
+          : _OnboardingFirstLaunchGate(
+              shellConfig: shellConfig,
+              child: RootWrapper(config: shellConfig),
+            ),
+    ),
   );
 
   @override

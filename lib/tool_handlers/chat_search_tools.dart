@@ -7,6 +7,8 @@
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:chuk_chat/services/chat_payload_codec.dart'
+    show decodeChatPayload;
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -440,18 +442,16 @@ _ParsedPayload? _parsePayload(String? payload) {
 
     final map = _coerceStringMap(decoded);
     final customName = (map['customName'] as String?)?.trim();
-    final rawMessages = map['messages'];
-    if (rawMessages is! List) {
+    if (map['messages'] is! List) {
       return const _ParsedPayload(messages: <ChatMessage>[]);
     }
 
-    final messages = <ChatMessage>[];
-    for (final rawMessage in rawMessages) {
-      if (rawMessage is! Map) {
-        continue;
-      }
-      messages.add(ChatMessage.fromJson(_coerceStringMap(rawMessage)));
-    }
+    // Every payload version (v1, v2, v3) through the one reader: a v3
+    // message stores its nested fields as real JSON and by reference.
+    final messages = <ChatMessage>[
+      for (final rawMessage in decodeChatPayload(payload).messages)
+        ChatMessage.fromJson(rawMessage),
+    ];
 
     return _ParsedPayload(messages: messages, customName: customName);
   } catch (_) {

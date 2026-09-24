@@ -593,4 +593,13 @@ const Map<String, String> stringsPt = {
   'bashSandboxFolder': 'Pasta do sandbox',
   'bashSandboxFolderUnset': 'Não definida — comandos bash são recusados',
   'bashSandboxChooseDialog': 'Escolher a pasta do sandbox do bash',
+  // ── Chat maintenance (payload v3 rewrite) ──────────────────
+  'maintenanceTitle': 'Atualizando seus chats',
+  'maintenanceBody': 'Por favor, não feche o app. Seus dados estão sendo reescritos.',
+  'maintenanceMigrating': 'Reescrevendo chats',
+  'maintenanceVerifying': 'Verificando chats',
+  'maintenanceCount': '{n} de {total}',
+  'maintenanceFailedTitle': 'A atualização não terminou',
+  'maintenanceFailedBody': 'Seus chats não foram alterados e estão seguros. Você pode tentar novamente ou continuar e usar o app como antes.',
+  'maintenanceContinue': 'Continuar',
 };

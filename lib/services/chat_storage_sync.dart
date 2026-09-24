@@ -1,13 +1,13 @@
 // lib/services/chat_storage_sync.dart
 
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_dirty_store.dart';
+import 'package:chuk_chat/services/chat_payload_codec.dart';
 import 'package:chuk_chat/services/chat_storage_mutations.dart'
-    show kChatPayloadVersion, saveTitlesToCache;
+    show saveTitlesToCache;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -24,40 +24,10 @@ class DeserializeResult {
 
 /// Top-level function for background JSON deserialization
 /// Must be top-level (not a class method) to work with compute()
+/// Reads every payload version (v1, v2, v3) into v2-shaped message maps.
 DeserializeResult deserializePayloadIsolate(String json) {
-  final Map<String, dynamic> map = jsonDecode(json) as Map<String, dynamic>;
-  final int version = (map['v'] as int?) ?? 1;
-  final String? customName = map['customName'] as String?;
-
-  if (version == 2) {
-    final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
-    final messages = rawMessages.map((m) => m as Map<String, dynamic>).toList();
-    return DeserializeResult(messages, customName: customName);
-  }
-
-  // Version 1 migration - normalize field names, preserving all fields
-  final List<dynamic> rawMessages = map['messages'] as List<dynamic>;
-  final messages = rawMessages.map((m) {
-    final msg = m as Map<String, dynamic>;
-    return <String, dynamic>{
-      'role': msg['role'] as String? ?? 'user',
-      'text': msg['text'] as String? ?? '',
-      if (msg['reasoning'] != null) 'reasoning': msg['reasoning'],
-      if (msg['images'] != null) 'images': msg['images'],
-      if (msg['imageCostEur'] != null) 'imageCostEur': msg['imageCostEur'],
-      if (msg['imageGeneratedAt'] != null)
-        'imageGeneratedAt': msg['imageGeneratedAt'],
-      if (msg['attachments'] != null) 'attachments': msg['attachments'],
-      if (msg['attachedFilesJson'] != null)
-        'attachedFilesJson': msg['attachedFilesJson'],
-      if (msg['toolCalls'] != null) 'toolCalls': msg['toolCalls'],
-      if (msg['contentBlocks'] != null) 'contentBlocks': msg['contentBlocks'],
-      if (msg['replyContext'] != null) 'replyContext': msg['replyContext'],
-      if (msg['modelId'] != null) 'modelId': msg['modelId'],
-      if (msg['provider'] != null) 'provider': msg['provider'],
-    };
-  }).toList();
-  return DeserializeResult(messages, customName: customName);
+  final decoded = decodeChatPayload(json);
+  return DeserializeResult(decoded.messages, customName: decoded.customName);
 }
 
 /// Internal class for chat payload
@@ -125,16 +95,47 @@ String chatTitleFromMessages(List<ChatMessage> messages) {
   return first.length > 100 ? '${first.substring(0, 100)}...' : first;
 }
 
-/// Serialises a decrypted [ChatPayload] for the plaintext local cache.
-///
-/// The local SQLite cache holds plaintext on purpose (the key sits on the same
-/// device), so this is deliberately not the encrypted Supabase shape.
-String plaintextPayloadJson(ChatPayload chatPayload) {
-  return jsonEncode({
-    'v': kChatPayloadVersion,
-    if (chatPayload.customName != null) 'customName': chatPayload.customName,
-    'messages': chatPayload.messages.map((m) => m.toJson()).toList(),
-  });
+/// Payload JSON shorter than this is encoded on the calling isolate.
+const int _backgroundEncodeMinChars = 32 * 1024;
+
+String _encodeChatPayloadIsolate(_EncodeArgs args) =>
+    encodeChatPayload(args.messages, customName: args.customName);
+
+class _EncodeArgs {
+  const _EncodeArgs(this.messages, this.customName);
+  final List<Map<String, dynamic>> messages;
+  final String? customName;
+}
+
+/// The v3 payload JSON of [messages], encoded off the UI isolate when the
+/// chat is long. The one encoding for the cloud, the cache and the digests
+/// that compare them.
+Future<String> encodeChatPayloadAsync(
+  List<ChatMessage> messages,
+  String? customName,
+) async {
+  final maps = messages.map((m) => m.toJson()).toList();
+  var chars = 0;
+  for (final m in messages) {
+    chars +=
+        m.text.length +
+        (m.reasoning?.length ?? 0) +
+        (m.toolCalls?.length ?? 0) +
+        (m.contentBlocks?.length ?? 0);
+    if (chars >= _backgroundEncodeMinChars) break;
+  }
+  if (chars < _backgroundEncodeMinChars) {
+    return encodeChatPayload(maps, customName: customName);
+  }
+  return compute(_encodeChatPayloadIsolate, _EncodeArgs(maps, customName));
+}
+
+/// [json] (a payload of any version) as a v3 payload JSON. A v3 input is
+/// returned at once; an older one is converted off the UI isolate.
+Future<String> toChatPayloadV3Async(String json) async {
+  if (peekChatPayloadVersion(json) == kChatPayloadVersion) return json;
+  if (json.length < _backgroundEncodeMinChars) return toChatPayloadV3(json);
+  return compute(toChatPayloadV3, json);
 }
 
 /// Handles chat synchronization from cloud to local state.
@@ -256,13 +257,17 @@ class ChatStorageSync {
     Map<String, dynamic> row,
     ChatPayload chatPayload,
     StoredChat chat,
-  ) {
+  ) async {
     final title = chat.title ?? chatTitleFromMessages(chatPayload.messages);
-    return LocalChatCacheService.upsert(
+    final payload = await encodeChatPayloadAsync(
+      chatPayload.messages,
+      chatPayload.customName,
+    );
+    await LocalChatCacheService.upsert(
       userId,
       LocalChatCacheService.buildPlaintextRow(
         id: chatId,
-        payload: plaintextPayloadJson(chatPayload),
+        payload: payload,
         createdAt: row['created_at'] as String,
         isStarred: (row['is_starred'] as bool?) ?? false,
         updatedAt: row['updated_at'] as String?,

@@ -607,4 +607,13 @@ const Map<String, String> stringsFr = {
   'bashSandboxFolder': 'Dossier du bac à sable',
   'bashSandboxFolderUnset': 'Non défini — les commandes bash sont refusées',
   'bashSandboxChooseDialog': 'Choisir le dossier du bac à sable bash',
+  // ── Chat maintenance (payload v3 rewrite) ──────────────────
+  'maintenanceTitle': 'Mise à jour de vos chats',
+  'maintenanceBody': "Merci de ne pas fermer l'app. Vos données sont en cours de réécriture.",
+  'maintenanceMigrating': 'Réécriture des chats',
+  'maintenanceVerifying': 'Vérification des chats',
+  'maintenanceCount': '{n} sur {total}',
+  'maintenanceFailedTitle': "La mise à jour n'a pas abouti",
+  'maintenanceFailedBody': "Vos chats sont inchangés et en sécurité. Vous pouvez réessayer, ou continuer et utiliser l'app comme avant.",
+  'maintenanceContinue': 'Continuer',
 };

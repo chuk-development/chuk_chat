@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/chat_payload_migration_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
@@ -144,6 +145,12 @@ class AppInitializationService {
     unawaited(MultiplexSession.prewarm());
 
     try {
+      // The one-time rewrite of the chats to payload v3 runs before any
+      // chat is loaded; the maintenance screen shows while it runs. Returns
+      // at once when there is nothing to do.
+      await ChatMaintenanceController.instance.ensureReady(user.id);
+      if (SupabaseService.auth.currentUser?.id != user.id) return;
+
       // Load cached sidebar data first so startup UI is responsive even if
       // secure storage takes time on Linux.
       await _loadUserData(stopwatch, startSync: false);

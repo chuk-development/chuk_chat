@@ -8,13 +8,11 @@ import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_preload_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart'
-    show deserializePayloadAsync;
+    show deserializePayloadAsync, encodeChatPayloadAsync;
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
-
-const int kChatPayloadVersion = 2;
 
 /// Handles chat mutations: star, rename, re-encrypt, export
 class ChatStorageMutations {
@@ -69,14 +67,12 @@ class ChatStorageMutations {
     }
 
     final updatedChat = chat.copyWith(customName: newName, title: newName);
-    final payload = jsonEncode({
-      'v': kChatPayloadVersion,
-      'customName': newName,
-      'messages': updatedChat.messages.map((m) => m.toJson()).toList(),
-    });
+    final payload = await encodeChatPayloadAsync(updatedChat.messages, newName);
 
     // Encrypt BOTH payload AND title (title is used for fast sidebar loading)
-    final encryptedPayload = await EncryptionService.encrypt(payload);
+    final encryptedPayload = await EncryptionService.encryptChatPayload(
+      payload,
+    );
     final encryptedTitle = await EncryptionService.encrypt(newName);
 
     final updatedRows = await SupabaseService.client
@@ -136,12 +132,13 @@ class ChatStorageMutations {
     if (user == null) return;
 
     for (final chat in chats) {
-      final payload = jsonEncode({
-        'v': kChatPayloadVersion,
-        'customName': chat.customName,
-        'messages': chat.messages.map((m) => m.toJson()).toList(),
-      });
-      final encryptedPayload = await EncryptionService.encrypt(payload);
+      final payload = await encodeChatPayloadAsync(
+        chat.messages,
+        chat.customName,
+      );
+      final encryptedPayload = await EncryptionService.encryptChatPayload(
+        payload,
+      );
 
       final updatedRows = await SupabaseService.client
           .from('encrypted_chats')
