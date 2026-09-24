@@ -37,6 +37,11 @@ done
 PKG=dev.chuk.chat
 OUT=build/app/outputs/flutter-apk/app-release.apk
 APP_VERSION="$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')"
+# Same version code as the release: major*100000 + minor*1000 + patch, the
+# formula in build.sh, android/fastlane/Fastfile and build-cross-platform.yml.
+# Without it this build got version code 2000001, above every release APK
+# (1.0.111 arm64 = 102111), so the phone refused the release as a downgrade.
+BUILD_NUMBER="$(echo "${APP_VERSION%%+*}" | awk -F. '{print ($1*100000)+($2*1000)+$3}')"
 BUILD_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
 DEFINES=(
@@ -46,6 +51,7 @@ DEFINES=(
   "--dart-define=FEATURE_AGENTS=true"
   "--dart-define=APP_VERSION=$APP_VERSION"
   "--dart-define=BUILD_TIMESTAMP=$BUILD_TIMESTAMP"
+  "--build-number=$BUILD_NUMBER"
 )
 
 echo "==> flutter build apk --release --target-platform $TARGET_PLATFORM"
