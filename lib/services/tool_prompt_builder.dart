@@ -102,6 +102,10 @@ class ToolPromptBuilder {
     // Identity system -- always injected (Soul > User > Memory).
     buffer.writeln(_buildIdentitySection(soulText, userInfoText, memoryText));
 
+    // Answer shape and the `:::` blocks the renderer draws. Always on and
+    // kept short: it rides on every prompt.
+    buffer.writeln(_answerFormatSection());
+
     // Tool calling protocol.
     //
     // Native mode: the model receives its tool definitions through the
@@ -1195,6 +1199,31 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
     buffer.writeln(
       '**News rules:** Only include fields from `web_search type:"news"` results. Never fabricate URLs or thumbnails. Emit at most one <news> block per response.',
     );
+  }
+
+  /// How an answer starts, and the `:::` blocks `MarkdownMessage` renders
+  /// natively (`lib/utils/answer_blocks_parser.dart`). About 190 tokens.
+  String _answerFormatSection() {
+    return '''
+## ANSWER FORMAT
+- If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of the reply is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". The explanation follows below it.
+- Optional blocks, only where they help. A line `::: name` opens one, a line `:::` closes it. Blocks do not nest. Inside, Markdown works as usual.
+::: steps
+1. Step title
+Body text.
+\$ command (terminal line with a copy button)
+! warning
+:::
+  Steps fit any ordered path: setup, recipe, process. `::: steps abc` letters them A, B, C.
+::: timeline Optional title
+2021-01: Event (a `*` before the date marks the key entry)
+:::
+  Use timeline ONLY for dates you know for certain or found with a tool. Never invent a date.
+::: scale 1800-6500 K
+2700: Warm white
+@ 2700: your lamp
+:::
+  Scale is experimental: use it only to place one value on a known range.''';
   }
 
   /// Chart and map rendering protocol — these are output formats, not tools.
