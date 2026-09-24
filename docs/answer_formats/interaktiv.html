@@ -1,0 +1,1123 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>chuk_chat · Antwortformate jenseits von Markdown</title>
+<style>
+:root{
+  --bg:#F4F1EC;--surface:#FBF9F6;--s2:#EFEBE4;--s3:#E5E0D7;--on:#1E1C19;--muted:#6B665E;--outline:#D8D1C6;
+  --accent:#2F5EA8;--on-accent:#FFFFFF;--accent-soft:#DCE5F5;--on-accent-soft:#122E5C;
+  --ok:#2E7D43;--ok-soft:#D3EDD9;--warn:#8A5A00;--warn-soft:#FBE7BF;--bad:#B3261E;--bad-soft:#F8DAD6;
+  --water:#CFDDE6;--land:#EDE7DC;--park:#D6E4CC;--street:#FFFFFF;--term:#1C1B19;--term-on:#E8E4DC;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
+  --r-card:18px;--r-btn:14px;
+}
+[data-theme=dark]{
+  --bg:#141311;--surface:#1C1A18;--s2:#24221F;--s3:#2F2C28;--on:#EDE9E2;--muted:#A49E94;--outline:#3A3631;
+  --accent:#A9C4F5;--on-accent:#0E2448;--accent-soft:#233450;--on-accent-soft:#D6E3FB;
+  --ok:#7FD79A;--ok-soft:#173622;--warn:#FFC860;--warn-soft:#3A2D0E;--bad:#FFB4AB;--bad-soft:#44211D;
+  --water:#1F2D36;--land:#27241F;--park:#26331F;--street:#34302A;--term:#0E0D0C;--term-on:#E8E4DC;
+  --shadow:0 1px 2px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--on);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+code,pre,.mono{font-family:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace}
+a{color:var(--accent)}
+/* ---------- top ---------- */
+.top{max-width:760px;margin:0 auto;padding:22px 16px 8px}
+.top-row{display:flex;align-items:flex-start;gap:12px}
+.top h1{font-size:26px;line-height:1.15;font-weight:800;letter-spacing:-.5px;margin:0;flex:1}
+.top p{color:var(--muted);margin:10px 0 0}
+.iconbtn{width:44px;height:44px;flex:none;border-radius:15px;border:0;background:var(--s2);display:grid;place-items:center;cursor:pointer}
+.iconbtn svg{width:22px;height:22px}
+.pillnote{display:inline-flex;gap:6px;align-items:center;margin-top:12px;padding:6px 12px;border-radius:999px;background:var(--warn-soft);color:var(--warn);font-size:13px;font-weight:600}
+/* ---------- nav ---------- */
+.nav{position:sticky;top:0;z-index:20;padding:10px 0 14px;background:linear-gradient(var(--bg) 0%,color-mix(in srgb,var(--bg) 82%,transparent) 70%,transparent)}
+.nav-in{max-width:760px;margin:0 auto;display:flex;gap:8px;overflow-x:auto;padding:0 16px;scrollbar-width:none}
+.nav-in::-webkit-scrollbar{display:none}
+.nav a{flex:none;text-decoration:none;color:var(--on);background:var(--surface);border:1px solid var(--outline);padding:7px 13px;border-radius:12px;font-size:13.5px;font-weight:600;white-space:nowrap;transition:background .2s,color .2s,border-color .2s}
+.nav a b{color:var(--muted);font-weight:700;margin-right:5px}
+.nav a.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.nav a.on b{color:inherit;opacity:.75}
+.nav .sep{flex:none;width:1px;background:var(--outline);margin:4px 2px}
+/* ---------- section ---------- */
+main{max-width:760px;margin:0 auto;padding:0 12px 80px}
+.grouph{margin:34px 4px 6px;font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.sec{background:var(--surface);border-radius:26px;padding:18px 14px 12px;margin:14px 0 18px;scroll-margin-top:70px;box-shadow:var(--shadow)}
+.kicker{font-size:12px;font-weight:700;color:var(--accent);letter-spacing:.04em;text-transform:uppercase}
+.sec h2{margin:2px 0 4px;font-size:22px;font-weight:800;letter-spacing:-.5px}
+.why{margin:0 0 12px;color:var(--muted);font-size:14px}
+.vwrap{display:flex;align-items:center;gap:10px;margin:4px 0 12px;flex-wrap:wrap}
+.vlabel{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+/* segmented pill (same idea as nav pill) */
+.seg{display:inline-flex;background:var(--s2);border-radius:22px;padding:4px;gap:2px;max-width:100%;overflow-x:auto;scrollbar-width:none}
+.seg::-webkit-scrollbar{display:none}
+.seg button{border:0;background:transparent;padding:7px 14px;border-radius:18px;font-size:13.5px;font-weight:650;cursor:pointer;white-space:nowrap;color:var(--muted);transition:background .2s,color .2s}
+.seg button[aria-selected=true]{background:var(--accent);color:var(--on-accent)}
+.seg.sm button{padding:5px 11px;font-size:12.5px}
+/* ---------- chat ---------- */
+.chat{background:var(--bg);border-radius:20px;padding:14px 10px 16px}
+.row{display:flex;gap:8px}
+.row.me{justify-content:flex-end;margin-bottom:14px}
+.bubble{max-width:84%;background:var(--accent);color:var(--on-accent);padding:10px 14px;border-radius:22px 22px 7px 22px;font-size:15px}
+.av{width:30px;height:30px;flex:none;border-radius:11px;background:var(--accent-soft);color:var(--on-accent-soft);display:grid;place-items:center;font-weight:800;font-size:14px;margin-top:2px}
+.botcol{flex:1;min-width:0}
+.lead{margin:4px 0 10px}
+.card{background:var(--surface);border-radius:var(--r-card);padding:14px;border:1px solid var(--outline)}
+.card+.card{margin-top:8px}
+.fine{font-size:12px;color:var(--muted);margin:10px 0 0}
+.demo-tag{display:inline-block;font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);background:var(--s2);border-radius:6px;padding:2px 6px;margin-left:6px;vertical-align:middle}
+/* details sketch */
+.sk{margin:10px 4px 2px}
+.sk summary{cursor:pointer;font-size:13px;color:var(--muted);font-weight:600;list-style:none;display:flex;align-items:center;gap:6px}
+.sk summary::-webkit-details-marker{display:none}
+.sk summary::before{content:"";width:7px;height:7px;border-right:2px solid var(--muted);border-bottom:2px solid var(--muted);transform:rotate(-45deg);transition:transform .2s;margin-right:3px}
+.sk[open] summary::before{transform:rotate(45deg)}
+.sk summary code{background:var(--s2);padding:1px 6px;border-radius:6px;color:var(--on)}
+.sk pre{margin:8px 0 0;background:var(--s2);padding:12px;border-radius:14px;overflow-x:auto;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word}
+/* ---------- controls ---------- */
+.btn{border:0;cursor:pointer;height:40px;padding:0 16px;border-radius:var(--r-btn);background:var(--accent);color:var(--on-accent);font-weight:700;font-size:14px;display:inline-flex;align-items:center;gap:8px;justify-content:center}
+.btn.tonal{background:var(--accent-soft);color:var(--on-accent-soft)}
+.btn.plain{background:var(--s2);color:var(--on)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px;border-radius:11px}
+.btn:disabled{opacity:.45;cursor:default}
+.btn:active:not(:disabled){transform:scale(.97)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{border:1px solid var(--outline);background:var(--surface);cursor:pointer;padding:6px 11px;border-radius:11px;font-size:13px;font-weight:600;color:var(--on)}
+.chip[aria-pressed=true]{background:var(--accent-soft);border-color:transparent;color:var(--on-accent-soft)}
+.sl{display:block;margin-top:12px}
+.sl-top{display:flex;justify-content:space-between;font-size:13.5px;color:var(--muted);margin-bottom:2px}
+.sl-top b{color:var(--on);font-variant-numeric:tabular-nums}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:30px;background:transparent;margin:0;cursor:pointer;--p:50%;touch-action:pan-y}
+input[type=range]::-webkit-slider-runnable-track{height:8px;border-radius:8px;background:linear-gradient(90deg,var(--accent) var(--p),var(--s3) var(--p))}
+input[type=range]::-moz-range-track{height:8px;border-radius:8px;background:linear-gradient(90deg,var(--accent) var(--p),var(--s3) var(--p))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:6px;height:26px;margin-top:-9px;border-radius:4px;background:var(--accent);border:0;box-shadow:0 0 0 4px var(--surface)}
+input[type=range]::-moz-range-thumb{width:6px;height:26px;border-radius:4px;background:var(--accent);border:0;box-shadow:0 0 0 4px var(--surface)}
+input[type=range]:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:8px}
+.big{font-size:52px;font-weight:800;letter-spacing:-2px;line-height:1;font-variant-numeric:tabular-nums}
+.big small{font-size:22px;letter-spacing:0;font-weight:700;color:var(--muted)}
+.sub{color:var(--muted);font-size:13.5px;margin-top:4px}
+.lbl{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.okc{color:var(--ok)}.badc{color:var(--bad)}.warnc{color:var(--warn)}
+.status{display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:10px;font-size:13px;font-weight:700}
+.status.ok{background:var(--ok-soft);color:var(--ok)}.status.bad{background:var(--bad-soft);color:var(--bad)}.status.warn{background:var(--warn-soft);color:var(--warn)}.status.neu{background:var(--s2);color:var(--muted)}
+.codebox{display:flex;align-items:stretch;background:var(--term);color:var(--term-on);border-radius:12px;overflow:hidden;margin:10px 0}
+.codebox code{flex:1;padding:10px 12px;font-size:13px;overflow-x:auto;white-space:pre}
+.codebox button{border:0;background:rgba(255,255,255,.08);color:var(--term-on);padding:0 12px;cursor:pointer;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:5px}
+.codebox button svg{width:15px;height:15px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);opacity:0;background:var(--on);color:var(--bg);padding:10px 16px;border-radius:14px;font-weight:650;font-size:14px;transition:.25s;z-index:50;pointer-events:none;max-width:90vw}
+.toast.on{opacity:1;transform:translate(-50%,0)}
+@keyframes pop{0%{transform:scale(.94)}60%{transform:scale(1.03)}100%{transform:scale(1)}}
+.pop{animation:pop .32s cubic-bezier(.3,1.4,.5,1)}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-7px)}75%{transform:translateX(7px)}}
+.shake{animation:shake .3s}
+/* ---------- A1 regler ---------- */
+.batt{display:flex;align-items:center;gap:4px;margin:14px 0 6px}
+.batt-body{flex:1;height:34px;border-radius:10px;background:var(--s2);border:2px solid var(--outline);position:relative;overflow:hidden;display:flex}
+.batt-body i{display:block;height:100%;transition:width .25s}
+.batt-body .use{background:var(--accent)}
+.batt-body .loss{background:repeating-linear-gradient(135deg,var(--accent-soft) 0 5px,transparent 5px 10px)}
+.batt-cap{width:6px;height:14px;border-radius:0 4px 4px 0;background:var(--outline)}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.legend .lg{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;vertical-align:-1px}
+.lg.use{background:var(--accent)}.lg.loss{background:repeating-linear-gradient(135deg,var(--accent) 0 2px,transparent 2px 4px)}.lg.res{background:var(--s2);border:1px solid var(--outline)}
+.goal{margin-top:12px}
+.tang{font-size:17px;line-height:2.05}
+.tn{touch-action:none;user-select:none;-webkit-user-select:none;cursor:ew-resize;color:var(--accent);background:var(--accent-soft);border-bottom:2px dashed var(--accent);padding:1px 5px;border-radius:7px 7px 2px 2px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;transition:background .15s}
+.tn.drag{background:var(--accent);color:var(--on-accent)}
+.tn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tres{font-size:24px;font-weight:800;letter-spacing:-.5px;white-space:nowrap}
+.hint{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--muted);background:var(--s2);border-radius:10px;padding:7px 10px;margin-top:10px}
+.bandsvg{width:100%;height:auto;display:block;margin-top:10px}
+/* ---------- A2 weiche ---------- */
+.trail{display:flex;align-items:center;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.tdot{width:28px;height:28px;border-radius:10px;display:grid;place-items:center;font-size:13px;font-weight:800;border:0;padding:0}
+.tdot.done{background:var(--ok-soft);color:var(--ok);cursor:pointer}
+.tdot.cur{background:var(--accent);color:var(--on-accent)}
+.tdot.todo{background:transparent;border:2px dashed var(--outline);color:var(--muted)}
+.tline{width:10px;height:2px;background:var(--outline)}
+.stepno{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.steph{font-size:18px;font-weight:800;margin:2px 0 4px;letter-spacing:-.3px}
+.where{display:inline-block;font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--s2);color:var(--muted);margin-left:6px;vertical-align:2px}
+.outs{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.out{display:flex;align-items:center;gap:10px;border:0;background:var(--s2);border-radius:14px;padding:11px 12px;text-align:left;cursor:pointer;font-weight:650;font-size:14px}
+.out:active{transform:scale(.98)}
+.out .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}.dot.warn{background:var(--warn)}
+.out .arr{margin-left:auto;color:var(--muted)}
+.logitem{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px dashed var(--outline);cursor:pointer}
+.logitem .tdot{flex:none}
+.logitem .pick{display:inline-block;margin-top:4px;background:var(--accent);color:var(--on-accent);border-radius:12px 12px 4px 12px;padding:3px 10px;font-size:12.5px;font-weight:600}
+.endcard{border-radius:16px;padding:16px}
+.endcard.ok{background:var(--ok-soft)}.endcard.bad{background:var(--bad-soft)}.endcard.warn{background:var(--warn-soft)}
+.endcard h4{margin:0 0 4px;font-size:18px}
+.cmdchip{display:inline-flex;align-items:center;gap:6px;max-width:100%;background:var(--term);color:var(--term-on);border:0;border-radius:10px;padding:6px 10px;font-size:12.5px;cursor:pointer;overflow:hidden}
+.cmdchip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* ---------- A3 duell ---------- */
+.score{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.sc{border-radius:16px;padding:12px;background:var(--s2);position:relative;transition:background .3s}
+.sc.win{background:var(--accent-soft);color:var(--on-accent-soft)}
+.sc .nm{font-weight:750;font-size:14px}
+.sc .pts{font-size:30px;font-weight:800;letter-spacing:-1px;font-variant-numeric:tabular-nums}
+.sc .badge{position:absolute;bottom:14px;right:12px;font-size:11px;font-weight:800;background:var(--accent);color:var(--on-accent);padding:2px 8px;border-radius:8px;opacity:0;transition:opacity .2s}
+.sc.win .badge{opacity:1}
+.attr{padding:12px 0 2px;border-bottom:1px solid var(--outline)}
+.attr:last-of-type{border-bottom:0}
+.attr-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.attr-h b{font-size:14.5px}
+.attr-h span{font-size:12.5px;color:var(--muted)}
+.axis{position:relative;height:30px;margin:4px 6px 0}
+.axis::before{content:"";position:absolute;left:0;right:0;top:14px;height:2px;background:var(--outline);border-radius:2px}
+.axis .tk{position:absolute;top:10px;width:1px;height:10px;background:var(--outline)}
+.pt{position:absolute;top:5px;width:20px;height:20px;margin-left:-10px;border-radius:50%;display:grid;place-items:center;font-size:9px;font-weight:800;transition:left .3s}
+.pt.a{background:var(--accent);color:var(--on-accent);z-index:2}
+.pt.b{background:var(--surface);border:2.5px solid var(--on);color:var(--on)}
+.slw{position:relative}
+.notch{position:absolute;top:22px;width:2px;height:14px;background:var(--warn);border-radius:2px;margin-left:-1px;pointer-events:none}
+.notch::after{content:"Kipppunkt";position:absolute;top:14px;left:50%;transform:translateX(-50%);font-size:10px;font-weight:700;color:var(--warn);white-space:nowrap}
+.wtxt{font-size:12.5px;color:var(--muted);margin-top:-2px;margin-bottom:10px}
+.tip{display:flex;gap:8px;align-items:flex-start;background:var(--warn-soft);color:var(--warn);border-radius:12px;padding:9px 11px;font-size:13.5px;font-weight:600;margin-top:8px}
+.stackbar{display:flex;height:22px;border-radius:8px;overflow:hidden;background:var(--s2);margin:4px 0 10px}
+.stackbar i{height:100%;transition:width .3s;border-right:2px solid var(--surface)}
+.biglabel{font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1.05}
+/* ---------- A4 tagesband ---------- */
+.map{width:100%;height:auto;display:block;border-radius:14px;background:var(--land)}
+.map text{font-family:system-ui,sans-serif}
+.pin{transition:transform .18s ease-out}
+.tband{position:relative;height:46px;margin-top:12px}
+.tband .seg-b{position:absolute;top:8px;height:18px;border-radius:6px;background:var(--s3);transition:background .2s}
+.tband .seg-b.cur{background:var(--accent)}
+.tband .mv{position:absolute;top:16px;height:2px;background:var(--outline)}
+.tband input{position:absolute;inset:0 0 auto 0;height:34px;top:0}
+.tband input::-webkit-slider-runnable-track{background:transparent}
+.tband input::-moz-range-track{background:transparent}
+.tband input::-webkit-slider-thumb{height:34px;margin-top:0;width:4px;background:var(--on);box-shadow:0 0 0 3px var(--surface)}
+.tband input::-moz-range-thumb{height:34px;width:4px;background:var(--on)}
+.tticks{position:absolute;left:0;right:0;top:30px;height:14px;font-size:10.5px;color:var(--muted)}
+.tticks span{position:absolute;transform:translateX(-50%)}
+.now{display:flex;gap:12px;align-items:center;margin-top:8px;background:var(--s2);border-radius:14px;padding:10px 12px}
+.now .clock{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.now .what b{display:block;font-size:14.5px}
+.now .what span{font-size:12.5px;color:var(--muted)}
+.tl{list-style:none;margin:10px 0 0;padding:0}
+.tl li{display:flex;gap:10px;padding:7px 8px;border-radius:12px;cursor:pointer;transition:background .2s}
+.tl li .tm{width:44px;flex:none;font-weight:750;font-variant-numeric:tabular-nums;font-size:13.5px}
+.tl li.cur{background:var(--accent-soft);color:var(--on-accent-soft)}
+.tl li.past{opacity:.55}
+.tl li small{display:block;color:var(--muted);font-size:12px}
+.tl li.cur small{color:inherit;opacity:.8}
+/* ---------- B demos ---------- */
+.mc-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.mc-name{font-size:20px;font-weight:800;letter-spacing:-.4px}
+.bigbadge{border:0;cursor:pointer;font-weight:900;letter-spacing:.06em;font-size:14px;padding:9px 14px;border-radius:12px}
+.bigbadge.open{background:var(--ok-soft);color:var(--ok)}.bigbadge.api{background:var(--s3);color:var(--muted)}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.tile{background:var(--s2);border-radius:14px;padding:10px 12px}
+.tile .v{font-weight:800;font-size:16px;margin-top:2px}
+.ctxbar{height:8px;border-radius:6px;background:var(--s3);margin-top:6px;overflow:hidden}
+.ctxbar i{display:block;height:100%;background:var(--accent);border-radius:6px;transition:width .3s}
+.expl{overflow:hidden;max-height:0;transition:max-height .3s}
+.expl.on{max-height:200px}
+.expl div{background:var(--s2);border-radius:12px;padding:10px 12px;margin-top:10px;font-size:13.5px}
+.prov{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+.prov button{display:flex;align-items:center;gap:8px;border:1px solid var(--outline);background:var(--surface);border-radius:14px;padding:9px 12px;cursor:pointer;text-align:left}
+.prov button[aria-pressed=true]{background:var(--accent-soft);border-color:transparent;color:var(--on-accent-soft)}
+.prov .pr{margin-left:auto;font-variant-numeric:tabular-nums;font-size:13px}
+.ring{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.ring svg{width:190px;height:190px;flex:none}
+.ringtxt{flex:1;min-width:150px}
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:12px}
+.days button{border:0;height:38px;min-width:0;padding:0;border-radius:12px;background:var(--s2);font-weight:700;font-size:13px;cursor:pointer;position:relative}
+.days button[aria-pressed=true]{background:var(--accent);color:var(--on-accent)}
+.days button.today::after{content:"";position:absolute;bottom:4px;left:50%;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor}
+.fitsvg{width:100%;height:auto;display:block}
+.part{transition:transform .5s cubic-bezier(.3,1.3,.5,1)}
+.gate{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--outline);cursor:pointer}
+.gate:last-child{border-bottom:0}
+.gate .lamp{width:12px;height:12px;border-radius:50%;flex:none}
+.gate .k{font-weight:700;font-size:14px;width:92px;flex:none}
+.gate .v{font-size:13.5px;color:var(--muted);flex:1}
+.gate .more{font-size:12.5px;color:var(--muted);flex-basis:100%;padding-left:22px;display:none}
+.gate.open .more{display:block}
+.gate{flex-wrap:wrap}
+.lamp.ok{background:var(--ok)}.lamp.bad{background:var(--bad)}.lamp.warn{background:var(--warn)}
+.spark{width:100%;height:auto;display:block;touch-action:pan-y}
+.pinbtn{cursor:pointer}
+.reason{background:var(--s2);border-radius:14px;padding:10px 12px;margin-top:8px;display:flex;gap:10px;align-items:flex-start}
+.reason .n{width:24px;height:24px;border-radius:8px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-weight:800;font-size:12px;flex:none}
+.srcchip{display:inline-block;margin-top:5px;font-size:11.5px;font-weight:700;padding:2px 7px;border-radius:6px;background:var(--surface);color:var(--muted)}
+.light{display:flex;flex-direction:column;gap:6px;background:var(--term);padding:8px;border-radius:16px;flex:none}
+.light i{width:22px;height:22px;border-radius:50%;background:#3a3834;transition:background .3s}
+.light i.r.on{background:#E5483E}.light i.y.on{background:#F2B233}.light i.g.on{background:#3FAE5A}
+.legal-top{display:flex;gap:14px;align-items:flex-start}
+.refs{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.refbox{background:var(--s2);border-radius:12px;padding:10px 12px;margin-top:8px;font-size:13.5px;display:none}
+.refbox.on{display:block}
+.money{margin-top:10px;border-radius:12px;padding:10px 12px;font-weight:650;font-size:14px;display:flex;gap:8px}
+.money.red{background:var(--bad-soft);color:var(--bad)}.money.yellow{background:var(--warn-soft);color:var(--warn)}.money.green{background:var(--ok-soft);color:var(--ok)}
+.transit svg{width:100%;height:auto;display:block}
+.stopbtn{cursor:pointer}
+.term{background:var(--term);color:var(--term-on);border-radius:16px;padding:12px 0;font-size:12.5px;line-height:1.6;overflow:hidden}
+.term .bar{display:flex;gap:6px;padding:0 12px 8px}
+.term .bar i{width:10px;height:10px;border-radius:50%;background:#4a4640}
+.term .ln{padding:0 12px;white-space:pre-wrap;word-break:break-all;min-height:1.6em}
+.term .ln.mark{background:rgba(229,72,62,.18);box-shadow:inset 3px 0 #E5483E}
+.term .ln.okl{color:#8FD9A2}
+.term .ln .ps{color:#8FB3F0}
+.callout{margin:6px 12px 8px;background:var(--surface);color:var(--on);border-radius:12px 12px 12px 4px;padding:8px 11px;font-family:system-ui,sans-serif;font-size:13px;position:relative}
+.callout b{color:var(--bad)}
+.cursor{display:inline-block;width:7px;height:1.1em;background:var(--term-on);vertical-align:-2px;animation:blink 1s steps(2) 6}
+@keyframes blink{50%{opacity:0}}
+.stack{position:relative;padding-left:34px}
+.layer{background:var(--s2);border-radius:14px;padding:10px 12px;margin-bottom:6px;cursor:pointer;transition:background .25s,color .25s}
+.layer.on{background:var(--accent-soft);color:var(--on-accent-soft)}
+.layer h5{margin:0;font-size:14.5px;display:flex;justify-content:space-between;gap:8px}
+.layer h5 span{font-weight:500;font-size:12px;opacity:.7}
+.layer .o{font-size:12.5px;margin-top:4px;opacity:0;max-height:0;transition:opacity .3s,max-height .3s;overflow:hidden}
+.layer.done .o,.layer.on .o{opacity:1;max-height:80px}
+.layer .ex{display:none;font-size:13px;margin-top:6px;padding-top:6px;border-top:1px solid var(--outline)}
+.layer.open .ex{display:block}
+.tok{position:absolute;left:0;top:0;width:26px;height:26px;border-radius:9px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;font-size:11px;font-weight:800;transition:transform .55s cubic-bezier(.3,1.2,.5,1)}
+.stack::before{content:"";position:absolute;left:12px;top:10px;bottom:16px;width:2px;background:var(--outline)}
+.kband{position:relative;margin-top:26px}
+.kgrad{height:40px;border-radius:12px;border:1px solid var(--outline)}
+.kband input{position:absolute;left:0;right:0;top:0;height:40px}
+.kband input::-webkit-slider-runnable-track{background:transparent;height:40px}
+.kband input::-moz-range-track{background:transparent}
+.kband input::-webkit-slider-thumb{height:52px;width:6px;margin-top:-6px;background:var(--on);box-shadow:0 0 0 3px var(--surface)}
+.kband input::-moz-range-thumb{height:52px;width:6px;background:var(--on)}
+.kregs{position:relative;height:34px;margin-top:6px;font-size:11px;color:var(--muted)}
+.kregs span{position:absolute;transform:translateX(-50%);text-align:center;white-space:nowrap}
+.kregs span::before{content:"";display:block;width:1px;height:6px;background:var(--outline);margin:0 auto 2px}
+.ghost{position:absolute;top:-22px;transform:translateX(-50%);font-size:11px;font-weight:700;color:var(--muted);white-space:nowrap}
+.ghost::after{content:"";display:block;width:2px;height:48px;background:var(--muted);margin:2px auto 0;opacity:.6;border-radius:2px}
+.swatch{display:flex;gap:12px;align-items:center;margin-top:12px}
+.bulb{width:58px;height:58px;border-radius:18px;border:1px solid var(--outline);transition:background .2s;flex:none}
+.bal svg{width:100%;height:auto;display:block}
+.beam{transition:transform .6s cubic-bezier(.3,1.3,.5,1)}
+.srccol{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.srccol h6{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.src{display:block;width:100%;text-align:left;border:1px solid var(--outline);background:var(--surface);border-radius:12px;padding:7px 9px;margin-bottom:6px;cursor:pointer;font-size:12.5px;line-height:1.3}
+.src[aria-pressed=false]{opacity:.45;text-decoration:line-through}
+.src .w{display:block;font-size:10.5px;font-weight:800;color:var(--muted);letter-spacing:.05em;margin-top:3px}
+.deck{position:relative;height:300px;margin-top:4px}
+.dcard{position:absolute;inset:0;background:var(--surface);border:1px solid var(--outline);border-radius:22px;padding:18px;display:flex;flex-direction:column;touch-action:pan-y;user-select:none;-webkit-user-select:none;transition:transform .3s cubic-bezier(.3,1.2,.5,1),opacity .3s}
+.dcard.under{transform:translateY(10px) scale(.95);opacity:.6;z-index:0}
+.dcard.top{z-index:1;cursor:grab}
+.dcard h4{margin:6px 0 8px;font-size:22px;letter-spacing:-.5px}
+.dcard p{margin:0;font-size:15px}
+.dcard .qopts{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.qopts button{border:0;background:var(--s2);border-radius:12px;padding:10px 12px;text-align:left;font-weight:650;cursor:pointer}
+.qopts button.right{background:var(--ok-soft);color:var(--ok)}
+.qopts button.wrong{background:var(--bad-soft);color:var(--bad)}
+.dprog{display:flex;gap:4px;margin:12px 0 8px}
+.dprog i{flex:1;height:4px;border-radius:4px;background:var(--s3);transition:background .2s}
+.dprog i.on{background:var(--accent)}
+.dnav{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+.pbar{display:flex;align-items:center;gap:8px;font-size:13px;margin-top:5px}
+.pbar i{display:block;height:10px;background:var(--accent);border-radius:4px}
+.cband{position:relative;margin-top:14px;user-select:none}
+.cscale{position:relative;height:40px;border-radius:12px;background:var(--s2)}
+.cscale+.cscale{margin-top:6px}
+.cscale .u{position:absolute;right:8px;top:4px;font-size:11px;font-weight:800;color:var(--muted)}
+.cscale .t{position:absolute;bottom:4px;transform:translateX(-50%);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+.cscale .t::before{content:"";display:block;width:1px;height:8px;background:var(--outline);margin:0 auto 1px}
+.chand{position:absolute;top:-6px;bottom:-6px;width:4px;margin-left:-2px;background:var(--accent);border-radius:3px;pointer-events:none}
+.cmark{position:absolute;top:-18px;transform:translateX(-50%);font-size:10.5px;font-weight:800;color:var(--warn);white-space:nowrap}
+.cband input{position:absolute;inset:0;height:100%;opacity:0;cursor:ew-resize}
+.cres{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.cres .big{font-size:36px;letter-spacing:-1px}
+.cres .eq{color:var(--muted);font-size:20px;font-weight:700}
+footer{max-width:760px;margin:0 auto;padding:10px 20px 60px;color:var(--muted);font-size:13px}
+@media (min-width:640px){
+  .sec{padding:22px 22px 16px}
+  .chat{padding:18px 16px 20px}
+  .top h1{font-size:30px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="top-row">
+    <h1>Antworten, die nicht wie Markdown aussehen</h1>
+    <button class="iconbtn" id="themeBtn" aria-label="Hell/Dunkel umschalten"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+  </div>
+  <p>Konzept-Demo für chuk_chat. Jede Karte ist die Antwort des Modells als eigener Tag, gerendert vom Client. Oben die vier Kernkonzepte in mehreren Design-Varianten, darunter zwölf Mini-Demos nach Rang aus <code>answer_formats_ideas.md</code>. Alles ist bedienbar.</p>
+  <span class="pillnote">Alle Zahlen sind Demo-Werte, keine echten Daten.</span>
+</div>
+<nav class="nav" aria-label="Abschnitte"><div class="nav-in" id="navIn"></div></nav>
+<main id="main"></main>
+<footer>chuk_chat · Konzept-Demo Antwortformate · Stand 2026-09-24 · eine Datei, kein Netz, keine privaten Daten.</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+/* ================= helpers ================= */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>Array.from(r.querySelectorAll(s));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const nf=(n,d=1)=>Number(n).toLocaleString('de-DE',{minimumFractionDigits:d,maximumFractionDigits:d});
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad2=n=>String(n).padStart(2,'0');
+const hm=min=>pad2(Math.floor(min/60)%24)+':'+pad2(Math.round(min%60));
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('on'),1600);}
+function copyText(txt){
+  const fallback=()=>{const ta=document.createElement('textarea');ta.value=txt;ta.setAttribute('readonly','');ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();let ok=false;try{ok=document.execCommand('copy');}catch(e){ok=false;}ta.remove();toast(ok?'Befehl kopiert':'Kopieren hier nicht möglich');};
+  if(navigator.clipboard&&window.isSecureContext){navigator.clipboard.writeText(txt).then(()=>toast('Befehl kopiert'),fallback);}else fallback();
+}
+const ICON_COPY='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg>';
+function codeBox(cmd){return `<div class="codebox"><code>${esc(cmd)}</code><button type="button" data-copy="${esc(cmd)}">${ICON_COPY}Kopieren</button></div>`;}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-copy]');if(b){copyText(b.getAttribute('data-copy'));}});
+function paintRange(i){const p=(i.value-i.min)/(i.max-i.min)*100;i.style.setProperty('--p',p+'%');}
+document.addEventListener('input',e=>{if(e.target.matches('input[type=range]'))paintRange(e.target);});
+function paintAll(root){$$('input[type=range]',root).forEach(paintRange);}
+function segHtml(opts,active,cls=''){return `<div class="seg ${cls}" role="tablist">${opts.map(([v,l])=>`<button type="button" role="tab" data-v="${esc(v)}" aria-selected="${String(v)===String(active)}">${l}</button>`).join('')}</div>`;}
+function segWire(seg,cb){seg.addEventListener('click',e=>{const b=e.target.closest('button[data-v]');if(!b)return;$$('button',seg).forEach(x=>x.setAttribute('aria-selected',String(x===b)));cb(b.dataset.v);});}
+function slider(label,key,min,max,step,val){return `<label class="sl"><span class="sl-top"><span>${label}</span><b data-out="${key}"></b></span><input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${val}" aria-label="${esc(label)}"></label>`;}
+function fmtDur(h){const m=Math.round(h*60),d=Math.floor(m/1440),hh=Math.floor((m%1440)/60),mm=m%60;const p=[];if(d)p.push(d+(d===1?' Tag':' Tage'));if(hh)p.push(hh+' h');if(mm&&!d)p.push(mm+' min');return p.join(' ')||'0 min';}
+function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+
+/* ================= A1 Regler-Antwort ================= */
+const runtime=s=>s.V*s.Ah*(s.dod/100)*(s.eff/100)/s.W;
+function reglerRich(el){
+  const st={V:12,Ah:9,W:2,dod:60,eff:85};
+  const F={Ah:v=>nf(v,1)+' Ah',W:v=>nf(v,1)+' W',dod:v=>v+' %',eff:v=>v+' %'};
+  el.innerHTML=`<div class="card">
+    <div class="lbl">Laufzeit</div>
+    <div class="big"><span data-o="h"></span><small> h</small></div>
+    <div class="sub" data-o="sub"></div>
+    <div class="batt" aria-hidden="true"><div class="batt-body"><i class="use"></i><i class="loss"></i></div><div class="batt-cap"></div></div>
+    <div class="legend"><span><i class="lg use"></i>nutzbar</span><span><i class="lg loss"></i>Wandler-Verlust</span><span><i class="lg res"></i>Reserve (Akkuschutz)</span></div>
+    <div class="goal" data-o="goal"></div>
+    ${slider('Kapazität','Ah',2,20,0.5,st.Ah)}
+    ${slider('Verbrauch Pi','W',0.5,8,0.1,st.W)}
+    ${slider('Entladetiefe','dod',30,100,5,st.dod)}
+    ${slider('Wandler-Wirkungsgrad (12 V → 5 V)','eff',60,98,1,st.eff)}
+    <div class="chips" style="margin-top:12px">
+      <button class="chip" data-w="0.6">Pi Zero 2 W idle · 0,6 W</button>
+      <button class="chip" data-w="2" aria-pressed="true">Pi Zero Last · 2 W</button>
+      <button class="chip" data-w="4.5">Pi 4 · 4,5 W</button>
+    </div>
+    <p class="fine">Demo-Werte. Blei-Gel-Akkus nicht tiefer als 50–60 % entladen, sonst altern sie schnell.</p>
+  </div>`;
+  const upd=()=>{
+    const h=runtime(st),wh=st.V*st.Ah;
+    $('[data-o=h]',el).textContent=nf(h,1);
+    $('[data-o=sub]',el).textContent=`≈ ${fmtDur(h)} · nutzbar ${nf(wh*st.dod/100*st.eff/100,0)} Wh von ${nf(wh,0)} Wh`;
+    $('.use',el).style.width=(st.dod*st.eff/100)+'%';
+    $('.loss',el).style.width=(st.dod*(100-st.eff)/100)+'%';
+    const need=24*st.W/(st.V*st.dod/100*st.eff/100);
+    $('[data-o=goal]',el).innerHTML=h>=24?`<span class="status ok">✓ Schafft 24 h · ${nf(h-24,1)} h Puffer</span>`:`<span class="status bad">✕ Keine 24 h · dafür ab ${nf(need,1)} Ah</span>`;
+    for(const k in F){$(`[data-out=${k}]`,el).textContent=F[k](st[k]);}
+    $$('.chip[data-w]',el).forEach(c=>c.setAttribute('aria-pressed',String(+c.dataset.w===st.W)));
+  };
+  $$('input[data-k]',el).forEach(i=>i.addEventListener('input',()=>{st[i.dataset.k]=+i.value;upd();}));
+  $$('.chip[data-w]',el).forEach(c=>c.addEventListener('click',()=>{st.W=+c.dataset.w;const i=$('input[data-k=W]',el);i.value=st.W;paintRange(i);upd();}));
+  paintAll(el);upd();
+}
+function tangleSpan(span,def,get,set){
+  span.tabIndex=0;span.setAttribute('role','slider');span.setAttribute('aria-label',def.label);
+  const round=v=>+(Math.round(v/def.step)*def.step).toFixed(3);
+  span.addEventListener('pointerdown',e=>{
+    e.preventDefault();span.setPointerCapture(e.pointerId);const x0=e.clientX,v0=get();span.classList.add('drag');
+    const mv=ev=>{const steps=Math.round((ev.clientX-x0)/(def.px||7));set(clamp(round(v0+steps*def.step),def.min,def.max));};
+    const up=()=>{span.classList.remove('drag');span.removeEventListener('pointermove',mv);span.removeEventListener('pointerup',up);span.removeEventListener('pointercancel',up);};
+    span.addEventListener('pointermove',mv);span.addEventListener('pointerup',up);span.addEventListener('pointercancel',up);
+  });
+  span.addEventListener('keydown',e=>{const d={ArrowRight:1,ArrowUp:1,ArrowLeft:-1,ArrowDown:-1}[e.key];if(d){e.preventDefault();set(clamp(round(get()+d*def.step),def.min,def.max));}});
+}
+function reglerTangle(el){
+  const st={V:12,Ah:9,W:2,dod:60,eff:85};
+  const D={V:{min:3,max:24,step:1,px:12,label:'Spannung',f:v=>nf(v,0)},Ah:{min:1,max:30,step:0.5,px:8,label:'Kapazität',f:v=>nf(v,1)},W:{min:0.3,max:10,step:0.1,px:6,label:'Leistung',f:v=>nf(v,1)},dod:{min:20,max:100,step:5,px:10,label:'Entladetiefe',f:v=>v},eff:{min:50,max:99,step:1,px:6,label:'Wirkungsgrad',f:v=>v}};
+  const tn=k=>`<span class="tn" data-k="${k}"></span>`;
+  el.innerHTML=`<div class="card">
+    <p class="tang" style="margin:0">Ein ${tn('V')}&nbsp;V-Akku mit ${tn('Ah')}&nbsp;Ah speichert <b data-o="wh"></b>. Bei ${tn('dod')}&nbsp;% Entladetiefe und ${tn('eff')}&nbsp;% Wandler-Wirkungsgrad bleiben <b data-o="use"></b> für den Pi. Zieht er ${tn('W')}&nbsp;W, läuft er <span class="tres" data-o="h"></span>.</p>
+    <p style="margin:10px 0 0">Für volle 24 Stunden brauchst du mindestens <b data-o="need"></b>.</p>
+    <div class="hint"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5"/></svg>Hervorgehobene Zahlen seitwärts ziehen. Mit Tastatur: Pfeiltasten.</div>
+    <p class="fine">Demo-Werte. Stil nach Bret Victors „Tangle": der Satz rechnet mit.</p>
+  </div>`;
+  const upd=()=>{
+    for(const k in D)$(`.tn[data-k=${k}]`,el).textContent=D[k].f(st[k]);
+    const wh=st.V*st.Ah,u=wh*st.dod/100*st.eff/100,h=runtime(st);
+    $('[data-o=wh]',el).textContent=nf(wh,0)+' Wh';
+    $('[data-o=use]',el).textContent=nf(u,1)+' Wh';
+    $('[data-o=h]',el).textContent=nf(h,1)+' Stunden';
+    $('[data-o=h]',el).style.color=h>=24?'var(--ok)':'var(--bad)';
+    $('[data-o=need]',el).textContent=nf(24*st.W/(st.V*st.dod/100*st.eff/100),1)+' Ah';
+  };
+  $$('.tn',el).forEach(s=>{const k=s.dataset.k;tangleSpan(s,D[k],()=>st[k],v=>{st[k]=v;upd();});});
+  upd();
+}
+function reglerBand(el){
+  const st={V:12,Ah:9,wmin:1.6,wmax:2.6,age:1};
+  el.innerHTML=`<div class="card">
+    <div class="lbl">Laufzeit, realistische Spanne</div>
+    <div class="big" style="font-size:44px"><span data-o="range"></span><small> h</small></div>
+    <div class="sub" data-o="mid"></div>
+    <svg class="bandsvg" viewBox="0 0 320 78" data-o="svg" role="img" aria-label="Laufzeit-Band"></svg>
+    <div data-o="verdict" style="margin-top:6px"></div>
+    ${slider('Verbrauch minimal (idle)','wmin',0.3,5,0.1,st.wmin)}
+    ${slider('Verbrauch maximal (Last)','wmax',0.5,8,0.1,st.wmax)}
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="lbl">Akku</span>${segHtml([['1','neu'],['0.8','2 Jahre alt (−20 %)']],'1','sm')}</div>
+    <div class="chips" style="margin-top:10px"><span class="status neu">Entladetiefe 50–70 %</span><span class="status neu">Wirkungsgrad 80–90 %</span></div>
+    <p class="fine">Demo-Werte. Statt einer Scheingenauigkeit zeigt das Band den Bereich (Idee: Guesstimate).</p>
+  </div>`;
+  const svg=$('[data-o=svg]',el);
+  const upd=()=>{
+    if(st.wmin>st.wmax){st.wmax=st.wmin;const i=$('input[data-k=wmax]',el);i.value=st.wmax;paintRange(i);}
+    const wh=st.V*st.Ah*st.age;
+    const lo=wh*0.5*0.8/st.wmax, hi=wh*0.7*0.9/st.wmin, mid=wh*0.6*0.85/((st.wmin+st.wmax)/2);
+    const maxAx=Math.max(48,Math.ceil(hi/12)*12), X=v=>10+clamp(v,0,maxAx)/maxAx*300;
+    $('[data-o=range]',el).textContent=nf(lo,0)+'–'+nf(hi,0);
+    $('[data-o=mid]',el).textContent=`wahrscheinlich um ${nf(mid,0)} h (${fmtDur(mid)})`;
+    $$('[data-out]',el).forEach(o=>{o.textContent=nf(st[o.dataset.out],1)+' W';});
+    let ticks='';for(let t=0;t<=maxAx;t+=12){ticks+=`<line x1="${X(t)}" y1="44" x2="${X(t)}" y2="50" stroke="var(--outline)"/><text x="${X(t)}" y="64" font-size="10" text-anchor="middle" fill="var(--muted)">${t} h</text>`;}
+    svg.innerHTML=`<rect x="10" y="30" width="300" height="14" rx="7" fill="var(--s2)"/>
+      <rect x="${X(lo)}" y="26" width="${Math.max(3,X(hi)-X(lo))}" height="22" rx="8" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+      <rect x="${X(mid)-2}" y="22" width="4" height="30" rx="2" fill="var(--accent)"/>
+      <line x1="${X(24)}" y1="8" x2="${X(24)}" y2="52" stroke="var(--warn)" stroke-width="2" stroke-dasharray="3 3"/>
+      <text x="${X(24)+4}" y="16" font-size="10.5" font-weight="700" fill="var(--warn)">Ziel 24 h</text>${ticks}`;
+    const v=$('[data-o=verdict]',el);
+    v.innerHTML=lo>=24?'<span class="status ok">✓ 24 h auch im schlechtesten Fall</span>':hi>=24?(mid>=24?'<span class="status warn">≈ 24 h wahrscheinlich, aber nicht sicher</span>':'<span class="status warn">24 h nur im besten Fall</span>'):'<span class="status bad">✕ 24 h nicht erreichbar</span>';
+  };
+  $$('input[data-k]',el).forEach(i=>i.addEventListener('input',()=>{st[i.dataset.k]=+i.value;if(i.dataset.k==='wmax'&&st.wmax<st.wmin){st.wmin=st.wmax;const j=$('input[data-k=wmin]',el);j.value=st.wmin;paintRange(j);}upd();}));
+  segWire($('.seg',el),v=>{st.age=+v;upd();});
+  paintAll(el);upd();
+}
+
+/* ================= A2 Weiche ================= */
+const TREE={
+  s1:{t:'Sieht sys-usb den Bluetooth-Adapter?',d:'Wir suchen einen Eintrag mit „Bluetooth" oder „Wireless".',where:'dom0',cmd:'qvm-usb list',outs:[['Adapter ist gelistet','s2','ok'],['Kein Bluetooth-Eintrag','sx','bad']],left:4},
+  sx:{t:'USB-Controller an sys-usb hängen',d:'Auf vielen Laptops hängt Bluetooth am internen USB-Controller.',where:'dom0',cmd:'qvm-pci attach --persistent sys-usb dom0:00_14.0',outs:[['Erledigt, nochmal prüfen','s1','ok'],['Kein USB-Controller da','end_hw','bad']],left:4},
+  s2:{t:'Adapter an die VM durchreichen',d:'„work" durch deine VM ersetzen, die ID kommt aus Schritt 1.',where:'dom0',cmd:'qvm-usb attach work sys-usb:2-7',outs:[['Angehängt','s3','ok'],['Fehler „device in use"','sy','bad']],left:3},
+  sy:{t:'Adapter von der anderen VM lösen',d:'Eine andere VM hält den Adapter noch fest.',where:'dom0',cmd:'qvm-usb detach personal sys-usb:2-7',outs:[['Gelöst, nochmal anhängen','s2','ok']],left:3},
+  s3:{t:'Kopfhörer koppeln',d:'Kopfhörer vorher in den Pairing-Modus setzen (LED blinkt).',where:'work-VM',cmd:'bluetoothctl -- power on && bluetoothctl -- scan on',outs:[['Gekoppelt, aber kein Ton','s4','warn'],['Pairing schlägt fehl','sz','bad'],['Gekoppelt und Ton läuft','done','ok']],left:2},
+  sz:{t:'Alte Kopplung löschen',d:'Eine halbe Kopplung von früher blockiert oft das neue Pairing.',where:'work-VM',cmd:'bluetoothctl -- remove AA:BB:CC:DD:EE:FF',outs:[['Gelöscht, neu koppeln','s3','ok']],left:2},
+  s4:{t:'Audio-Dienste neu starten',d:'PipeWire hat den Adapter vor dem Anhängen nicht gesehen.',where:'work-VM',cmd:'systemctl --user restart wireplumber pipewire pipewire-pulse',outs:[['Ton ist da','done','ok'],['Immer noch still','s5','bad']],left:1},
+  s5:{t:'Profil auf A2DP stellen',d:'Im Headset-Profil (HFP) ist der Ton oft stumm oder schlecht.',where:'work-VM',cmd:'pactl set-card-profile bluez_card.AA_BB_CC_DD_EE_FF a2dp-sink',outs:[['Ton ist da','done','ok'],['Immer noch nichts','end_log','bad']],left:1},
+  done:{end:'ok',t:'Gelöst',d:'Der Kopfhörer spielt in der VM. Tipp: mit „qvm-usb attach --persistent" merkt sich Qubes die Zuordnung.'},
+  end_hw:{end:'bad',t:'Hardware-Grenze',d:'Ohne eigenen USB-Controller geht es nur mit einem USB-Bluetooth-Stick (ca. 10 €, Demo-Preis).'},
+  end_log:{end:'warn',t:'Ich brauche das Log',d:'Schick mir die Ausgabe von „journalctl --user -u wireplumber -n 50", dann geht es gezielt weiter.'}
+};
+function weiche(el,mode){
+  let path=[{id:'s1'}];
+  const trail=()=>{
+    const cur=TREE[path[path.length-1].id];
+    let h=path.map((p,i)=>i<path.length-1?`<button class="tdot done" data-j="${i}" aria-label="Zurück zu Schritt ${i+1}">✓</button>`:(cur.end?`<span class="tdot ${cur.end==='ok'?'done':'cur'}">${cur.end==='ok'?'★':'!'}</span>`:`<span class="tdot cur">●</span>`)).join('<i class="tline"></i>');
+    const left=cur.end?0:cur.left;
+    for(let i=0;i<left;i++)h+='<i class="tline"></i><span class="tdot todo">○</span>';
+    return `<div class="trail">${h}</div>`;
+  };
+  const stepCard=(node,n)=>{
+    if(node.end)return `<div class="endcard ${node.end} pop"><h4>${node.end==='ok'?'✓ ':''}${esc(node.t)}</h4><div>${esc(node.d)}</div><div style="margin-top:12px"><button class="btn sm" data-reset>Von vorn</button></div></div>`;
+    return `<div class="stepno">Schritt ${n}</div><div class="steph">${esc(node.t)}<span class="where">${esc(node.where)}</span></div><div style="color:var(--muted);font-size:14px">${esc(node.d)}</div>${codeBox(node.cmd)}<div class="lbl" style="margin:12px 0 6px">Was passiert?</div><div class="outs">${node.outs.map((o,i)=>`<button class="out" data-o="${i}"><span class="dot ${o[2]}"></span>${esc(o[0])}<span class="arr">›</span></button>`).join('')}</div>`;
+  };
+  const render=()=>{
+    const cur=TREE[path[path.length-1].id],n=path.length;
+    if(mode==='card'){
+      el.innerHTML=`<div class="card">${trail()}${stepCard(cur,n)}</div>`;
+    }else if(mode==='log'){
+      const log=path.slice(0,-1).map((p,i)=>`<div class="logitem" data-j="${i}" title="Hierhin zurück"><span class="tdot done">✓</span><div><div style="font-weight:700;font-size:14px">${esc(TREE[p.id].t)}</div><span class="pick">${esc(p.pick)}</span></div><span style="margin-left:auto;font-size:12px;color:var(--muted)">zurück</span></div>`).join('');
+      el.innerHTML=`<div class="card">${log}${log?'<div style="height:12px"></div>':''}${stepCard(cur,n)}</div>`;
+    }else{
+      const dots=path.map((p,i)=>i<path.length-1?`<button class="tdot done" data-j="${i}" style="width:22px;height:22px;font-size:11px">✓</button>`:`<span class="tdot ${cur.end==='ok'?'done':'cur'}" style="width:22px;height:22px;font-size:11px">${cur.end?(cur.end==='ok'?'★':'!'):'●'}</span>`).join('');
+      let todo='';for(let i=0;i<(cur.end?0:cur.left);i++)todo+='<span class="tdot todo" style="width:22px;height:22px;font-size:11px">○</span>';
+      el.innerHTML=`<div class="card"><div style="display:flex;gap:4px;align-items:center;margin-bottom:8px">${dots}${todo}<span style="margin-left:auto;font-size:12px;color:var(--muted)">${cur.end?'fertig':'Schritt '+n}</span></div>`+
+       (cur.end?stepCard(cur,n):`<div style="font-weight:800;font-size:16px">${esc(cur.t)}</div><div style="margin:8px 0"><button class="cmdchip" data-copy="${esc(cur.cmd)}">${ICON_COPY.replace('<svg','<svg width="14" height="14"')}<span>${esc(cur.cmd)}</span></button></div><div class="chips">${cur.outs.map((o,i)=>`<button class="chip" data-o="${i}"><span class="dot ${o[2]}" style="display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px"></span>${esc(o[0])}</button>`).join('')}</div>`)+`</div>`;
+    }
+    const c=$('.card',el);c.classList.remove('pop');void c.offsetWidth;c.classList.add('pop');
+  };
+  el.addEventListener('click',e=>{
+    const o=e.target.closest('[data-o]'),j=e.target.closest('[data-j]'),r=e.target.closest('[data-reset]');
+    if(o){const cur=path[path.length-1],node=TREE[cur.id],pick=node.outs[+o.dataset.o];cur.pick=pick[0];path.push({id:pick[1]});render();}
+    else if(j){path=path.slice(0,+j.dataset.j+1);delete path[path.length-1].pick;render();toast('Zurück zu Schritt '+path.length+', der Ast danach ist verworfen');}
+    else if(r){path=[{id:'s1'}];render();}
+  });
+  render();
+}
+
+/* ================= A3 Gewichtungs-Duell ================= */
+const DUEL={a:'Apple M5',b:'Intel i7-1355U',sa:'M5',sb:'i7',attrs:[
+  {k:'akku',n:'Akku',a:10,b:5,w:30,note:'≈ 18 h vs ≈ 9 h Video'},
+  {k:'leist',n:'Leistung',a:9,b:6,w:30,note:'Single- und Multicore'},
+  {k:'linux',n:'Linux',a:3,b:9,w:60,note:'Treiber, Distros, Qubes'},
+  {k:'preis',n:'Preis',a:4,b:8,w:40,note:'Gerät ab ≈ 1.600 € vs ≈ 900 €'},
+  {k:'leise',n:'Lautstärke',a:9,b:5,w:30,note:'lüfterlos vs Lüfter unter Last'}]};
+function duelCalc(w){let sw=0,A=0,B=0;DUEL.attrs.forEach(x=>{const v=w[x.k];sw+=v;A+=v*x.a;B+=v*x.b;});return sw?{A:A/sw,B:B/sw,diff:A-B}:{A:0,B:0,diff:0};}
+function flipPoint(w,k){const x=DUEL.attrs.find(a=>a.k===k),d=x.a-x.b;if(!d)return null;let rest=0;DUEL.attrs.forEach(a=>{if(a.k!==k)rest+=w[a.k]*(a.a-a.b);});const p=-rest/d;if(p<=0||p>=100)return null;return{p,above:d>0?'a':'b',below:d>0?'b':'a'};}
+function tipsHtml(w){
+  const out=[];DUEL.attrs.forEach(x=>{const f=flipPoint(w,x.k);if(!f)return;const cur=w[x.k];
+    if(cur<f.p)out.push(`ab Gewicht ${x.n} &gt; ${Math.ceil(f.p)} % gewinnt ${DUEL['s'+f.above]}`);
+    else out.push(`unter Gewicht ${x.n} ${Math.floor(f.p)} % gewinnt ${DUEL['s'+f.below]}`);});
+  return out.length?out.slice(0,2).map(t=>`<div class="tip">⚖ <span>${t}</span></div>`).join(''):'<div class="tip">⚖ <span>Bei diesen Gewichten kippt keine einzelne Achse das Ergebnis.</span></div>';
+}
+function scoreHtml(){return `<div class="score"><div class="sc" data-s="a"><span class="badge">vorne</span><div class="nm">${DUEL.a}</div><div class="pts" data-p="a"></div></div><div class="sc" data-s="b"><span class="badge">vorne</span><div class="nm">${DUEL.b}</div><div class="pts" data-p="b"></div></div></div>`;}
+function scoreUpd(el,w,state){const r=duelCalc(w),win=r.diff>=0?'a':'b';$('[data-p=a]',el).textContent=nf(r.A,1);$('[data-p=b]',el).textContent=nf(r.B,1);
+  $$('.sc',el).forEach(s=>s.classList.toggle('win',s.dataset.s===win));
+  if(state.win&&state.win!==win){const s=$(`.sc[data-s=${win}]`,el);s.classList.remove('pop');void s.offsetWidth;s.classList.add('pop');}
+  state.win=win;return win;}
+function duelAxes(el){
+  const w={};DUEL.attrs.forEach(x=>w[x.k]=x.w);const state={};
+  el.innerHTML=`<div class="card">${scoreHtml()}
+    ${DUEL.attrs.map(x=>`<div class="attr"><div class="attr-h"><b>${x.n}</b><span>${x.note}</span></div>
+      <div class="axis">${[0,2.5,5,7.5,10].map(t=>`<i class="tk" style="left:${t*10}%"></i>`).join('')}<span class="pt b" style="left:${x.b*10}%">${DUEL.sb}</span><span class="pt a" style="left:${x.a*10}%">${DUEL.sa}</span></div>
+      <div class="slw">${slider('Gewicht',x.k,0,100,5,x.w)}<i class="notch" data-n="${x.k}"></i></div><div style="height:12px"></div></div>`).join('')}
+    <div data-o="tips"></div>
+    <p class="fine">Demo-Werte, Skala 0–10 pro Achse. Kipppunkt = das Gewicht, ab dem der Sieger wechselt.</p></div>`;
+  const upd=()=>{scoreUpd(el,w,state);DUEL.attrs.forEach(x=>{$(`[data-out=${x.k}]`,el).textContent=w[x.k]+' %';const f=flipPoint(w,x.k),n=$(`[data-n=${x.k}]`,el);if(f){n.style.display='block';n.style.left=f.p+'%';}else n.style.display='none';});$('[data-o=tips]',el).innerHTML=tipsHtml(w);};
+  $$('input[data-k]',el).forEach(i=>i.addEventListener('input',()=>{w[i.dataset.k]=+i.value;upd();}));
+  paintAll(el);upd();
+}
+function duelChips(el){
+  const L=[['0','egal'],['33','etwas'],['66','wichtig'],['100','sehr']];
+  const snap=v=>v<17?0:v<50?33:v<83?66:100;
+  const w={};DUEL.attrs.forEach(x=>w[x.k]=snap(x.w));const state={};
+  el.innerHTML=`<div class="card">${scoreHtml()}<div style="height:10px"></div>
+    ${DUEL.attrs.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;flex-wrap:wrap"><b style="font-size:14px">${x.n}</b>${segHtml(L,w[x.k],'sm').replace('class="seg','data-a="'+x.k+'" class="seg')}</div>`).join('')}
+    <div class="lbl" style="margin-top:12px">Punkte je Achse</div>
+    <div style="font-size:12.5px;margin-top:6px">${DUEL.sa}</div><div class="stackbar" data-bar="a"></div>
+    <div style="font-size:12.5px">${DUEL.sb}</div><div class="stackbar" data-bar="b"></div>
+    <div data-o="tips"></div><p class="fine">Demo-Werte. Ein Tipp auf ein Gewicht ersetzt einen neuen Prompt.</p></div>`;
+  const shades=[1,.78,.58,.42,.28];
+  const upd=()=>{
+    scoreUpd(el,w,state);
+    let sw=0;DUEL.attrs.forEach(x=>sw+=w[x.k]);
+    ['a','b'].forEach(s=>{$(`[data-bar=${s}]`,el).innerHTML=DUEL.attrs.map((x,i)=>{const pct=sw?w[x.k]*x[s]/sw*10:0;return `<i title="${x.n}" style="width:${pct}%;background:${s==='a'?'var(--accent)':'var(--on)'};opacity:${shades[i]}"></i>`;}).join('');});
+    let tip='';const winNow=duelCalc(w).diff>=0?'a':'b';
+    outer:for(const x of DUEL.attrs){for(const [v,l] of L){if(+v===w[x.k])continue;const t={...w,[x.k]:+v};const wn=duelCalc(t).diff>=0?'a':'b';if(wn!==winNow){tip=`Wäre ${x.n} „${l}", gewänne ${DUEL['s'+wn]}.`;break outer;}}}
+    $('[data-o=tips]',el).innerHTML=`<div class="tip">⚖ <span>${tip||'Keine einzelne Umstellung kippt das Ergebnis.'}</span></div>`;
+  };
+  $$('.seg[data-a]',el).forEach(s=>segWire(s,v=>{w[s.dataset.a]=+v;upd();}));
+  upd();
+}
+function duelMinimal(el){
+  const base={leist:30,preis:40,leise:20};let p=35;const state={};
+  const wOf=p=>({...base,akku:p,linux:100-p});
+  const diffAt=p=>duelCalc(wOf(p)).diff;
+  let flip=null;for(let x=0;x<100;x+=0.5){if(Math.sign(diffAt(x))!==Math.sign(diffAt(x+0.5))){flip=x+0.25;break;}}
+  el.innerHTML=`<div class="card"><div class="lbl">Für dich vorne</div><div class="biglabel" data-o="win"></div><div class="sub" data-o="pts"></div>
+    <div class="lbl" style="margin-top:16px">Was ist dir wichtiger?</div>
+    <div class="slw" style="margin-top:4px"><input type="range" min="0" max="100" step="1" value="${p}" aria-label="Linux gegen Akku">${flip!==null?`<i class="notch" style="left:${flip}%;top:24px"></i>`:''}</div>
+    <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-top:14px"><span>← Linux</span><span>Akku →</span></div>
+    ${flip!==null?`<div class="tip">⚖ <span>Ab ${Math.ceil(flip)} % Richtung Akku gewinnt ${DUEL.sa}.</span></div>`:''}
+    <p class="fine">Demo-Werte. Leistung, Preis und Lautstärke bleiben fest. Nur die eine Abwägung, die zählt.</p></div>`;
+  const i=$('input',el);
+  const upd=()=>{const r=duelCalc(wOf(p)),win=r.diff>=0?'a':'b';const b=$('[data-o=win]',el);b.textContent=DUEL[win];if(state.win&&state.win!==win){b.classList.remove('pop');void b.offsetWidth;b.classList.add('pop');}state.win=win;$('[data-o=pts]',el).textContent=`${DUEL.sa} ${nf(r.A,1)} : ${nf(r.B,1)} ${DUEL.sb} · Akku ${p} % · Linux ${100-p} %`;};
+  i.addEventListener('input',()=>{p=+i.value;upd();});paintAll(el);upd();
+}
+
+/* ================= A4 Tagesband ================= */
+const HP={B:[236,214],C:[198,127],S:[216,150],P:[262,86],F:[160,134],D:[64,178],M:[250,174]};
+const DAY=[
+  {p:'B',n:'Bahnhof Husum',w:'Ankunft mit dem Zug',a:480,b:490},
+  {p:'C',n:'Café am Binnenhafen',w:'Frühstück mit Hafenblick',a:505,b:585},
+  {p:'S',n:'Theodor-Storm-Haus',w:'Wohnhaus des Dichters, Museum',a:600,b:675},
+  {p:'P',n:'Schloss vor Husum',w:'Schloss und Schlosspark',a:695,b:765},
+  {p:'F',n:'Außenhafen',w:'Mittag: Krabbenbrötchen',a:785,b:840},
+  {p:'D',n:'Dockkoog',w:'Deich, Watt und Wind',a:880,b:990},
+  {p:'M',n:'NordseeMuseum',w:'Sturmfluten und Halligen',a:1020,b:1095},
+  {p:'C',n:'Binnenhafen',w:'Abendessen',a:1110,b:1215},
+  {p:'B',n:'Bahnhof Husum',w:'Zug zurück',a:1240,b:1260}];
+const T0=480,T1=1260;
+function dayPos(t){
+  for(let i=0;i<DAY.length;i++){const s=DAY[i];if(t>=s.a&&t<=s.b)return{xy:HP[s.p],i,stay:true};
+    const nx=DAY[i+1];if(nx&&t>s.b&&t<nx.a){const f=(t-s.b)/(nx.a-s.b),A=HP[s.p],B=HP[nx.p];return{xy:[A[0]+(B[0]-A[0])*f,A[1]+(B[1]-A[1])*f],i,stay:false,to:i+1,f};}}
+  return{xy:HP[DAY[0].p],i:0,stay:true};
+}
+function mapSvg(){
+  const lab=(k,t,dx,dy,anc='start')=>`<text x="${HP[k][0]+dx}" y="${HP[k][1]+dy}" font-size="9.5" font-weight="600" fill="var(--muted)" text-anchor="${anc}">${t}</text>`;
+  const route=DAY.map(s=>HP[s.p].join(',')).join(' ');
+  return `<svg class="map" viewBox="0 0 360 250" role="img" aria-label="Skizze Husum">
+    <path d="M0,0 H118 C104,50 126,98 104,138 C88,170 110,210 94,250 H0 Z" fill="var(--water)"/>
+    <path d="M118,0 C104,50 126,98 104,138 C88,170 110,210 94,250" fill="none" stroke="var(--park)" stroke-width="6"/>
+    <path d="M104,140 C130,136 150,128 176,126 L206,122 L207,131 L178,135 C152,138 132,146 101,152 Z" fill="var(--water)"/>
+    <rect x="240" y="64" width="62" height="44" rx="10" fill="var(--park)"/>
+    <g stroke="var(--street)" stroke-width="4" fill="none" stroke-linecap="round"><path d="M206,126 L236,214"/><path d="M178,110 L300,110"/><path d="M216,150 L300,160 L360,168"/><path d="M198,127 L230,40 L240,0"/><path d="M160,134 L120,190 L64,178"/></g>
+    <path d="M236,214 L360,246 M236,214 L300,0" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 4" fill="none" opacity=".6"/>
+    <text x="30" y="70" font-size="13" font-style="italic" fill="var(--muted)" opacity=".8">Nordsee</text>
+    <text x="226" y="36" font-size="15" font-weight="800" fill="var(--on)" opacity=".35">Husum</text>
+    <polyline points="${route}" fill="none" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="3 4" opacity=".7"/>
+    <polyline class="done" points="" fill="none" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    ${Object.keys(HP).map(k=>`<circle cx="${HP[k][0]}" cy="${HP[k][1]}" r="4.5" fill="var(--surface)" stroke="var(--on)" stroke-width="1.5"/>`).join('')}
+    ${lab('B','Bahnhof',8,4)}${lab('C','Binnenhafen',0,-9,'middle')}${lab('S','Storm-Haus',8,4)}${lab('P','Schloss',0,-10,'middle')}${lab('F','Außenhafen',-4,16,'middle')}${lab('D','Dockkoog',0,16,'middle')}${lab('M','Museum',8,4)}
+    <g class="pin"><path d="M0,0 C-9,-12 -11,-16 -11,-21 A11,11 0 1 1 11,-21 C11,-16 9,-12 0,0 Z" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/><circle cy="-21" r="4" fill="var(--surface)"/></g>
+    <text x="352" y="244" font-size="8.5" fill="var(--muted)" text-anchor="end">Skizze, nicht maßstäblich</text></svg>`;
+}
+function mapUpd(root,t){
+  const pos=dayPos(t);$('.pin',root).setAttribute('transform',`translate(${pos.xy[0].toFixed(1)},${pos.xy[1].toFixed(1)})`);
+  const pts=[];for(let i=0;i<=pos.i;i++)pts.push(HP[DAY[i].p]);pts.push(pos.xy);
+  $('.done',root).setAttribute('points',pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' '));return pos;
+}
+function nowHtml(t,pos){
+  const s=DAY[pos.i];
+  if(pos.stay){const nx=DAY[pos.i+1];return `<div class="now"><div class="clock">${hm(t)}</div><div class="what"><b>${s.n}</b><span>${s.w} · noch ${Math.round(s.b-t)} min${nx?' · danach '+nx.n:''}</span></div></div>`;}
+  const nx=DAY[pos.to];return `<div class="now"><div class="clock">${hm(t)}</div><div class="what"><b>unterwegs → ${nx.n}</b><span>${nx.p==='D'||s.p==='D'?'mit dem Rad':'zu Fuß'} · Ankunft ${hm(nx.a)}</span></div></div>`;
+}
+function dayBand(el){
+  let t=735;
+  const X=v=>(v-T0)/(T1-T0)*100;
+  let segs='';DAY.forEach((s,i)=>{segs+=`<i class="seg-b" data-i="${i}" style="left:${X(s.a)}%;width:${Math.max(0.8,X(s.b)-X(s.a))}%"></i>`;const n=DAY[i+1];if(n)segs+=`<i class="mv" style="left:${X(s.b)}%;width:${X(n.a)-X(s.b)}%"></i>`;});
+  let ticks='';for(let hh=8;hh<=21;hh+=2)ticks+=`<span style="left:${X(hh*60)}%">${hh}</span>`;
+  el.innerHTML=`<div class="card">${mapSvg()}<div class="tband">${segs}<input type="range" min="${T0}" max="${T1}" step="5" value="${t}" aria-label="Uhrzeit"><div class="tticks">${ticks}</div></div><div data-o="now"></div><p class="fine">Demo-Plan. Zeiten und Wege sind Schätzwerte.</p></div>`;
+  const i=$('input',el);
+  const upd=()=>{const pos=mapUpd(el,t);$('[data-o=now]',el).innerHTML=nowHtml(t,pos);$$('.seg-b',el).forEach(b=>b.classList.toggle('cur',pos.stay&&+b.dataset.i===pos.i));};
+  i.addEventListener('input',()=>{t=+i.value;upd();});
+  upd();
+}
+function dayList(el){
+  let t=T0,raf=0,playing=false;
+  el.innerHTML=`<div class="card"><div style="display:flex;gap:8px;align-items:center"><button class="btn sm" data-play>▶ Tag abspielen</button><span class="sub" style="margin:0" data-o="clock"></span></div>
+    <input type="range" min="${T0}" max="${T1}" step="5" value="${t}" aria-label="Uhrzeit" style="margin-top:6px">
+    <div style="max-width:300px;margin:4px auto 0">${mapSvg()}</div>
+    <ul class="tl">${DAY.map((s,i)=>`<li data-i="${i}"><span class="tm">${hm(s.a)}</span><div><b style="font-size:14px">${s.n}</b><small>${s.w}</small></div></li>`).join('')}</ul>
+    <p class="fine">Demo-Plan. Tipp auf eine Station springt dorthin.</p></div>`;
+  const i=$('input',el),pb=$('[data-play]',el);
+  const upd=()=>{const pos=mapUpd(el,t);i.value=t;paintRange(i);$('[data-o=clock]',el).textContent=hm(t)+' Uhr';
+    $$('.tl li',el).forEach(li=>{const k=+li.dataset.i;li.classList.toggle('cur',k===pos.i&&pos.stay||(!pos.stay&&k===pos.to));li.classList.toggle('past',DAY[k].b<t&&!(k===pos.i&&pos.stay));});};
+  const stop=()=>{playing=false;cancelAnimationFrame(raf);pb.textContent='▶ Tag abspielen';};
+  pb.addEventListener('click',()=>{
+    if(playing){stop();return;}
+    if(t>=T1)t=T0;playing=true;pb.textContent='❚❚ Pause';let last=performance.now();
+    const step=now=>{if(!playing)return;const dt=now-last;last=now;t=Math.min(T1,t+dt*0.09);upd();if(t>=T1){stop();return;}raf=requestAnimationFrame(step);};
+    raf=requestAnimationFrame(step);});
+  i.addEventListener('input',()=>{stop();t=+i.value;upd();});
+  $$('.tl li',el).forEach(li=>li.addEventListener('click',()=>{stop();t=DAY[+li.dataset.i].a;upd();}));
+  paintAll(el);upd();
+  return stop;
+}
+
+/* ================= B1 Modell-Steckbrief ================= */
+const MODELS=[
+  {name:'GLM-5.1',vendor:'Z.ai',open:true,lic:'MIT',params:'744B · 40B aktiv (MoE)',ctx:200000,asof:'04/2026',why:'Gewichte liegen öffentlich auf Hugging Face, Lizenz MIT. Quelle: Modellkarte des Herstellers.',prov:[['Z.ai API',1.0,3.2],['Fireworks',0.9,3.0],['OpenRouter',1.1,3.5]]},
+  {name:'MiniMax M2.7',vendor:'MiniMax',open:false,lic:'proprietär',params:'230B · 10B aktiv (MoE)',ctx:204800,asof:'04/2026',why:'Keine Gewichte veröffentlicht, nur per API nutzbar. Quelle: Ankündigung des Herstellers.',prov:[['MiniMax API',0.3,1.2],['OpenRouter',0.35,1.4]]},
+  {name:'DeepSeek V4 Flash',vendor:'DeepSeek',open:true,lic:'MIT',params:'284B · 13B aktiv (MoE)',ctx:1000000,asof:'07/2026',why:'Gewichte auf Hugging Face, Lizenz MIT. Quelle: Modell-Repository.',prov:[['DeepSeek API',0.14,0.28],['Fireworks',0.2,0.6]]}];
+function modelCard(el){
+  let mi=0,pi=0,tok=10;
+  const render=()=>{
+    const m=MODELS[mi];
+    el.innerHTML=`<div class="chips" style="margin-bottom:8px">${MODELS.map((x,i)=>`<button class="chip" data-m="${i}" aria-pressed="${i===mi}">${x.name}</button>`).join('')}</div>
+    <div class="card"><div class="mc-top"><div style="flex:1;min-width:140px"><div class="mc-name">${m.name}</div><div class="sub" style="margin:0">${m.vendor}</div></div>
+      <button class="bigbadge ${m.open?'open':'api'}" data-why aria-expanded="false">${m.open?'OPEN WEIGHT':'NUR API'} ⓘ</button></div>
+      <div class="expl"><div>${m.why}</div></div>
+      <div class="tiles"><div class="tile"><div class="lbl">Lizenz</div><div class="v">${m.lic}</div></div><div class="tile"><div class="lbl">Parameter</div><div class="v" style="font-size:14px">${m.params}</div></div>
+      <div class="tile" style="grid-column:1/-1"><div class="lbl">Kontextfenster</div><div class="v">${m.ctx>=1e6?nf(m.ctx/1e6,0)+' M':nf(m.ctx/1000,0)+' k'} Token</div><div class="ctxbar"><i style="width:${m.ctx/1e6*100}%"></i></div><div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-top:2px"><span>0</span><span>1 M</span></div></div></div>
+      <div class="lbl" style="margin-top:14px">Anbieter · € pro 1 M Token (ein / aus)</div>
+      <div class="prov">${m.prov.map((p,i)=>`<button data-p="${i}" aria-pressed="${i===pi}"><b style="font-size:14px">${p[0]}</b><span class="pr">${nf(p[1],2)} / ${nf(p[2],2)} €</span></button>`).join('')}</div>
+      ${slider('Dein Verbrauch pro Monat','tok',1,100,1,tok)}
+      <div data-o="cost" style="margin-top:4px;font-weight:700"></div>
+      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">${m.open?'<button class="btn" data-dl>Gewichte laden</button>':''}<button class="btn tonal" data-try>Im Chat nutzen</button></div>
+      <p class="fine">Demo-Werte, Stand ${m.asof}. Preise und Größen sind Beispiele.</p></div>`;
+    paintAll(el);cost();
+  };
+  const cost=()=>{const p=MODELS[mi].prov[pi];const c=tok*0.8*p[1]+tok*0.2*p[2];$('[data-out=tok]',el).textContent=tok+' M Token';$('[data-o=cost]',el).textContent=`≈ ${nf(c,2)} € / Monat bei ${p[0]} (80 % Eingabe, 20 % Ausgabe)`;};
+  el.addEventListener('click',e=>{const t=e.target;
+    const mb=t.closest('[data-m]');if(mb){mi=+mb.dataset.m;pi=0;render();return;}
+    const pb=t.closest('[data-p]');if(pb){pi=+pb.dataset.p;$$('[data-p]',el).forEach(b=>b.setAttribute('aria-pressed',String(b===pb)));cost();return;}
+    if(t.closest('[data-why]')){const x=$('.expl',el),on=!x.classList.contains('on');x.classList.toggle('on',on);t.closest('[data-why]').setAttribute('aria-expanded',String(on));return;}
+    if(t.closest('[data-dl]')){toast('Demo: öffnet das Hugging-Face-Repository');return;}
+    if(t.closest('[data-try]')){toast('Demo: wählt '+MODELS[mi].name+' als Chat-Modell');}
+  });
+  el.addEventListener('input',e=>{if(e.target.dataset.k==='tok'){tok=+e.target.value;cost();}});
+  render();
+}
+
+/* ================= B2 Offen-jetzt-Ring ================= */
+const PLACES=[
+  {n:'IKEA Kiel',h:[null,[600,1200],[600,1200],[600,1200],[600,1200],[600,1200],[600,1200]]},
+  {n:'Bäckerei am Hbf',h:[[420,660],[330,1110],[330,1110],[330,1110],[330,1110],[330,1110],[360,780]]},
+  {n:'Wertstoffhof',h:[null,null,[540,1020],[540,1020],[540,1020],[540,1020],[480,780]]}];
+const WD=['So','Mo','Di','Mi','Do','Fr','Sa'];
+function berlinNow(){
+  try{const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Berlin',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+    const g=k=>(parts.find(p=>p.type===k)||{}).value;const wd=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(g('weekday'));
+    return{wd:wd<0?new Date().getDay():wd,min:(+g('hour')%24)*60+(+g('minute'))};}
+  catch(e){const d=new Date();return{wd:d.getDay(),min:d.getHours()*60+d.getMinutes()};}
+}
+function hoursRing(el){
+  let pi=0,now=berlinNow(),day=now.wd,timer=0;
+  const arc=(a0,a1,r)=>{const P=m=>{const a=m/1440*2*Math.PI-Math.PI/2;return[100+r*Math.cos(a),100+r*Math.sin(a)];};const [x0,y0]=P(a0),[x1,y1]=P(a1);const large=(a1-a0)>720?1:0;return `M${x0.toFixed(2)},${y0.toFixed(2)} A${r},${r} 0 ${large} 1 ${x1.toFixed(2)},${y1.toFixed(2)}`;};
+  const status=()=>{
+    const pl=PLACES[pi],today=pl.h[now.wd];
+    if(today&&now.min>=today[0]&&now.min<today[1]){const left=today[1]-now.min;return{open:true,big:'offen',line:`schließt in ${fmtDur(left/60)} (${hm(today[1])})`};}
+    for(let k=0;k<8;k++){const d=(now.wd+k)%7,h=pl.h[d];if(!h)continue;if(k===0&&now.min<h[0])return{open:false,big:'zu',line:`öffnet heute ${hm(h[0])} · in ${fmtDur((h[0]-now.min)/60)}`};if(k>0)return{open:false,big:'zu',line:`öffnet ${k===1?'morgen':WD[d]} ${hm(h[0])}`};}
+    return{open:false,big:'zu',line:'keine Öffnungszeiten bekannt'};
+  };
+  const render=()=>{
+    const pl=PLACES[pi],h=pl.h[day],isToday=day===now.wd,s=status();
+    let ticks='';for(let k=0;k<24;k+=3){const a=k/24*2*Math.PI-Math.PI/2;ticks+=`<text x="${(100+60*Math.cos(a)).toFixed(1)}" y="${(100+60*Math.sin(a)+3.5).toFixed(1)}" font-size="10" text-anchor="middle" fill="var(--muted)">${k}</text>`;}
+    const na=now.min/1440*2*Math.PI-Math.PI/2;
+    el.innerHTML=`<div class="chips" style="margin-bottom:8px">${PLACES.map((p,i)=>`<button class="chip" data-pl="${i}" aria-pressed="${i===pi}">${p.n}</button>`).join('')}</div>
+    <div class="card"><div class="ring"><svg viewBox="0 0 200 200" role="img" aria-label="24-Stunden-Ring">
+      <circle cx="100" cy="100" r="80" fill="none" stroke="var(--s3)" stroke-width="18"/>
+      ${h?`<path d="${arc(h[0],h[1],80)}" fill="none" stroke="var(--ok)" stroke-width="18" stroke-linecap="round"/>`:''}
+      ${ticks}
+      ${isToday?`<line x1="100" y1="100" x2="${(100+92*Math.cos(na)).toFixed(1)}" y2="${(100+92*Math.sin(na)).toFixed(1)}" stroke="var(--accent)" stroke-width="3" stroke-linecap="round"/><circle cx="100" cy="100" r="5" fill="var(--accent)"/><circle cx="${(100+80*Math.cos(na)).toFixed(1)}" cy="${(100+80*Math.sin(na)).toFixed(1)}" r="6" fill="var(--surface)" stroke="var(--accent)" stroke-width="3"/>`:''}
+    </svg><div class="ringtxt">${isToday?`<div class="big" style="font-size:40px;color:${s.open?'var(--ok)':'var(--bad)'}">${s.big}</div><div style="font-weight:650;margin-top:4px">${s.line}</div><div class="sub">jetzt ${hm(now.min)} Uhr (Europe/Berlin, live)</div>`:`<div class="lbl">${WD[day]}</div><div class="big" style="font-size:30px;margin-top:4px">${h?hm(h[0])+'–'+hm(h[1]):'geschlossen'}</div><div class="sub">Heute ist ${WD[now.wd]}. ${status().open?'Gerade offen.':'Gerade zu.'}</div>`}</div></div>
+    <div class="days">${[1,2,3,4,5,6,0].map(d=>`<button data-d="${d}" class="${d===now.wd?'today':''}" aria-pressed="${d===day}">${WD[d]}</button>`).join('')}</div>
+    <p class="fine">Demo-Öffnungszeiten. Die Uhrzeit rechnet der Client, nicht das Modell.</p></div>`;
+  };
+  el.addEventListener('click',e=>{const p=e.target.closest('[data-pl]'),d=e.target.closest('[data-d]');if(p){pi=+p.dataset.pl;render();}if(d){day=+d.dataset.d;render();}});
+  render();timer=setInterval(()=>{now=berlinNow();render();},30000);
+  return()=>clearInterval(timer);
+}
+
+/* ================= B3 Kompatibilitäts-Schacht ================= */
+const PARTS=[
+  {n:'i7-6700T',v:'ok',g:[['Sockel','ok','LGA1151 = LGA1151','Gleicher Sockel wie der verbaute i5-6500T.'],['Chipsatz','ok','Q150 kann Skylake','Skylake (6. Gen) läuft ab Werk.'],['TDP','ok','35 W ≤ 65 W','Das 65-W-Netzteil und der Kühler reichen mit Reserve.'],['BIOS','ok','ab Werk','Kein Update nötig.']]},
+  {n:'i7-7700T',v:'warn',g:[['Sockel','ok','LGA1151 = LGA1151','Gleicher Sockel.'],['Chipsatz','ok','Q150 kann Kaby Lake','Offiziell unterstützt, aber erst mit neuem BIOS.'],['TDP','ok','35 W ≤ 65 W','Passt.'],['BIOS','warn','≥ 2.20 nötig','Erst mit der alten CPU das BIOS flashen, dann tauschen. Sonst bleibt der Bildschirm schwarz.']]},
+  {n:'i7-6700K',v:'bad',g:[['Sockel','ok','LGA1151 = LGA1151','Mechanisch passt er.'],['Chipsatz','ok','Q150 kann Skylake','Kein Problem.'],['TDP','bad','91 W > 65 W','Der Mini-Kühler und das 65-W-Netzteil schaffen das nicht. Er drosselt stark oder schaltet ab.'],['BIOS','ok','ab Werk','—']]},
+  {n:'i7-9700T',v:'bad',g:[['Sockel','warn','LGA1151 v2','Gleicher Name, aber andere Pinbelegung.'],['Chipsatz','bad','Q150 kann kein Coffee Lake','Coffee Lake braucht einen 300er-Chipsatz. Das Board startet damit nicht.'],['TDP','ok','35 W ≤ 65 W','—'],['BIOS','bad','kein Update verfügbar','HP bietet dafür kein BIOS an.']]}];
+function fitCheck(el){
+  let pi=1;
+  el.innerHTML=`<div class="chips" style="margin-bottom:8px">${PARTS.map((p,i)=>`<button class="chip" data-pt="${i}" aria-pressed="${i===pi}">${p.n}</button>`).join('')}</div>
+  <div class="card"><div class="lbl">HP EliteDesk 800 G2 DM · 65 W</div>
+  <svg class="fitsvg" viewBox="0 0 320 150" role="img" aria-label="Sockel und Prozessor">
+    <rect x="10" y="10" width="300" height="130" rx="14" fill="var(--s2)"/>
+    <g opacity=".5" stroke="var(--outline)" stroke-width="2"><line x1="30" y1="30" x2="90" y2="30"/><line x1="30" y1="40" x2="80" y2="40"/><rect x="232" y="30" width="60" height="16" rx="3" fill="none"/><rect x="232" y="54" width="60" height="16" rx="3" fill="none"/></g>
+    <rect x="115" y="62" width="90" height="62" rx="8" fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="5 4"/>
+    <text x="160" y="137" font-size="10" text-anchor="middle" fill="var(--muted)">Sockel LGA1151</text>
+    <g class="part" data-part><rect x="121" y="68" width="78" height="50" rx="6" fill="var(--surface)" stroke="var(--on)" stroke-width="2"/><text x="160" y="97" font-size="12" font-weight="800" text-anchor="middle" fill="var(--on)" data-pn></text></g>
+    <g data-mark></g>
+  </svg>
+  <div data-o="verdict" style="margin:6px 0 8px"></div>
+  <div data-o="gates"></div>
+  <p class="fine">Demo-Angaben. Tipp auf eine Zeile erklärt das Kriterium.</p></div>`;
+  const part=$('[data-part]',el),card=$('.card',el);
+  const render=()=>{
+    const p=PARTS[pi];$('[data-pn]',el).textContent=p.n;$$('[data-pt]',el).forEach(b=>b.setAttribute('aria-pressed',String(+b.dataset.pt===pi)));
+    const V={ok:['ok','✓ Passt'],warn:['warn','✓ Passt, erst BIOS-Update'],bad:['bad','✕ Passt nicht']}[p.v];
+    $('[data-o=verdict]',el).innerHTML=`<span class="status ${V[0]}">${V[1]}</span>`;
+    $('[data-o=gates]',el).innerHTML=p.g.map(g=>`<div class="gate"><i class="lamp ${g[1]}"></i><span class="k">${g[0]}</span><span class="v">${g[2]}</span><span class="more">${g[3]}</span></div>`).join('');
+    $('[data-mark]',el).innerHTML='';
+    part.style.transition='none';part.style.transform='translateY(-60px)';void part.getBoundingClientRect();part.style.transition='';
+    requestAnimationFrame(()=>{
+      if(p.v==='bad'){part.style.transform='translateY(-4px)';setTimeout(()=>{part.style.transform='translateY(-40px) rotate(-4deg)';$('[data-mark]',el).innerHTML='<circle cx="252" cy="36" r="14" fill="var(--bad)"/><path d="M246,30 L258,42 M258,30 L246,42" stroke="#fff" stroke-width="3" stroke-linecap="round"/>';},380);}
+      else{part.style.transform='translateY(0)';setTimeout(()=>{$('[data-mark]',el).innerHTML=`<circle cx="252" cy="36" r="14" fill="var(--${p.v==='ok'?'ok':'warn'})"/><path d="M245,36 L250,41 L259,31" stroke="#fff" stroke-width="3" fill="none" stroke-linecap="round"/>`;},420);}
+    });
+  };
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-pt]');if(b){pi=+b.dataset.pt;render();}const g=e.target.closest('.gate');if(g)g.classList.toggle('open');});
+  render();
+}
+
+/* ================= B4 Kurs-Warum ================= */
+function priceMove(el){
+  const N=96,r=rng(7),pins=[{i:28,t:'Gerücht über ein Börsen-Delisting wird offiziell dementiert.',src:'Börsen-Blog',d:0.09},{i:57,t:'Große Börse listet XMR-Paare wieder, Volumen verdreifacht sich.',src:'Pressemitteilung',d:0.16},{i:79,t:'Gewinnmitnahmen nach dem Anstieg.',src:'Orderbuch-Daten',d:-0.05}];
+  const data=[];let v=330;for(let i=0;i<N;i++){v*=1+(r()-0.5)*0.012;pins.forEach(p=>{if(i>=p.i&&i<p.i+4)v*=1+p.d/4;});data.push(v);}
+  const mn=Math.min(...data)*0.98,mx=Math.max(...data)*1.02,W=320,H=130;
+  const X=i=>8+i/(N-1)*(W-16),Y=val=>10+(1-(val-mn)/(mx-mn))*(H-30);
+  const line=data.map((d,i)=>(i?'L':'M')+X(i).toFixed(1)+','+Y(d).toFixed(1)).join(' ');
+  const chg=(data[N-1]/data[0]-1)*100;let sel=1;
+  el.innerHTML=`<div class="card"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><b style="font-size:18px">XMR</b><span class="big" style="font-size:32px;letter-spacing:-1px">${nf(data[N-1],0)} €</span><span class="status ${chg>=0?'ok':'bad'}">${chg>=0?'▲':'▼'} ${nf(Math.abs(chg),1)} % · 24 h</span></div>
+  <svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="Kursverlauf 24 Stunden">
+    <path d="${line} L${X(N-1)},${H-18} L${X(0)},${H-18} Z" fill="var(--accent-soft)" opacity=".7"/>
+    <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.2" stroke-linejoin="round"/>
+    <g data-cross style="display:none"><line y1="6" y2="${H-18}" stroke="var(--muted)" stroke-dasharray="2 3"/><circle r="4" fill="var(--accent)"/><text y="12" font-size="10" font-weight="700" fill="var(--on)"></text></g>
+    ${pins.map((p,k)=>`<g class="pinbtn" data-pin="${k}" transform="translate(${X(p.i+2).toFixed(1)},${(Y(data[p.i+2])-14).toFixed(1)})"><circle r="10" fill="var(--surface)" stroke="var(--accent)" stroke-width="2"/><text y="4" font-size="11" font-weight="800" text-anchor="middle" fill="var(--accent)">${k+1}</text></g>`).join('')}
+    <text x="8" y="${H-4}" font-size="10" fill="var(--muted)">vor 24 h</text><text x="${W-8}" y="${H-4}" font-size="10" fill="var(--muted)" text-anchor="end">jetzt</text>
+  </svg>
+  <div data-o="reason"></div><p class="fine">Demo-Kurs und Demo-Gründe. Über die Kurve fahren zeigt den Wert, Tipp auf eine Zahl den Grund.</p></div>`;
+  const svg=$('svg',el),cross=$('[data-cross]',el);
+  const showReason=()=>{const p=pins[sel];$('[data-o=reason]',el).innerHTML=`<div class="reason pop"><span class="n">${sel+1}</span><div><div style="font-weight:650">${p.t}</div><span class="srcchip">Quelle: ${p.src} (Demo)</span></div></div>`;
+    $$('[data-pin]',el).forEach(g=>{$('circle',g).setAttribute('fill',+g.dataset.pin===sel?'var(--accent)':'var(--surface)');$('text',g).setAttribute('fill',+g.dataset.pin===sel?'var(--on-accent)':'var(--accent)');});};
+  $$('[data-pin]',el).forEach(g=>g.addEventListener('click',()=>{sel=+g.dataset.pin;showReason();}));
+  svg.addEventListener('pointermove',e=>{if(e.target.closest('[data-pin]'))return;const b=svg.getBoundingClientRect(),x=(e.clientX-b.left)/b.width*W,i=clamp(Math.round((x-8)/(W-16)*(N-1)),0,N-1);
+    cross.style.display='';$('line',cross).setAttribute('x1',X(i));$('line',cross).setAttribute('x2',X(i));$('circle',cross).setAttribute('cx',X(i));$('circle',cross).setAttribute('cy',Y(data[i]));
+    const tx=$('text',cross);tx.setAttribute('x',clamp(X(i),30,W-60));tx.textContent=`${nf(data[i],0)} € · vor ${nf((N-1-i)/(N-1)*24,0)} h`;});
+  svg.addEventListener('pointerleave',()=>{cross.style.display='none';});
+  showReason();
+}
+
+/* ================= B5 Rechts-Ampel ================= */
+const LEGAL=[
+  {k:'steuer',chip:'Steuer nachholen',light:'r',claim:'3 Jahre keine Steuererklärung abgegeben',core:'Riskant. Das Finanzamt kann schätzen und Zuschläge verlangen. Wer freiwillig nachreicht, bevor es sich meldet, zahlt deutlich weniger.',refs:[['§ 149 AO','Pflicht zur Abgabe, wenn das Gesetz sie verlangt (z. B. bei Gewerbe oder Nebeneinkünften).'],['§ 152 AO','Verspätungszuschlag: 0,25 % der festgesetzten Steuer je angefangenem Monat, mindestens 25 € je Monat (sinngemäß).'],['§ 233a AO','Nachzahlungszinsen 0,15 % pro vollem Monat, nach einer Karenzzeit (sinngemäß).'],['§ 170 AO','Die Verjährung startet bei Nichtabgabe erst später, bis zu 3 Jahre (sinngemäß).']],money:'Nachzahlung + Verspätungszuschlag + Zinsen',calc:true},
+  {k:'airbnb',chip:'Airbnb in Berlin',light:'y',claim:'Ganze Wohnung in Berlin auf Airbnb vermieten',core:'Nur mit Genehmigung des Bezirksamts und Registriernummer in der Anzeige. Ohne beides ist es verboten.',refs:[['ZwVbG § 2','Ferienwohnung gilt als Zweckentfremdung und braucht eine Genehmigung (sinngemäß).'],['ZwVbG § 5','Registriernummer muss in jeder Anzeige stehen (sinngemäß).'],['ZwVbG § 7','Ordnungswidrigkeit, Bußgeld bis 500.000 € (sinngemäß).']],money:'Bußgeld bis 500.000 €'},
+  {k:'gpl',chip:'GPL-Code verkaufen',light:'g',claim:'GPL-3.0-Software gegen Geld verkaufen',core:'Erlaubt. Du darfst Geld nehmen, musst aber den Quellcode mitgeben und die Käufer dürfen ihn weitergeben. Proprietär machen geht nicht.',refs:[['GPLv3 § 4','Kopien dürfen gegen Gebühr weitergegeben werden (sinngemäß).'],['GPLv3 § 6','Mit dem Programm muss der Quellcode verfügbar sein (sinngemäß).'],['GPLv3 § 8','Bei Verstoß erlischt die Lizenz (sinngemäß).']],money:'Bei Verstoß: Unterlassung und Schadenersatz'}];
+function legalLight(el){
+  let ci=0,tax=3000,ri=-1;
+  const render=()=>{
+    const c=LEGAL[ci],word={r:'riskant',y:'mit Auflage',g:'erlaubt'}[c.light],cls={r:'red',y:'yellow',g:'green'}[c.light];
+    el.innerHTML=`<div class="chips" style="margin-bottom:8px">${LEGAL.map((x,i)=>`<button class="chip" data-c="${i}" aria-pressed="${i===ci}">${x.chip}</button>`).join('')}</div>
+    <div class="card"><div class="legal-top"><div class="light" aria-hidden="true"><i class="r ${c.light==='r'?'on':''}"></i><i class="y ${c.light==='y'?'on':''}"></i><i class="g ${c.light==='g'?'on':''}"></i></div>
+      <div><div class="lbl">${esc(c.claim)}</div><div style="font-size:22px;font-weight:800;letter-spacing:-.4px;margin:2px 0 4px" class="${c.light==='r'?'badc':c.light==='y'?'warnc':'okc'}">${word}</div><div style="font-size:14.5px">${esc(c.core)}</div></div></div>
+      <div class="refs">${c.refs.map((r,i)=>`<button class="chip" data-r="${i}" aria-pressed="${i===ri}">${r[0]}</button>`).join('')}</div>
+      <div class="refbox ${ri>=0?'on':''}">${ri>=0?`<b>${c.refs[ri][0]}</b> · ${esc(c.refs[ri][1])}`:''}</div>
+      <div class="money ${cls}">€ <span>${esc(c.money)}</span></div>
+      ${c.calc?`${slider('Steuer pro Jahr (Schätzung)','tax',500,15000,250,tax)}<div data-o="calc" style="font-size:14px;font-weight:650"></div>`:''}
+      <p class="fine">Demo, keine Rechtsberatung. Normen sinngemäß zusammengefasst.</p></div>`;
+    paintAll(el);calc();
+  };
+  const calc=()=>{const o=$('[data-o=calc]',el);if(!o)return;$('[data-out=tax]',el).textContent=nf(tax,0)+' €';let z=0;[26,14,2].forEach(m=>{z+=Math.max(0.0025*tax*m,25*m);});o.textContent=`Verspätungszuschlag grob ≈ ${nf(z,0)} € für 3 Jahre, dazu ${nf(tax*3,0)} € Steuer und Zinsen.`;};
+  el.addEventListener('click',e=>{const c=e.target.closest('[data-c]'),r=e.target.closest('[data-r]');if(c){ci=+c.dataset.c;ri=-1;render();}if(r){ri=ri===+r.dataset.r?-1:+r.dataset.r;render();}});
+  el.addEventListener('input',e=>{if(e.target.dataset.k==='tax'){tax=+e.target.value;calc();}});
+  render();
+}
+
+/* ================= B6 Netz-Faden ================= */
+function transit(el){
+  const trunk=[['Hamburg Hbf','10:05'],['Hamburg Dammtor','10:09'],['Pinneberg','10:22'],['Elmshorn','10:31'],['Neumünster','10:58']];
+  const kiel=[['Bordesholm','11:10'],['Kiel Hbf','11:25']],fl=[['Rendsburg','11:20'],['Schleswig','11:38'],['Flensburg','12:02']];
+  const P={};trunk.forEach((s,i)=>P['t'+i]={x:40,y:24+i*40,n:s[0],t:s[1]});kiel.forEach((s,i)=>P['k'+i]={x:40,y:24+(5+i)*40,n:s[0],t:s[1]});fl.forEach((s,i)=>P['f'+i]={x:200,y:24+(5+i)*40,n:s[0],t:s[1]});
+  let part='k',pos=3,info=null;
+  const route=()=>['t0','t1','t2','t3','t4'].concat(part==='k'?['k0','k1']:['f0','f1','f2']);
+  el.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><span class="lbl">Ich sitze im</span>${segHtml([['k','vorderen Teil → Kiel'],['f','hinteren Teil → Flensburg']],'k','sm')}</div>
+  <div class="card transit"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="status neu" style="background:var(--accent);color:var(--on-accent)">RE7</span><b data-o="dir"></b></div>
+  <svg viewBox="0 0 340 300" role="img" aria-label="Linienverlauf"></svg>
+  <div data-o="info" class="now" style="margin-top:4px"></div>
+  <div style="display:flex;gap:8px;margin-top:10px"><button class="btn plain sm" data-prev>‹ Halt zurück</button><button class="btn sm" data-next>Nächster Halt ›</button></div>
+  <p class="fine">Demo-Fahrplan. Zugteilung in Neumünster: vorne Kiel, hinten Flensburg.</p></div>`;
+  const svg=$('svg',el);
+  const render=()=>{
+    const r=route(),here=r[pos],H=P[here];
+    const pth=(a,b)=>{const A=P[a],B=P[b];return A.x===B.x?`M${A.x},${A.y} L${B.x},${B.y}`:`M${A.x},${A.y} C${A.x},${A.y+26} ${B.x},${B.y-26} ${B.x},${B.y}`;};
+    const edges=[['t0','t1'],['t1','t2'],['t2','t3'],['t3','t4'],['t4','k0'],['k0','k1'],['t4','f0'],['f0','f1'],['f1','f2']];
+    const onRoute=(a,b)=>{const i=r.indexOf(a);return i>=0&&r[i+1]===b;};
+    let s=edges.map(([a,b])=>`<path d="${pth(a,b)}" fill="none" stroke="${onRoute(a,b)?(r.indexOf(b)<=pos?'var(--muted)':'var(--accent)'):'var(--s3)'}" stroke-width="${onRoute(a,b)?5:3}" stroke-linecap="round" ${onRoute(a,b)&&r.indexOf(b)<=pos?'stroke-dasharray="1 8"':''}/>`).join('');
+    Object.keys(P).forEach(k=>{const p=P[k],on=r.includes(k),past=on&&r.indexOf(k)<pos;s+=`<g class="stopbtn" data-s="${k}"><rect x="${p.x-8}" y="${p.y-14}" width="${k[0]==='f'?130:170}" height="28" fill="transparent"/><circle cx="${p.x}" cy="${p.y}" r="${k==='t4'?8:6}" fill="${past?'var(--s3)':'var(--surface)'}" stroke="${on?'var(--accent)':'var(--outline)'}" stroke-width="3"/><text x="${p.x+16}" y="${p.y+4}" font-size="12.5" font-weight="${k===here?800:600}" fill="${on?(past?'var(--muted)':'var(--on)'):'var(--muted)'}">${p.n}</text><text x="${p.x+16}" y="${p.y+16}" font-size="10" fill="var(--muted)">${k==='t4'?'Zugteilung · ':''}${p.t}</text></g>`;});
+    s+=`<g style="transition:transform .45s cubic-bezier(.3,1.2,.5,1)" transform="translate(${H.x},${H.y})"><rect x="-13" y="-9" width="26" height="18" rx="6" fill="var(--accent)"/><path d="M-5,-2 L0,4 L5,-2" stroke="var(--on-accent)" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>`;
+    s+=`<text x="${H.x-24}" y="${H.y+4}" font-size="10" font-weight="800" fill="var(--accent)" text-anchor="end">du</text>`;
+    svg.innerHTML=s;
+    $('[data-o=dir]',el).textContent='Richtung '+(part==='k'?'Kiel Hbf':'Flensburg');
+    const nx=r[pos+1];const I=info&&P[info]?P[info]:null;
+    $('[data-o=info]',el).innerHTML=I?`<div class="clock">${I.t}</div><div class="what"><b>${I.n}</b><span>${r.includes(info)?(r.indexOf(info)<pos?'schon durch':r.indexOf(info)===pos?'hier bist du':'noch '+(r.indexOf(info)-pos)+' Halt(e)'):'fährt dein Zugteil nicht an'}</span></div>`:
+      `<div class="clock">${H.t}</div><div class="what"><b>${H.n}</b><span>${nx?'nächster Halt: '+P[nx].n+' ('+P[nx].t+')':'Endhalt, bitte aussteigen'}${here==='t4'?' · hier wird geteilt':''}</span></div>`;
+    $('[data-prev]',el).disabled=pos===0;$('[data-next]',el).disabled=pos>=r.length-1;
+  };
+  segWire($('.seg',el),v=>{part=v;pos=Math.min(pos,route().length-1);info=null;render();});
+  el.addEventListener('click',e=>{if(e.target.closest('[data-next]')){pos=Math.min(route().length-1,pos+1);info=null;render();}else if(e.target.closest('[data-prev]')){pos=Math.max(0,pos-1);info=null;render();}else{const g=e.target.closest('[data-s]');if(g){info=g.dataset.s;render();}}});
+  render();
+}
+
+/* ================= B7 Terminal-Replay ================= */
+function terminal(el){
+  const FIX=`echo 'export PATH="$HOME/.codex/bin:$PATH"' >> ~/.zshrc && source ~/.zshrc`;
+  const base=[['$ ','codex'],['',"zsh: correct 'codex' to 'code' [nyae]? n"],['','zsh: command not found: codex',true],['$ ','ls ~/.codex/bin'],['','codex'],['$ ','echo $PATH'],['','/usr/local/bin:/usr/bin:/bin',true]];
+  let timers=[];
+  const lineHtml=(l,cls='')=>`<div class="ln ${l[2]?'mark':''} ${cls}">${l[0]?`<span class="ps">${esc(l[0])}</span>`:''}${esc(l[1])}</div>`;
+  el.innerHTML=`<div class="term"><div class="bar"><i></i><i></i><i></i></div><div data-o="lines">${base.map((l,i)=>lineHtml(l)+(i===2?'<div class="callout">⬑ <b>Das ist das Problem:</b> codex ist installiert, aber <code>~/.codex/bin</code> steht nicht im PATH. Deshalb schlägt zsh „code" vor.</div>':'')).join('')}</div><div data-o="replay"></div></div>
+  <div class="card" style="margin-top:8px"><div class="lbl">Fix</div>${codeBox(FIX)}<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-run>▶ Fix im Replay ansehen</button></div><p class="fine">Demo-Ausgabe. Das Replay spielt die Befehle einmal ab, es führt nichts aus.</p></div>`;
+  const out=$('[data-o=replay]',el),btn=$('[data-run]',el);
+  const type=(txt,cls,delay,cb)=>{const d=document.createElement('div');d.className='ln '+cls;out.appendChild(d);let i=0;const ps=cls.includes('cmd');if(ps)d.innerHTML='<span class="ps">$ </span>';const sp=document.createElement('span');d.appendChild(sp);
+    const tick=()=>{sp.textContent=txt.slice(0,++i);if(i<txt.length)timers.push(setTimeout(tick,delay));else cb&&cb();};timers.push(setTimeout(tick,delay));};
+  btn.addEventListener('click',()=>{timers.forEach(clearTimeout);timers=[];out.innerHTML='';btn.disabled=true;
+    type(FIX,'cmd',18,()=>timers.push(setTimeout(()=>type('codex --version','cmd',45,()=>timers.push(setTimeout(()=>{type('codex-cli 0.9.2 (Demo)','okl',8,()=>{const d=document.createElement('div');d.className='ln';d.innerHTML='<span class="ps">$ </span><span class="cursor"></span>';out.appendChild(d);btn.disabled=false;btn.textContent='↻ Nochmal abspielen';});},350))),400)));});
+  return()=>timers.forEach(clearTimeout);
+}
+
+/* ================= B8 Schichten-Stack ================= */
+const STACKS={
+  compiler:{tok:'x=2+3',layers:[['Quelltext','int x = 2 + 3;','Das, was du schreibst. Für den Computer ist es nur eine Zeichenkette.'],['Lexer','[int] [x] [=] [2] [+] [3] [;]','Zerlegt den Text in Tokens: Schlüsselwörter, Namen, Zahlen, Zeichen.'],['Parser','Zuweisung(x, Plus(2, 3))','Baut aus den Tokens einen Syntaxbaum (AST) und prüft die Grammatik.'],['Semantik','x : int ✓','Prüft Typen und Namen. Hier fällt z. B. „x ist nicht deklariert" auf.'],['Optimierer','x = 5','Rechnet Konstantes schon vorher aus (Constant Folding).'],['Codegen','mov dword [x], 5','Übersetzt in Maschinenbefehle für die Ziel-CPU (hier x86).']]},
+  web:{tok:'GET',layers:[['Anwendung (HTTP)','GET / HTTP/1.1 · Host: beispiel.de','Der Browser formuliert die Anfrage.'],['TLS','🔒 verschlüsselte Bytes','Verschlüsselt alles, damit niemand unterwegs mitliest.'],['TCP','Segmente an Port 443','Teilt in Stücke, nummeriert sie und sorgt für Wiederholung bei Verlust.'],['IP','Pakete an 203.0.113.10','Adressiert jedes Paket und findet über Router den Weg.'],['WLAN / Ethernet','Frames an die MAC des Routers','Bringt die Pakete bis zum nächsten Gerät im Netz.'],['Physik','Funkwellen · Licht · Strom','Die Bits als Signal auf dem Medium.']]}};
+function layerStack(el){
+  let key='compiler',timers=[];
+  const render=()=>{
+    timers.forEach(clearTimeout);timers=[];const S=STACKS[key];
+    el.innerHTML=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px">${segHtml([['compiler','Compiler'],['web','Webseite laden']],key,'sm')}<button class="btn sm" data-go>▶ Durchlauf</button></div>
+    <div class="card"><div class="stack"><div class="tok" data-tok>${esc(S.tok)}</div>${S.layers.map((l,i)=>`<div class="layer" data-l="${i}"><h5>${esc(l[0])}<span>Tippen für Details</span></h5><div class="o mono">${esc(l[1])}</div><div class="ex">${esc(l[2])}</div></div>`).join('')}</div>
+    <p class="fine">Demo. Das Token wandert von oben nach unten durch alle Schichten.</p></div>`;
+    segWire($('.seg',el),v=>{key=v;render();});
+    $('[data-go]',el).addEventListener('click',run);
+    $$('.layer',el).forEach(l=>l.addEventListener('click',()=>l.classList.toggle('open')));
+    const tok=$('[data-tok]',el);tok.style.fontSize=S.tok.length>4?'8px':'11px';tok.style.width=S.tok.length>4?'30px':'26px';
+    requestAnimationFrame(()=>{const f=$('.layer',el);if(f)tok.style.transform=`translate(-2px,${f.offsetTop+6}px)`;});
+  };
+  const run=()=>{
+    timers.forEach(clearTimeout);timers=[];const ls=$$('.layer',el),tok=$('[data-tok]',el),b=$('[data-go]',el);b.disabled=true;
+    ls.forEach(l=>l.classList.remove('on','done'));
+    ls.forEach((l,i)=>timers.push(setTimeout(()=>{ls.forEach((x,j)=>{x.classList.toggle('on',j===i);if(j<i)x.classList.add('done');});tok.style.transform=`translate(-2px,${l.offsetTop+6}px)`;
+      if(i===ls.length-1)timers.push(setTimeout(()=>{l.classList.remove('on');l.classList.add('done');b.disabled=false;b.textContent='↻ Nochmal';},900));},i*850)));
+  };
+  render();
+  return()=>timers.forEach(clearTimeout);
+}
+
+/* ================= B9 Skala-Einordnung (Kelvin) ================= */
+function k2rgb(K){const t=K/100;let r,g,b;
+  if(t<=66){r=255;g=99.4708025861*Math.log(t)-161.1195681661;}else{r=329.698727446*Math.pow(t-60,-0.1332047592);g=288.1221695283*Math.pow(t-60,-0.0755148492);}
+  b=t>=66?255:t<=19?0:138.5177312231*Math.log(t-10)-305.0447927307;
+  const c=v=>Math.round(clamp(v,0,255));return `rgb(${c(r)},${c(g)},${c(b)})`;}
+function kelvin(el){
+  const MIN=1800,MAX=6500,LAMP=3000;let v=LAMP;
+  const REG=[[MIN,2200,'Kerze'],[2200,3300,'warmweiß'],[3300,5300,'neutralweiß'],[5300,MAX,'tageslicht']];
+  const X=k=>(k-MIN)/(MAX-MIN)*100;
+  let stops=[];for(let k=MIN;k<=MAX;k+=350)stops.push(`${k2rgb(k)} ${X(k).toFixed(1)}%`);
+  el.innerHTML=`<div class="card"><div class="lbl">Farbtemperatur</div>
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span class="big" style="font-size:40px" data-o="k"></span><span class="status neu" data-o="reg" style="font-size:14px"></span></div>
+    <div class="kband"><span class="ghost" style="left:${X(LAMP)}%">deine Lampe</span><div class="kgrad" style="background:linear-gradient(90deg,${stops.join(',')})"></div><input type="range" min="${MIN}" max="${MAX}" step="50" value="${v}" aria-label="Kelvin"></div>
+    <div class="kregs">${REG.map(r=>`<span style="left:${X((r[0]+r[1])/2)}%">${r[2]}<br>${r[0]===MIN?'< 2200':r[1]===MAX?'> 5300':r[0]+'–'+r[1]}</span>`).join('')}</div>
+    <div class="swatch"><div class="bulb" data-o="bulb"></div><div style="font-size:14px" data-o="txt"></div></div>
+    <p class="fine">Demo. Farben angenähert (Schwarzkörper). Schieb den Regler zum Vergleichen.</p></div>`;
+  const i=$('input',el);i.style.setProperty('--p','0%');
+  const upd=()=>{const r=REG.find(r=>v>=r[0]&&v<=r[1])||REG[REG.length-1];$('[data-o=k]',el).textContent=nf(v,0)+' K';$('[data-o=reg]',el).textContent=r[2];$('[data-o=bulb]',el).style.background=k2rgb(v);
+    $('[data-o=txt]',el).innerHTML=v===LAMP?'<b>Ja, 3000 K ist warmweiß.</b> Gemütlich, gut fürs Wohnzimmer und abends.':v<LAMP?`${nf(LAMP-v,0)} K wärmer als deine Lampe: noch gelber, fast Kerzenlicht.`:`${nf(v-LAMP,0)} K kälter als deine Lampe: ${v>5300?'bläulich, eher Büro oder Werkstatt.':'sachlicher, gut für Küche und Bad.'}`;};
+  i.addEventListener('input',()=>{v=+i.value;upd();});upd();
+}
+
+/* ================= B10 Quellen-Waage ================= */
+function balance(el){
+  const S={pro:[{t:'Kleine Studie 1928, sehr hohe Dosis',w:2,k:'Studie, alt'},{t:'Blogartikel „Kaffee entwässert"',w:1,k:'Blog'}],con:[{t:'Kontrollierte Studie 2014, 50 Männer: kein Unterschied zu Wasser',w:3,k:'Studie'},{t:'Ernährungsgesellschaft: Kaffee zählt zur Trinkmenge',w:3,k:'Fachgesellschaft'},{t:'Übersichtsarbeit: Effekt nur bei ungewohnten, hohen Dosen',w:2,k:'Review'}]};
+  const on={};S.pro.forEach((x,i)=>on['p'+i]=true);S.con.forEach((x,i)=>on['c'+i]=true);
+  el.innerHTML=`<div class="card bal"><div class="lbl">Behauptung</div><div style="font-size:18px;font-weight:800;letter-spacing:-.3px">„Kaffee entzieht dem Körper Wasser."</div>
+  <svg viewBox="0 0 320 170" role="img" aria-label="Quellen-Waage"><path d="M160,150 L146,168 H174 Z" fill="var(--muted)"/><rect x="157" y="56" width="6" height="96" rx="3" fill="var(--muted)"/>
+    <g class="beam" data-beam style="transform-origin:160px 56px"><rect x="40" y="52" width="240" height="8" rx="4" fill="var(--on)"/>
+      <g data-pan="l"><line x1="52" y1="56" x2="52" y2="96" stroke="var(--muted)"/><path d="M22,96 H82 A30,12 0 0 1 22,96 Z" fill="var(--s3)"/><text x="52" y="126" font-size="11" text-anchor="middle" font-weight="800" fill="var(--on)">stimmt</text><text x="52" y="140" font-size="10" text-anchor="middle" fill="var(--muted)" data-sum="l"></text></g>
+      <g data-pan="r"><line x1="268" y1="56" x2="268" y2="96" stroke="var(--muted)"/><path d="M238,96 H298 A30,12 0 0 1 238,96 Z" fill="var(--s3)"/><text x="268" y="126" font-size="11" text-anchor="middle" font-weight="800" fill="var(--on)">stimmt nicht</text><text x="268" y="140" font-size="10" text-anchor="middle" fill="var(--muted)" data-sum="r"></text></g></g>
+    <g transform="translate(160,30)"><path d="M-26,0 A26,26 0 0 1 26,0" fill="none" stroke="var(--s3)" stroke-width="6"/><line data-needle x1="0" y1="0" x2="0" y2="-22" stroke="var(--accent)" stroke-width="3" stroke-linecap="round" style="transition:transform .5s"/><circle r="3.5" fill="var(--accent)"/></g></svg>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><span data-o="verdict" style="font-weight:800;font-size:16px"></span><span class="status neu" data-o="conf"></span></div>
+  <div class="srccol"><div><h6>stützt</h6>${S.pro.map((x,i)=>`<button class="src" data-src="p${i}" aria-pressed="true" style="font-size:${11.5+x.w}px">${x.t}<span class="w">${x.k.toUpperCase()} · GEWICHT ${x.w}</span></button>`).join('')}</div>
+  <div><h6>widerspricht</h6>${S.con.map((x,i)=>`<button class="src" data-src="c${i}" aria-pressed="true" style="font-size:${11.5+x.w}px">${x.t}<span class="w">${x.k.toUpperCase()} · GEWICHT ${x.w}</span></button>`).join('')}</div></div>
+  <p class="fine">Demo-Quellen. Tipp auf eine Quelle nimmt sie von der Waage.</p></div>`;
+  const upd=()=>{
+    let l=0,r=0;S.pro.forEach((x,i)=>{if(on['p'+i])l+=x.w;});S.con.forEach((x,i)=>{if(on['c'+i])r+=x.w;});
+    const ang=clamp((r-l)*4,-18,18);$('[data-beam]',el).style.transform=`rotate(${ang}deg)`;
+    $('[data-sum=l]',el).textContent='Gewicht '+l;$('[data-sum=r]',el).textContent='Gewicht '+r;
+    const tot=l+r,share=tot?Math.max(l,r)/tot:0.5,conf=share>0.75?'hoch':share>0.6?'mittel':'niedrig';
+    $('[data-needle]',el).style.transform=`rotate(${-80+(share-0.5)/0.5*160}deg)`;
+    $('[data-o=conf]',el).textContent='Sicherheit: '+conf;
+    $('[data-o=verdict]',el).innerHTML=!tot?'Keine Quelle ausgewählt':r>l?'<span class="okc">Eher falsch</span> <span style="font-weight:500;font-size:14px;color:var(--muted)">bei normalen Mengen</span>':l>r?'<span class="badc">Eher richtig</span>':'<span class="warnc">Unentschieden</span>';
+  };
+  el.addEventListener('click',e=>{const b=e.target.closest('[data-src]');if(!b)return;on[b.dataset.src]=!on[b.dataset.src];b.setAttribute('aria-pressed',String(on[b.dataset.src]));upd();});
+  upd();
+}
+
+/* ================= B11 Lern-Deck ================= */
+const DECK=[
+  {h:'1 · Token',b:'Text wird in Stücke zerlegt. „Husum ist schön" wird zu [Hus] [um] [ ist] [ schön]. Das Modell sieht nur Nummern: 3491, 372, 318, 9921.'},
+  {h:'2 · Embedding',b:'Jede Token-Nummer wird zu einer Liste aus einigen tausend Zahlen, einem Vektor. Ähnliche Wörter liegen nah beieinander: „Hund" nah bei „Katze".'},
+  {h:'Kurz geprüft',q:'Was ist ein Embedding?',o:['ein Vektor aus Zahlen','ein kürzeres Wort','eine Liste von Webseiten'],a:0},
+  {h:'3 · Attention',b:'Jedes Token schaut auf die Tokens davor und gewichtet, welche wichtig sind. In „die Bank am Fluss" zieht „Fluss" die Bedeutung von „Bank" Richtung Ufer.'},
+  {h:'4 · Vorhersage',b:'Am Ende steht eine Wahrscheinlichkeit für jedes mögliche nächste Token. „Der Himmel ist …"',bars:[['blau',62],['grau',14],['klar',9]]},
+  {h:'Kurz geprüft',q:'Was sagt ein LLM im Kern vorher?',o:['die ganze Antwort auf einmal','das nächste Token','einen Eintrag aus einer Datenbank'],a:1},
+  {h:'5 · Sampling',b:'Das Modell zieht ein Token aus dieser Verteilung, hängt es an und fängt von vorn an. Die Temperatur regelt, wie mutig es zieht.'}];
+function deck(el){
+  let i=0;const solved={};
+  const cardHtml=(c,cls)=>`<div class="dcard ${cls}"><div class="lbl">${c.q?'Frage':'Karte'}</div><h4>${esc(c.h)}</h4>${c.q?`<p style="font-weight:650">${esc(c.q)}</p><div class="qopts">${c.o.map((o,k)=>`<button data-q="${k}" class="${solved[DECK.indexOf(c)]&&k===c.a?'right':''}">${esc(o)}</button>`).join('')}</div>`:`<p>${esc(c.b)}</p>${c.bars?c.bars.map(b=>`<div class="pbar"><span style="width:40px">${b[0]}</span><i style="width:${b[1]*1.6}px"></i><span>${b[1]} %</span></div>`).join(''):''}`}<div style="margin-top:auto;font-size:12px;color:var(--muted)">${cls==='top'?'← wischen →':''}</div></div>`;
+  const render=()=>{
+    const done=i>=DECK.length;
+    el.innerHTML=`<div class="card"><div class="dprog">${DECK.map((c,k)=>`<i class="${k<=i?'on':''}"></i>`).join('')}</div>
+    <div class="deck">${done?`<div class="dcard top pop" style="align-items:center;justify-content:center;text-align:center"><div style="font-size:44px">✓</div><h4>Fertig: LLM in 5 Ideen</h4><p>Token → Embedding → Attention → Vorhersage → Sampling</p><button class="btn" data-restart style="margin-top:14px">Nochmal</button></div>`:(DECK[i+1]?cardHtml(DECK[i+1],'under'):'')+cardHtml(DECK[i],'top')}</div>
+    <div class="dnav"><button class="btn plain sm" data-back ${i===0?'disabled':''}>‹ Zurück</button><span style="font-size:13px;font-weight:700">${Math.min(i+1,DECK.length)} / ${DECK.length}</span><button class="btn sm" data-fwd ${done?'disabled':''}>Weiter ›</button></div>
+    <p class="fine">Demo. Nach einer falschen Antwort kommt die Karte davor zurück.</p></div>`;
+    const top=$('.dcard.top',el);if(top&&!done)swipe(top);
+  };
+  const blocked=()=>DECK[i]&&DECK[i].q&&!solved[i];
+  const next=()=>{if(blocked()){const t=$('.dcard.top',el);t.classList.remove('shake');void t.offsetWidth;t.classList.add('shake');toast('Erst die Frage beantworten');return false;}i++;render();return true;};
+  const swipe=card=>{let x0=null,dx=0;
+    card.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;x0=e.clientX;dx=0;card.setPointerCapture(e.pointerId);card.style.transition='none';});
+    card.addEventListener('pointermove',e=>{if(x0===null)return;dx=e.clientX-x0;card.style.transform=`translateX(${dx}px) rotate(${dx/18}deg)`;});
+    const end=()=>{if(x0===null)return;x0=null;card.style.transition='';
+      if(Math.abs(dx)>80&&!blocked()){card.style.transform=`translateX(${dx>0?400:-400}px) rotate(${dx>0?20:-20}deg)`;card.style.opacity='0';setTimeout(()=>{i++;render();},220);}
+      else{card.style.transform='';if(Math.abs(dx)>80)next();}};
+    card.addEventListener('pointerup',end);card.addEventListener('pointercancel',end);};
+  el.addEventListener('click',e=>{
+    const q=e.target.closest('[data-q]');
+    if(q){const c=DECK[i],k=+q.dataset.q;if(k===c.a){q.classList.add('right');solved[i]=true;setTimeout(()=>{i++;render();},650);}else{q.classList.add('wrong');toast('Nicht ganz. Die Karte davor nochmal');setTimeout(()=>{i=Math.max(0,i-1);render();},800);}return;}
+    if(e.target.closest('[data-fwd]'))next();
+    else if(e.target.closest('[data-back]')){i=Math.max(0,i-1);render();}
+    else if(e.target.closest('[data-restart]')){i=0;for(const k in solved)delete solved[k];render();}
+  });
+  render();
+}
+
+/* ================= B12 Umrechen-Band ================= */
+const CONV={
+  pace:{label:'Pace',tu:'km/h',min:6,max:24,step:0.1,v:12,bu:'min/km',tick:[6,9,12,15,18,21,24],btick:[10,8,6,5,4,3.5,3],toB:x=>60/x,bpos:b=>60/b,fa:x=>nf(x,1),fb:b=>{const s=Math.round(b*60);return Math.floor(s/60)+':'+pad2(s%60);},
+    extra:x=>{const p=60/x;const hmT=m=>{const s=Math.round(m*60);return Math.floor(s/3600)+':'+pad2(Math.floor(s%3600/60))+':'+pad2(s%60);};return `10 km in ${hmT(p*10)} · Halbmarathon in ${hmT(p*21.0975)}`;},note:'Pace = 60 ÷ Geschwindigkeit. Die untere Skala ist deshalb nicht gleichmäßig.'},
+  psi:{label:'„lbs" → bar',tu:'psi',min:0,max:100,step:1,v:59,bu:'bar',tick:[0,20,40,60,80,100],btick:[0,1,2,3,4,5,6],toB:x=>x*0.0689476,bpos:b=>b/0.0689476,fa:x=>nf(x,0),fb:b=>nf(b,2),extra:()=>'',warn:'„lbs" ist eine Masse, bar ist Druck. Beim Reifen ist psi (Pfund pro Quadratzoll) gemeint, damit ist gerechnet.',note:'1 psi = 0,0689 bar'},
+  mi:{label:'Meilen → km',tu:'mi',min:0,max:30,step:0.1,v:26.2,bu:'km',tick:[0,5,10,15,20,25,30],btick:[0,10,20,30,40],toB:x=>x*1.609344,bpos:b=>b/1.609344,fa:x=>nf(x,1),fb:b=>nf(b,1),extra:()=>'',mark:[26.219,'Marathon'],note:'1 mi = 1,609 km'}};
+function convert(el){
+  let mode='pace',x=CONV.pace.v;
+  const render=()=>{
+    const C=CONV[mode];const P=v=>(v-C.min)/(C.max-C.min)*100;
+    el.innerHTML=`<div style="margin-bottom:8px">${segHtml(Object.keys(CONV).map(k=>[k,CONV[k].label]),mode,'sm')}</div>
+    <div class="card"><div class="cres"><span class="big" data-o="a"></span><span class="eq">=</span><span class="big" data-o="b" style="color:var(--accent)"></span></div><div class="sub" data-o="x"></div>
+    ${C.warn?`<div class="tip" style="margin-top:8px">⚠ <span>${C.warn}</span></div>`:''}
+    <div class="cband" style="margin-top:${C.mark?30:18}px">
+      <div class="cscale"><span class="u">${C.tu}</span>${C.tick.map(t=>`<span class="t" style="left:${P(t)}%">${t}</span>`).join('')}</div>
+      <div class="cscale"><span class="u">${C.bu}</span>${C.btick.filter(b=>{const p=C.bpos(b);return p>=C.min&&p<=C.max;}).map(b=>`<span class="t" style="left:${P(C.bpos(b))}%">${C.fb(b)}</span>`).join('')}</div>
+      ${C.mark?`<span class="cmark" style="left:${P(C.mark[0])}%">▼ ${C.mark[1]}</span>`:''}
+      <i class="chand" data-h></i><input type="range" min="${C.min}" max="${C.max}" step="${C.step}" value="${x}" aria-label="Wert ${C.tu}"></div>
+    <p class="fine">${C.note} Griff ziehen, beide Skalen laufen mit.</p></div>`;
+    segWire($('.seg',el),v=>{mode=v;x=CONV[v].v;render();});
+    const i=$('input',el);i.addEventListener('input',()=>{x=+i.value;upd();});upd();
+  };
+  const upd=()=>{const C=CONV[mode];$('[data-o=a]',el).innerHTML=`${C.fa(x)}<small> ${C.tu}</small>`;$('[data-o=b]',el).innerHTML=x===0&&mode==='pace'?'–':`${C.fb(C.toB(x))}<small> ${C.bu}</small>`;$('[data-o=x]',el).textContent=C.extra(x);$('[data-h]',el).style.left=((x-C.min)/(C.max-C.min)*100)+'%';};
+  render();
+}
+
+/* ================= sections ================= */
+const J=o=>JSON.stringify(o);
+const SECTIONS=[
+ {id:'regler',g:'A',no:'A1',nav:'Regler',title:'Regler-Antwort',tag:'<calc>',why:'Die Frage ist eigentlich „und was, wenn …". Regler beantworten die Nachfrage, bevor sie kommt.',q:'12V 9Ah Akku, Pi Zero braucht 2W, wie lange läuft der?',
+  variants:[
+   {name:'Reich',lead:'Bei deinen Werten etwa 27 Stunden. Zieh an den Reglern, die Antwort rechnet mit.',render:reglerRich,sk:`<calc>${J({title:'Laufzeit Pi Zero an Blei-Gel',formula:'V*Ah*dod*eff/W',result:{unit:'h',label:'Laufzeit'},vars:[{k:'V',v:12,fixed:true},{k:'Ah',v:9,min:2,max:20,step:0.5,label:'Kapazität'},{k:'W',v:2,min:0.5,max:8,step:0.1,label:'Verbrauch'},{k:'dod',v:0.6,min:0.3,max:1,label:'Entladetiefe'},{k:'eff',v:0.85,min:0.6,max:0.98,label:'Wirkungsgrad'}],goal:{v:24,label:'24 h'},presets:[{label:'Pi Zero idle',W:0.6},{label:'Pi 4',W:4.5}]},null,1)}</calc>`},
+   {name:'Tangle',lead:'Etwa 27 Stunden, gerechnet im Satz:',render:reglerTangle,sk:`<calc style="inline">${J({text:'Ein {V} V-Akku mit {Ah} Ah … läuft er {=h} Stunden.',formula:'V*Ah*dod*eff/W',vars:{V:12,Ah:9,W:2,dod:60,eff:85}})}</calc>`},
+   {name:'Band',lead:'Realistisch zwischen 17 und 43 Stunden, am wahrscheinlichsten um 26.',render:reglerBand,sk:`<calc style="band">${J({formula:'V*Ah*dod*eff/W',vars:{V:12,Ah:9,W:[1.6,2.6],dod:[0.5,0.7],eff:[0.8,0.9]},goal:24,unit:'h'})}</calc>`}]},
+ {id:'weiche',g:'A',no:'A2',nav:'Weiche',title:'Weiche',tag:'<troubleshoot>',why:'Fehlersuche als Baum: ein Schritt, ein Befehl, dann sagst du, was passiert ist. Die Spur oben erlaubt den Rücksprung.',q:'Bluetooth-Kopfhörer in Qubes-VM gehen nicht',
+  variants:[
+   {name:'Karte',lead:'Gehen wir das Schritt für Schritt durch.',render:el=>weiche(el,'card')},
+   {name:'Verlauf',lead:'Gehen wir das Schritt für Schritt durch. Deine Antworten bleiben als Spur stehen.',render:el=>weiche(el,'log')},
+   {name:'Kompakt',lead:'Kurz und knapp:',render:el=>weiche(el,'compact')}],
+  sk:`<troubleshoot>${J({start:'s1',nodes:{s1:{t:'Sieht sys-usb den Adapter?',where:'dom0',cmd:'qvm-usb list',outs:[{label:'Adapter gelistet',go:'s2',tone:'ok'},{label:'Kein Eintrag',go:'sx',tone:'bad'}]},s2:{t:'…'},done:{end:'ok',t:'Gelöst'}}},null,1)}</troubleshoot>`},
+ {id:'duell',g:'A',no:'A3',nav:'Duell',title:'Gewichtungs-Duell',tag:'<duel>',why:'„Was ist besser" hängt davon ab, was dir wichtig ist. Die Gewichte stellst du, der Sieger folgt live, der Kipppunkt steht dran.',q:'Apple M5 vs Intel i7-1355U',
+  variants:[
+   {name:'Achsen',lead:'Hängt an deinen Prioritäten. Mit diesen Gewichten liegt der i7 vorne:',render:duelAxes},
+   {name:'Chips',lead:'Sag mir grob, was dir wichtig ist:',render:duelChips},
+   {name:'Minimal',lead:'Am Ende ist es eine Abwägung:',render:duelMinimal}],
+  sk:`<duel>${J({a:'Apple M5',b:'Intel i7-1355U',scale:10,attrs:[{k:'Akku',a:10,b:5,w:30},{k:'Leistung',a:9,b:6,w:30},{k:'Linux',a:3,b:9,w:60},{k:'Preis',a:4,b:8,w:40},{k:'Lautstärke',a:9,b:5,w:30}]},null,1)}</duel>`},
+ {id:'tag',g:'A',no:'A4',nav:'Tagesband',title:'Tagesband',tag:'<dayplan>',why:'Ein Tag ist Zeit und Ort zugleich. Der Regler ist die Uhr, die Karte folgt.',q:'Ein Tag in Husum',
+  variants:[
+   {name:'Karte + Band',lead:'Ein entspannter Tag, alles zu Fuß oder mit dem Rad:',render:dayBand},
+   {name:'Zeitleiste',lead:'Ein entspannter Tag. Drück auf Play:',render:dayList}],
+  sk:`<dayplan>${J({place:'Husum',stops:[{t:'08:25',to:'09:45',n:'Café am Binnenhafen',lat:54.4858,lon:9.0508},{t:'10:00',to:'11:15',n:'Theodor-Storm-Haus',lat:54.4846,lon:9.0534},{t:'…'}],mode:'walk'},null,1)}</dayplan>`},
+ {id:'modell',g:'B',no:'B1',nav:'Steckbrief',title:'Modell-Steckbrief',tag:'<modelcard>',why:'Rang 1 (~70 Chats). Die vier Fakten, die immer gefragt sind, in fester Reihenfolge.',q:'ist glm 5.1 open weight?',lead:'Ja.',render:modelCard,sk:`<modelcard>${J({name:'GLM-5.1',status:'open_weight',license:'MIT',params:'744B-A40B',ctx:200000,ctxMax:1000000,asof:'2026-04',hf:'zai-org/GLM-5.1',providers:[{name:'Z.ai API',in:1.0,out:3.2},{name:'Fireworks',in:0.9,out:3.0}]})}</modelcard>`},
+ {id:'offen',g:'B',no:'B2',nav:'Offen?',title:'Offen-jetzt-Ring',tag:'<hoursdial>',why:'Rang 2. „Bis wann offen" ist eine Zeitspanne relativ zu jetzt. Die Rechnung macht der Client mit der echten Uhrzeit.',q:'bis wann hat ikea kiel heute offen',lead:'Live gegen die aktuelle Uhrzeit gerechnet:',render:hoursRing,sk:`<hoursdial>${J({name:'IKEA Kiel',tz:'Europe/Berlin',hours:{'mo-sa':'10:00-20:00',su:null}})}</hoursdial>`},
+ {id:'passt',g:'B',no:'B3',nav:'Passt?',title:'Kompatibilitäts-Schacht',tag:'<fitcheck>',why:'Rang 3. Das Ergebnis ist Ja/Nein plus die eine Bedingung, die kippt.',q:'welche cpu passt in hp elitedesk 800 g2 dm 65w, geht der i7-7700T?',lead:'Ja, aber erst nach einem BIOS-Update. Tipp auf die anderen Chips zum Vergleich.',render:fitCheck,sk:`<fitcheck>${J({target:'HP EliteDesk 800 G2 DM 65W',part:'i7-7700T',fits:'maybe',gates:[{k:'Sockel',ok:true,v:'LGA1151'},{k:'TDP',ok:true,v:'35W ≤ 65W'},{k:'BIOS',ok:'maybe',v:'≥ 2.20'}]})}</fitcheck>`},
+ {id:'kurs',g:'B',no:'B4',nav:'Kurs',title:'Kurs-Warum',tag:'<pricemove>',why:'Rang 4. Der Grund klebt an der Stelle der Kurve, wo er wirkte.',q:'warum ist monero heute so hoch gegangen',lead:'Drei Auslöser, in der Kurve markiert:',render:priceMove,sk:`<pricemove>${J({sym:'XMR',cur:'EUR',win:'24h',spark:'[96 Werte]',pins:[{at:0.3,t:'Delisting-Gerücht dementiert',src:'…'},{at:0.6,t:'Wieder-Listing',src:'…'},{at:0.83,t:'Gewinnmitnahmen'}]})}</pricemove>`},
+ {id:'recht',g:'B',no:'B5',nav:'Recht',title:'Rechts-Ampel',tag:'<legal>',why:'Rang 5. Farbe (geht das?), Geldfolge und Fundstelle sauber getrennt.',q:'ich hab 3 jahre keine steuererklärung gemacht, was passiert',lead:'Kurz gesagt:',render:legalLight,sk:`<legal>${J({light:'red',claim:'3 Jahre keine Steuererklärung',risk:'Schätzung + Verspätungszuschlag + Zinsen',refs:[{label:'§ 152 AO',note:'Verspätungszuschlag'},{label:'§ 233a AO',note:'Zinsen'}],calc:'late_fee'})}</legal>`},
+ {id:'bahn',g:'B',no:'B6',nav:'ÖPNV',title:'Netz-Faden',tag:'<transit>',why:'Rang 6. Richtung, Rest-Halte und Zugteilung sind räumlich. Eine Liste verliert das „wo bin ich".',q:'re7 welcher teil fährt nach kiel und wo sind wir gerade',lead:'Du bist kurz vor Neumünster. Dort wird geteilt:',render:transit,sk:`<transit>${J({line:'RE7',here:'Elmshorn',stops:['Hamburg Hbf','Hamburg Dammtor','Pinneberg','Elmshorn','Neumünster'],split:{at:'Neumünster',front:{to:'Kiel Hbf',stops:['Bordesholm','Kiel Hbf']},rear:{to:'Flensburg',stops:['Rendsburg','Schleswig','Flensburg']}}})}</transit>`},
+ {id:'term',g:'B',no:'B7',nav:'Terminal',title:'Terminal-Replay',tag:'<console>',why:'Rang 7. Die Diagnose klebt an der Zeile, der Fix ist ein Copy-Knopf.',q:"zsh: correct 'codex' to 'code' [nyae]? was soll das",lead:'Gefunden, markiert in deiner Ausgabe:',render:terminal,sk:`<console>${J({lines:[{t:'zsh: command not found: codex',mark:true},{t:'/usr/local/bin:/usr/bin:/bin',mark:true}],finding:'~/.codex/bin fehlt im PATH',fix:{cmd:"echo 'export PATH=\"$HOME/.codex/bin:$PATH\"' >> ~/.zshrc"},replay:['codex --version']})}</console>`},
+ {id:'stack',g:'B',no:'B8',nav:'Stack',title:'Schichten-Stack',tag:'<stack>',why:'Rang 8. Pipeline sichtbar: was geht rein, was kommt raus, pro Stufe.',q:'wie funktioniert ein compiler von source bis executable',lead:'Sechs Stufen. Drück auf Durchlauf:',render:layerStack,sk:`<stack>${J({flow:'down',token:'x=2+3',layers:[{name:'Lexer',out:'[int] [x] [=] …'},{name:'Parser',out:'AST'},{name:'Codegen',out:'mov dword [x], 5'}]})}</stack>`},
+ {id:'kelvin',g:'B',no:'B9',nav:'Kelvin',title:'Skala-Einordnung',tag:'<gauge>',why:'Rang 12. Eine Zahl sagt nichts, ein Punkt auf der Skala schon.',q:'ist 3000 kelvin warmweiß?',lead:'Ja:',render:kelvin,sk:`<gauge>${J({scale:'kelvin',min:1800,max:6500,value:3000,bands:[{to:2200,label:'Kerze'},{to:3300,label:'warmweiß'},{to:5300,label:'neutralweiß'}]})}</gauge>`},
+ {id:'waage',g:'B',no:'B10',nav:'Quellen',title:'Quellen-Waage',tag:'<balance>',why:'Rang 14. Wie sicher ist das, und worauf stützt es sich. Widerspruch wird gezeigt statt glattgebügelt.',q:'stimmt es dass kaffee dehydriert?',lead:'Die Belege sprechen eher dagegen:',render:balance,sk:`<balance>${J({claim:'Kaffee entzieht dem Körper Wasser',confidence:'hoch',for:[{src:'Studie 1928',weight:2},{src:'Blog',weight:1}],against:[{src:'Studie 2014',weight:3},{src:'Fachgesellschaft',weight:3},{src:'Review',weight:2}]})}</balance>`},
+ {id:'deck',g:'B',no:'B11',nav:'Lernen',title:'Lern-Deck',tag:'<deck>',why:'Rang 10. Eine Idee pro Karte, und eine Mini-Frage prüft, ob es saß.',q:'erklär mir wie ein llm funktioniert, schritt für schritt, ich verstehs sonst nicht',lead:'Fünf Karten, zwei kurze Fragen:',render:deck,sk:`<deck>${J({topic:'LLM von Grund auf',cards:[{h:'Token',b:'Text wird in Stücke zerlegt …'},{h:'Embedding',b:'…'},{quiz:{q:'Was ist ein Embedding?',opts:['ein Vektor','ein Wort'],a:0}}]})}</deck>`},
+ {id:'umrechnen',g:'B',no:'B12',nav:'Umrechnen',title:'Umrechen-Band',tag:'<convert>',why:'Rang 11. Ergebnis groß, Nachbarwerte durch Ziehen, ohne neue Frage.',q:'12 km/h, was ist das als pace?',lead:'5:00 min/km. Zieh am Griff für andere Tempi:',render:convert,sk:`<convert>${J({kind:'pace',from:{v:12,u:'km/h'},to:{u:'min/km'},note:'Pace = 60 ÷ km/h'})}</convert>`}
+];
+
+/* ================= build page ================= */
+const main=$('#main'),navIn=$('#navIn');
+let lastG='';
+SECTIONS.forEach(s=>{
+  if(s.g!==lastG){if(lastG)navIn.insertAdjacentHTML('beforeend','<i class="sep"></i>');lastG=s.g;main.insertAdjacentHTML('beforeend',`<div class="grouph">${s.g==='A'?'A · Vier Kernkonzepte, je mehrere Varianten':'B · Zwölf Mini-Demos nach Rang'}</div>`);}
+  navIn.insertAdjacentHTML('beforeend',`<a href="#${s.id}" data-nav="${s.id}"><b>${s.no}</b>${s.nav}</a>`);
+  const vs=s.variants||[{name:'',lead:s.lead,render:s.render,sk:s.sk}];
+  const sec=document.createElement('section');sec.className='sec';sec.id=s.id;
+  sec.innerHTML=`<div class="kicker">${s.no} · ${s.g==='A'?'Kernkonzept':'Mini-Demo'}</div><h2>${s.title}</h2><p class="why">${s.why}</p>
+   ${vs.length>1?`<div class="vwrap"><span class="vlabel">Variante</span>${segHtml(vs.map((v,i)=>[i,v.name]),0)}</div>`:''}
+   <div class="chat"><div class="row me"><div class="bubble">${esc(s.q)}</div></div>
+   <div class="row bot"><div class="av">c</div><div class="botcol"><p class="lead"></p><div class="ans"></div></div></div></div>
+   <details class="sk"><summary>Tag-Skizze: <code>${esc(s.tag)}</code></summary><pre><code></code></pre></details>`;
+  main.appendChild(sec);
+  let cleanup=null;
+  const show=i=>{const v=vs[i];if(typeof cleanup==='function')cleanup();const old=$('.ans',sec);const ans=old.cloneNode(false);old.replaceWith(ans);const lead=$('.lead',sec);lead.textContent=v.lead||'';lead.style.display=v.lead?'':'none';
+    try{cleanup=v.render(ans);}catch(err){ans.innerHTML=`<div class="card">Renderfehler: ${esc(err.message)}</div>`;console.error(err);}
+    $('pre code',sec).textContent=v.sk||s.sk||'';};
+  const seg=$('.vwrap .seg',sec);if(seg)segWire(seg,v=>show(+v));
+  show(0);
+});
+/* scroll spy */
+const links=$$('.nav a');
+const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(a=>a.classList.toggle('on',a.dataset.nav===e.target.id));const a=links.find(a=>a.dataset.nav===e.target.id);if(a){const n=navIn;n.scrollTo({left:a.offsetLeft-n.clientWidth/2+a.clientWidth/2,behavior:'smooth'});}}});},{rootMargin:'-45% 0px -50% 0px'});
+$$('.sec').forEach(s=>io.observe(s));
+/* theme */
+const root=document.documentElement;
+const saved=(()=>{try{return localStorage.getItem('af-theme');}catch(e){return null;}})();
+root.dataset.theme=saved||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+$('#themeBtn').addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('af-theme',root.dataset.theme);}catch(e){}});
+</script>
+</body>
+</html>
