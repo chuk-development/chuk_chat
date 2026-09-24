@@ -92,8 +92,15 @@ android {
             ?.mapNotNull { abiForTarget[it.trim()] }
             ?.takeIf { it.isNotEmpty() }
             ?: listOf("arm64-v8a")
-        ndk {
-            abiFilters += requestedAbis
+        // --split-per-abi (the release CI) makes Flutter set splits.abi, and
+        // AGP rejects ndk.abiFilters next to it; the splits already limit
+        // each APK to one ABI.
+        val splitPerAbi = (project.findProperty("split-per-abi") as String?)
+            ?.toBoolean() == true
+        if (!splitPerAbi) {
+            ndk {
+                abiFilters += requestedAbis
+            }
         }
     }
 
