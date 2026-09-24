@@ -13,6 +13,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/chat_payload_migration_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_sync_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -183,6 +184,10 @@ class AgentsChatStorageBootstrap {
       _startFlushing();
       return;
     }
+    // The one-time rewrite of the chats to payload v3 runs before any chat
+    // loads (the maintenance screen shows while it runs).
+    await ChatMaintenanceController.instance.ensureReady(userId);
+    if (_activeUserId != userId) return;
     try {
       // Titles from the local cache first (instant), then the cloud poll.
       // This is the chuk_chat order (`_loadUserData` → `_startSyncAfterKey`).

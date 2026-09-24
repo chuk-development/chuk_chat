@@ -9,7 +9,190 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'package:chuk_chat/platform_config.dart';
+import 'package:chuk_chat/services/chat_payload_codec.dart';
+import 'package:chuk_chat/services/payload_compression.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
+
+/// Envelope version of a plain ciphertext: the cleartext is UTF-8 text or
+/// raw bytes. Titles, prompts, images and every other value use it.
+const String kPlainEnvelopeVersion = '1';
+
+/// Envelope version of a compressed chat payload: the cleartext is a
+/// payload frame (see payload_compression.dart) holding a v3 payload JSON.
+///
+/// An app from before v3 accepts only [kPlainEnvelopeVersion] and throws
+/// `StateError('Unsupported ciphertext version: 2')` before it decrypts
+/// anything, so it can neither misread nor rewrite such a chat.
+const String kCompressedEnvelopeVersion = '2';
+
+/// The text of a decrypted envelope of [version].
+String _cleartextToString(List<int> cleartext, Object? version) {
+  if (version == kCompressedEnvelopeVersion) {
+    return utf8.decode(decompressPayloadFrame(cleartext));
+  }
+  return utf8.decode(cleartext);
+}
+
+void _checkEnvelopeVersion(Object? version) {
+  if (version != kPlainEnvelopeVersion &&
+      version != kCompressedEnvelopeVersion) {
+    throw StateError('Unsupported ciphertext version: $version');
+  }
+}
+
+/// Seal a chat payload JSON: compress it into a frame, encrypt the frame
+/// with AES-256-GCM and wrap it in a [kCompressedEnvelopeVersion] envelope.
+/// Pure, so it runs in an isolate and in tests without a signed-in user.
+Future<String> sealChatPayload({
+  required String json,
+  required List<int> keyBytes,
+  required int keyVersion,
+  bool allowBzip2 = true,
+}) async {
+  final frame = compressPayloadStrong(json, allowBzip2: allowBzip2);
+  final cipher = AesGcm.with256bits();
+  final rng = Random.secure();
+  final nonce = List<int>.generate(12, (_) => rng.nextInt(256));
+  final secretBox = await cipher.encrypt(
+    frame,
+    secretKey: SecretKey(keyBytes),
+    nonce: nonce,
+  );
+  return jsonEncode(<String, dynamic>{
+    'v': kCompressedEnvelopeVersion,
+    'kv': keyVersion,
+    'nonce': base64Encode(secretBox.nonce),
+    'ciphertext': base64Encode(secretBox.cipherText),
+    'mac': base64Encode(secretBox.mac.bytes),
+  });
+}
+
+/// Decrypt an envelope of either version to its text. Pure, see
+/// [sealChatPayload].
+Future<String> openEnvelopeText(String encrypted, List<int> keyBytes) async {
+  final Map<String, dynamic> payload = jsonDecode(encrypted);
+  final version = payload['v'];
+  _checkEnvelopeVersion(version);
+  final secretBox = SecretBox(
+    base64Decode(payload['ciphertext'] as String),
+    nonce: base64Decode(payload['nonce'] as String),
+    mac: Mac(base64Decode(payload['mac'] as String)),
+  );
+  final cleartext = await AesGcm.with256bits().decrypt(
+    secretBox,
+    secretKey: SecretKey(keyBytes),
+  );
+  return _cleartextToString(cleartext, version);
+}
+
+/// The envelope version of [encrypted] without decrypting it, or null when
+/// it is not an envelope.
+String? envelopeVersionOf(String encrypted) {
+  try {
+    final decoded = jsonDecode(encrypted);
+    if (decoded is! Map) return null;
+    final version = decoded['v'];
+    return version is String ? version : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Parameters for sealing a chat payload in the background.
+class _SealParams {
+  const _SealParams(this.json, this.keyBytes, this.keyVersion, this.allowBzip2);
+
+  final String json;
+  final List<int> keyBytes;
+  final int keyVersion;
+  final bool allowBzip2;
+}
+
+/// The result of [convertChatEnvelopeToV3]: the new envelope, the v3
+/// payload JSON sealed in it, and the fingerprint of the original messages
+/// (see `chatPayloadFingerprint`).
+typedef ChatEnvelopeV3 = ({
+  String envelope,
+  String payloadJson,
+  String fingerprint,
+});
+
+/// Convert the chat payload envelope [encrypted] (any version) to a v3
+/// payload in a compressed envelope, and prove the result before it is
+/// returned: the v3 JSON must decode to the same messages as the original,
+/// and the new envelope must decrypt to exactly that JSON. Returns null when
+/// either proof fails. Pure, so it runs in an isolate.
+Future<ChatEnvelopeV3?> convertChatEnvelopeToV3({
+  required String encrypted,
+  required List<int> keyBytes,
+  required int keyVersion,
+  bool allowBzip2 = true,
+}) async {
+  final original = await openEnvelopeText(encrypted, keyBytes);
+  final before = decodeChatPayload(original);
+  final payloadJson = before.version == kChatPayloadVersion
+      ? original
+      : encodeChatPayload(before.messages, customName: before.customName);
+  final after = decodeChatPayload(payloadJson);
+  if (!chatPayloadsEquivalent(before, after)) return null;
+  final fingerprint = chatPayloadFingerprint(before);
+  final envelope = await sealChatPayload(
+    json: payloadJson,
+    keyBytes: keyBytes,
+    keyVersion: keyVersion,
+    allowBzip2: allowBzip2,
+  );
+  if (await openEnvelopeText(envelope, keyBytes) != payloadJson) return null;
+  return (
+    envelope: envelope,
+    payloadJson: payloadJson,
+    fingerprint: fingerprint,
+  );
+}
+
+/// Decrypt a chat envelope and return the fingerprint of its messages.
+/// Pure, for isolates and tests.
+Future<String> chatEnvelopeFingerprint(
+  String encrypted,
+  List<int> keyBytes,
+) async => chatPayloadJsonFingerprint(
+  await openEnvelopeText(encrypted, keyBytes),
+);
+
+class _FingerprintParams {
+  const _FingerprintParams(this.encrypted, this.keyBytes);
+
+  final String encrypted;
+  final List<int> keyBytes;
+}
+
+Future<String> _fingerprintInBackground(_FingerprintParams params) =>
+    chatEnvelopeFingerprint(params.encrypted, params.keyBytes);
+
+class _ConvertParams {
+  const _ConvertParams(this.encrypted, this.keyBytes, this.keyVersion);
+
+  final String encrypted;
+  final List<int> keyBytes;
+  final int keyVersion;
+}
+
+Future<ChatEnvelopeV3?> _convertChatEnvelopeInBackground(
+  _ConvertParams params,
+) => convertChatEnvelopeToV3(
+  encrypted: params.encrypted,
+  keyBytes: params.keyBytes,
+  keyVersion: params.keyVersion,
+  allowBzip2: !kIsWeb,
+);
+
+Future<String> _sealChatPayloadInBackground(_SealParams params) =>
+    sealChatPayload(
+      json: params.json,
+      keyBytes: params.keyBytes,
+      keyVersion: params.keyVersion,
+      allowBzip2: params.allowBzip2,
+    );
 
 /// Parameters for background encryption
 class _EncryptionParams {
@@ -104,9 +287,7 @@ Future<String> _decryptStringInBackground(_DecryptionParams params) async {
 
   final Map<String, dynamic> payload = jsonDecode(params.encrypted);
   final version = payload['v'];
-  if (version != params.payloadVersion) {
-    throw StateError('Unsupported ciphertext version: $version');
-  }
+  _checkEnvelopeVersion(version);
 
   final nonce = base64Decode(payload['nonce'] as String);
   final cipherText = base64Decode(payload['ciphertext'] as String);
@@ -115,7 +296,7 @@ Future<String> _decryptStringInBackground(_DecryptionParams params) async {
 
   final cleartextBytes = await cipher.decrypt(secretBox, secretKey: secretKey);
 
-  return utf8.decode(cleartextBytes);
+  return _cleartextToString(cleartextBytes, version);
 }
 
 /// Top-level function for batch background decryption
@@ -131,7 +312,8 @@ Future<List<String?>> _decryptBatchInBackground(
     try {
       final Map<String, dynamic> payload = jsonDecode(encrypted);
       final version = payload['v'];
-      if (version != params.payloadVersion) {
+      if (version != kPlainEnvelopeVersion &&
+          version != kCompressedEnvelopeVersion) {
         results.add(null);
         continue;
       }
@@ -146,7 +328,7 @@ Future<List<String?>> _decryptBatchInBackground(
         secretKey: secretKey,
       );
 
-      results.add(utf8.decode(cleartextBytes));
+      results.add(_cleartextToString(cleartextBytes, version));
     } catch (_) {
       results.add(null);
     }
@@ -643,9 +825,7 @@ class EncryptionService {
     final secretKey = await _ensureKey();
     final Map<String, dynamic> payload = jsonDecode(encrypted);
     final version = payload['v'];
-    if (version != _payloadVersion) {
-      throw StateError('Unsupported ciphertext version: $version');
-    }
+    _checkEnvelopeVersion(version);
     final nonce = base64Decode(payload['nonce'] as String);
     final cipherText = base64Decode(payload['ciphertext'] as String);
     final mac = Mac(base64Decode(payload['mac'] as String));
@@ -654,7 +834,56 @@ class EncryptionService {
       secretBox,
       secretKey: secretKey,
     );
-    return utf8.decode(cleartextBytes);
+    return _cleartextToString(cleartextBytes, version);
+  }
+
+  /// Payloads up to this many characters are sealed on the calling isolate.
+  static const int _backgroundSealMinChars = 4 * 1024;
+
+  /// On the web there is no isolate: [compute] runs on the UI thread. bzip2
+  /// is slow in JavaScript, so above this size the web seals with deflate.
+  static const int _webBzip2MaxChars = 128 * 1024;
+
+  /// Encrypt a chat payload JSON (v3) for `encrypted_chats`: compressed,
+  /// then encrypted, in a [kCompressedEnvelopeVersion] envelope. Runs off
+  /// the UI isolate for anything but a short chat.
+  static Future<String> encryptChatPayload(String json) async {
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+    final params = _SealParams(
+      json,
+      keyBytes,
+      _currentKeyVersion,
+      !kIsWeb || json.length <= _webBzip2MaxChars,
+    );
+    if (json.length < _backgroundSealMinChars) {
+      return _sealChatPayloadInBackground(params);
+    }
+    return compute(_sealChatPayloadInBackground, params);
+  }
+
+  /// [convertChatEnvelopeToV3] with the current key, off the UI isolate.
+  /// For the one-time migration of old chats.
+  static Future<ChatEnvelopeV3?> convertChatPayloadToV3(
+    String encrypted,
+  ) async {
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+    return compute(
+      _convertChatEnvelopeInBackground,
+      _ConvertParams(encrypted, keyBytes, _currentKeyVersion),
+    );
+  }
+
+  /// [chatEnvelopeFingerprint] with the current key, off the UI isolate.
+  /// Verifies a chat that was just rewritten.
+  static Future<String> chatPayloadFingerprintOf(String encrypted) async {
+    final secretKey = await _ensureKey();
+    final keyBytes = await secretKey.extractBytes();
+    return compute(
+      _fingerprintInBackground,
+      _FingerprintParams(encrypted, keyBytes),
+    );
   }
 
   /// Encrypts binary data (e.g., image files) and returns encrypted JSON

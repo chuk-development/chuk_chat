@@ -311,6 +311,18 @@ class AppLocalizations {
   String get deleteAccount => _get('deleteAccount');
   String get unableToLoadProfile => _get('unableToLoadProfile');
   String get retry => _get('retry');
+
+  // ── Chat maintenance (payload v3 rewrite) ──────────────────
+  String get maintenanceTitle => _get('maintenanceTitle');
+  String get maintenanceBody => _get('maintenanceBody');
+  String get maintenanceMigrating => _get('maintenanceMigrating');
+  String get maintenanceVerifying => _get('maintenanceVerifying');
+  String maintenanceCount(int n, int total) => _get(
+    'maintenanceCount',
+  ).replaceAll('{n}', '$n').replaceAll('{total}', '$total');
+  String get maintenanceFailedTitle => _get('maintenanceFailedTitle');
+  String get maintenanceFailedBody => _get('maintenanceFailedBody');
+  String get maintenanceContinue => _get('maintenanceContinue');
   String get saved => _get('saved');
   String emailUpdated(String email) =>
       _get('emailUpdated').replaceAll('{email}', email);

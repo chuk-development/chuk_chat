@@ -769,4 +769,13 @@ const Map<String, String> stringsDe = {
   'bashSandboxFolder': 'Sandbox-Ordner',
   'bashSandboxFolderUnset': 'Nicht gesetzt — bash-Befehle werden abgelehnt',
   'bashSandboxChooseDialog': 'Bash-Sandbox-Ordner wählen',
+  // ── Chat maintenance (payload v3 rewrite) ──────────────────
+  'maintenanceTitle': 'Deine Chats werden aktualisiert',
+  'maintenanceBody': 'Bitte schließe die App nicht. Deine Daten werden neu geschrieben.',
+  'maintenanceMigrating': 'Chats neu schreiben',
+  'maintenanceVerifying': 'Chats prüfen',
+  'maintenanceCount': '{n} von {total}',
+  'maintenanceFailedTitle': 'Die Aktualisierung wurde nicht abgeschlossen',
+  'maintenanceFailedBody': 'Deine Chats sind unverändert und sicher. Du kannst es erneut versuchen oder fortfahren und die App wie bisher nutzen.',
+  'maintenanceContinue': 'Fortfahren',
 };

@@ -380,6 +380,7 @@ Chat payloads stored in **SQLite database** (`chat_cache.db`) on all native plat
 - **Web**: SharedPreferences fallback (always online, small cache)
 - **Server-side encryption**: Unchanged. AES-256-GCM, E2E, zero knowledge.
 - **Local cache fields**: `payload` + `title` (plaintext in SQLite)
+- **Payload format**: v3 JSON everywhere, compressed (cache: deflate frame; cloud: bzip2/deflate frame inside an AES envelope `{"v":"2"}`). Build payloads only with `encodeChatPayload`/`encodeChatPayloadAsync` and seal them with `EncryptionService.encryptChatPayload`. See `docs/CHAT_PAYLOAD_FORMAT.md`
 - **Supabase fields**: `encrypted_payload` + `encrypted_title` (encrypted)
 - **Safety**: Different field names prevent accidentally sending plaintext to Supabase
 - **Chat loading**: Cache-first via `loadFullChat()` — instant from SQLite, Supabase sync in background
@@ -488,6 +489,7 @@ actually loads before committing. See `docs/MCP_CONNECTORS.md`.
 | `docs/GOTCHAS.md` | **CRITICAL** — bugs to avoid |
 | `docs/ASSISTANT_SURFACE.md` | Android assistant surface: assist role, overlay, device tools, the pinned model |
 | `docs/MCP_CONNECTORS.md` | Remote MCP connectors: the OAuth flow, storage, tool naming |
+| `docs/CHAT_PAYLOAD_FORMAT.md` | Chat payload v3 (no duplicates), compression frame, envelope `v:"2"`, old-client behaviour, the one-time migration behind the blocking maintenance screen |
 | `docs/LINUX_BUILDS.md` | Fastlane packaging (DEB, RPM, AppImage, Flatpak) |
 | `docs/REMOTE_DEV_SETUP.md` | Agent on `claudecode`, app on the laptop: `flutter-remote` / `flutter-hotd` |
 | `docs/FASTLANE.md` | Fastlane: generated store screenshots, Play + F-Droid metadata, upload lanes |

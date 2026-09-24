@@ -14,22 +14,29 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:chuk_chat/services/chat_cache_search_text.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_rows.dart';
+import 'package:chuk_chat/services/payload_compression.dart';
 
 class LocalChatCacheService {
   static const String _dbName = 'chat_cache.db';
-  static const int _dbVersion = 5;
+  static const int _dbVersion = 6;
 
-  /// Payloads are gzipped before they hit the `payload` column.
+  /// Payloads are compressed before they hit the `payload` column: a deflate
+  /// payload frame (see payload_compression.dart), the frame format the
+  /// cloud uses too. Rows written before v3 are gzip blobs or plain TEXT and
+  /// still read.
   ///
-  /// A chat is JSON with long, highly repetitive tool results, so it
-  /// compresses about 4x. That shrinks the file, the platform-channel
-  /// traffic and the memory each read allocates. Level 4 reaches within
-  /// 4% of level 9 at half the CPU time, which matters because the
-  /// one-time migration of an existing cache runs at app start.
-  static final GZipCodec _payloadCodec = GZipCodec(level: 4);
+  /// A chat is JSON with long, repetitive tool results, so it compresses
+  /// about 4x. That shrinks the file, the platform-channel traffic and the
+  /// memory each read allocates. The cache takes deflate, not the cloud's
+  /// bzip2: a chat is opened from here, and bzip2 decodes several times
+  /// slower for a few percent.
+  ///
+  /// Every payload is framed, even a short one where the frame gains
+  /// nothing: an app from before v3 cannot read a frame and skips the row,
+  /// while plain TEXT holding v3 JSON it would misread as v1.
 
-  /// Below this size the gzip header costs more than it saves.
-  static const int _compressMinBytes = 512;
+  /// From this payload size on a row is encoded in a background isolate.
+  static const int _backgroundEncodeMinChars = 16 * 1024;
 
   /// Old SharedPreferences key prefixes (for migration).
   static const String _oldV2PrefsKey = 'cached_chats_v2-';
@@ -83,9 +90,8 @@ class LocalChatCacheService {
             PRIMARY KEY (user_id, id)
           )
         ''');
-        await db.execute(
-          'CREATE INDEX idx_chat_cache_user ON chat_cache (user_id)',
-        );
+        // No index on (user_id) alone: the primary key (user_id, id)
+        // already serves every lookup by user.
         await db.execute(
           'CREATE INDEX idx_chat_cache_user_updated '
           'ON chat_cache (user_id, updated_at DESC, created_at DESC)',
@@ -123,6 +129,10 @@ class LocalChatCacheService {
         }
         if (oldVersion < 5) {
           await _createSkillsTable(db);
+        }
+        if (oldVersion < 6) {
+          // Redundant: the primary key (user_id, id) has user_id as prefix.
+          await db.execute('DROP INDEX IF EXISTS idx_chat_cache_user');
         }
       },
     );
@@ -367,13 +377,15 @@ class LocalChatCacheService {
     String userId,
     List<Map<String, dynamic>> rows,
   ) async {
+    final sanitized = <Map<String, dynamic>>[
+      for (final row in rows) ?_sanitizeRow(row),
+    ];
+    final dbRows = await _toDbRows(userId, sanitized);
     final db = await _getDb();
     final batch = db.batch();
     batch.delete('chat_cache', where: 'user_id = ?', whereArgs: [userId]);
-    for (final row in rows) {
-      final s = _sanitizeRow(row);
-      if (s == null) continue;
-      batch.insert('chat_cache', _toDbRow(userId, s));
+    for (final dbRow in dbRows) {
+      batch.insert('chat_cache', dbRow);
     }
     await batch.commit(noResult: true);
   }
@@ -381,12 +393,166 @@ class LocalChatCacheService {
   static Future<void> upsert(String userId, Map<String, dynamic> row) async {
     final s = _sanitizeRow(row);
     if (s == null) return;
+    final dbRows = await _toDbRows(userId, [s]);
     final db = await _getDb();
     await db.insert(
       'chat_cache',
-      _toDbRow(userId, s),
+      dbRows.single,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+  }
+
+  /// Replace the payload of one row with [payload], but only while the row
+  /// is still the one the caller read: same `updated_at`, same stored size.
+  /// Returns whether it was written. For the background upgrade of old rows
+  /// to v3, which must never overwrite a save that came in meanwhile.
+  static Future<bool> replacePayloadIfUnchanged(
+    String userId,
+    String chatId, {
+    required String payload,
+    required String? expectedUpdatedAt,
+    required int expectedStoredLength,
+  }) async {
+    final dbRows = await _toDbRows(userId, [
+      <String, dynamic>{'id': chatId, 'payload': payload},
+    ]);
+    final encoded = dbRows.single;
+    final db = await _getDb();
+    final count = await db.rawUpdate(
+      'UPDATE chat_cache SET payload = ?, search_text = ? '
+      'WHERE user_id = ? AND id = ? AND updated_at IS ? '
+      'AND LENGTH(payload) = ?',
+      [
+        encoded['payload'],
+        encoded['search_text'],
+        userId,
+        chatId,
+        expectedUpdatedAt,
+        expectedStoredLength,
+      ],
+    );
+    return count > 0;
+  }
+
+  // ─── Maintenance: payload v3 upgrade ──────────────────────────────────
+
+  static const String _backupName = 'chat_cache.backup.db';
+
+  static Future<String> _dbPath() async =>
+      p.join((await getApplicationSupportDirectory()).path, _dbName);
+
+  static Future<String> _backupPath() async =>
+      p.join((await getApplicationSupportDirectory()).path, _backupName);
+
+  /// Ids of [userId]'s rows that are not a payload frame yet (plain TEXT or
+  /// the gzip BLOB of before v3). Reads no payloads.
+  static Future<List<String>> idsNeedingPayloadUpgrade(String userId) async {
+    await _runMigrations(userId);
+    final db = await _getDb();
+    final rows = await db.rawQuery(
+      "SELECT id FROM chat_cache WHERE user_id = ? AND "
+      "(typeof(payload) != 'blob' OR substr(payload, 1, 1) != x'00')",
+      [userId],
+    );
+    return [for (final row in rows) row['id'] as String];
+  }
+
+  /// Write a consistent copy of the whole cache next to it
+  /// (`VACUUM INTO`), replacing an older backup. Returns its path.
+  static Future<String> backupDatabase() async {
+    final db = await _getDb();
+    final path = await _backupPath();
+    final file = File(path);
+    if (await file.exists()) await file.delete();
+    await db.execute('VACUUM INTO ?', [path]);
+    return path;
+  }
+
+  /// Put the backup of [backupDatabase] back in place of the cache. The
+  /// handle is closed first and reopened by the next call.
+  static Future<void> restoreBackup() async {
+    final backup = File(await _backupPath());
+    if (!await backup.exists()) {
+      throw StateError('No chat cache backup to restore');
+    }
+    await _db?.close();
+    _db = null;
+    _migrationChecked.clear();
+    final dbPath = await _dbPath();
+    for (final suffix in const ['-wal', '-shm', '-journal']) {
+      final side = File('$dbPath$suffix');
+      if (await side.exists()) await side.delete();
+    }
+    await backup.copy(dbPath);
+  }
+
+  /// Remove the backup of [backupDatabase], if there is one.
+  static Future<void> deleteBackup() async {
+    final file = File(await _backupPath());
+    if (await file.exists()) await file.delete();
+  }
+
+  /// Whether a backup of [backupDatabase] exists.
+  static Future<bool> hasBackup() async => File(await _backupPath()).exists();
+
+  /// Set `updated_at` of one row to [value], but only while it is still
+  /// [expected]: the cloud row was rewritten with a new timestamp, and the
+  /// cache must follow it or the next sync downloads the chat again.
+  static Future<bool> updateUpdatedAtIfEqual(
+    String userId,
+    String chatId, {
+    required String expected,
+    required String value,
+  }) async {
+    final db = await _getDb();
+    final count = await db.rawUpdate(
+      'UPDATE chat_cache SET updated_at = ? '
+      'WHERE user_id = ? AND id = ? AND updated_at = ?',
+      [value, userId, chatId, expected],
+    );
+    return count > 0;
+  }
+
+  /// One row with its payload decoded, plus what
+  /// [replacePayloadIfUnchanged] needs to detect a change: the stored
+  /// payload length and whether the row is already a v3-era frame.
+  static Future<({Map<String, dynamic> row, int storedLength, bool framed})?>
+  loadRawById(String userId, String chatId) async {
+    final db = await _getDb();
+    final rows = await db.rawQuery(
+      'SELECT *, LENGTH(payload) AS stored_length FROM chat_cache '
+      'WHERE user_id = ? AND id = ? LIMIT 1',
+      [userId, chatId],
+    );
+    if (rows.isEmpty) return null;
+    final raw = rows.first;
+    final stored = raw['payload'];
+    return (
+      row: _fromDbRow(raw),
+      storedLength: (raw['stored_length'] as num?)?.toInt() ?? 0,
+      framed: stored is List<int> && isPayloadFrame(stored),
+    );
+  }
+
+  /// Encode rows for the table. Large payloads are compressed (and their
+  /// search text extracted) in a background isolate.
+  static Future<List<Map<String, dynamic>>> _toDbRows(
+    String userId,
+    List<Map<String, dynamic>> rows,
+  ) async {
+    var chars = 0;
+    for (final row in rows) {
+      chars += (row['payload'] as String).length;
+    }
+    final encoded = chars < _backgroundEncodeMinChars
+        ? _encodePayloads([for (final row in rows) row['payload'] as String])
+        : await compute(_encodePayloads, [
+            for (final row in rows) row['payload'] as String,
+          ]);
+    return [
+      for (var i = 0; i < rows.length; i++)
+        _toDbRow(userId, rows[i], encoded[i]),
+    ];
   }
 
   static Future<void> delete(String userId, String chatId) async {
@@ -842,37 +1008,31 @@ class LocalChatCacheService {
 
   // ─── Row conversion ───────────────────────────────────────────────────
 
-  /// Encode a payload for storage: gzip unless it is too small to gain.
-  static Object _encodePayload(String payload) {
-    final bytes = utf8.encode(payload);
-    if (bytes.length < _compressMinBytes) return payload;
-    return Uint8List.fromList(_payloadCodec.encode(bytes));
-  }
+  /// Encode a payload for storage: always a deflate frame (see above).
+  static Object _encodePayload(String payload) => compressPayloadFast(payload);
 
-  /// Decode a stored payload. Accepts gzipped BLOBs and legacy plain TEXT,
-  /// so a row written before the v4 upgrade still reads correctly.
+  /// Decode a stored payload. Accepts payload frames, the gzip BLOBs of
+  /// v4/v5 and legacy plain TEXT, so every row ever written still reads.
   static String _decodePayload(Object? stored) {
     if (stored is String) return stored;
-    if (stored is List<int>) {
-      return utf8.decode(_payloadCodec.decode(stored));
-    }
+    if (stored is List<int>) return decodeStoredPayload(stored);
     throw StateError('Unsupported payload storage type: ${stored.runtimeType}');
   }
 
   static Map<String, dynamic> _toDbRow(
     String userId,
     Map<String, dynamic> row,
+    _EncodedPayload encoded,
   ) {
-    final payload = row['payload'] as String;
     return {
       'id': row['id'],
       'user_id': userId,
-      'payload': _encodePayload(payload),
+      'payload': encoded.stored,
       'title': row['title'],
       'created_at': row['created_at'],
       'updated_at': row['updated_at'],
       'is_starred': row['is_starred'] == true ? 1 : 0,
-      'search_text': buildChatSearchText(payload),
+      'search_text': encoded.searchText,
     };
   }
 
@@ -911,7 +1071,18 @@ class LocalChatCacheService {
   }
 }
 
-// ─── Top-level isolate function ─────────────────────────────────────────────
+// ─── Top-level isolate functions ────────────────────────────────────────────
+
+/// A payload as the table stores it, with its search text.
+typedef _EncodedPayload = ({Object stored, String? searchText});
+
+List<_EncodedPayload> _encodePayloads(List<String> payloads) => [
+  for (final payload in payloads)
+    (
+      stored: LocalChatCacheService._encodePayload(payload),
+      searchText: buildChatSearchText(payload),
+    ),
+];
 
 /// Parse JSON cache data in a background isolate (for migration reads).
 List<Map<String, dynamic>> _parseJsonCacheInIsolate(String raw) {

@@ -53,7 +53,7 @@
 ///   (and into memory when the thread is there). A dirty thread, a thread
 ///   with a write in flight and a thread just deleted are never overwritten.
 ///
-/// The payload shape is chuk_chat's (`{"v": kChatPayloadVersion,
+/// The payload shape is chuk_chat's v2 (`{"v": kChatPayloadVersionV2,
 /// "messages": [...]}`) and the cache row builder is chuk_chat's.
 ///
 /// ## Delete and password change
@@ -74,11 +74,13 @@ import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
+import 'package:chuk_chat/services/chat_payload_codec.dart'
+    show kChatPayloadVersionV2;
 import 'package:chuk_chat/services/chat_storage_crud.dart' show ChatStorageCrud;
 import 'package:chuk_chat/services/chat_storage_sync.dart'
     show deserializePayloadIsolate;
 import 'package:chuk_chat/services/chat_storage_mutations.dart'
-    show kChatPayloadVersion, saveTitlesToCache;
+    show saveTitlesToCache;
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -1354,7 +1356,7 @@ class AgentsChatStore {
 
   static String _payloadJson(List<ChatMessage> messages, String? customName) =>
       jsonEncode(<String, dynamic>{
-        'v': kChatPayloadVersion,
+        'v': kChatPayloadVersionV2,
         'customName': ?customName,
         'messages': messages.map((m) => m.toJson()).toList(),
       });

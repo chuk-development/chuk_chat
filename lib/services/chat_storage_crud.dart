@@ -186,21 +186,27 @@ class ChatStorageCrud {
               ),
             );
 
-            // Cache plaintext for next time
+            // Cache plaintext (as v3) for next time
             final title = chat.title ?? extractTitleFromMessages(chat.messages);
-            unawaited(
-              LocalChatCacheService.upsert(
-                user.id,
-                LocalChatCacheService.buildPlaintextRow(
-                  id: chatId,
-                  payload: decrypted,
-                  createdAt: row['created_at'] as String,
-                  isStarred: (row['is_starred'] as bool?) ?? false,
-                  updatedAt: row['updated_at'] as String?,
-                  title: title.isNotEmpty ? title : null,
-                ),
-              ),
-            );
+            unawaited(() async {
+              try {
+                await LocalChatCacheService.upsert(
+                  user.id,
+                  LocalChatCacheService.buildPlaintextRow(
+                    id: chatId,
+                    payload: await toChatPayloadV3Async(decrypted),
+                    createdAt: row['created_at'] as String,
+                    isStarred: (row['is_starred'] as bool?) ?? false,
+                    updatedAt: row['updated_at'] as String?,
+                    title: title.isNotEmpty ? title : null,
+                  ),
+                );
+              } catch (e) {
+                if (kDebugMode) {
+                  debugPrint('⚠️ [ChatStorage] Cache write failed: $e');
+                }
+              }
+            }());
 
             stopwatch.stop();
             if (kDebugMode) {
@@ -310,7 +316,7 @@ class ChatStorageCrud {
         userId,
         LocalChatCacheService.buildPlaintextRow(
           id: chatId,
-          payload: decrypted,
+          payload: await toChatPayloadV3Async(decrypted),
           createdAt: row['created_at'] as String,
           isStarred: (row['is_starred'] as bool?) ?? false,
           updatedAt: row['updated_at'] as String?,
@@ -806,11 +812,10 @@ class ChatStorageCrud {
             continue;
           }
 
-          final payload = jsonEncode({
-            'v': kChatPayloadVersion,
-            if (chat.customName != null) 'customName': chat.customName,
-            'messages': chat.messages.map((m) => m.toJson()).toList(),
-          });
+          final payload = await encodeChatPayloadAsync(
+            chat.messages,
+            chat.customName,
+          );
 
           plaintextRows.add(
             LocalChatCacheService.buildPlaintextRow(
@@ -960,18 +965,21 @@ class ChatStorageCrud {
 
   /// Chat id -> the newest cache row waiting to be written, and the writer
   /// working through them. One writer per chat keeps the rows in order, and
-  /// a row that is replaced before its turn is never written.
-  static final Map<String, Map<String, dynamic>> _pendingLocalRows =
-      <String, Map<String, dynamic>>{};
+  /// a row that is replaced before its turn is never written. A row is a
+  /// future: its payload is encoded off the UI isolate, and the order is the
+  /// order of the calls, not the order in which the encodings finish.
+  static final Map<String, Future<Map<String, dynamic>>> _pendingLocalRows =
+      <String, Future<Map<String, dynamic>>>{};
   static final Map<String, Future<void>> _localRowWriters =
       <String, Future<void>>{};
 
   static Future<void> _writeLocalRow(
     String userId,
     String chatId,
-    Map<String, dynamic> row,
+    Future<Map<String, dynamic>> row,
   ) {
-    _pendingLocalRows[chatId] = row;
+    // A failed row is reported by the writer; nobody else listens to it.
+    _pendingLocalRows[chatId] = row..ignore();
     return _localRowWriters[chatId] ??= () async {
       try {
         for (
@@ -980,7 +988,7 @@ class ChatStorageCrud {
           next = _pendingLocalRows.remove(chatId)
         ) {
           try {
-            await LocalChatCacheService.upsert(userId, next);
+            await LocalChatCacheService.upsert(userId, await next);
           } catch (e) {
             // The chat stays dirty and in memory; the flush writes the cloud
             // from there, and the next save writes this row again.
@@ -1000,18 +1008,27 @@ class ChatStorageCrud {
     return name != null && name.isNotEmpty ? name : null;
   }
 
-  /// The plaintext payload of a chat. The one encoding for the cache, the
-  /// cloud and the digests that compare them.
-  static String _payloadJson(List<ChatMessage> messages, String? customName) {
-    return jsonEncode({
-      'v': kChatPayloadVersion,
-      'messages': messages.map((m) => m.toJson()).toList(),
-      'customName': ?customName,
-    });
-  }
+  /// The plaintext payload of a chat (v3). The one encoding for the cache
+  /// and the cloud.
+  static Future<String> _payloadJson(
+    List<ChatMessage> messages,
+    String? customName,
+  ) => encodeChatPayloadAsync(messages, customName);
 
-  static String _digest(String payloadJson) =>
-      sha256.convert(utf8.encode(payloadJson)).toString();
+  /// The digest that tells two saves of a chat apart: over the messages as
+  /// they are in memory, not over the stored encoding, so it is computed
+  /// before (and without) the payload.
+  static String _digest(List<ChatMessage> messages, String? customName) =>
+      sha256
+          .convert(
+            utf8.encode(
+              jsonEncode({
+                'messages': messages.map((m) => m.toJson()).toList(),
+                'customName': ?customName,
+              }),
+            ),
+          )
+          .toString();
 
   /// Save [messagesMaps] on this device only: memory (sidebar, search and
   /// reopening the chat read it), the SQLite cache and a dirty mark. No
@@ -1033,8 +1050,7 @@ class ChatStorageCrud {
 
     final existing = ChatStorageState.chatsById[id];
     final customName = _customNameOf(existing);
-    final payloadJson = _payloadJson(messages, customName);
-    final digest = _digest(payloadJson);
+    final digest = _digest(messages, customName);
 
     // The same messages as the copy in memory: nothing to save. A stream
     // checkpoint or an auto-save tick often carries nothing new.
@@ -1082,8 +1098,10 @@ class ChatStorageCrud {
 
     // Mark first, then write the row: a kill in between leaves a dirty mark
     // over the previous row, which is harmless; the reverse would leave a
-    // newer row that nothing ever sends to the cloud.
-    await ChatDirtyStore.markDirty(
+    // newer row that nothing ever sends to the cloud. The mark counts the
+    // revision at once; the row is queued at once too (in call order) and
+    // waits for the mark before it is written.
+    final marked = ChatDirtyStore.markDirty(
       user.id,
       id,
       pendingInsert: existing == null,
@@ -1091,20 +1109,24 @@ class ChatStorageCrud {
 
     // Web keeps its cache in SharedPreferences, which must not take a whole
     // payload on every checkpoint. There the dirty copy lives in memory.
-    if (!kIsWeb) {
-      await _writeLocalRow(
-        user.id,
-        id,
-        LocalChatCacheService.buildPlaintextRow(
-          id: id,
-          payload: payloadJson,
-          createdAt: chat.createdAt.toUtc().toIso8601String(),
-          isStarred: chat.isStarred,
-          updatedAt: now.toIso8601String(),
-          title: chat.title,
-        ),
-      );
+    if (kIsWeb) {
+      await marked;
+      return chat;
     }
+    final writer = _writeLocalRow(user.id, id, () async {
+      final payloadJson = await _payloadJson(messages, customName);
+      await marked;
+      return LocalChatCacheService.buildPlaintextRow(
+        id: id,
+        payload: payloadJson,
+        createdAt: chat.createdAt.toUtc().toIso8601String(),
+        isStarred: chat.isStarred,
+        updatedAt: now.toIso8601String(),
+        title: chat.title,
+      );
+    }());
+    await marked;
+    await writer;
     return chat;
   }
 
@@ -1235,9 +1257,11 @@ class ChatStorageCrud {
     // A chat saved locally first may already carry a name and a star.
     final local = ChatStorageState.chatsById[effectiveChatId];
     final customName = _customNameOf(local);
-    final payloadJson = _payloadJson(messages, customName);
+    final payloadJson = await _payloadJson(messages, customName);
 
-    final encryptedPayload = await EncryptionService.encrypt(payloadJson);
+    final encryptedPayload = await EncryptionService.encryptChatPayload(
+      payloadJson,
+    );
 
     // Extract and encrypt title separately for fast sidebar loading
     final title = customName ?? extractTitleFromMessages(messages);
@@ -1315,7 +1339,7 @@ class ChatStorageCrud {
       customName: customName,
       title: title.isNotEmpty ? title : null,
     );
-    final digest = _digest(payloadJson);
+    final digest = _digest(messages, customName);
     ChatStorageState.lastWrite[chatId] = (
       digest: digest,
       updatedAt: chat.updatedAt,
@@ -1339,13 +1363,15 @@ class ChatStorageCrud {
       _writeLocalRow(
         userId,
         chatId,
-        LocalChatCacheService.buildPlaintextRow(
-          id: chatId,
-          payload: payloadJson,
-          createdAt: row['created_at'] as String,
-          isStarred: (row['is_starred'] as bool?) ?? false,
-          updatedAt: row['updated_at'] as String?,
-          title: title.isNotEmpty ? title : null,
+        Future.value(
+          LocalChatCacheService.buildPlaintextRow(
+            id: chatId,
+            payload: payloadJson,
+            createdAt: row['created_at'] as String,
+            isStarred: (row['is_starred'] as bool?) ?? false,
+            updatedAt: row['updated_at'] as String?,
+            title: title.isNotEmpty ? title : null,
+          ),
         ),
       ),
     );
@@ -1467,10 +1493,9 @@ class ChatStorageCrud {
     final existingChat = ChatStorageState.chatsById[chatId];
     final String? normalizedCustomName = _customNameOf(existingChat);
 
-    final payloadJson = _payloadJson(messages, normalizedCustomName);
     // Title and image paths derive from the payload, so an equal payload on
     // an unchanged row means an equal row: skip the write.
-    final digest = _digest(payloadJson);
+    final digest = _digest(messages, normalizedCustomName);
     final lastWrite = ChatStorageState.lastWrite[chatId];
     if (existingChat != null &&
         lastWrite != null &&
@@ -1479,7 +1504,10 @@ class ChatStorageCrud {
       await ChatDirtyStore.markSynced(user.id, chatId, rev);
       return existingChat;
     }
-    final encryptedPayload = await EncryptionService.encrypt(payloadJson);
+    final payloadJson = await _payloadJson(messages, normalizedCustomName);
+    final encryptedPayload = await EncryptionService.encryptChatPayload(
+      payloadJson,
+    );
 
     // Extract and encrypt title separately for fast sidebar loading
     final String title =

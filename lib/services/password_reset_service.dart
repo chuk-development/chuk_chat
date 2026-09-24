@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_crud.dart';
+import 'package:chuk_chat/services/chat_storage_sync.dart'
+    show toChatPayloadV3Async;
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/key_version_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -165,8 +167,11 @@ class PasswordResetService {
       onProgress?.call('Recovering chat ${i + 1} of ${rows.length}...');
 
       try {
-        // Re-encrypt payload with current key
-        final newEncPayload = await EncryptionService.encrypt(plaintext);
+        // Re-encrypt payload with current key, in the current format (v3,
+        // compressed): a recovered chat needs no second rewrite later.
+        final newEncPayload = await EncryptionService.encryptChatPayload(
+          await toChatPayloadV3Async(plaintext),
+        );
 
         // Re-encrypt title if present
         String? newEncTitle;

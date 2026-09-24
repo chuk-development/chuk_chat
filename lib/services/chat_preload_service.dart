@@ -328,7 +328,7 @@ class ChatPreloadService {
           userId,
           LocalChatCacheService.buildPlaintextRow(
             id: chatId,
-            payload: plaintextPayloadJson(chatPayload),
+            payload: await toChatPayloadV3Async(decrypted),
             createdAt: row['created_at'] as String,
             isStarred: (row['is_starred'] as bool?) ?? false,
             updatedAt: row['updated_at'] as String?,

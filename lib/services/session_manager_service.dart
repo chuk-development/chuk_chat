@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/chat_payload_migration_service.dart';
 import 'package:chuk_chat/services/app_initialization_service.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -161,6 +162,7 @@ class SessionManagerService extends ChangeNotifier {
 
     // Stop sync immediately
     ChatSyncService.stop();
+    ChatMaintenanceController.instance.reset();
     unawaited(UserModelPrefsRealtimeService.instance.stop());
 
     // Check if this is a real logout or just offline

@@ -600,4 +600,13 @@ const Map<String, String> stringsEs = {
   'bashSandboxFolder': 'Carpeta del sandbox',
   'bashSandboxFolderUnset': 'Sin definir: los comandos bash se rechazan',
   'bashSandboxChooseDialog': 'Elegir la carpeta del sandbox de bash',
+  // ── Chat maintenance (payload v3 rewrite) ──────────────────
+  'maintenanceTitle': 'Actualizando tus chats',
+  'maintenanceBody': 'Por favor, no cierres la app. Tus datos se están reescribiendo.',
+  'maintenanceMigrating': 'Reescribiendo chats',
+  'maintenanceVerifying': 'Comprobando chats',
+  'maintenanceCount': '{n} de {total}',
+  'maintenanceFailedTitle': 'La actualización no terminó',
+  'maintenanceFailedBody': 'Tus chats no han cambiado y están a salvo. Puedes intentarlo de nuevo o continuar y usar la app como antes.',
+  'maintenanceContinue': 'Continuar',
 };
