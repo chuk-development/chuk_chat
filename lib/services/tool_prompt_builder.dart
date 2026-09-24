@@ -1206,7 +1206,7 @@ Never wrap an <artifact> tag inside a markdown code fence (```…```); the parse
   String _answerFormatSection() {
     return '''
 ## ANSWER FORMAT
-- If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of the reply is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". The explanation follows below it.
+- If the question has a short answer (yes/no, a number, a name, fits/does not fit), the FIRST line of your final answer is that answer in plain Markdown **bold**, e.g. "**Yes, warm white.**". Make any needed tool calls first; never state the short answer before the lookup. The explanation follows below it.
 - Optional blocks, only where they help. A line `::: name` opens one, a line `:::` closes it. Blocks do not nest. Inside, Markdown works as usual.
 ::: steps
 1. Step title
