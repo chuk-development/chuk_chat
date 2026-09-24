@@ -88,10 +88,7 @@ void main() {
         'query': '3 day weather forecast Berlin',
         'data': {
           'location': 'Berlin',
-          'current': {
-            'temperature': '12',
-            'condition': 'Sunny',
-          },
+          'current': {'temperature': '12', 'condition': 'Sunny'},
           'forecast': [
             {
               'date': '2026-04-25',
@@ -120,11 +117,7 @@ void main() {
       final result = await executeWeather(
         serverHttpUrl: 'https://api.example.com',
         serverHeaders: const {},
-        args: const {
-          'location': 'Berlin',
-          'action': 'forecast',
-          'days': 3,
-        },
+        args: const {'location': 'Berlin', 'action': 'forecast', 'days': 3},
         client: client,
       );
 
@@ -134,6 +127,172 @@ void main() {
       expect(result, contains('Sunny'));
       expect(result, contains('2026-04-26'));
       expect(result, contains('Rain'));
+    });
+
+    // The shape Brave really returns (keys taken from the owner's chat cache,
+    // 2026-09-23; values made up). The generic reader never matched it, so
+    // every call dumped ~16 kB of raw JSON, the same for current, forecast
+    // and hourly, and the model called `weather` again and again.
+    Map<String, dynamic> braveRichPayload() {
+      Map<String, dynamic> day(int ts, int id, String description) => {
+        'ts': ts,
+        'date_i18n': 'Mittwoch, Sept. 23',
+        'temperature': {'day': 17.53, 'min': 9.28, 'max': 17.91},
+        'feels_like': {'day': 17.4},
+        'humidity': 79,
+        'wind': {'speed': 4.6, 'deg': 200, 'gust': 8.18},
+        'pop': 1.0,
+        'rain': 3.4,
+        'weather': {'id': id, 'main': 'rain', 'description': description},
+      };
+      Map<String, dynamic> slot(int ts) => {
+        'ts': ts,
+        'temperature': {'temp': 14.76, 'feels_like': 14.51},
+        'weather': {'id': 501, 'main': 'rain', 'description': 'moderate rain'},
+        'wind': {'speed': 4.6, 'deg': 200},
+        'pop': 0.35,
+        'rain': 3.74,
+      };
+      // 2026-09-23 12:00 UTC; Kiel is UTC+2 in September.
+      const noon = 1790164800;
+      return {
+        'vertical': 'weather',
+        'data': {
+          'type': 'rich',
+          'results': [
+            {
+              'type': 'rich',
+              'subtype': 'weather',
+              'provider': {'name': 'OpenWeatherMap'},
+              'weather': {
+                'location': {
+                  'name': 'Kiel',
+                  'country': 'DE',
+                  'tzoffset': 7200,
+                  'coords': {'lat': 54.32, 'lon': 10.13},
+                },
+                'current_time_iso': '2026-09-23T20:53:42',
+                'current_weather': {
+                  'ts': noon,
+                  'temp': 15.11,
+                  'feels_like': 14.82,
+                  'humidity': 82,
+                  'uvi': 0.0,
+                  'clouds': 38,
+                  'wind': {'speed': 2.06, 'deg': 190},
+                  'weather': {
+                    'id': 802,
+                    'main': 'clouds',
+                    'description': 'scattered clouds',
+                  },
+                },
+                'daily': [
+                  for (var i = 0; i < 8; i++)
+                    day(noon + i * 86400, 501, 'moderate rain'),
+                ],
+                'hours3': [for (var i = 0; i < 40; i++) slot(noon + i * 10800)],
+                'alerts': [
+                  {
+                    'sender': 'Deutscher Wetterdienst',
+                    'event': 'Wind gusts',
+                    'start_relative_i18n': 'in 5 Stunden',
+                    'description': 'long text',
+                  },
+                ],
+              },
+            },
+          ],
+          'response_callback_info': {'callback_key': 'abc'},
+        },
+      };
+    }
+
+    Future<String> runWeather(Map<String, dynamic> args) => executeWeather(
+      serverHttpUrl: 'https://api.example.com',
+      serverHeaders: const {},
+      args: args,
+      client: MockClient(
+        (request) async => http.Response(jsonEncode(braveRichPayload()), 200),
+      ),
+    );
+
+    test('reads the real Brave rich payload instead of dumping it', () async {
+      final result = await runWeather(const {
+        'location': 'Kiel',
+        'action': 'current',
+      });
+
+      expect(result, isNot(contains('Raw payload')));
+      expect(result, contains('Weather — Kiel, DE'));
+      expect(result, contains(kWeatherCompleteNote));
+      expect(result, contains('Local time: 2026-09-23 20:53'));
+      expect(result, contains('scattered clouds (WMO 2)'));
+      expect(result, contains('15.1 °C (feels 14.8 °C)'));
+      expect(result, contains('humidity 82%'));
+      expect(result, contains('wind 7 km/h S'));
+      expect(result, contains('Wind gusts (Deutscher Wetterdienst)'));
+      // Local ISO dates, precipitation probability and WMO codes: the fields
+      // the weather card asks for.
+      expect(result, contains('- 2026-09-23: moderate rain (WMO 63)'));
+      expect(result, contains('max 17.9 / min 9.3 °C'));
+      expect(result, contains('precip prob 100%'));
+      expect(result, contains('- 2026-09-23 14:00: 14.8 °C'));
+      expect(result, contains('precip prob 35%'));
+      // A short result, not the 16 kB dump.
+      expect(result.length, lessThan(3000));
+    });
+
+    test('action, days and hours now change the result', () async {
+      final current = await runWeather(const {'location': 'Kiel'});
+      final forecast = await runWeather(const {
+        'location': 'Kiel',
+        'action': 'forecast',
+        'days': 7,
+      });
+      final hourly = await runWeather(const {
+        'location': 'Kiel',
+        'action': 'hourly',
+        'hours': 48,
+      });
+
+      int dailyLines(String s) => RegExp(
+        r'^- \d{4}-\d{2}-\d{2}: ',
+        multiLine: true,
+      ).allMatches(s).length;
+      int hourlyLines(String s) => RegExp(
+        r'^- \d{4}-\d{2}-\d{2} \d{2}:\d{2}: ',
+        multiLine: true,
+      ).allMatches(s).length;
+
+      expect(dailyLines(current), 3);
+      expect(dailyLines(forecast), 7);
+      expect(hourlyLines(current), 8);
+      expect(hourlyLines(hourly), 16);
+    });
+
+    test('maps OpenWeatherMap ids to WMO codes', () {
+      expect(owmToWmoCode(800), 0);
+      expect(owmToWmoCode(801), 1);
+      expect(owmToWmoCode(802), 2);
+      expect(owmToWmoCode(804), 3);
+      expect(owmToWmoCode(500), 61);
+      expect(owmToWmoCode(501), 63);
+      expect(owmToWmoCode(502), 65);
+      expect(owmToWmoCode(521), 81);
+      expect(owmToWmoCode(601), 73);
+      expect(owmToWmoCode(741), 45);
+      expect(owmToWmoCode(211), 95);
+      expect(owmToWmoCode(300), 51);
+    });
+
+    test('gives an eight-point compass direction', () {
+      expect(compassPoint(0), 'N');
+      expect(compassPoint(190), 'S');
+      expect(compassPoint(225), 'SW');
+      expect(compassPoint(200), 'S');
+      expect(compassPoint(350), 'N');
+      expect(compassPoint(90), 'E');
+      expect(compassPoint(315), 'NW');
     });
 
     test('forwards server auth headers', () async {

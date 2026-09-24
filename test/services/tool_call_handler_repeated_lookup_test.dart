@@ -257,6 +257,131 @@ void main() {
       expect(done.finalContent, answer);
     });
 
+    test('a round that mixes a repeat with a new call counts too', () async {
+      final handler = ToolCallHandler();
+      final session = newSession(handler)..toolCalls.add(completedWeather());
+
+      NativeToolCall calc(String id, String expression) => NativeToolCall(
+        id: id,
+        name: 'calculate',
+        arguments: jsonEncode({'expression': expression}),
+      );
+
+      // Each round adds one new call next to the repeat. Before, only a round
+      // of nothing but repeats counted, so this pattern ran to the cap.
+      await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: [
+          nativeWeather('call-2', kielArgs),
+          calc('c-1', '1+1'),
+        ],
+      );
+      expect(session.toolsClosed, isFalse);
+      final second = await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: [
+          nativeWeather('call-3', kielArgs),
+          calc('c-2', '2+2'),
+        ],
+      );
+      expect(second.shouldContinue, isTrue);
+      expect(session.toolsClosed, isTrue);
+      expect(handler.nativeToolDefinitions(session), isEmpty);
+    });
+
+    test('the same lookup twice in one round runs once', () async {
+      final handler = ToolCallHandler();
+      final session = newSession(handler);
+
+      await handler.processAssistantResponse(
+        session: session,
+        content: '',
+        reasoning: '',
+        nativeToolCalls: const [
+          NativeToolCall(
+            id: 'c-1',
+            name: 'calculate',
+            arguments: '{"expression":"6*7"}',
+          ),
+          NativeToolCall(
+            id: 'c-2',
+            name: 'calculate',
+            arguments: '{"expression":"6*7"}',
+          ),
+        ],
+      );
+
+      final first = session.toolCalls[0];
+      final second = session.toolCalls[1];
+      expect(first.result, isNot(startsWith(kRepeatedToolCallNote)));
+      expect(second.result, startsWith(kRepeatedToolCallNote));
+      expect(second.result, endsWith(first.result!));
+    });
+
+    test('a model that asks the same thing every pass is stopped within '
+        'four passes, and the tool runs once', () async {
+      // The failure seen live: one call, then the identical call on every
+      // pass. Nothing is pre-seeded here; the loop starts from scratch.
+      final handler = ToolCallHandler();
+      final session = newSession(handler);
+
+      var passes = 0;
+      ToolLoopResult result;
+      do {
+        passes++;
+        result = await handler.processAssistantResponse(
+          session: session,
+          content: '',
+          reasoning: '',
+          nativeToolCalls: [
+            NativeToolCall(
+              id: 'c-$passes',
+              name: 'calculate',
+              arguments: '{"expression":"2*3"}',
+            ),
+          ],
+        );
+      } while (result.shouldContinue && passes < 30);
+
+      expect(result.shouldContinue, isFalse);
+      expect(passes, lessThanOrEqualTo(4));
+      final executed = session.toolCalls.where(
+        (c) => !(c.result ?? '').startsWith(kRepeatedToolCallNote),
+      );
+      expect(executed, hasLength(1));
+    });
+
+    test('new calls on every pass stop at the round cap', () async {
+      final handler = ToolCallHandler();
+      final session = newSession(handler);
+      expect(kMaxToolRoundsPerTurn, lessThanOrEqualTo(16));
+
+      var passes = 0;
+      ToolLoopResult result;
+      do {
+        passes++;
+        result = await handler.processAssistantResponse(
+          session: session,
+          content: '',
+          reasoning: '',
+          nativeToolCalls: [
+            NativeToolCall(
+              id: 'c-$passes',
+              name: 'calculate',
+              arguments: '{"expression":"$passes+1"}',
+            ),
+          ],
+        );
+      } while (result.shouldContinue && passes < 100);
+
+      expect(result.shouldContinue, isFalse);
+      expect(passes, kMaxToolRoundsPerTurn + 1);
+    });
+
     test('a tool with a changing result is never reused', () {
       expect(repeatableLookupToolNames, isNot(contains('get_time')));
       expect(repeatableLookupToolNames, isNot(contains('roll_dice')));

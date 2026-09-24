@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:http/http.dart' as http;
 
 import 'package:chuk_chat/services/multiplex_tool_proxy.dart';
@@ -47,11 +48,7 @@ Future<String> executeWeather({
   final shouldCloseClient = client == null;
 
   try {
-    final body = {
-      'query': query,
-      'country': 'DE',
-      'search_lang': 'de',
-    };
+    final body = {'query': query, 'country': 'DE', 'search_lang': 'de'};
 
     Map<String, dynamic>? data;
     final mux = await tryToolViaMultiplex(tool: 'brave_rich', payload: body);
@@ -94,6 +91,8 @@ Future<String> executeWeather({
     return _formatWeather(
       locationLabel: location.isNotEmpty ? location : query,
       action: action,
+      days: days,
+      hours: hours,
       vertical: vertical,
       payload: Map<String, dynamic>.from(payload),
     );
@@ -118,9 +117,7 @@ String _buildQuery({
 }) {
   final locationPart = location.isNotEmpty
       ? location
-      : (latitude != null && longitude != null
-            ? '$latitude,$longitude'
-            : '');
+      : (latitude != null && longitude != null ? '$latitude,$longitude' : '');
 
   switch (action) {
     case 'forecast':
@@ -138,9 +135,28 @@ String _buildQuery({
 String _formatWeather({
   required String locationLabel,
   required String action,
+  int? days,
+  int? hours,
   required String vertical,
   required Map<String, dynamic> payload,
 }) {
+  // The payload Brave really sends: `{type: rich, results: [{subtype:
+  // weather, weather: {location, current_weather, daily, hours3, alerts}}]}`.
+  // The generic reader below never matched it, so every call returned the
+  // same 16 kB raw JSON dump, whatever the action. The model then could not
+  // find the fields the weather card asks for and called the tool again.
+  final brave = _braveWeather(payload);
+  if (brave != null) {
+    return _formatBraveWeather(
+      brave,
+      locationLabel: locationLabel,
+      action: action,
+      days: days,
+      hours: hours,
+      vertical: vertical,
+    );
+  }
+
   final buf = StringBuffer();
   final weather = _pickMap(payload, const [
     'weather',
@@ -151,15 +167,19 @@ String _formatWeather({
   ]);
   final source = weather ?? payload;
 
-  final place = _pickString(source, const [
-    'location',
-    'place',
-    'title',
-    'name',
-    'query',
-  ]) ?? locationLabel;
+  final place =
+      _pickString(source, const [
+        'location',
+        'place',
+        'title',
+        'name',
+        'query',
+      ]) ??
+      locationLabel;
 
-  buf.writeln('Weather — $place (source: Brave rich${vertical.isNotEmpty ? '/$vertical' : ''})');
+  buf.writeln(
+    'Weather — $place (source: Brave rich${vertical.isNotEmpty ? '/$vertical' : ''})',
+  );
 
   final current = _pickMap(source, const [
     'current',
@@ -219,6 +239,260 @@ String _formatWeather({
   return result;
 }
 
+/// Line that tells the model this one result is complete for the place.
+const String kWeatherCompleteNote =
+    'This one result holds the current conditions, the daily forecast and '
+    'the hourly outlook for this place. Another weather call for the same '
+    'place returns the same data.';
+
+/// The `weather` map of a Brave rich weather payload, or null when the
+/// payload has another shape.
+Map<String, dynamic>? _braveWeather(Map<String, dynamic> payload) {
+  final results = payload['results'];
+  if (results is! List) return null;
+  for (final item in results) {
+    if (item is! Map) continue;
+    final weather = item['weather'];
+    if (weather is Map &&
+        (weather['current_weather'] is Map ||
+            weather['daily'] is List ||
+            weather['hours3'] is List)) {
+      return Map<String, dynamic>.from(weather);
+    }
+  }
+  return null;
+}
+
+String _formatBraveWeather(
+  Map<String, dynamic> weather, {
+  required String locationLabel,
+  required String action,
+  int? days,
+  int? hours,
+  required String vertical,
+}) {
+  final location = weather['location'] is Map
+      ? Map<String, dynamic>.from(weather['location'] as Map)
+      : const <String, dynamic>{};
+  final tzOffset = _asNum(location['tzoffset'])?.toInt() ?? 0;
+  final name = (location['name'] as String?)?.trim();
+  final country = (location['country'] as String?)?.trim();
+  final place = (name == null || name.isEmpty)
+      ? locationLabel
+      : (country == null || country.isEmpty ? name : '$name, $country');
+
+  final buf = StringBuffer()
+    ..writeln(
+      'Weather — $place (source: Brave rich'
+      '${vertical.isNotEmpty ? '/$vertical' : ''})',
+    )
+    ..writeln(kWeatherCompleteNote)
+    ..writeln('Units: °C, km/h, mm. Codes are WMO weather codes.');
+
+  final localTime = weather['current_time_iso'];
+  if (localTime is String && localTime.length >= 16) {
+    buf.writeln(
+      'Local time: ${localTime.substring(0, 16).replaceAll('T', ' ')}',
+    );
+  }
+
+  final current = weather['current_weather'];
+  if (current is Map) {
+    final c = Map<String, dynamic>.from(current);
+    final parts = <String>[
+      ?_conditionPart(c['weather']),
+      if (_asNum(c['temp']) != null)
+        '${_fmt(_asNum(c['temp']))} °C'
+            '${_asNum(c['feels_like']) != null ? ' (feels ${_fmt(_asNum(c['feels_like']))} °C)' : ''}',
+      if (_asNum(c['humidity']) != null)
+        'humidity ${_fmt(_asNum(c['humidity']))}%',
+      ?_windPart(c['wind']),
+      if (_precipAmount(c['rain']) != null)
+        'rain ${_fmt(_precipAmount(c['rain']))} mm',
+      if (_precipAmount(c['snow']) != null)
+        'snow ${_fmt(_precipAmount(c['snow']))} mm',
+      if (_asNum(c['clouds']) != null) 'clouds ${_fmt(_asNum(c['clouds']))}%',
+      if (_asNum(c['uvi']) != null) 'UV ${_fmt(_asNum(c['uvi']))}',
+    ];
+    buf.writeln('Current: ${parts.join(' · ')}');
+  }
+
+  final alerts = weather['alerts'];
+  if (alerts is List && alerts.isNotEmpty) {
+    buf.writeln('Alerts:');
+    for (final alert in alerts.whereType<Map>()) {
+      final event = alert['event']?.toString() ?? 'Alert';
+      final sender = alert['sender']?.toString();
+      final when = alert['start_relative_i18n']?.toString();
+      buf.writeln(
+        '- $event'
+        '${sender != null && sender.isNotEmpty ? ' ($sender)' : ''}'
+        '${when != null && when.isNotEmpty ? ', $when' : ''}',
+      );
+    }
+  }
+
+  final daily = weather['daily'];
+  if (daily is List && daily.isNotEmpty) {
+    final count = (action == 'forecast' ? (days ?? 7) : 3).clamp(
+      1,
+      daily.length,
+    );
+    buf.writeln('Daily:');
+    for (final entry in daily.take(count).whereType<Map>()) {
+      final d = Map<String, dynamic>.from(entry);
+      final temp = d['temperature'] is Map
+          ? Map<String, dynamic>.from(d['temperature'] as Map)
+          : const <String, dynamic>{};
+      final parts = <String>[
+        ?_conditionPart(d['weather']),
+        if (_asNum(temp['max']) != null || _asNum(temp['min']) != null)
+          'max ${_fmt(_asNum(temp['max']))} / min ${_fmt(_asNum(temp['min']))} °C',
+        if (_asNum(d['pop']) != null)
+          'precip prob ${(_asNum(d['pop'])! * 100).round()}%',
+        if (_precipAmount(d['rain']) != null)
+          'rain ${_fmt(_precipAmount(d['rain']))} mm',
+        if (_precipAmount(d['snow']) != null)
+          'snow ${_fmt(_precipAmount(d['snow']))} mm',
+        ?_windPart(d['wind']),
+      ];
+      final date = _localDateTime(d['ts'], tzOffset);
+      buf.writeln(
+        '- ${date == null ? '' : '${_isoDate(date)}: '}${parts.join(' · ')}',
+      );
+    }
+  }
+
+  final hourly = weather['hours3'];
+  if (hourly is List && hourly.isNotEmpty) {
+    final wantHours = action == 'hourly' ? (hours ?? 24) : 24;
+    final count = ((wantHours.clamp(1, 48) + 2) ~/ 3).clamp(1, hourly.length);
+    buf.writeln('Hourly (3-hour steps):');
+    for (final entry in hourly.take(count).whereType<Map>()) {
+      final h = Map<String, dynamic>.from(entry);
+      final temp = h['temperature'] is Map
+          ? Map<String, dynamic>.from(h['temperature'] as Map)
+          : const <String, dynamic>{};
+      final t = _asNum(temp['temp']) ?? _asNum(h['temp']);
+      final parts = <String>[
+        if (t != null) '${_fmt(t)} °C',
+        ?_conditionPart(h['weather']),
+        if (_asNum(h['pop']) != null)
+          'precip prob ${(_asNum(h['pop'])! * 100).round()}%',
+        if (_precipAmount(h['rain']) != null)
+          'rain ${_fmt(_precipAmount(h['rain']))} mm',
+        ?_windPart(h['wind']),
+      ];
+      final time = _localDateTime(h['ts'], tzOffset);
+      buf.writeln(
+        '- ${time == null ? '' : '${_isoDate(time)} ${_hhmm(time)}: '}'
+        '${parts.join(' · ')}',
+      );
+    }
+  }
+
+  return buf.toString().trimRight();
+}
+
+num? _asNum(Object? value) {
+  if (value is num) return value;
+  if (value is String) return num.tryParse(value.trim());
+  return null;
+}
+
+String _fmt(num? value) {
+  if (value == null) return '?';
+  final rounded = (value * 10).round() / 10;
+  return rounded == rounded.roundToDouble()
+      ? rounded.toInt().toString()
+      : rounded.toStringAsFixed(1);
+}
+
+/// Rain or snow amount: OpenWeatherMap sends a number or `{"1h": n}`.
+num? _precipAmount(Object? value) {
+  if (value is Map) return _asNum(value['1h'] ?? value['3h']);
+  return _asNum(value);
+}
+
+String? _conditionPart(Object? weather) {
+  if (weather is! Map) return null;
+  final description = weather['description']?.toString().trim();
+  final id = _asNum(weather['id'])?.toInt();
+  final code = id == null ? null : owmToWmoCode(id);
+  if ((description == null || description.isEmpty) && code == null) {
+    return null;
+  }
+  return '${description ?? ''}${code != null ? ' (WMO $code)' : ''}'.trim();
+}
+
+String? _windPart(Object? wind) {
+  if (wind is! Map) return null;
+  final speed = _asNum(wind['speed']);
+  if (speed == null) return null;
+  final deg = _asNum(wind['deg']);
+  final gust = _asNum(wind['gust']);
+  return 'wind ${(speed * 3.6).round()} km/h'
+      '${deg != null ? ' ${compassPoint(deg)}' : ''}'
+      '${gust != null ? ', gusts ${(gust * 3.6).round()} km/h' : ''}';
+}
+
+DateTime? _localDateTime(Object? ts, int tzOffsetSeconds) {
+  final seconds = _asNum(ts)?.toInt();
+  if (seconds == null) return null;
+  return DateTime.fromMillisecondsSinceEpoch(
+    (seconds + tzOffsetSeconds) * 1000,
+    isUtc: true,
+  );
+}
+
+String _two(int n) => n.toString().padLeft(2, '0');
+
+String _isoDate(DateTime t) => '${t.year}-${_two(t.month)}-${_two(t.day)}';
+
+String _hhmm(DateTime t) => '${_two(t.hour)}:${_two(t.minute)}';
+
+/// Eight-point compass direction for a wind bearing in degrees.
+@visibleForTesting
+String compassPoint(num degrees) {
+  const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  final index = (((degrees % 360) + 22.5) ~/ 45) % 8;
+  return points[index];
+}
+
+/// Maps an OpenWeatherMap condition id to the WMO weather code the
+/// `<weather>` card uses.
+@visibleForTesting
+int owmToWmoCode(int id) {
+  if (id >= 200 && id < 300) return 95;
+  if (id >= 300 && id < 400) {
+    if (id == 300 || id == 301) return 51;
+    if (id == 302) return 55;
+    return 53;
+  }
+  if (id >= 500 && id < 600) {
+    if (id == 500) return 61;
+    if (id == 501) return 63;
+    if (id >= 502 && id <= 504) return 65;
+    if (id == 511) return 66;
+    if (id == 520) return 80;
+    if (id == 521) return 81;
+    return 82;
+  }
+  if (id >= 600 && id < 700) {
+    if (id == 600) return 71;
+    if (id == 601) return 73;
+    if (id == 602) return 75;
+    if (id == 620) return 85;
+    if (id == 621 || id == 622) return 86;
+    return 77;
+  }
+  if (id >= 700 && id < 800) return 45;
+  if (id == 800) return 0;
+  if (id == 801) return 1;
+  if (id == 802) return 2;
+  return 3;
+}
+
 void _writeCurrent(StringBuffer buf, Map<String, dynamic> src) {
   final temp = _pickString(src, const [
     'temperature',
@@ -251,8 +525,18 @@ void _writeCurrent(StringBuffer buf, Map<String, dynamic> src) {
   final precip = _pickString(src, const ['precipitation', 'precip', 'rain']);
   final pressure = _pickString(src, const ['pressure', 'surface_pressure']);
   final uv = _pickString(src, const ['uv', 'uv_index']);
-  final high = _pickString(src, const ['high', 'max_temp', 'temp_max', 'high_temp']);
-  final low = _pickString(src, const ['low', 'min_temp', 'temp_min', 'low_temp']);
+  final high = _pickString(src, const [
+    'high',
+    'max_temp',
+    'temp_max',
+    'high_temp',
+  ]);
+  final low = _pickString(src, const [
+    'low',
+    'min_temp',
+    'temp_min',
+    'low_temp',
+  ]);
 
   if (condition != null) buf.writeln('Condition: $condition');
   if (temp != null) {
@@ -280,8 +564,18 @@ void _writeDay(StringBuffer buf, Map<String, dynamic> day) {
     'summary',
     'weather',
   ]);
-  final high = _pickString(day, const ['high', 'max_temp', 'temp_max', 'high_temp']);
-  final low = _pickString(day, const ['low', 'min_temp', 'temp_min', 'low_temp']);
+  final high = _pickString(day, const [
+    'high',
+    'max_temp',
+    'temp_max',
+    'high_temp',
+  ]);
+  final low = _pickString(day, const [
+    'low',
+    'min_temp',
+    'temp_min',
+    'low_temp',
+  ]);
   final precip = _pickString(day, const ['precipitation', 'precip', 'rain']);
   final wind = _pickString(day, const ['wind', 'wind_speed']);
   buf.write('- ');
