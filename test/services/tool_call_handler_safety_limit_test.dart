@@ -37,9 +37,10 @@ void main() {
   // Push the session's enforcer right up to its per-turn ceiling so the next
   // enforce() call (inside processAssistantResponse) trips the safety limit.
   void exhaustIterations(ToolLoopSession session) {
-    // maxIterations is 24; enforce() increments then checks `> max`, so 24
-    // empty passes leave the counter at 24 and the 25th (the real call) trips.
-    for (var i = 0; i < 24; i++) {
+    // enforce() increments then checks `> max`, so kMaxToolRoundsPerTurn
+    // empty passes leave the counter at the cap and the next (the real call)
+    // trips.
+    for (var i = 0; i < kMaxToolRoundsPerTurn; i++) {
       session.enforcer.enforce(const []);
     }
   }
@@ -52,7 +53,8 @@ void main() {
     final result = await handler.processAssistantResponse(
       session: session,
       // A parseable tool call so the flow reaches the enforce/limit check.
-      content: '<tool_call>{"name":"generate_image","arguments":{}}</tool_call>',
+      content:
+          '<tool_call>{"name":"generate_image","arguments":{}}</tool_call>',
       reasoning: '',
     );
     expect(result.shouldContinue, isFalse);
@@ -101,23 +103,26 @@ void main() {
       expect(msg, contains('simpler prompt'));
     });
 
-    test('a typst_compile that failed to compile is not a delivered PDF', () async {
-      final handler = ToolCallHandler();
-      // Completed status, but the compile failed so no version was persisted
-      // and no artifact card was shown — must not be reported as a ready PDF.
-      final session = newSession(handler)
-        ..toolCalls.add(
-          completed(
-            'typst_compile',
-            const {},
-            'Typst compile failed. The source was NOT saved.',
-          ),
-        );
+    test(
+      'a typst_compile that failed to compile is not a delivered PDF',
+      () async {
+        final handler = ToolCallHandler();
+        // Completed status, but the compile failed so no version was persisted
+        // and no artifact card was shown — must not be reported as a ready PDF.
+        final session = newSession(handler)
+          ..toolCalls.add(
+            completed(
+              'typst_compile',
+              const {},
+              'Typst compile failed. The source was NOT saved.',
+            ),
+          );
 
-      final msg = await tripLimit(handler, session);
-      expect(msg, contains('simpler prompt'));
-      expect(msg, isNot(contains('PDF')));
-    });
+        final msg = await tripLimit(handler, session);
+        expect(msg, contains('simpler prompt'));
+        expect(msg, isNot(contains('PDF')));
+      },
+    );
 
     test('an errored deliverable does not count as delivered', () async {
       final handler = ToolCallHandler();

@@ -13,8 +13,11 @@ output tag, not a tool: write the JSON directly in your response text.
 
 ## Workflow
 
-1. Call the `weather` tool first. If the user named a place the tool cannot
-   resolve, use `geocode` to get coordinates, then call `weather` again.
+1. Call the `weather` tool once. One result holds the current conditions,
+   the daily forecast and the hourly outlook, with WMO codes, compass wind
+   directions and local dates. Do not call it again for the same place. Only
+   if the tool cannot resolve the place, use `geocode` for coordinates and
+   call `weather` with them.
 2. Emit exactly one `<weather>` block, populated **only** from the tool
    output.
 3. Do not also dump the raw tool text — the card already contains everything.
@@ -46,7 +49,9 @@ output tag, not a tool: write the JSON directly in your response text.
 ## Rules
 
 - Only include fields that came from `weather` tool results in this
-  conversation. Never fabricate temperatures, codes, or forecasts.
+  conversation. Never fabricate temperatures, codes, or forecasts. If a field
+  is not in the result, leave it out of the card; do not call the tool again
+  to look for it.
 - Emit at most one `<weather>` block per response.
 - Put the block at the very END of your answer and stop after `</weather>`.
 - Match `unit_temp` to the user's locale expectation: "C" for German and

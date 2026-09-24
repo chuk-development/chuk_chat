@@ -78,6 +78,14 @@ const String kToolsClosedNote =
     'Tools are now closed for this turn. Write the final answer for the user '
     'from the results you have.';
 
+/// Most tool rounds one user turn may run. Every round re-sends the whole
+/// history, so the cost of a turn grows with the square of its rounds. On
+/// 2026-09-23 a weather question ran 24 rounds (the old cap) and re-sent
+/// about 400 kB of tool results on each of them. Real turns in the owner's
+/// 939 chats need at most 16 rounds.
+@visibleForTesting
+const int kMaxToolRoundsPerTurn = 16;
+
 /// A key that is equal for two calls with the same name and the same
 /// arguments, whatever the order of the argument keys.
 @visibleForTesting
@@ -94,7 +102,6 @@ Object? _canonicalJson(Object? value) {
   if (value is List) return value.map(_canonicalJson).toList();
   return value;
 }
-
 
 class ToolLoopSession {
   ToolLoopSession({
@@ -158,9 +165,11 @@ class ToolLoopSession {
   int nonFinalTurnRecoveryAttempts = 0;
   int factCheckRecoveryAttempts = 0;
 
-  /// Rounds whose every call repeated a lookup this turn already held. The
-  /// first is answered from the held results with a note; a second means the
-  /// model ignored the note, and the tools close (see [toolsClosed]).
+  /// Rounds with at least one call that repeated a lookup this turn already
+  /// held. The first is answered from the held results with a note; a second
+  /// means the model ignored the note, and the tools close (see
+  /// [toolsClosed]). A round that mixes a repeat with a new call counts too,
+  /// or a model could add one new call per round and never be stopped.
   int repeatedLookupRounds = 0;
 
   /// Set when the model kept repeating lookups it already had. The next pass
@@ -407,8 +416,9 @@ class ToolCallHandler {
     // skills load, reconcile against the remote catalog (adds new skills,
     // silently updates pristine ones, queues suggestions for edited ones).
     unawaited(
-      SkillRegistry.refreshUserSkills()
-          .then((_) => SkillsCatalogService.reconcile()),
+      SkillRegistry.refreshUserSkills().then(
+        (_) => SkillsCatalogService.reconcile(),
+      ),
     );
   }
 
@@ -494,7 +504,8 @@ class ToolCallHandler {
     // artifact_manager / typst_compile never race static-state
     // propagation on the first turn of a newly-created chat.
     _toolExecutor.currentChatId = discoveryContextKey;
-    final enforcer = ToolEnforcer(maxIterations: 24)..resetIteration();
+    final enforcer = ToolEnforcer(maxIterations: kMaxToolRoundsPerTurn)
+      ..resetIteration();
 
     // Tell the enforcer which tools bypass discovery.
     final bypass = <String>{};
@@ -608,9 +619,11 @@ class ToolCallHandler {
     if (completed(
       (tc) =>
           tc.name == 'artifact_manager' &&
-          const {'create', 'rewrite', 'update'}.contains(
-            (tc.arguments['action'] ?? '').toString(),
-          ),
+          const {
+            'create',
+            'rewrite',
+            'update',
+          }.contains((tc.arguments['action'] ?? '').toString()),
     )) {
       delivered.add('the artifact');
     }
@@ -635,7 +648,8 @@ class ToolCallHandler {
     } else if (list.length == 2) {
       what = '${list[0]} and ${list[1]}';
     } else {
-      what = '${list.sublist(0, list.length - 1).join(', ')}, '
+      what =
+          '${list.sublist(0, list.length - 1).join(', ')}, '
           'and ${list.last}';
     }
     return 'Your work is ready above — $what is done. I reached the '
@@ -703,9 +717,8 @@ class ToolCallHandler {
     // Strip literal `<thinking>` / `<think>` wrapper tags — some providers
     // emit them inline in the content stream, which then renders as visible
     // gibberish in the chat UI.
-    final cleanedContent = _stripThinkingTags(
-      hallucinationCheck.cleanedContent,
-    ).trim();
+    final cleanedContent = _stripThinkingTags(hallucinationCheck.cleanedContent)
+        .trim();
 
     if (!session.toolCallingEnabled) {
       final displayContent = _stripToolCallBlocks(cleanedContent);
@@ -1179,6 +1192,7 @@ class ToolCallHandler {
     final bool onlyRepeats =
         enforceResult.validCalls.isNotEmpty &&
         enforceResult.validCalls.every(isRepeat);
+    final bool anyRepeat = enforceResult.validCalls.any(isRepeat);
     final pendingCandidate = session.factCheckCandidate;
     if (pendingCandidate != null && onlyRepeats) {
       final candidateReasoning = session.factCheckCandidateReasoning;
@@ -1199,7 +1213,7 @@ class ToolCallHandler {
     // definitions, so the model can only answer. Should it still ask after
     // that, the turn ends with the safety-limit message instead of looping.
     bool closingTools = false;
-    if (onlyRepeats) {
+    if (anyRepeat) {
       if (session.toolsClosed) {
         return ToolLoopResult.finalAnswer(
           content: _buildSafetyLimitMessage(session),
@@ -1242,6 +1256,7 @@ class ToolCallHandler {
     // Anything that writes — notes, artifacts, the device — stays
     // sequential, because with those the order is part of the meaning.
     final inFlight = <String, Future<dynamic>>{};
+    final startedThisRound = <String>{};
     if (enforceResult.validCalls.length > 1 &&
         enforceResult.validCalls.every(
           (call) => _readOnlyToolNames.contains(call.name),
@@ -1252,6 +1267,14 @@ class ToolCallHandler {
         // an unawaited future behind.
         if (call.arguments.containsKey(_kMalformedArgumentsKey)) continue;
         if (isRepeat(call)) continue;
+        // The same lookup twice in one round runs once; the second copy is
+        // answered from the first result in the loop below.
+        if (repeatableLookupToolNames.contains(call.name) &&
+            !startedThisRound.add(
+              toolCallIdentityKey(call.name, call.arguments),
+            )) {
+          continue;
+        }
         inFlight[call.callId] = _toolExecutor.execute(
           call.name,
           call.arguments,
@@ -1293,6 +1316,13 @@ class ToolCallHandler {
           isError = executionResult.isError;
           if (executionResult.producedBlocks.isNotEmpty) {
             session.producedBlocks.addAll(executionResult.producedBlocks);
+          }
+          // Later copies of this lookup in the same round reuse the result.
+          if (!isError && repeatableLookupToolNames.contains(call.name)) {
+            priorResults.putIfAbsent(
+              toolCallIdentityKey(call.name, call.arguments),
+              () => rawResult,
+            );
           }
         } catch (error) {
           rawResult = 'Error executing ${call.name}: $error';
@@ -1471,9 +1501,7 @@ class ToolCallHandler {
   /// parse it defensively — providers occasionally emit malformed or truncated
   /// JSON, in which case the call runs with empty args rather than crashing the
   /// whole turn.
-  List<Map<String, dynamic>> _nativeCallsToParsed(
-    List<NativeToolCall> calls,
-  ) {
+  List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls) {
     return calls.map((call) {
       Map<String, dynamic> args = <String, dynamic>{};
       final raw = call.arguments.trim();
