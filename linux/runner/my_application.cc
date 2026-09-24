@@ -78,13 +78,20 @@ void release_single_instance_lock() {
 // a file in it. After that the old name is never read again.
 constexpr char kLegacyApplicationId[] = "com.example.chuk_chat";
 
+gchar* legacy_dir(const gchar* base_dir) {
+  return g_build_filename(base_dir, kLegacyApplicationId, nullptr);
+}
+
 void move_legacy_dir(const gchar* base_dir) {
-  g_autofree gchar* old_path =
-      g_build_filename(base_dir, kLegacyApplicationId, nullptr);
+  g_autofree gchar* old_path = legacy_dir(base_dir);
   g_autofree gchar* new_path =
       g_build_filename(base_dir, APPLICATION_ID, nullptr);
-  if (!g_file_test(old_path, G_FILE_TEST_IS_DIR) ||
-      g_file_test(new_path, G_FILE_TEST_EXISTS)) {
+  if (!g_file_test(old_path, G_FILE_TEST_IS_DIR)) {
+    return;
+  }
+  // An empty new directory holds nothing to lose; clear it so the move can
+  // run. A non-empty one means the move already happened: leave both alone.
+  if (g_file_test(new_path, G_FILE_TEST_EXISTS) && g_rmdir(new_path) != 0) {
     return;
   }
   if (g_rename(old_path, new_path) != 0) {
@@ -93,9 +100,32 @@ void move_legacy_dir(const gchar* base_dir) {
   }
 }
 
-void migrate_legacy_app_dirs() {
+bool migration_pending() {
+  g_autofree gchar* data = legacy_dir(g_get_user_data_dir());
+  g_autofree gchar* cache = legacy_dir(g_get_user_cache_dir());
+  return g_file_test(data, G_FILE_TEST_IS_DIR) ||
+         g_file_test(cache, G_FILE_TEST_IS_DIR);
+}
+
+// Returns false if the move has to wait: a running instance may still have
+// files open under the old name, and moving the directory under it would
+// break its SQLite journal writes.
+bool migrate_legacy_app_dirs() {
+  if (!migration_pending()) {
+    return true;
+  }
+  // Without CHUK_MULTI_INSTANCE the lock is already held here. With it, take
+  // the lock only for the move, so a later normal launch is not blocked.
+  const bool had_lock = g_single_instance_lock_fd != -1;
+  if (!had_lock && !acquire_single_instance_lock()) {
+    return false;
+  }
   move_legacy_dir(g_get_user_data_dir());
   move_legacy_dir(g_get_user_cache_dir());
+  if (!had_lock) {
+    release_single_instance_lock();
+  }
+  return true;
 }
 }  // namespace
 
@@ -211,7 +241,15 @@ static gboolean my_application_local_command_line(GApplication* application, gch
     return TRUE;
   }
 
-  migrate_legacy_app_dirs();
+  if (!migrate_legacy_app_dirs()) {
+    // Starting now would create an empty dev.chuk.chat directory, and the
+    // old data would never be moved.
+    g_printerr(
+        "chuk_chat: the app data still has to move to its new directory, but "
+        "another instance is running. Quit it first, then start again.\n");
+    *exit_status = 1;
+    return TRUE;
+  }
 
   g_application_activate(application);
   *exit_status = 0;
