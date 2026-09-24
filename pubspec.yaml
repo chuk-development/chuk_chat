@@ -2,7 +2,7 @@ name: chuk_chat
 description: "Chuk Chat — AI chat client for all platforms."
 publish_to: 'none'
 
-version: 1.0.110
+version: 1.0.111
 
 environment:
   sdk: ^3.13.0  # tray_manager 0.7 / nativeapi 0.3 need Dart 3.13 (Flutter 3.47)
