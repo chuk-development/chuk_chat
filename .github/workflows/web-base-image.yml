@@ -43,7 +43,7 @@ jobs:
       - name: Flutter version
         id: flutter
         run: |
-          version="$(grep -oP '^ARG FLUTTER_VERSION=\K[0-9.]+' Dockerfile.web)"
+          version="$(grep -oP '^(ARG|ENV) FLUTTER_VERSION=\K[0-9.]+' Dockerfile.web)"
           test -n "$version"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
