@@ -1,0 +1,39 @@
+# syntax=docker/dockerfile:1
+# Base image for Dockerfile.web: Flutter SDK, web artifacts and a warm pub cache.
+#
+# Dokploy builds chat.chuk.chat from Dockerfile.web on every push to master.
+# Without this image, each deploy with a cold builder cache ran apt, cloned
+# Flutter and downloaded the 227 MB Dart SDK again (25 minutes on the slow
+# link of the server). This image holds all of that, so a deploy only pulls one
+# image (once per Flutter version) and compiles the app.
+#
+# Published by .github/workflows/web-base-image.yml as
+#   ghcr.io/chuk-development/chuk-chat-web-base:<FLUTTER_VERSION>
+# The workflow reads FLUTTER_VERSION from Dockerfile.web, so that file is the
+# one place to bump.
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl git unzip ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG FLUTTER_VERSION
+RUN test -n "${FLUTTER_VERSION}" \
+    && git clone --depth 1 --branch "${FLUTTER_VERSION}" \
+       https://github.com/flutter/flutter.git /opt/flutter
+ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}" \
+    PUB_CACHE=/opt/pub-cache
+
+RUN flutter config --no-analytics --no-cli-animations \
+    && dart --disable-analytics \
+    && flutter precache --web
+
+# Warm the pub cache with the current lock. A later lock change then downloads
+# only the packages that differ.
+WORKDIR /warm
+COPY pubspec.yaml pubspec.lock ./
+COPY vendor/ ./vendor/
+COPY third_party/ ./third_party/
+RUN flutter pub get && rm -rf /warm
+
+WORKDIR /app
