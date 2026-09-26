@@ -1,4 +1,4 @@
-# The web image needs lib/, assets/, vendor/, pubspec*. Everything else only
+# The web image needs lib/, assets/, vendor/, third_party/, pubspec*. Everything else only
 # inflates the build context and busts the layer cache on unrelated changes.
 .git
 .github

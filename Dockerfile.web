@@ -17,6 +17,8 @@ RUN flutter doctor -v
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
 COPY vendor/ ./vendor/
+# Path dependencies (flutter_rfb, dart_rfb) must be present before pub get.
+COPY third_party/ ./third_party/
 # The pub cache survives between builds, so an unchanged lock resolves offline.
 RUN --mount=type=cache,target=/root/.pub-cache flutter pub get
 
