@@ -66,12 +66,15 @@ AppDir/
 # Agents tree ships a real, tracked `tools/` directory (agents-browser-bridge,
 # agents-extension-mcp, chat_ui_manifest.txt), so the line is gone. Ignore the
 # downloaded tool by name if it ever comes back.
+/tools/appimagetool
 
 # Generated files
 combined_code_for_llm.txt
 generate_llm_input.sh
 SECURITY_AND_DUPLICATION_REPORT.md
 android/.kotlin/
+# Gradle problem reports from the root android project.
+/android/build/
 
 # Environment files with secrets
 .env
