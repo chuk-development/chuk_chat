@@ -9,6 +9,7 @@ import 'package:chuk_chat/l10n/strings_es.dart';
 import 'package:chuk_chat/l10n/strings_fr.dart';
 import 'package:chuk_chat/l10n/strings_pt.dart';
 import 'package:chuk_chat/services/chat_payload_migration_service.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/chat_maintenance_gate.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -58,6 +59,42 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
   });
 
+  testWidgets('a quick check shows nothing; a slow one says it is syncing', (
+    tester,
+  ) async {
+    controller.debugShow(ChatMaintenancePhase.checking);
+    await tester.pumpWidget(
+      _app(
+        ChatMaintenanceGate(
+          controller: controller,
+          syncingHintDelay: const Duration(milliseconds: 400),
+          child: const Text('SHELL'),
+        ),
+        locale: const Locale('de'),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+
+    // A normal start is done before the delay: no text flashes.
+    expect(find.text('SHELL'), findsNothing);
+    expect(find.text('Chats werden synchronisiert...'), findsNothing);
+    expect(find.byType(ExpressiveLoader), findsNothing);
+
+    // A first start after an install is not: the screen says why it waits.
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('Chats werden synchronisiert...'), findsOneWidget);
+    expect(find.text('Das kann einen Moment dauern.'), findsOneWidget);
+    expect(find.byType(ExpressiveLoader), findsOneWidget);
+    expect(find.text('SHELL'), findsNothing);
+
+    // The check ends: the shell replaces the hint.
+    controller.debugShow(ChatMaintenancePhase.done);
+    await tester.pump();
+    expect(find.text('SHELL'), findsOneWidget);
+    expect(find.text('Chats werden synchronisiert...'), findsNothing);
+  });
+
   testWidgets('a failure offers Retry and Continue; Continue opens the app', (
     tester,
   ) async {
@@ -90,6 +127,8 @@ void main() {
       'maintenanceFailedTitle',
       'maintenanceFailedBody',
       'maintenanceContinue',
+      'maintenanceSyncing',
+      'maintenanceSyncingHint',
     ];
     for (final strings in [
       stringsEn,
