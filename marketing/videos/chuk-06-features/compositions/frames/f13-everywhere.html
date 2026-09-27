@@ -1,0 +1,272 @@
+<template>
+  <style>
+
+@font-face { font-family: "Chuk Chat Mono"; src: url("assets/fonts/ChukChatMono-wght.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Ubuntu"; src: url("assets/fonts/Ubuntu-subset.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/Inter-subset.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+
+.fill { position: absolute; inset: 0; overflow: hidden; }
+
+/* ---------- Worlds (usecases.css "Backdrop scenes", px for 1920x1080) ---------- */
+.sc { position: absolute; inset: 0; overflow: hidden; }
+.sc--paper { background: radial-gradient(ellipse at 50% 38%, #FFFDF8 0%, #FDFBF7 45%, #F3F0E8 100%); }
+.sc--dawn { background: linear-gradient(180deg, #F4E6D4 0%, #F6D4A6 48%, #F1B872 78%, #E8A150 100%); }
+.sc-sun { position: absolute; left: 1060px; bottom: -60px; width: 476px; height: 476px; border-radius: 50%; background: radial-gradient(circle, #FFF3D1 0 34%, #FAD08A 56%, rgba(250, 208, 138, 0) 71%); }
+.sc-hills { position: absolute; left: 0; bottom: 0; width: 1920px; height: 346px; }
+.sc--night { background: radial-gradient(ellipse at 50% 120%, rgba(90, 110, 190, 0.35), transparent 60%), linear-gradient(180deg, #0A0F1F 0%, #131A33 55%, #1D2444 100%); }
+.sc-stars { position: absolute; inset: -20% 0 0; background-image:
+  radial-gradient(1.6px 1.6px at 6% 14%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 14% 38%, #fff 50%, transparent 52%),
+  radial-gradient(1.8px 1.8px at 22% 8%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 31% 26%, #fff 50%, transparent 52%),
+  radial-gradient(1.4px 1.4px at 39% 12%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 46% 34%, #fff 50%, transparent 52%),
+  radial-gradient(1.6px 1.6px at 55% 6%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 63% 22%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 71% 40%, #fff 50%, transparent 52%), radial-gradient(1.6px 1.6px at 79% 16%, #fff 50%, transparent 52%),
+  radial-gradient(1.2px 1.2px at 88% 30%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 95% 10%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 9% 58%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 27% 66%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 51% 60%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 68% 70%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 84% 56%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 93% 74%, #fff 50%, transparent 52%); }
+.sc-stars--b { background-position: 58px 76px; opacity: 0.6; }
+.sc-moon { position: absolute; top: 64px; left: 560px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8); }
+.sc--day { background: linear-gradient(180deg, #F9F1E4 0%, #F2E4CE 100%); }
+.sc-awning { position: absolute; top: 0; left: 0; right: 0; height: 76px; background: repeating-linear-gradient(90deg, #D7775A 0 64px, #FAF3E8 64px 128px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }
+.sc-awning::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 16px; background:
+  radial-gradient(circle at 32px 0, #D7775A 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x,
+  radial-gradient(circle at 96px 0, #FAF3E8 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x; }
+.sc-beams { position: absolute; inset: -20%; background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.6) 36%, transparent 44%, transparent 54%, rgba(255, 255, 255, 0.45) 60%, transparent 67%); }
+.sc--network { background: radial-gradient(ellipse at 50% 50%, #F4F6F0 0%, #E6ECE2 70%, #DCE4D7 100%); }
+.sc-web { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+.sc--prism { background: #F7F4EF; }
+.sc-blob { position: absolute; width: 1344px; height: 1344px; border-radius: 50%; }
+.sc-blob--a { left: -480px; top: -576px; background: radial-gradient(circle, rgba(77, 107, 254, 0.4), transparent 62%); }
+.sc-blob--b { right: -538px; top: -192px; background: radial-gradient(circle, rgba(124, 92, 255, 0.34), transparent 62%); }
+.sc-blob--c { left: 192px; bottom: -768px; background: radial-gradient(circle, rgba(255, 120, 110, 0.32), transparent 62%); }
+.sc-blob--d { right: -192px; bottom: -864px; background: radial-gradient(circle, rgba(245, 165, 36, 0.3), transparent 62%); }
+.sc--street { background: linear-gradient(180deg, #181C33 0%, #332F52 42%, #9A5E78 74%, #E29B75 100%); }
+.sc-city { position: absolute; left: 0; bottom: 0; width: 1920px; height: 360px; }
+.sc--library { background: linear-gradient(180deg, #F2EAD8 0%, #ECE1C9 100%); }
+.sc-ruled { position: absolute; inset: 0; background:
+  linear-gradient(90deg, transparent 56px, rgba(200, 90, 80, 0.3) 56px, rgba(200, 90, 80, 0.3) 58px, transparent 58px),
+  repeating-linear-gradient(180deg, transparent 0 35px, rgba(70, 100, 150, 0.13) 35px 36px); }
+
+/* ---------- Left text column (same grammar every beat) ---------- */
+.lt { position: absolute; left: 100px; top: 0; width: 610px; height: 100%; display: flex; flex-direction: column; justify-content: center; padding-bottom: 20px; }
+.lt-n { margin: 0; font-family: "Chuk Chat Mono", monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.1em; line-height: 1; color: #7A5A0A; white-space: nowrap; }
+.lt-t { margin: 30px 0 0; font-family: "Inter", sans-serif; font-size: 112px; font-weight: 400; letter-spacing: -0.045em; line-height: 1.0; color: #26251F; }
+.lt-t .ln { display: block; white-space: nowrap; }
+.lt-t .wd { display: inline-block; }
+.lt-s { margin: 36px 0 0; max-width: 580px; font-family: "Inter", sans-serif; font-size: 46px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; color: #4E4C45; text-wrap: balance; }
+.lt-rule { width: 64px; height: 4px; margin-top: 30px; border-radius: 2px; background: #D97757; }
+.dark .lt-n { color: #E9C46A; }
+.dark .lt-t { color: #F6F3EC; }
+.dark .lt-s { color: rgba(246, 243, 236, 0.86); }
+
+/* ---------- Result area and card (app surface, logical px, zoomed) ---------- */
+.ra { position: absolute; left: 744px; top: 0; width: 1104px; height: 100%; display: flex; align-items: center; justify-content: center; }
+.rc, .ph {
+  --fg: #E8E4D8; --fg85: rgba(232, 228, 216, 0.85); --fg82: rgba(232, 228, 216, 0.82); --fg70: rgba(232, 228, 216, 0.72);
+  --fg55: rgba(232, 228, 216, 0.6); --fg30: rgba(232, 228, 216, 0.3); --fg15: rgba(232, 228, 216, 0.15);
+  --bg: #262624; --lift: #333330; --acc: #D97757; --bubble: #AD6048;
+  --chat-font: "Chuk Chat Mono", monospace; --ui-font: "Ubuntu", sans-serif;
+}
+.rc { zoom: 1.9; position: relative; width: 580px; min-height: 360px; padding: 20px; border-radius: 22px; background: var(--bg); color: var(--fg);
+  font-family: var(--ui-font); font-size: 16px; line-height: 1.4; text-align: left;
+  box-shadow: 0 34px 80px -26px rgba(20, 16, 8, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.rc *, .ph * { box-sizing: border-box; }
+.rc p, .ph p { margin: 0; }
+.rc svg, .ph svg { flex: none; display: block; }
+.z14 { width: 12px; height: 12px; } .z16 { width: 13.8px; height: 13.8px; } .z18 { width: 15.5px; height: 15.5px; }
+.z20 { width: 17.2px; height: 17.2px; } .z22 { width: 18.9px; height: 18.9px; } .z24 { width: 20.6px; height: 20.6px; } .z26 { width: 22.4px; height: 22.4px; }
+.i16 { width: 16px; height: 16px; } .i18 { width: 18px; height: 18px; } .i20 { width: 20px; height: 20px; } .i22 { width: 22px; height: 22px; }
+
+/* The sent prompt: one line, top of the card */
+.a-user { display: flex; justify-content: flex-end; }
+.a-bubble { max-width: 86%; padding: 9px 14px; border: 1px solid var(--fg30); border-radius: 16px 16px 5px 16px; background: var(--bubble);
+  color: #FFFFFF; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.38; white-space: nowrap; }
+.a-docs { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+.a-doc { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 9px; background: rgba(0, 0, 0, 0.2); font-family: var(--ui-font); font-size: 15px; font-weight: 500; }
+
+/* Answer text (chat font) */
+.a-ai { margin-top: 14px; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.5; color: var(--fg); }
+.a-ai strong, .a-ai b { font-weight: 700; }
+.w { display: inline; }
+
+/* Agent timeline rows */
+.a-step { position: relative; display: flex; align-items: center; gap: 9px; min-height: 30px; margin-top: 14px; font-family: var(--ui-font); font-size: 15px; color: var(--fg55); white-space: nowrap; }
+.a-step b { font-weight: 500; color: var(--fg85); }
+.a-badge { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+.a-badge.ok { color: #86C795; border-color: rgba(134, 199, 149, 0.35); }
+.spin { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.16); border-top-color: var(--acc); border-radius: 50%; }
+
+/* Favicon letters (a-src pills of the website mocks) */
+.a-fav { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--ui-font); font-size: 12px; font-weight: 700; font-style: normal; color: #fff; }
+
+/* Pointer */
+.cursor { position: absolute; left: 0; top: 0; z-index: 20; width: 34px; height: 48px; }
+.cursor svg { width: 34px; height: 48px; display: block; }
+.ripple { position: absolute; left: -22px; top: -22px; z-index: 19; width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(232, 228, 216, 0.8); opacity: 0; }
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: transparent; }
+
+    .dv { position: relative; width: 1090px; height: 820px; }
+    .dv-win { position: absolute; left: 0; top: 30px; }
+    .dv-win-in { position: relative; width: 500px; height: 310px; zoom: 1.6; overflow: hidden; border-radius: 14px; background: #262624; color: #E8E4D8;
+      box-shadow: 0 34px 80px -26px rgba(20, 16, 8, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07); font-family: "Ubuntu", sans-serif; }
+    .dv-bar { position: absolute; left: 14px; top: 12px; display: flex; gap: 6px; }
+    .dv-bar i { width: 10px; height: 10px; border-radius: 50%; background: #5A5852; }
+    .dv-rail { position: absolute; left: 12px; top: 40px; display: flex; flex-direction: column; gap: 14px; color: #E8E4D8; }
+    .dv-rail span { display: flex; }
+    .dv-acc { color: #D97757; }
+    .dv-col { position: absolute; left: 70px; right: 30px; top: 22px; bottom: 16px; display: flex; flex-direction: column; }
+    .dv-user { display: flex; justify-content: flex-end; }
+    .dv-bub { padding: 6px 12px; border-radius: 13px 13px 4px 13px; background: #AD6048; color: #fff; font-family: "Chuk Chat Mono", monospace; font-size: 18px; white-space: nowrap; }
+    .dv-ans { margin-top: 8px; font-family: "Chuk Chat Mono", monospace; font-size: 18px; line-height: 1.45; }
+    .dv-li { margin: 0; white-space: nowrap; }
+    .dv-li b { color: #F0A585; font-weight: 700; }
+    .dv-comp { margin-top: auto; display: flex; align-items: center; justify-content: space-between; height: 46px; padding: 0 8px 0 16px; border: 2px solid #615F5A; border-radius: 23px;
+      font-size: 18px; font-weight: 600; color: rgba(232, 228, 216, 0.75); }
+    .dv-comp i { width: 40px; height: 32px; border-radius: 16px; background: #D97757; color: #fff; display: flex; align-items: center; justify-content: center; }
+    .dv-ph { position: absolute; left: 770px; top: 150px; }
+    .dv-ph-in { width: 196px; height: 406px; zoom: 1.6; padding: 6px; border-radius: 30px; background: #0B0C10;
+      box-shadow: inset 0 0 0 1.5px #2A2C33, 0 40px 80px -24px rgba(0, 0, 0, 0.6); }
+    .dv-ph-scr { position: relative; height: 100%; overflow: hidden; border-radius: 25px; background: #262624; color: #E8E4D8; }
+    .dv-ph-top { height: 26px; }
+    .dv-cam { position: absolute; left: 50%; top: 8px; width: 12px; height: 12px; margin-left: -6px; border-radius: 50%; background: #050506; }
+    .dv-ph-col { padding: 8px 9px 0; }
+    .dv-ph-col .dv-bub { font-size: 18px; padding: 6px 10px; }
+    .dv-sync { position: absolute; left: 12px; bottom: 14px; display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 8px; background: rgba(134, 199, 149, 0.16); color: #86C795;
+      font-family: "Ubuntu", sans-serif; font-size: 18px; font-weight: 700; }
+    .dv-chips { position: absolute; left: 0; top: 590px; display: flex; gap: 10px; }
+    .dv-chip { display: inline-flex; align-items: center; height: 64px; padding: 0 22px; border-radius: 32px; background: #FFFFFF; border: 1.5px solid #E6E1D5;
+      font-family: "Ubuntu", sans-serif; font-size: 32px; font-weight: 500; color: #26251F; box-shadow: 0 10px 24px -14px rgba(20, 16, 8, 0.3); }
+    .dv-lock { position: absolute; left: 0; top: 684px; display: inline-flex; align-items: center; gap: 14px; height: 68px; margin: 0; padding: 0 28px 0 22px; border-radius: 34px;
+      background: #26251F; color: #F6F3EC; font-family: "Ubuntu", sans-serif; font-size: 32px; font-weight: 500; white-space: nowrap; }
+    .dv-lk { width: 34px; height: 34px; color: #86C795; }
+
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <div id="root" data-composition-id="f13-everywhere" data-start="0" data-duration="4" data-width="1920" data-height="1080">
+    <div id="f13-everywhere-world" class="clip sc sc--prism" data-start="0" data-duration="4" data-track-index="0"><span class="sc-blob sc-blob--a" data-layout-allow-overflow></span><span class="sc-blob sc-blob--b" data-layout-allow-overflow></span><span class="sc-blob sc-blob--c" data-layout-allow-overflow></span><span class="sc-blob sc-blob--d" data-layout-allow-overflow></span></div>
+    <div id="f13-everywhere-stage" class="clip fill" data-start="0" data-duration="4" data-track-index="1">
+      <div class="lt"><p class="lt-n">13 / 13</p><h2 class="lt-t"><span class="ln"><span class="wd">Everywhere</span></span></h2><div class="lt-rule"></div><p class="lt-s">Mac, Windows, Linux, Android, Web.</p></div>
+      <div class="ra"><div class="ra-push"><div class="ra-in"><div class="dv">
+      <div class="dv-win"><div class="dv-win-in">
+        <div class="dv-bar"><i></i><i></i><i></i></div>
+        <div class="dv-rail"><span><svg class="z20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5L20 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M4 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M4 19L20 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="dv-acc"><svg class="z20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16.4249 4.60509L17.4149 3.6151C18.2351 2.79497 19.5648 2.79497 20.3849 3.6151C21.205 4.43524 21.205 5.76493 20.3849 6.58507L19.3949 7.57506M16.4249 4.60509L9.76558 11.2644C9.25807 11.772 8.89804 12.4078 8.72397 13.1041L8 16L10.8959 15.276C11.5922 15.102 12.228 14.7419 12.7356 14.2344L19.3949 7.57506M16.4249 4.60509L19.3949 7.57506" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5" /> <path d="M18.9999 13.5C18.9999 16.7875 18.9999 18.4312 18.092 19.5376C17.9258 19.7401 17.7401 19.9258 17.5375 20.092C16.4312 21 14.7874 21 11.4999 21H11C7.22876 21 5.34316 21 4.17159 19.8284C3.00003 18.6569 3 16.7712 3 13V12.5C3 9.21252 3 7.56879 3.90794 6.46244C4.07417 6.2599 4.2599 6.07417 4.46244 5.90794C5.56879 5 7.21252 5 10.5 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="dv-acc"><svg class="z20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7.5" cy="7.5" r="1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M5 21C9.37246 15.775 14.2741 8.88406 21.4975 13.5424" stroke="currentColor" stroke-width="1.5" /></svg></span></div>
+        <div class="dv-col"><div class="dv-user"><span class="dv-bub">Plan Saturday</span></div><div class="dv-ans"><p class="dv-li dw-l0"><b>09:00</b> Market</p><p class="dv-li dw-l1"><b>12:30</b> Lunch</p><p class="dv-li dw-l2"><b>20:00</b> Cinema</p></div>
+          <div class="dv-comp"><span>Ask me anything !</span><i><svg class="z20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.325 5.33455L16.1084 8.24495C19.3643 9.88342 20.9922 10.7027 20.9922 12C20.9922 13.2973 19.3643 14.1166 16.1084 15.7551L10.325 18.6655C6.63532 20.5223 4.79046 21.4507 3.7862 20.7851C3.57349 20.6441 3.38825 20.4651 3.23962 20.2569C2.53788 19.2741 3.3843 17.381 5.07715 13.5948C5.39957 12.8736 5.56078 12.5131 5.58462 12.1319C5.59011 12.044 5.59011 11.956 5.58462 11.8681C5.56078 11.4869 5.39957 11.1264 5.07715 10.4052C3.3843 6.61898 2.53788 4.72586 3.23962 3.74307C3.38825 3.53492 3.57349 3.35593 3.7862 3.21495C4.79046 2.54933 6.63532 3.47774 10.325 5.33455Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M9.49219 12H13.4922" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></i></div></div>
+      </div></div>
+      <div class="dv-ph"><div class="dv-ph-in"><div class="dv-ph-scr">
+        <div class="dv-ph-top"><span class="dv-cam"></span></div>
+        <div class="dv-ph-col"><div class="dv-user"><span class="dv-bub">Plan Saturday</span></div><div class="dv-ans"><p class="dv-li dp-l0"><b>09:00</b> Market</p><p class="dv-li dp-l1"><b>12:30</b> Lunch</p><p class="dv-li dp-l2"><b>20:00</b> Cinema</p></div></div>
+        <span class="dv-sync"><svg class="z16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg>Synced</span>
+      </div></div></div>
+      <div class="dv-chips"><span class="dv-chip dv-c0">Mac</span><span class="dv-chip dv-c1">Windows</span><span class="dv-chip dv-c2">Linux</span><span class="dv-chip dv-c3">Android</span><span class="dv-chip dv-c4">Web</span></div>
+      <p class="dv-lock"><svg class="dv-lk" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg>Synced and end-to-end encrypted</p>
+    </div></div></div></div>
+    </div>
+  </div>
+  <script>
+(function () {
+  var ID = "f13-everywhere", DUR = 4;
+
+  var R = document.querySelector('[data-composition-id="' + ID + '"]');
+  var $ = function (s) { return R.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(R.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+  var ups = [];
+  function c01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function setText(el, s) { if (el.__v !== s) { el.textContent = s; el.__v = s; } }
+  function stream(el, t0, wps, fade) {
+    var ws = Array.prototype.slice.call(el.querySelectorAll('.w'));
+    fade = fade || 0.14;
+    ups.push(function (t) {
+      for (var i = 0; i < ws.length; i++) {
+        var o = c01((t - t0 - i / wps) / fade);
+        if (ws[i].__o !== o) { ws[i].style.opacity = o; ws[i].__o = o; }
+      }
+    });
+    return t0 + ws.length / wps;
+  }
+  function spin(el) {
+    ups.push(function (t) { el.style.transform = 'rotate(' + ((t * 460) % 360).toFixed(1) + 'deg)'; });
+  }
+  function showBetween(el, t0, t1) {
+    ups.push(function (t) { var on = t >= t0 && t < t1; var d = on ? '' : 'none'; if (el.__d !== d) { el.style.display = d; el.__d = d; } });
+  }
+  function count(el, a, b, t0, t1, fmt) {
+    ups.push(function (t) { var k = c01((t - t0) / (t1 - t0)); k = 1 - Math.pow(1 - k, 3); setText(el, fmt(a + (b - a) * k)); });
+  }
+  function rise(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, y: opt.y == null ? 10 : opt.y, scale: opt.s == null ? 1 : opt.s },
+      { opacity: 1, y: 0, scale: 1, duration: opt.d || 0.35, ease: opt.ease || 'power3.out' }, t);
+  }
+  function pop(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, scale: opt.s || 0.6 }, { opacity: 1, scale: 1, duration: opt.d || 0.32, ease: opt.ease || 'back.out(2.2)' }, t);
+  }
+  function fadeIn(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: d || 0.3, ease: 'power1.out' }, t);
+  }
+  function fadeOut(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 1 }, { opacity: 0, duration: d || 0.25, ease: 'power1.in', immediateRender: false }, t);
+  }
+  function draw(sel, t, d, ease) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    var L = Math.ceil(el.getTotalLength()) + 2;
+    el.style.strokeDasharray = L + ' ' + L;
+    tl.fromTo(el, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: d, ease: ease || 'power1.inOut' }, t);
+  }
+  function press(el, t, lo, origin) {
+    var o = origin ? { transformOrigin: origin } : {};
+    tl.fromTo(el, Object.assign({ scale: 1 }, o), Object.assign({ scale: lo, duration: 0.08, ease: 'power2.in', immediateRender: false }, o), t - 0.08);
+    tl.fromTo(el, Object.assign({ scale: lo }, o), Object.assign({ scale: 1, duration: 0.3, ease: 'back.out(3)', immediateRender: false }, o), t);
+  }
+  function ripple(rip, t) {
+    tl.fromTo(rip, { scale: 0.3, opacity: 0 }, { scale: 0.3, opacity: 0.9, duration: 0.01, immediateRender: false }, t);
+    tl.fromTo(rip, { scale: 0.3, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: 'power2.out', immediateRender: false }, t + 0.01);
+  }
+  function cursorPath(cur, pts) {
+    tl.fromTo(cur, { x: pts[0][1], y: pts[0][2] }, { x: pts[0][1], y: pts[0][2], duration: 0.01 }, 0);
+    for (var i = 1; i < pts.length; i++) {
+      var d = pts[i][3] || 0.4;
+      tl.fromTo(cur, { x: pts[i - 1][1], y: pts[i - 1][2] },
+        { x: pts[i][1], y: pts[i][2], duration: d, ease: 'power2.inOut', immediateRender: false }, pts[i][0] - d);
+    }
+  }
+  // Same entrance every beat: text column in, card lifts onto the world, slow push.
+  function beatIn() {
+    tl.fromTo($('.lt-n'), { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 0);
+    $$('.lt-t .wd').forEach(function (w, i) {
+      tl.fromTo(w, { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power3.out' }, 0.03 + i * 0.05);
+    });
+    tl.fromTo($('.lt-rule'), { scaleX: 0, transformOrigin: '0% 50%' }, { scaleX: 1, duration: 0.4, ease: 'power3.out' }, 0.18);
+    tl.fromTo($('.lt-s'), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 0.22);
+    tl.fromTo($('.ra-in'), { opacity: 0, y: 120, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }, 0);
+    tl.fromTo($('.ra-push'), { scale: 1 }, { scale: 1.025, duration: DUR, ease: 'none' }, 0);
+  }
+
+  beatIn();
+
+  // Desktop answers first; the phone shows the same chat a beat later.
+  [0, 1, 2].forEach(function (i) { rise('.dw-l' + i, 0.45 + i * 0.2, { y: 6, d: 0.3 }); });
+  tl.fromTo('.dv-ph', { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.45, ease: 'power3.out' }, 0.2);
+  [0, 1, 2].forEach(function (i) { rise('.dp-l' + i, 1.0 + i * 0.2, { y: 6, d: 0.3 }); });
+  pop('.dv-sync', 1.6, { s: 0.5 });
+  for (var i = 0; i < 5; i++) pop('.dv-c' + i, 2.0 + i * 0.125, { s: 0.6 });
+  rise('.dv-lock', 2.75, { y: 14, d: 0.4 });
+
+
+  var drv = { t: 0 };
+  tl.to(drv, { t: DUR, duration: DUR, ease: 'none', onUpdate: function () {
+    for (var i = 0; i < ups.length; i++) ups[i](drv.t);
+  } }, 0);
+  for (var i = 0; i < ups.length; i++) ups[i](0);
+  window.__timelines[ID] = tl;
+
+})();
+  </script>
+</template>

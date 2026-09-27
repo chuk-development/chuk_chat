@@ -1,0 +1,239 @@
+<template>
+  <style>
+
+@font-face { font-family: "Chuk Chat Mono"; src: url("assets/fonts/ChukChatMono-wght.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Ubuntu"; src: url("assets/fonts/Ubuntu-subset.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/Inter-subset.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+
+.fill { position: absolute; inset: 0; overflow: hidden; }
+
+/* ---------- Worlds (usecases.css "Backdrop scenes", px for 1920x1080) ---------- */
+.sc { position: absolute; inset: 0; overflow: hidden; }
+.sc--paper { background: radial-gradient(ellipse at 50% 38%, #FFFDF8 0%, #FDFBF7 45%, #F3F0E8 100%); }
+.sc--dawn { background: linear-gradient(180deg, #F4E6D4 0%, #F6D4A6 48%, #F1B872 78%, #E8A150 100%); }
+.sc-sun { position: absolute; left: 1060px; bottom: -60px; width: 476px; height: 476px; border-radius: 50%; background: radial-gradient(circle, #FFF3D1 0 34%, #FAD08A 56%, rgba(250, 208, 138, 0) 71%); }
+.sc-hills { position: absolute; left: 0; bottom: 0; width: 1920px; height: 346px; }
+.sc--night { background: radial-gradient(ellipse at 50% 120%, rgba(90, 110, 190, 0.35), transparent 60%), linear-gradient(180deg, #0A0F1F 0%, #131A33 55%, #1D2444 100%); }
+.sc-stars { position: absolute; inset: -20% 0 0; background-image:
+  radial-gradient(1.6px 1.6px at 6% 14%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 14% 38%, #fff 50%, transparent 52%),
+  radial-gradient(1.8px 1.8px at 22% 8%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 31% 26%, #fff 50%, transparent 52%),
+  radial-gradient(1.4px 1.4px at 39% 12%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 46% 34%, #fff 50%, transparent 52%),
+  radial-gradient(1.6px 1.6px at 55% 6%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 63% 22%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 71% 40%, #fff 50%, transparent 52%), radial-gradient(1.6px 1.6px at 79% 16%, #fff 50%, transparent 52%),
+  radial-gradient(1.2px 1.2px at 88% 30%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 95% 10%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 9% 58%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 27% 66%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 51% 60%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 68% 70%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 84% 56%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 93% 74%, #fff 50%, transparent 52%); }
+.sc-stars--b { background-position: 58px 76px; opacity: 0.6; }
+.sc-moon { position: absolute; top: 64px; left: 560px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8); }
+.sc--day { background: linear-gradient(180deg, #F9F1E4 0%, #F2E4CE 100%); }
+.sc-awning { position: absolute; top: 0; left: 0; right: 0; height: 76px; background: repeating-linear-gradient(90deg, #D7775A 0 64px, #FAF3E8 64px 128px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }
+.sc-awning::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 16px; background:
+  radial-gradient(circle at 32px 0, #D7775A 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x,
+  radial-gradient(circle at 96px 0, #FAF3E8 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x; }
+.sc-beams { position: absolute; inset: -20%; background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.6) 36%, transparent 44%, transparent 54%, rgba(255, 255, 255, 0.45) 60%, transparent 67%); }
+.sc--network { background: radial-gradient(ellipse at 50% 50%, #F4F6F0 0%, #E6ECE2 70%, #DCE4D7 100%); }
+.sc-web { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+.sc--prism { background: #F7F4EF; }
+.sc-blob { position: absolute; width: 1344px; height: 1344px; border-radius: 50%; }
+.sc-blob--a { left: -480px; top: -576px; background: radial-gradient(circle, rgba(77, 107, 254, 0.4), transparent 62%); }
+.sc-blob--b { right: -538px; top: -192px; background: radial-gradient(circle, rgba(124, 92, 255, 0.34), transparent 62%); }
+.sc-blob--c { left: 192px; bottom: -768px; background: radial-gradient(circle, rgba(255, 120, 110, 0.32), transparent 62%); }
+.sc-blob--d { right: -192px; bottom: -864px; background: radial-gradient(circle, rgba(245, 165, 36, 0.3), transparent 62%); }
+.sc--street { background: linear-gradient(180deg, #181C33 0%, #332F52 42%, #9A5E78 74%, #E29B75 100%); }
+.sc-city { position: absolute; left: 0; bottom: 0; width: 1920px; height: 360px; }
+.sc--library { background: linear-gradient(180deg, #F2EAD8 0%, #ECE1C9 100%); }
+.sc-ruled { position: absolute; inset: 0; background:
+  linear-gradient(90deg, transparent 56px, rgba(200, 90, 80, 0.3) 56px, rgba(200, 90, 80, 0.3) 58px, transparent 58px),
+  repeating-linear-gradient(180deg, transparent 0 35px, rgba(70, 100, 150, 0.13) 35px 36px); }
+
+/* ---------- Left text column (same grammar every beat) ---------- */
+.lt { position: absolute; left: 100px; top: 0; width: 610px; height: 100%; display: flex; flex-direction: column; justify-content: center; padding-bottom: 20px; }
+.lt-n { margin: 0; font-family: "Chuk Chat Mono", monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.1em; line-height: 1; color: #7A5A0A; white-space: nowrap; }
+.lt-t { margin: 30px 0 0; font-family: "Inter", sans-serif; font-size: 112px; font-weight: 400; letter-spacing: -0.045em; line-height: 1.0; color: #26251F; }
+.lt-t .ln { display: block; white-space: nowrap; }
+.lt-t .wd { display: inline-block; }
+.lt-s { margin: 36px 0 0; max-width: 580px; font-family: "Inter", sans-serif; font-size: 46px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; color: #4E4C45; text-wrap: balance; }
+.lt-rule { width: 64px; height: 4px; margin-top: 30px; border-radius: 2px; background: #D97757; }
+.dark .lt-n { color: #E9C46A; }
+.dark .lt-t { color: #F6F3EC; }
+.dark .lt-s { color: rgba(246, 243, 236, 0.86); }
+
+/* ---------- Result area and card (app surface, logical px, zoomed) ---------- */
+.ra { position: absolute; left: 744px; top: 0; width: 1104px; height: 100%; display: flex; align-items: center; justify-content: center; }
+.rc, .ph {
+  --fg: #E8E4D8; --fg85: rgba(232, 228, 216, 0.85); --fg82: rgba(232, 228, 216, 0.82); --fg70: rgba(232, 228, 216, 0.72);
+  --fg55: rgba(232, 228, 216, 0.6); --fg30: rgba(232, 228, 216, 0.3); --fg15: rgba(232, 228, 216, 0.15);
+  --bg: #262624; --lift: #333330; --acc: #D97757; --bubble: #AD6048;
+  --chat-font: "Chuk Chat Mono", monospace; --ui-font: "Ubuntu", sans-serif;
+}
+.rc { zoom: 1.9; position: relative; width: 580px; min-height: 360px; padding: 20px; border-radius: 22px; background: var(--bg); color: var(--fg);
+  font-family: var(--ui-font); font-size: 16px; line-height: 1.4; text-align: left;
+  box-shadow: 0 34px 80px -26px rgba(20, 16, 8, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.rc *, .ph * { box-sizing: border-box; }
+.rc p, .ph p { margin: 0; }
+.rc svg, .ph svg { flex: none; display: block; }
+.z14 { width: 12px; height: 12px; } .z16 { width: 13.8px; height: 13.8px; } .z18 { width: 15.5px; height: 15.5px; }
+.z20 { width: 17.2px; height: 17.2px; } .z22 { width: 18.9px; height: 18.9px; } .z24 { width: 20.6px; height: 20.6px; } .z26 { width: 22.4px; height: 22.4px; }
+.i16 { width: 16px; height: 16px; } .i18 { width: 18px; height: 18px; } .i20 { width: 20px; height: 20px; } .i22 { width: 22px; height: 22px; }
+
+/* The sent prompt: one line, top of the card */
+.a-user { display: flex; justify-content: flex-end; }
+.a-bubble { max-width: 86%; padding: 9px 14px; border: 1px solid var(--fg30); border-radius: 16px 16px 5px 16px; background: var(--bubble);
+  color: #FFFFFF; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.38; white-space: nowrap; }
+.a-docs { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+.a-doc { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 9px; background: rgba(0, 0, 0, 0.2); font-family: var(--ui-font); font-size: 15px; font-weight: 500; }
+
+/* Answer text (chat font) */
+.a-ai { margin-top: 14px; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.5; color: var(--fg); }
+.a-ai strong, .a-ai b { font-weight: 700; }
+.w { display: inline; }
+
+/* Agent timeline rows */
+.a-step { position: relative; display: flex; align-items: center; gap: 9px; min-height: 30px; margin-top: 14px; font-family: var(--ui-font); font-size: 15px; color: var(--fg55); white-space: nowrap; }
+.a-step b { font-weight: 500; color: var(--fg85); }
+.a-badge { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+.a-badge.ok { color: #86C795; border-color: rgba(134, 199, 149, 0.35); }
+.spin { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.16); border-top-color: var(--acc); border-radius: 50%; }
+
+/* Favicon letters (a-src pills of the website mocks) */
+.a-fav { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--ui-font); font-size: 12px; font-weight: 700; font-style: normal; color: #fff; }
+
+/* Pointer */
+.cursor { position: absolute; left: 0; top: 0; z-index: 20; width: 34px; height: 48px; }
+.cursor svg { width: 34px; height: 48px; display: block; }
+.ripple { position: absolute; left: -22px; top: -22px; z-index: 19; width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(232, 228, 216, 0.8); opacity: 0; }
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: transparent; }
+
+    .en-price { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .en-p1 { margin: 0; font-family: "Inter", sans-serif; font-size: 170px; font-weight: 400; letter-spacing: -0.05em; line-height: 1; color: #26251F; white-space: nowrap; }
+    .en-p2 { margin: 34px 0 0; font-family: "Inter", sans-serif; font-size: 60px; font-weight: 400; letter-spacing: -0.025em; color: #4E4C45; white-space: nowrap; }
+    .en-p2 b { font-weight: 500; color: #B4532F; }
+    .en-lock { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; padding-bottom: 10px; }
+    .en-brand { display: flex; align-items: center; gap: 34px; }
+    .en-logo { width: 140px; height: 140px; display: block; }
+    .en-name { font-family: "Chuk Chat Mono", monospace; font-size: 124px; font-weight: 700; letter-spacing: -4px; line-height: 1; color: #26251F; white-space: nowrap; }
+    .en-slogan { margin: 52px 0 0; font-family: "Inter", sans-serif; font-size: 80px; font-weight: 300; letter-spacing: -0.03em; line-height: 1.05; color: #26251F; white-space: nowrap; }
+    .en-url { margin: 46px 0 0; padding: 12px 38px; border: 2px solid rgba(38, 37, 31, 0.28); border-radius: 999px; background: #F3F0E8;
+      font-family: "Chuk Chat Mono", monospace; font-size: 44px; font-weight: 600; letter-spacing: 0.01em; color: #26251F; }
+
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <div id="root" data-composition-id="f14-end" data-start="0" data-duration="8" data-width="1920" data-height="1080">
+    <div id="f14-end-world" class="clip sc sc--paper" data-start="0" data-duration="8" data-track-index="0"></div>
+    <div id="f14-end-stage" class="clip fill" data-start="0" data-duration="8" data-track-index="1">
+      <div class="en-price"><p class="en-p1">€20 / month</p><p class="en-p2"><b>€16</b> AI credits included</p></div>
+      <div class="en-lock">
+        <div class="en-brand"><svg class="en-logo" viewBox="0 0 500 500" aria-hidden="true"><g transform="translate(0,500) scale(0.1,-0.1)" fill="#26251F"><path d="M2365 4644 c-123 -17 -233 -41 -310 -66 -641 -213 -1147 -829 -1251 -1521 -20 -136 -20 -368 1 -493 79 -468 376 -837 785 -977 135 -46 265 -67 418 -67 208 0 366 34 609 131 88 35 103 44 107 67 6 27 106 651 106 659 0 2 -30 -20 -67 -50 -141 -112 -280 -186 -428 -229 -117 -33 -319 -33 -425 0 -123 39 -187 78 -285 177 -76 75 -99 106 -138 185 -60 120 -86 224 -94 370 -11 213 35 416 141 636 66 135 146 243 257 350 139 132 288 219 444 260 100 26 316 26 405 0 148 -44 273 -123 361 -228 29 -35 51 -54 54 -46 11 35 105 663 100 675 -11 31 -223 116 -370 149 -67 15 -353 27 -420 18z"/><path d="M2758 3464 c-89 -16 -231 -60 -375 -115 -89 -35 -102 -43 -107 -67 -6 -28 -106 -651 -106 -659 0 -3 21 14 47 37 115 101 302 201 453 242 69 19 109 23 215 22 220 -1 342 -52 495 -204 70 -70 94 -102 133 -180 72 -144 90 -224 91 -410 0 -92 -5 -185 -13 -229 -30 -167 -114 -372 -211 -517 -73 -108 -235 -269 -340 -336 -170 -109 -284 -142 -485 -142 -133 0 -145 1 -238 33 -120 41 -239 121 -315 210 -30 36 -54 56 -57 49 -11 -34 -105 -663 -101 -674 11 -29 183 -102 331 -140 82 -21 131 -27 265 -31 261 -8 455 32 690 144 213 100 438 271 600 454 241 273 414 639 465 986 21 141 21 375 -1 501 -91 539 -471 940 -973 1026 -116 20 -354 20 -463 0z"/></g></svg><span class="en-name">Chuk Chat</span></div>
+        <p class="en-slogan">Private and Secure. Always.</p>
+        <p class="en-url">chuk.chat</p>
+      </div>
+    </div>
+  </div>
+  <script>
+(function () {
+  var ID = "f14-end", DUR = 8;
+
+  var R = document.querySelector('[data-composition-id="' + ID + '"]');
+  var $ = function (s) { return R.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(R.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+  var ups = [];
+  function c01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function setText(el, s) { if (el.__v !== s) { el.textContent = s; el.__v = s; } }
+  function stream(el, t0, wps, fade) {
+    var ws = Array.prototype.slice.call(el.querySelectorAll('.w'));
+    fade = fade || 0.14;
+    ups.push(function (t) {
+      for (var i = 0; i < ws.length; i++) {
+        var o = c01((t - t0 - i / wps) / fade);
+        if (ws[i].__o !== o) { ws[i].style.opacity = o; ws[i].__o = o; }
+      }
+    });
+    return t0 + ws.length / wps;
+  }
+  function spin(el) {
+    ups.push(function (t) { el.style.transform = 'rotate(' + ((t * 460) % 360).toFixed(1) + 'deg)'; });
+  }
+  function showBetween(el, t0, t1) {
+    ups.push(function (t) { var on = t >= t0 && t < t1; var d = on ? '' : 'none'; if (el.__d !== d) { el.style.display = d; el.__d = d; } });
+  }
+  function count(el, a, b, t0, t1, fmt) {
+    ups.push(function (t) { var k = c01((t - t0) / (t1 - t0)); k = 1 - Math.pow(1 - k, 3); setText(el, fmt(a + (b - a) * k)); });
+  }
+  function rise(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, y: opt.y == null ? 10 : opt.y, scale: opt.s == null ? 1 : opt.s },
+      { opacity: 1, y: 0, scale: 1, duration: opt.d || 0.35, ease: opt.ease || 'power3.out' }, t);
+  }
+  function pop(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, scale: opt.s || 0.6 }, { opacity: 1, scale: 1, duration: opt.d || 0.32, ease: opt.ease || 'back.out(2.2)' }, t);
+  }
+  function fadeIn(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: d || 0.3, ease: 'power1.out' }, t);
+  }
+  function fadeOut(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 1 }, { opacity: 0, duration: d || 0.25, ease: 'power1.in', immediateRender: false }, t);
+  }
+  function draw(sel, t, d, ease) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    var L = Math.ceil(el.getTotalLength()) + 2;
+    el.style.strokeDasharray = L + ' ' + L;
+    tl.fromTo(el, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: d, ease: ease || 'power1.inOut' }, t);
+  }
+  function press(el, t, lo, origin) {
+    var o = origin ? { transformOrigin: origin } : {};
+    tl.fromTo(el, Object.assign({ scale: 1 }, o), Object.assign({ scale: lo, duration: 0.08, ease: 'power2.in', immediateRender: false }, o), t - 0.08);
+    tl.fromTo(el, Object.assign({ scale: lo }, o), Object.assign({ scale: 1, duration: 0.3, ease: 'back.out(3)', immediateRender: false }, o), t);
+  }
+  function ripple(rip, t) {
+    tl.fromTo(rip, { scale: 0.3, opacity: 0 }, { scale: 0.3, opacity: 0.9, duration: 0.01, immediateRender: false }, t);
+    tl.fromTo(rip, { scale: 0.3, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: 'power2.out', immediateRender: false }, t + 0.01);
+  }
+  function cursorPath(cur, pts) {
+    tl.fromTo(cur, { x: pts[0][1], y: pts[0][2] }, { x: pts[0][1], y: pts[0][2], duration: 0.01 }, 0);
+    for (var i = 1; i < pts.length; i++) {
+      var d = pts[i][3] || 0.4;
+      tl.fromTo(cur, { x: pts[i - 1][1], y: pts[i - 1][2] },
+        { x: pts[i][1], y: pts[i][2], duration: d, ease: 'power2.inOut', immediateRender: false }, pts[i][0] - d);
+    }
+  }
+  // Same entrance every beat: text column in, card lifts onto the world, slow push.
+  function beatIn() {
+    tl.fromTo($('.lt-n'), { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 0);
+    $$('.lt-t .wd').forEach(function (w, i) {
+      tl.fromTo(w, { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power3.out' }, 0.03 + i * 0.05);
+    });
+    tl.fromTo($('.lt-rule'), { scaleX: 0, transformOrigin: '0% 50%' }, { scaleX: 1, duration: 0.4, ease: 'power3.out' }, 0.18);
+    tl.fromTo($('.lt-s'), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 0.22);
+    tl.fromTo($('.ra-in'), { opacity: 0, y: 120, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }, 0);
+    tl.fromTo($('.ra-push'), { scale: 1 }, { scale: 1.025, duration: DUR, ease: 'none' }, 0);
+  }
+
+
+  // Price on the downbeat (V56), end card on the next bar (V58), then it holds.
+  tl.fromTo('.en-p1', { opacity: 0, y: 50 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }, 0);
+  tl.fromTo('.en-p2', { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power3.out' }, 0.5);
+  tl.fromTo('.en-price', { opacity: 1, y: 0 }, { opacity: 0, y: -40, duration: 0.22, ease: 'power2.in', immediateRender: false }, 1.8);
+  tl.fromTo('.en-logo', { opacity: 0, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.5, ease: 'power3.out' }, 2.0);
+  tl.fromTo('.en-name', { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.5, ease: 'power3.out' }, 2.0);
+  tl.fromTo('.en-slogan', { opacity: 0, y: 22 }, { opacity: 1, y: 0, duration: 0.55, ease: 'power3.out' }, 2.5);
+  tl.fromTo('.en-url', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power3.out' }, 3.0);
+
+
+  var drv = { t: 0 };
+  tl.to(drv, { t: DUR, duration: DUR, ease: 'none', onUpdate: function () {
+    for (var i = 0; i < ups.length; i++) ups[i](drv.t);
+  } }, 0);
+  for (var i = 0; i < ups.length; i++) ups[i](0);
+  window.__timelines[ID] = tl;
+
+})();
+  </script>
+</template>

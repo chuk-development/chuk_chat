@@ -28,3 +28,16 @@ round outcome).
 
 ## 2026-09-24 Antwortformate
 - "Schoenerer Output" heisst: statisch bessere Darstellung der Modell-Antwort (Typografie, Layout, Markup), NICHT interaktive Widgets. Bei vagen UI-Wuenschen erst klaeren, ob statisch oder interaktiv gemeint ist.
+
+## 2026-09-27 Marketing-Videos: jedes Video braucht eine eigene Aufgabe
+- Fehler: Fuenf Launch-Videos gebaut, die sich gegenseitig kopieren. Vier
+  starten mit Tippen in eine Box, drei nutzen denselben Boss-Burnout-Prompt,
+  und keins zeigt einfach, was die App kann. Der Hook von 01 (Nachricht senden,
+  nichts passiert, Logo setzt sich zusammen) hat keine Aussage.
+- Regel: Vor dem Bauen einer Serie eine Tabelle "Video -> eine Aufgabe ->
+  eigener Hook -> eigene Prompts" schreiben und auf Ueberschneidung pruefen.
+  Kein Prompt, kein Hook, kein Endcard-Gimmick doppelt.
+- Regel: Ein Feature-Video zeigt Ergebnisse (Chart, Karte, Bild, PDF), nicht
+  das Absenden. Tippen ist nur dann der Hook, wenn das Tippen die Geschichte ist.
+- Regel: Lesbarkeit an Einzelframes in voller Aufloesung pruefen, nicht an
+  verkleinerten Kontaktbogen-Kacheln (Schaetzungen waren um Faktor 4 zu klein).

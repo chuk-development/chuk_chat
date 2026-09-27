@@ -1,0 +1,18 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track_edit.wav",
+    "source": "marketing/_shared/music/05-announce-yourself.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 64.0,
+    "bpm": 120,
+    "edit": "tools/make_music_edit.sh: source 20.069-48.069 + 56.069-64.069 + 24.069-52.069, 0.12 s fade-in, 4.5 s fade-out from 59.5 s; video downbeats at every even second"
+  },
+  "voices": [],
+  "sfx": [
+    {"file": "assets/sfx/pop.mp3", "at": 34.5, "duration_s": 0.5, "volume": 0.2, "cue": "calendar event card lands"},
+    {"file": "assets/sfx/click-soft.mp3", "at": 44.98, "duration_s": 0.36, "volume": 0.22, "cue": "model pick: Kimi K3"},
+    {"file": "assets/sfx/click-soft.mp3", "at": 45.98, "duration_s": 0.36, "volume": 0.22, "cue": "model pick: Qwen3.8 27B"},
+    {"file": "assets/sfx/click-soft.mp3", "at": 46.98, "duration_s": 0.36, "volume": 0.22, "cue": "model pick: Mistral Small 4"}
+  ]
+}
