@@ -199,6 +199,9 @@ flutter:
     - assets/novnc/vendor/pako/lib/zlib/
     - assets/icons/chuk_chat_tray_brand.png
     - assets/mcp_icons/
+    # Lab logos in front of each model in the model menu. The same SVGs as the
+    # website (chuk.chat static/logos/models/), drawn as one-colour silhouettes.
+    - assets/model_logos/
     - web/icons/Icon-512.png
     - windows/runner/resources/app_icon.ico
   # The three selectable chat fonts, bundled locally (previously fetched at
