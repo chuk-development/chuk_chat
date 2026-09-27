@@ -46,7 +46,7 @@
   - L36 `Widget build(BuildContext context)`
   - L57 `bool _isMobilePhone(BuildContext context)`
 
-## lib/platform_specific/root_wrapper_mobile.dart  (769 Z.)
+## lib/platform_specific/root_wrapper_mobile.dart  (784 Z.)
 - L37 `class RootWrapperMobile extends StatefulWidget`
   - L38 `final AppShellConfig config`
   - L40 `const RootWrapperMobile({super.key, required this.config})`
@@ -77,11 +77,11 @@
   - L422 `void _newChatFromAppBar()`
   - L432 `String? _currentChatTitle()`  — Title of the chat in view, or null for a fresh/unsaved chat.
   - L448 `Widget _buildFloatingTopBar(Color iconFg)`  — The composer's top row, rebuilt as free-floating blocks: a round menu
-  - L531 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round, frosted icon chip for the floating top bar.
-  - L561 `void _newChatFromSidebar()`
-  - L570 `void _openArtifactSheet()`
-  - L594 `void _copyDebugChat()`
-  - L609 `Widget build(BuildContext context)`
+  - L546 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round, frosted icon chip for the floating top bar.
+  - L576 `void _newChatFromSidebar()`
+  - L585 `void _openArtifactSheet()`
+  - L609 `void _copyDebugChat()`
+  - L624 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_stub.dart  (19 Z.)
 - L8 `class RootWrapper extends StatelessWidget`  — Web wrapper - renders desktop UI since web is a desktop-like environment
@@ -125,7 +125,7 @@
   - L528 `List<PopupMenuEntry<String>> _buildMenuItems({required Color iconFgColor})`
   - L563 `void _showChatContextMenu( BuildContext context, Offset position, StoredChat chat, { required Color iconFgColor, VoidCallback? onDelete, })`
 
-## lib/platform_specific/sidebar_mobile.dart  (704 Z.)
+## lib/platform_specific/sidebar_mobile.dart  (694 Z.)
 - L28 `class SidebarMobile extends StatefulWidget`
   - L29 `final Function(String? chatId) onChatSelected`
   - L30 `final Function() onSettingsTapped`
@@ -161,10 +161,10 @@
   - L268 `List<StoredChat> _filterChatsLocally( List<StoredChat> chats, String lowerQuery, )`
   - L288 `void didUpdateWidget(covariant SidebarMobile oldWidget)`
   - L296 `Widget build(BuildContext context)`
-  - L439 `List<Widget> _buildMobileSlivers(Color accent)`
-  - L478 `List<Widget> _buildMobileNavigationCards()`
-  - L510 `void _selectMobileChat(StoredChat storedChat)`
-  - L519 `Widget _buildMobileChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, })`
-  - L583 `void _showChatOptionsMenu( StoredChat chat, { Offset? at, VoidCallback? onDelete, required Color accentColor, required Color iconColor, })`  — The chat menu, opened where the finger was.
-  - L637 `Widget _chatOptionRow({ required IconData icon, required Color iconColor, required String label, required VoidCallback onTap, Color? labelColor, })`  — One row of the chat menu. A plain [InkWell] — the tile around it carries
-- L671 `List<String> _filterChatsIsolate(Map<String, dynamic> params)`
+  - L452 `List<Widget> _buildMobileSlivers(Color accent)`
+  - L491 `List<Widget> _buildMobileNavigationCards()`
+  - L524 `void _selectMobileChat(StoredChat storedChat)`
+  - L533 `Widget _buildMobileChatItem( StoredChat chat, { VoidCallback? onTap, VoidCallback? onDelete, required Color accentColor, })`
+  - L573 `void _showChatOptionsMenu( StoredChat chat, { Offset? at, VoidCallback? onDelete, required Color accentColor, required Color iconColor, })`  — The chat menu, opened where the finger was.
+  - L627 `Widget _chatOptionRow({ required IconData icon, required Color iconColor, required String label, required VoidCallback onTap, Color? labelColor, })`  — One row of the chat menu. A plain [InkWell] — the tile around it carries
+- L661 `List<String> _filterChatsIsolate(Map<String, dynamic> params)`

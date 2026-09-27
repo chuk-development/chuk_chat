@@ -1,51 +1,51 @@
 # lib/platform_specific/chat/handlers · Signaturen
 
-## lib/platform_specific/chat/handlers/audio_recording_handler.dart  (517 Z.)
-- L16 `enum AudioRecordingChange`
-  - L16 `started`
-  - L16 `stopped`
-  - L16 `failed`
-  - L16 `busy`
-- L28 `class AudioRecordingHandler`  — Handles microphone recording + transcription.
-  - L29 `static const int _sampleRate = 16000`
-  - L30 `static const int _channels = 1`
-  - L32 `final AudioRecorder _audioRecorder = AudioRecorder()`
-  - L33 `final List<double> _audioLevels = List<double>.filled( 32, 0.0, growable: true, )`
-  - L40 `bool _isMicActive = false`
-  - L41 `bool _isTranscribingAudio = false`
-  - L42 `bool _isChangingRecordingState = false`
-  - L45 `VoidCallback? onLevelsChanged`  — Called whenever audio levels update, so the UI can rebuild.
-  - L48 `StreamSubscription<Uint8List>? _pcmStreamSub`
-  - L49 `final BytesBuilder _pcmBuffer = BytesBuilder(copy: false)`
-  - L52 `StreamingTranscriptionService? _streamingService`
-  - L53 `bool _isStreamingMode = false`
-  - L55 `bool get isMicActive`
-  - L56 `bool get isTranscribingAudio`
-  - L57 `List<double> get audioLevels`
-  - L60 `bool get isStreamingMode`  — Whether a WebSocket streaming session is active.
-  - L69 `Future<bool> _startRecording({String? accessToken})`  — Start microphone recording.
-  - L114 `Future<AudioRecordingChange> toggleRecording({ required String? accessToken, required VoidCallback handleLevelsChanged, })`  — Toggles recording while keeping recorder state transitions identical on
-  - L144 `Future<void> stopRecording({bool keepFile = false})`  — Stop microphone recording.
-  - L174 `Future<TranscriptionResult> _transcribeLastRecording({ required ChatApiService apiService, required String accessToken, })`  — Transcribe the last recorded audio.
-  - L194 `Future<TranscriptionResult?> stopAndTranscribe({ required ChatApiService apiService, required Future<String?> Function() getAccessToken, VoidCallback? onStateChanged, })`  — Stops the active recording, resolves authentication, and transcribes it.
-  - L233 `Future<void> dispose()`
-  - L244 `void _handlePcmChunk(Uint8List data)`
-  - L258 `Future<void> _tryConnectStreaming(String accessToken)`  — Connect the WebSocket in the background. On success, flush any PCM
-  - L302 `Future<TranscriptionResult> _transcribeStreaming()`
-  - L341 `Future<TranscriptionResult> _transcribeBufferedPcm({ required ChatApiService apiService, required String accessToken, })`
-  - L403 `static Uint8List _pcmToWav( Uint8List pcm, { required int sampleRate, required int channels, })`  — Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
-  - L441 `static void _writeAscii(ByteData buf, int offset, String value)`
-  - L448 `void _computeAmplitudeFromPcm(Uint8List data)`
-  - L465 `void _resetAudioLevels()`
-  - L471 `Future<bool> _ensureMicPermission()`
-- L504 `class TranscriptionResult`  — Result of audio transcription.
-  - L505 `final bool success`
-  - L506 `final String? text`
-  - L507 `final String? error`
-  - L508 `final bool requiresLogout`
-  - L510 `TranscriptionResult({ required this.success, this.text, this.error, this.requiresLogout = false, })`
+## lib/platform_specific/chat/handlers/audio_recording_handler.dart  (567 Z.)
+- L17 `enum AudioRecordingChange`
+  - L17 `started`
+  - L17 `stopped`
+  - L17 `failed`
+  - L17 `busy`
+- L29 `class AudioRecordingHandler`  — Handles microphone recording + transcription.
+  - L30 `static const int _sampleRate = 16000`
+  - L31 `static const int _channels = 1`
+  - L33 `final AudioRecorder _audioRecorder = AudioRecorder()`
+  - L34 `final List<double> _audioLevels = List<double>.filled( 32, 0.0, growable: true, )`
+  - L41 `bool _isMicActive = false`
+  - L42 `bool _isTranscribingAudio = false`
+  - L43 `bool _isChangingRecordingState = false`
+  - L46 `VoidCallback? onLevelsChanged`  — Called whenever audio levels update, so the UI can rebuild.
+  - L49 `StreamSubscription<Uint8List>? _pcmStreamSub`
+  - L50 `final BytesBuilder _pcmBuffer = BytesBuilder(copy: false)`
+  - L53 `StreamingTranscriptionService? _streamingService`
+  - L54 `bool _isStreamingMode = false`
+  - L56 `bool get isMicActive`
+  - L57 `bool get isTranscribingAudio`
+  - L58 `List<double> get audioLevels`
+  - L61 `bool get isStreamingMode`  — Whether a WebSocket streaming session is active.
+  - L70 `Future<bool> _startRecording({String? accessToken})`  — Start microphone recording.
+  - L115 `Future<AudioRecordingChange> toggleRecording({ required String? accessToken, required VoidCallback handleLevelsChanged, })`  — Toggles recording while keeping recorder state transitions identical on
+  - L145 `Future<void> stopRecording({bool keepFile = false})`  — Stop microphone recording.
+  - L175 `Future<TranscriptionResult> _transcribeLastRecording({ required ChatApiService apiService, required String accessToken, })`  — Transcribe the last recorded audio.
+  - L195 `Future<TranscriptionResult?> stopAndTranscribe({ required ChatApiService apiService, required Future<String?> Function() getAccessToken, VoidCallback? onStateChanged, })`  — Stops the active recording, resolves authentication, and transcribes it.
+  - L234 `Future<void> dispose()`
+  - L245 `void _handlePcmChunk(Uint8List data)`
+  - L259 `Future<void> _tryConnectStreaming(String accessToken)`  — Connect the WebSocket in the background. On success, flush any PCM
+  - L303 `Future<TranscriptionResult> _transcribeStreaming()`
+  - L342 `Future<TranscriptionResult> _transcribeBufferedPcm({ required ChatApiService apiService, required String accessToken, })`
+  - L418 `Future<TranscriptionResult?> _retryTranscribeAfterRefresh({ required ChatApiService apiService, required Uint8List wav, required String staleToken, })`  — Refresh the Supabase access token and replay the upload once.
+  - L459 `static Uint8List _pcmToWav( Uint8List pcm, { required int sampleRate, required int channels, })`  — Wrap raw PCM-16 LE mono samples in a minimal WAV (RIFF) container so
+  - L497 `static void _writeAscii(ByteData buf, int offset, String value)`
+  - L504 `void _computeAmplitudeFromPcm(Uint8List data)`
+  - L521 `void _resetAudioLevels()`
+  - L527 `Future<bool> _ensureMicPermission()`
+- L560 `class TranscriptionResult`  — Result of audio transcription.
+  - L561 `final bool success`
+  - L562 `final String? text`
+  - L563 `final String? error`
+  - L565 `TranscriptionResult({required this.success, this.text, this.error})`
 
-## lib/platform_specific/chat/handlers/chat_persistence_handler.dart  (447 Z.)
+## lib/platform_specific/chat/handlers/chat_persistence_handler.dart  (467 Z.)
 - L15 `@visibleForTesting bool keepsMoreThanPatch(String? stored, String? patch)`  — Handles chat persistence and storage
 - L22 `class ChatPersistenceHandler`
   - L23 `static const Duration _backgroundUpdateDebounce = Duration(milliseconds: 700)`
@@ -57,26 +57,28 @@
   - L36 `final Map<String, Timer> _backgroundUpdateTimers = <String, Timer>{}`
   - L38 `void dispose()`
   - L50 `Future<void> flushPending({String? chatId})`  — Write every pending patch now. With [chatId] only that chat's patches.
-  - L64 `Future<StoredChat?> persistChat({ required List<Map<String, String>> messages, String? chatId, bool waitForCompletion = false, bool isOffline = false, bool silent = false, })`  — Save or update chat in storage
-  - L128 `static void stampWorkedFor(List<Map<String, String>> messages)`  — Write down how long each answer took, so a reopened chat shows the
-  - L154 `Future<StoredChat?> _persistChatInternal( List<Map<String, String>> messagesCopy, String? chatId, { required bool isOffline, bool silent = false, })`
-  - L266 `Future<void> updateBackgroundChatMessage({ required String chatId, required int messageIndex, String? content, String? reasoning, String? toolCallsJson, String? contentBlocksJson, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? tps, String? status, bool immediate = false, })`  — Update a specific message in storage for a background chat
-  - L312 `Future<void> _flushBackgroundUpdate(String key)`
-- L430 `class _PendingBackgroundUpdate`
-  - L431 `_PendingBackgroundUpdate({required this.chatId, required this.messageIndex})`
-  - L433 `final String chatId`
-  - L434 `final int messageIndex`
-  - L435 `String? content`
-  - L436 `String? reasoning`
-  - L437 `String? toolCallsJson`
-  - L438 `String? contentBlocksJson`
-  - L439 `String? images`
-  - L440 `String? imageMetas`
-  - L441 `String? imageCostEur`
-  - L442 `String? imageGeneratedAt`
-  - L443 `String? tps`
-  - L444 `int attempts = 0`
-  - L445 `String? status`
+  - L70 `Future<StoredChat?> persistChat({ required List<Map<String, String>> messages, String? chatId, bool waitForCompletion = false, bool isOffline = false, bool silent = false, bool commit = true, })`  — Save or update chat in storage
+  - L136 `static void stampWorkedFor(List<Map<String, String>> messages)`  — Write down how long each answer took, so a reopened chat shows the
+  - L162 `Future<StoredChat?> _persistChatInternal( List<Map<String, String>> messagesCopy, String? chatId, { required bool isOffline, bool silent = false, bool commit = true, })`
+  - L210 `void _reportSaveError(Object error, {required bool isOffline})`
+  - L275 `Future<void> updateBackgroundChatMessage({ required String chatId, required int messageIndex, String? content, String? reasoning, String? toolCallsJson, String? contentBlocksJson, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? tps, String? status, bool immediate = false, bool commit = false, })`  — Update a specific message in storage for a background chat.
+  - L323 `Future<void> _flushBackgroundUpdate(String key)`
+- L449 `class _PendingBackgroundUpdate`
+  - L450 `_PendingBackgroundUpdate({required this.chatId, required this.messageIndex})`
+  - L452 `final String chatId`
+  - L453 `final int messageIndex`
+  - L454 `String? content`
+  - L455 `String? reasoning`
+  - L456 `String? toolCallsJson`
+  - L457 `String? contentBlocksJson`
+  - L458 `String? images`
+  - L459 `String? imageMetas`
+  - L460 `String? imageCostEur`
+  - L461 `String? imageGeneratedAt`
+  - L462 `String? tps`
+  - L463 `int attempts = 0`
+  - L464 `String? status`
+  - L465 `bool commit = false`
 
 ## lib/platform_specific/chat/handlers/desktop_clipboard_handler.dart  (265 Z.)
 - L20 `class DesktopClipboardHandler`  — Handles desktop-specific clipboard operations and context menus.
@@ -91,7 +93,7 @@
   - L161 `Future<void> handleSmartPaste(TextEditingController controller)`  — Handles a Ctrl+V paste.
   - L230 `Future<void> cleanupOldPasteTempDirectories()`  — Removes paste temp directories older than [kPasteTempRetention].
 
-## lib/platform_specific/chat/handlers/desktop_file_handler.dart  (439 Z.)
+## lib/platform_specific/chat/handlers/desktop_file_handler.dart  (444 Z.)
 - L17 `class ValidatedFile`  — Temporary container for validated files before upload.
   - L18 `ValidatedFile({ required this.file, required this.fileName, required this.fileSize, required this.isImage, })`
   - L25 `final File file`
@@ -116,13 +118,13 @@
   - L168 `Future<void> _uploadEncryptedImage( File file, String fileName, String fileId, )`  — Upload image with compression and encryption
   - L211 `Future<void> uploadFiles()`  — Opens file picker and processes selected files.
   - L245 `Future<void> processWebFiles(List<PlatformFile> platformFiles)`  — Process files on web where we only have bytes, not file paths
-  - L317 `Future<void> _uploadEncryptedImageFromBytes( Uint8List imageBytes, String fileName, String fileId, )`  — Upload image from bytes (web)
-  - L354 `Future<void> handleDroppedFiles(List<String> filePaths)`  — Handles files dropped via drag and drop
-  - L359 `void removeAttachedFile(String fileId)`  — Remove an attached file by ID. Cleans up encrypted images from storage.
-  - L377 `void handleFileUploadUpdate( String fileId, String? markdownContent, bool isUploading, String? snackBarMessage, { List<String>? pageImages, })`  — Callback for upload status updates from ChatApiService.
-  - L426 `void clearAll()`  — Clear all attachments.
+  - L322 `Future<void> _uploadEncryptedImageFromBytes( Uint8List imageBytes, String fileName, String fileId, )`  — Upload image from bytes (web)
+  - L359 `Future<void> handleDroppedFiles(List<String> filePaths)`  — Handles files dropped via drag and drop
+  - L364 `void removeAttachedFile(String fileId)`  — Remove an attached file by ID. Cleans up encrypted images from storage.
+  - L382 `void handleFileUploadUpdate( String fileId, String? markdownContent, bool isUploading, String? snackBarMessage, { List<String>? pageImages, })`  — Callback for upload status updates from ChatApiService.
+  - L431 `void clearAll()`  — Clear all attachments.
 
-## lib/platform_specific/chat/handlers/file_attachment_handler.dart  (429 Z.)
+## lib/platform_specific/chat/handlers/file_attachment_handler.dart  (438 Z.)
 - L18 `class FileAttachmentHandler`  — Handles file and image attachments
   - L19 `final List<AttachedFile> _attachedFiles = []`
   - L20 `final Uuid _uuid = const Uuid()`
@@ -137,17 +139,17 @@
   - L37 `void initialize(ChatApiService apiService)`
   - L42 `Future<void> pickImageFromSource( ImageSource source, { required bool supportsImages, })`  — Pick image from camera or gallery
   - L92 `Future<void> pickImagesFromGallery({required bool supportsImages})`  — Pick multiple images from gallery
-  - L136 `Future<void> uploadFiles({required bool supportsImages})`  — Upload files using file picker
-  - L189 `Future<void> _handleFileAttachment({ required File file, required String fileName, required int fileSizeBytes, required bool supportsImages, })`
-  - L265 `Future<void> _handleWebFileAttachment({ required Future<Uint8List> Function() readBytes, required String fileName, required int fileSizeBytes, required bool supportsImages, })`  — Handle file attachment from bytes (web).
-  - L328 `Future<void> _uploadEncryptedImageFromBytes( Uint8List imageBytes, String fileName, String fileId, )`  — Upload image from bytes (web)
-  - L356 `bool _isImageExtension(String extension)`
-  - L361 `void handleUploadStatusUpdate( String fileId, String? markdownContent, bool isUploading, { List<String>? pageImages, })`  — Handle file upload status update from ChatApiService
-  - L405 `void removeFile(String fileId)`  — Remove an attached file.
-  - L419 `void clearAll()`  — Clear all attachments
-  - L425 `List<AttachedFile> getUploadedFiles()`  — Get files with markdown content (successfully uploaded)
+  - L134 `Future<void> uploadFiles({required bool supportsImages})`  — Upload files using file picker
+  - L193 `Future<void> _handleFileAttachment({ required File file, required String fileName, required int fileSizeBytes, required bool supportsImages, })`
+  - L269 `Future<void> _handleWebFileAttachment({ required Future<Uint8List> Function() readBytes, required String fileName, required int fileSizeBytes, required bool supportsImages, })`  — Handle file attachment from bytes (web).
+  - L332 `Future<void> _uploadEncryptedImageFromBytes( Uint8List imageBytes, String fileName, String fileId, )`  — Upload image from bytes (web)
+  - L360 `bool _isImageExtension(String extension)`
+  - L365 `void handleUploadStatusUpdate( String fileId, String? markdownContent, bool isUploading, { List<String>? pageImages, })`  — Handle file upload status update from ChatApiService
+  - L414 `void removeFile(String fileId)`  — Remove an attached file.
+  - L428 `void clearAll()`  — Clear all attachments
+  - L434 `List<AttachedFile> getUploadedFiles()`  — Get files with markdown content (successfully uploaded)
 
-## lib/platform_specific/chat/handlers/message_actions_handler.dart  (196 Z.)
+## lib/platform_specific/chat/handlers/message_actions_handler.dart  (195 Z.)
 - L12 `class MessageActionsHandler`  — Handles message-related actions (copy, edit, resend)
   - L14 `Function(String)? onShowSnackBar`
   - L15 `Function(int, String)? onSubmitEdit`
@@ -156,85 +158,90 @@
   - L20 `int? get editingMessageIndex`
   - L21 `bool get isEditing`
   - L29 `static String _forExport(String text)`  — Strips tool-call protocol from text that is about to leave the app.
-  - L33 `Future<void> copyToClipboard(String rawText, {String? label})`  — Copy text to clipboard
-  - L57 `void startEdit(int index)`  — Start editing a message at the given index
-  - L62 `void cancelEdit()`  — Cancel editing
-  - L67 `Future<void> submitEdit(int index, String newText)`  — Submit edited message
-  - L79 `Future<void> resend(int index, String text)`  — Resend message at index
-  - L88 `List<MessageBubbleAction> buildActionsForMessage({ required int index, required String messageText, required bool isUser, required bool isStreaming, required Function(int) onEdit, required Function(int) onResendMessage, Future<void> Function(int)? onRetryToolPass, bool canRetryToolPass = false, void Function(int)? onBranch, })`  — Build actions for AI messages (shown below the bubble).
-  - L156 `List<MessageBubbleAction> buildUserMessageActions({ required int index, required String messageText, required Function(int) onEdit, required Function(int) onResendMessage, })`  — Build actions for user messages (shown in long-press popup).
+  - L32 `Future<void> copyToClipboard(String rawText, {String? label})`  — Copy text to clipboard
+  - L56 `void startEdit(int index)`  — Start editing a message at the given index
+  - L61 `void cancelEdit()`  — Cancel editing
+  - L66 `Future<void> submitEdit(int index, String newText)`  — Submit edited message
+  - L78 `Future<void> resend(int index, String text)`  — Resend message at index
+  - L87 `List<MessageBubbleAction> buildActionsForMessage({ required int index, required String messageText, required bool isUser, required bool isStreaming, required Function(int) onEdit, required Function(int) onResendMessage, Future<void> Function(int)? onRetryToolPass, bool canRetryToolPass = false, void Function(int)? onBranch, })`  — Build actions for AI messages (shown below the bubble).
+  - L155 `List<MessageBubbleAction> buildUserMessageActions({ required int index, required String messageText, required Function(int) onEdit, required Function(int) onResendMessage, })`  — Build actions for user messages (shown in long-press popup).
 
-## lib/platform_specific/chat/handlers/mobile_workspace_handler.dart  (155 Z.)
+## lib/platform_specific/chat/handlers/mobile_workspace_handler.dart  (153 Z.)
 - L12 `class MobileWorkspaceHandler`  — Handles mobile-specific workspace selection UI and workspace–chat linking.
   - L13 `const MobileWorkspaceHandler._()`
   - L24 `static Future<void> createNewProject({ required BuildContext context, required ValueChanged<String> onShowSnackBar, required void Function(String workspaceId) onOpenWorkspaceManagement, })`  — Shows a dialog that lets the user create a new workspace.
-  - L90 `static Future<void> addChatToProject({ required String workspaceId, required String? activeChatId, required ValueChanged<String> onShowSnackBar, required VoidCallback onStateChanged, })`  — Adds the chat identified by [activeChatId] to the given workspace.
-  - L110 `static Future<void> removeChatFromProject({ required String workspaceId, required String? activeChatId, required ValueChanged<String> onShowSnackBar, required VoidCallback onStateChanged, })`  — Removes the chat identified by [activeChatId] from the given workspace.
-  - L137 `static void openProjectManagement({ required BuildContext context, required String workspaceId, required void Function(String? workspaceId) onStartNewChat, })`  — Pushes the [WorkspaceManagementPage] for the given [workspaceId].
+  - L88 `static Future<void> addChatToProject({ required String workspaceId, required String? activeChatId, required ValueChanged<String> onShowSnackBar, required VoidCallback onStateChanged, })`  — Adds the chat identified by [activeChatId] to the given workspace.
+  - L108 `static Future<void> removeChatFromProject({ required String workspaceId, required String? activeChatId, required ValueChanged<String> onShowSnackBar, required VoidCallback onStateChanged, })`  — Removes the chat identified by [activeChatId] from the given workspace.
+  - L135 `static void openProjectManagement({ required BuildContext context, required String workspaceId, required void Function(String? workspaceId) onStartNewChat, })`  — Pushes the [WorkspaceManagementPage] for the given [workspaceId].
 
 ## lib/platform_specific/chat/handlers/scanned_pdf_pages.dart  (89 Z.)
 - L20 `Future<void> replaceWithScannedPages({ required List<String> dataUrls, required String fileId, required String fileName, required String? note, required List<AttachedFile> attachedFiles, void Function()? onUpdate, void Function(String message)? onError, })`  — Replaces a scanned PDF in [attachedFiles] with its rendered pages.
 - L82 `void discardScannedPages(List<String> paths)`  — Deletes pages that were uploaded before the replacement failed, so a
 
-## lib/platform_specific/chat/handlers/streaming_message_handler.dart  (1571 Z.)
-- L25 `class StreamingMessageHandler`  — Handles message streaming and sending
-  - L26 `StreamingMessageHandler()`
-  - L33 `final StreamingManager _streamingManager = StreamingManager()`
-  - L34 `final ToolCallHandler _toolCallHandler = ToolCallHandler()`
-  - L37 `Function(String)? onShowSnackBar`
-  - L38 `Function()? onUpdateUI`
-  - L39 `Function(int index, String content, String reasoning, String chatId)? onMessageUpdate`
-  - L41 `Function( int index, String content, String reasoning, String chatId, double? tps, )? onMessageFinalize`
-  - L49 `Function(int index, List<ToolCall> toolCalls, String chatId)? onToolCallsUpdate`
-  - L51 `Function( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )? onToolImagesProcessed`
-  - L64 `Function(int index, String contentBlocksJson, String chatId)? onContentBlocksUpdate`  — Called when content blocks are updated during or after the tool loop.
-  - L69 `Function(int index, String requestPayloadJson, String chatId)? onRequestPayloadUpdate`  — Called when an outbound request payload is prepared for a streaming pass.
-  - L72 `Function(String chatId, int index, String content, String reasoning)? onBackgroundUpdate`
-  - L80 `Function(String chatId, int index)? onStreamInterrupted`  — Called when the active stream is torn down (dispose / cancel /
-  - L92 `Function( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )? onStreamTick`  — Fires on a periodic timer (and immediately on lifecycle pause /
-  - L102 `Function()? onPaymentRequired`
-  - L104 `bool _isStreaming = false`
-  - L105 `bool _isSending = false`
-  - L106 `bool _isDisposed = false`
-  - L111 `bool _cancelRequested = false`
-  - L112 `bool _hasForegroundKeepAliveLock = false`
-  - L113 `Future<void>? _activeToolLoopFuture`
-  - L123 `static const Duration _snapshotInterval = Duration(milliseconds: 500)`
-  - L124 `Timer? _snapshotTimer`
-  - L125 `_StreamingSnapshot? _currentSnapshot`
-  - L126 `bool _streamFinalized = false`
-  - L128 `bool get isStreaming`
-  - L129 `bool get isSending`
-  - L130 `Future<void>? get activeToolLoopFuture`
-  - L135 `Future<void> sendMessage({ required String userInput, required List<AttachedFile> attachedFiles, required String selectedModelId, required String? selectedProviderSlug, required List<Map<String, String>> messages, required String? systemPrompt, required String? activeChatId, required int placeholderIndex, required Future<String?> Function() getProviderSlug, required bool isOffline, bool includeRecentImagesInHistory = true, bool includeAllImagesInHistory = false, bool includeReasoningInHistory = false, bool includeToolResultsInHistory = true, bool toolCallingEnabled = true, bool toolDiscoveryMode = true, String? reasoningEffort, String? continuePriorText, String? continuePriorContentBlocksJson, })`  — Send a message with streaming response
-  - L1189 `Future<void> cancelStream(String? chatId)`  — Cancel active stream
-  - L1213 `Future<void> _processToolImages( List<ToolCall> toolCalls, int index, String chatId, )`  — Download tool-generated images, encrypt, and persist to Supabase storage.
-  - L1256 `Future<void> _acquireForegroundKeepAlive()`
-  - L1275 `Future<void> _releaseForegroundKeepAlive()`
-  - L1290 `Future<void> _updateForegroundNotification({ required String title, required String content, })`
-  - L1311 `void resetState()`  — Reset state (use when stuck in invalid state)
-  - L1326 `bool isChatStreaming(String chatId)`  — Check if a specific chat is streaming
-  - L1331 `String? getBufferedContent(String chatId)`  — Get buffered content for a streaming chat
-  - L1336 `String? getBufferedReasoning(String chatId)`  — Get buffered reasoning for a streaming chat
-  - L1341 `int? getStreamingMessageIndex(String chatId)`  — Get the streaming message index for a chat
-  - L1346 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
-  - L1351 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed
-  - L1356 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, )`  — Store background messages for a streaming chat when user switches away
-  - L1367 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get the most recent background snapshot for a chat, with the live buffer
-  - L1372 `bool hasBackgroundMessages(String chatId)`  — Whether a background snapshot exists for this chat.
-  - L1378 `Future<List<Map<String, dynamic>>> _buildApiHistory( List<Map<String, String>> messages, String pendingUserText, { bool includeRecentImages = true, bool includeAllImages = false, bool includeReasoning = false, bool includeToolResults = true, })`  — Delegates to [ChatHistoryBuilder] — see that file for why this must not
-  - L1397 `Future<dynamic> getSessionSafely()`  — Get session safely with network error handling
-  - L1440 `void _markStreamFinalized()`  — Mark the active stream as cleanly finished (a final-answer event ran).
-  - L1454 `void _recordSnapshot({ required String chatId, required int index, required String content, required String reasoning, String? contentBlocksJson, })`
-  - L1474 `void _flushSnapshot({bool forceImmediate = false})`
-  - L1509 `void _clearSnapshot()`
-  - L1518 `void _handleAppPaused()`  — Called by the lifecycle service when the app moves to background.
-  - L1524 `void _markInterruptedIfStreaming()`
-  - L1540 `void dispose()`  — Dispose resources
-- L1556 `class _StreamingSnapshot`
-  - L1557 `_StreamingSnapshot({ required this.chatId, required this.index, required this.content, required this.reasoning, this.contentBlocksJson, })`
-  - L1565 `final String chatId`
-  - L1566 `final int index`
-  - L1567 `final String content`
-  - L1568 `final String reasoning`
-  - L1569 `final String? contentBlocksJson`
+## lib/platform_specific/chat/handlers/streaming_message_handler.dart  (1657 Z.)
+- L26 `class StreamingMessageHandler`  — Handles message streaming and sending
+  - L27 `StreamingMessageHandler()`
+  - L34 `final StreamingManager _streamingManager = StreamingManager()`
+  - L35 `final ToolCallHandler _toolCallHandler = ToolCallHandler()`
+  - L38 `Function(String)? onShowSnackBar`
+  - L39 `Function()? onUpdateUI`
+  - L40 `Function(int index, String content, String reasoning, String chatId)? onMessageUpdate`
+  - L42 `Function( int index, String content, String reasoning, String chatId, double? tps, )? onMessageFinalize`
+  - L50 `Function(int index, List<ToolCall> toolCalls, String chatId)? onToolCallsUpdate`
+  - L52 `Function( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )? onToolImagesProcessed`
+  - L65 `Function(int index, String contentBlocksJson, String chatId)? onContentBlocksUpdate`  — Called when content blocks are updated during or after the tool loop.
+  - L70 `Function(int index, String requestPayloadJson, String chatId)? onRequestPayloadUpdate`  — Called when an outbound request payload is prepared for a streaming pass.
+  - L73 `Function(String chatId, int index, String content, String reasoning)? onBackgroundUpdate`
+  - L81 `Function(String chatId, int index)? onStreamInterrupted`  — Called when the active stream is torn down (dispose / cancel /
+  - L93 `Function( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )? onStreamTick`  — Fires on a periodic timer (and immediately on lifecycle pause /
+  - L103 `Function()? onPaymentRequired`
+  - L105 `bool _isStreaming = false`
+  - L106 `bool _isSending = false`
+  - L107 `bool _isDisposed = false`
+  - L112 `bool _cancelRequested = false`
+  - L117 `String? _stopIntentChatId`  — The chat whose stop this handler declared last. Only that one is taken
+  - L118 `bool _hasForegroundKeepAliveLock = false`
+  - L119 `Future<void>? _activeToolLoopFuture`
+  - L129 `static const Duration _snapshotInterval = Duration(milliseconds: 500)`
+  - L130 `Timer? _snapshotTimer`
+  - L131 `_StreamingSnapshot? _currentSnapshot`
+  - L132 `bool _streamFinalized = false`
+  - L134 `bool get isStreaming`
+  - L135 `bool get isSending`
+  - L136 `Future<void>? get activeToolLoopFuture`
+  - L141 `Future<void> sendMessage({ required String userInput, required List<AttachedFile> attachedFiles, required String selectedModelId, required String? selectedProviderSlug, required List<Map<String, String>> messages, required String? systemPrompt, required String? activeChatId, required int placeholderIndex, required Future<String?> Function() getProviderSlug, required bool isOffline, bool includeRecentImagesInHistory = true, bool includeAllImagesInHistory = false, bool includeReasoningInHistory = false, bool includeToolResultsInHistory = true, bool toolCallingEnabled = true, bool toolDiscoveryMode = true, String? reasoningEffort, String? continuePriorText, String? continuePriorContentBlocksJson, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Send a message with streaming response
+  - L1234 `Future<void> cancelStream(String? chatId)`  — Cancel active stream
+  - L1271 `String? _imageTurnChatId`  — Images already persisted for the message being streamed, so a second
+  - L1272 `int? _imageTurnIndex`
+  - L1273 `final List<String> _turnImagePaths = <String>[]`
+  - L1274 `final List<Map<String, dynamic>> _turnImageMetas = <Map<String, dynamic>>[]`
+  - L1277 `Future<void> _processToolImages( List<ToolCall> toolCalls, int index, String chatId, )`  — Download tool-generated images, encrypt, and persist to Supabase storage.
+  - L1337 `Future<void> _acquireForegroundKeepAlive()`
+  - L1356 `Future<void> _releaseForegroundKeepAlive()`
+  - L1371 `Future<void> _updateForegroundNotification({ required String title, required String content, })`
+  - L1392 `void resetState()`  — Reset state (use when stuck in invalid state)
+  - L1407 `bool isChatStreaming(String chatId)`  — Check if a specific chat is streaming
+  - L1412 `String? getBufferedContent(String chatId)`  — Get buffered content for a streaming chat
+  - L1417 `String? getBufferedReasoning(String chatId)`  — Get buffered reasoning for a streaming chat
+  - L1422 `int? getStreamingMessageIndex(String chatId)`  — Get the streaming message index for a chat
+  - L1427 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
+  - L1432 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed
+  - L1437 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, )`  — Store background messages for a streaming chat when user switches away
+  - L1448 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get the most recent background snapshot for a chat, with the live buffer
+  - L1453 `bool hasBackgroundMessages(String chatId)`  — Whether a background snapshot exists for this chat.
+  - L1459 `Future<List<Map<String, dynamic>>> _buildApiHistory( List<Map<String, String>> messages, String pendingUserText, { bool includeRecentImages = true, bool includeAllImages = false, bool includeReasoning = false, bool includeToolResults = true, })`  — Delegates to [ChatHistoryBuilder] — see that file for why this must not
+  - L1476 `Future<dynamic> getSessionSafely()`  — Get session safely with network error handling
+  - L1519 `void _markStreamFinalized()`  — Mark the active stream as cleanly finished (a final-answer event ran).
+  - L1533 `void _recordSnapshot({ required String chatId, required int index, required String content, required String reasoning, String? contentBlocksJson, })`
+  - L1554 `void _flushSnapshot({bool forceImmediate = false})`
+  - L1589 `void _clearSnapshot()`
+  - L1598 `void _handleAppPaused()`  — Called by the lifecycle service when the app moves to background.
+  - L1604 `void _markInterruptedIfStreaming()`
+  - L1620 `void dispose()`  — Dispose resources
+- L1642 `class _StreamingSnapshot`
+  - L1643 `_StreamingSnapshot({ required this.chatId, required this.index, required this.content, required this.reasoning, this.contentBlocksJson, })`
+  - L1651 `final String chatId`
+  - L1652 `final int index`
+  - L1653 `final String content`
+  - L1654 `final String reasoning`
+  - L1655 `final String? contentBlocksJson`

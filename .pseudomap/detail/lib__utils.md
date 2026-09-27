@@ -1,5 +1,77 @@
 # lib/utils · Signaturen
 
+## lib/utils/answer_blocks_parser.dart  (480 Z.)
+- L19 `enum AnswerBlockKind`  — The block kinds the renderer draws natively.
+  - L19 `steps`
+  - L19 `timeline`
+  - L19 `scale`
+  - L19 `alert`
+- L22 `sealed class AnswerSegment`  — One slice of a message: Markdown text or a parsed block.
+  - L23 `const AnswerSegment()`
+- L27 `class AnswerTextSegment extends AnswerSegment`  — Markdown between the blocks, verbatim.
+  - L28 `const AnswerTextSegment(this.text)`
+  - L29 `final String text`
+- L33 `class AnswerBlockSegment extends AnswerSegment`  — A block with its raw body lines.
+  - L34 `const AnswerBlockSegment({ required this.kind, required this.arg, required this.lines, required this.closed, })`
+  - L41 `final AnswerBlockKind kind`
+  - L45 `final String arg`  — Everything after the block name on the opening line. For an alert, the
+  - L48 `final List<String> lines`  — The body lines, without the marker lines.
+  - L51 `final bool closed`  — False while the block is still streaming.
+- L54 `_kBlockNames = <String, AnswerBlockKind>{ 'steps': AnswerBlockKind.steps, 'timeline': AnswerBlockKind.timeline, 'scale':`
+- L60 `_openRe = RegExp(r'^ {0,3}:::\s*([A-Za-z][\w-]*)[ \t]*(.*)$')`
+- L61 `_closeRe = RegExp(r'^ {0,3}:::\s*$')`
+- L64 `_partialCloseRe = RegExp(r'^ {0,3}:{1,2}\s*$')`  — A closing marker that is still being typed (`:` or `::`).
+- L66 `_alertRe = RegExp( r'^ {0,3}>[ \t]?\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\][ \t]*(.*)$', caseSensitive: false, )`
+- L71 `bool _isFence(String line)`
+- L79 `List<AnswerSegment> splitAnswerBlocks(String text)`  — Splits [text] into Markdown and block segments.
+- L217 `enum StepPartKind`
+  - L217 `text`
+  - L217 `command`
+  - L217 `warning`
+- L222 `class StepPart`  — One piece of a step body. A [StepPartKind.command] part holds one or more
+  - L223 `const StepPart(this.kind, this.text)`
+  - L224 `final StepPartKind kind`
+  - L225 `final String text`
+- L228 `class StepItem`
+  - L229 `const StepItem({ required this.label, required this.title, required this.parts, })`
+  - L236 `final String label`  — `1`, `2`, ... or `A`, `B`, ... for `::: steps abc`.
+  - L237 `final String title`
+  - L238 `final List<StepPart> parts`
+- L241 `class StepsSpec`
+  - L242 `const StepsSpec({required this.title, required this.steps})`
+  - L243 `final String title`
+  - L244 `final List<StepItem> steps`
+- L247 `_stepNumRe = RegExp(r'^\s{0,3}(\d{1,3})[.)]\s+(.*)$')`
+- L248 `_stepLetterRe = RegExp(r'^\s{0,3}([A-Za-z])[.)]\s+(.*)$')`
+- L249 `_lettersArgRe = RegExp(r'^abc\b\s*', caseSensitive: false)`
+- L251 `String _letter(int index)`
+- L254 `StepsSpec parseSteps(String arg, List<String> lines)`
+- L315 `class TimelineEntry`
+  - L316 `const TimelineEntry({ required this.label, required this.text, required this.highlight, })`
+  - L323 `final String label`  — The date or label before the first `: `. Empty when the line has none.
+  - L324 `final String text`
+  - L327 `final bool highlight`  — The line started with `*`: the key entry.
+- L332 `(String, String) splitKeyValue(String line)`  — Splits at the first `: ` (colon and space), so `12:30: Lunch` keeps its
+- L338 `List<TimelineEntry> parseTimeline(List<String> lines)`
+- L358 `class ScalePoint`
+  - L359 `const ScalePoint({required this.value, required this.raw, this.label = ''})`
+  - L360 `final double value`
+  - L363 `final String raw`  — The number as the model wrote it, shown unchanged.
+  - L364 `final String label`
+- L367 `class ScaleSpec`
+  - L368 `const ScaleSpec({ required this.min, required this.max, required this.unit, required this.ticks, required this.markers, })`
+  - L376 `final double min`
+  - L377 `final double max`
+  - L378 `final String unit`
+  - L379 `final List<ScalePoint> ticks`
+  - L380 `final List<ScalePoint> markers`
+  - L382 `bool get isKelvin`
+  - L386 `double fraction(double value)`  — Where [value] sits on the band, 0..1.
+- L392 `_numRe = RegExp(r"-?\d[\d.,']*")`
+- L396 `double? parseLooseNumber(String s)`  — Reads the first number in [s]. Accepts `2700`, `2.700` and `2,700`
+- L418 `_rangeRe = RegExp( r"^\s*(-?\d[\d.,']*)\s*(?:–|—|-|\.\.|to|bis)\s*(-?\d[\d.,']*)\s*(.*)$", caseSensitive: false, )`
+- L425 `ScaleSpec? parseScale(String arg, List<String> lines)`  — Returns null when the block cannot be drawn (no range and fewer than two
+
 ## lib/utils/api_rate_limiter.dart  (248 Z.)
 - L4 `class RateLimitConfig`  — API rate limiting configuration for different endpoint types.
   - L5 `final int maxRequests`
@@ -41,7 +113,7 @@
 ## lib/utils/arch_helper_stub.dart  (7 Z.)
 - L6 `String getCurrentArch()`  — Returns the CPU architecture string for the current platform.
 
-## lib/utils/artifact_tag_parser.dart  (141 Z.)
+## lib/utils/artifact_tag_parser.dart  (140 Z.)
 - L18 `class ParsedArtifactTag`  — A single `<artifact>` tag parsed out of assistant text.
   - L19 `ParsedArtifactTag({ required this.id, required this.type, required this.title, required this.content, this.language, required this.matchStart, required this.matchEnd, })`
   - L29 `final String id`
@@ -57,15 +129,25 @@
 - L61 `_leadingCodeFence = RegExp( r'^\s*```(?:[a-zA-Z_][\w+\-]*)?\s*\r?\n', )`
 - L64 `_trailingCodeFence = RegExp(r'\r?\n\s*```\s*$')`
 - L68 `List<ParsedArtifactTag> parseArtifactTags(String text)`  — Returns all complete `<artifact>` blocks found in [text]. Partial
-- L118 `String _stripWrappingFence(String content)`  — Strip a single surrounding "```lang\n … \n```" fence if present. Leaves
-- L128 `String stripArtifactTagsForDisplay( String content, { bool stripIncomplete = true, })`  — Strips complete `<artifact>...</artifact>` blocks from [content]. When
+- L117 `String _stripWrappingFence(String content)`  — Strip a single surrounding "```lang\n … \n```" fence if present. Leaves
+- L127 `String stripArtifactTagsForDisplay( String content, { bool stripIncomplete = true, })`  — Strips complete `<artifact>...</artifact>` blocks from [content]. When
 
-## lib/utils/build_info.dart  (44 Z.)
+## lib/utils/automation_message.dart  (55 Z.)
+- L17 `class AutomationWake`  — A user turn that a fired automation produced, not a person.
+  - L18 `const AutomationWake({required this.id, required this.name})`
+  - L21 `final String id`  — The automation's id, as the host printed it in the header.
+  - L24 `final String name`  — The automation's display name. Empty when the host had none.
+  - L27 `bool operator ==(Object other)`
+  - L31 `int get hashCode`
+- L38 `_headerPattern = RegExp( r'^\[automation ([A-Za-z0-9_-]+) fired:[ \t]*(.*)\]$', )`  — The header the host writes first in a fired task's prompt, mirroring
+- L45 `AutomationWake? parseAutomationWake(String text)`  — Reads the automation header off [text], or returns null when this is an
+
+## lib/utils/build_info.dart  (50 Z.)
 - L12 `class BuildInfo`
   - L13 `BuildInfo._()`
-  - L16 `static const String buildTimestampRaw = String.fromEnvironment('BUILD_TIMESTAMP')`  — Raw value from --dart-define=BUILD_TIMESTAMP=...
-  - L20 `static DateTime? get buildTimestamp`  — Parsed UTC build timestamp, or null if not provided / invalid.
-  - L33 `static String? formatted({DateTime? now})`  — Formatted display string `yyyy-MM-dd HH:mm UTC`, or null when
+  - L16 `static const String buildTimestampRaw = String.fromEnvironment( 'BUILD_TIMESTAMP', )`  — Raw value from --dart-define=BUILD_TIMESTAMP=...
+  - L21 `static DateTime? get buildTimestamp`  — Parsed UTC build timestamp, or null if not provided / invalid.
+  - L39 `static String? formatted({DateTime? now})`  — Formatted display string `yyyy-MM-dd HH:mm UTC`, or null when
 
 ## lib/utils/certificate_pinning.dart  (127 Z.)
 - L6 `class CertificatePin`  — Certificate pin configuration for a domain.
@@ -129,7 +211,7 @@
   - L23 `String toHexString()`
   - L31 `static Color fromHexString(String? hexString, {Color? fallback})`
 
-## lib/utils/debug_chat_formatter.dart  (260 Z.)
+## lib/utils/debug_chat_formatter.dart  (276 Z.)
 - L13 `class DebugChatFormatter`  — Formats the full chat message list as a debug-friendly text string.
   - L14 `const DebugChatFormatter._()`
   - L16 `static const int _maxContextValueChars = 220`
@@ -138,10 +220,17 @@
   - L19 `static const int _maxToolArgsChars = 320`
   - L20 `static const int _maxToolResultChars = 250`
   - L21 `static const int _maxAttachmentsChars = 420`
-  - L24 `static void _noop(Object? _)`
-  - L26 `static int _countImages(String rawImages)`
-  - L41 `static String _truncateForExport(String value, {required int maxChars})`
-  - L60 `static String format( List<Map<String, String>> messages, { Map<String, String>? context, })`  — Format a list of message maps (as used by chat UIs) into a debug string.
+  - L27 `static const int maxContextValueChars = _maxContextValueChars`
+  - L28 `static const int maxReasoningChars = _maxReasoningChars`
+  - L29 `static const int maxMessageTextChars = _maxMessageTextChars`
+  - L30 `static const int maxToolArgsChars = _maxToolArgsChars`
+  - L31 `static const int maxToolResultChars = _maxToolResultChars`
+  - L32 `static const int maxAttachmentsChars = _maxAttachmentsChars`
+  - L36 `static String truncateForExport(String value, {required int maxChars})`  — [_truncateForExport] for other exporters: trim, cut at [maxChars], and say
+  - L40 `static void _noop(Object? _)`
+  - L42 `static int _countImages(String rawImages)`
+  - L57 `static String _truncateForExport(String value, {required int maxChars})`
+  - L76 `static String format( List<Map<String, String>> messages, { Map<String, String>? context, })`  — Format a list of message maps (as used by chat UIs) into a debug string.
 
 ## lib/utils/desktop_drop_stub.dart  (36 Z.)
 - L5 `class DropTarget extends StatelessWidget`
@@ -185,6 +274,21 @@
   - L146 `static Duration _calculateDelay(int attempt, BackoffConfig config)`  — Calculate delay for a given attempt with exponential backoff and jitter.
   - L169 `static bool shouldRetryError(dynamic error)`  — Determine if an error should trigger a retry based on common scenarios.
 
+## lib/utils/favicon.dart  (97 Z.)
+- L14 `List<String> faviconUrls(String host, {int size = 64})`  — Where a site logo is fetched from, best source first.
+- L25 `class FaviconImage extends StatefulWidget`  — The logo of [host], falling back through [faviconUrls] and ending on a
+  - L26 `const FaviconImage({ super.key, required this.host, required this.size, required this.fallbackColor, this.borderRadius = 5, this.fallbackIcon = Icons.public_rounded, })`
+  - L35 `final String host`
+  - L36 `final double size`
+  - L37 `final Color fallbackColor`
+  - L38 `final double borderRadius`
+  - L39 `final IconData fallbackIcon`
+  - L42 `State<FaviconImage> createState()`
+- L45 `class _FaviconImageState extends State<FaviconImage>`
+  - L46 `int _attempt = 0`
+  - L49 `void didUpdateWidget(FaviconImage oldWidget)`
+  - L55 `Widget build(BuildContext context)`
+
 ## lib/utils/file_upload_validator.dart  (461 Z.)
 - L8 `class FileValidationResult`  — File upload validation result.
   - L9 `final bool isValid`
@@ -220,7 +324,10 @@
   - L8 `const ImageClipboardService._()`
   - L10 `static Future<bool> copyImageBytes(Uint8List bytes)`
 
-## lib/utils/input_validator.dart  (374 Z.)
+## lib/utils/incomplete_markdown_links.dart  (21 Z.)
+- L3 `String presentIncompleteMarkdownLinks(String text, {required bool streaming})`  — Keep a partial streamed URL from filling the bubble with encoded bytes.
+
+## lib/utils/input_validator.dart  (372 Z.)
 - L2 `enum PasswordStrength`  — Password strength levels.
   - L2 `weak`
   - L2 `fair`
@@ -254,8 +361,8 @@
   - L195 `static PasswordValidationResult validatePasswordStrength(String? password)`  — Validates password strength and returns detailed feedback.
   - L285 `static String? validatePassword(String? password)`  — Simple password validation for forms.
   - L299 `static Uri? safeHttpUri(String? raw)`  — Build a safe `Uri` from an AI-supplied website string for use with
-  - L341 `static Uri? safeTelUri(String? raw)`  — Build a safe `tel:` URI from an AI-supplied phone number. Accepts only
-  - L354 `static Uri? safeGeoUri({ required double lat, required double lon, String? label, })`  — Build a safe RFC 5870 `geo:` URI for handing coordinates off to an
+  - L339 `static Uri? safeTelUri(String? raw)`  — Build a safe `tel:` URI from an AI-supplied phone number. Accepts only
+  - L352 `static Uri? safeGeoUri({ required double lat, required double lon, String? label, })`  — Build a safe RFC 5870 `geo:` URI for handing coordinates off to an
 
 ## lib/utils/io_helper.dart  (4 Z.)
 - reicht weiter: 'io_helper_stub.dart' if (dart.library.io) 'io_helper_io.dart'
@@ -316,6 +423,12 @@
 - L14 `Map<String, dynamic>? tryDecodeJsonObject(String body)`  — Decodes [body] into a JSON object, or returns null when it is not one.
 - L32 `dynamic tryParseLenientJson(String raw)`  — Lenient JSON parse for model output, which makes two mistakes often
 - L60 `bool looksLikeEncryptedPayload(String raw)`  — True when [raw] is one of our AES-GCM envelopes rather than plaintext.
+
+## lib/utils/lenient_json.dart  (84 Z.)
+- L13 `String stripTrailingCommas(String source)`  — Remove commas that sit directly before `}` or `]`, outside of any string.
+- L56 `String stripCodeFence(String source)`  — Strip a markdown fence (```json … ```) around a JSON body.
+- L67 `Object? tryDecodeLenientJson(String source)`  — Decode a JSON value a model wrote, repairing only a fence and a trailing
+- L80 `Map<String, dynamic>? tryDecodeLenientJsonObject(String source)`  — The same, narrowed to a JSON object.
 
 ## lib/utils/lru_byte_cache.dart  (86 Z.)
 - L10 `class LruByteCache`  — LRU (Least Recently Used) cache with a maximum total byte size.
@@ -410,10 +523,15 @@
 - L10 `_initialized = false`
 - L12 `void initShiftKeyTracker()`
 
-## lib/utils/stream_error_sanitizer.dart  (38 Z.)
+## lib/utils/stream_error_notice.dart  (76 Z.)
+- L11 `kConnectionErrorNotice = 'Could not establish a connection to the server. ' 'Please check your internet connection and t`  — The message shown when the socket to the API cannot be opened.
+- L20 `String stripStreamErrorNotice(String text)`  — Removes the transport error notice from [text], wherever it sits.
+- L39 `String? stripStreamErrorNoticeFromBlocksJson(String? blocksJson)`  — The same cleanup for a stored content-block list.
+
+## lib/utils/stream_error_sanitizer.dart  (41 Z.)
 - L15 `String sanitizeStreamError(Object error)`  — Turns a transport exception into something safe and readable to show.
 
-## lib/utils/theme_extensions.dart  (215 Z.)
+## lib/utils/theme_extensions.dart  (257 Z.)
 - L3 `extension ThemeDataIconColorX on ThemeData`
   - L4 `Color get resolvedIconColor`
   - L16 `Color accentButtonForeground(Color fill)`  — The glyph colour for a button that is filled with the accent — the send
@@ -441,8 +559,8 @@
   - L68 `final Color onWarningContainer`
   - L71 `MaterialYouTokens copyWith({ Color? surfaceContainerLow, Color? surfaceContainer, Color? surfaceContainerHigh, Color? surfaceContainerHighest, Color? primaryContainer, Color? onPrimaryContainer, Color? secondaryContainer, Color? onSecondaryContainer, Color? tertiaryContainer, Color? onTertiaryContainer, Color? outline, Color? outlineVariant, Color? onSurfaceVariant, Color? success, Color? onSuccess, Color? successContainer, Color? onSuccessContainer, Color? warning, Color? warningContainer, Color? onWarningContainer, })`
   - L119 `MaterialYouTokens lerp( covariant ThemeExtension<MaterialYouTokens>? other, double t, )`
-- L167 `extension MaterialYouTokensX on ThemeData`
-  - L170 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
+- L209 `extension MaterialYouTokensX on ThemeData`
+  - L212 `MaterialYouTokens get m3`  — Returns Material You extension tokens. Falls back to sensible defaults
 
 ## lib/utils/token_estimator.dart  (58 Z.)
 - L3 `class TokenEstimator`
@@ -471,7 +589,7 @@
 - L9 `String formatDuration(int ms)`  — Format milliseconds duration as mm:ss string.
 - L17 `String truncate(String text, int maxLength)`  — Truncate text with ellipsis if it exceeds maxLength.
 
-## lib/utils/tool_history_formatter.dart  (100 Z.)
+## lib/utils/tool_history_formatter.dart  (102 Z.)
 - L8 `_maxResultChars = 4000`
 - L9 `_maxTotalChars = 16000`
 - L16 `String? formatAssistantContent( Map<String, String> message, { bool includeReasoning = false, bool includeToolResults = true, })`  — Builds the assistant `content` string for one stored message, optionally

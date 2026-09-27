@@ -1,0 +1,136 @@
+# lib/widgets/agents_desktop · Signaturen
+
+## lib/widgets/agents_desktop/desktop_controls.dart  (328 Z.)
+- L21 `class DeskIconButton extends StatefulWidget`  — One icon button in a desktop bar: a 32 px square with a 20 px glyph.
+  - L22 `const DeskIconButton({ super.key, required this.icon, required this.tooltip, required this.onPressed, this.selected = false, this.parked = false, this.color, this.size = kDeskButton, this.glyph = kDeskGlyph, this.semanticsId, })`
+  - L35 `final IconData icon`
+  - L38 `final String tooltip`  — Names the action and, where there is one, its shortcut.
+  - L39 `final VoidCallback? onPressed`
+  - L40 `final bool selected`
+  - L41 `final bool parked`
+  - L44 `final Color? color`  — The glyph colour. Defaults to `onSurfaceVariant`.
+  - L45 `final double size`
+  - L46 `final double glyph`
+  - L47 `final String? semanticsId`
+  - L50 `State<DeskIconButton> createState()`
+- L53 `class _DeskIconButtonState extends State<DeskIconButton>`
+  - L54 `bool _hovered = false`
+  - L55 `bool _focused = false`
+  - L58 `Widget build(BuildContext context)`
+- L114 `class DeskContextMenuIntent extends Intent`  — Opens a context menu from the keyboard (the Menu key, Shift+F10).
+  - L115 `const DeskContextMenuIntent()`
+- L125 `class DeskFocusable extends StatelessWidget`  — The keyboard half of a desktop control: a focus stop that Enter and Space
+  - L126 `const DeskFocusable({ super.key, required this.child, required this.onActivate, required this.onFocusHighlight, this.onContextMenu, })`
+  - L134 `final Widget child`
+  - L135 `final VoidCallback? onActivate`
+  - L136 `final ValueChanged<bool> onFocusHighlight`
+  - L137 `final VoidCallback? onContextMenu`
+  - L140 `Widget build(BuildContext context)`
+- L174 `class DeskHairline extends StatelessWidget`  — A 1 px hairline in `outlineVariant`, horizontal or vertical.
+  - L175 `const DeskHairline({super.key, this.vertical = false})`
+  - L177 `final bool vertical`
+  - L180 `Widget build(BuildContext context)`
+- L192 `class PaneResizeHandle extends StatefulWidget`  — The drag target on a pane border. It paints nothing of its own — the
+  - L193 `const PaneResizeHandle({ super.key, required this.onDrag, this.onDragEnd, this.onDoubleTap, this.hitWidth = 8, this.semanticLabel = 'Resize pane', })`
+  - L202 `final ValueChanged<double> onDrag`
+  - L203 `final VoidCallback? onDragEnd`
+  - L206 `final VoidCallback? onDoubleTap`  — Back to the default width.
+  - L207 `final double hitWidth`
+  - L208 `final String semanticLabel`
+  - L211 `State<PaneResizeHandle> createState()`
+- L214 `class _PaneResizeHandleState extends State<PaneResizeHandle>`
+  - L215 `bool _active = false`
+  - L218 `Widget build(BuildContext context)`
+- L259 `class DeskPaneHeader extends StatelessWidget`  — The 48 px header row of a side pane, lined up with the thread's title bar:
+  - L260 `const DeskPaneHeader({ super.key, required this.title, this.leading, this.actions = const <Widget>[], this.padding = const EdgeInsets.fromLTRB(16, 0, 8, 0), })`
+  - L268 `final String title`
+  - L269 `final Widget? leading`
+  - L270 `final List<Widget> actions`
+  - L271 `final EdgeInsets padding`
+  - L274 `Widget build(BuildContext context)`
+- L316 `String deskShortcutLabel(String keys)`  — The platform's name for the primary modifier: Cmd on a Mac, Ctrl
+- L322 `bool deskPrimaryModifierPressed()`  — Whether the platform's primary modifier is down (Cmd on a Mac).
+
+## lib/widgets/agents_desktop/desktop_dialog.dart  (132 Z.)
+- L10 `bool isAgentsDesktop(BuildContext context)`  — Whether [context] is laid out as the desktop (not the phone).
+- L18 `Future<T?> showAgentsSheetOrDialog<T>({ required BuildContext context, required WidgetBuilder builder, })`  — A form that is a bottom sheet on the phone and a centred dialog, at most
+- L38 `class AgentsDesktopDialog extends StatelessWidget`  — The dialog frame itself: the app's dialog surface and radius, centred,
+  - L39 `const AgentsDesktopDialog({super.key, required this.child})`
+  - L41 `final Widget child`
+  - L44 `Widget build(BuildContext context)`
+- L69 `Future<bool> showAgentsConfirmDialog( BuildContext context, { required String title, required String message, String confirmLabel = 'Delete', bool destructive = true, })`  — Asks before something is deleted. Returns true when the user confirms.
+
+## lib/widgets/agents_desktop/desktop_metrics.dart  (62 Z.)
+- L9 `kDeskRosterMin = 220`  — Left pane (roster): resizable between these, default in the middle.
+- L10 `kDeskRosterMax = 360`
+- L11 `kDeskRosterDefault = 264`
+- L14 `kDeskRailWidth = 56`  — The roster folded to a rail of faces.
+- L17 `kDeskDetailsMin = 300`  — Right pane (details): resizable between these.
+- L18 `kDeskDetailsMax = 420`
+- L19 `kDeskDetailsDefault = 340`
+- L23 `kDeskThreadMin = 420`  — The thread keeps at least this much. Below it the roster folds to the rail
+- L27 `kDeskBarHeight = 48`  — Title bar of the centre pane, and the header rows of the side panes, so the
+- L30 `kDeskButton = 32`  — Icon buttons in a bar: box and glyph.
+- L31 `kDeskGlyph = 20`
+- L34 `kDeskButtonGap = 4`  — Space between two bar buttons.
+- L37 `kDeskAgentRow = 36`  — Roster rows.
+- L38 `kDeskRoomRow = 32`
+- L39 `kDeskRowFace = 24`
+- L40 `kDeskRowPadH = 8`
+- L43 `kDeskSelectedBar = 3`  — The selected row's accent bar.
+- L46 `kDeskControlRadius = 8`  — Corner of a roster row, a bar button and the search field.
+- L49 `kDeskMenuRadius = 12`  — Desktop menus: radius and row height (§14.6).
+- L50 `kDeskMenuRow = 32`
+- L53 `kDeskComposerRadius = 12`  — Composer (§14.5).
+- L54 `kDeskComposerButton = 28`
+- L57 `kDeskReadingMeasure = 720`  — Reading measure of the transcript and the composer (§14.4).
+- L60 `kDeskDialogMaxWidth = 480`  — Dialogs on the desktop (§14.6): at most this wide, with this corner.
+- L61 `kDeskDialogRadius = 20`
+
+## lib/widgets/agents_desktop/message_hover_actions.dart  (152 Z.)
+- L20 `class MessageHoverActions extends StatefulWidget`
+  - L21 `const MessageHoverActions({ super.key, required this.actions, required this.child, })`
+  - L27 `final List<MessageBubbleAction> actions`
+  - L28 `final Widget child`
+  - L31 `State<MessageHoverActions> createState()`
+- L34 `class _MessageHoverActionsState extends State<MessageHoverActions>`
+  - L35 `bool _hovered = false`
+  - L38 `bool _focusWithin = false`  — The message or one of its toolbar buttons has the focus.
+  - L41 `bool _focusRing = false`  — The message itself has the focus and the keyboard is driving: the ring.
+  - L43 `final FocusNode _node = FocusNode(debugLabel: 'message-row')`
+  - L46 `void initState()`
+  - L53 `void dispose()`
+  - L60 `void _onHighlightMode(FocusHighlightMode _)`
+  - L62 `void _onFocus()`
+  - L76 `Widget build(BuildContext context)`
+
+## lib/widgets/agents_desktop/quick_switcher.dart  (329 Z.)
+- L19 `sealed class QuickSwitcherPick`  — What the user picked.
+  - L20 `const QuickSwitcherPick()`
+- L23 `class QuickSwitcherAgent extends QuickSwitcherPick`
+  - L24 `const QuickSwitcherAgent(this.agent)`
+  - L25 `final AgentsAgent agent`
+- L28 `class QuickSwitcherRoom extends QuickSwitcherPick`
+  - L29 `const QuickSwitcherRoom(this.room)`
+  - L30 `final AgentsRoom room`
+- L35 `Future<QuickSwitcherPick?> showQuickSwitcher( BuildContext context, { required List<AgentsAgent> agents, required List<AgentsRoom> rooms, AgentProfileStore? profiles, AgentReadMarks? readMarks, })`  — Opens the switcher near the top of the window. Returns the pick, or null
+- L52 `class QuickSwitcher extends StatefulWidget`
+  - L53 `const QuickSwitcher({ super.key, required this.agents, required this.rooms, this.profiles, this.readMarks, })`
+  - L61 `final List<AgentsAgent> agents`
+  - L62 `final List<AgentsRoom> rooms`
+  - L63 `final AgentProfileStore? profiles`
+  - L64 `final AgentReadMarks? readMarks`
+  - L67 `State<QuickSwitcher> createState()`
+- L70 `class _QuickSwitcherState extends State<QuickSwitcher>`
+  - L71 `final TextEditingController _query = TextEditingController()`
+  - L72 `final ScrollController _scroll = ScrollController()`
+  - L73 `int _index = 0`
+  - L75 `static const double _rowHeight = 36`
+  - L78 `void initState()`
+  - L84 `void dispose()`
+  - L92 `List<QuickSwitcherPick> get _matches`  — Matches first by a name that starts with the query, then by one that
+  - L120 `void _move(int delta, int count)`
+  - L137 `KeyEventResult _onKey(FocusNode node, KeyEvent event, int count)`
+  - L152 `void _open(QuickSwitcherPick pick)`
+  - L155 `Widget build(BuildContext context)`
+  - L255 `Widget _row( BuildContext context, QuickSwitcherPick pick, bool highlighted, int i, )`

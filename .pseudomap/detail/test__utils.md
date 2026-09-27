@@ -3,11 +3,18 @@
 ## test/utils/accent_button_foreground_test.dart  (46 Z.)
 - L6 `void main()`
 
+## test/utils/answer_blocks_parser_test.dart  (241 Z.)
+- L7 `AnswerBlockSegment _onlyBlock(List<AnswerSegment> segs)`
+- L10 `void main()`
+
 ## test/utils/api_rate_limiter_test.dart  (263 Z.)
 - L4 `void main()`
 
 ## test/utils/artifact_tag_parser_test.dart  (208 Z.)
 - L6 `void main()`
+
+## test/utils/build_app_theme_agents_test.dart  (46 Z.)
+- L10 `void main()`  — The theme has two sides. With Agents off it is upstream chuk_chat's; with
 
 ## test/utils/build_app_theme_contrast_test.dart  (161 Z.)
 - L10 `void main()`
@@ -24,8 +31,14 @@
 ## test/utils/file_upload_validator_test.dart  (148 Z.)
 - L4 `void main()`
 
+## test/utils/incomplete_markdown_links_test.dart  (27 Z.)
+- L4 `void main()`
+
 ## test/utils/input_validator_test.dart  (314 Z.)
 - L4 `void main()`
+
+## test/utils/lenient_json_test.dart  (48 Z.)
+- L5 `void main()`
 
 ## test/utils/lru_byte_cache_test.dart  (168 Z.)
 - L6 `Uint8List _bytes(int size)`  — Helper: create a Uint8List of [size] bytes.

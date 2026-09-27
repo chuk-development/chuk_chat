@@ -1,5 +1,25 @@
 # lib/services/skills · Signaturen
 
+## lib/services/skills/agents_skill.dart  (94 Z.)
+- L8 `@immutable class AgentsSkill`  — One skill as the host lists it (docs/WIRE_CONTRACT.md, "Skills").
+  - L10 `const AgentsSkill({ required this.name, required this.description, required this.source, required this.enabled, this.path, })`
+  - L19 `final String name`  — The `name` of the SKILL.md frontmatter, unique on the host.
+  - L22 `final String description`  — The level-1 text the model reads on every round (300 chars max).
+  - L26 `final String source`  — `builtin` for a skill shipped with the repository (the host's seed set),
+  - L29 `final bool enabled`  — The user's switch. Off keeps the file on disk but out of the prompt.
+  - L32 `final String? path`  — Where the host read it from. Informative only.
+  - L34 `bool get isBuiltin`
+  - L36 `static const String kSourceBuiltin = 'builtin'`
+  - L37 `static const String kSourceWorkspace = 'workspace'`
+  - L40 `static AgentsSkill? fromPayload(Map<String, dynamic> payload)`  — Reads one `skills_list` entry. Null when it has no usable name.
+  - L56 `AgentsSkill copyWith({bool? enabled})`
+  - L65 `bool operator ==(Object other)`
+  - L75 `int get hashCode`
+  - L78 `String toString()`
+- L85 `abstract interface class AgentsSkillsControl`  — The two frames the app sends about skills. Kept apart from
+  - L88 `Future<void> sendSkillControl({required String name, required String action})`  — `skill_control`: switch one skill on (`enable`) or off (`disable`). The
+  - L92 `Future<void> requestSkillsList()`  — `skills_list`: ask for every skill of the host. The host answers with a
+
 ## lib/services/skills/skill_frontmatter_parser.dart  (241 Z.)
 - L24 `class SkillParseException implements Exception`  — Thrown when a SKILL.md violates the spec.
   - L25 `const SkillParseException(this.message, {this.field})`
@@ -32,6 +52,24 @@
   - L81 `static void setUserSkills(List<Skill> skills)`  — Replaces the user-skill layer, dropping anything that would make the
   - L104 `static void _invalidate()`
   - L110 `static void resetForTest()`
+
+## lib/services/skills/skill_settings_sync.dart  (88 Z.)
+- L16 `abstract interface class SkillSettingsMirror`
+  - L18 `Future<void> save(String name, bool enabled)`  — Records one switch. Best-effort: a failure is logged, never thrown.
+  - L22 `Future<Map<String, bool>?> load()`  — Every switch the account holds, or null when the mirror cannot be read
+- L25 `class NoopSkillSettingsMirror implements SkillSettingsMirror`
+  - L26 `const NoopSkillSettingsMirror()`
+  - L29 `Future<void> save(String name, bool enabled)`
+  - L32 `Future<Map<String, bool>?> load()`
+- L35 `class SkillSettingsSync implements SkillSettingsMirror`
+  - L36 `const SkillSettingsSync()`
+  - L38 `static const String table = 'cowork_skill_settings'`
+  - L39 `static const String columnUserId = 'user_id'`
+  - L40 `static const String columnName = 'name'`
+  - L41 `static const String columnEnabled = 'enabled'`
+  - L42 `static const String columnUpdatedAt = 'updated_at'`
+  - L45 `Future<void> save(String name, bool enabled)`
+  - L62 `Future<Map<String, bool>?> load()`
 
 ## lib/services/skills/skills_catalog_service.dart  (418 Z.)
 - L30 `class CatalogSkill`  — One entry in the catalog manifest.
@@ -87,7 +125,31 @@
   - L404 `static Future<void> acceptSuggestion(SkillUpdateSuggestion suggestion)`  — Accepts a pending suggestion: replaces the user's copy with the catalog
   - L413 `static void resetForTest()`
 
-## lib/services/skills/user_skills_service.dart  (397 Z.)
+## lib/services/skills/skills_source.dart  (152 Z.)
+- L23 `class SkillsSource extends ChangeNotifier`  — The app's copy of the host's skill list, kept current from the relay.
+  - L24 `SkillsSource._({SkillSettingsMirror mirror = const SkillSettingsSync()}) : _mirror = mirror`
+  - L27 `static SkillsSource instance = SkillsSource._()`
+  - L29 `SkillSettingsMirror _mirror`
+  - L30 `List<AgentsSkill> _skills = const <AgentsSkill>[]`
+  - L31 `List<String> _errors = const <String>[]`
+  - L32 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L33 `bool _listed = false`
+  - L34 `bool _mirrorApplied = false`
+  - L35 `Map<String, bool> _mirrored = const <String, bool>{}`
+  - L38 `void attach()`  — Starts listening. Idempotent.
+  - L43 `List<AgentsSkill> get all`  — Every skill the host listed, in the host's order (built-ins first).
+  - L45 `List<AgentsSkill> get builtin`
+  - L48 `List<AgentsSkill> get workspace`
+  - L53 `List<String> get errors`  — What the host could not load (a broken SKILL.md) or refused (an unknown
+  - L57 `bool get listed`  — True once the host answered a list request. Before that an empty list
+  - L59 `AgentsSkill? byName(String name)`
+  - L68 `Future<bool> refresh()`  — Ask the host for the current list. Returns false when nothing is
+  - L82 `Future<bool> setEnabled(String name, bool enabled)`  — Switch one skill on or off. The row flips at once so the switch does not
+  - L104 `void _onInbound(AgentsRelayInbound event)`
+  - L115 `Future<void> _reconcileMirror(List<AgentsSkill> skills)`  — First reply: push the account's OFF switches to a host that has them ON.
+  - L141 `void reset({SkillSettingsMirror? mirror})`  — Test seam: forget everything, stop listening, swap the mirror.
+
+## lib/services/skills/user_skills_service.dart  (412 Z.)
 - L38 `class UserSkillException implements Exception`  — Thrown for storage-level failures. Spec violations surface as
   - L39 `const UserSkillException(this.message)`
   - L41 `final String message`
@@ -105,8 +167,8 @@
   - L115 `static Future<List<Skill>> load({bool forceRefresh = false})`  — Every stored skill, newest first. Local-first: memory, then the SQLite
   - L136 `static Future<List<Skill>> _loadLocal(String userId)`  — Reads the SQLite store and parses each row. A row that fails to parse is
   - L151 `static Skill? _rowToSkill(Map<String, dynamic> row)`
-  - L170 `static Future<List<Skill>> _refreshFromServer(String userId)`
-  - L195 `static Future<({List<Skill> skills, List<Map<String, dynamic>> localRows})> _decodeRows(List<dynamic> rows)`  — Decrypts and parses server rows into both [Skill]s (for the prompt) and
-  - L266 `static Future<Skill> save( String source, { String? id, String? catalogName, String? baselineHash, })`  — Validates, stores and returns a skill.
-  - L368 `static Future<void> delete(String id)`  — Deletes the skill with [id]. Throws [UserSkillException] on failure —
-  - L392 `static void resetForTest()`  — Test seam: drops the in-memory cache state.
+  - L172 `static Future<List<Skill>> _refreshFromServer(String userId)`
+  - L197 `static Future<({List<Skill> skills, List<Map<String, dynamic>> localRows})> _decodeRows(List<dynamic> rows)`  — Decrypts and parses server rows into both [Skill]s (for the prompt) and
+  - L281 `static Future<Skill> save( String source, { String? id, String? catalogName, String? baselineHash, })`  — Validates, stores and returns a skill.
+  - L383 `static Future<void> delete(String id)`  — Deletes the skill with [id]. Throws [UserSkillException] on failure —
+  - L407 `static void resetForTest()`  — Test seam: drops the in-memory cache state.

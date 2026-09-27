@@ -1,6 +1,6 @@
 # lib/widgets/sidebar · Signaturen
 
-## lib/widgets/sidebar/hover_marquee_text.dart  (218 Z.)
+## lib/widgets/sidebar/hover_marquee_text.dart  (215 Z.)
 - L10 `class HoverMarqueeText extends StatefulWidget`  — A single-line title that shows an ellipsis at rest and, when the pointer
   - L11 `const HoverMarqueeText( this.text, { super.key, this.style, this.velocity = 45, this.textAlign, })`
   - L20 `final String text`  — The full title to display.
@@ -16,200 +16,267 @@
   - L56 `static const Duration _startDelay = Duration(milliseconds: 500)`  — How long the pointer must dwell before the marquee starts, so a quick
   - L59 `int _cycleToken = 0`  — Bumped on every stop so an in-flight scroll loop bails at its next await.
   - L61 `Future<void> _start(double overflow)`
-  - L94 `bool _stillRunning(int token)`  — True while the loop started under [token] is still the active one.
-  - L97 `void _stop()`
+  - L93 `bool _stillRunning(int token)`  — True while the loop started under [token] is still the active one.
+  - L95 `void _stop()`
   - L111 `Widget build(BuildContext context)`
 
-## lib/widgets/sidebar/sidebar_chrome.dart  (1152 Z.)
-- L32 `Color sbPanelBackground(BuildContext context)`  — The colour the sidebar panel is painted in — the same step off the page
-- L36 `kSbCardGap = 3.0`  — Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
-- L39 `kSbBlockInset = 8.0`  — Horizontal inset of every block from the sidebar edge.
-- L44 `kSbCardRadius = 20.0`  — Corner radius of a lone card, and of the outward corners of a block.
-- L49 `kSbCardJointRadius = 6.0`  — The corners where two cards of one block meet. Same idea as
-- L53 `kSbNavCardHeight = 42.0`  — Height of a navigation card. Short enough that the block reads as one
-- L57 `kSbNavRowStep = kSbNavCardHeight + kSbCardGap`  — One row of the navigation block, card plus the gap under it. The rhythm
-- L62 `_kSbMenuCentre = kTopInitialSpacing + kMenuButtonHeight / 2`  — The hamburger's centre line. It is the row above the block — folded, it is
-- L69 `kSbNavBlockTop = _kSbMenuCentre + kSbNavRowStep - kSbNavCardHeight / 2`  — Where the first navigation card starts.
-- L78 `double sbNavRowTop(int index)`  — Top of row [index] of the navigation block — the cards when the panel is
-- L84 `kSbNavIconLeft = kSbBlockInset + 8`  — Left edge of the icon inside a navigation card: the block's inset, then
-- L87 `kSbNavIconTile = 30.0`  — Side of the tonal square an icon sits in, in a card and in the rail.
-- L90 `kSbNavIconTop = (kSbNavCardHeight - kSbNavIconTile) / 2`  — Top of the icon tile within its row.
-- L98 `kSbNavIconCentre = kSbNavIconLeft + kSbNavIconTile / 2`  — The vertical line every icon on the left edge stands on: the card icons,
-- L100 `class SidebarTokens`
-  - L101 `final Color iconFg`
-  - L102 `final Color accent`
-  - L103 `final Color bg`
-  - L104 `final Color surface`
-  - L105 `final Color surfaceHigh`
-  - L106 `final Color hairline`
-  - L107 `final Color muted`
-  - L108 `final bool isDark`
-  - L109 `const SidebarTokens({ required this.iconFg, required this.accent, required this.bg, required this.surface, required this.surfaceHigh, required this.hairline, required this.muted, required this.isDark, })`
-  - L120 `factory SidebarTokens.of(BuildContext context)`
-- L141 `class SbCard extends StatefulWidget`  — The filled, rounded card every sidebar row sits in.
-  - L142 `const SbCard({ super.key, required this.child, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.selected = false, this.outlined = false, this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10), this.minHeight, this.radius, })`
-  - L156 `final Widget child`
-  - L157 `final VoidCallback? onTap`
-  - L158 `final VoidCallback? onLongPress`
-  - L162 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press, reported in global coordinates so the caller can open a menu
-  - L166 `final void Function(Offset globalPosition)? onSecondaryTap`  — Right-click, reported in global coordinates so the caller can anchor a
-  - L167 `final bool selected`
-  - L171 `final bool outlined`  — Draws the accent ring without the accent fill — for the search field,
-  - L172 `final EdgeInsets padding`
-  - L173 `final double? minHeight`
-  - L176 `final double? radius`  — Overrides the shape the enclosing [SbBlock] would give this card.
-  - L179 `State<SbCard> createState()`
-- L182 `class _SbCardState extends State<SbCard>`
-  - L183 `bool _pressed = false`
-  - L184 `bool _hovered = false`
-  - L189 `Offset? _lastDown`  — Where the finger went down. A long press is always preceded by a tap
-  - L192 `Widget build(BuildContext context)`
-- L284 `class SbCardHoverScope extends InheritedWidget`  — Publishes the hover state of the enclosing [SbCard] to its content.
-  - L285 `const SbCardHoverScope({ super.key, required this.hovered, required super.child, })`
-  - L291 `final bool hovered`
-  - L293 `static bool of(BuildContext context)`
-  - L298 `bool updateShouldNotify(SbCardHoverScope old)`
-- L304 `class SbBlock extends StatelessWidget`  — A stack of cards that belong together — the navigation block, or the chats
-  - L305 `const SbBlock({ super.key, required this.children, this.inset = kSbBlockInset, this.joinTop = false, })`
-  - L312 `final List<Widget> children`
-  - L313 `final double inset`
-  - L317 `final bool joinTop`  — The block continues the card above it — the sidebar's head bar — so its
-  - L320 `Widget build(BuildContext context)`
-- L347 `BorderRadius sbBlockRadiusFor({ required int index, required int length, bool joinTop = false, })`  — The corners of the card at [index] in a block of [length] cards: outward
-- L388 `class SbCardShape extends InheritedWidget`  — Carries the shape a card should take from its block down to the card.
-  - L389 `const SbCardShape({super.key, required this.radius, required super.child})`
-  - L391 `final BorderRadius radius`
-  - L393 `static BorderRadius? of(BuildContext context)`
-  - L398 `bool updateShouldNotify(SbCardShape old)`
-- L407 `class SbNavIcon extends StatelessWidget`  — The glyph of a navigation entry: the bare icon in the accent colour, in a
-  - L408 `const SbNavIcon({ super.key, required this.icon, this.tone, this.size = kSbNavIconTile, })`
-  - L415 `final IconData icon`
-  - L418 `final Color? tone`  — Null takes the theme's accent.
-  - L421 `final double size`  — Side of the box the glyph is centred in.
-  - L424 `Widget build(BuildContext context)`
-- L436 `class SbNavCard extends StatelessWidget`  — One navigation entry: a full-width card with a coloured icon and a bold
-  - L437 `const SbNavCard({ super.key, required this.icon, required this.label, required this.onTap, this.tone, this.trailing, })`
-  - L446 `final IconData icon`
-  - L447 `final String label`
-  - L448 `final VoidCallback onTap`
-  - L449 `final Color? tone`
-  - L450 `final Widget? trailing`
-  - L453 `Widget build(BuildContext context)`
-- L483 `class SbRoundAction extends StatelessWidget`  — A round icon button on the card fill — the shape the head bar and the
-  - L484 `const SbRoundAction({ super.key, required this.icon, required this.onTap, required this.tooltip, this.diameter = 44, this.iconSize = 22, this.fill, })`
-  - L494 `final IconData icon`
-  - L495 `final VoidCallback onTap`
-  - L496 `final String tooltip`
-  - L497 `final double diameter`
-  - L498 `final double iconSize`
-  - L502 `final Color? fill`  — Null uses the same container fill the cards use; a colour here makes the
-  - L505 `Widget build(BuildContext context)`
-- L535 `class SbGroupHeader extends StatelessWidget`  — The header above a block: a quiet label, the number of items in the group,
-  - L536 `const SbGroupHeader({ super.key, required this.label, required this.collapsed, this.count, this.onToggle, })`
-  - L544 `final String label`
-  - L545 `final bool collapsed`
-  - L546 `final int? count`
-  - L547 `final VoidCallback? onToggle`
-  - L550 `Widget build(BuildContext context)`
-- L620 `class SbSearchField extends StatefulWidget`  — The pill-shaped search field of the bottom bar.
-  - L621 `const SbSearchField({ super.key, required this.controller, required this.focusNode, required this.onClear, this.hintText, this.transparent = false, })`
-  - L630 `final TextEditingController controller`
-  - L631 `final FocusNode focusNode`
-  - L632 `final VoidCallback onClear`
-  - L635 `final String? hintText`  — Null takes the localized default.
-  - L639 `final bool transparent`  — Draws no fill of its own, for a field that sits where a card already
-  - L642 `State<SbSearchField> createState()`
-- L645 `class _SbSearchFieldState extends State<SbSearchField>`
-  - L650 `bool _hasText = false`  — Whether the clear button belongs on screen. Tracked here, from the
-  - L653 `void initState()`
-  - L660 `void didUpdateWidget(covariant SbSearchField oldWidget)`
-  - L670 `void dispose()`
-  - L675 `void _onControllerChanged()`
-  - L682 `Widget build(BuildContext context)`
-- L749 `class SbAccountLine extends StatelessWidget`  — The bottom bar of the phone sidebar: who is signed in, what is left on the
-  - L750 `const SbAccountLine({ super.key, required this.name, this.balance, this.onTap, this.onSettings, this.settingsTooltip, })`
-  - L759 `final String name`
-  - L762 `final Widget? balance`  — The remaining balance, drawn on the right.
-  - L763 `final VoidCallback? onTap`
-  - L764 `final VoidCallback? onSettings`
-  - L765 `final String? settingsTooltip`
-  - L768 `Widget build(BuildContext context)`
-- L817 `class SbChatTile extends StatelessWidget`  — One chat in a group block: the title, the date under it, and the actions
-  - L818 `const SbChatTile({ super.key, required this.title, this.dateLine, this.selected = false, this.locked = false, this.streaming = false, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.trailing, this.hoverTrailing, })`
-  - L833 `final String title`
-  - L834 `final String? dateLine`
-  - L835 `final bool selected`
-  - L836 `final bool locked`
-  - L837 `final bool streaming`
-  - L838 `final VoidCallback? onTap`
-  - L839 `final VoidCallback? onLongPress`
-  - L842 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press with the position of the finger, for a menu that opens there.
-  - L843 `final void Function(Offset globalPosition)? onSecondaryTap`
-  - L846 `final Widget? trailing`  — Always visible — the three-dot menu.
-  - L850 `final Widget? hoverTrailing`  — Revealed only while the pointer is over the card, for a control that
-  - L853 `Widget build(BuildContext context)`
-- L876 `class _SbChatTileBody extends StatelessWidget`  — Split out so it can read the card's hover state, which the card publishes
-  - L877 `const _SbChatTileBody({ required this.title, required this.dateLine, required this.selected, required this.locked, required this.streaming, required this.trailing, required this.hoverTrailing, })`
-  - L887 `final String title`
-  - L888 `final String? dateLine`
-  - L889 `final bool selected`
-  - L890 `final bool locked`
-  - L891 `final bool streaming`
-  - L892 `final Widget? trailing`
-  - L893 `final Widget? hoverTrailing`
-  - L896 `Widget build(BuildContext context)`
-- L985 `class SbChatGroup<T>`  — A time group: the header label and the chats that fall into it.
-  - L986 `const SbChatGroup(this.label, this.items)`
-  - L987 `final String label`
-  - L988 `final List<T> items`
-- L998 `List<SbChatGroup<T>> sbGroupByTime<T>( List<T> items, DateTime Function(T item) dateOf, { required String Function(DateTime date) monthLabel, String todayLabel = 'Today', String weekLabel = 'This week', String thisMonthLabel = 'This month', DateTime? now, })`  — Buckets chats into Today / This week / This month / one group per older
-- L1044 `String sbChatDateLine(BuildContext context, DateTime? date)`  — The muted line under a chat title: the time for anything from today, the
-- L1061 `class SbOfflineNotice extends StatelessWidget`  — The strip that says the list is stale because the device is offline, with
-  - L1062 `const SbOfflineNotice({ super.key, required this.label, required this.onRetry, this.retryTooltip, })`
-  - L1069 `final String label`
-  - L1070 `final VoidCallback onRetry`
-  - L1073 `final String? retryTooltip`  — Null takes the localized default.
-  - L1076 `Widget build(BuildContext context)`
-- L1133 `class SbFloatingBar extends StatelessWidget`  — A card that floats over the scrolling list — the app name at the top of
-  - L1134 `const SbFloatingBar({super.key, required this.child, this.borderRadius})`
-  - L1136 `final Widget child`
-  - L1140 `final BorderRadius? borderRadius`  — Per-corner shape. A bar that the block below it joins tightens the
-  - L1143 `Widget build(BuildContext context)`
+## lib/widgets/sidebar/sidebar_chrome.dart  (1670 Z.)
+- L33 `Color sbPanelBackground(BuildContext context)`  — The colour the sidebar panel is painted in — the same step off the page
+- L37 `kSbCardGap = 3.0`  — Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
+- L40 `kSbBlockInset = 8.0`  — Horizontal inset of every block from the sidebar edge.
+- L45 `kSbCardRadius = 20.0`  — Corner radius of a lone card, and of the outward corners of a block.
+- L50 `kSbCardJointRadius = 6.0`  — The corners where two cards of one block meet. Same idea as
+- L54 `kSbNavCardHeight = 42.0`  — Height of a navigation card. Short enough that the block reads as one
+- L58 `kSbNavRowStep = kSbNavCardHeight + kSbCardGap`  — One row of the navigation block, card plus the gap under it. The rhythm
+- L63 `_kSbMenuCentre = kTopInitialSpacing + kMenuButtonHeight / 2`  — The hamburger's centre line. It is the row above the block — folded, it is
+- L70 `kSbNavBlockTop = _kSbMenuCentre + kSbNavRowStep - kSbNavCardHeight / 2`  — Where the first navigation card starts.
+- L79 `double sbNavRowTop(int index)`  — Top of row [index] of the navigation block — the cards when the panel is
+- L85 `kSbNavIconLeft = kSbBlockInset + 8`  — Left edge of the icon inside a navigation card: the block's inset, then
+- L88 `kSbNavIconTile = 30.0`  — Side of the tonal square an icon sits in, in a card and in the rail.
+- L91 `kSbNavIconTop = (kSbNavCardHeight - kSbNavIconTile) / 2`  — Top of the icon tile within its row.
+- L99 `kSbNavIconCentre = kSbNavIconLeft + kSbNavIconTile / 2`  — The vertical line every icon on the left edge stands on: the card icons,
+- L101 `class SidebarTokens`
+  - L102 `final Color iconFg`
+  - L103 `final Color accent`
+  - L104 `final Color bg`
+  - L105 `final Color surface`
+  - L106 `final Color surfaceHigh`
+  - L107 `final Color hairline`
+  - L108 `final Color muted`
+  - L109 `final bool isDark`
+  - L110 `const SidebarTokens({ required this.iconFg, required this.accent, required this.bg, required this.surface, required this.surfaceHigh, required this.hairline, required this.muted, required this.isDark, })`
+  - L121 `factory SidebarTokens.of(BuildContext context)`
+- L142 `class SbCard extends StatefulWidget`  — The filled, rounded card every sidebar row sits in.
+  - L143 `const SbCard({ super.key, required this.child, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.selected = false, this.outlined = false, this.padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10), this.minHeight, this.radius, })`
+  - L157 `final Widget child`
+  - L158 `final VoidCallback? onTap`
+  - L159 `final VoidCallback? onLongPress`
+  - L163 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press, reported in global coordinates so the caller can open a menu
+  - L167 `final void Function(Offset globalPosition)? onSecondaryTap`  — Right-click, reported in global coordinates so the caller can anchor a
+  - L168 `final bool selected`
+  - L172 `final bool outlined`  — Draws the accent ring without the accent fill — for the search field,
+  - L173 `final EdgeInsets padding`
+  - L174 `final double? minHeight`
+  - L177 `final double? radius`  — Overrides the shape the enclosing [SbBlock] would give this card.
+  - L180 `State<SbCard> createState()`
+- L183 `class _SbCardState extends State<SbCard>`
+  - L184 `bool _pressed = false`
+  - L185 `bool _hovered = false`
+  - L190 `Offset? _lastDown`  — Where the finger went down. A long press is always preceded by a tap
+  - L193 `Widget build(BuildContext context)`
+- L285 `class SbCardHoverScope extends InheritedWidget`  — Publishes the hover state of the enclosing [SbCard] to its content.
+  - L286 `const SbCardHoverScope({ super.key, required this.hovered, required super.child, })`
+  - L292 `final bool hovered`
+  - L294 `static bool of(BuildContext context)`
+  - L299 `bool updateShouldNotify(SbCardHoverScope old)`
+- L305 `class SbBlock extends StatelessWidget`  — A stack of cards that belong together — the navigation block, or the chats
+  - L306 `const SbBlock({ super.key, required this.children, this.inset = kSbBlockInset, this.joinTop = false, })`
+  - L313 `final List<Widget> children`
+  - L314 `final double inset`
+  - L318 `final bool joinTop`  — The block continues the card above it — the sidebar's head bar — so its
+  - L321 `Widget build(BuildContext context)`
+- L348 `BorderRadius sbBlockRadiusFor({ required int index, required int length, bool joinTop = false, })`  — The corners of the card at [index] in a block of [length] cards: outward
+- L389 `class SbCardShape extends InheritedWidget`  — Carries the shape a card should take from its block down to the card.
+  - L390 `const SbCardShape({super.key, required this.radius, required super.child})`
+  - L392 `final BorderRadius radius`
+  - L394 `static BorderRadius? of(BuildContext context)`
+  - L399 `bool updateShouldNotify(SbCardShape old)`
+- L408 `class SbNavIcon extends StatelessWidget`  — The glyph of a navigation entry: the bare icon in the accent colour, in a
+  - L409 `const SbNavIcon({ super.key, required this.icon, this.tone, this.size = kSbNavIconTile, })`
+  - L416 `final IconData icon`
+  - L419 `final Color? tone`  — Null takes the theme's accent.
+  - L422 `final double size`  — Side of the box the glyph is centred in.
+  - L425 `Widget build(BuildContext context)`
+- L437 `class SbNavCard extends StatelessWidget`  — One navigation entry: a full-width card with a coloured icon and a bold
+  - L438 `const SbNavCard({ super.key, required this.icon, required this.label, required this.onTap, this.tone, this.trailing, })`
+  - L447 `final IconData icon`
+  - L448 `final String label`
+  - L449 `final VoidCallback onTap`
+  - L450 `final Color? tone`
+  - L451 `final Widget? trailing`
+  - L454 `Widget build(BuildContext context)`
+- L484 `class SbRoundAction extends StatelessWidget`  — A round icon button on the card fill — the shape the head bar and the
+  - L485 `const SbRoundAction({ super.key, required this.icon, required this.onTap, required this.tooltip, this.diameter = 44, this.iconSize = 22, this.fill, })`
+  - L495 `final IconData icon`
+  - L496 `final VoidCallback onTap`
+  - L497 `final String tooltip`
+  - L498 `final double diameter`
+  - L499 `final double iconSize`
+  - L503 `final Color? fill`  — Null uses the same container fill the cards use; a colour here makes the
+  - L506 `Widget build(BuildContext context)`
+- L536 `class SbGroupHeader extends StatelessWidget`  — The header above a block: a quiet label, the number of items in the group,
+  - L537 `const SbGroupHeader({ super.key, required this.label, required this.collapsed, this.count, this.onToggle, })`
+  - L545 `final String label`
+  - L546 `final bool collapsed`
+  - L547 `final int? count`
+  - L548 `final VoidCallback? onToggle`
+  - L551 `Widget build(BuildContext context)`
+- L621 `class SbSearchField extends StatefulWidget`  — The pill-shaped search field of the bottom bar.
+  - L622 `const SbSearchField({ super.key, required this.controller, required this.focusNode, required this.onClear, this.hintText, this.transparent = false, })`
+  - L631 `final TextEditingController controller`
+  - L632 `final FocusNode focusNode`
+  - L633 `final VoidCallback onClear`
+  - L636 `final String? hintText`  — Null takes the localized default.
+  - L640 `final bool transparent`  — Draws no fill of its own, for a field that sits where a card already
+  - L643 `State<SbSearchField> createState()`
+- L646 `class _SbSearchFieldState extends State<SbSearchField>`
+  - L651 `bool _hasText = false`  — Whether the clear button belongs on screen. Tracked here, from the
+  - L654 `void initState()`
+  - L661 `void didUpdateWidget(covariant SbSearchField oldWidget)`
+  - L671 `void dispose()`
+  - L676 `void _onControllerChanged()`
+  - L683 `Widget build(BuildContext context)`
+- L754 `class SbAccountLine extends StatelessWidget`  — The bottom bar of the phone sidebar: who is signed in, what is left on the
+  - L755 `const SbAccountLine({ super.key, required this.name, this.balance, this.onTap, this.onSettings, this.settingsTooltip, this.onNewChat, this.newChatTooltip, })`
+  - L766 `final String name`
+  - L769 `final Widget? balance`  — The remaining balance, drawn on the right.
+  - L770 `final VoidCallback? onTap`
+  - L771 `final VoidCallback? onSettings`
+  - L772 `final String? settingsTooltip`
+  - L775 `final VoidCallback? onNewChat`  — The one accent action of the panel. Null leaves it out.
+  - L776 `final String? newChatTooltip`
+  - L779 `Widget build(BuildContext context)`
+- L853 `class SbChatTile extends StatelessWidget`  — One chat in a group block: the title, the date under it, and the actions
+  - L854 `const SbChatTile({ super.key, required this.title, this.dateLine, this.selected = false, this.locked = false, this.streaming = false, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.trailing, this.hoverTrailing, })`
+  - L869 `final String title`
+  - L870 `final String? dateLine`
+  - L871 `final bool selected`
+  - L872 `final bool locked`
+  - L873 `final bool streaming`
+  - L874 `final VoidCallback? onTap`
+  - L875 `final VoidCallback? onLongPress`
+  - L878 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press with the position of the finger, for a menu that opens there.
+  - L879 `final void Function(Offset globalPosition)? onSecondaryTap`
+  - L882 `final Widget? trailing`  — Always visible — the three-dot menu.
+  - L886 `final Widget? hoverTrailing`  — Revealed only while the pointer is over the card, for a control that
+  - L889 `Widget build(BuildContext context)`
+- L912 `class _SbChatTileBody extends StatelessWidget`  — Split out so it can read the card's hover state, which the card publishes
+  - L913 `const _SbChatTileBody({ required this.title, required this.dateLine, required this.selected, required this.locked, required this.streaming, required this.trailing, required this.hoverTrailing, })`
+  - L923 `final String title`
+  - L924 `final String? dateLine`
+  - L925 `final bool selected`
+  - L926 `final bool locked`
+  - L927 `final bool streaming`
+  - L928 `final Widget? trailing`
+  - L929 `final Widget? hoverTrailing`
+  - L932 `Widget build(BuildContext context)`
+- L1015 `class SbChatGroup<T>`  — A time group: the header label and the chats that fall into it.
+  - L1016 `const SbChatGroup(this.label, this.items)`
+  - L1017 `final String label`
+  - L1018 `final List<T> items`
+- L1028 `List<SbChatGroup<T>> sbGroupByTime<T>( List<T> items, DateTime Function(T item) dateOf, { required String Function(DateTime date) monthLabel, String todayLabel = 'Today', String weekLabel = 'This week', String thisMonthLabel = 'This month', DateTime? now, })`  — Buckets chats into Today / This week / This month / one group per older
+- L1074 `String sbChatDateLine(BuildContext context, DateTime? date)`  — The muted line under a chat title: the time for anything from today, the
+- L1091 `class SbOfflineNotice extends StatelessWidget`  — The strip that says the list is stale because the device is offline, with
+  - L1092 `const SbOfflineNotice({ super.key, required this.label, required this.onRetry, this.retryTooltip, })`
+  - L1099 `final String label`
+  - L1100 `final VoidCallback onRetry`
+  - L1103 `final String? retryTooltip`  — Null takes the localized default.
+  - L1106 `Widget build(BuildContext context)`
+- L1163 `class SbFloatingBar extends StatelessWidget`  — A card that floats over the scrolling list — the app name at the top of
+  - L1164 `const SbFloatingBar({super.key, required this.child, this.borderRadius})`
+  - L1166 `final Widget child`
+  - L1170 `final BorderRadius? borderRadius`  — Per-corner shape. A bar that the block below it joins tightens the
+  - L1173 `Widget build(BuildContext context)`
+- L1197 `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + text. Trailing widget on the right.
+  - L1198 `final Widget? trailing`
+  - L1199 `final EdgeInsets padding`
+  - L1200 `final String label`
+  - L1201 `final bool showLogo`
+  - L1202 `final double fontSize`
+  - L1203 `final FontWeight fontWeight`
+  - L1204 `const SbBrand({ super.key, this.trailing, this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12), this.label = 'Chuk Chat', this.showLogo = false, this.fontSize = 20, this.fontWeight = FontWeight.w700, })`
+  - L1215 `Widget build(BuildContext context)`
+- L1265 `class SbSearchTrigger extends StatelessWidget`  — Subtle search trigger — rounded icon button with "Search" label.
+  - L1266 `final VoidCallback onTap`
+  - L1267 `final String label`
+  - L1268 `const SbSearchTrigger({ super.key, required this.onTap, this.label = 'Search', })`
+  - L1275 `Widget build(BuildContext context)`
+- L1310 `class SbNewChatPill extends StatelessWidget`  — Compact accent pill — used for mobile top-right "New chat".
+  - L1311 `final VoidCallback onTap`
+  - L1312 `final String label`
+  - L1313 `final IconData icon`
+  - L1314 `const SbNewChatPill({ super.key, required this.onTap, this.label = 'New', this.icon = Icons.edit_rounded, })`
+  - L1322 `Widget build(BuildContext context)`
+- L1355 `class SbNavItem extends StatelessWidget`  — Sidebar nav row (icon + label, stacked vertically). Primary highlights accent.
+  - L1356 `final IconData icon`
+  - L1357 `final String label`
+  - L1358 `final VoidCallback onTap`
+  - L1359 `final bool primary`
+  - L1360 `const SbNavItem({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, })`
+  - L1369 `Widget build(BuildContext context)`
+- L1407 `class SbRailRow extends StatelessWidget`  — Rail-aligned nav row. 48 px tall, icon centred inside a 48x48 square at
+  - L1408 `final IconData icon`
+  - L1409 `final String label`
+  - L1410 `final VoidCallback onTap`
+  - L1411 `final bool primary`
+  - L1417 `final double leftPadding`  — Inner padding inside the rounded hover pill. Combined with the 6 px
+  - L1418 `final double rowHeight`
+  - L1419 `final double iconBoxWidth`
+  - L1420 `final double iconSize`
+  - L1421 `const SbRailRow({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.leftPadding = 2.0, this.rowHeight = 40.0, this.iconBoxWidth = 48.0, this.iconSize = 24.0, })`
+  - L1434 `Widget build(BuildContext context)`
+- L1486 `class SbSectionLabel extends StatelessWidget`  — Mixed-case section label with optional count. Claude.ai style.
+  - L1487 `final String label`
+  - L1488 `final int? count`
+  - L1489 `final EdgeInsets padding`
+  - L1490 `final Color? color`
+  - L1491 `const SbSectionLabel({ super.key, required this.label, this.count, this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 4), this.color, })`
+  - L1500 `Widget build(BuildContext context)`
+- L1541 `class SbPinnedBento extends StatelessWidget`  — Accent-tinted "Pinned" bento card. Caller supplies the row widgets.
+  - L1542 `final int count`
+  - L1543 `final List<Widget> children`
+  - L1544 `final EdgeInsets margin`
+  - L1545 `const SbPinnedBento({ super.key, required this.count, required this.children, this.margin = const EdgeInsets.symmetric(horizontal: 6), })`
+  - L1553 `Widget build(BuildContext context)`
+- L1615 `class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate`  — Sliver delegate that renders an SbSectionLabel as a pinned header. The
+  - L1616 `final String label`
+  - L1617 `final Color background`
+  - L1618 `final Color? color`
+  - L1619 `final double height`
+  - L1620 `const SbStickyLabelDelegate({ required this.label, required this.background, this.color, this.height = 40, })`
+  - L1628 `Widget build( BuildContext context, double shrinkOffset, bool overlapsContent, )`
+  - L1644 `double get maxExtent`
+  - L1646 `double get minExtent`
+  - L1649 `bool shouldRebuild(covariant SbStickyLabelDelegate oldDelegate)`
+- L1658 `class SbHairline extends StatelessWidget`  — Hairline divider matching app palette.
+  - L1659 `final EdgeInsets margin`
+  - L1660 `const SbHairline({super.key, this.margin = EdgeInsets.zero})`
+  - L1662 `Widget build(BuildContext context)`
 
-## lib/widgets/sidebar/sidebar_common.dart  (507 Z.)
+## lib/widgets/sidebar/sidebar_common.dart  (512 Z.)
 - L19 `kSidebarPageSize = 40`
 - L22 `String normalizeSidebarTitle(String title)`  — Strips generated Markdown decoration from a chat title before display.
 - L53 `String deriveSidebarChatTitle(StoredChat chat)`
 - L59 `String sidebarDisplayName(ProfileRecord? profile)`
-- L74 `List<Widget> buildSidebarNavigationCards({ required BuildContext context, required bool showWorkspaces, required VoidCallback onWorkspacesTapped, required VoidCallback onMediaTapped, required VoidCallback onNewChatTapped, required Widget searchEntry, })`  — The destinations shared by both sidebars, with a platform-owned search
-- L109 `mixin SidebarStateCommon<T extends StatefulWidget> on State<T>`  — Common state, mutations, and grouped-list construction for both sidebars.
-  - L110 `final TextEditingController searchController = TextEditingController()`
-  - L111 `final ScrollController scrollController = ScrollController()`
-  - L112 `final FocusNode searchFocus = FocusNode()`
-  - L113 `final Set<String> collapsedGroups = <String>{}`
-  - L115 `String searchQuery = ''`
-  - L116 `List<StoredChat> filteredRecentChats = <StoredChat>[]`
-  - L117 `int displayLimit = kSidebarPageSize`
-  - L118 `ProfileRecord? profile`
-  - L119 `bool isOfflineMode = false`
-  - L121 `StreamSubscription<String?>? _chatUpdatesSubscription`
-  - L122 `Timer? _deleteNotificationTimer`
-  - L123 `String? _lastDeletedChatTitle`
-  - L125 `Future<void> Function(String chatId)? get onChatDeletedCallback`
-  - L128 `Future<void> applyChatFilter()`  — Desktop filters synchronously; mobile may hand this work to an isolate.
-  - L130 `void initSidebarCommon()`
-  - L146 `void disposeSidebarCommon()`
-  - L161 `void handleSidebarWidgetUpdate({required bool selectedChatChanged})`
-  - L169 `void onScrollForAutoLoad()`
-  - L179 `void toggleSidebarGroup(String label)`
-  - L188 `void onSidebarNetworkStatusChanged()`
-  - L193 `Future<void> loadSidebarProfile()`
-  - L207 `void showSidebarNotification( ScaffoldMessengerState messenger, String message, { AppNotificationKind kind = AppNotificationKind.info, })`
-  - L216 `Future<void> toggleSidebarChatStarred(StoredChat chat)`
-  - L236 `Future<void> renameSidebarChat(StoredChat chat)`
-  - L296 `Future<void> confirmAndDeleteSidebarChat(StoredChat chat)`
-  - L352 `Future<void> _refreshSidebarAfterMutation( ScaffoldMessengerState messenger, String action, )`
-  - L367 `void _showDebouncedDeleteNotification(String chatTitle)`
-  - L384 `void showLockedSidebarChatDialog({required Color accentColor})`
-  - L412 `List<Widget> buildSidebarChatSlivers({ required List<Widget> leadingSlivers, required Color accent, required Color emptyTextColor, required Widget Function(StoredChat chat, int index, int length) itemBuilder, })`
-  - L481 `List<Widget> _buildSidebarGroup( String label, List<StoredChat> chats, Widget Function(StoredChat chat, int index, int length) itemBuilder, { int? total, })`
+- L74 `List<Widget> buildSidebarNavigationCards({ required BuildContext context, required bool showWorkspaces, required VoidCallback onWorkspacesTapped, required VoidCallback onMediaTapped, required VoidCallback onNewChatTapped, required Widget searchEntry, /// The phone keeps its one new-chat action in the head bar, so the list /// there starts at Media. The desktop keeps the row because its collapsed /// rail is built from these same rows. bool showNewChat = true, })`  — The destinations shared by both sidebars, with a platform-owned search
+- L114 `mixin SidebarStateCommon<T extends StatefulWidget> on State<T>`  — Common state, mutations, and grouped-list construction for both sidebars.
+  - L115 `final TextEditingController searchController = TextEditingController()`
+  - L116 `final ScrollController scrollController = ScrollController()`
+  - L117 `final FocusNode searchFocus = FocusNode()`
+  - L118 `final Set<String> collapsedGroups = <String>{}`
+  - L120 `String searchQuery = ''`
+  - L121 `List<StoredChat> filteredRecentChats = <StoredChat>[]`
+  - L122 `int displayLimit = kSidebarPageSize`
+  - L123 `ProfileRecord? profile`
+  - L124 `bool isOfflineMode = false`
+  - L126 `StreamSubscription<String?>? _chatUpdatesSubscription`
+  - L127 `Timer? _deleteNotificationTimer`
+  - L128 `String? _lastDeletedChatTitle`
+  - L130 `Future<void> Function(String chatId)? get onChatDeletedCallback`
+  - L133 `Future<void> applyChatFilter()`  — Desktop filters synchronously; mobile may hand this work to an isolate.
+  - L135 `void initSidebarCommon()`
+  - L151 `void disposeSidebarCommon()`
+  - L166 `void handleSidebarWidgetUpdate({required bool selectedChatChanged})`
+  - L174 `void onScrollForAutoLoad()`
+  - L184 `void toggleSidebarGroup(String label)`
+  - L193 `void onSidebarNetworkStatusChanged()`
+  - L198 `Future<void> loadSidebarProfile()`
+  - L212 `void showSidebarNotification( ScaffoldMessengerState messenger, String message, { AppNotificationKind kind = AppNotificationKind.info, })`
+  - L221 `Future<void> toggleSidebarChatStarred(StoredChat chat)`
+  - L241 `Future<void> renameSidebarChat(StoredChat chat)`
+  - L301 `Future<void> confirmAndDeleteSidebarChat(StoredChat chat)`
+  - L357 `Future<void> _refreshSidebarAfterMutation( ScaffoldMessengerState messenger, String action, )`
+  - L372 `void _showDebouncedDeleteNotification(String chatTitle)`
+  - L389 `void showLockedSidebarChatDialog({required Color accentColor})`
+  - L417 `List<Widget> buildSidebarChatSlivers({ required List<Widget> leadingSlivers, required Color accent, required Color emptyTextColor, required Widget Function(StoredChat chat, int index, int length) itemBuilder, })`
+  - L486 `List<Widget> _buildSidebarGroup( String label, List<StoredChat> chats, Widget Function(StoredChat chat, int index, int length) itemBuilder, { int? total, })`

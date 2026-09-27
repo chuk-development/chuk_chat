@@ -12,5 +12,5 @@
 - L12 `Widget _host(Widget child)`
 - L22 `void main()`
 
-## test/assistant/assistant_tools_test.dart  (145 Z.)
+## test/assistant/assistant_tools_test.dart  (143 Z.)
 - L6 `void main()`

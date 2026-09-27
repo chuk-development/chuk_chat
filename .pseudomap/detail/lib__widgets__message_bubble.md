@@ -1,6 +1,6 @@
 # lib/widgets/message_bubble · Signaturen
 
-## lib/widgets/message_bubble/cards.dart  (903 Z.)
+## lib/widgets/message_bubble/cards.dart  (905 Z.)
 - part of '../message_bubble.dart'
 - L11 `class _CachedImageThumbnail extends StatefulWidget`  — Cached image thumbnail that decodes once and caches the bytes
   - L12 `const _CachedImageThumbnail({ required this.imageDataUrl, required this.width, required this.height, required this.onTap, this.borderRadius = 8, this.fit = BoxFit.cover, this.naturalAspect = false, this.maxNaturalHeight, })`
@@ -24,83 +24,99 @@
   - L91 `void dispose()`
   - L96 `Future<void> _loadImage()`
   - L180 `Widget build(BuildContext context)`
-- L326 `class _ArtifactInlineCard extends StatefulWidget`  — Compact artifact card shown inline in chat after artifact_manager calls.
-  - L327 `const _ArtifactInlineCard({ required this.artifactId, required this.title, required this.type, this.authoredVersion, })`
-  - L334 `final String artifactId`
-  - L339 `final String title`  — Title captured at message-author time. Used as a fallback before the
-  - L344 `final String type`  — Type captured at message-author time (e.g. `excalidraw`, `markdown`).
-  - L349 `final int? authoredVersion`  — The artifact's version at the time the assistant message was authored.
-  - L352 `State<_ArtifactInlineCard> createState()`
-- L355 `class _ArtifactInlineCardState extends State<_ArtifactInlineCard>`
-  - L360 `ArtifactDocument? _live`  — Latest live snapshot of the artifact, or `null` until the first load
-  - L365 `bool _resolved = false`  — `true` once we've completed at least one resolution attempt — even if
-  - L367 `StreamSubscription<void>? _changesSub`
-  - L370 `void initState()`
-  - L377 `void dispose()`
-  - L382 `Future<void> _refresh()`
-  - L401 `IconData get _icon`
-  - L424 `String get _typeLabel`
-  - L447 `Future<void> _open(BuildContext context)`
-  - L496 `Future<void> _download(BuildContext context)`  — Saves the artifact's source to a file. Mirrors the file card's Download so
-  - L537 `Widget build(BuildContext context)`
-- L650 `class _ArtifactErrorCard extends StatelessWidget`  — Visible error chip when an inline artifact tag (or artifact_manager tool
-  - L651 `const _ArtifactErrorCard({required this.toolName, required this.message})`
-  - L653 `final String toolName`
-  - L654 `final String message`
-  - L657 `Widget build(BuildContext context)`
-- L703 `class _NewsCard extends StatelessWidget`  — News article card: thumbnail (left, 96x96), title, publisher · age, summary,
-  - L704 `const _NewsCard({required this.item, required this.colorScheme})`
-  - L706 `final Map<String, dynamic> item`
-  - L707 `final ColorScheme colorScheme`
-  - L710 `Widget build(BuildContext context)`
-  - L894 `Future<void> _openUrl(BuildContext context, String url)`
+- L328 `class _ArtifactInlineCard extends StatefulWidget`  — Compact artifact card shown inline in chat after artifact_manager calls.
+  - L329 `const _ArtifactInlineCard({ required this.artifactId, required this.title, required this.type, this.authoredVersion, })`
+  - L336 `final String artifactId`
+  - L341 `final String title`  — Title captured at message-author time. Used as a fallback before the
+  - L346 `final String type`  — Type captured at message-author time (e.g. `excalidraw`, `markdown`).
+  - L351 `final int? authoredVersion`  — The artifact's version at the time the assistant message was authored.
+  - L354 `State<_ArtifactInlineCard> createState()`
+- L357 `class _ArtifactInlineCardState extends State<_ArtifactInlineCard>`
+  - L362 `ArtifactDocument? _live`  — Latest live snapshot of the artifact, or `null` until the first load
+  - L367 `bool _resolved = false`  — `true` once we've completed at least one resolution attempt — even if
+  - L369 `StreamSubscription<void>? _changesSub`
+  - L372 `void initState()`
+  - L379 `void dispose()`
+  - L384 `Future<void> _refresh()`
+  - L403 `IconData get _icon`
+  - L426 `String get _typeLabel`
+  - L449 `Future<void> _open(BuildContext context)`
+  - L498 `Future<void> _download(BuildContext context)`  — Saves the artifact's source to a file. Mirrors the file card's Download so
+  - L539 `Widget build(BuildContext context)`
+- L652 `class _ArtifactErrorCard extends StatelessWidget`  — Visible error chip when an inline artifact tag (or artifact_manager tool
+  - L653 `const _ArtifactErrorCard({required this.toolName, required this.message})`
+  - L655 `final String toolName`
+  - L656 `final String message`
+  - L659 `Widget build(BuildContext context)`
+- L705 `class _NewsCard extends StatelessWidget`  — News article card: thumbnail (left, 96x96), title, publisher · age, summary,
+  - L706 `const _NewsCard({required this.item, required this.colorScheme})`
+  - L708 `final Map<String, dynamic> item`
+  - L709 `final ColorScheme colorScheme`
+  - L712 `Widget build(BuildContext context)`
+  - L896 `Future<void> _openUrl(BuildContext context, String url)`
 
-## lib/widgets/message_bubble/chrome.dart  (451 Z.)
+## lib/widgets/message_bubble/chrome.dart  (412 Z.)
 - part of '../message_bubble.dart'
 - L10 `extension _MessageBubbleChrome on _MessageBubbleState`
   - L16 `Widget _buildBottomBar(Color iconFgColor, bool hasActions)`  — Bottom bar for AI messages: action buttons (left) + a sources pill
-  - L58 `Widget _buildVariantPager(Color iconFgColor)`  — The OpenAI-style ‹ k/n › pager: a compact previous / index / next
-  - L125 `List<ToolCall> _collectAllToolCalls()`  — Every tool call in the turn — top-level plus any nested in content
-  - L144 `List<AgentActivitySource> _allSources(List<ToolCall> toolCalls)`  — Every web source across the turn, deduped by URL. Only the web tools
-  - L158 `Widget _buildSourcesBar(List<AgentActivitySource> sources)`  — The bottom-right pill: a strip of up to five favicons and a "N sources"
-  - L205 `Widget _buildFavicon(String host, ColorScheme colorScheme, double size)`
-  - L223 `void _showSourcesSheet(List<AgentActivitySource> sources)`  — The expandable list behind the pill: a modal sheet of every source,
-  - L311 `Widget _buildUserActionButtons(Color iconFgColor)`
-  - L318 `Widget _buildActionButtons(Color iconFgColor, bool alignRight)`
-  - L330 `Widget _buildActionBar({ required List<MessageBubbleAction> actions, required Color iconFgColor, required bool alignRight, required bool dimDisabledIcon, })`  — Shared pill of icon action buttons behind [_buildUserActionButtons]
-  - L390 `Widget _buildStatusIndicator(BuildContext context)`
+  - L63 `Widget _buildVariantPager(Color iconFgColor)`  — The OpenAI-style ‹ k/n › pager: a compact previous / index / next
+  - L130 `List<ToolCall> _collectAllToolCalls()`  — Every tool call in the turn — top-level plus any nested in content
+  - L149 `List<AgentActivitySource> _allSources(List<ToolCall> toolCalls)`  — Every web source across the turn, deduped by URL. Only the web tools
+  - L163 `Widget _buildSourcesBar( List<AgentActivitySource> sources, { int maxIcons = 5, })`  — The bottom-right pill: a strip of up to [maxIcons] favicons and a
+  - L214 `Widget _buildFavicon(String host, ColorScheme colorScheme, double size)`
+  - L226 `void _showSourcesSheet(List<AgentActivitySource> sources)`  — The expandable list behind the pill: a modal sheet of every source,
+  - L272 `Widget _buildUserActionButtons(Color iconFgColor)`
+  - L279 `Widget _buildActionButtons(Color iconFgColor, bool alignRight)`
+  - L291 `Widget _buildActionBar({ required List<MessageBubbleAction> actions, required Color iconFgColor, required bool alignRight, required bool dimDisabledIcon, })`  — Shared pill of icon action buttons behind [_buildUserActionButtons]
+  - L351 `Widget _buildStatusIndicator(BuildContext context)`
 
-## lib/widgets/message_bubble/images.dart  (646 Z.)
+## lib/widgets/message_bubble/images.dart  (642 Z.)
 - part of '../message_bubble.dart'
 - L12 `extension _MessageBubbleImages on _MessageBubbleState`
   - L15 `String? _modelFor(int index)`  — Human-readable generator model for the image at [index], or null when
   - L41 `Widget? _buildGeneratingImagesGrid( List<ToolCall> roundToolCalls, { required bool includeArrived, })`  — A round can fan out N `generate_image` tool calls that produce N images.
-  - L154 `Widget _loaderTile({ required double width, required double height, required double borderRadius, String? label, })`  — A grey rounded loader tile for an image that is being *generated*. The
-  - L214 `MapEntry<double, String> _pendingImageSize(Map<String, dynamic> args)`  — Best-effort target size for a pending `generate_image` call: returns
-  - L259 `Widget _buildImagesGrid(List<String> images)`  — Renders the image grid (1, 2+1, or N-col Wrap) for the message.
-  - L375 `Widget _captionedTile({ required String imageSource, required double width, required double height, required double borderRadius, required VoidCallback onTap, String? model, BoxFit fit = BoxFit.cover, bool naturalAspect = false, double? maxNaturalHeight, })`
-  - L462 `void _openImagePreview({ required String imageSource, required List<String> images, required int index, // _modelFor indexes widget.imageMetas, which is aligned with // widget.images. When [images] is a different list (e.g. an <image> // block's single web URL), those indices don't correspond, so callers // pass false to avoid mislabelling the preview with unrelated metadata. bool resolveModels = true, })`
-  - L492 `Future<void> _showImageContextMenu(Offset globalPosition, String path)`  — Context menu shown on right-click / long-press of a stored chat image.
-  - L528 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
-  - L581 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
+  - L150 `Widget _loaderTile({ required double width, required double height, required double borderRadius, String? label, })`  — A grey rounded loader tile for an image that is being *generated*. The
+  - L210 `MapEntry<double, String> _pendingImageSize(Map<String, dynamic> args)`  — Best-effort target size for a pending `generate_image` call: returns
+  - L255 `Widget _buildImagesGrid(List<String> images)`  — Renders the image grid (1, 2+1, or N-col Wrap) for the message.
+  - L371 `Widget _captionedTile({ required String imageSource, required double width, required double height, required double borderRadius, required VoidCallback onTap, String? model, BoxFit fit = BoxFit.cover, bool naturalAspect = false, double? maxNaturalHeight, })`
+  - L458 `void _openImagePreview({ required String imageSource, required List<String> images, required int index, // _modelFor indexes widget.imageMetas, which is aligned with // widget.images. When [images] is a different list (e.g. an <image> // block's single web URL), those indices don't correspond, so callers // pass false to avoid mislabelling the preview with unrelated metadata. bool resolveModels = true, })`
+  - L488 `Future<void> _showImageContextMenu(Offset globalPosition, String path)`  — Context menu shown on right-click / long-press of a stored chat image.
+  - L524 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
+  - L577 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
 
-## lib/widgets/message_bubble/layout.dart  (824 Z.)
+## lib/widgets/message_bubble/layout.dart  (1564 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleLayout on _MessageBubbleState`
-  - L14 `String get _chatFontFamily`  — Returns the user-selected chat font family, falling back to the historic
-  - L21 `bool get _hasReasoning`
-  - L33 `bool get _hasModelInfo`
-  - L43 `bool get _shouldShowTps`
-  - L48 `bool get _isQrImageMessage`
-  - L73 `String get _strippedMessage`
-  - L82 `Widget _buildUserBubble(BuildContext context)`
-  - L167 `Widget _buildAiBubble(BuildContext context)`
-  - L257 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
-  - L306 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
-  - L397 `Widget _buildFramedUserImageGrid(Widget child)`
-  - L405 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
-  - L744 `String _stripAttachmentHeaderForUser(String text)`
-  - L763 `Widget _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`
+  - L12 `Future<void> _showMessengerMenu(Offset? position)`
+  - L45 `Widget _withMessengerMenu(Widget child)`
+  - L59 `String get _chatFontFamily`  — Returns the user-selected chat font family, falling back to the historic
+  - L70 `double get _chatFontSize`
+  - L75 `bool get _hasReasoning`
+  - L90 `bool get _hasModelInfo`
+  - L101 `bool get _shouldShowTps`
+  - L107 `bool get _isQrImageMessage`
+  - L132 `String get _strippedMessage`
+  - L141 `String _stripForPresentation(String text)`
+  - L160 `bool get _agentsLook`  — Whether this bubble wears the Agents look: filled bubbles, run-shaped
+  - L164 `BubblePosition get _bubblePosition`  — Where this bubble sits in a run of messages from the same sender. Drives
+  - L172 `String? get _clockLabel`  — The wall clock of the turn as `HH:mm`, or null when the row carries no
+  - L183 `Widget? _buildBubbleFooter({ required BuildContext context, required bool isUser, required Color fill, required Color onFill, bool? endsRun, })`  — The stamp in the bubble's bottom-right corner: the time, plus the queue
+  - L214 `AgentBubbleKind get _agentBubbleKind`  — The kind of a coworker's message, which decides the bubble colour.
+  - L238 `Widget _buildAutomationWakeLine(BuildContext context, AutomationWake wake)`  — The entire on-screen trace of a fired automation: one quiet line.
+  - L286 `Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls)`  — A turn that really did work but has nothing left to read: one quiet
+  - L329 `Widget _buildUserBubble(BuildContext context)`
+  - L493 `Widget _buildAiBubble(BuildContext context)`
+  - L780 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
+  - L826 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
+  - L923 `Widget _buildFramedUserImageGrid(Widget child)`
+  - L931 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
+  - L1287 `String _stripAttachmentHeaderForUser(String text)`
+  - L1306 `bool get _isPlainMessengerText`
+  - L1338 `bool get _stampRidesInText`  — Whether this bubble's body carries the stamp itself, at the end of its
+  - L1350 `bool get _isPlainAgentText`  — A coworker's turn that is one plain line of prose and nothing else.
+  - L1385 `TextStyle _agentProseStyle(Color foreground)`  — The prose style the Markdown renderer gives a paragraph, so a plain line
+  - L1401 `Widget _buildMessengerText( String text, Color foreground, Color background, { TextStyle? style, bool fillWidth = false, })`
+  - L1434 `Widget? _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`  — The turn's own text, or null when it has none to show. Null — not an
 
 ## lib/widgets/message_bubble/models.dart  (135 Z.)
 - part of '../message_bubble.dart'
@@ -144,21 +160,22 @@
   - L131 `final ToolCall? toolCall`
   - L133 `bool get isReasoning`
 
-## lib/widgets/message_bubble/rich_blocks.dart  (544 Z.)
+## lib/widgets/message_bubble/rich_blocks.dart  (562 Z.)
 - part of '../message_bubble.dart'
 - L12 `extension _MessageBubbleRichBlocks on _MessageBubbleState`
   - L13 `bool _hasVisualBlocks(String content)`
-  - L23 `Widget _buildVisualContent({ required String content, required Color textColor, required Color bgColor, })`  — Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
-  - L156 `Widget _buildDiffBlock(Map<String, dynamic> data)`
-  - L167 `Widget _buildEmailBlock(Map<String, dynamic> data)`  — Renders an `<email>` block as a card with subject, recipients, body
-  - L273 `Widget _emailField(String label, String value, ColorScheme colorScheme)`
-  - L301 `Future<void> _openMailto( String to, String subject, String body, String? cc, String? bcc, )`
-  - L334 `Widget _buildNewsBlock(Map<String, dynamic> data)`  — Renders a `<news>` block as a list of news cards (thumbnail, title,
-  - L370 `Widget _buildImageBlock(Map<String, dynamic> data)`  — Renders an `<image>` block as a display-only image card.
-  - L498 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
-  - L521 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
+  - L26 `dynamic _tryParseJson(String raw)`  — Lenient JSON for a block a model wrote.
+  - L41 `Widget _buildVisualContent({ required String content, required Color textColor, required Color bgColor, })`  — Renders interleaved markdown + rich `<chart>` / `<map>` / `<email>`
+  - L174 `Widget _buildDiffBlock(Map<String, dynamic> data)`
+  - L185 `Widget _buildEmailBlock(Map<String, dynamic> data)`  — Renders an `<email>` block as a card with subject, recipients, body
+  - L291 `Widget _emailField(String label, String value, ColorScheme colorScheme)`
+  - L319 `Future<void> _openMailto( String to, String subject, String body, String? cc, String? bcc, )`
+  - L352 `Widget _buildNewsBlock(Map<String, dynamic> data)`  — Renders a `<news>` block as a list of news cards (thumbnail, title,
+  - L388 `Widget _buildImageBlock(Map<String, dynamic> data)`  — Renders an `<image>` block as a display-only image card.
+  - L516 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
+  - L539 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
 
-## lib/widgets/message_bubble/tools.dart  (822 Z.)
+## lib/widgets/message_bubble/tools.dart  (826 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleTools on _MessageBubbleState`
   - L15 `Widget _buildBlockReasoning( String text, Color accentColor, { bool live = false, bool carriesTurnStatus = false, })`  — Renders a reasoning content block as an expandable card. Renders
@@ -169,45 +186,45 @@
   - L163 `List<Widget> _buildArtifactCards(List<ToolCall> toolCalls)`  — Renders inline artifact cards for artifact_manager tool calls, so users
   - L270 `List<Widget> _stackArtifactCards(List<Widget> cards)`  — Wrap a list of artifact cards into one cohesive "artifact stack":
   - L292 `Widget _buildActivityTimeline( List<ToolCall> toolCalls, { List<_ToolTimelineEntry>? contentBlockTimeline, bool live = false, bool carriesTurnStatus = true, })`  — Returns a self-contained tool-calls bar (the pill with the
-  - L338 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
-  - L354 `void _showToolCallDetails(ToolCall toolCall)`
-  - L392 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
-  - L473 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
-  - L555 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
-  - L580 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
-  - L671 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
-  - L705 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
-  - L748 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
-  - L783 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
+  - L344 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
+  - L360 `void _showToolCallDetails(ToolCall toolCall)`
+  - L398 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
+  - L477 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
+  - L559 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
+  - L584 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
+  - L675 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
+  - L709 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
+  - L752 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
+  - L787 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
 
-## lib/widgets/message_bubble/web_search_sources.dart  (292 Z.)
-- L14 `class WebSearchSource`  — One parsed hit from a web_search result.
-  - L15 `const WebSearchSource({ required this.title, required this.url, required this.host, required this.snippet, this.age, })`
-  - L23 `final String title`
-  - L24 `final String url`
-  - L25 `final String host`
-  - L26 `final String snippet`
-  - L27 `final String? age`
-- L33 `String _clean(String s)`  — Strip HTML tags + the handful of entities the search backend emits, and
-- L43 `String _hostOf(String url)`
-- L51 `List<WebSearchSource> parseWebSearchSources(String result)`  — Parse a `web_search` result into ordered source hits. Returns an empty
-- L119 `class WebSearchSourcesCard extends StatelessWidget`  — Renders parsed [WebSearchSource]s as tappable source cards.
-  - L120 `const WebSearchSourcesCard({ super.key, required this.sources, required this.textColor, required this.accentColor, })`
-  - L127 `final List<WebSearchSource> sources`
-  - L128 `final Color textColor`
-  - L129 `final Color accentColor`
-  - L131 `Future<void> _open(String url)`
-  - L146 `Widget build(BuildContext context)`
-- L162 `class _SourceCard extends StatelessWidget`
-  - L163 `const _SourceCard({ required this.source, required this.textColor, required this.accentColor, required this.onTap, })`
-  - L170 `final WebSearchSource source`
-  - L171 `final Color textColor`
-  - L172 `final Color accentColor`
-  - L173 `final VoidCallback onTap`
-  - L176 `Widget build(BuildContext context)`
-- L256 `class _Favicon extends StatelessWidget`  — Favicon for [host] via Google's public favicon service, with a globe
-  - L257 `const _Favicon({ required this.host, required this.accent, required this.muted, })`
-  - L263 `final String host`
-  - L264 `final Color accent`
-  - L265 `final Color muted`
-  - L268 `Widget build(BuildContext context)`
+## lib/widgets/message_bubble/web_search_sources.dart  (289 Z.)
+- L16 `class WebSearchSource`  — One parsed hit from a web_search result.
+  - L17 `const WebSearchSource({ required this.title, required this.url, required this.host, required this.snippet, this.age, })`
+  - L25 `final String title`
+  - L26 `final String url`
+  - L27 `final String host`
+  - L28 `final String snippet`
+  - L29 `final String? age`
+- L35 `String _clean(String s)`  — Strip HTML tags + the handful of entities the search backend emits, and
+- L45 `String _hostOf(String url)`
+- L53 `List<WebSearchSource> parseWebSearchSources(String result)`  — Parse a `web_search` result into ordered source hits. Returns an empty
+- L121 `class WebSearchSourcesCard extends StatelessWidget`  — Renders parsed [WebSearchSource]s as tappable source cards.
+  - L122 `const WebSearchSourcesCard({ super.key, required this.sources, required this.textColor, required this.accentColor, })`
+  - L129 `final List<WebSearchSource> sources`
+  - L130 `final Color textColor`
+  - L131 `final Color accentColor`
+  - L133 `Future<void> _open(String url)`
+  - L150 `Widget build(BuildContext context)`
+- L166 `class _SourceCard extends StatelessWidget`
+  - L167 `const _SourceCard({ required this.source, required this.textColor, required this.accentColor, required this.onTap, })`
+  - L174 `final WebSearchSource source`
+  - L175 `final Color textColor`
+  - L176 `final Color accentColor`
+  - L177 `final VoidCallback onTap`
+  - L180 `Widget build(BuildContext context)`
+- L260 `class _Favicon extends StatelessWidget`  — Favicon for [host] via Google's public favicon service, with a globe
+  - L261 `const _Favicon({ required this.host, required this.accent, required this.muted, })`
+  - L267 `final String host`
+  - L268 `final Color accent`
+  - L269 `final Color muted`
+  - L272 `Widget build(BuildContext context)`

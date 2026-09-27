@@ -1,0 +1,77 @@
+# lib/services/secrets · Signaturen
+
+## lib/services/secrets/secrets_service.dart  (171 Z.)
+- L28 `typedef SecretsHostSink = Future<void> Function(SecretsSet set, {String? requestId})`  — Where a `secrets` frame goes. Defaults to the link's bound controller.
+- L31 `class SecretsService`
+  - L32 `SecretsService._({ SecretsStore? store, SecretsMirror? mirror, SecretsHostSink? hostSink, }) : _store = store ?? SecretsStore(), _mirror = mirror ?? const SecretsSync(), _hostSink = hostSink ?? _defaultHostSink`
+  - L40 `static SecretsService _instance = SecretsService._()`
+  - L41 `static SecretsService get instance`
+  - L46 `static SecretsService resetForTest({ SecretsStore? store, SecretsMirror? mirror, SecretsHostSink? hostSink, })`  — Test seam: a fresh service over injected parts. Also resets the
+  - L59 `final SecretsStore _store`
+  - L60 `final SecretsMirror _mirror`
+  - L61 `final SecretsHostSink _hostSink`
+  - L64 `final ValueNotifier<List<String>> names = ValueNotifier<List<String>>( const <String>[], )`  — The names that are set, sorted. What every page renders.
+  - L68 `int _revision = 0`
+  - L69 `int get revision`
+  - L71 `Future<void>? _loading`
+  - L72 `bool _loaded = false`
+  - L73 `bool get isLoaded`
+  - L78 `final List<(int, List<String>, String?)> forwarded = <(int, List<String>, String?)>[]`  — Every `secrets` frame handed to the host, for diagnostics: `(revision,
+  - L81 `static Future<void> _defaultHostSink( SecretsSet set, { String? requestId, })`
+  - L96 `Future<void> load()`  — Read the local set; on an empty local set, pull the mirror once and adopt
+  - L100 `Future<void> _loadOnce()`
+  - L112 `void _publish(SecretsSet set)`
+  - L119 `Future<void> set(String name, String value)`  — Set (or change) one key. Empty [value] is ignored.
+  - L125 `Future<void> setMany(Map<String, String> values, {String? requestId})`  — Set several keys at once (the dialog's answer). [requestId] ties the
+  - L138 `Future<void> remove(String name)`
+  - L148 `Future<void> answerUnchanged(String requestId)`  — The user dismissed a `secret_request` without entering anything: the
+  - L156 `Future<void> forwardToHost()`  — Forward the current set to the host (after a provision). Loads first, so
+  - L161 `Future<void> _forward(SecretsSet set, {String? requestId})`
+
+## lib/services/secrets/secrets_store.dart  (162 Z.)
+- L18 `@immutable class SecretsSet`  — A snapshot of the set: the values and the revision they belong to.
+  - L20 `const SecretsSet({this.values = const <String, String>{}, this.revision = 0})`
+  - L22 `final Map<String, String> values`
+  - L26 `final int revision`  — Bumped on every local write. Informational on the host (the last frame
+  - L28 `List<String> get names`
+  - L29 `bool get isEmpty`
+  - L30 `bool has(String name)`
+  - L32 `Map<String, dynamic> toJson()`
+  - L37 `static SecretsSet fromJson(Map<String, dynamic> json)`
+- L59 `class SecretsStore`
+  - L60 `SecretsStore({AgentsSecureKeyValueStore? backend}) : _backend = backend ?? const FlutterSecureKeyValueStore()`
+  - L64 `static const String storageKey = 'agents_secrets_v1'`  — The one secure-storage key holding the whole set.
+  - L67 `static final RegExp _nameShape = RegExp(r'^[A-Za-z_][A-Za-z0-9_]{0,127}$')`  — Environment-variable name shape; the host drops anything else.
+  - L72 `static const int redactMinLength = 8`  — Values shorter than this are stored and injected like any other but are
+  - L74 `final AgentsSecureKeyValueStore _backend`
+  - L76 `static bool validName(String name)`
+  - L79 `Future<SecretsSet> load()`  — Every stored secret. Never throws: a corrupt record reads as empty.
+  - L92 `Future<void> _save(SecretsSet set)`
+  - L102 `Future<SecretsSet> replaceAll(Map<String, String> values)`  — Replace the whole set (a mirror pull, or the dialog's batch). Names with
+  - L115 `Future<SecretsSet> setMany(Map<String, String> values)`  — Set one or more values, keeping the rest. An empty value for a name
+  - L131 `Future<SecretsSet> set(String name, String value)`
+  - L134 `Future<SecretsSet> remove(String name)`
+  - L143 `Future<void> clear()`
+  - L149 `static Map<String, dynamic> forwardPayload( SecretsSet set, { String? requestId, })`  — The `secrets` frame for the host: the WHOLE set, every time
+
+## lib/services/secrets/secrets_sync.dart  (127 Z.)
+- L22 `abstract interface class SecretsMirror`  — The pluggable half, so a test and a signed-out app can swap it out.
+  - L23 `Future<void> save(String name, String value)`
+  - L24 `Future<void> delete(String name)`
+  - L27 `Future<Map<String, String>?> load()`  — Name -> value, or null when nothing usable could be read.
+- L31 `class NoopSecretsMirror implements SecretsMirror`  — A mirror that does nothing. The default before sign-in and in tests.
+  - L32 `const NoopSecretsMirror()`
+  - L35 `Future<void> save(String name, String value)`
+  - L38 `Future<void> delete(String name)`
+  - L41 `Future<Map<String, String>?> load()`
+- L44 `class SecretsSync implements SecretsMirror`
+  - L45 `const SecretsSync()`
+  - L47 `static const String table = 'cowork_secrets'`
+  - L48 `static const String columnUserId = 'user_id'`
+  - L49 `static const String columnName = 'name'`
+  - L50 `static const String columnCiphertext = 'ciphertext'`
+  - L51 `static const String columnUpdatedAt = 'updated_at'`
+  - L54 `Future<void> save(String name, String value)`
+  - L73 `Future<void> delete(String name)`
+  - L89 `Future<Map<String, String>?> load()`
+  - L122 `Future<bool> _ensureEncryptionKey()`

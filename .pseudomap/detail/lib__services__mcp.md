@@ -1,46 +1,76 @@
 # lib/services/mcp · Signaturen
 
-## lib/services/mcp/mcp_availability.dart  (36 Z.)
-- L16 `List<McpCatalogueEntry> unconnectedCatalogueEntries()`  — Every catalogue server (our own first-party ones plus the offered
-- L27 `McpCatalogueEntry? catalogueEntryById(String id)`  — The catalogue entry with this [id], searching the first-party connectors
+## lib/services/mcp/chuk_mcp_mirror.dart  (187 Z.)
+- L27 `@immutable class ChukMcpRow`  — One chuk row, decrypted: the connection as JSON and its secrets, if any.
+  - L29 `const ChukMcpRow({required this.id, required this.connection, this.secrets})`
+  - L32 `final String id`  — The catalogue id from the service name (`mcp_notion` -> `notion`).
+  - L36 `final Map<String, dynamic> connection`  — `McpConnection.toJson` as chuk wrote it (tools may be present; the
+  - L40 `final Map<String, dynamic>? secrets`  — `_McpSecrets.toJson`, or null for a connector without a stored token (an
+  - L43 `Map<String, dynamic> toBlob()`  — chuk's blob shape, for the write-back.
+  - L51 `static ChukMcpRow? fromBlob(String id, Object? decoded)`  — Parses one decrypted blob. Null when it is not chuk's shape or the
+- L68 `abstract interface class ChukMcpMirror`
+  - L72 `Future<Map<String, ChukMcpRow>?> load()`  — Every `mcp_*` row of the signed-in user, by catalogue id. Null when the
+  - L75 `Future<void> save(ChukMcpRow row)`  — Writes one row in chuk's shape. Best-effort.
+  - L78 `Future<void> delete(String id)`  — Removes one row. Best-effort. Callers verify the row is theirs first.
+- L81 `class NoopChukMcpMirror implements ChukMcpMirror`
+  - L82 `const NoopChukMcpMirror()`
+  - L85 `Future<Map<String, ChukMcpRow>?> load()`
+  - L88 `Future<void> save(ChukMcpRow row)`
+  - L91 `Future<void> delete(String id)`
+- L94 `class ChukMcpSync implements ChukMcpMirror`
+  - L95 `const ChukMcpSync()`
+  - L97 `static const String table = 'service_credentials'`
+  - L98 `static const String columnUserId = 'user_id'`
+  - L99 `static const String columnServiceName = 'service_name'`
+  - L100 `static const String columnEncryptedData = 'encrypted_data'`
+  - L101 `static const String servicePrefix = 'mcp_'`
+  - L103 `static String serviceName(String id)`
+  - L106 `Future<Map<String, ChukMcpRow>?> load()`
+  - L147 `Future<void> save(ChukMcpRow row)`
+  - L167 `Future<void> delete(String id)`
+  - L182 `Future<bool> _ensureEncryptionKey()`
 
-## lib/services/mcp/mcp_catalogue.dart  (1001 Z.)
-- L24 `class McpCredentialField`  — One credential a server takes on its URL instead of through a browser
-  - L25 `const McpCredentialField({ required this.key, required this.label, this.hint, this.secret = true, this.required = true, })`
-  - L34 `final String key`  — The query-parameter name the server expects, e.g. `browserbaseApiKey`.
-  - L37 `final String label`  — What the reader sees, e.g. "API key".
-  - L40 `final String? hint`  — Placeholder text, e.g. "bb_live_…".
-  - L44 `final bool secret`  — True for a value that must be obscured on screen and kept in secure
-  - L47 `final bool required`  — Whether the connect form insists on a value.
-- L51 `class McpCatalogueEntry`  — A connector as offered to the reader.
-  - L52 `const McpCatalogueEntry({ required this.id, required this.name, required this.url, required this.category, this.description = '', this.iconUrl, this.publisher, this.websiteUrl, this.termsUrl, this.privacyUrl, this.auth = McpAuth.oauth, this.credentials = const <McpCredentialField>[], })`
-  - L68 `final String id`  — Stable id, used as the tool-name prefix and the storage key.
-  - L69 `final String name`
-  - L70 `final String url`
-  - L71 `final String category`
-  - L72 `final String description`
-  - L73 `final String? iconUrl`
-  - L78 `final String? publisher`  — The domain that publishes this server, for entries that come out of the
-  - L83 `final String? websiteUrl`  — The publisher's own page, where their terms and privacy policy live.
-  - L91 `final String? termsUrl`  — The two documents the reader agrees to by connecting. Filled in by
-  - L92 `final String? privacyUrl`
-  - L98 `String? get legalUrl`  — Where to send a reader who wants the terms before signing in. The
-  - L120 `final McpAuth auth`  — Where the token comes from. Everything in the catalogue signs in
-  - L124 `final List<McpCredentialField> credentials`  — The credentials the reader must supply for an [McpAuth.apiKey] server.
-  - L128 `String get icon`  — The logo. Servers rarely publish one in `serverInfo.icons`, so the
-  - L130 `static String faviconFor(String url)`
-  - L135 `static List<String> faviconCandidates(String url)`  — Places a logo can come from, best first. `mcp.figma.com` has no icon
-  - L148 `static String brandDomain(String host)`  — `mcp.figma.com` → `figma.com`: the host without the part that only
-- L170 `kBundledMcpIcons = { 'airtable', 'asana', 'atlassian', 'box', 'browserbase', 'buffer', 'calcom', 'canva', 'clickup', 'co`  — Catalogue ids whose real brand logo ships in the binary as
-- L232 `String? bundledIconAsset(String id)`  — The bundled logo path for [id], or null when no logo ships for it. The
-- L237 `kMcpCategories = [ 'Recommended', 'Productivity', 'Finance', 'Creative', 'Lifestyle', 'Developer', 'Registry', ]`  — Categories, in the order they are shown. Consumer-relevant groups lead;
-- L260 `List<McpCatalogueEntry> firstPartyConnectors()`  — Connectors our own API server fronts.
-- L284 `kMcpCatalogue = [ // ─── Recommended ─────────────────────────────────────────────────────── McpCatalogueEntry( id: 'exc`  — The offered connectors. Only servers that speak Streamable HTTP and sign
-- L870 `String? namespaceDomain(String serverName)`  — The domain a registry namespace stands for: `com.notion` → `notion.com`.
-- L886 `bool isFirstPartyRemote(String serverName, String remoteUrl)`  — Whether [remoteUrl] is served by the same domain that publishes
-- L898 `bool _isCurrentRegistryEntry(Object? meta)`  — Whether the registry still stands behind this entry — `active`, and the
-- L915 `Future<List<McpCatalogueEntry>> searchMcpRegistry( String query, { http.Client? httpClient, int limit = 20, bool firstPartyOnly = true, })`  — Search the official MCP registry for anything not in the catalogue.
-- L990 `String slugFor(String nameOrUrl)`  — A short, stable id for a server: used to prefix its tool names, so two
+## lib/services/mcp/mcp_availability.dart  (33 Z.)
+- L14 `List<McpCatalogueEntry> unconnectedCatalogueEntries()`  — Every catalogue server the reader has NOT connected yet, in catalogue
+- L24 `McpCatalogueEntry? catalogueEntryById(String id)`  — The catalogue entry with this [id]. Null when no catalogue entry uses the
+
+## lib/services/mcp/mcp_catalogue.dart  (982 Z.)
+- L30 `class McpCredentialField`  — One credential a server takes on its URL instead of through a browser
+  - L31 `const McpCredentialField({ required this.key, required this.label, this.hint, this.secret = true, this.required = true, })`
+  - L40 `final String key`  — The query-parameter name the server expects, e.g. `browserbaseApiKey`.
+  - L43 `final String label`  — What the reader sees, e.g. "API key".
+  - L46 `final String? hint`  — Placeholder text, e.g. "bb_live_…".
+  - L50 `final bool secret`  — True for a value that must be obscured on screen and kept in secure
+  - L53 `final bool required`  — Whether the connect form insists on a value.
+- L57 `class McpCatalogueEntry`  — A connector as offered to the reader.
+  - L58 `const McpCatalogueEntry({ required this.id, required this.name, required this.url, required this.category, this.description = '', this.iconUrl, this.publisher, this.websiteUrl, this.termsUrl, this.privacyUrl, this.auth = McpAuth.oauth, this.credentials = const <McpCredentialField>[], })`
+  - L74 `final String id`  — Stable id, used as the tool-name prefix and the storage key.
+  - L75 `final String name`
+  - L76 `final String url`
+  - L77 `final String category`
+  - L78 `final String description`
+  - L79 `final String? iconUrl`
+  - L84 `final String? publisher`  — The domain that publishes this server, for entries that come out of the
+  - L89 `final String? websiteUrl`  — The publisher's own page, where their terms and privacy policy live.
+  - L93 `final String? termsUrl`  — The two documents the reader agrees to by connecting. Filled in by
+  - L94 `final String? privacyUrl`
+  - L100 `String? get legalUrl`  — Where to send a reader who wants the terms before signing in. The
+  - L122 `final McpAuth auth`  — Where the token comes from. Everything in the catalogue signs in
+  - L126 `final List<McpCredentialField> credentials`  — The credentials the reader must supply for an [McpAuth.apiKey] server.
+  - L130 `String get icon`  — The logo. Servers rarely publish one, so the site's own favicon is the
+  - L132 `static String faviconFor(String url)`
+  - L137 `static List<String> faviconCandidates(String url)`  — Places a logo can come from, best first. `mcp.figma.com` has no icon
+  - L151 `static String brandDomain(String host)`  — `mcp.figma.com` → `figma.com`: the host without the part that only
+- L169 `kBundledMcpIcons = { 'airtable', 'asana', 'atlassian', 'box', 'browserbase', 'buffer', 'calcom', 'canva', 'clickup', 'co`  — Catalogue ids whose real brand logo ships in the binary as
+- L231 `String? bundledIconAsset(String id)`  — The bundled logo path for [id], or null when no logo ships for it. The
+- L236 `kMcpCategories = [ 'Recommended', 'Productivity', 'Finance', 'Creative', 'Lifestyle', 'Developer', 'Registry', ]`  — Categories, in the order they are shown. Consumer-relevant groups lead;
+- L259 `List<McpCatalogueEntry> firstPartyConnectors()`  — Connectors our own API server fronts.
+- L281 `kMcpCatalogue = [ // ─── Recommended ─────────────────────────────────────────────────────── McpCatalogueEntry( id: 'exc`  — The offered connectors. Only servers that speak Streamable HTTP and sign
+- L859 `String? namespaceDomain(String serverName)`  — The domain a registry namespace stands for: `com.notion` → `notion.com`.
+- L870 `bool isFirstPartyRemote(String serverName, String remoteUrl)`  — Whether [remoteUrl] is served by the same domain that publishes
+- L882 `bool _isCurrentRegistryEntry(Object? meta)`  — Whether the registry still stands behind this entry — `active`, and the
+- L896 `Future<List<McpCatalogueEntry>> searchMcpRegistry( String query, { http.Client? httpClient, int limit = 20, bool firstPartyOnly = true, })`  — Search the official MCP registry for anything not in the catalogue.
+- L971 `String slugFor(String nameOrUrl)`  — A short, stable id for a server: used to prefix its tool names, so two
 
 ## lib/services/mcp/mcp_client.dart  (352 Z.)
 - L20 `kMcpProtocolVersion = '2025-06-18'`  — The revision this client speaks. Servers negotiate down if they must.
@@ -92,41 +122,64 @@
   - L307 `Future<Map<String, dynamic>> _readSseReply( http.StreamedResponse response, int id, )`  — Read an SSE stream until the reply to [id] arrives. Anything else the
   - L344 `static String? _firstIcon(Object? icons)`
 
-## lib/services/mcp/mcp_connection.dart  (109 Z.)
-- L12 `enum McpAuth`  — How a connection proves who it is.
-  - L15 `oauth`
-  - L20 `appSession`
-  - L27 `apiKey`
-- L30 `class McpConnection`
-  - L31 `const McpConnection({ required this.id, required this.name, required this.url, this.description = '', this.iconUrl, this.tools = const <McpTool>[], this.addedByHand = false, this.auth = McpAuth.oauth, })`
-  - L42 `final String id`
-  - L43 `final String name`
-  - L44 `final String url`
-  - L45 `final String description`
-  - L46 `final String? iconUrl`
-  - L50 `final List<McpTool> tools`  — The tools the server offered at connect time, cached so the list can
-  - L53 `final bool addedByHand`  — True when the reader typed the URL instead of picking a connector.
-  - L56 `final McpAuth auth`  — Where the token for this server comes from.
-  - L58 `String get icon`
-  - L60 `McpConnection copyWith({List<McpTool>? tools, String? name, String? iconUrl})`
-  - L72 `Map<String, dynamic> toJson()`
-  - L83 `static McpConnection fromJson(Map<String, dynamic> json)`
-  - L103 `String toolNameFor(String tool)`  — The name a model sees for [tool] on this server. Prefixed, because two
+## lib/services/mcp/mcp_connection.dart  (216 Z.)
+- L14 `enum McpAuth`  — How a connection proves who it is.
+  - L19 `oauth`
+  - L24 `appSession`
+  - L32 `apiKey`
+  - L34 `static McpAuth parse(String? raw)`
+- L44 `class McpTool`  — One tool a server offers. Kept minimal because Agents discovers the live
+  - L45 `const McpTool({ required this.name, this.description = '', this.inputSchema = const <String, dynamic>{}, })`
+  - L51 `final String name`
+  - L52 `final String description`
+  - L62 `final Map<String, dynamic> inputSchema`  — The tool's JSON-Schema parameters, exactly as the server published them.
+  - L64 `Map<String, dynamic> toJson()`
+  - L70 `static McpTool fromJson(Map<String, dynamic> json)`
+- L81 `class McpConnection`  — A configured MCP server. The non-secret config; the token or the API
+  - L82 `const McpConnection({ required this.id, required this.name, required this.url, this.description = '', this.iconUrl, this.tools = const <McpTool>[], this.addedByHand = false, this.auth = McpAuth.oauth, this.checkedAt, this.lastError, })`
+  - L95 `final String id`
+  - L96 `final String name`
+  - L97 `final String url`
+  - L98 `final String description`
+  - L101 `final String? iconUrl`  — An icon the catalogue entry named, if any. Falls back to a favicon.
+  - L105 `final List<McpTool> tools`  — The tools the server offered, as the host reported them (`mcp_tools`).
+  - L110 `final DateTime? checkedAt`  — When the host last answered about this connector. Null means nobody has
+  - L114 `final String? lastError`  — Why the host could not use this connector, as it reported it. Null when
+  - L117 `final bool addedByHand`  — True when the user typed the URL instead of picking a connector.
+  - L120 `final McpAuth auth`  — Where the token for this server comes from.
+  - L123 `String get icon`  — The icon to show: the named icon, else the site favicon.
+  - L125 `McpConnection copyWith({ String? name, String? url, String? description, String? iconUrl, List<McpTool>? tools, McpAuth? auth, DateTime? checkedAt, // Explicit, because "no error any more" is a value and `null` cannot say // it through the usual `?? this.lastError`. bool clearError = false, String? lastError, })`
+  - L150 `Map<String, dynamic> toJson()`
+  - L163 `static McpConnection fromJson(Map<String, dynamic> json)`
+  - L183 `String toolNameFor(String tool)`  — The name a model sees for [tool] on this server. Prefixed, because two
+  - L203 `Map<String, dynamic> toForwardJson({String? accessToken})`  — The shape the Python agent needs to reach this server (WS-D forwards it
 
-## lib/services/mcp/mcp_icon_cache.dart  (120 Z.)
-- L24 `class McpIconCache`
-  - L25 `McpIconCache._()`
-  - L27 `static const int _maxBytes = 256 * 1024`
-  - L29 `static final Map<String, Uint8List> _memory = <String, Uint8List>{}`
-  - L30 `static Directory? _directory`
-  - L34 `static http.Client? httpClient`  — Injected in tests, so nothing is downloaded.
-  - L38 `static Future<Uint8List?> load(String url)`  — The bytes of [url], from memory, then disk, then the network.
-  - L69 `static Future<Uint8List?> _download(String url)`
-  - L88 `static Future<File?> _fileFor(String url)`
-  - L99 `static Future<Directory> _openDirectory()`
+## lib/services/mcp/mcp_connector_sync.dart  (142 Z.)
+- L37 `class McpConnectorSync`  — Reads and writes the encrypted connector mirror in Supabase.
+  - L38 `const McpConnectorSync()`
+  - L41 `static const String table = 'cowork_mcp_connectors'`  — Table holding one encrypted connector blob per user.
+  - L45 `static const String columnUserId = 'user_id'`  — `uuid` — the owner. Primary key. Row-level security ties every row to
+  - L48 `static const String columnCiphertext = 'ciphertext'`  — `text` — the AES-256-GCM ciphertext produced by [EncryptionService.encrypt].
+  - L51 `static const String columnUpdatedAt = 'updated_at'`  — `timestamptz` — last write, for debugging and last-writer-wins.
+  - L59 `Future<void> save(Map<String, dynamic> payload)`  — Encrypts [payload] and upserts it under the signed-in user's id.
+  - L86 `Future<Map<String, dynamic>?> load()`  — Fetches and decrypts the mirrored connector blob for the signed-in user.
+  - L118 `Future<void> clear()`  — Removes the mirrored blob for the signed-in user. Best-effort; never
+  - L137 `Future<bool> _ensureEncryptionKey()`  — Makes sure the per-user encryption key is loaded. It is cached after a
+
+## lib/services/mcp/mcp_icon_cache.dart  (122 Z.)
+- L23 `class McpIconCache`
+  - L24 `McpIconCache._()`
+  - L26 `static const int _maxBytes = 256 * 1024`
+  - L28 `static final Map<String, Uint8List> _memory = <String, Uint8List>{}`
+  - L29 `static Directory? _directory`
+  - L33 `static http.Client? httpClient`  — Injected in tests, so nothing is downloaded.
+  - L37 `static Future<Uint8List?> load(String url)`  — The bytes of [url], from memory, then disk, then the network.
+  - L68 `static Future<Uint8List?> _download(String url)`
+  - L86 `static Future<File?> _fileFor(String url)`
+  - L98 `static Future<Directory?> _openDirectory()`
   - L107 `static Future<void> clear()`  — Forget everything, on disk and in memory.
 
-## lib/services/mcp/mcp_oauth.dart  (506 Z.)
+## lib/services/mcp/mcp_oauth.dart  (511 Z.)
 - L22 `class McpAuthServer`  — What a server's authorization looks like once discovered.
   - L23 `const McpAuthServer({ required this.issuer, required this.authorizationEndpoint, required this.tokenEndpoint, this.registrationEndpoint, this.scopesSupported = const <String>[], })`
   - L31 `final String issuer`
@@ -167,28 +220,32 @@
 - L141 `class McpOAuth`
   - L142 `McpOAuth({http.Client? httpClient}) : _http = httpClient ?? http.Client()`
   - L144 `final http.Client _http`
-  - L146 `static const String clientName = 'Chuk Chat'`
-  - L147 `static const String clientUri = 'https://chat.chuk.chat'`
+  - L146 `static const String clientName = 'Agents'`
+  - L147 `static const String clientUri = 'https://agents.chuk.chat'`
   - L153 `static String canonicalResource(Uri serverUrl)`  — The canonical resource identifier of an MCP server, as RFC 8707 wants
   - L164 `static Uri? resourceMetadataUrl(String? wwwAuthenticate)`  — Pull `resource_metadata="…"` out of a `WWW-Authenticate` challenge.
   - L174 `static List<String> challengeScopes(String? wwwAuthenticate)`  — The scopes the challenge asks for, if it says.
   - L183 `static List<Uri> resourceMetadataCandidates( Uri serverUrl, String? wwwAuthenticate, )`  — Well-known locations for protected resource metadata: the one the
   - L201 `static List<Uri> authServerMetadataCandidates(Uri issuer)`  — Well-known locations for authorization server metadata, in the order
-  - L212 `Future<McpAuthServer> discover( Uri serverUrl, { String? wwwAuthenticate, })`  — Find the authorization server behind an MCP endpoint.
-  - L274 `Future<McpClientCredentials> register( McpAuthServer server, Uri redirectUri, { String? scope, })`  — Register this app with the authorization server (RFC 7591), so no
-  - L341 `McpAuthorizationRequest buildAuthorizationRequest({ required McpAuthServer server, required McpClientCredentials credentials, required Uri redirectUri, required String resource, List<String> scopes = const [], })`  — Build the URL to open in the browser, with PKCE and the resource the
-  - L383 `Future<McpTokens> exchange( McpAuthorizationRequest request, Uri callback, )`  — Swap the code from the callback for tokens. Rejects a callback whose
-  - L420 `Future<McpTokens?> refresh({ required McpAuthServer server, required McpClientCredentials credentials, required String refreshToken, required String resource, String? scope, })`  — Trade a refresh token for a fresh access token. Returns null when the
-  - L448 `Future<McpTokens> _token( McpAuthServer server, McpClientCredentials credentials, Map<String, String> body, )`
-  - L478 `Future<Map<String, dynamic>?> _getJson(Uri url)`
-  - L492 `static Uri? _uriOrNull(Object? value)`  — An absolute URI, or null for anything that is not one.
-  - L499 `static final Random _random = Random.secure()`
-  - L501 `static String _randomString(int length)`
+  - L213 `Future<McpAuthServer> discover( Uri serverUrl, { String? wwwAuthenticate, })`  — Find the authorization server behind an MCP endpoint.
+  - L277 `Future<McpClientCredentials> register( McpAuthServer server, Uri redirectUri, { String? scope, })`  — Register this app with the authorization server (RFC 7591), so no
+  - L344 `McpAuthorizationRequest buildAuthorizationRequest({ required McpAuthServer server, required McpClientCredentials credentials, required Uri redirectUri, required String resource, List<String> scopes = const [], })`  — Build the URL to open in the browser, with PKCE and the resource the
+  - L386 `Future<McpTokens> exchange( McpAuthorizationRequest request, Uri callback, )`  — Swap the code from the callback for tokens. Rejects a callback whose
+  - L425 `Future<McpTokens?> refresh({ required McpAuthServer server, required McpClientCredentials credentials, required String refreshToken, required String resource, String? scope, })`  — Trade a refresh token for a fresh access token. Returns null when the
+  - L453 `Future<McpTokens> _token( McpAuthServer server, McpClientCredentials credentials, Map<String, String> body, )`
+  - L483 `Future<Map<String, dynamic>?> _getJson(Uri url)`
+  - L497 `static Uri? _uriOrNull(Object? value)`  — An absolute URI, or null for anything that is not one.
+  - L504 `static final Random _random = Random.secure()`
+  - L506 `static String _randomString(int length)`
 
-## lib/services/mcp/mcp_redirect.dart  (13 Z.)
+## lib/services/mcp/mcp_probe_control.dart  (17 Z.)
+- L12 `abstract interface class McpProbeControl`
+  - L15 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`  — Dial [servers] (the same projection the task frame carries) and answer
+
+## lib/services/mcp/mcp_redirect.dart  (12 Z.)
 - reicht weiter: 'mcp_redirect_stub.dart' if (dart.library.io) 'mcp_redirect_io.dart'
 
-## lib/services/mcp/mcp_redirect_io.dart  (59 Z.)
+## lib/services/mcp/mcp_redirect_io.dart  (62 Z.)
 - L9 `class McpRedirectListener`  — A one-shot HTTP server on 127.0.0.1 that catches the OAuth redirect.
   - L10 `McpRedirectListener._(this._server)`
   - L12 `final HttpServer _server`
@@ -197,137 +254,166 @@
   - L24 `Uri get redirectUri`  — The address to hand the authorization server.
   - L28 `Future<Uri> get callback`  — Completes with the full callback URL, including code and state.
   - L30 `void _listen()`
-  - L48 `Future<void> close()`
-  - L52 `static String _page(bool ok)`
+  - L51 `Future<void> close()`
+  - L55 `static String _page(bool ok)`
 
-## lib/services/mcp/mcp_redirect_stub.dart  (22 Z.)
+## lib/services/mcp/mcp_redirect_stub.dart  (23 Z.)
 - L7 `class McpRedirectListener`
   - L8 `McpRedirectListener._()`
   - L10 `static Future<McpRedirectListener> start()`
   - L16 `Uri get redirectUri`
   - L18 `Future<Uri> get callback`
-  - L20 `Future<void> close()`
+  - L21 `Future<void> close()`
 
-## lib/services/mcp/mcp_service.dart  (830 Z.)
-- L28 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
-  - L28 `connected`
-  - L28 `cancelled`
-  - L28 `failed`
-- L34 `class McpConnectCanceler`  — A handle the screen keeps so it can stop a connect while the browser
-  - L35 `final Completer<void> _canceled = Completer<void>()`
-  - L37 `void cancel()`
-  - L41 `bool get isCanceled`
-  - L42 `Future<void> get whenCanceled`
-- L47 `class _ConnectCanceled implements Exception`  — Thrown inside [McpService] when the reader cancels the sign-in. Private:
-  - L48 `const _ConnectCanceled()`
-- L51 `class McpConnectResult`
-  - L52 `const McpConnectResult(this.status, {this.message, this.connection})`
-  - L54 `final McpConnectStatus status`
-  - L55 `final String? message`
-  - L56 `final McpConnection? connection`
-- L60 `class _McpSecrets`  — The secrets of one connection. Never written to shared preferences.
-  - L61 `const _McpSecrets({ this.credentials = const McpClientCredentials(clientId: ''), this.tokens = const McpTokens(accessToken: ''), this.issuer, this.authorizationEndpoint, this.tokenEndpoint, this.scope, this.apiCredentials = const <String, String>{}, })`
-  - L71 `final McpClientCredentials credentials`
-  - L72 `final McpTokens tokens`
-  - L73 `final String? issuer`
-  - L74 `final String? authorizationEndpoint`
-  - L75 `final String? tokenEndpoint`
-  - L76 `final String? scope`
-  - L80 `final Map<String, String> apiCredentials`  — Reader-supplied API credentials for an [McpAuth.apiKey] server, keyed by
-  - L82 `Map<String, dynamic> toJson()`
-  - L92 `static _McpSecrets fromJson(Map<String, dynamic> json)`
-  - L109 `McpAuthServer? get authServer`
-  - L120 `_McpSecrets withTokens(McpTokens next)`
-- L130 `class McpService`
-  - L131 `McpService._()`
-  - L133 `static const String _prefsKey = 'mcp_connections_v1'`
-  - L134 `static const FlutterSecureStorage _secure = FlutterSecureStorage()`
-  - L136 `static final ValueNotifier<List<McpConnection>> connections = ValueNotifier<List<McpConnection>>(const <McpConnection>[])`
-  - L141 `static Future<bool> Function(Uri url)? launcher`  — Injected in tests so no browser opens and no real server is called.
-  - L143 `static bool _loaded = false`
-  - L147 `static Future<void> load()`
-  - L168 `static Future<String?> _readConnectionsRaw()`
-  - L180 `static Future<void> _persist()`
-  - L187 `static Future<_McpSecrets?> _readSecrets(String id)`
-  - L200 `static Future<void> _writeSecrets(String id, _McpSecrets secrets)`
-  - L207 `static Future<McpConnectResult> connect({ required String id, required String name, required String url, String description = '', String? iconUrl, bool addedByHand = false, McpAuth auth = McpAuth.oauth, McpConnectCanceler? canceler, })`  — Connect [url] and remember it. Opens the browser when the server asks
-  - L321 `static Future<McpConnectResult> connectWithCredentials({ required String id, required String name, required String url, required Map<String, String> credentials, String description = '', String? iconUrl, bool addedByHand = false, })`  — Connect a server that takes the reader's own credentials on its URL
-  - L392 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`  — The endpoint the server is actually called on: the base URL with the
-  - L400 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
-  - L407 `static Future<String?> _authorize({ required String id, required Uri endpoint, String? wwwAuthenticate, McpConnectCanceler? canceler, })`  — Run the OAuth flow and store what came out of it. Returns the access
-  - L489 `static Future<bool> _launch(Uri url)`  — Opens the sign-in inside the app: a Custom Tab on Android, a Safari
-  - L498 `static Future<void> _closeBrowser()`
-  - L510 `static Future<void> disconnect(String id)`  — Forget a server: its tokens, its tools and its entry — here and on the
-  - L527 `static Future<void> _forgetLocal(String id)`  — Forget a server on this device only: entry, tools and stored token. Used
-  - L551 `static final ValueNotifier<Set<String>> unreachable = ValueNotifier<Set<String>>(<String>{})`  — Ask a connected server for its tools again.
-  - L559 `static Future<bool> verifyReachable(String id)`  — Ask the server whether it is still there.
-  - L581 `static Future<void> verifyAllReachable()`  — Check every connection. Used when the connectors page opens, so the
-  - L587 `static void _recordReachable(String id, bool alive)`
-  - L593 `static Future<McpConnection?> refreshTools(String id)`
-  - L616 `static McpConnection? connectionFor(String id)`
-  - L624 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — Which connection and which remote tool a model-facing tool name means.
-  - L636 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Run a tool on the server it belongs to.
-  - L679 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine.
-  - L696 `static Future<String?> _appSessionToken()`  — The app's own session token, refreshed when it is about to lapse.
-  - L707 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client carrying a valid token, refreshing it first when it is stale.
-  - L753 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the reader typed in by hand.
-  - L782 `static bool internalIsAcceptableUrl(String url)`  — True when [url] is one this device will send a token to — https, or a
-  - L788 `static Future<Map<String, dynamic>?> internalReadSecretsJson(String id)`  — The connection's secrets as a plain map, or null when it has none.
-  - L794 `static Future<void> internalWriteSecretsJson( String id, Map<String, dynamic> json, )`  — Write a connection's secrets from a plain map (from a synced blob).
-  - L801 `static Future<void> internalUpsertConnection(McpConnection connection)`  — Add or replace [connection] in the live list and persist. Registers its
-  - L811 `static Future<void> internalForgetLocal(String id)`  — Forget a connection on this device without touching the remote row —
-  - L816 `static Future<List<McpTool>?> internalFetchTools( McpConnection connection, )`  — List a connection's tools live, building a client from its stored token
+## lib/services/mcp/mcp_service.dart  (1312 Z.)
+- L65 `kMcpProtocolVersion = '2025-06-18'`  — The MCP revision the challenge probe claims to speak. It only has to be a
+- L68 `enum McpConnectStatus`  — What a connect attempt ended in, for the UI to show.
+  - L68 `connected`
+  - L68 `cancelled`
+  - L68 `failed`
+- L73 `class McpConnectCanceler`  — A handle the screen keeps so it can stop a connect. On Agents the connect
+  - L74 `final Completer<void> _canceled = Completer<void>()`
+  - L76 `void cancel()`
+  - L80 `bool get isCanceled`
+  - L81 `Future<void> get whenCanceled`
+- L86 `class _ConnectCanceled implements Exception`  — Thrown inside [McpService] when the user cancels the sign-in. Private: it
+  - L87 `const _ConnectCanceled()`
+- L90 `class McpConnectResult`
+  - L91 `const McpConnectResult(this.status, {this.message, this.connection})`
+  - L93 `final McpConnectStatus status`
+  - L94 `final String? message`
+  - L95 `final McpConnection? connection`
+- L98 `class McpService`
+  - L99 `McpService._()`
+  - L102 `static McpStore store = McpStore()`  — The local persistence. Swappable in tests through [resetForTest].
+  - L105 `static McpConnectorSync sync = const McpConnectorSync()`  — The encrypted Supabase mirror. Swappable in tests through [resetForTest].
+  - L109 `static ChukMcpMirror chukMirror = const ChukMcpSync()`  — chuk_chat's per-connector rows in `service_credentials` (bead
+  - L111 `static final ValueNotifier<List<McpConnection>> connections = ValueNotifier<List<McpConnection>>(const <McpConnection>[])`
+  - L114 `static bool _loaded = false`
+  - L118 `static Future<bool> Function(Uri url)? launcher`  — Injected in tests so no browser opens and no real server is called.
+  - L123 `static McpOAuth Function()? oauthFactory`  — Injected in tests so the OAuth discovery, registration and token
+  - L128 `static http.Client Function()? probeClientFactory`  — Injected in tests so the unauthenticated challenge probe answers from a
+  - L132 `static void resetForTest({ McpStore? store, McpConnectorSync? sync, ChukMcpMirror? chukMirror, })`  — Reset for a test: inject a store / sync and forget the loaded state.
+  - L159 `static Future<void> load()`  — Load the connector set into [connections]. Runs once. Reads the local
+  - L179 `static Future<void> pullRemoteForTest()`  — Adopt the encrypted mirror and wait for it, for a test. [load] fires the
+  - L182 `static Future<void> pushRemoteForTest()`
+  - L209 `static const Duration kDefaultAdoptInterval = Duration(minutes: 5)`  — How long a successful adoption is trusted before the next caller pulls
+  - L213 `static const Duration kDefaultAdoptRetryInterval = Duration(seconds: 20)`  — How long to wait after an attempt that could NOT read the mirror (no
+  - L215 `static Duration adoptInterval = kDefaultAdoptInterval`
+  - L216 `static Duration adoptRetryInterval = kDefaultAdoptRetryInterval`
+  - L220 `static DateTime Function() clock = DateTime.now`  — Test seam so a test can move time instead of waiting for it.
+  - L222 `static Future<void>? _adopting`
+  - L223 `static DateTime? _adoptedAt`
+  - L224 `static DateTime? _attemptedAt`
+  - L227 `static bool get hasAdopted`  — True when a pull has read the mirrors at least once.
+  - L237 `static Future<void> adoptMirrors({bool force = false})`  — Pull both mirrors and adopt what this device is missing.
+  - L248 `static bool _isAdoptDue()`
+  - L261 `static Future<void> _adoptOnce()`
+  - L277 `static Future<bool> _pullOwnMirror()`  — Adopt the own encrypted mirror. Returns true when it was readable — a
+  - L341 `static Future<bool> _pullChukMirror()`  — What chuk_chat connected, adopted where this device has nothing
+  - L394 `static Future<void> _pushRemote()`  — Read the whole connector set and its secrets and push it to the encrypted
+  - L438 `static Future<void> _pushChukRows(List<McpConnection> list)`  — The write-back into chuk_chat's table (bead cowork-hza): one
+  - L448 `static Future<ChukMcpRow> _chukRowFor(McpConnection c)`
+  - L474 `static Future<void> _deleteChukRow(String id)`  — Removes chuk's row for [id], but only a row that is really this
+  - L498 `static Future<McpConnectResult> connect({ required String id, required String name, required String url, String description = '', String? iconUrl, bool addedByHand = false, McpAuth auth = McpAuth.oauth, McpConnectCanceler? canceler, })`  — Record [url] as a connector the user wants, signing in first when the
+  - L566 `static Future<bool> _hasUsableRecord(String id)`  — True when [id] already holds a record this device can still use.
+  - L572 `static bool _isUsable(McpSecrets? record)`  — Whether [record] can still get a request authenticated: a bearer that has
+  - L584 `static Future<McpConnectResult> connectWithCredentials({ required String id, required String name, required String url, required Map<String, String> credentials, String description = '', String? iconUrl, bool addedByHand = false, })`  — Record a server that takes the user's own credentials on its URL (an API
+  - L631 `static Future<McpConnectResult> connectByUrl( String url, { String? name, McpConnectCanceler? canceler, })`  — Add a server the user typed in by hand.
+  - L653 `static Future<void> disconnect(String id)`  — Forget a server: its config and its secrets, here and on the mirror.
+  - L675 `static Future<String?> _authorize({ required String id, required Uri endpoint, String? wwwAuthenticate, McpConnectCanceler? canceler, bool signInOptional = false, })`  — Run the OAuth flow for [endpoint] and store what came out of it.
+  - L772 `static Future<String?> _challengeFor(Uri endpoint)`  — The `WWW-Authenticate` challenge [endpoint] answers an unauthenticated
+  - L811 `static Future<bool> _launch(Uri url)`  — Opens the sign-in inside the app: a Custom Tab on Android, a Safari
+  - L820 `static Future<void> _closeBrowser()`
+  - L834 `static McpSecrets? _recordFromMirror(Map<Object?, Object?> entry)`  — The secret record inside one mirrored entry. A blob written by this
+  - L879 `static Future<int> applyRotatedCredentials( Map<String, dynamic> payload, )`  — Take an `mcp_credentials` frame from the host and update the stored
+  - L912 `static final ValueNotifier<Set<String>> unreachable = ValueNotifier<Set<String>>(<String>{})`  — Ids of connections whose server did not answer the last time it was
+  - L928 `static Future<bool> verifyReachable(String id)`  — Ask the server whether it is still there.
+  - L941 `static Future<void> verifyAllReachable()`  — Check every connection. Used when the connectors page opens, so the
+  - L945 `static void _recordReachable(String id, bool alive)`
+  - L953 `static Future<bool> _answersInitialize(Uri endpoint)`  — Whether [endpoint] answers an MCP `initialize` at all. The status does
+  - L999 `static Future<void> probe({McpProbeControl? control})`  — Ask the paired host to dial every stored connector now.
+  - L1027 `static Future<int> applyToolsFrame(Map<String, dynamic> payload)`  — Take an `mcp_tools` frame from the host and record what each connector
+  - L1081 `static Future<bool> _applyOneCredential(Map<String, dynamic> payload)`  — One connector out of an `mcp_credentials` frame. True when it was written.
+  - L1138 `static Future<McpConnection?> _connectionFromFrame( Map<String, dynamic> payload, )`  — The connection an `mcp_credentials` frame is about, or null when this
+  - L1159 `static McpConnection? connectionFor(String id)`
+  - L1168 `static bool _isAcceptableEndpoint(Uri endpoint)`  — https everywhere, except a server on this machine. A debug build may
+  - L1191 `static ({McpConnection connection, String tool})? resolve(String toolName)`  — The connection and the server-side tool name behind a registered tool.
+  - L1203 `static Future<McpCallResult> call( String toolName, Map<String, dynamic> arguments, )`  — Call [toolName] on the server that offers it, from this device.
+  - L1243 `static Future<McpClient?> _clientFor(McpConnection connection)`  — A client for [connection], with whatever credential it needs. Null when
+  - L1289 `static Future<String?> _appSessionToken()`  — The account's own access token, for a server fronted by our API.
+  - L1299 `static Uri _endpointWithCredentials(Uri base, Map<String, String> creds)`
+  - L1307 `static Uri endpointWithCredentialsForTest( Uri base, Map<String, String> creds, )`  — The credentialed endpoint, exposed for tests: the reader's key must land
 
-## lib/services/mcp/mcp_sync_service.dart  (763 Z.)
-- L38 `@immutable class McpSyncBlob`  — One connection as it travels between devices: its metadata without the
-  - L40 `const McpSyncBlob({required this.connection, this.secrets})`
-  - L44 `final McpConnection connection`  — The connection to recreate. Its [McpConnection.tools] is always empty
-  - L49 `final Map<String, dynamic>? secrets`  — The decrypted secrets map (`_McpSecrets.toJson`), or null for connectors
-  - L52 `static McpSyncBlob fromConnection( McpConnection connection, Map<String, dynamic>? secrets, )`  — Pack a live connection, stripping its cached tools.
-  - L60 `Map<String, dynamic> toJson()`
-  - L65 `static McpSyncBlob fromJson(Map<String, dynamic> json)`
-  - L83 `String? get accessToken`  — The access token inside the secrets, if any. Used only to notice a token
-  - L87 `DateTime? get expiresAt`  — When the access token expires, if the secrets say. Used to keep an older
-- L93 `@visibleForTesting String? accessTokenOf(Map<String, dynamic>? secrets)`  — The access token buried in a `_McpSecrets.toJson` map, or null. Public only
-- L104 `@visibleForTesting DateTime? expiresAtOf(Map<String, dynamic>? secrets)`  — The access token's expiry from a `_McpSecrets.toJson` map, or null. Public
-- L112 `@immutable class McpSyncPlan`  — What one reconcile pass decided to do.
-  - L114 `const McpSyncPlan({ required this.toAdd, required this.toUpdate, required this.toRemove, required this.nextKnownSyncedIds, })`
-  - L122 `final Set<String> toAdd`  — Remote connections that are not here yet: add them and connect them.
-  - L127 `final Set<String> toUpdate`  — Connections here whose remote token rotated to a strictly newer one:
-  - L131 `final Set<String> toRemove`  — Connections here that were synced before but whose remote row is gone:
-  - L137 `final Set<String> nextKnownSyncedIds`  — The known-synced set to persist for the next pass — the ids confirmed to
-- L146 `McpSyncPlan reconcileMcpSync({ required Set<String> localIds, required Set<String> knownSyncedIds, required Set<String> remoteIds, required Map<String, String?> localAccessTokens, required Map<String, String?> remoteAccessTokens, Map<String, DateTime?> localTokenExpiries = const {}, Map<String, DateTime?> remoteTokenExpiries = const {}, })`  — Decide the sync actions. Pure: no IO, no clock, no globals.
-- L187 `@visibleForTesting bool metadataDiffers(McpConnection a, McpConnection b)`  — True when two connections differ in any synced metadata field. Tools are
-- L198 `bool _remoteTokenIsNewer({ required String? remoteToken, required String? localToken, required DateTime? remoteExpiry, required DateTime? localExpiry, })`  — True when the remote token should replace the local one: it exists, it
-- L211 `class McpSyncService`  — The IO around [reconcileMcpSync]: push on change, delete on disconnect,
-  - L212 `McpSyncService._()`
-  - L216 `static const String _servicePrefix = 'mcp_'`  — `service_name` prefix in the `service_credentials` table. One row per
-  - L219 `static const String _knownKey = 'mcp_synced_ids_v1'`  — Where the known-synced ids live between passes.
-  - L223 `static const String _pendingDeleteKey = 'mcp_pending_delete_v1'`  — Ids whose remote row a disconnect could not delete yet. Kept so the next
-  - L228 `static const Duration _minPullInterval = Duration(minutes: 2)`  — Connectors change rarely, so a pull need not run on every 30 s chat tick.
-  - L230 `static bool _pulling = false`
-  - L231 `static DateTime? _lastPullAt`
-  - L237 `static final Map<String, int> _deleteEpochs = <String, int>{}`  — A monotonic arm counter per id. Every arm (a disconnect) and every disarm
-  - L239 `static String _serviceName(String id)`
-  - L244 `static String get pendingDeleteKeyForTest`  — The persisted tombstone-set key, exposed so tests read the same key the
-  - L248 `static void resetForTests()`  — Clears in-memory pull and tombstone-arm state so tests start clean.
-  - L259 `static Future<void> push(McpConnection connection)`  — Encrypt and upload one connection's blob. Called after a connect and
-  - L283 `static Future<bool> delete(String id)`  — Delete the remote row for [id] so the disconnect propagates, and drop it
-  - L309 `static Future<int> markPendingDelete(String id)`  — Remember that [id] must still be deleted remotely. Honoured by the next
-  - L321 `static Future<void> clearPendingDelete(String id)`  — Forget any pending delete for [id]. Called when the reader reconnects a
-  - L331 `static Future<void> deleteIfStillPending(String id, int epoch)`  — Delete the remote row only while the tombstone from *this* disconnect
-  - L354 `static Future<void> _isolate( String what, String id, Future<void> Function() op, )`  — Run one id's reconcile step, swallowing and logging any failure so a
-  - L369 `static Future<void> _repairAfterLateDelete(String id)`  — A background delete for one arm can land after a reconnect wrote a fresh
-  - L382 `static Future<void> pullAndReconcile()`  — Fetch every remote blob, decide what changed and apply it: add and
-  - L624 `static Future<void> _retryPendingDeletes( Set<String> pending, Set<String> remoteIds, )`  — Retry the remote delete for every tombstoned id, dropping the ones that
-  - L667 `static Future<void> _applyAdd(McpSyncBlob blob)`  — Recreate a remote connection here and connect it: write its secrets, list
-  - L712 `static Future<void> _healEmptyTools(Set<String> remoteIds)`  — Refetch tools for synced connections that have none yet (added offline).
-  - L728 `static Future<Set<String>> _loadKnownSyncedIds()`
-  - L729 `static Future<void> _saveKnownSyncedIds(Set<String> ids)`
-  - L732 `static Future<Set<String>> _loadIdSet(String key)`
-  - L741 `static Future<void> _saveIdSet(String key, Set<String> ids)`
-  - L754 `static Future<void> _idSetGate = Future<void>.value()`
-  - L756 `static Future<T> _locked<T>(Future<T> Function() action)`
+## lib/services/mcp/mcp_store.dart  (592 Z.)
+- L47 `class McpSecrets`  — Everything secret about one connection: the client this device registered
+  - L48 `const McpSecrets({ this.credentials = const McpClientCredentials(clientId: ''), this.tokens = const McpTokens(accessToken: ''), this.issuer, this.authorizationEndpoint, this.tokenEndpoint, this.scope, })`
+  - L57 `final McpClientCredentials credentials`
+  - L58 `final McpTokens tokens`
+  - L59 `final String? issuer`
+  - L60 `final String? authorizationEndpoint`
+  - L61 `final String? tokenEndpoint`
+  - L64 `final String? scope`  — The scope the authorization request asked for, needed again on refresh.
+  - L67 `bool get isEmpty`  — True when there is nothing worth storing.
+  - L73 `McpAuthServer? get authServer`  — The authorization server, when enough of it was recorded to talk to.
+  - L85 `McpSecrets withTokens(McpTokens next)`
+  - L94 `Map<String, dynamic> toJson()`
+  - L111 `Map<String, dynamic> _tokensJson()`  — The tokens, with the expiry written in UTC.
+  - L120 `static McpSecrets fromJson(Map<String, dynamic> json)`
+- L136 `class McpListBackend`  — Where [McpStore] keeps the connection list: the SQLite kv_cache by
+  - L137 `const McpListBackend({ this.read = LocalChatCacheService.kvGet, this.write = LocalChatCacheService.kvSet, })`
+  - L142 `final Future<String?> Function(String key) read`
+  - L143 `final Future<void> Function(String key, String value) write`
+- L146 `class McpStore`
+  - L147 `McpStore({ AgentsSecureKeyValueStore? secrets, McpOAuth? oauth, McpListBackend? list, }) : _secrets = secrets ?? const FlutterSecureKeyValueStore(), _oauth = oauth ?? McpOAuth(), _list = list ?? const McpListBackend()`
+  - L157 `static const String prefsKey = 'mcp_connections_v1'`  — Non-secret connection config: the kv_cache key, and the legacy
+  - L160 `static const String secretPrefix = 'mcp_secrets_'`  — Per-connection secret key prefix in secure storage (the secret record).
+  - L164 `static const String apiCredsPrefix = 'mcp_apicreds_'`  — Per-connection API-credential key prefix in secure storage. Holds a JSON
+  - L166 `final AgentsSecureKeyValueStore _secrets`
+  - L167 `final McpOAuth _oauth`
+  - L168 `final McpListBackend _list`
+  - L180 `static final Map<String, Future<McpSecrets?>> _refreshes = <String, Future<McpSecrets?>>{}`  — The refresh in flight for a connection id, if any.
+  - L189 `static Future<void> _listChain = Future<void>.value()`  — One queue for every read-modify-write of the connection list: the
+  - L190 `static int _listPending = 0`
+  - L192 `static Future<T> _serialized<T>(Future<T> Function() op)`
+  - L208 `static String secretKey(String id)`
+  - L210 `static String apiCredsKey(String id)`
+  - L214 `Future<List<McpConnection>> load()`  — Every stored connection, in saved order. Never throws — a corrupt record
+  - L216 `Future<List<McpConnection>> _loadUnlocked()`
+  - L225 `static List<McpConnection> _decode(String? raw)`
+  - L240 `Future<String?> _readRaw()`  — The stored list as JSON. A SharedPreferences copy wins over the
+  - L255 `static Future<bool> _moveToKv( SharedPreferences prefs, String legacy, McpListBackend list, )`  — Move a SharedPreferences copy of the list into the kv_cache: write it
+  - L281 `static Future<bool> migrateLegacyPrefs({ McpListBackend list = const McpListBackend(), })`  — One-time move of the connection list out of SharedPreferences. Cheap
+  - L301 `Future<void> _saveAll(List<McpConnection> connections)`  — Persist the whole list (config only; secrets are written separately).
+  - L323 `Future<void> upsert(McpConnection connection, {String? accessToken})`  — Add or replace [connection] (matched by id) and, when given, store its
+  - L340 `Future<void> remove(String id)`  — Remove a connection and its stored secrets.
+  - L357 `Future<McpSecrets?> secretsFor(String id)`  — The whole secret record for [id], or null when none is stored.
+  - L372 `Future<void> setSecrets(String id, McpSecrets secrets)`  — Store the whole secret record for [id]. An empty record clears it.
+  - L386 `Future<void> setToken(String id, String token)`  — Store (or clear, on empty) just the bearer token for [id], keeping any
+  - L416 `Future<String?> tokenFor(String id)`  — The stored bearer token for [id], or null when none is set.
+  - L423 `Future<void> setApiCredentials(String id, Map<String, String> creds)`  — Store (or clear, on empty) the API credentials for [id]. The map is the
+  - L432 `Future<Map<String, String>> apiCredentialsFor(String id)`  — The stored API credentials for [id], or an empty map when none are set.
+  - L463 `Future<List<Map<String, dynamic>>> forwardPayloads()`  — The payloads WS-D forwards to the Python agent, one per connection:
+  - L501 `Future<McpSecrets?> _refreshedSecrets(McpConnection connection)`  — The record for [connection], with the access token refreshed when it is
+  - L523 `Future<McpSecrets?> _refreshOnce( McpConnection connection, McpSecrets secrets, McpAuthServer server, String refreshToken, )`  — One trip to the token endpoint, with the result written back.
+  - L551 `static Map<String, dynamic>? _oauthBlock( McpConnection connection, McpSecrets? secrets, )`  — The `oauth` block the host needs to keep [connection] alive on its own,
+  - L581 `static String _urlWithCredentials(String url, Map<String, String> creds)`  — The base URL with the API credentials added as query parameters, keeping
+
+## lib/services/mcp/mcp_support_dir.dart  (11 Z.)
+- reicht weiter: 'mcp_support_dir_stub.dart' if (dart.library.io) 'mcp_support_dir_io.dart'
+
+## lib/services/mcp/mcp_support_dir_io.dart  (21 Z.)
+- L10 `Future<String?> mcpSupportDirPath()`  — The absolute path of the app support directory on a native build.
+- L17 `Future<void> mcpDeleteDir(String path)`  — Delete the directory at [path] and everything under it. Native-only, so the
+
+## lib/services/mcp/mcp_support_dir_stub.dart  (12 Z.)
+- L8 `Future<String?> mcpSupportDirPath()`  — Null on web: there is no disk support directory to cache into.
+- L11 `Future<void> mcpDeleteDir(String path)`  — No-op on web: there is no disk cache directory to delete.
+
+## lib/services/mcp/mcp_sync_service.dart  (44 Z.)
+- L36 `class McpSyncService`
+  - L37 `McpSyncService._()`
+  - L42 `static Future<void> pullAndReconcile()`  — Adopt whatever the encrypted mirrors hold that this device is missing.
 
 ## lib/services/mcp/mcp_tool_bridge.dart  (59 Z.)
 - L17 `void syncMcpTools(ToolExecutor executor)`  — Register the tools of every connected server, replacing whatever was

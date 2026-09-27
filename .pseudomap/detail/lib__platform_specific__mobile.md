@@ -1,0 +1,294 @@
+# lib/platform_specific/mobile · Signaturen
+
+## lib/platform_specific/mobile/mobile_agent_list.dart  (1240 Z.)
+- L56 `String accountMonogram(String? label)`  — The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
+- L70 `class MobileAgentList extends StatefulWidget`
+  - L71 `const MobileAgentList({ super.key, required this.source, required this.onSelect, this.selectedAgentId, this.selectedThreadKey, this.onAddAgent, this.onOpenAccount, this.onOpenProfile, this.onRenameAgent, this.onDeleteAgent, this.accountLabel, this.now, this.readMarks, this.profiles, this.onOpenFrom, this.hiddenAgentId, this.rooms, this.onOpenRoom, this.onCreateRoom, this.emptyState, })`
+  - L94 `final AgentRosterSource source`
+  - L99 `final Widget? emptyState`  — Shown instead of the plain "No agents yet" when the list is empty and
+  - L103 `final RoomSource? rooms`  — The group rooms, listed above the coworkers in the same list. Null (or an
+  - L106 `final void Function(String roomId)? onOpenRoom`  — Opens a room. Rooms are not tappable without it.
+  - L110 `final VoidCallback? onCreateRoom`  — Starts a new room. With both this and [onAddAgent] set, the "+" target
+  - L113 `final void Function(String agentId, String threadKey) onSelect`  — Opens a coworker's thread — the same callback the desktop sidebar uses.
+  - L115 `final String? selectedAgentId`
+  - L116 `final String? selectedThreadKey`
+  - L119 `final VoidCallback? onAddAgent`  — The accent "+" target. Null hides it.
+  - L122 `final VoidCallback? onOpenAccount`  — The account face on the left. Null hides it.
+  - L125 `final void Function(AgentsAgent agent)? onOpenProfile`  — Opens a coworker's profile page (long-press → Profile).
+  - L129 `final void Function(AgentsAgent agent)? onRenameAgent`  — Renames a coworker (long-press → Rename). This is the one profile field
+  - L132 `final void Function(AgentsAgent agent)? onDeleteAgent`  — Deletes a coworker (long-press → Delete).
+  - L135 `final String? accountLabel`  — Text the account monogram is taken from (the user's name or e-mail).
+  - L138 `final DateTime Function()? now`  — Injectable clock for tests.
+  - L141 `final AgentReadMarks? readMarks`  — Injectable stores for tests; default to the app-wide ones.
+  - L142 `final AgentProfileStore? profiles`
+  - L148 `final void Function(ContainerTransformSource source)? onOpenFrom`  — Where the tapped row is, and a copy of it — everything the chat-open
+  - L153 `final String? hiddenAgentId`  — The coworker whose row is currently inside the growing container. Its row
+  - L156 `State<MobileAgentList> createState()`
+- L159 `class _MobileAgentListState extends State<MobileAgentList>`
+  - L160 `static const List<String> _filters = <String>['All', 'Unread']`
+  - L167 `static const double _barControlHeight = 56`  — The home bar runs taller than [MobileLayout.controlHeight] and its two
+  - L171 `static const double _barControlWidth = 74`  — Width of the search and add targets. Wider than they are tall, so both
+  - L174 `static const double _barHeight = 68`  — What the row takes, its own breathing room included.
+  - L176 `final TextEditingController _query = TextEditingController()`
+  - L177 `final FocusNode _searchFocus = FocusNode()`
+  - L179 `int _filter = 0`
+  - L182 `bool _reverse = false`  — Direction of the last filter change — drives the shared-axis slide.
+  - L186 `bool _animate = true`  — Whether the rows play their cascade. Off right after a search closes, so
+  - L188 `bool _searching = false`
+  - L190 `AgentReadMarks get _marks`
+  - L191 `AgentProfileStore get _profiles`
+  - L195 `void dispose()`
+  - L201 `DateTime _now()`
+  - L203 `void _openSearch()`
+  - L210 `void _closeSearch()`
+  - L222 `List<AgentsRoom> _visibleRooms()`  — The rooms this list shows. A room has no read marks, so the Unread filter
+  - L243 `Future<void> _openAddMenu(BuildContext anchor)`  — What the "+" target does. One action goes straight there; two ask, on the
+  - L265 `List<AgentsAgent> _visible()`
+  - L285 `String? _roleOf(AgentsAgent agent)`  — The role line: the one the user set in the profile wins over the one the
+  - L292 `Future<void> _openRowMenu(BuildContext rowContext, AgentsAgent agent)`
+  - L356 `Widget build(BuildContext context)`
+  - L370 `Widget _buildList(BuildContext context)`
+- L641 `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
+  - L642 `const _SearchField({ required this.controller, required this.focusNode, required this.height, required this.onClear, })`
+  - L649 `final TextEditingController controller`
+  - L650 `final FocusNode focusNode`
+  - L653 `final double height`  — The height of the row's other controls, so the field is their sibling.
+  - L655 `final VoidCallback onClear`
+  - L658 `Widget build(BuildContext context)`
+- L735 `class MobileAgentRow extends StatelessWidget`
+  - L736 `const MobileAgentRow({ super.key, required this.agent, required this.now, this.selected = false, this.unread = false, this.unreadThreads = 1, this.role, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
+  - L750 `final AgentsAgent agent`
+  - L751 `final DateTime now`
+  - L752 `final bool selected`
+  - L753 `final bool unread`
+  - L757 `final int unreadThreads`  — How many of this coworker's threads have something new in them. Shown as
+  - L760 `final String? role`  — The role line to show; null hides the tag.
+  - L765 `final void Function(Rect globalRect)? onTap`  — Opens the coworker's thread. It is handed the row's own rounded rect, in
+  - L768 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L770 `final AgentProfileStore? profiles`
+  - L774 `final bool padded`  — False builds the row without the list's outer padding, so it fills the
+  - L778 `static const double height = 64`  — One row's minimum height. Tight enough that a screen holds the roster,
+  - L783 `static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles})`  — The preview line under the name. What the coworker is doing now beats a
+  - L816 `Widget build(BuildContext context)`
+- L958 `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
+  - L959 `const MobileRoomRow({ super.key, required this.room, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
+  - L968 `final AgentsRoom room`
+  - L971 `final VoidCallback? onTap`  — Opens the room. Null makes the row inert.
+  - L974 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L976 `final AgentProfileStore? profiles`
+  - L979 `final bool padded`  — False drops the list's outer padding, matching [MobileAgentRow.padded].
+  - L983 `static String previewOf(AgentsRoom room)`  — The line under the name: who is in the room, by the handle they are
+  - L986 `Widget build(BuildContext context)`
+- L1055 `class _RoleTag extends StatelessWidget`  — The small grey tag next to the name (the coworker's role).
+  - L1056 `const _RoleTag({required this.role})`
+  - L1058 `final String role`
+  - L1061 `Widget build(BuildContext context)`
+- L1088 `class _MenuRow extends StatelessWidget`
+  - L1089 `const _MenuRow({required this.icon, required this.label, this.color})`
+  - L1091 `final IconData icon`
+  - L1092 `final String label`
+  - L1093 `final Color? color`
+  - L1096 `Widget build(BuildContext context)`
+- L1111 `class _EmptyState extends StatelessWidget`
+  - L1112 `const _EmptyState({ required this.filter, required this.query, this.onAddAgent, })`
+  - L1118 `final String filter`
+  - L1119 `final String query`
+  - L1120 `final VoidCallback? onAddAgent`
+  - L1123 `Widget build(BuildContext context)`
+- L1183 `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
+- L1213 `class _UnreadBadge extends StatelessWidget`  — The number of new threads on a coworker, in that coworker's colour.
+  - L1214 `const _UnreadBadge({required this.count, required this.colour})`
+  - L1216 `final int count`
+  - L1217 `final Color colour`
+  - L1220 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_agent_sheet.dart  (189 Z.)
+- L27 `class MobileAgentSheet extends StatelessWidget`
+  - L28 `const MobileAgentSheet({ super.key, required this.agent, this.onProfile, this.onControls, this.onRename, this.onRooms, this.onCopyChat, this.onSettings, this.onSignOut, })`
+  - L40 `final AgentsAgent agent`
+  - L43 `final VoidCallback? onProfile`  — Opens the coworker's profile page.
+  - L44 `final VoidCallback? onControls`
+  - L45 `final VoidCallback? onRename`
+  - L46 `final VoidCallback? onRooms`
+  - L47 `final VoidCallback? onCopyChat`
+  - L48 `final VoidCallback? onSettings`
+  - L49 `final VoidCallback? onSignOut`
+  - L54 `static Future<void> show( BuildContext context, { required AgentsAgent agent, VoidCallback? onProfile, VoidCallback? onControls, VoidCallback? onRename, VoidCallback? onRooms, VoidCallback? onCopyChat, VoidCallback? onSettings, VoidCallback? onSignOut, })`  — Opens the sheet. Each row closes the sheet first, then runs its action,
+  - L88 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the coworker's own actions, the parked
+  - L176 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_chat_chrome.dart  (391 Z.)
+- L32 `class MobileChatChrome extends StatelessWidget`
+  - L33 `const MobileChatChrome({ super.key, required this.agent, required this.onBack, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.profiles, })`
+  - L46 `final AgentsAgent agent`
+  - L49 `final VoidCallback onBack`  — Back to the coworker list.
+  - L52 `final VoidCallback? onOpenProfile`  — Tap on the coworker pill — its profile page. Null renders the pill flat.
+  - L57 `final VoidCallback? onOpenBrowser`  — The "computer" target: the coworker's screen. Called whether or not a
+  - L61 `final bool browserAvailable`  — Is a screen open right now? False draws the target parked: visibly not
+  - L62 `final VoidCallback? onOpenFiles`
+  - L63 `final VoidCallback? onReconnect`
+  - L66 `final VoidCallback? onMore`  — The "more" target: the shell's secondary actions. Null hides it.
+  - L68 `final AgentProfileStore? profiles`
+  - L71 `Widget build(BuildContext context)`
+- L161 `_kPillFaceSize = 32`  — The coworker's face inside the header pill.
+- L164 `_kPillStatusFontSize = 11`  — The status line's font size. The presence dot is derived from it.
+- L168 `class _AgentPill extends StatelessWidget`  — The coworker pill: face, name, live state. As tall as a chip, so the whole
+  - L169 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
+  - L176 `final AgentsAgent agent`
+  - L177 `final VoidCallback? onTap`
+  - L178 `final VoidCallback? onReconnect`
+  - L179 `final AgentProfileStore? profiles`
+  - L182 `Widget build(BuildContext context)`
+  - L195 `Widget _surface(BuildContext context, {required bool paired})`
+  - L361 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
+  - L384 `String? _roleOf(AgentProfileStore store)`
+
+## lib/platform_specific/mobile/mobile_chat_screen.dart  (226 Z.)
+- L29 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
+- L32 `class MobileChatScreen extends StatefulWidget`
+  - L33 `const MobileChatScreen({ super.key, required this.agent, required this.onBack, required this.bodyBuilder, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.active = true, })`
+  - L47 `final AgentsAgent agent`
+  - L48 `final VoidCallback onBack`
+  - L49 `final MobileChatBodyBuilder bodyBuilder`
+  - L50 `final VoidCallback? onOpenProfile`
+  - L51 `final VoidCallback? onOpenBrowser`
+  - L54 `final bool browserAvailable`  — Is a screen open to take over? Drives the chrome's screen target.
+  - L55 `final VoidCallback? onOpenFiles`
+  - L56 `final VoidCallback? onReconnect`
+  - L57 `final VoidCallback? onMore`
+  - L64 `final bool active`  — Is this page the one in front? The shell keeps the page mounted behind
+  - L67 `State<MobileChatScreen> createState()`
+- L70 `class _MobileChatScreenState extends State<MobileChatScreen> with TickerProviderStateMixin`
+  - L72 `late final AnimationController _entrance = AnimationController( vsync: this, duration: const Duration(milliseconds: 280), )`
+  - L76 `late final Animation<double> _progress = CurvedAnimation( parent: _entrance, curve: Curves.easeOutCubic, )`
+  - L87 `late final AnimationController _swap = AnimationController( vsync: this, duration: const Duration(milliseconds: 260), value: 1, )`  — The coworker swap. There is exactly ONE thread view in the app (it holds
+  - L92 `late final Animation<double> _swapped = CurvedAnimation( parent: _swap, curve: kExpressiveDecelerate, )`
+  - L99 `late final Listenable _motion = Listenable.merge(<Listenable>[ _progress, _swapped, ])`  — Built once: a fresh [Listenable.merge] on every build would make the
+  - L105 `void didChangeDependencies()`
+  - L116 `void didUpdateWidget(MobileChatScreen oldWidget)`
+  - L130 `void dispose()`
+  - L139 `double? _dragStartX`  — Where the current horizontal drag started. Only a drag that starts at
+  - L141 `void _onDragStart(DragStartDetails details)`
+  - L145 `void _onDragEnd(DragEndDetails details)`
+  - L155 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_chips.dart  (63 Z.)
+- L18 `List<BoxShadow> mobileChipShadow(ThemeData theme)`  — The soft shadow under a chip or pill. Lighter in dark mode, where a hard
+- L35 `class MobileBarFade extends StatelessWidget`  — The fade behind a floating bar: solid at the top, transparent at the
+  - L36 `const MobileBarFade({super.key, required this.child})`
+  - L38 `final Widget child`
+  - L41 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_container_transform.dart  (178 Z.)
+- L27 `@immutable class ContainerTransformSource`  — One tapped roster row, as the container transform needs it: where the row
+  - L29 `const ContainerTransformSource({required this.rect, required this.child})`
+  - L32 `final Rect rect`  — The row's rounded rect, in the coordinates of the shell's phone body.
+  - L37 `final Widget child`  — A copy of the row, drawn inside the growing container while the real row
+- L41 `class MobileContainerTransform extends StatelessWidget`  — The container transform: [closed] grows into [open] over [progress].
+  - L42 `const MobileContainerTransform({ super.key, required this.progress, required this.reverse, required this.openSize, required this.open, required this.openColor, this.closed, })`
+  - L53 `static const Duration duration = Duration(milliseconds: 300)`  — The reference's `transitionDuration`.
+  - L56 `static const double closedRadius = 30`  — The reference's `closedShape` radius.
+  - L61 `final double progress`  — Linear travel, 0 (closed, sitting on the row) to 1 (open, full screen).
+  - L66 `final bool reverse`  — True while [progress] is falling. The curve is flipped then, and the
+  - L69 `final Size openSize`  — The open state: the whole phone body.
+  - L71 `final Widget open`
+  - L72 `final Color openColor`
+  - L78 `final ContainerTransformSource? closed`  — The row the travel starts from. Null before any row has been tapped (a
+  - L81 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_home.dart  (306 Z.)
+- L31 `class MobileHome extends StatefulWidget`
+  - L32 `const MobileHome({ super.key, required this.roster, required this.chats, required this.settings, required this.controller, this.readMarks, this.profiles, })`
+  - L43 `final AgentRosterSource roster`  — The roster, for the coworker pickers of the other tabs.
+  - L47 `final Widget chats`  — The Chats tab: the roster as the shell already builds it, wired to open a
+  - L50 `final Widget settings`  — The Settings tab, built by the shell because it owns the config.
+  - L53 `final AgentsRelayController? controller`  — The live relay controller, handed to the documents panel.
+  - L55 `final AgentReadMarks? readMarks`
+  - L56 `final AgentProfileStore? profiles`
+  - L59 `State<MobileHome> createState()`
+- L62 `class _MobileHomeState extends State<MobileHome>`
+  - L63 `int _index = 0`
+  - L65 `AgentReadMarks get _marks`
+  - L67 `void _openPanel(AgentsAgent agent, String threadKey)`
+  - L83 `Widget _picker()`  — The same roster, used to pick whose files to open. It carries no
+  - L100 `Widget build(BuildContext context)`
+- L188 `class _FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
+  - L189 `const _FadeThroughTabs({required this.index, required this.children})`
+  - L191 `final int index`
+  - L192 `final List<Widget> children`
+  - L195 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
+  - L198 `State<_FadeThroughTabs> createState()`
+- L201 `class _FadeThroughTabsState extends State<_FadeThroughTabs> with SingleTickerProviderStateMixin`
+  - L203 `late final AnimationController _c = AnimationController( vsync: this, duration: _FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
+  - L210 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
+  - L213 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
+  - L215 `bool _reducedMotion = false`
+  - L217 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
+  - L221 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
+  - L226 `void _onStatus(AnimationStatus status)`
+  - L233 `void didChangeDependencies()`
+  - L244 `void didUpdateWidget(covariant _FadeThroughTabs oldWidget)`
+  - L260 `void dispose()`
+  - L266 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_layout.dart  (96 Z.)
+- L20 `class MobileLayout`
+  - L21 `MobileLayout._()`
+  - L26 `static const double phoneBreakpoint = 600`  — Below this width the phone layout applies on EVERY platform. A narrow
+  - L30 `static const double minTouchTarget = 48`  — Material's minimum touch target. The reference uses 44 pt targets; the
+  - L33 `static const double chipDiameter = minTouchTarget`  — Diameter of the round chips in the floating bars.
+  - L39 `static const double controlHeight = 52`  — The height of one control in a header row: an icon button, the contact
+  - L43 `static const double barHeight = 8 + controlHeight + 10`  — Height at normal text size: 8 padding + the contact pill + 10 padding.
+  - L49 `static double headerContentHeight(BuildContext context)`  — Grow the contact bar with accessibility text sizing rather than clip it.
+  - L59 `static const double barFade = 14`  — The soft fade under the bar. It overlaps the first list row on purpose:
+  - L62 `static const double edgeSwipeWidth = 24`  — Left-edge width that starts a swipe-back. Same value iOS uses.
+  - L66 `static const double swipeVelocity = 500`  — Horizontal velocity (px/s) that counts as a swipe. Same threshold chuk
+  - L73 `static bool isPhone(BuildContext context)`  — True when the phone layout applies: a real phone, or any window narrower
+  - L86 `static bool isPhoneWidth(double width)`  — The same rule for a width the caller already has (a `LayoutBuilder`
+  - L93 `static double chromeInset(BuildContext context)`  — Space the chat body reserves at the top so its first row starts below
+
+## lib/platform_specific/mobile/mobile_media_page.dart  (225 Z.)
+- L25 `class MobileMediaPage extends StatefulWidget`
+  - L26 `const MobileMediaPage({super.key, this.index, this.threadKeys = const []})`
+  - L28 `final MediaIndex? index`
+  - L32 `final List<String> threadKeys`  — Every thread this device holds. Read once each, so what arrived before
+  - L35 `State<MobileMediaPage> createState()`
+- L38 `class _MobileMediaPageState extends State<MobileMediaPage>`
+  - L39 `int _filter = 0`
+  - L41 `MediaIndex get _index`
+  - L44 `void initState()`
+  - L50 `void didUpdateWidget(MobileMediaPage oldWidget)`
+  - L56 `Widget build(BuildContext context)`
+  - L159 `static SandboxArtifactPayload _payloadOf(MediaEntry entry)`  — A file entry, in the shape the chat's own file row takes. Reusing that row
+- L168 `class _Thumbnail extends StatelessWidget`
+  - L169 `const _Thumbnail({required this.entry})`
+  - L171 `final MediaEntry entry`
+  - L174 `Widget build(BuildContext context)`
+- L192 `class _Empty extends StatelessWidget`
+  - L193 `const _Empty({ required this.topSpace, required this.message, required this.hint, })`
+  - L199 `final double topSpace`
+  - L200 `final String message`
+  - L201 `final String hint`
+  - L204 `Widget build(BuildContext context)`
+
+## lib/platform_specific/mobile/mobile_nav_bar.dart  (171 Z.)
+- L16 `@immutable class MobileNavDestination`  — One destination of [MobileNavBar].
+  - L18 `const MobileNavDestination({ required this.icon, required this.label, this.badge = 0, })`
+  - L24 `final HugeIconData icon`
+  - L28 `final String label`  — Read out by screen readers and used as the tooltip. The bar itself shows
+  - L31 `final int badge`  — A count drawn on the icon. Zero draws nothing.
+- L34 `class MobileNavBar extends StatelessWidget`
+  - L35 `const MobileNavBar({ super.key, required this.destinations, required this.index, required this.onSelected, })`
+  - L42 `final List<MobileNavDestination> destinations`
+  - L43 `final int index`
+  - L44 `final ValueChanged<int> onSelected`
+  - L48 `static const double height = PillGeometry.height + _lift`  — The height the content has to keep free at the bottom: the pill itself
+  - L51 `static const double _lift = 10`  — How far the pill floats above the safe area.
+  - L54 `Widget build(BuildContext context)`
+- L88 `class _NavTarget extends StatelessWidget`
+  - L89 `const _NavTarget({ required this.destination, required this.selected, required this.onTap, })`
+  - L95 `final MobileNavDestination destination`
+  - L96 `final bool selected`
+  - L97 `final VoidCallback onTap`
+  - L100 `static const double _iconSize = 24`  — Sized so the icon plus its air is exactly one segment tall.
+  - L103 `Widget build(BuildContext context)`

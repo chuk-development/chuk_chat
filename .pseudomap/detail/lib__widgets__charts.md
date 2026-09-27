@@ -1,0 +1,259 @@
+# lib/widgets/charts · Signaturen
+
+## lib/widgets/charts/chart_painter.dart  (1458 Z.)
+- L26 `enum ChartLabelLayout`  — How the category labels under the plot are laid out, once measured.
+  - L29 `flat`
+  - L32 `wrapped`
+  - L36 `tilted`
+- L42 `class ChartGeometry`  — Everything the painter worked out from the spec and the box it was given.
+  - L43 `ChartGeometry._({ required this.axisWidth, required this.valueBand, required this.plotHeight, required this.labelBand, required this.min, required this.max, required this.step, required this.labelLayout, required this.labelStride, required this.categoryCount, })`
+  - L57 `final double axisWidth`  — Width of the tick-label column on the left.
+  - L60 `final double valueBand`  — Height reserved above the plot for the value printed at a bar.
+  - L63 `final double plotHeight`  — Height of the plot box itself.
+  - L66 `final double labelBand`  — Height reserved under the plot for the category labels.
+  - L68 `final double min`
+  - L69 `final double max`
+  - L70 `final double step`
+  - L72 `final ChartLabelLayout labelLayout`
+  - L75 `final int labelStride`  — Draw every n-th category label. 1 means all of them.
+  - L77 `final int categoryCount`
+  - L80 `double get totalHeight`  — The height the whole plot widget needs.
+  - L83 `double slotWidth(double boxWidth)`  — The width one category owns.
+  - L89 `bool operator ==(Object other)`
+  - L103 `int get hashCode`
+- L119 `enum ChartBoxKind`  — What a measured box belongs to. The reference label dodges all of them;
+  - L121 `bar`
+  - L124 `value`
+  - L127 `category`
+  - L130 `tick`
+- L135 `@immutable class ChartBox`  — One box the painter put down, kept so the reference label can step around
+  - L137 `const ChartBox(this.kind, this.rect)`
+  - L139 `final ChartBoxKind kind`
+  - L140 `final Rect rect`
+  - L143 `String toString()`
+- L148 `_kMinLabelFontSize = 8.5`  — The smallest font a label is allowed to shrink to before it is ellipsised
+- L151 `_kAxisFontSize = 10.5`  — Base sizes, before the reader's text scale.
+- L152 `_kLabelFontSize = 11.5`
+- L153 `_kValueFontSize = 11.5`
+- L155 `class ChukChartPainter extends CustomPainter`
+  - L156 `ChukChartPainter({ required this.spec, required this.palette, required this.geometry, required this.textScaler, required this.progress, this.fontFamily, })`
+  - L165 `final ChartSpec spec`
+  - L166 `final ChartPalette palette`
+  - L167 `final ChartGeometry geometry`
+  - L168 `final TextScaler textScaler`
+  - L171 `final double progress`  — 0 → 1 entrance. Bars grow from the baseline, lines draw left to right.
+  - L173 `final String? fontFamily`
+  - L176 `_RefLabel? _refLabel`  — Where the reference line's label goes, decided before anything is drawn.
+  - L181 `List<ChartBox> _boxes = const <ChartBox>[]`  — The boxes the plot occupies: bars, the numbers at them, the category
+  - L184 `List<ChartBox>? _collect`  — Non-null while the dry run is on; every paint step drops its box in.
+  - L187 `Rect? _measuredFor`  — The plot box [_boxes] was measured against, so a resize throws it away.
+  - L191 `double get _t`  — 1 during the dry run, so the reference label is placed against the
+  - L195 `Rect? get debugReferenceLabelBox`  — The box the reference label took, for the tests. Null when the chart has
+  - L199 `bool get debugReferenceLabelPlated`  — False when the label had to give up its plate and sit on the rule — the
+  - L203 `String? get debugReferenceLabelText`  — What the label says. Shortened to the bare number on a plot too narrow
+  - L206 `List<ChartBox> get debugBoxes`  — Everything the reference label had to dodge in the last paint.
+  - L214 `static ChartGeometry measure( ChartSpec spec, { required double width, required TextScaler textScaler, String? fontFamily, })`  — Works out the plot's bands for [width]. Call before laying the widget
+  - L328 `void paint(Canvas canvas, Size size)`
+  - L351 `void _paintSeries(Canvas canvas, Rect plot)`
+  - L361 `bool get _hasReferenceLabel`
+  - L373 `List<ChartBox> _measureBoxes(Rect plot, double width)`  — Lays the plot out once into a throwaway canvas to learn where everything
+  - L391 `void _paintUnitCaption(Canvas canvas, Rect plot)`  — The unit, once, at the head of the axis column — "%" over the numbers,
+  - L411 `double _y(Rect plot, double value)`
+  - L418 `void _paintGrid(Canvas canvas, Rect plot, double width)`
+  - L469 `void _paintBars(Canvas canvas, Rect plot)`
+  - L545 `void _paintStacked(Canvas canvas, Rect plot)`
+  - L597 `void _paintLines(Canvas canvas, Rect plot)`
+  - L688 `double _lastX(Path p, double fallback)`
+  - L696 `Path _trim(Path path, double t)`
+  - L705 `Color _lineColor(ChartSeries ser, int index)`
+  - L718 `void _paintValue( Canvas canvas, { required String text, required double centre, required double slot, required double anchorY, required bool above, required Color color, required Rect plot, required double fade, double? altAnchorY, bool chip = false, bool onText = false, })`  — The number printed at a bar or at the end of a line. Shrinks to fit its
+  - L832 `Color get _referenceColor`
+  - L849 `_RefLabel? _placeReferenceLabel(Rect plot, List<ChartBox> boxes)`  — Where the rule's label goes.
+  - L888 `_RefLabel _leastBadReferenceLabel( Rect plot, double y, String text, List<ChartBox> boxes, )`
+  - L985 `String _shortReferenceText(ChartReferenceLine ref)`  — The label with the words stripped off: "5 %-Hürde" → "5 %". Used only
+  - L996 `List<Rect> _referenceBands(Rect plot, double y, double h, double left)`  — The strips the label may sit in: above the rule, below it, and astride
+  - L1013 `TextPainter _referencePainter(String text, Rect plot, {double? fontSize})`
+  - L1031 `_RefLabel? _fitReferenceLabel( Rect plot, double y, String text, TextPainter tp, List<ChartBox> boxes, { required bool gutter, required double air, })`  — Tries to seat [tp] in the strip above or below the rule, or astride it.
+  - L1085 `bool _emptierEndIsLeft(List<Rect> bands, List<ChartBox> boxes, double left)`  — Which end of the rule has more free room in [bands].
+  - L1099 `double _totalWidth(List<_Span> spans)`
+  - L1104 `List<_Span> _freeSpans(Rect band, List<ChartBox> boxes, double air)`  — The stretches of [band] that no measured box covers, with [air] left
+  - L1131 `void _paintReference(Canvas canvas, Rect plot)`
+  - L1167 `void _paintCategories(Canvas canvas, Rect plot)`
+  - L1253 `bool shouldRepaint(ChukChartPainter old)`
+- L1278 `TextStyle _axisStyle()`
+- L1285 `TextStyle _labelStyle()`
+- L1292 `TextStyle _valueStyle()`
+- L1299 `TextPainter _paint( String text, TextStyle style, TextScaler scaler, String? fontFamily, { double maxWidth = double.infinity, int? maxLines, bool ellipsis = false, TextAlign align = TextAlign.left, })`
+- L1325 `class _RefLabel`  — The reference line's label once it has found a spot: what it says, laid
+  - L1326 `const _RefLabel({ required this.text, required this.painter, required this.box, required this.plate, this.plateAlpha = 0.86, })`
+  - L1334 `final String text`
+  - L1335 `final TextPainter painter`
+  - L1338 `final Rect box`  — The plate, three pixels of air around the glyphs on each side.
+  - L1341 `final bool plate`  — False only in the last resort, where the label sits on the rule itself.
+  - L1345 `final double plateAlpha`  — How solid the plate is. Translucent where it covers only background,
+- L1349 `class _Span`  — A stretch of a strip, in x.
+  - L1350 `const _Span(this.start, this.end)`
+  - L1351 `final double start`
+  - L1352 `final double end`
+  - L1353 `double get width`
+- L1356 `class _Range`
+  - L1357 `const _Range(this.min, this.max, this.step)`
+  - L1358 `final double min`
+  - L1359 `final double max`
+  - L1360 `final double step`
+- L1368 `_Range _rangeFor(ChartSpec spec)`  — The value range and the gridline step.
+- L1415 `double _niceStep(double range, int target)`
+- L1433 `int _decimalsFor(double step)`
+- L1442 `String _tickText(double v, ChartSpec spec, int decimals)`  — An axis tick. Big numbers are abbreviated (62k, 1.2M) so the axis column
+- L1456 `String _trimZeros(String s)`
+
+## lib/widgets/charts/chart_palette.dart  (149 Z.)
+- L13 `@immutable class ChartPalette`  — The resolved colours for one chart in one theme.
+  - L15 `const ChartPalette({ required this.text, required this.muted, required this.faint, required this.grid, required this.baseline, required this.border, required this.surface, required this.accent, required this.up, required this.down, required this.series, required this.isDark, })`
+  - L32 `factory ChartPalette.of(BuildContext context, {Color? accent})`  — Reads everything off the theme. [accent] overrides the scheme's primary,
+  - L61 `final Color text`
+  - L62 `final Color muted`
+  - L63 `final Color faint`
+  - L64 `final Color grid`
+  - L65 `final Color baseline`
+  - L66 `final Color border`
+  - L67 `final Color surface`
+  - L68 `final Color accent`
+  - L69 `final Color up`
+  - L70 `final Color down`
+  - L71 `final List<Color> series`
+  - L72 `final bool isDark`
+  - L75 `Color seriesColor(int index)`  — The colour for series [index] when nothing was asked for.
+  - L79 `Color barColor({ required Color? asked, required int index, required double value, required bool bySign, })`  — The colour of a bar: what the agent asked for wins; otherwise the sign
+  - L93 `Color legible(Color c)`  — Pulls a colour far enough from the card behind it to be seen. A party
+  - L96 `static Color _fixed(Color seed, double lightness)`  — The hue of [seed] at the app's fixed saturation and a chosen lightness.
+  - L101 `static Color _legible(Color c, {required bool dark})`
+  - L125 `Color ink(Color c)`  — [c] pushed until TEXT in it is readable on the card.
+  - L137 `static double _contrast(Color a, Color b)`
+  - L144 `Color onFill(Color fill)`  — A readable colour to print ON a filled bar of [fill].
+
+## lib/widgets/charts/chart_spec.dart  (888 Z.)
+- L89 `enum ChartKind`  — What the chart draws.
+  - L91 `bar`
+  - L95 `columnDelta`
+  - L98 `line`
+  - L101 `grouped`
+  - L104 `stacked`
+  - L107 `static ChartKind parse(Object? raw)`  — The kind [raw] names, or [bar] when it names nothing known.
+  - L148 `bool get isBarFamily`  — True when the kind paints bars rather than a polyline.
+  - L151 `bool get isMultiSeries`  — True when several series are drawn against one category axis.
+- L158 `enum ChartSort`  — How the points are ordered before they are drawn.
+  - L160 `given`
+  - L163 `descending`
+  - L166 `ascending`
+  - L168 `static ChartSort parse(Object? raw)`
+- L187 `enum ChartDirection`  — Whether a series is a good thing going up or a bad thing going down. Used
+  - L189 `auto`
+  - L192 `up`
+  - L195 `down`
+  - L198 `neutral`
+  - L200 `static ChartDirection parse(Object? raw)`
+- L226 `@immutable class ChartPoint`  — One category and its value.
+  - L228 `const ChartPoint({ required this.label, required this.value, this.color, this.note, })`
+  - L236 `final String label`  — The category, drawn under the bar.
+  - L239 `final double value`  — The height of the bar. Negative hangs below the baseline.
+  - L242 `final Color? color`  — The colour the agent asked for, or null to let the app pick.
+  - L245 `final String? note`  — One short line of context. Never painted over the plot.
+  - L248 `bool operator ==(Object other)`
+  - L256 `int get hashCode`
+- L260 `@immutable class ChartSeries`  — One line or one bar family.
+  - L262 `const ChartSeries({ required this.points, this.name, this.color, this.direction = ChartDirection.auto, })`
+  - L269 `final List<ChartPoint> points`
+  - L272 `final String? name`  — Shown in the legend when there is more than one series.
+  - L275 `final Color? color`  — The colour for the whole series. Null lets the app pick.
+  - L277 `final ChartDirection direction`
+  - L281 `bool get risesOverall`  — The sign of the series read from its own numbers: the last value against
+  - L287 `ChartDirection get resolvedDirection`  — The direction to colour by, with [ChartDirection.auto] resolved.
+- L295 `@immutable class ChartAxis`  — The optional min/max the agent asked for.
+  - L297 `const ChartAxis({this.min, this.max})`
+  - L299 `final double? min`
+  - L300 `final double? max`
+  - L302 `bool get isEmpty`
+- L306 `@immutable class ChartReferenceLine`  — One horizontal rule across the plot — the 5 % threshold.
+  - L308 `const ChartReferenceLine({required this.value, this.label, this.color})`
+  - L310 `final double value`
+  - L311 `final String? label`
+  - L312 `final Color? color`
+- L320 `@immutable class ChartSpec`  — A parsed, validated chart.
+  - L322 `const ChartSpec({ required this.kind, required this.series, this.title, this.subtitle, this.unit = '', this.sort = ChartSort.given, this.axis = const ChartAxis(), this.referenceLine, this.source, this.retrievedAt, this.decimals, this.decimalSeparator = '.', this.showValues, this.height, this.problems = const <String>[], this.rawFallbackText, })`
+  - L341 `final ChartKind kind`
+  - L345 `final List<ChartSeries> series`  — Always at least one entry for a usable spec. A single-series chart holds
+  - L347 `final String? title`
+  - L348 `final String? subtitle`
+  - L352 `final String unit`  — A short suffix: "%", "€", "$", "kg". Drawn on the axis and, when it fits,
+  - L354 `final ChartSort sort`
+  - L355 `final ChartAxis axis`
+  - L356 `final ChartReferenceLine? referenceLine`
+  - L357 `final String? source`
+  - L358 `final DateTime? retrievedAt`
+  - L361 `final int? decimals`  — Digits after the separator. Null means "work it out from the values".
+  - L364 `final String decimalSeparator`  — "." or ",". German charts want the comma.
+  - L367 `final bool? showValues`  — Null means the kind decides: bars print their value, lines do not.
+  - L370 `final double? height`  — A plot height in logical pixels, when the agent insists. Clamped later.
+  - L374 `final List<String> problems`  — Everything that was wrong with the input, in the order it was found.
+  - L378 `final String? rawFallbackText`  — What the fallback shows when the input was not even a chart object —
+  - L381 `bool get unusable`  — True when there is nothing to draw.
+  - L385 `List<String> get categories`  — The categories, in drawing order, taken from the longest series.
+  - L395 `Iterable<double> get values`  — Every value in every series.
+  - L400 `bool get hasNegative`  — True when any value is below zero — the plot then needs a baseline in
+  - L403 `bool get drawsValueLabels`  — Whether values are printed at the bars.
+  - L408 `bool get unitOverAxis`  — True when the unit is printed ONCE, over the axis, instead of on every
+  - L412 `int get effectiveDecimals`  — How many digits to print, worked out from the data when the agent did
+  - L427 `String format(double value, {bool withUnit = true, bool signed = false})`  — [value] as it is printed at a bar or on the axis.
+  - L448 `ChartSpec sorted()`  — The spec with [sort] applied. Multi-series charts share one category
+  - L487 `ChartSpec copyWith({ ChartKind? kind, List<ChartSeries>? series, ChartSort? sort, List<String>? problems, })`
+  - L512 `factory ChartSpec.broken(List<String> problems, {String? raw, String? title})`  — A spec that draws nothing but says why.
+  - L523 `factory ChartSpec.parse(Object? input)`  — Reads a chart out of anything: a decoded map, a JSON string, a list of
+  - L723 `static String _preview(Object? value)`  — A short, readable echo of an object that did not parse, for the fallback.
+- L736 `List<ChartPoint> _parsePoints( Object? raw, List<String> problems, { required String where, List<String>? xLabels, })`  — Reads a list of points. Accepts three shapes, because all three turn up in
+- L801 `List<String>? _labelList(Object? raw)`
+- L806 `String? _asText(Object? raw)`
+- L813 `bool? _asBool(Object? raw)`
+- L823 `int? _asInt(Object? raw)`
+- L830 `double? _asNumber(Object? raw)`  — A number out of a number, or out of the many ways a model writes one:
+- L863 `DateTime? _asDate(Object? raw)`
+- L872 `Color? parseChartColor(Object? raw)`  — "#RRGGBB", "RRGGBB", "#AARRGGBB" or an int, into a [Color]. Anything else
+
+## lib/widgets/charts/chuk_chart.dart  (532 Z.)
+- reicht weiter: 'package:chuk_chat/widgets/charts/chart_spec.dart'
+- L26 `kChukChartRadius = 12`  — The card radius. The same 12 [ChukTable] uses, so a chart next to a table
+- L30 `kChukChartEntrance = Duration(milliseconds: 620)`  — The entrance. Long enough to be seen, short enough not to be waited for —
+- L34 `Widget chukChartFromJson( Object? json, { Key? key, Color? accentColor, String? fontFamily, bool animate = true, })`  — Builds a chart from whatever the agent emitted: a decoded map, a JSON
+- L49 `class ChukChart extends StatefulWidget`  — Draws a [ChartSpec]: a card with a title, a plot and a source line.
+  - L50 `const ChukChart({ super.key, required this.spec, this.accentColor, this.fontFamily, this.animate = true, })`
+  - L58 `final ChartSpec spec`
+  - L62 `final Color? accentColor`  — Overrides the scheme's primary — an open thread passes the coworker's
+  - L64 `final String? fontFamily`
+  - L67 `final bool animate`  — False draws the finished chart at once. Tests and goldens use it.
+  - L70 `State<ChukChart> createState()`
+- L73 `class _ChukChartState extends State<ChukChart> with SingleTickerProviderStateMixin`
+  - L75 `late final AnimationController _controller = AnimationController( vsync: this, duration: kChukChartEntrance, )`
+  - L79 `late final Animation<double> _entrance = CurvedAnimation( parent: _controller, curve: kExpressiveDecelerate, )`
+  - L85 `void initState()`
+  - L97 `void dispose()`
+  - L103 `Widget build(BuildContext context)`
+  - L197 `String? _family(BuildContext context)`  — The font the card draws in: what the caller asked for, else the app's.
+  - L202 `List<Widget> _legendEntries(ChartSpec spec, ChartPalette palette)`
+  - L246 `List<Widget> _notes(ChartSpec spec, ChartPalette palette)`
+  - L279 `List<Widget> _footer(ChartSpec spec, ChartPalette palette)`
+- L301 `String chartSourceLine(ChartSpec spec)`  — "Source · 2026-09-12 20:15", or an empty string when neither is known.
+- L310 `String _stamp(DateTime d)`
+- L318 `String _semanticLabel(ChartSpec spec)`  — A one-sentence description for a screen reader.
+- L335 `class _Heading extends StatelessWidget`  — The heading of a chart card: title, then subtitle.
+  - L336 `const _Heading({ required this.spec, required this.palette, this.fontFamily, })`
+  - L342 `final ChartSpec spec`
+  - L343 `final ChartPalette palette`
+  - L344 `final String? fontFamily`
+  - L347 `Widget build(BuildContext context)`
+- L391 `class ChukChartFallback extends StatelessWidget`  — What a chart that could not be drawn shows instead.
+  - L392 `const ChukChartFallback({ super.key, required this.spec, required this.palette, this.fontFamily, })`
+  - L399 `final ChartSpec spec`
+  - L400 `final ChartPalette palette`
+  - L401 `final String? fontFamily`
+  - L404 `Widget build(BuildContext context)`
+  - L525 `static String _sentence(String problem)`

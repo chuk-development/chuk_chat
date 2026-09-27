@@ -1,0 +1,102 @@
+# lib/pages/settings · Signaturen
+
+## lib/pages/settings/developer_settings_page.dart  (124 Z.)
+- L15 `class DeveloperSettingsPage extends StatefulWidget`  — Developer options: the endpoints the app talks to, and a couple of local
+  - L16 `const DeveloperSettingsPage({super.key})`
+  - L19 `State<DeveloperSettingsPage> createState()`
+- L22 `class _DeveloperSettingsPageState extends State<DeveloperSettingsPage>`
+  - L23 `bool _captureContext = false`
+  - L24 `bool _loading = true`
+  - L27 `void initState()`
+  - L32 `Future<void> _load()`
+  - L44 `Future<void> _setCaptureContext(bool value)`
+  - L50 `Widget build(BuildContext context)`
+
+## lib/pages/settings/embedding_settings_page.dart  (93 Z.)
+- L14 `class EmbeddingSettingsPage extends StatefulWidget`  — Picks the embedding model the host uses for semantic memory.
+  - L15 `const EmbeddingSettingsPage({super.key})`
+  - L18 `State<EmbeddingSettingsPage> createState()`
+- L21 `class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage>`
+  - L22 `String _selected = EmbeddingModelService.defaultModelId`
+  - L23 `bool _loading = true`
+  - L26 `void initState()`
+  - L31 `Future<void> _load()`
+  - L40 `Future<void> _pick(String id)`
+  - L46 `Widget build(BuildContext context)`
+
+## lib/pages/settings/herenow_settings_page.dart  (151 Z.)
+- L18 `class HereNowSettingsPage extends StatefulWidget`  — The here.now publishing connector: let a coworker put a file or a folder on
+  - L19 `const HereNowSettingsPage({super.key, HereNowStore? store}) : _injectedStore = store`
+  - L22 `final HereNowStore? _injectedStore`
+  - L25 `State<HereNowSettingsPage> createState()`
+- L28 `class _HereNowSettingsPageState extends State<HereNowSettingsPage>`
+  - L29 `late final HereNowStore _store = widget._injectedStore ?? HereNowStore()`
+  - L31 `HereNowSettings _settings = const HereNowSettings()`
+  - L32 `bool _loading = true`
+  - L35 `void initState()`
+  - L40 `Future<void> _reload()`
+  - L49 `Future<void> _update(HereNowSettings next)`
+  - L55 `Widget build(BuildContext context)`
+
+## lib/pages/settings/mcp_connectors_page.dart  (960 Z.)
+- L31 `class McpConnectorsPage extends StatefulWidget`
+  - L32 `const McpConnectorsPage({super.key})`
+  - L35 `State<McpConnectorsPage> createState()`
+- L38 `class _McpConnectorsPageState extends State<McpConnectorsPage>`
+  - L39 `final TextEditingController _search = TextEditingController()`
+  - L40 `List<McpCatalogueEntry> _registryHits = const []`
+  - L41 `bool _searchingRegistry = false`
+  - L46 `String? _searchedQuery`  — The query the shown hits belong to. Without it an empty result and a
+  - L50 `String? _inFlightQuery`  — The query of the search still in flight. An older answer arriving late
+  - L53 `void initState()`
+  - L63 `void dispose()`
+  - L73 `static String _statusOf(McpConnection connection)`  — The right-hand line of a connected row.
+  - L80 `String get _query`
+  - L84 `Future<void> _searchRegistry()`  — The registry is only asked once the catalogue runs dry, so typing
+  - L103 `Widget build(BuildContext context)`
+  - L266 `Widget _searchField(ThemeData theme)`
+  - L291 `Widget _row({ required String url, required String name, required String trailing, required VoidCallback onTap, String? icon, String? assetPath, String? subtitle, })`
+  - L315 `Future<void> _open(String id, McpCatalogueEntry? entry)`
+  - L323 `Future<void> _addByUrl()`
+  - L344 `void _report(McpConnectResult result)`
+- L358 `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
+  - L359 `const McpConnectorDetailPage({super.key, required this.id, this.entry})`
+  - L361 `final String id`
+  - L362 `final McpCatalogueEntry? entry`
+  - L365 `State<McpConnectorDetailPage> createState()`
+- L368 `class _McpConnectorDetailPageState extends State<McpConnectorDetailPage>`
+  - L369 `bool _busy = false`
+  - L370 `McpConnectCanceler? _canceler`
+  - L373 `Widget build(BuildContext context)`
+  - L520 `Widget _legalNote(ThemeData theme, String url)`  — Who the reader is about to hand their data to, and where their terms
+  - L571 `Future<void> _openLegal(String url)`
+  - L600 `void _cancelConnect()`
+  - L602 `Future<void> _connect(String url, String name)`
+  - L662 `Future<void> _disconnect()`
+- L674 `Future<Map<String, String>?> showMcpCredentialDialog( BuildContext context, List<McpCredentialField> fields, String name, )`  — Collect a reader's own credentials for an [McpAuth.apiKey] server. Returns
+- L751 `class McpConnectorIcon extends StatefulWidget`  — A connector logo. The bundled brand logo first (shipped in the binary for
+  - L752 `const McpConnectorIcon({ super.key, this.url, this.assetPath, this.serverUrl, this.name, this.size = 32, this.fallback, })`
+  - L765 `final String? assetPath`  — A logo bundled in the binary (`assets/mcp_icons/<id>.png`), if this
+  - L768 `final String? url`  — An icon the server published, if any.
+  - L771 `final String? serverUrl`  — The server address, which the favicon services are asked about.
+  - L774 `final String? name`  — Used for the initial when no logo loads.
+  - L776 `final double size`
+  - L777 `final IconData? fallback`
+  - L780 `State<McpConnectorIcon> createState()`
+- L783 `class _McpConnectorIconState extends State<McpConnectorIcon>`
+  - L784 `Future<Uint8List?>? _bytes`
+  - L786 `List<String> get _candidates`
+  - L793 `void initState()`
+  - L799 `void didUpdateWidget(McpConnectorIcon old)`
+  - L808 `Future<Uint8List?> _loadFirstThatWorks()`  — Walks the sources in order until one answers. Each answer is cached,
+  - L817 `Widget build(BuildContext context)`
+  - L841 `Widget _networkIcon(ThemeData theme)`  — The favicon-cache path: walk the network sources, then the placeholder.
+  - L862 `Widget _placeholder(ThemeData theme)`
+- L891 `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
+- L917 `class _AddByUrlDialog extends StatefulWidget`  — The "Add a connector" dialog. It owns its text controller so the controller
+  - L918 `const _AddByUrlDialog()`
+  - L921 `State<_AddByUrlDialog> createState()`
+- L924 `class _AddByUrlDialogState extends State<_AddByUrlDialog>`
+  - L925 `final TextEditingController _controller = TextEditingController()`
+  - L928 `void dispose()`
+  - L934 `Widget build(BuildContext context)`

@@ -1,0 +1,168 @@
+# lib/services/storage · Signaturen
+
+## lib/services/storage/agents_chat_cache_migration.dart  (224 Z.)
+- L37 `kReplayCursorPrefsPrefix = 'cowork.replay_cursor.'`  — Prefix of the per-session replay cursor key in SharedPreferences (the
+- L40 `kMigratedSuffix = '.migrated'`  — Suffix a migrated JSON file gets. It stays on disk as a backup.
+- L42 `typedef AgentsThreadWriter = Future<StoredChat?> Function( String sessionKey, List<Map<String, dynamic>> rows, { DateTim`
+- L52 `class AgentsChatCacheMigration`
+  - L53 `AgentsChatCacheMigration._()`
+  - L57 `static Future<Directory?> Function()? chatDirProvider`  — Test seams.
+  - L59 `static Future<bool> Function(String userId, String sessionKey)? hasLocalCopy`
+  - L61 `static AgentsThreadWriter? writer`
+  - L64 `static void reset()`
+  - L72 `static Future<int> migrateJsonCache(String userId)`  — Moves every un-migrated P2b JSON thread file into the SQLite cache.
+  - L137 `static Future<int> dropOrphanCursors(String userId)`  — Removes every replay cursor whose thread has no local copy. Returns the
+  - L163 `static Future<bool> _hasLocalCopy(String userId, String sessionKey)`
+  - L169 `static Future<Directory?> _chatDir()`
+  - L185 `static Future<List<File>> _jsonFiles(Directory dir)`  — The P2b files. P2b kept `index.json` (a JSON list of ids) precisely
+  - L205 `static String _fileNameOf(String chatId)`  — P2b's file name for a session key (`chat_storage_service.dart` stub,
+  - L210 `static Future<void> _markMigrated(File file)`  — A rename in two steps, because the web `File` stub has no rename: the
+
+## lib/services/storage/agents_chat_storage_bootstrap.dart  (257 Z.)
+- L26 `class AgentsChatStorageBootstrap`
+  - L27 `AgentsChatStorageBootstrap._()`
+  - L29 `static StreamSubscription<AuthState>? _sub`
+  - L30 `static String? _activeUserId`
+  - L31 `static Timer? _flushTimer`
+  - L37 `static Duration flushInterval = const Duration(seconds: 30)`  — How often the cloud outbox is flushed while signed in. chuk_chat's
+  - L42 `static Future<void> Function()? flushHook`  — Test seam: what a tick does. Defaults to [AgentsChatStore.flushOutbox]
+  - L47 `static Future<void> Function(String userId)? migrationHook`  — Test seam: the one-time repairs at sign-in. Defaults to
+  - L51 `static Stream<AuthState>? authStream`  — Test seam: the auth events to follow. Defaults to Supabase's stream.
+  - L55 `static String? Function()? currentUserId`  — Test seam: who is signed in right now. Defaults to Supabase's session.
+  - L59 `static Future<void> Function()? onSignedInHook`  — Test seams for the two side effects.
+  - L61 `static Future<void> Function()? onSignedOutHook`
+  - L70 `static void start()`  — Idempotent. Safe to call before Supabase is initialised: it then does
+  - L88 `static Future<void> stop()`
+  - L99 `static Future<void> flushNow()`  — Flushes the cloud outbox now (on sign-in, and every [flushInterval]),
+  - L118 `static Future<void>? _inFlight`
+  - L120 `static void _startFlushing()`
+  - L126 `static void _stopFlushing()`
+  - L132 `static Future<void> reset()`
+  - L144 `static String? get activeUserId`
+  - L148 `static Future<void> _onAuthState(AuthState state)`
+  - L172 `static Future<void> _signedIn(String userId)`
+  - L215 `static Future<void> _repair(String userId)`
+  - L222 `static Future<void> _signedOut()`
+  - L238 `static String? _userId()`
+  - L248 `static Stream<AuthState>? _supabaseAuthStream()`
+
+## lib/services/storage/agents_chat_store.dart  (1479 Z.)
+- L93 `kAgentsChatsTable = 'cowork_chats'`  — The Supabase table Agents threads live in. Same columns and RLS as
+- L98 `_kReplayCursorPrefix = 'cowork.replay_cursor.'`  — Prefix of the per-session replay cursor key in SharedPreferences. Mirrors
+- L101 `kCloudOutboxPrefix = 'cowork.cloud_outbox.'`  — Prefix of the per-user outbox key in the SQLite `kv_cache` table.
+- L107 `kLastCacheUserKey = 'cowork.last_user_id'`  — Where the last signed-in user id is remembered, so the local cache can be
+- L112 `typedef AgentsCloudUpsert = Future<Map<String, dynamic>?> Function( String userId, Map<String, dynamic> row, )`  — Signature of the cloud upsert. Injectable so the store is testable with no
+- L121 `typedef AgentsCloudSelect = Future<List<Map<String, dynamic>>> Function( String userId, { List<String>? ids, required St`  — Signature of a cloud read of [kAgentsChatsTable]. [ids] null reads every
+- L130 `_kFullColumns = 'id, encrypted_payload, encrypted_title, created_at, is_starred, updated_at'`  — The columns of a full `cowork_chats` row.
+- L134 `@immutable class AgentsCloudThread`  — One Agents thread of the cloud, decrypted: what a password change re-seals.
+  - L136 `const AgentsCloudThread({ required this.id, required this.payloadJson, this.title, })`
+  - L142 `final String id`
+  - L143 `final String payloadJson`
+  - L144 `final String? title`
+- L147 `class AgentsChatStore`
+  - L148 `AgentsChatStore._()`
+  - L152 `static final Set<String> _owned = <String>{}`  — Session keys this store has written. Used to spot a thread the sync
+  - L156 `static final Map<String, Future<void>> _chains = <String, Future<void>>{}`  — One write chain per session, so a slow cloud write can never be
+  - L160 `static final Map<String, String> _dirty = <String, String>{}`  — The outbox: session key → `updated_at` (ISO 8601) of the local copy
+  - L161 `static String? _dirtyUser`
+  - L162 `static Future<void>? _outboxLoad`
+  - L166 `static Future<void> _outboxChain = Future<void>.value()`  — One chain for the outbox, so a flush never overlaps another flush and a
+  - L168 `static StreamSubscription<String?>? _removalWatch`
+  - L172 `static String? Function()? userIdProvider`  — Test seams.
+  - L174 `static AgentsCloudUpsert? cloudUpsert`
+  - L176 `static Future<void> Function(String userId, Map<String, dynamic> row)? localCacheWriter`
+  - L179 `static Future<Map<String, dynamic>?> Function(String userId, String id)? localCacheReader`
+  - L182 `static Future<bool> Function()? keyLoader`
+  - L184 `static Future<String> Function(String plaintext)? encryptor`
+  - L186 `static Future<String?> Function(String key)? outboxRead`
+  - L188 `static Future<void> Function(String key, String value)? outboxWrite`
+  - L190 `static Future<void> Function(String key)? outboxDelete`
+  - L192 `static AgentsCloudSelect? cloudSelect`
+  - L197 `static int idPageSize = 1000`  — Rows per page of the id list. Supabase caps one response at its
+  - L199 `static Future<void> Function( String userId, String id, Map<String, dynamic> values, )? cloudUpdate`
+  - L206 `static Future<void> Function(String userId, String id)? cloudDelete`
+  - L208 `static Future<String> Function(String ciphertext)? decryptor`
+  - L210 `static Future<List<Map<String, dynamic>>> Function(String userId)? localMetaReader`
+  - L213 `static Future<void> Function(String userId, String id)? localCacheDeleter`
+  - L230 `static Future<StoredChat?> replaceThread( String sessionKey, List<Map<String, dynamic>> rows, { DateTime? createdAt, DateTime? updatedAt, bool? isStarred, String? customName, })`  — Replaces the whole transcript of [sessionKey] with [rows] — the raw
+  - L316 `static Future<void> saveDocumentSnapshot( String sessionKey, Map<String, dynamic> document, )`  — Store a full host read without depending on a separate file-event replay.
+  - L343 `static void _retainQueueMarks( List<ChatMessage> stored, List<ChatMessage> incoming, )`  — Copies a still-open queue mark from [stored] onto the matching row of
+  - L363 `static num _documentVersion(Map<String, dynamic> document)`
+  - L366 `static Map<String, Map<String, dynamic>> _documentSnapshots( List<ChatMessage> messages, )`
+  - L390 `static Map<String, dynamic> _documentRow(Map<String, dynamic> doc)`
+  - L421 `static Future<String?> resolveCacheUserId()`  — Whose rows the local cache is read under.
+  - L435 `static Future<void> rememberUser(String userId)`  — Writes the read key for the next cold start. Called when a session signs
+  - L447 `static String? _rememberedUserId`
+  - L448 `static bool _rememberedLoaded = false`
+  - L450 `static Future<void> _loadRememberedUser()`
+  - L472 `static Future<StoredChat?> loadThread(String chatId)`  — Reads a thread: memory when it is fully loaded there, else the SQLite
+  - L485 `static Future<StoredChat?> _loadFromCloud( String userId, String chatId, StoredChat? existing, )`  — The cloud half of [loadThread]: one `cowork_chats` row, decrypted, put
+  - L534 `static Future<List<String>> pullFromCloud()`  — Brings every Agents thread whose `cowork_chats` row is newer than this
+  - L583 `static bool _skipPull(String id)`
+  - L591 `static Future<Map<String, DateTime>> _localTimestamps(String userId)`  — The newest `updated_at` this device holds per thread: the SQLite row,
+  - L616 `static Future<_CloudRow?> _decodeCloudRow(Map<String, dynamic> row)`  — Decrypts one full `cowork_chats` row. Null when it cannot be read.
+  - L659 `static Future<void> deleteThread(String sessionKey)`  — Deletes an Agents thread: its `cowork_chats` row, its SQLite row, its
+  - L710 `static Future<void> _supabaseDelete(String userId, String id)`
+  - L730 `static Future<List<AgentsCloudThread>> snapshotCloudThreads()`  — Every `cowork_chats` row of the signed-in user, decrypted with the key
+  - L774 `static Future<void> reencryptCloudThreads( List<AgentsCloudThread> snapshot, )`  — Seals every thread of [snapshot] with the key that is loaded NOW and
+  - L794 `static Future<void> _supabaseUpdate( String userId, String id, Map<String, dynamic> values, )`
+  - L808 `static const int _kFetchBatch = 50`  — How many full rows one cloud read asks for.
+  - L813 `static Future<List<Map<String, dynamic>>> _selectBatched( String userId, List<String> ids, { bool strict = false, })`  — Full rows for [ids], [_kFetchBatch] at a time, so one large request
+  - L854 `static bool _cloudWritesPaused = false`
+  - L861 `static Future<void> pauseCloudWrites()`  — Stops every cloud write until [resumeCloudWrites]. A thread written
+  - L875 `static Future<void> resumeCloudWrites()`  — Lets cloud writes run again and flushes what waited, sealed with the key
+  - L883 `static Future<List<Map<String, dynamic>>> _selectIdList( String userId, )`  — `id` and `updated_at` of every row of the user, read in pages of
+  - L904 `static Future<List<Map<String, dynamic>>> _select( String userId, { List<String>? ids, required String columns, int? from, int? to, })`
+  - L932 `static Future<StoredChat?> _loadFromLocalCache( String userId, String chatId, StoredChat? existing, )`  — The offline half of [loadThread]: the plaintext SQLite row, decoded into
+  - L979 `static Future<bool> hasThread(String sessionKey)`  — True when this device holds a copy of [sessionKey]: fully loaded in
+  - L999 `static bool get cloudAvailable`  — True when chuk_chat's cloud-backed entry points can run at all: the
+  - L1003 `static bool isDirty(String sessionKey)`  — True when the local copy of [sessionKey] has not reached the cloud yet.
+  - L1006 `static Set<String> get dirtyThreads`  — The threads waiting for a cloud write, for the facade and for tests.
+  - L1013 `static Future<void> flushOutbox()`  — Pushes every dirty thread's local copy to the cloud. Safe to call at any
+  - L1021 `static Future<void> pending(String sessionKey)`  — The write chain for [sessionKey], for a test that wants to await it.
+  - L1026 `static Future<void> reset()`  — Test seam.
+  - L1071 `static void _enqueue(String sessionKey, Future<void> Function() work)`
+  - L1085 `static Future<void> _runOnOutbox(Future<void> Function() work)`
+  - L1093 `static Future<void> _writeLocalCache( String userId, StoredChat chat, String payloadJson, )`
+  - L1120 `static Future<bool> _pushToCloud( String userId, { required String id, required String payloadJson, required String title, required DateTime updatedAt, })`  — One encrypted upsert. Returns true when the server took the row. Never
+  - L1162 `static Future<Map<String, dynamic>?> _supabaseUpsert( String userId, Map<String, dynamic> row, )`
+  - L1177 `static void _adoptServerTimestamps(String id, Map<String, dynamic> stored)`  — The server's `created_at` / `updated_at` win over the local guesses, so
+  - L1197 `static Future<void> _saveTitles(String userId)`
+  - L1212 `static String _outboxKey(String userId)`
+  - L1217 `static Future<void> _loadOutbox(String userId)`  — Loads the persisted outbox for [userId] once per user. A thread in it
+  - L1244 `static Future<void> _persistOutbox(String userId)`
+  - L1260 `static Future<void> _markDirty( String userId, String sessionKey, DateTime updatedAt, )`
+  - L1271 `static Future<void> _clearDirty(String userId, String sessionKey)`
+  - L1280 `static Future<void> _flush(String userId)`  — Runs inside the outbox chain.
+  - L1318 `static Future<_LocalCopy?> _localCopy(String userId, String id)`  — The newest local copy of a thread: memory when fully loaded there, else
+  - L1357 `static String _payloadJson(List<ChatMessage> messages, String? customName)`
+  - L1364 `static Future<bool> _ensureKey()`
+  - L1374 `static String? _currentUserId()`
+  - L1389 `static void _watchRemovals()`  — If the cloud sync removes a thread from local state (the row is gone on
+  - L1401 `static Future<void> _dropCursor(String sessionKey)`
+  - L1413 `static List<ChatMessage> _decode(List<Map<String, dynamic>> rows)`
+  - L1430 `static String? _normalized(String? value)`
+- L1437 `class _LocalCopy`
+  - L1438 `const _LocalCopy({ required this.payloadJson, required this.title, required this.updatedAt, })`
+  - L1444 `final String payloadJson`
+  - L1445 `final String title`
+  - L1446 `final DateTime updatedAt`
+- L1450 `class _CloudRow`  — One decrypted `cowork_chats` row.
+  - L1451 `const _CloudRow({ required this.id, required this.row, required this.payloadJson, required this.messages, required this.customName, })`
+  - L1459 `final String id`
+  - L1460 `final Map<String, dynamic> row`
+  - L1461 `final String payloadJson`
+  - L1462 `final List<ChatMessage> messages`
+  - L1463 `final String? customName`
+  - L1465 `StoredChat chat(StoredChat? existing)`
+
+## lib/services/storage/chat_origin.dart  (72 Z.)
+- L31 `class ChatOrigin`
+  - L32 `ChatOrigin._()`
+  - L36 `static bool get agentsEnabled`  — Whether the Agents storage paths are live. Follows [agentsChatCore], the
+  - L41 `static set agentsEnabled(bool value)`  — A test picks a side here (tests run with the flag off). Sets the one
+  - L43 `static final RegExp _uuid = RegExp( r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' r'[0-9a-fA-F]{12}$', )`
+  - L48 `static final Set<String> _claimed = <String>{}`
+  - L52 `static bool isAgentsThread(String? chatId)`  — True when [chatId] names an Agents thread. Always false with the flag
+  - L61 `static void claimAgentsThread(String sessionKey)`  — Records [sessionKey] as an Agents thread. Called by the Agents write
+  - L67 `static void reset()`

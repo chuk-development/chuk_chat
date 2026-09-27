@@ -1,0 +1,143 @@
+# lib/services/notifications · Signaturen
+
+## lib/services/notifications/agents_notifications.dart  (106 Z.)
+- L29 `typedef ThreadLabelResolver = String Function(String sessionKey)`  — Resolves the label a toast carries for a thread — the coworker's name.
+- L31 `class AgentsNotifications`
+  - L32 `AgentsNotifications._()`
+  - L34 `static final AgentsNotifications instance = AgentsNotifications._()`
+  - L37 `ThreadLabelResolver threadLabel = (String sessionKey) => 'Chuk Chat'`  — Set by the shell. Default: a neutral label.
+  - L41 `AppLifecycleState? lifecycleOverride`  — Test seam: overrides the lifecycle the rule reads.
+  - L43 `bool _initialized = false`
+  - L47 `Future<void> initialize({ LocalNotificationsBackend? localBackend, bool startPush = true, })`  — Initialises the local plugin and starts push registration. Both are
+  - L58 `bool get _inForeground`
+  - L66 `Future<void> onLiveDone(String sessionKey, {String? runId})`  — A live `done` reached the thread view for [sessionKey]. Toast only when
+  - L78 `Future<void> onAnswerReplayed(String sessionKey, {String? runId})`  — A replayed run terminal with `while_away` landed for [sessionKey]: the
+  - L87 `Future<void> onOpenedFromNotification( String sessionKey, { String? runId, })`  — The user tapped a notification for [sessionKey]; the shell opened the
+  - L100 `void reset()`  — Test seam.
+
+## lib/services/notifications/local_notifications.dart  (327 Z.)
+- L33 `kAgentsNotificationChannelId = 'cowork_answer_ready'`  — The Android channel every Agents toast lands in.
+- L34 `kAgentsNotificationChannelName = 'Answer ready'`
+- L35 `kAgentsNotificationChannelDescription = 'A coworker finished a task or needs your input'`
+- L41 `kAgentsNotificationIconAsset = 'assets/icons/app_icon.png'`  — The logo a Linux toast draws. The same image the Android launcher uses,
+- L45 `abstract class LocalNotificationsBackend`  — What the service needs from the platform. The real one wraps
+  - L46 `Future<bool> initialize({required void Function(String? payload) onTap})`
+  - L48 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
+  - L56 `Future<void> cancel({required int id, required String tag})`
+  - L59 `Future<String?> launchPayload()`  — The payload of the notification that launched the app, when one did.
+  - L62 `Future<bool> requestPermission()`  — Android 13+ runtime permission. True where no permission exists.
+- L65 `class LocalNotifications`
+  - L66 `LocalNotifications._()`
+  - L68 `static final LocalNotifications instance = LocalNotifications._()`
+  - L70 `LocalNotificationsBackend? _backend`
+  - L71 `bool _initialized = false`
+  - L73 `bool get isInitialized`
+  - L76 `static const int brandColorValue = 0xFF285DA9`  — Brand accent used to tint the icon and title on Android (chuk's blue).
+  - L81 `Future<void> initialize({LocalNotificationsBackend? backend})`  — Wires the platform plugin. Safe to call twice; a failure (no D-Bus
+  - L97 `static int idFor(String sessionKey)`  — Stable id per thread, so a newer toast replaces the older one.
+  - L99 `static String payloadFor(String sessionKey, {String? runId})`
+  - L104 `Future<void> showAnswerReady({ required String sessionKey, required String threadLabel, String? runId, String body = 'Your answer is ready.', })`  — "Answer ready" for [sessionKey]. [threadLabel] is the coworker's name
+  - L128 `Future<void> cancelForSession(String sessionKey)`  — Clears the thread's toast — ours and, on Android, the FCM one that
+  - L140 `Future<void> checkLaunchNotification()`  — A cold start from a toast: hand the target to the router so the shell
+  - L150 `Future<bool> requestPermission()`
+  - L160 `void _onTap(String? payload)`
+  - L178 `void reset()`  — Test seam.
+- L187 `class _PluginBackend implements LocalNotificationsBackend`  — The real backend: `flutter_local_notifications` on Android, iOS, macOS
+  - L188 `_PluginBackend(this._plugin)`
+  - L190 `final FlutterLocalNotificationsPlugin _plugin`
+  - L192 `static bool get _supported`
+  - L199 `Future<bool> initialize({ required void Function(String? payload) onTap, })`
+  - L249 `Future<void> show({ required int id, required String title, required String body, required String payload, required String tag, })`
+  - L298 `Future<void> cancel({required int id, required String tag})`
+  - L307 `Future<String?> launchPayload()`
+  - L317 `Future<bool> requestPermission()`
+
+## lib/services/notifications/notification_router.dart  (79 Z.)
+- L16 `@immutable class NotificationTarget`
+  - L18 `const NotificationTarget({required this.sessionKey, this.runId})`
+  - L21 `final String sessionKey`  — The thread to open — the executor's session key.
+  - L24 `final String? runId`  — The run the notification was about, when the sender knew it.
+  - L28 `static NotificationTarget? fromData(Map<Object?, Object?>? data)`  — Parses the payload both channels use: the local toast's JSON payload
+  - L40 `bool operator ==(Object other)`
+  - L46 `int get hashCode`
+  - L49 `String toString()`
+- L52 `class NotificationRouter`
+  - L53 `NotificationRouter._()`
+  - L55 `static final NotificationRouter instance = NotificationRouter._()`
+  - L59 `final ValueNotifier<NotificationTarget?> pending = ValueNotifier<NotificationTarget?>(null)`  — The tap nobody has handled yet. The shell listens, reads, then calls
+  - L64 `void open(NotificationTarget target)`  — A tap arrived (from the local plugin, from FCM, or from the launch
+  - L69 `NotificationTarget? take()`  — The shell took the target. Returns it, or null when there was none.
+  - L77 `void reset()`  — Test seam.
+
+## lib/services/notifications/push_service.dart  (353 Z.)
+- L36 `@immutable class PushMessage`  — A push message as the service sees it: only the `data` map matters.
+  - L38 `const PushMessage(this.data)`
+  - L40 `final Map<String, dynamic> data`
+  - L42 `NotificationTarget? get target`
+- L47 `abstract class PushTransport`  — What the service needs from the push provider. [FirebasePushTransport]
+  - L50 `Future<bool> initialize()`  — True when push works on this build/platform. False disables the
+  - L52 `Future<String?> token()`
+  - L54 `Stream<String> get onTokenRefresh`
+  - L57 `Stream<PushMessage> get onMessageOpenedApp`  — The user tapped a push while the app was in the background.
+  - L60 `Future<PushMessage?> initialMessage()`  — The push that launched the app from a cold start, if any.
+  - L62 `Future<void> requestPermission()`
+- L66 `abstract class DeviceTokenStore`  — The `cowork_device_tokens` row.
+  - L67 `Future<void> upsert({ required String userId, required String deviceId, required String token, required String platform, })`
+  - L74 `Future<void> delete({required String userId, required String deviceId})`
+- L77 `class PushService`
+  - L78 `PushService._()`
+  - L80 `static final PushService instance = PushService._()`
+  - L82 `PushTransport? _transport`
+  - L83 `DeviceTokenStore? _store`
+  - L84 `Future<String> Function()? _deviceId`
+  - L85 `String? _platform`
+  - L87 `StreamSubscription<AuthState>? _authSub`
+  - L88 `StreamSubscription<String>? _tokenSub`
+  - L89 `StreamSubscription<PushMessage>? _openedSub`
+  - L91 `String? _userId`
+  - L92 `String? _token`
+  - L93 `bool _started = false`
+  - L95 `bool get isStarted`
+  - L98 `String? get registeredUserId`  — The user id the last upsert went to (test/diagnostic).
+  - L102 `Future<void> start({ PushTransport? transport, DeviceTokenStore? store, Future<String> Function()? deviceId, Stream<AuthState>? authStates, String? Function()? currentUserId, String? platform, })`  — Starts the service. All seams are injectable; the defaults are Firebase,
+  - L153 `Future<void> _onAuth(AuthState state, String? Function() userIdOf)`
+  - L172 `Future<void> _register()`  — Signed in: get a token and write the row.
+  - L184 `Future<void> _syncToken()`
+  - L202 `Future<void> _unregister()`  — Signed out: the row goes, so no push reaches this device.
+  - L214 `void _route(PushMessage? message)`
+  - L219 `static Future<String> _defaultDeviceId()`
+  - L222 `static String? _defaultUserId()`
+  - L227 `static Stream<AuthState>? _defaultAuthStates()`
+  - L232 `static String _defaultPlatform()`
+  - L251 `Future<void> reset()`  — Test seam.
+- L269 `class SupabaseDeviceTokenStore implements DeviceTokenStore`  — `cowork_device_tokens` over the Supabase client (RLS: own rows only).
+  - L270 `const SupabaseDeviceTokenStore()`
+  - L272 `static const String table = 'cowork_device_tokens'`
+  - L275 `Future<void> upsert({ required String userId, required String deviceId, required String token, required String platform, })`
+  - L289 `Future<void> delete({required String userId, required String deviceId})`
+- L299 `class FirebasePushTransport implements PushTransport`  — Firebase Cloud Messaging. Only Android and iOS carry a push; everywhere
+  - L300 `FirebaseMessaging? _messaging`
+  - L302 `static bool get _pushPlatform`
+  - L308 `Future<bool> initialize()`
+  - L324 `Future<String?> token()`
+  - L327 `Stream<String> get onTokenRefresh`
+  - L330 `Stream<PushMessage> get onMessageOpenedApp`
+  - L335 `Future<PushMessage?> initialMessage()`
+  - L341 `Future<void> requestPermission()`
+- L352 `@pragma('vm:entry-point') Future<void> agentsPushBackgroundHandler(RemoteMessage message)`  — Runs in a background isolate when a push arrives while the app is not
+
+## lib/services/notifications/run_notifications.dart  (98 Z.)
+- L17 `typedef RunNotificationsWriter = Future<void> Function({ required String userId, String? sessionKey, String? runId, requ`  — Test seam: how a consume is written. The default talks to Supabase.
+- L25 `class RunNotifications`
+  - L26 `RunNotifications._()`
+  - L28 `static final RunNotifications instance = RunNotifications._()`
+  - L30 `static const String table = 'cowork_run_notifications'`
+  - L32 `RunNotificationsWriter? _writer`
+  - L33 `String? Function()? _userId`
+  - L39 `final Set<String> _consumedSessions = <String>{}`  — Every answer this app already closed since launch — `session/run_id`
+  - L44 `void configure({RunNotificationsWriter? writer, String? Function()? userId})`  — Injects the writer and the user-id lookup (tests). Null restores the
+  - L53 `Future<void> consumeForSession(String sessionKey, {String? runId})`  — Marks every open row for [sessionKey] consumed. Idempotent per launch
+  - L60 `Future<void> consumeRun(String runId)`  — Marks the row for one run consumed (a tap that named the run).
+  - L62 `Future<void> _consume({String? sessionKey, String? runId})`
+  - L77 `static String? _defaultUserId()`
+  - L82 `static Future<void> _defaultWriter({ required String userId, String? sessionKey, String? runId, required String consumedAt, })`

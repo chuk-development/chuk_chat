@@ -1,5 +1,68 @@
 # lib/models · Signaturen
 
+## lib/models/agents_agent.dart  (130 Z.)
+- L15 `enum AgentActivity`  — What a coworker is doing, as far as the app can actually tell.
+  - L17 `working`
+  - L20 `waiting`
+  - L23 `scheduled`
+- L30 `@immutable class AgentsThreadInfo`  — One conversation with one agent. An agent can have many (§4).
+  - L32 `const AgentsThreadInfo({ required this.key, required this.title, this.lastActivity, })`
+  - L38 `final String key`
+  - L39 `final String title`
+  - L40 `final DateTime? lastActivity`
+  - L42 `AgentsThreadInfo copyWith({String? title, DateTime? lastActivity})`
+- L51 `@immutable class AgentsAgent`  — One coworker.
+  - L53 `const AgentsAgent({ required this.id, required this.name, required this.threads, this.role, this.brief, this.schedule, this.attachmentNames = const <String>[], this.onHost = false, this.running = false, this.lastActivity, })`
+  - L66 `final String id`
+  - L67 `final String name`
+  - L73 `final String? role`  — An optional short role the user gave the coworker — "researcher",
+  - L77 `final String? brief`  — The standing job the user gave it at onboarding (§4). Null when the user
+  - L81 `final ScheduleSpec? schedule`  — A schedule the user set in the app. It is not installed on the host yet —
+  - L86 `final List<String> attachmentNames`  — Names of files the user attached at onboarding. Only the names: the
+  - L90 `final bool onHost`  — True only for the agent that really runs on the paired host. False for an
+  - L93 `final bool running`  — A run is in flight for this agent right now.
+  - L97 `final DateTime? lastActivity`  — The last time anything happened in one of its threads, as observed by this
+  - L99 `final List<AgentsThreadInfo> threads`
+  - L101 `AgentActivity get activity`
+  - L107 `AgentsAgent copyWith({ String? name, String? role, String? brief, ScheduleSpec? schedule, List<String>? attachmentNames, bool? onHost, bool? running, DateTime? lastActivity, List<AgentsThreadInfo>? threads, })`
+
+## lib/models/agents_room.dart  (157 Z.)
+- L15 `@immutable class AgentsRoomMember`  — One coworker in a room: the agent id the app tracks and the handle it is
+  - L17 `const AgentsRoomMember({required this.agentId, required this.handle})`
+  - L19 `final String agentId`
+  - L20 `final String handle`
+  - L23 `bool operator ==(Object other)`
+  - L29 `int get hashCode`
+- L35 `@immutable class AgentsRoom`  — A group room the app knows about: an id, a name, and its members in order.
+  - L37 `const AgentsRoom({ required this.id, required this.name, required this.members, this.agentToAgent = true, })`
+  - L44 `final String id`
+  - L45 `final String name`
+  - L46 `final List<AgentsRoomMember> members`
+  - L52 `final bool agentToAgent`  — Whether the coworkers may pull each other in by writing `@handle`
+  - L55 `List<String> get handles`  — The members' handles, in room order — the "everyone speaks" sequence.
+  - L57 `AgentsRoom copyWith({ String? name, List<AgentsRoomMember>? members, bool? agentToAgent, })`
+- L71 `@immutable class AgentsRoomDraft`  — What the create-room form produces: a name and the chosen members. It is not
+  - L73 `const AgentsRoomDraft({ required this.name, required this.members, this.agentToAgent = true, })`
+  - L79 `final String name`
+  - L80 `final List<AgentsRoomMember> members`
+  - L85 `final bool agentToAgent`  — The policy the form chose; see [AgentsRoom.agentToAgent]. Defaults to the
+- L90 `@immutable class AgentsRoomTurn`  — One agent turn in a room exchange, as the app shows it. Mirrors the manager's
+  - L92 `const AgentsRoomTurn({ required this.round, required this.agentId, required this.handle, required this.text, })`
+  - L99 `final int round`
+  - L100 `final String agentId`
+  - L101 `final String handle`
+  - L102 `final String text`
+- L108 `enum AgentsRoomStop`  — Why a room exchange ended, as the host reported it. The strings match the
+  - L110 `noMoreMentions`
+  - L113 `roundsExhausted`
+  - L116 `messagesExhausted`
+  - L119 `stopped`
+  - L122 `turnFailed`
+  - L126 `noSuchRoom`
+  - L131 `agentToAgentOff`
+  - L134 `static AgentsRoomStop? fromWire(String? reason)`  — Parse the wire string, or null for one this build does not know.
+  - L146 `String get label`  — A short human line for the thread footer.
+
 ## lib/models/app_shell_config.dart  (147 Z.)
 - L9 `class AppShellConfig`  — Bundles all theme, display, image-generation, and AI-context settings
   - L11 `final Brightness currentThemeMode`
@@ -58,7 +121,7 @@
   - L88 `final Future<void> Function(double) setUiScale`
   - L90 `const AppShellConfig({ required this.currentThemeMode, required this.currentAccentColor, required this.currentIconFgColor, required this.currentBgColor, required this.setThemeMode, required this.setAccentColor, required this.setIconFgColor, required this.setBgColor, required this.dynamicColorEnabled, required this.setDynamicColorEnabled, required this.contrast, required this.setContrast, required this.uiFontFamily, required this.setUiFontFamily, required this.showReasoningTokens, required this.setShowReasoningTokens, required this.showModelInfo, required this.setShowModelInfo, required this.showTps, required this.setShowTps, required this.autoSendVoiceTranscription, required this.setAutoSendVoiceTranscription, required this.imageGenEnabled, required this.setImageGenEnabled, required this.imageGenDefaultSize, required this.setImageGenDefaultSize, required this.imageGenCustomWidth, required this.setImageGenCustomWidth, required this.imageGenCustomHeight, required this.setImageGenCustomHeight, required this.imageGenUseCustomSize, required this.setImageGenUseCustomSize, required this.includeRecentImagesInHistory, required this.setIncludeRecentImagesInHistory, required this.includeAllImagesInHistory, required this.setIncludeAllImagesInHistory, required this.includeReasoningInHistory, required this.setIncludeReasoningInHistory, required this.includeToolResultsInHistory, required this.setIncludeToolResultsInHistory, required this.toolCallingEnabled, required this.setToolCallingEnabled, required this.toolDiscoveryMode, required this.setToolDiscoveryMode, required this.showToolCalls, required this.setShowToolCalls, required this.uiLocale, required this.setUiLocale, required this.chatFontSize, required this.setChatFontSize, required this.chatFontFamily, required this.setChatFontFamily, required this.uiScale, required this.setUiScale, })`
 
-## lib/models/artifact.dart  (217 Z.)
+## lib/models/artifact.dart  (219 Z.)
 - L3 `enum ArtifactType`
   - L4 `code`
   - L5 `markdown`
@@ -90,21 +153,21 @@
   - L97 `ArtifactDocument copyWith({ String? id, String? chatId, String? userId, String? messageId, String? title, ArtifactType? type, String? language, String? content, int? version, DateTime? createdAt, DateTime? updatedAt, String? attachmentPath, })`
   - L127 `Map<String, dynamic> toMap({String? encryptedContent})`
   - L144 `static ArtifactDocument fromMap( Map<String, dynamic> map, { required String decryptedContent, })`
-- L171 `class ArtifactVersionSnapshot`
-  - L172 `const ArtifactVersionSnapshot({ required this.artifactId, required this.version, required this.content, required this.createdAt, this.attachmentPath, })`
-  - L180 `final String artifactId`
-  - L181 `final int version`
-  - L182 `final String content`
-  - L183 `final DateTime createdAt`
-  - L184 `final String? attachmentPath`
-  - L186 `static ArtifactVersionSnapshot fromMap( Map<String, dynamic> map, { required String decryptedContent, })`
-- L204 `class ArtifactEdit`
-  - L205 `const ArtifactEdit({required this.oldStr, required this.newStr})`
-  - L207 `final String oldStr`
-  - L208 `final String newStr`
-  - L210 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
+- L172 `class ArtifactVersionSnapshot`
+  - L173 `const ArtifactVersionSnapshot({ required this.artifactId, required this.version, required this.content, required this.createdAt, this.attachmentPath, })`
+  - L181 `final String artifactId`
+  - L182 `final int version`
+  - L183 `final String content`
+  - L184 `final DateTime createdAt`
+  - L185 `final String? attachmentPath`
+  - L187 `static ArtifactVersionSnapshot fromMap( Map<String, dynamic> map, { required String decryptedContent, })`
+- L206 `class ArtifactEdit`
+  - L207 `const ArtifactEdit({required this.oldStr, required this.newStr})`
+  - L209 `final String oldStr`
+  - L210 `final String newStr`
+  - L212 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
 
-## lib/models/chat_message.dart  (269 Z.)
+## lib/models/chat_message.dart  (277 Z.)
 - L12 `enum ChatMessageStatus`  — Delivery status of a chat message in the local queue/UI.
   - L12 `sent`
   - L12 `pending`
@@ -114,35 +177,36 @@
 - L32 `int? parseFlexibleInt(dynamic value)`  — Parse an int that may arrive as an int, a num, or a String — the UI map
 - L39 `String? _statusToString(ChatMessageStatus? status)`
 - L54 `class ChatMessage`  — Represents a single message in a chat.
-  - L55 `ChatMessage({ required this.role, required this.text, this.reasoning, this.replyContext, this.images, this.imageMetas, this.imageCostEur, this.imageGeneratedAt, this.attachments, this.attachedFilesJson, this.toolCalls, this.contentBlocks, this.modelId, this.provider, this.status, this.queueId, this.messageId, this.startedAt, this.generationMs, this.variants, this.activeVariant, })`
-  - L79 `factory ChatMessage.fromJson(Map<String, dynamic> json)`
-  - L105 `final String role`
-  - L106 `final String text`
-  - L107 `final String? reasoning`
-  - L108 `final String? replyContext`
-  - L109 `final String? images`
-  - L114 `final String? imageMetas`  — JSON-encoded list of per-image metadata objects aligned with [images].
-  - L115 `final String? imageCostEur`
-  - L116 `final String? imageGeneratedAt`
-  - L117 `final String? attachments`
-  - L118 `final String? attachedFilesJson`
-  - L119 `final String? toolCalls`
-  - L124 `final String? contentBlocks`  — JSON-encoded list of [ContentBlock] objects representing the ordered
-  - L126 `final String? modelId`
-  - L127 `final String? provider`
-  - L131 `final ChatMessageStatus? status`  — Local-only delivery status. `null` is treated as [ChatMessageStatus.sent]
-  - L135 `final String? queueId`  — Optional offline-queue id linking this user message to its pending entry
-  - L144 `final String? messageId`  — Stable id assigned to an assistant message at placeholder creation time.
-  - L149 `final String? startedAt`  — When the request for this answer went out, ISO-8601. Stamped on the
-  - L154 `final String? generationMs`  — How long the turn took, in whole milliseconds, written down when the
-  - L164 `final String? variants`  — JSON-encoded `List` of answer-variant snapshots for a regenerated
-  - L168 `final int? activeVariant`  — Index into [variants] of the answer currently shown at top level.
-  - L172 `Duration? get workedFor`  — [generationMs] as a duration, or null when it was never recorded or
-  - L179 `String get sender`
-  - L182 `ChatMessageStatus get effectiveStatus`  — Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
-  - L188 `String? get statusString`  — Wire string for [status] (`null` when unset), matching the persisted
-  - L190 `ChatMessage copyWith({ String? role, String? text, String? reasoning, String? replyContext, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? attachments, String? attachedFilesJson, String? toolCalls, String? contentBlocks, String? modelId, String? provider, ChatMessageStatus? status, String? queueId, String? messageId, String? startedAt, String? generationMs, String? variants, int? activeVariant, })`
-  - L238 `Map<String, dynamic> toJson()`
+  - L55 `ChatMessage({ required this.role, required this.text, this.reasoning, this.replyContext, this.images, this.imageMetas, this.imageCostEur, this.imageGeneratedAt, this.attachments, this.attachedFilesJson, this.toolCalls, this.contentBlocks, this.modelId, this.provider, this.status, this.queueId, this.messageId, this.sentAt, this.startedAt, this.generationMs, this.variants, this.activeVariant, })`
+  - L80 `factory ChatMessage.fromJson(Map<String, dynamic> json)`
+  - L107 `final String role`
+  - L108 `final String text`
+  - L109 `final String? reasoning`
+  - L110 `final String? replyContext`
+  - L111 `final String? images`
+  - L116 `final String? imageMetas`  — JSON-encoded list of per-image metadata objects aligned with [images].
+  - L117 `final String? imageCostEur`
+  - L118 `final String? imageGeneratedAt`
+  - L119 `final String? attachments`
+  - L120 `final String? attachedFilesJson`
+  - L121 `final String? toolCalls`
+  - L126 `final String? contentBlocks`  — JSON-encoded list of [ContentBlock] objects representing the ordered
+  - L128 `final String? modelId`
+  - L129 `final String? provider`
+  - L133 `final ChatMessageStatus? status`  — Local-only delivery status. `null` is treated as [ChatMessageStatus.sent]
+  - L137 `final String? queueId`  — Optional offline-queue id linking this user message to its pending entry
+  - L146 `final String? messageId`  — Stable id assigned to an assistant message at placeholder creation time.
+  - L150 `final String? sentAt`  — Actual message timestamp (ISO-8601), independent of the run-duration
+  - L155 `final String? startedAt`  — When the request for this answer went out, ISO-8601. Stamped on the
+  - L160 `final String? generationMs`  — How long the turn took, in whole milliseconds, written down when the
+  - L170 `final String? variants`  — JSON-encoded `List` of answer-variant snapshots for a regenerated
+  - L174 `final int? activeVariant`  — Index into [variants] of the answer currently shown at top level.
+  - L178 `Duration? get workedFor`  — [generationMs] as a duration, or null when it was never recorded or
+  - L185 `String get sender`
+  - L188 `ChatMessageStatus get effectiveStatus`  — Effective status — defaults to [ChatMessageStatus.sent] for legacy rows.
+  - L193 `String? get statusString`  — Wire string for [status] (`null` when unset), matching the persisted
+  - L195 `ChatMessage copyWith({ String? role, String? text, String? reasoning, String? replyContext, String? images, String? imageMetas, String? imageCostEur, String? imageGeneratedAt, String? attachments, String? attachedFilesJson, String? toolCalls, String? contentBlocks, String? modelId, String? provider, ChatMessageStatus? status, String? queueId, String? messageId, String? sentAt, String? startedAt, String? generationMs, String? variants, int? activeVariant, })`
+  - L245 `Map<String, dynamic> toJson()`
 
 ## lib/models/chat_model.dart  (122 Z.)
 - L3 `class ModelItem`
@@ -171,59 +235,76 @@
   - L95 `Map<String, dynamic> toJson()`  — Converts AttachedFile to JSON for storage
   - L108 `factory AttachedFile.fromJson(Map<String, dynamic> json)`  — Creates AttachedFile from JSON
 
-## lib/models/chat_stream_event.dart  (161 Z.)
+## lib/models/chat_reply.dart  (36 Z.)
+- L3 `class ChatReply`  — Reply context travels as ordinary quoted user text, so host history, offline
+  - L4 `const ChatReply({required this.author, required this.text})`
+  - L5 `final String author`
+  - L6 `final String text`
+  - L8 `String compose(String message)`
+  - L15 `static ({ChatReply reply, String message})? parse(String text)`
+
+## lib/models/chat_stream_event.dart  (194 Z.)
 - L10 `sealed class ChatStreamEvent`  — Events that can be received from chat streaming services.
   - L11 `const ChatStreamEvent()`
   - L13 `const factory ChatStreamEvent.content(String text) = ContentEvent`
-  - L14 `const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent`
-  - L15 `const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent`
-  - L16 `const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent`
-  - L17 `const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent`
-  - L18 `const factory ChatStreamEvent.toolCalls(List<NativeToolCall> calls) = ToolCallsEvent`
-  - L20 `const factory ChatStreamEvent.error(String message, {String? code}) = ErrorEvent`
-  - L22 `const factory ChatStreamEvent.done() = DoneEvent`
-- L31 `class NativeToolCall`  — A native OpenAI-format tool call assembled from the provider stream.
-  - L32 `final String id`
-  - L33 `final String name`
-  - L34 `final String arguments`
-  - L36 `const NativeToolCall({ required this.id, required this.name, required this.arguments, })`
-  - L42 `factory NativeToolCall.fromJson(Map<String, dynamic> json)`
-- L54 `class ToolCallsEvent extends ChatStreamEvent`  — Event carrying one or more native tool calls the model requested this turn.
-  - L55 `final List<NativeToolCall> calls`
-  - L56 `const ToolCallsEvent(this.calls)`
-- L60 `class ContentEvent extends ChatStreamEvent`  — Event containing message content text.
-  - L61 `final String text`
-  - L62 `const ContentEvent(this.text)`
-- L66 `class ReasoningEvent extends ChatStreamEvent`  — Event containing reasoning/thinking process text.
-  - L67 `final String text`
-  - L68 `const ReasoningEvent(this.text)`
-- L72 `class UsageEvent extends ChatStreamEvent`  — Event containing token usage information.
-  - L73 `final Map<String, dynamic> usage`
-  - L74 `const UsageEvent(this.usage)`
-- L78 `class MetaEvent extends ChatStreamEvent`  — Event containing metadata about the response.
-  - L79 `final Map<String, dynamic> meta`
-  - L80 `const MetaEvent(this.meta)`
-- L84 `class TpsEvent extends ChatStreamEvent`  — Event containing tokens per second (TPS) metric.
-  - L85 `final double tokensPerSecond`
-  - L86 `const TpsEvent(this.tokensPerSecond)`
-- L90 `class ErrorEvent extends ChatStreamEvent`  — Event indicating an error occurred.
-  - L93 `final String message`  — Human-readable text. Safe to show, useless to branch on — the server
-  - L102 `final String? code`  — Machine-readable failure class from the server (`upstream_network`,
-  - L104 `const ErrorEvent(this.message, {this.code})`
-- L108 `class DoneEvent extends ChatStreamEvent`  — Event indicating the stream has completed.
-  - L109 `const DoneEvent()`
-- L117 `typedef StreamErrorCallback = void Function(String error, {String? code})`  — Signature for stream error callbacks.
-- L124 `abstract final class StreamErrorCodes`  — Failure classes carried on [ErrorEvent.code].
-  - L127 `static const String upstreamNetwork = 'upstream_network'`  — Server ⇄ provider network failure. The server already retried with
-  - L131 `static const String upstreamStatus = 'upstream_status'`  — The provider *rejected* the request (e.g. 400/413 on an oversized
-  - L134 `static const String upstreamNoStream = 'upstream_no_stream'`  — Provider returned 200 headers and then never sent a body token.
-  - L135 `static const String upstreamFirstByteTimeout = 'upstream_first_byte_timeout'`
-  - L138 `static const String connectionLost = 'connection_lost'`  — The WebSocket died with the request in flight.
-  - L141 `static const String idleTimeout = 'idle_timeout'`  — No event arrived within the client's idle window.
-  - L144 `static const String streamFailure = 'stream_failure'`  — The event stream itself raised.
-  - L152 `static const Set<String> retryable = <String>{ upstreamNetwork, upstreamNoStream, upstreamFirstByteTimeout, connectionLost, idleTimeout, streamFailure, }`  — Failures worth re-issuing the pass for.
+  - L14 `const factory ChatStreamEvent.finalContent(String text) = FinalContentEvent`
+  - L15 `const factory ChatStreamEvent.reasoning(String text) = ReasoningEvent`
+  - L16 `const factory ChatStreamEvent.usage(Map<String, dynamic> usage) = UsageEvent`
+  - L17 `const factory ChatStreamEvent.meta(Map<String, dynamic> meta) = MetaEvent`
+  - L18 `const factory ChatStreamEvent.tps(double tokensPerSecond) = TpsEvent`
+  - L19 `const factory ChatStreamEvent.toolCalls(List<NativeToolCall> calls) = ToolCallsEvent`
+  - L21 `const factory ChatStreamEvent.error(String message, {String? code}) = ErrorEvent`
+  - L23 `const factory ChatStreamEvent.heartbeat({int seq, double? elapsedSeconds}) = HeartbeatEvent`
+  - L25 `const factory ChatStreamEvent.done() = DoneEvent`
+- L34 `class NativeToolCall`  — A native OpenAI-format tool call assembled from the provider stream.
+  - L35 `final String id`
+  - L36 `final String name`
+  - L37 `final String arguments`
+  - L39 `const NativeToolCall({ required this.id, required this.name, required this.arguments, })`
+  - L45 `factory NativeToolCall.fromJson(Map<String, dynamic> json)`
+- L57 `class ToolCallsEvent extends ChatStreamEvent`  — Event carrying one or more native tool calls the model requested this turn.
+  - L58 `final List<NativeToolCall> calls`
+  - L59 `const ToolCallsEvent(this.calls)`
+- L63 `class ContentEvent extends ChatStreamEvent`  — Event containing message content text.
+  - L64 `final String text`
+  - L65 `const ContentEvent(this.text)`
+- L70 `class FinalContentEvent extends ChatStreamEvent`  — Authoritative completed answer. Replaces streamed provisional content;
+  - L71 `final String text`
+  - L72 `const FinalContentEvent(this.text)`
+- L76 `class ReasoningEvent extends ChatStreamEvent`  — Event containing reasoning/thinking process text.
+  - L77 `final String text`
+  - L78 `const ReasoningEvent(this.text)`
+- L82 `class UsageEvent extends ChatStreamEvent`  — Event containing token usage information.
+  - L83 `final Map<String, dynamic> usage`
+  - L84 `const UsageEvent(this.usage)`
+- L88 `class MetaEvent extends ChatStreamEvent`  — Event containing metadata about the response.
+  - L89 `final Map<String, dynamic> meta`
+  - L90 `const MetaEvent(this.meta)`
+- L94 `class TpsEvent extends ChatStreamEvent`  — Event containing tokens per second (TPS) metric.
+  - L95 `final double tokensPerSecond`
+  - L96 `const TpsEvent(this.tokensPerSecond)`
+- L100 `class ErrorEvent extends ChatStreamEvent`  — Event indicating an error occurred.
+  - L103 `final String message`  — Human-readable text. Safe to show, useless to branch on — the server
+  - L112 `final String? code`  — Machine-readable failure class from the server (`upstream_network`,
+  - L114 `const ErrorEvent(this.message, {this.code})`
+- L129 `class HeartbeatEvent extends ChatStreamEvent`  — Proof of life: the host says the run behind this stream is still running.
+  - L130 `final int seq`
+  - L131 `final double? elapsedSeconds`
+  - L132 `const HeartbeatEvent({this.seq = 0, this.elapsedSeconds})`
+- L136 `class DoneEvent extends ChatStreamEvent`  — Event indicating the stream has completed.
+  - L137 `const DoneEvent()`
+- L145 `typedef StreamErrorCallback = void Function(String error, {String? code})`  — Signature for stream error callbacks.
+- L152 `abstract final class StreamErrorCodes`  — Failure classes carried on [ErrorEvent.code].
+  - L155 `static const String upstreamNetwork = 'upstream_network'`  — Server ⇄ provider network failure. The server already retried with
+  - L159 `static const String upstreamStatus = 'upstream_status'`  — The provider *rejected* the request (e.g. 400/413 on an oversized
+  - L162 `static const String upstreamNoStream = 'upstream_no_stream'`  — Provider returned 200 headers and then never sent a body token.
+  - L163 `static const String upstreamFirstByteTimeout = 'upstream_first_byte_timeout'`
+  - L166 `static const String connectionLost = 'connection_lost'`  — The WebSocket died with the request in flight.
+  - L174 `static const String idleTimeout = 'idle_timeout'`  — No event arrived within an idle window.
+  - L177 `static const String streamFailure = 'stream_failure'`  — The event stream itself raised.
+  - L185 `static const Set<String> retryable = <String>{ upstreamNetwork, upstreamNoStream, upstreamFirstByteTimeout, connectionLost, idleTimeout, streamFailure, }`  — Failures worth re-issuing the pass for.
 
-## lib/models/client_tool.dart  (71 Z.)
+## lib/models/client_tool.dart  (70 Z.)
 - L7 `class ClientTool`  — Represents a tool that can be executed client-side.
   - L8 `ClientTool({ String? id, required this.name, required this.description, this.parameters = const {}, this.type = ToolType.builtin, this.config = const {}, this.tags = const [], }) : id = id ?? const Uuid().v4()`
   - L18 `final String id`
@@ -248,48 +329,52 @@
   - L66 `slack`
   - L67 `google`
   - L68 `mcp`
-  - L69 `sandbox`
 
-## lib/models/content_block.dart  (128 Z.)
-- L4 `enum ContentBlockType`  — The type of a content block within an AI response.
-  - L4 `text`
-  - L4 `toolCalls`
-  - L4 `reasoning`
-  - L4 `sandboxArtifact`
-- L12 `class SandboxArtifactPayload`  — Payload for a [ContentBlockType.sandboxArtifact] block.
-  - L13 `const SandboxArtifactPayload({ required this.storagePath, required this.filename, required this.mime, required this.sizeBytes, })`
-  - L24 `final String storagePath`  — Storage path returned by [PdfAttachmentService.upload]:
-  - L25 `final String filename`
-  - L26 `final String mime`
-  - L27 `final int sizeBytes`
-  - L29 `Map<String, dynamic> toJson()`
-  - L36 `factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j)`
-- L50 `class ContentBlock`  — An ordered block of content within an AI response.
-  - L51 `const ContentBlock._({ required this.type, this.text, this.toolCalls, this.sandboxArtifact, })`
-  - L59 `const ContentBlock.text(String text) : this._(type: ContentBlockType.text, text: text)`  — A block of visible text shown to the user.
-  - L63 `const ContentBlock.toolCalls(List<ToolCall> calls) : this._(type: ContentBlockType.toolCalls, toolCalls: calls)`  — A block of tool calls (expandable in the UI).
-  - L67 `const ContentBlock.reasoning(String text) : this._(type: ContentBlockType.reasoning, text: text)`  — A reasoning/thinking block (expandable in the UI).
-  - L73 `const ContentBlock.sandboxArtifact(SandboxArtifactPayload payload) : this._(type: ContentBlockType.sandboxArtifact, sandboxArtifact: payload)`  — A sandbox-produced file handed to the user (downloadable / inline-
-  - L76 `final ContentBlockType type`
-  - L80 `final String? text`  — The text content (for [ContentBlockType.text] and
-  - L83 `final List<ToolCall>? toolCalls`  — The tool calls (for [ContentBlockType.toolCalls] blocks).
-  - L86 `final SandboxArtifactPayload? sandboxArtifact`  — Sandbox artifact metadata (for [ContentBlockType.sandboxArtifact]).
-  - L88 `Map<String, dynamic> toJson()`
-  - L96 `factory ContentBlock.fromJson(Map<String, dynamic> json)`
+## lib/models/content_block.dart  (173 Z.)
+- L7 `enum ContentBlockType`  — The type of a content block within an AI response.
+  - L7 `text`
+  - L7 `toolCalls`
+  - L7 `reasoning`
+  - L7 `sandboxArtifact`
+- L15 `class SandboxArtifactPayload`  — Payload for a [ContentBlockType.sandboxArtifact] block.
+  - L16 `const SandboxArtifactPayload({ required this.storagePath, required this.filename, required this.mime, required this.sizeBytes, this.document, })`
+  - L28 `final String storagePath`  — Storage path returned by [PdfAttachmentService.upload]:
+  - L29 `final String filename`
+  - L30 `final String mime`
+  - L31 `final int sizeBytes`
+  - L35 `final Map<String, dynamic>? document`  — Full table/Markdown snapshot. Stored inside the encrypted chat payload,
+  - L37 `Map<String, dynamic> toJson()`
+  - L45 `factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j)`
+- L62 `class ContentBlock`  — An ordered block of content within an AI response.
+  - L63 `const ContentBlock._({ required this.type, this.text, this.toolCalls, this.sandboxArtifact, })`
+  - L71 `const ContentBlock.text(String text) : this._(type: ContentBlockType.text, text: text)`  — A block of visible text shown to the user.
+  - L75 `const ContentBlock.toolCalls(List<ToolCall> calls) : this._(type: ContentBlockType.toolCalls, toolCalls: calls)`  — A block of tool calls (expandable in the UI).
+  - L79 `const ContentBlock.reasoning(String text) : this._(type: ContentBlockType.reasoning, text: text)`  — A reasoning/thinking block (expandable in the UI).
+  - L85 `const ContentBlock.sandboxArtifact(SandboxArtifactPayload payload) : this._(type: ContentBlockType.sandboxArtifact, sandboxArtifact: payload)`  — A sandbox-produced file handed to the user (downloadable / inline-
+  - L88 `final ContentBlockType type`
+  - L92 `final String? text`  — The text content (for [ContentBlockType.text] and
+  - L95 `final List<ToolCall>? toolCalls`  — The tool calls (for [ContentBlockType.toolCalls] blocks).
+  - L98 `final SandboxArtifactPayload? sandboxArtifact`  — Sandbox artifact metadata (for [ContentBlockType.sandboxArtifact]).
+  - L100 `Map<String, dynamic> toJson()`
+  - L111 `static const String _legacySandboxArtifactType = 'sandboxArtifact'`  — Stored type name of file blocks. Chat used to write them from the
+  - L118 `static bool get decodesFileBlocks`  — Whether a stored file block decodes to a file card. With Agents on, it
+  - L122 `static set decodesFileBlocks(bool value)`  — A test picks a side here. Sets the one shared override.
+  - L125 `factory ContentBlock.fromJson(Map<String, dynamic> json)`
+  - L163 `static String legacySandboxArtifactNote(Map<String, dynamic> json)`  — The note shown in place of a legacy code-sandbox file block.
 
-## lib/models/queued_message.dart  (105 Z.)
+## lib/models/queued_message.dart  (103 Z.)
 - L6 `class QueuedMessage`  — A message persisted in the offline queue, waiting for connectivity so it
   - L7 `QueuedMessage({ required this.id, required this.chatId, required this.sendPayload, required this.attemptCount, required this.createdAt, required this.updatedAt, this.lastError, })`
   - L17 `factory QueuedMessage.fromRow(Map<String, dynamic> row)`
-  - L70 `final String id`
-  - L71 `final String chatId`
-  - L72 `final Map<String, dynamic> sendPayload`
-  - L73 `final int attemptCount`
-  - L74 `final String? lastError`
-  - L75 `final int createdAt`
-  - L76 `final int updatedAt`
-  - L78 `QueuedMessage copyWith({ int? attemptCount, String? lastError, bool clearLastError = false, int? updatedAt, })`
-  - L95 `Map<String, dynamic> toRow()`
+  - L68 `final String id`
+  - L69 `final String chatId`
+  - L70 `final Map<String, dynamic> sendPayload`
+  - L71 `final int attemptCount`
+  - L72 `final String? lastError`
+  - L73 `final int createdAt`
+  - L74 `final int updatedAt`
+  - L76 `QueuedMessage copyWith({ int? attemptCount, String? lastError, bool clearLastError = false, int? updatedAt, })`
+  - L93 `Map<String, dynamic> toRow()`
 
 ## lib/models/skill.dart  (276 Z.)
 - L27 `enum SkillSource`  — Where a [Skill] came from. Determines its trust level.
@@ -364,7 +449,7 @@
   - L28 `writing`
   - L31 `String get label`  — The present-tense wording shown while the phase lasts.
 
-## lib/models/tool_call.dart  (95 Z.)
+## lib/models/tool_call.dart  (94 Z.)
 - L7 `class ToolCall`  — Represents a single tool call made by the AI during a conversation.
   - L8 `ToolCall({ String? id, required this.name, this.arguments = const {}, this.result, this.status = ToolCallStatus.pending, this.roundThinking, DateTime? startedAt, this.completedAt, }) : id = id ?? const Uuid().v4(), startedAt = startedAt ?? DateTime.now()`
   - L20 `final String id`
@@ -376,16 +461,16 @@
   - L30 `final DateTime startedAt`  — When this tool call was created / started executing.
   - L33 `DateTime? completedAt`  — When execution completed (success or error).
   - L36 `Duration get elapsed`  — How long the tool call has been running (or ran).
-  - L39 `Map<String, dynamic> toJson()`
-  - L50 `factory ToolCall.fromJson(Map<String, dynamic> json)`
-- L72 `enum ToolCallStatus`  — Status of a tool call in its lifecycle.
-  - L72 `pending`
-  - L72 `running`
-  - L72 `completed`
-  - L72 `error`
-- L82 `bool finalizeStaleToolCalls(List<ToolCall> toolCalls)`  — Utility to finalize any stale (running/pending) tool calls.
+  - L38 `Map<String, dynamic> toJson()`
+  - L49 `factory ToolCall.fromJson(Map<String, dynamic> json)`
+- L71 `enum ToolCallStatus`  — Status of a tool call in its lifecycle.
+  - L71 `pending`
+  - L71 `running`
+  - L71 `completed`
+  - L71 `error`
+- L81 `bool finalizeStaleToolCalls(List<ToolCall> toolCalls)`  — Utility to finalize any stale (running/pending) tool calls.
 
-## lib/models/workspace_model.dart  (465 Z.)
+## lib/models/workspace_model.dart  (464 Z.)
 - L7 `class Workspace`  — Represents a workspace that combines AI persona, system prompts, files,
   - L8 `final String id`
   - L9 `final String name`
@@ -414,34 +499,34 @@
   - L149 `int get totalFileSize`  — Get total size of all files in bytes
   - L152 `String get totalFileSizeFormatted`  — Get formatted total file size (e.g., "2.5 MB")
   - L155 `Color get displayColor`  — Display color — uses custom avatar color if set, otherwise deterministic
-  - L169 `IconData get displayIcon`  — Display icon — uses custom avatar icon if set, otherwise deterministic
-  - L179 `bool get hasCustomImage`  — Check if this workspace has a custom uploaded image
-  - L183 `static final Map<String, IconData> _iconMap = { 'smart_toy': Icons.smart_toy_outlined, 'psychology': Icons.psychology_outlined, 'lightbulb': Icons.lightbulb_outline, 'auto_awesome': Icons.auto_awesome_outlined, 'chat': Icons.chat_bubble_outline, 'support': Icons.support_agent_outlined, 'code': Icons.code, 'school': Icons.school_outlined, 'work': Icons.work_outline, 'science': Icons.science_outlined, 'book': Icons.auto_stories_outlined, 'terminal': Icons.terminal, 'rocket': Icons.rocket_launch_outlined, 'folder': Icons.folder_outlined, }`
-  - L202 `String get updatedAgo`  — Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
-  - L215 `String get initials`  — Get the first letter(s) for avatar display
-  - L229 `static const List<Color> kWorkspaceColors = [ Color(0xFF6366F1), // Indigo Color(0xFF8B5CF6), // Violet Color(0xFFEC4899), // Pink Color(0xFFEF4444), // Red Color(0xFFF97316), // Orange Color(0xFFEAB308), // Yellow Color(0xFF22C55E), // Green Color(0xFF14B8A6), // Teal Color(0xFF06B6D4), // Cyan Color(0xFF3B82F6), // Blue Color(0xFF8B5E3C), // Brown Color(0xFF64748B), // Slate ]`  — Predefined workspace colors - vibrant but balanced for both themes
-  - L245 `static const List<IconData> kWorkspaceIcons = [ Icons.folder_outlined, Icons.code, Icons.science_outlined, Icons.auto_stories_outlined, Icons.palette_outlined, Icons.build_outlined, Icons.school_outlined, Icons.work_outline, Icons.language, Icons.terminal, Icons.data_object, Icons.psychology_outlined, Icons.lightbulb_outline, Icons.rocket_launch_outlined, Icons.auto_awesome_outlined, Icons.hub_outlined, ]`  — Predefined workspace icons
-  - L264 `static String _formatFileSize(int bytes)`
-- L275 `class WorkspaceFile`  — Represents a file attached to a workspace
-  - L276 `final String id`
-  - L277 `final String workspaceId`
-  - L278 `final String fileName`
-  - L279 `final String storagePath`
-  - L280 `final String fileType`
-  - L281 `final int fileSize`
-  - L282 `final DateTime uploadedAt`
-  - L283 `final String? markdownSummary`
-  - L285 `WorkspaceFile({ required this.id, required this.workspaceId, required this.fileName, required this.storagePath, required this.fileType, required this.fileSize, required this.uploadedAt, this.markdownSummary, })`
-  - L296 `factory WorkspaceFile.fromJson(Map<String, dynamic> json)`
-  - L309 `Map<String, dynamic> toJson()`
-  - L320 `WorkspaceFile copyWith({ String? id, String? workspaceId, String? fileName, String? storagePath, String? fileType, int? fileSize, DateTime? uploadedAt, String? markdownSummary, })`
-  - L343 `bool get hasMarkdownSummary`  — Check if this file has an AI-generated markdown summary
-  - L347 `String get fileSizeFormatted`  — Get formatted file size (e.g., "1.5 MB")
-  - L359 `IconData get fileIcon`  — Get file icon based on file type
-  - L425 `bool get isPreviewable`  — Check if file is a text-based file that can be previewed
-  - L428 `bool get isTextFile`  — Check if file is a text-based file (not binary)
-  - L431 `String get extension`  — Get file extension
-  - L435 `bool get isImage`  — Check if file is an image
-  - L438 `bool get isPdf`  — Check if file is a PDF
-  - L443 `int get estimatedTokens`  — Estimate how many tokens this file will consume in context.
-  - L458 `String get estimatedTokensFormatted`  — Format estimated tokens for display (e.g. "2.5k tokens")
+  - L168 `IconData get displayIcon`  — Display icon — uses custom avatar icon if set, otherwise deterministic
+  - L178 `bool get hasCustomImage`  — Check if this workspace has a custom uploaded image
+  - L182 `static final Map<String, IconData> _iconMap = { 'smart_toy': Icons.smart_toy_outlined, 'psychology': Icons.psychology_outlined, 'lightbulb': Icons.lightbulb_outline, 'auto_awesome': Icons.auto_awesome_outlined, 'chat': Icons.chat_bubble_outline, 'support': Icons.support_agent_outlined, 'code': Icons.code, 'school': Icons.school_outlined, 'work': Icons.work_outline, 'science': Icons.science_outlined, 'book': Icons.auto_stories_outlined, 'terminal': Icons.terminal, 'rocket': Icons.rocket_launch_outlined, 'folder': Icons.folder_outlined, }`
+  - L201 `String get updatedAgo`  — Get relative time string for updatedAt (e.g., "2h ago", "3d ago")
+  - L214 `String get initials`  — Get the first letter(s) for avatar display
+  - L228 `static const List<Color> kWorkspaceColors = [ Color(0xFF6366F1), // Indigo Color(0xFF8B5CF6), // Violet Color(0xFFEC4899), // Pink Color(0xFFEF4444), // Red Color(0xFFF97316), // Orange Color(0xFFEAB308), // Yellow Color(0xFF22C55E), // Green Color(0xFF14B8A6), // Teal Color(0xFF06B6D4), // Cyan Color(0xFF3B82F6), // Blue Color(0xFF8B5E3C), // Brown Color(0xFF64748B), // Slate ]`  — Predefined workspace colors - vibrant but balanced for both themes
+  - L244 `static const List<IconData> kWorkspaceIcons = [ Icons.folder_outlined, Icons.code, Icons.science_outlined, Icons.auto_stories_outlined, Icons.palette_outlined, Icons.build_outlined, Icons.school_outlined, Icons.work_outline, Icons.language, Icons.terminal, Icons.data_object, Icons.psychology_outlined, Icons.lightbulb_outline, Icons.rocket_launch_outlined, Icons.auto_awesome_outlined, Icons.hub_outlined, ]`  — Predefined workspace icons
+  - L263 `static String _formatFileSize(int bytes)`
+- L274 `class WorkspaceFile`  — Represents a file attached to a workspace
+  - L275 `final String id`
+  - L276 `final String workspaceId`
+  - L277 `final String fileName`
+  - L278 `final String storagePath`
+  - L279 `final String fileType`
+  - L280 `final int fileSize`
+  - L281 `final DateTime uploadedAt`
+  - L282 `final String? markdownSummary`
+  - L284 `WorkspaceFile({ required this.id, required this.workspaceId, required this.fileName, required this.storagePath, required this.fileType, required this.fileSize, required this.uploadedAt, this.markdownSummary, })`
+  - L295 `factory WorkspaceFile.fromJson(Map<String, dynamic> json)`
+  - L308 `Map<String, dynamic> toJson()`
+  - L319 `WorkspaceFile copyWith({ String? id, String? workspaceId, String? fileName, String? storagePath, String? fileType, int? fileSize, DateTime? uploadedAt, String? markdownSummary, })`
+  - L342 `bool get hasMarkdownSummary`  — Check if this file has an AI-generated markdown summary
+  - L346 `String get fileSizeFormatted`  — Get formatted file size (e.g., "1.5 MB")
+  - L358 `IconData get fileIcon`  — Get file icon based on file type
+  - L424 `bool get isPreviewable`  — Check if file is a text-based file that can be previewed
+  - L427 `bool get isTextFile`  — Check if file is a text-based file (not binary)
+  - L430 `String get extension`  — Get file extension
+  - L434 `bool get isImage`  — Check if file is an image
+  - L437 `bool get isPdf`  — Check if file is a PDF
+  - L442 `int get estimatedTokens`  — Estimate how many tokens this file will consume in context.
+  - L457 `String get estimatedTokensFormatted`  — Format estimated tokens for display (e.g. "2.5k tokens")

@@ -12,49 +12,613 @@
   - L28 `const AccentIconButton({ super.key, required this.icon, required this.onTap, required this.tooltip, this.semanticsId, this.accent, this.diameter = 42, this.iconSize = 22, })`
   - L40 `Widget build(BuildContext context)`
 
-## lib/widgets/anchored_menu.dart  (361 Z.)
-- L19 `_kAnchorGap = 6`  — Gap between the anchor and the menu.
-- L22 `_kEdgeMargin = 8`  — Smallest margin the menu keeps to the screen edges and the keyboard.
-- L26 `_kMinRoomAbove = 120`  — Below this, "open above" is not worth forcing — the menu would be a
-- L28 `_kMenuDuration = Duration(milliseconds: 140)`
-- L33 `Future<T?> showAnchoredMenu<T>( BuildContext anchorContext, { required List<Widget> items, required Color color, required Color borderColor, double minWidth = 200, double borderRadius = 18, bool preferAbove = false, // null → pick the side from the anchor's screen position (a control on the // right opens leftwards). true → align the menu's right edge to the anchor // (open leftwards). false → align left edges (open rightwards, for a // right-cascading submenu). bool? alignRight, // Global position of the press. Given, the menu opens there instead of at // the anchor widget. Offset? anchorPoint, // A cascading submenu: open beside the anchor (to its right, or to its left // when the right would run off screen) with the top edges aligned, the way // a native submenu flies out of its parent row. bool besideAnchor = false, // Draw the frame around the whole menu. An action menu is a run of loose // tiles and wants none; a picker — the model and mode menus — is a list // being read against the chat behind it, and there the frame is what says // where the list ends. bool outlined = false, })`  — Show [items] as a dropdown anchored to the widget of [anchorContext].
-- L118 `class _AnchoredMenuRoute<T> extends PopupRoute<T>`
-  - L119 `_AnchoredMenuRoute({ required this.anchor, required this.items, required this.color, required this.borderColor, required this.minWidth, required this.borderRadius, required this.preferAbove, required this.alignRight, required this.besideAnchor, required this.outlined, required this.usableTop, required this.usableBottom, required this.themes, // The menu has nothing to do with the keyboard. Taking the focus is // what pulled the keyboard down and made the composer jump, so this // route does not take it: whatever had the focus keeps it, and the // keyboard stays open or closed exactly as the reader left it. }) : super(requestFocus: false)`
-  - L139 `final Rect anchor`
-  - L140 `final List<Widget> items`
-  - L141 `final Color color`
-  - L142 `final Color borderColor`
-  - L143 `final double minWidth`
-  - L144 `final double borderRadius`
-  - L145 `final bool preferAbove`
-  - L146 `final bool? alignRight`
-  - L147 `final bool besideAnchor`
-  - L148 `final bool outlined`
-  - L149 `final double usableTop`
-  - L150 `final double usableBottom`
-  - L151 `final CapturedThemes themes`
-  - L154 `Duration get transitionDuration`
-  - L157 `bool get barrierDismissible`
-  - L160 `Color? get barrierColor`
-  - L163 `String? get barrierLabel`
-  - L166 `Widget buildPage(BuildContext context, Animation<double> animation, _)`
-  - L213 `Widget _frame(Widget child)`  — The frame, when the caller asked for one. The tiles keep their own
-  - L228 `Widget buildTransitions( BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child, )`
-- L250 `class _AnchoredMenuLayout extends SingleChildLayoutDelegate`  — Puts the menu above the anchor when it does not fit below it. The child
-  - L251 `const _AnchoredMenuLayout({ required this.anchor, required this.usableTop, required this.usableBottom, this.preferAbove = false, this.alignRight, this.besideAnchor = false, })`
-  - L260 `final Rect anchor`
-  - L261 `final double usableTop`
-  - L262 `final double usableBottom`
-  - L265 `final bool? alignRight`  — Which edge the menu aligns to; null means pick from the anchor position.
-  - L269 `final bool besideAnchor`  — A cascade: sit beside the anchor (right, or left if right runs off) with
-  - L274 `final bool preferAbove`  — Open above the anchor whenever the menu fits there, even when there is
-  - L276 `double get _roomBelow`
-  - L277 `double get _roomAbove`
-  - L281 `bool get _forceAbove`  — Honour [preferAbove] only while there is room worth using up there.
-  - L284 `BoxConstraints getConstraintsForChild(BoxConstraints constraints)`
-  - L296 `Offset getPositionForChild(Size size, Size childSize)`
-  - L339 `bool shouldRelayout(_AnchoredMenuLayout old)`
-- L350 `List<List<Widget>> _splitOnDividers(List<Widget> items)`  — Splits a flat item list into runs at every divider, so a divider becomes
+## lib/widgets/agent_avatar.dart  (88 Z.)
+- L18 `class AgentAvatar extends StatelessWidget`
+  - L19 `const AgentAvatar({ super.key, required this.seed, required this.label, this.radius = 16, this.dimmed = false, })`
+  - L29 `final String seed`  — The stable identity the colour is derived from — pass the agent id, not
+  - L32 `final String label`  — The text the monogram is taken from — pass the display name.
+  - L34 `final double radius`
+  - L37 `final bool dimmed`  — A hidden coworker is shown faded in the "show hidden" list.
+  - L42 `static String monogramOf(String label)`  — The monogram: the first character of the name, upper-cased, or '?' when
+  - L51 `static double hueOf(String seed)`  — A stable hue in [0, 360) from the seed. A plain FNV-1a hash over the code
+  - L61 `Widget build(BuildContext context)`
+
+## lib/widgets/agent_control_panel.dart  (413 Z.)
+- L19 `class AgentControlPanel extends StatefulWidget`
+  - L20 `const AgentControlPanel({ super.key, required this.agent, required this.source, this.onScheduleSubmitted, this.showHeader = true, this.showRefresh = true, })`
+  - L31 `final bool showHeader`  — The name row at the top. The desktop details pane keeps it; the pane
+  - L32 `final bool showRefresh`
+  - L34 `final AgentsAgent agent`
+  - L35 `final AgentControlSource source`
+  - L40 `final void Function(ScheduleSpec spec)? onScheduleSubmitted`  — Retired. The panel no longer sets schedules: nothing installed them on the
+  - L43 `State<AgentControlPanel> createState()`
+- L46 `class _AgentControlPanelState extends State<AgentControlPanel>`
+  - L47 `String? _actionError`
+  - L51 `String get _sessionKey`  — The coworker's thread key IS its session key on the host, so the panel
+  - L56 `void initState()`
+  - L62 `void didUpdateWidget(AgentControlPanel oldWidget)`
+  - L70 `Widget build(BuildContext context)`
+  - L164 `Widget _buildModel( BuildContext context, ControlValue<AgentModelChoice> value, )`
+  - L191 `Widget _buildTokens( BuildContext context, ControlValue<AgentTokenUsage> value, )`
+  - L216 `Widget _buildRuntime( BuildContext context, ControlValue<AgentSessionRuntime> value, )`
+  - L250 `Widget _buildSandbox(BuildContext context, ControlValue<AgentSandbox> value)`
+  - L287 `Widget _buildSkills( BuildContext context, ControlValue<List<AgentSkill>> value, )`
+  - L328 `Future<void> _run(Future<void> Function() action)`
+  - L338 `Widget _section(BuildContext context, String title, Widget child)`
+  - L358 `Widget _notReported(BuildContext context, String reason)`  — The host measured nothing here — said plainly, with the reason, so a
+  - L375 `Widget _loading()`
+- L386 `String formatRuntime(Duration d)`  — `1h 04m` / `4m 12s` / `12s`.
+- L397 `String formatCount(int value)`  — `1 234 567` — grouped, so a six-figure token count is readable at a glance.
+- L408 `String formatTimestamp(DateTime when)`  — `2026-02-03 14:00` — stable and unambiguous, no locale guessing.
+
+## lib/widgets/agent_markdown.dart  (153 Z.)
+- L8 `sealed class AgentSegment`  — One piece of an agent reply: prose, or a chart the agent asked for.
+  - L9 `const AgentSegment()`
+- L13 `class AgentTextSegment extends AgentSegment`  — Markdown prose between the visual blocks.
+  - L14 `const AgentTextSegment(this.text)`
+  - L15 `final String text`
+- L19 `class AgentChartSegment extends AgentSegment`  — A parsed `<chart>` block, already decoded to its JSON map.
+  - L20 `const AgentChartSegment(this.data)`
+  - L21 `final Map<String, dynamic> data`
+- L24 `_chartBlock = RegExp( r'<\s*chart\s*>([\s\S]*?)<\s*/\s*chart\s*>', caseSensitive: false, )`
+- L30 `_chartStart = RegExp(r'<\s*chart\s*>', caseSensitive: false)`  — The opening tag of a block whose end has not arrived yet.
+- L33 `_chartEnd = RegExp(r'<\s*/\s*chart\s*>', caseSensitive: false)`  — Its closing tag.
+- L38 `Map<String, dynamic>? decodeChartBody(String body)`  — Decode a chart body, tolerating the two things a model gets wrong: a fenced
+- L47 `List<AgentSegment> splitAgentSegments(String data)`  — Split an agent reply into prose and `<chart>` blocks.
+- L103 `class AgentMarkdown extends StatelessWidget`  — Renders an agent reply as Markdown, with `<chart>` blocks drawn as charts.
+  - L104 `const AgentMarkdown( this.data, { super.key, this.fontSize, this.height, this.selectable = true, })`
+  - L112 `final String data`
+  - L113 `final double? fontSize`
+  - L114 `final double? height`
+  - L119 `final bool selectable`  — One [SelectionArea] around the whole reply, so a drag selects across a
+  - L122 `Widget build(BuildContext context)`
+  - L139 `Widget _markdown(BuildContext context, String text)`
+
+## lib/widgets/agent_roster_view.dart  (1534 Z.)
+- reicht weiter: 'package:chuk_chat/widgets/coworker_name_dialog.dart'
+- L55 `kSidebarBrandWordmarkSize = 16`  — The brand row's sizing knob: `SbBrand` draws the frozen wordmark and uses
+- L60 `class DesktopRosterPins extends ChangeNotifier`  — Which coworkers the user pinned to the top of the desktop roster. Local to
+  - L61 `DesktopRosterPins._()`
+  - L63 `static final DesktopRosterPins instance = DesktopRosterPins._()`
+  - L65 `static const String _kKey = 'agents.desktop.pinned_v1'`
+  - L67 `final Set<String> _ids = <String>{}`
+  - L68 `bool _loaded = false`
+  - L70 `Set<String> get ids`
+  - L72 `bool isPinned(String agentId)`
+  - L74 `Future<void> load()`
+  - L92 `void toggle(String agentId)`
+  - L98 `Future<void> _save()`
+  - L108 `void reset()`
+- L118 `List<AgentsAgent> desktopRosterOrder( List<AgentsAgent> agents, Set<String> pinned, )`  — The agents in the order the desktop roster shows them: pinned first, then
+- L128 `class AgentRosterView extends StatefulWidget`
+  - L129 `const AgentRosterView({ super.key, required this.source, required this.onSelect, this.selectedAgentId, this.selectedThreadKey, this.selectedRoomId, this.onAddAgent, this.onDeleteAgent, this.onRenameAgent, this.onOpenRooms, this.rooms, this.onOpenRoom, this.onCreateRoom, this.onRenameRoom, this.onDeleteRoom, this.onManageRoomMembers, this.onOpenSettings, this.onOpenProfile, this.onOpenQuickSwitcher, this.collapsed = false, this.onToggleCollapsed, this.accountLabel, this.now, this.readMarks, this.profiles, this.pins, })`
+  - L158 `final AgentRosterSource source`
+  - L162 `final void Function(String agentId, String threadKey) onSelect`  — Called with the agent and the thread the user picked. A coworker has one
+  - L164 `final String? selectedAgentId`
+  - L165 `final String? selectedThreadKey`
+  - L168 `final String? selectedRoomId`  — The room open in the centre pane, if one is. Its row is the selected one.
+  - L171 `final VoidCallback? onAddAgent`  — Opens the new-agent dialog. Hidden when null.
+  - L175 `final void Function(String agentId)? onDeleteAgent`  — Deletes a coworker, after the user confirmed. A Delete item appears for
+  - L178 `final void Function(String agentId, String name)? onRenameAgent`  — Renames a coworker; reports the trimmed, non-empty, changed name.
+  - L181 `final void Function(AgentsAgent agent)? onOpenProfile`  — Opens a coworker's profile page. Hidden when null.
+  - L184 `final VoidCallback? onOpenRooms`  — Control Rooms in the right pane.
+  - L187 `final RoomSource? rooms`  — The group rooms, listed under "Rooms". Null leaves the section out.
+  - L190 `final void Function(String roomId)? onOpenRoom`  — Opens a room. Rooms are not listed without it.
+  - L193 `final VoidCallback? onCreateRoom`  — Starts a new room.
+  - L195 `final void Function(String roomId, String name)? onRenameRoom`
+  - L196 `final void Function(String roomId)? onDeleteRoom`
+  - L197 `final void Function(String roomId)? onManageRoomMembers`
+  - L200 `final VoidCallback? onOpenSettings`  — Settings — the gear in the account row. The row is hidden when null.
+  - L203 `final VoidCallback? onOpenQuickSwitcher`  — The quick switcher (Ctrl+K), from the search field's button.
+  - L206 `final bool collapsed`  — Folded to the rail of faces.
+  - L209 `final VoidCallback? onToggleCollapsed`  — Folds or unfolds the pane (Ctrl+B).
+  - L212 `final String? accountLabel`  — The account row's name. Null lets the roster load the profile itself.
+  - L215 `final DateTime Function()? now`  — Clock seam so a row's time is deterministic in a test.
+  - L217 `final AgentReadMarks? readMarks`
+  - L218 `final AgentProfileStore? profiles`
+  - L219 `final DesktopRosterPins? pins`
+  - L222 `State<AgentRosterView> createState()`
+- L225 `class _AgentRosterViewState extends State<AgentRosterView>`
+  - L226 `ProfileRecord? _profile`
+  - L227 `final TextEditingController _search = TextEditingController()`
+  - L228 `bool _hiddenOpen = false`
+  - L230 `bool get _hosted`
+  - L232 `DesktopRosterPins get _pins`
+  - L233 `AgentReadMarks get _marks`
+  - L234 `AgentProfileStore get _profiles`
+  - L238 `void initState()`
+  - L245 `void dispose()`
+  - L251 `void _onSearch()`
+  - L253 `Future<void> _loadProfile()`
+  - L265 `String _displayNameFor(ProfileRecord? profile)`
+  - L274 `DateTime _now()`
+  - L276 `bool _isSelected(AgentsAgent agent)`
+  - L284 `void _pick(AgentsAgent agent)`
+  - L291 `Future<void> _renameAgent(AgentsAgent agent)`
+  - L303 `Future<void> _deleteAgent(AgentsAgent agent)`
+  - L315 `Future<void> _renameRoom(AgentsRoom room)`
+  - L327 `Future<void> _deleteRoom(AgentsRoom room)`
+  - L337 `PopupMenuItem<VoidCallback> _item( String label, IconData icon, VoidCallback onTap, { Color? tone, String? shortcut, })`
+  - L355 `Future<void> _openAgentMenu( BuildContext anchor, AgentsAgent agent, { Offset? at, })`
+  - L404 `Future<void> _openRoomMenu( BuildContext anchor, AgentsRoom room, { Offset? at, })`
+  - L441 `Future<void> _openNewMenu(BuildContext anchor)`
+  - L471 `Widget build(BuildContext context)`
+  - L490 `List<AgentsAgent> get _orderedAgents`
+  - L493 `List<AgentsRoom> get _rooms`
+  - L497 `Widget _buildPane(BuildContext context)`
+  - L602 `Widget _header(BuildContext context)`
+  - L647 `Widget _searchField(BuildContext context)`
+  - L713 `Widget _sectionHeader( BuildContext context, String label, { VoidCallback? onAdd, String? addTooltip, })`
+  - L720 `Widget _hiddenHeader(BuildContext context, int count)`
+  - L751 `Widget _quietLine(BuildContext context, String text)`
+  - L764 `Widget _emptyState(BuildContext context)`
+  - L792 `Widget _accountRow(BuildContext context)`
+  - L868 `Widget _buildRail(BuildContext context)`
+- L963 `class _SectionHeader extends StatefulWidget`  — A section label: small caps in the quiet colour, and a "+" that shows
+  - L964 `const _SectionHeader({required this.label, this.onAdd, this.addTooltip})`
+  - L966 `final String label`
+  - L967 `final VoidCallback? onAdd`
+  - L968 `final String? addTooltip`
+  - L971 `State<_SectionHeader> createState()`
+- L974 `class _SectionHeaderState extends State<_SectionHeader>`
+  - L975 `bool _hovered = false`
+  - L976 `bool _focused = false`
+  - L979 `Widget build(BuildContext context)`
+- L1027 `class _HoverTile extends StatefulWidget`  — The hover fill and the rounded row shape every roster row shares.
+  - L1028 `const _HoverTile({ required this.child, required this.height, this.onTap, this.selected = false, this.onSecondaryTapUp, this.onHover, this.onContextMenu, })`
+  - L1038 `final Widget child`
+  - L1039 `final double height`
+  - L1040 `final VoidCallback? onTap`
+  - L1041 `final bool selected`
+  - L1042 `final GestureTapUpCallback? onSecondaryTapUp`
+  - L1043 `final ValueChanged<bool>? onHover`
+  - L1047 `final VoidCallback? onContextMenu`  — The row's menu from the keyboard (the Menu key, Shift+F10) — what a
+  - L1050 `State<_HoverTile> createState()`
+- L1053 `class _HoverTileState extends State<_HoverTile>`
+  - L1054 `bool _hovered = false`
+  - L1055 `bool _focused = false`
+  - L1057 `void _setHover(bool value)`
+  - L1064 `Widget build(BuildContext context)`
+- L1135 `class _AgentRow extends StatefulWidget`  — One coworker: 36 px, face 24, name; on the right the unread dot, the
+  - L1136 `const _AgentRow({ super.key, required this.agent, required this.selected, required this.unread, required this.pinned, required this.now, required this.profiles, required this.onTap, required this.onMenu, this.shortcutIndex, })`
+  - L1149 `final AgentsAgent agent`
+  - L1150 `final bool selected`
+  - L1151 `final bool unread`
+  - L1152 `final bool pinned`
+  - L1153 `final DateTime now`
+  - L1154 `final AgentProfileStore profiles`
+  - L1155 `final VoidCallback onTap`
+  - L1156 `final Future<void> Function(BuildContext anchor, Offset? at) onMenu`
+  - L1159 `final int? shortcutIndex`  — Ctrl+n opens this row; shown in the row's tooltip.
+  - L1162 `State<_AgentRow> createState()`
+- L1165 `class _AgentRowState extends State<_AgentRow>`
+  - L1166 `bool _hovered = false`
+  - L1169 `Widget build(BuildContext context)`
+- L1272 `class _RoomRow extends StatefulWidget`  — One room: 32 px, the members' faces, the name, the "…" on hover.
+  - L1273 `const _RoomRow({ super.key, required this.room, required this.selected, required this.profiles, required this.onTap, required this.onMenu, })`
+  - L1282 `final AgentsRoom room`
+  - L1283 `final bool selected`
+  - L1284 `final AgentProfileStore profiles`
+  - L1285 `final VoidCallback onTap`
+  - L1286 `final Future<void> Function(BuildContext anchor, Offset? at) onMenu`
+  - L1289 `State<_RoomRow> createState()`
+- L1292 `class _RoomRowState extends State<_RoomRow>`
+  - L1293 `bool _hovered = false`
+  - L1296 `Widget build(BuildContext context)`
+- L1367 `class _HiddenRow extends StatelessWidget`  — A hidden coworker, dimmed, with Unhide.
+  - L1368 `const _HiddenRow({ required this.agent, required this.profiles, required this.onUnhide, })`
+  - L1374 `final AgentsAgent agent`
+  - L1375 `final AgentProfileStore profiles`
+  - L1376 `final VoidCallback onUnhide`
+  - L1379 `Widget build(BuildContext context)`
+- L1423 `class _RailFace extends StatelessWidget`  — A face in the folded rail: a 40 px target, the selected fill and bar, an
+  - L1424 `const _RailFace({ super.key, required this.child, required this.tooltip, required this.selected, required this.unread, required this.onTap, })`
+  - L1433 `final Widget child`
+  - L1434 `final String tooltip`
+  - L1435 `final bool selected`
+  - L1436 `final bool unread`
+  - L1437 `final VoidCallback onTap`
+  - L1440 `Widget build(BuildContext context)`
+- L1479 `class _KeyCap extends StatelessWidget`  — A key in a hint: "Ctrl+K" in a small outlined box.
+  - L1480 `const _KeyCap(this.label)`
+  - L1482 `final String label`
+  - L1485 `Widget build(BuildContext context)`
+- L1506 `String activityLabel(AgentActivity activity)`  — The word for a coworker's state, as shown in the roster.
+- L1514 `String lastActivityLabel(DateTime? when, {required DateTime now})`  — "just now" / "5m ago" / "2h ago" / "3d ago", or a plain statement that
+- L1525 `String compactAgeLabel(DateTime? when, {required DateTime now})`  — The roster row's time: "now", "5m", "2h", "3d" — or nothing when nothing
+
+## lib/widgets/agent_run_views.dart  (389 Z.)
+- L24 `class AgentToolLine extends StatefulWidget`  — One tool call, as a single quiet line that opens on tap.
+  - L25 `const AgentToolLine({ super.key, required this.call, this.initiallyExpanded = false, })`
+  - L31 `final AgentsRelayTool call`
+  - L32 `final bool initiallyExpanded`
+  - L35 `State<AgentToolLine> createState()`
+- L38 `class _AgentToolLineState extends State<AgentToolLine>`
+  - L39 `late bool _expanded = widget.initiallyExpanded`
+  - L42 `Widget build(BuildContext context)`
+  - L104 `Widget _buildDetail( BuildContext context, AgentsRelayTool call, TextStyle? mono, )`
+  - L132 `static String? _shortResult(AgentsRelayTool call)`
+  - L139 `static String _oneLine(String value)`
+  - L144 `static String _failureTag(AgentsRelayTool call)`
+  - L150 `static String _formatDuration(Duration d)`
+- L162 `class AgentReasoningBlock extends StatefulWidget`  — The model's thinking, kept apart from the answer.
+  - L163 `const AgentReasoningBlock({ super.key, required this.text, this.initiallyExpanded = false, })`
+  - L169 `final String text`
+  - L170 `final bool initiallyExpanded`
+  - L173 `State<AgentReasoningBlock> createState()`
+- L176 `class _AgentReasoningBlockState extends State<AgentReasoningBlock>`
+  - L177 `late bool _expanded = widget.initiallyExpanded`
+  - L180 `Widget build(BuildContext context)`
+- L226 `class AgentFileCard extends StatefulWidget`  — A file the agent produced: a preview for an image, a save action otherwise.
+  - L227 `const AgentFileCard({super.key, required this.file, required this.saver})`
+  - L229 `final AgentsRelayFile file`
+  - L230 `final AgentFileSaver saver`
+  - L233 `State<AgentFileCard> createState()`
+- L236 `class _AgentFileCardState extends State<AgentFileCard>`
+  - L237 `bool _saving = false`
+  - L238 `String? _savedTo`
+  - L239 `String? _saveError`
+  - L241 `Future<void> _save()`
+  - L258 `Widget build(BuildContext context)`
+  - L376 `static String _subtitle(AgentsRelayFile file)`
+- L384 `String formatBytes(int bytes)`  — Formats a byte count the way a file manager does.
+
+## lib/widgets/agents_status_panel.dart  (276 Z.)
+- L17 `class AgentsStatusPanel extends StatelessWidget`
+  - L18 `const AgentsStatusPanel({ super.key, required this.status, this.message, this.busy = false, this.onAddComputer, this.onReconnect, this.onAddAgent, this.footer, this.topInset = 0, })`
+  - L30 `final AgentsShellStatus status`
+  - L33 `final String? message`  — A plain sentence about the last failure, shown under the body.
+  - L36 `final bool busy`  — A connect or reconnect is in flight: the action shows it and waits.
+  - L38 `final VoidCallback? onAddComputer`
+  - L39 `final VoidCallback? onReconnect`
+  - L40 `final VoidCallback? onAddAgent`
+  - L43 `final Widget? footer`  — Extra content under the actions (the developer's same-machine row).
+  - L46 `final double topInset`  — Room the panel keeps clear at the top for chrome painted over it.
+  - L48 `static const ValueKey<String> addComputerKey = ValueKey<String>( 'agents-add-computer', )`
+  - L51 `static const ValueKey<String> reconnectKey = ValueKey<String>( 'agents-status-reconnect', )`
+  - L54 `static const ValueKey<String> addAgentKey = ValueKey<String>( 'agents-status-add-agent', )`
+  - L60 `static String titleFor(AgentsShellStatus status)`  — The title each status shows. Public so tests and the phone inbox read
+  - L71 `static String bodyFor(AgentsShellStatus status)`
+  - L88 `Widget build(BuildContext context)`
+  - L181 `List<Widget> _actions(BuildContext context)`
+- L250 `class _Primary extends StatelessWidget`  — The one filled action. While [busy] it says what it is doing and ignores
+  - L251 `const _Primary({ super.key, required this.label, required this.icon, required this.busy, required this.busyLabel, required this.onTap, })`
+  - L260 `final String label`
+  - L261 `final IconData icon`
+  - L262 `final bool busy`
+  - L263 `final String busyLabel`
+  - L264 `final VoidCallback onTap`
+  - L267 `Widget build(BuildContext context)`
+
+## lib/widgets/agents_thread_header.dart  (838 Z.)
+- L23 `enum AgentsThreadConnection`  — How the relay looks to the reader. Not the phase enum: the header only
+  - L23 `live`
+  - L23 `connecting`
+  - L23 `down`
+- L31 `@immutable class AgentsThreadAction`  — One button in the header's trailing group.
+  - L33 `const AgentsThreadAction({ required this.icon, required this.tooltip, required this.onPressed, this.selected = false, })`
+  - L42 `final bool selected`  — A toggle that is on (the desktop details pane): drawn with the selected
+  - L44 `final IconData icon`
+  - L49 `final String tooltip`  — Shown on hover, read aloud by a screen reader, and used as the label when
+  - L51 `final VoidCallback onPressed`
+- L78 `class AgentsThreadHeader extends StatelessWidget`  — The one bar above a Agents thread: who you are talking to on the left, what
+  - L79 `const AgentsThreadHeader({ super.key, this.title, this.subtitle, this.connection = AgentsThreadConnection.live, this.automationLabel, this.automationPaused = false, this.automationExpanded = false, this.onToggleAutomations, this.actions = const <AgentsThreadAction>[], this.leadingInset = 0, this.topInset = 0, this.dense = false, this.agent, this.onOpenProfile, this.showCallTargets = true, this.onOpenScreen, this.floating = false, this.menuActions = const <AgentsThreadAction>[], })`
+  - L102 `final List<AgentsThreadAction> menuActions`  — The desktop title bar's "…" menu: actions that are not worth a button of
+  - L108 `final bool floating`  — The bar floats over the chat on the top veil (docs/DESIGN.md §2–3): the
+  - L112 `static const double barHeight = 16 + _slot + 8`  — The height of the bar row with its padding, without the veil's fade.
+  - L115 `static const double veilFade = 26`  — How far the veil fades out below the bar row.
+  - L120 `final String? title`  — The coworker this thread belongs to. Null before one is selected: the row
+  - L124 `final String? subtitle`  — A second, quieter line — the coworker's role, or the thread. Dropped
+  - L126 `final AgentsThreadConnection connection`
+  - L130 `final String? automationLabel`  — The running automation as one short line ("Wahlradar · Active", or
+  - L133 `final bool automationPaused`  — Colours the chip's dot: a paused automation is not a live one.
+  - L137 `final bool automationExpanded`  — Whether the automation cards under the header are open. Drives the
+  - L140 `final VoidCallback? onToggleAutomations`  — Tap on the chip. Null renders the chip flat (nothing to open).
+  - L142 `final List<AgentsThreadAction> actions`
+  - L145 `final double leadingInset`  — Left room for chrome painted OVER this widget by the shell.
+  - L148 `final double topInset`  — Top room for the same reason — the phone's floating bar.
+  - L150 `final bool dense`
+  - L157 `final AgentsAgent? agent`  — The coworker this thread belongs to. When it is given, the subject block is
+  - L160 `final void Function(AgentsAgent agent)? onOpenProfile`  — Tap on the subject pill. Null renders it flat.
+  - L164 `final bool showCallTargets`  — Whether the messenger's two call targets are shown: the parked voice call
+  - L168 `final VoidCallback? onOpenScreen`  — Opens the live view of the coworker's screen (its sandbox VNC). Null keeps
+  - L172 `static const double _slot = MobileLayout.minTouchTarget`  — One action's footprint: Material's minimum 48 dp hit box, the size every
+  - L176 `static const double _minTitleWidth = 96`  — Width the title keeps for itself before actions start folding away. Below
+  - L179 `Widget build(BuildContext context)`
+  - L221 `Widget _buildDesktopBar(BuildContext context)`  — The desktop title bar: 48 px, part of the frame. The subject on the
+  - L245 `Widget _buildDesktopRow(BuildContext context, double maxWidth)`
+  - L312 `Widget _buildDesktopSubject(BuildContext context)`  — Face (24), name (titleSmall, w600) and the status line under it. The
+  - L374 `Widget _buildDeskCall(BuildContext context)`
+  - L386 `Widget _buildDeskScreen(BuildContext context)`
+  - L403 `Widget _buildDeskMenu(BuildContext context, List<AgentsThreadAction> folded)`
+  - L434 `Widget _buildRow(BuildContext context, double maxWidth)`
+  - L480 `Widget _buildTitle(BuildContext context)`
+  - L618 `Widget _buildParkedCall(BuildContext context)`  — The parked voice call. It is not a [AgentsThreadAction] because it must
+  - L634 `Widget _buildScreenTarget(BuildContext context)`  — The video call's slot, with what this app really has behind it: the live
+  - L658 `Widget _buildAction(BuildContext context, AgentsThreadAction action)`  — Every action is the same button, so a button that moved in from the
+  - L668 `Widget _buildOverflow(BuildContext context, List<AgentsThreadAction> folded)`  — What no longer fits, in a menu — folded, never dropped. The house
+- L711 `class _HeaderButton extends StatelessWidget`  — One header button: a 40 px round ink target with a tooltip.
+  - L712 `const _HeaderButton({ required this.icon, required this.tooltip, required this.onTap, })`
+  - L718 `final IconData icon`
+  - L719 `final String tooltip`
+  - L720 `final VoidCallback onTap`
+  - L723 `Widget build(BuildContext context)`
+- L740 `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
+  - L741 `const _AutomationChip({ required this.label, required this.paused, required this.expanded, this.onTap, })`
+  - L748 `final String label`
+  - L749 `final bool paused`
+  - L750 `final bool expanded`
+  - L751 `final VoidCallback? onTap`
+  - L754 `Widget build(BuildContext context)`
+- L797 `class _DeskSubjectTarget extends StatefulWidget`  — The title bar's subject as one hover target: a quiet fill under the
+  - L798 `const _DeskSubjectTarget({ required this.child, required this.onTap, required this.tooltip, })`
+  - L804 `final Widget child`
+  - L805 `final VoidCallback onTap`
+  - L806 `final String tooltip`
+  - L809 `State<_DeskSubjectTarget> createState()`
+- L812 `class _DeskSubjectTargetState extends State<_DeskSubjectTarget>`
+  - L813 `bool _hovered = false`
+  - L816 `Widget build(BuildContext context)`
+
+## lib/widgets/agents_thread_view.dart  (2286 Z.)
+- L71 `kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST')`  — The Agents chat surface: the imported chuk_chat chat screen, wired to the
+- L73 `class AgentsThreadView extends StatefulWidget`
+  - L74 `const AgentsThreadView({ super.key, required this.controllerBuilder, required this.sessionSource, this.pairingStore, this.devHostUrl = kAgentsDevHostUrl, this.threadKey = 'default', this.fileSaver = const DownloadsAgentFileSaver(), this.onRunStateChanged, this.onActivity, this.onPaired, this.onController, this.onOpenModelScreen, this.shellConfig, this.title, this.subtitle, this.headerAgent, this.onOpenAgentProfile, this.onOpenAgentScreen, this.actions = const <AgentsThreadAction>[], this.menuActions = const <AgentsThreadAction>[], this.leadingInset = 0, this.topInset = 0, this.phoneLayout = false, this.linkReport, this.emptyState, })`
+  - L105 `final Future<AgentsRelayController> Function() controllerBuilder`  — Builds the transport controller. Async because a real client generates a
+  - L108 `final AccountSessionSource sessionSource`  — Supplies the account session that gets provisioned once paired.
+  - L114 `final void Function(AgentsRelayController controller)? onController`  — Called with the live transport controller whenever it is built or rebuilt,
+  - L120 `final AgentsPairingStore? pairingStore`  — Persistent trust store. When provided and a pairing is stored, the view
+  - L127 `final String devHostUrl`  — A developer's escape hatch, never the product path: with a non-empty
+  - L131 `final String threadKey`  — The executor-side session this view talks to (§4: many threads per agent),
+  - L138 `final AgentFileSaver fileSaver`  — Where a file card writes when the user saves.
+  - L142 `final void Function(String threadKey, bool running)? onRunStateChanged`  — Reports whether a run is in flight, and for which thread, so the roster can
+  - L145 `final void Function(String threadKey, DateTime when)? onActivity`  — Reports that something happened in [threadKey], for "last active".
+  - L149 `final void Function(String peerDeviceId)? onPaired`  — Reports the host device id the moment the transport is paired, so the
+  - L153 `final VoidCallback? onOpenModelScreen`  — Opens the full model catalogue — the composer's "More models" row calls
+  - L158 `final AppShellConfig? shellConfig`  — chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
+  - L163 `final String? title`  — The coworker this thread belongs to, for the header's title. Null before
+  - L166 `final String? subtitle`  — The quieter second line under [title] — the coworker's role.
+  - L171 `final AgentsAgent? headerAgent`  — The coworker whose thread this is. With it the header shows the messenger's
+  - L174 `final void Function(AgentsAgent agent)? onOpenAgentProfile`  — Tap on the header pill — the coworker's profile page.
+  - L177 `final VoidCallback? onOpenAgentScreen`  — Opens the live view of the coworker's screen. Null parks the target.
+  - L184 `final List<AgentsThreadAction> actions`  — Actions the SHELL owns but this thread's header shows: agent controls,
+  - L187 `final List<AgentsThreadAction> menuActions`  — The desktop title bar's "…" menu (docs/DESIGN.md §14.2).
+  - L192 `final double leadingInset`  — Left room the header keeps clear for chrome the shell paints OVER this
+  - L197 `final double topInset`  — The same for the top, on a phone: the height of the floating chrome. The
+  - L202 `final bool phoneLayout`  — Force chuk's phone screen. The mobile shell sets it below the phone
+  - L208 `final ValueNotifier<AgentsLinkReport>? linkReport`  — Where this view publishes what it knows about the link: not read yet, no
+  - L214 `final Widget? emptyState`  — Shown in place of the chat while no thread is selected ([threadKey] is
+  - L217 `State<AgentsThreadView> createState()`
+- L220 `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
+  - L222 `bool _wasBackgrounded = false`
+  - L223 `bool _rebuildingForResume = false`
+  - L224 `late final TextEditingController _hostController`
+  - L225 `final TextEditingController _codeController = TextEditingController()`
+  - L227 `AgentsRelayController? _controller`
+  - L228 `StreamSubscription<AgentsRelayInbound>? _inboundSub`
+  - L230 `final AgentsRelayLink _link = AgentsRelayLink.instance`
+  - L231 `final AgentsRunLedger _ledger = AgentsRunLedger.instance`
+  - L232 `final AgentsReplayLoader _loader = AgentsReplayLoader.instance`
+  - L244 `bool _verbose = false`  — Mirrors [VerboseService.instance]: the single source of truth for the two
+  - L249 `int _revision = 0`  — The replay revision this view has painted for [AgentsThreadView.threadKey].
+  - L256 `int _cacheRevision = 0`  — Extra turns of the same key, for rows that arrive from the CACHE rather
+  - L266 `int _screenGeneration = 0`  — The chat screen's identity. It moves ONLY when the screen has to read
+  - L269 `StreamSubscription<String?>? _storeSub`  — Watches the chat store for the late arrival described above.
+  - L275 `bool _mountedWithRows = false`  — Whether this thread already had rows in memory when the screen mounted.
+  - L280 `int _revisionAtMount = 0`  — The loader revision the screen was mounted at for this thread. A thread
+  - L284 `AgentsRelayApprovalRequest? _approval`  — A here.now publish waiting on the user. The run is BLOCKED on the executor
+  - L285 `bool? _approvalDecision`
+  - L290 `final AutomationsSource _automations = AutomationsSource.instance`  — This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
+  - L291 `bool _automationsCollapsed = true`
+  - L297 `AgentsRelaySecretRequest? _secretRequest`  — A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
+  - L298 `final Map<String, TextEditingController> _secretFields = <String, TextEditingController>{}`
+  - L300 `bool _secretsBusy = false`
+  - L303 `final Set<String> _ackedRuns = <String>{}`  — Run ids already acknowledged, so a rebuild cannot ack the same run twice.
+  - L305 `String? _localError`
+  - L306 `bool _busy = false`
+  - L319 `bool _cacheReady = false`  — Whether the local chat cache has been read once.
+  - L320 `final _startupState = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.connecting), )`
+  - L326 `AgentsStoredPairing? _storedPairing`  — The persisted trust, loaded once at startup. Non-null means "already
+  - L331 `bool _pairingLoaded = false`  — Whether the stored pairing has been read. Before that the link is
+  - L335 `AgentsLinkReport? _publishedLink`  — The last report handed to [AgentsThreadView.linkReport], and whether a
+  - L336 `bool _linkWriteQueued = false`
+  - L339 `bool _manuallyDisconnected = false`  — The user tapped Disconnect: stay down until they act, no auto-reconnect.
+  - L341 `Timer? _autoReconnectTimer`
+  - L342 `int _reconnectAttempts = 0`
+  - L347 `AgentsRelayPhase? _lastPhase`  — The transport phase this view last saw. It is how "we just became paired"
+  - L356 `int _failedReconnects = 0`  — How many reconnects have been tried since the link was last up.
+  - L366 `Timer? _watchdogTimer`  — A safety net that periodically forces a reconnect when the app is down but
+  - L369 `static const Duration _baseBackoff = Duration(seconds: 1)`  — Capped exponential backoff for auto-reconnect after an unexpected drop.
+  - L370 `static const Duration _maxBackoff = Duration(seconds: 30)`
+  - L373 `void initState()`
+  - L423 `void didUpdateWidget(AgentsThreadView oldWidget)`
+  - L452 `Future<void> _readSwitchedThread(String key)`  — A switch to a thread with no rows in memory reads its local copy, the
+  - L465 `void dispose()`
+  - L497 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L523 `Future<void> _bootstrap()`  — Load any stored pairing first, then build the controller. If a pairing is
+  - L569 `Future<bool> _tryBuildController()`  — [_buildController], with a failure turned into state the user can see
+  - L593 `Future<void> _warmCache()`  — Reads the local chat cache once and then lets the chat area mount. A
+  - L624 `bool get _threadHasRows`  — Whether the store holds a transcript for this thread right now.
+  - L632 `Future<void> _buildController()`
+  - L646 `Future<void> _rebuildController()`  — Tears down the live controller and spins up a fresh one, without touching
+  - L670 `void _onStateChanged()`  — Watches the transport state for an unexpected drop after being paired, and
+  - L728 `Future<int> _flushOutbox(AgentsRelayController controller)`  — Sends what the user typed while the host was unreachable.
+  - L779 `Future<void> _resendUnacknowledged(AgentsRelayController controller)`  — Sends every task of this thread the host has not acknowledged again.
+  - L810 `void _onTaskUnacknowledged(String sessionKey)`  — The ledger's pre-run window expired: this task has no `task_ack`, no
+  - L818 `void _requestReplay()`  — Asks the host to re-stream this thread from the replay cursor.
+  - L837 `void _watchdogTick()`  — Force a reconnect if we are paired-but-down and nothing is already trying.
+  - L859 `void _scheduleAutoReconnect()`
+  - L892 `Future<void> _reconnect()`  — Reconnects the current controller to the stored host with no code, then
+  - L923 `Future<void> reconnect({bool force = false})`  — Retry stored trust without exposing transport controls in the chat.
+  - L952 `Future<void> openPairing()`  — Opens the "Add your computer" flow (the QR scan). Public so the shell's
+  - L960 `Future<void> _connect()`
+  - L991 `Future<void> _persistTrust( AgentsRelayController controller, { Uri? hostUrl, })`
+  - L1019 `Future<void> _pairFromInvite(AgentsPairingInvite invite)`  — The QR path, and the whole of what a phone ever does to get linked: open
+  - L1065 `static String _pairingFailureText(Object error)`  — One plain sentence for whatever went wrong. The user is not shown a code,
+  - L1072 `static String _connectionFailureText(Object error)`  — The same for a reconnect of a computer that is already paired.
+  - L1077 `static const String _kComputerAway = 'Your computer is not reachable right now. Make sure it is on and ' 'Agents is running there.'`
+  - L1084 `String? _connectionBanner(AgentsRelayState state)`  — What the connect bar says about the transport. The relay's own detail
+  - L1094 `Future<void> _openPairingScreen()`
+  - L1105 `Future<void> _confirmForget()`  — Deletes the stored trust — the next connection needs a fresh code again —
+  - L1130 `Future<void> _forget()`
+  - L1152 `Future<void> _loadVerbose()`  — Load the persisted verbose flag once at startup. Never throws: a failure
+  - L1157 `void _onVerboseChanged()`
+  - L1161 `void _onThemeChanged()`
+  - L1167 `void _onInbound(AgentsRelayInbound event)`
+  - L1316 `void _clearSecretRequest()`
+  - L1329 `Future<void> _submitSecretRequest()`  — Save what the user typed and answer the host. An empty field for a name
+  - L1355 `Future<void> _skipSecretRequest()`  — The user does not have (or want to give) the keys: tell the host so the
+  - L1371 `void _decideApproval(bool approved)`  — Answer a here.now publish approval. Idempotent: once a decision is sent
+  - L1392 `Future<void> copyFullChat()`  — Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
+  - L1404 `bool _running = false`  — The ledger is the run's truth: it knows a run is in flight whether this
+  - L1406 `void _onLedgerChanged()`
+  - L1427 `void _onRunClosed()`  — A run just ended and left the thread with nothing to show. Never silence:
+  - L1456 `void _releaseStaleComposer(String key)`  — The composer goes back to the send target when the run is over.
+  - L1469 `void _onRunSilent(String sessionKey)`  — The run for [sessionKey] has produced nothing for the ledger's ceiling.
+  - L1481 `void _reconcileOnOpen()`  — The thread is being opened. A run the ledger still draws as live is
+  - L1492 `void _onLoaderChanged()`
+  - L1525 `void _onChatStoreChanged(String? changedId)`  — The chat cache changed. Remount the screen ONLY when this thread's rows
+  - L1544 `bool get _screenIsEmpty`  — Whether the screen on the tree is showing an empty transcript. The
+  - L1552 `void _syncRevision()`  — Adopt a new replay revision — but never while a run is in flight: the
+  - L1565 `Widget build(BuildContext context)`
+  - L1625 `Widget _buildHeader( BuildContext context, AgentsRelayState state, List<AgentsAutomation>? automations, { bool floating = false, })`  — The one bar above the thread. It carries what used to be scattered over
+  - L1683 `String _automationLabel(List<AgentsAutomation> automations)`  — One automation reads as itself; several read as a count, because the
+  - L1689 `void _openDocuments(BuildContext context)`
+  - L1708 `Widget _buildChat(BuildContext context, {double desktopTopInset = 0})`  — The imported chuk_chat renderer. Everything Agents-specific about it is in
+  - L1778 `void _noopToggleSidebar()`  — The sidebar is the shell's (the Agents roster), not the chat screen's.
+  - L1782 `void _onChatIdChanged(String? id)`  — Agents's chat id is the thread key and never changes under the screen, so
+  - L1788 `bool _useDesktopChat(BuildContext context)`  — Desktop chrome for desktop, web and tablets; the phone layout only for a
+  - L1817 `bool get _showsEmptyState`  — The connection is not something the user manages. Once paired the socket
+  - L1823 `AgentsLinkReport _linkReportFor(AgentsRelayState state)`  — What the link is, in the words the shell's status panel uses. The
+  - L1854 `void _publishLink(AgentsLinkReport report)`  — Hands [report] to the shell after this frame, once per change.
+  - L1868 `bool get _showConnectBar`
+  - L1878 `Widget _buildSecretRequestBar( BuildContext context, AgentsRelaySecretRequest request, )`  — One field per name the model asked for. A name already set shows a
+  - L1977 `void _onAutomationsChanged()`
+  - L1984 `Widget _buildAutomationCards( BuildContext context, List<AgentsAutomation> automations, )`  — The active and paused automations of this thread, with Pause / Resume /
+  - L2014 `Widget _buildApprovalBar( BuildContext context, AgentsRelayApprovalRequest request, )`  — A here.now publish the user must answer before the blocked run continues.
+  - L2100 `static String _humanBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+  - L2114 `Widget _buildConnectBar(BuildContext context, AgentsRelayState state)`
+  - L2179 `Widget _buildDevConnectRow()`
+  - L2229 `Widget _buildReconnectBar(BuildContext context, String? banner)`  — The bottom bar shown when the app is paired but not currently connected:
+
+## lib/widgets/anchored_menu.dart  (405 Z.)
+- L20 `_kAnchorGap = 6`  — Gap between the anchor and the menu.
+- L23 `_kEdgeMargin = 8`  — Smallest margin the menu keeps to the screen edges and the keyboard.
+- L27 `_kMinRoomAbove = 120`  — Below this, "open above" is not worth forcing — the menu would be a
+- L32 `_kMenuDuration = Duration(milliseconds: 140)`
+- L37 `Future<T?> showAnchoredMenu<T>( BuildContext anchorContext, { required List<Widget> items, required Color color, // Kept so the call sites read the same; the menu no longer draws a frame. Color? borderColor, double minWidth = 200, // Caps how wide a long row may push the menu; without it a very long // model name makes the menu as wide as the screen. double? maxWidth, // Null takes the build's default: the Agents app opened every menu at // kMenuOuterRadius (26), upstream's own menus are tuned to 18. Most call // sites take the default, so the Agents home and roster menus follow it. double? borderRadius, bool preferAbove = false, // null → pick the side from the anchor's screen position (a control on the // right opens leftwards). true → align the menu's right edge to the anchor // (open leftwards). false → align left edges (open rightwards, for a // right-cascading submenu). bool? alignRight, // Global position of the press. Given, the menu opens there instead of at // the anchor widget. Offset? anchorPoint, // A cascading submenu: open beside the anchor (to its right, or to its left // when the right would run off screen) with the top edges aligned, the way // a native submenu flies out of its parent row. bool besideAnchor = false, // Draw the frame around the whole menu. An action menu is a run of loose // tiles and wants none; a picker — the model and mode menus — is a list // being read against the chat behind it, and there the frame is what says // where the list ends. bool outlined = false, })`  — Show [items] as a dropdown anchored to the widget of [anchorContext].
+- L137 `class _AnchoredMenuRoute<T> extends PopupRoute<T>`
+  - L138 `_AnchoredMenuRoute({ required this.anchor, required this.items, required this.color, required this.borderColor, required this.minWidth, required this.maxWidth, required this.borderRadius, required this.preferAbove, required this.alignRight, required this.besideAnchor, required this.outlined, required this.usableTop, required this.usableBottom, required this.themes, // The menu has nothing to do with the keyboard. Taking the focus is // what pulled the keyboard down and made the composer jump, so this // route does not take it: whatever had the focus keeps it, and the // keyboard stays open or closed exactly as the reader left it. }) : super(requestFocus: false)`
+  - L159 `final Rect anchor`
+  - L160 `final List<Widget> items`
+  - L161 `final Color color`
+  - L165 `final Color? borderColor`  — The frame's border, when [outlined]. Null on the call sites that keep
+  - L166 `final double minWidth`
+  - L167 `final double? maxWidth`
+  - L168 `final double borderRadius`
+  - L169 `final bool preferAbove`
+  - L170 `final bool? alignRight`
+  - L171 `final bool besideAnchor`
+  - L172 `final bool outlined`
+  - L173 `final double usableTop`
+  - L174 `final double usableBottom`
+  - L175 `final CapturedThemes themes`
+  - L178 `Duration get transitionDuration`
+  - L181 `bool get barrierDismissible`
+  - L184 `Color? get barrierColor`
+  - L187 `String? get barrierLabel`
+  - L190 `Widget buildPage(BuildContext context, Animation<double> animation, _)`
+  - L238 `Widget _frame(Widget child)`  — The frame, when the caller asked for one. The tiles keep their own
+  - L258 `Widget buildTransitions( BuildContext context, Animation<double> animation, Animation<double> secondaryAnimation, Widget child, )`
+- L280 `class _AnchoredMenuLayout extends SingleChildLayoutDelegate`  — Puts the menu above the anchor when it does not fit below it. The child
+  - L281 `const _AnchoredMenuLayout({ required this.anchor, this.maxWidth, required this.usableTop, required this.usableBottom, this.preferAbove = false, this.alignRight, this.besideAnchor = false, })`
+  - L291 `final Rect anchor`
+  - L294 `final double? maxWidth`  — Widest the menu may get, whatever its rows ask for.
+  - L296 `final double usableTop`
+  - L297 `final double usableBottom`
+  - L300 `final bool? alignRight`  — Which edge the menu aligns to; null means pick from the anchor position.
+  - L304 `final bool besideAnchor`  — A cascade: sit beside the anchor (right, or left if right runs off) with
+  - L309 `final bool preferAbove`  — Open above the anchor whenever the menu fits there, even when there is
+  - L311 `double get _roomBelow`
+  - L312 `double get _roomAbove`
+  - L316 `bool get _forceAbove`  — Honour [preferAbove] only while there is room worth using up there.
+  - L319 `BoxConstraints getConstraintsForChild(BoxConstraints constraints)`
+  - L334 `Offset getPositionForChild(Size size, Size childSize)`
+  - L382 `bool shouldRelayout(_AnchoredMenuLayout old)`
+- L394 `List<List<Widget>> _splitOnDividers(List<Widget> items)`  — Splits a flat item list into runs at every divider, so a divider becomes
+
+## lib/widgets/answer_blocks.dart  (728 Z.)
+- part of 'markdown_message.dart'
+- L12 `class _AnswerBlockStyle`  — Colours and type the blocks share, taken from the surrounding message.
+  - L13 `_AnswerBlockStyle({ required this.textColor, required this.backgroundColor, required this.accent, required this.fontFamily, required this.baseFontSize, }) : dark = ThemeData.estimateBrightnessForColor(backgroundColor) == Brightness.dark`
+  - L23 `final Color textColor`
+  - L24 `final Color backgroundColor`
+  - L25 `final Color accent`
+  - L26 `final String? fontFamily`
+  - L27 `final double baseFontSize`
+  - L28 `final bool dark`
+  - L30 `Color get muted`
+  - L31 `Color get secondary`
+  - L32 `Color get hairline`
+  - L34 `Color get warn`
+  - L35 `Color get warnSoft`
+  - L37 `Color get bad`
+  - L39 `Color get termBg`
+  - L40 `static const Color termText = Color(0xFFE8E4DC)`
+  - L41 `Color get termDim`
+  - L45 `Widget markdown( String text, { Color? color, double? fontSize, FontWeight? fontWeight, double? height, })`  — Inline Markdown (bold, code, links) inside a block. Blocks do not nest,
+- L67 `Widget _buildAnswerBlock(AnswerBlockSegment block, _AnswerBlockStyle s)`  — Builds the widget for one block. Throws only on a programming error; the
+- L93 `class _BlockFrame extends StatelessWidget`  — The frame of a block: a rule on top and an optional small-caps title.
+  - L94 `const _BlockFrame({ required this.title, required this.s, required this.child, })`
+  - L100 `final String title`
+  - L101 `final _AnswerBlockStyle s`
+  - L102 `final Widget child`
+  - L105 `Widget build(BuildContext context)`
+- L142 `class _StepsBlock extends StatelessWidget`
+  - L143 `const _StepsBlock({required this.spec, required this.s})`
+  - L145 `final StepsSpec spec`
+  - L146 `final _AnswerBlockStyle s`
+  - L148 `static const double _circle = 26`
+  - L149 `static const double _gutter = 12`
+  - L152 `Widget build(BuildContext context)`
+  - L168 `Widget _step(StepItem step, {required bool last})`
+  - L231 `Widget _part(StepPart part)`
+- L255 `class _TerminalLines extends StatelessWidget`  — Command lines on a dark terminal card, with the code block's copy button.
+  - L256 `const _TerminalLines({required this.commands, required this.s})`
+  - L258 `final List<String> commands`
+  - L259 `final _AnswerBlockStyle s`
+  - L262 `Widget build(BuildContext context)`
+- L310 `class _WarningLine extends StatelessWidget`
+  - L311 `const _WarningLine({required this.text, required this.s})`
+  - L313 `final String text`
+  - L314 `final _AnswerBlockStyle s`
+  - L317 `Widget build(BuildContext context)`
+- L359 `class _TimelineBlock extends StatelessWidget`
+  - L360 `const _TimelineBlock({ required this.title, required this.entries, required this.s, })`
+  - L366 `final String title`
+  - L367 `final List<TimelineEntry> entries`
+  - L368 `final _AnswerBlockStyle s`
+  - L370 `static const double _rail = 22`
+  - L371 `static const double _dot = 9`
+  - L374 `Widget build(BuildContext context)`
+  - L399 `Widget _entry( TimelineEntry e, { required bool last, required double labelWidth, required double dotTop, required double lineHeight, })`
+- L478 `class _ScaleBlock extends StatelessWidget`  — A labelled band with ticks and a marker. Experimental: the prompt offers
+  - L479 `const _ScaleBlock({required this.spec, required this.s})`
+  - L481 `final ScaleSpec spec`
+  - L482 `final _AnswerBlockStyle s`
+  - L484 `static const double _stripHeight = 14`
+  - L485 `static const double _shortLine = 6`
+  - L487 `LinearGradient _gradient()`
+  - L507 `String _withUnit(String raw)`
+  - L510 `Widget build(BuildContext context)`
+  - L580 `List<Widget> _marker(ScalePoint m, double w, double pill, double area)`
+  - L625 `List<Widget> _tick(ScalePoint p, double w, {required double lineHeight})`
+- L687 `class _AlertBlock extends StatelessWidget`
+  - L688 `const _AlertBlock({required this.type, required this.lines, required this.s})`
+  - L690 `final String type`
+  - L691 `final List<String> lines`
+  - L692 `final _AnswerBlockStyle s`
+  - L695 `Widget build(BuildContext context)`
 
 ## lib/widgets/api_availability_polling.dart  (51 Z.)
 - L13 `mixin ApiAvailabilityPolling<T extends StatefulWidget> on State<T>`  — Retries a failed model fetch once the API answers again.
@@ -65,6 +629,18 @@
   - L23 `Future<void> onApiReachable()`  — Runs once the API answers again. Implementations reload their models.
   - L25 `void startApiAvailabilityPolling()`
   - L45 `void stopApiAvailabilityPolling()`
+
+## lib/widgets/app_lifecycle_observer.dart  (59 Z.)
+- L20 `class AppLifecycleObserver extends StatefulWidget`
+  - L21 `const AppLifecycleObserver({super.key, required this.child, this.onState})`
+  - L23 `final Widget child`
+  - L28 `final void Function(AppLifecycleState state)? onState`  — Where a lifecycle change goes. Defaults to [AppLifecycleService]; a test
+  - L31 `State<AppLifecycleObserver> createState()`
+- L34 `class _AppLifecycleObserverState extends State<AppLifecycleObserver> with WidgetsBindingObserver`
+  - L37 `void initState()`
+  - L43 `void dispose()`
+  - L49 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L57 `Widget build(BuildContext context)`
 
 ## lib/widgets/app_notification.dart  (209 Z.)
 - L22 `enum AppNotificationKind`  — What kind of thing happened. Picks the glyph and the accent down the side.
@@ -87,7 +663,7 @@
   - L186 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> error( BuildContext context, String message, { Duration duration = const Duration(seconds: 4), String? actionLabel, VoidCallback? onAction, })`  — A failure. Longer on screen, because there is usually something to read.
   - L202 `static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> success( BuildContext context, String message, { Duration duration = const Duration(seconds: 2), })`  — It worked.
 
-## lib/widgets/artifact_panel.dart  (2167 Z.)
+## lib/widgets/artifact_panel.dart  (2169 Z.)
 - L32 `class ArtifactPanel extends StatefulWidget`
   - L33 `const ArtifactPanel({ super.key, required this.artifact, this.onClose, this.onOpenSourceChat, this.showHeader = true, })`
   - L41 `final ArtifactDocument artifact`
@@ -133,120 +709,120 @@
   - L452 `ArtifactType get _effectiveType`
   - L454 `String? get _effectiveAttachmentPath`
   - L466 `Widget build(BuildContext context)`
-- L770 `class ArtifactBottomSheet extends StatelessWidget`
-  - L771 `const ArtifactBottomSheet({super.key, this.onOpenSourceChat})`
-  - L776 `final void Function(String chatId)? onOpenSourceChat`  — Mobile equivalent of the desktop side panel's source-chat button:
-  - L779 `Widget build(BuildContext context)`
-- L853 `class _TypeBadge extends StatelessWidget`
-  - L854 `const _TypeBadge({required this.type})`
-  - L856 `final ArtifactType type`
-  - L859 `Widget build(BuildContext context)`
-- L879 `class _ArtifactRenderer extends StatelessWidget`
-  - L880 `const _ArtifactRenderer({ required this.type, required this.content, this.language, this.attachmentPath, this.artifactId, this.title, this.captureKey, this.forceCodeView = false, this.codeLanguageHint = '', this.readOnly = false, })`
-  - L893 `final ArtifactType type`
-  - L894 `final String content`
-  - L895 `final String? language`
-  - L896 `final String? attachmentPath`
-  - L897 `final String? artifactId`
-  - L898 `final String? title`
-  - L899 `final bool forceCodeView`
-  - L900 `final String codeLanguageHint`
-  - L905 `final bool readOnly`  — True when the user has selected a non-current snapshot. Forces
-  - L909 `final GlobalKey? captureKey`  — Attached to visual artifacts (SVG, technical drawings) so parent can
-  - L911 `Widget _buildVisualView(BuildContext context, Color iconFg)`
-  - L971 `Widget _buildCodeView(BuildContext context)`
-  - L989 `Widget build(BuildContext context)`
-- L1120 `class _ExcalidrawMarkdrawEditor extends StatefulWidget`  — Native cross-platform Excalidraw editor backed by the `markdraw`
-  - L1121 `const _ExcalidrawMarkdrawEditor({ super.key, required this.jsonString, this.artifactId, this.title, this.readOnly = false, })`
-  - L1129 `final String jsonString`
-  - L1130 `final String? artifactId`
-  - L1136 `final String? title`  — Forwarded to the markdraw controller via `renameDocument` so the
-  - L1143 `final bool readOnly`  — When true, the editor renders the scene but rejects all edits and
-  - L1146 `State<_ExcalidrawMarkdrawEditor> createState()`
-- L1150 `class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor>`
-  - L1151 `late final markdraw.MarkdrawController _controller`
-  - L1152 `String _lastPersisted = ''`
-  - L1153 `bool _savingSelfTriggered = false`
-  - L1154 `bool _busy = false`
-  - L1155 `bool _hasUnsavedChanges = false`
-  - L1156 `String? _saveError`
-  - L1161 `Future<void> Function()? _registeredFlush`  — The flush callback we registered with [ArtifactStorageService]. Held
-  - L1164 `void initState()`
-  - L1183 `void _scheduleAutoCenter()`  — Auto-fit the scene to the viewport on first paint. Has to wait
-  - L1204 `void _loadIntoController(String json)`
-  - L1229 `void _applyTitleToController(String? title)`
-  - L1242 `void _registerFlusher()`
-  - L1254 `void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget)`
-  - L1297 `void dispose()`
-  - L1318 `void _onSceneChanged(markdraw.Scene _)`
-  - L1335 `String _safeSerialize()`
-  - L1350 `Future<void> _persistAsNewVersion()`  — Commits the current scene as a NEW artifact version. Called only
-  - L1386 `Size _lastKnownCanvasSize = const Size(800, 600)`
-  - L1388 `void _centerCanvas()`
-  - L1397 `Widget build(BuildContext context)`
-  - L1406 `Widget _buildStack(BuildContext context)`
-- L1532 `class _TypstPdfRenderer extends StatefulWidget`  — Renders a Typst artifact's PDF. Prefers the persisted encrypted
-  - L1533 `const _TypstPdfRenderer({ super.key, required this.source, this.attachmentPath, this.artifactId, })`
-  - L1540 `final String source`
-  - L1541 `final String? attachmentPath`
-  - L1546 `final String? artifactId`  — When non-null and [attachmentPath] is null, a successful live compile
-  - L1549 `State<_TypstPdfRenderer> createState()`
-- L1552 `class _TypstPdfRendererState extends State<_TypstPdfRenderer>`
-  - L1553 `String? _error`
-  - L1554 `bool _loading = true`
-  - L1555 `Uint8List? _pdfBytes`
-  - L1558 `final PdfViewerController _pdfController = PdfViewerController()`
-  - L1559 `bool _ctrlHeld = false`
-  - L1562 `void initState()`
-  - L1569 `void dispose()`
-  - L1574 `bool _onHardwareKey(KeyEvent event)`
-  - L1582 `void _zoomUp()`
-  - L1583 `void _zoomDown()`
-  - L1584 `void _zoomReset()`
-  - L1592 `void didUpdateWidget(covariant _TypstPdfRenderer old)`
-  - L1600 `Future<void> _load()`
-  - L1648 `Future<void> _compile()`
-  - L1709 `static void _backfillAttachment(Uint8List bytes, String artifactId)`  — Upload compiled PDF and update the artifact row in the background.
-  - L1732 `Widget build(BuildContext context)`
-- L1834 `class _ViewModeToggle extends StatelessWidget`  — Preview / Code toggle shown in the artifact header for types that support
-  - L1835 `const _ViewModeToggle({ required this.mode, required this.onChanged, this.compact = true, })`
-  - L1841 `final _ArtifactViewMode mode`
-  - L1842 `final ValueChanged<_ArtifactViewMode> onChanged`
-  - L1846 `final bool compact`  — Compact = desktop header (small font, shrink-wrap).
-  - L1849 `Widget build(BuildContext context)`
-- L1886 `IconData _iconForType(ArtifactType type)`
-- L1908 `class _ZoomableVisual extends StatefulWidget`  — Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
-  - L1909 `const _ZoomableVisual({super.key, required this.child})`
-  - L1911 `final Widget child`
-  - L1914 `State<_ZoomableVisual> createState()`
-- L1917 `class _ZoomableVisualState extends State<_ZoomableVisual>`
-  - L1918 `final TransformationController _ctrl = TransformationController()`
-  - L1921 `void dispose()`
-  - L1926 `void _zoom(double factor, {Offset? focal})`
-  - L1939 `void _resetZoom()`
-  - L1944 `Widget build(BuildContext context)`
-- L1985 `class _DownloadFormat`
-  - L1986 `const _DownloadFormat(this.label, this.ext)`
-  - L1987 `final String label`
-  - L1988 `final String ext`
-- L1996 `class _HistoryReadOnlyBanner extends StatelessWidget`  — Thin banner shown above the renderer when the user has selected a
-  - L1997 `const _HistoryReadOnlyBanner({ required this.selectedVersion, required this.latestVersion, required this.onSwitchToLatest, })`
-  - L2003 `final int selectedVersion`
-  - L2004 `final int latestVersion`
-  - L2005 `final VoidCallback onSwitchToLatest`
-  - L2008 `Widget build(BuildContext context)`
-- L2057 `class _ArtifactSwitcher extends StatelessWidget`  — Header title + switcher. When the current chat has more than one artifact,
-  - L2058 `const _ArtifactSwitcher({ required this.current, required this.all, required this.onSelect, this.fontSize = 14, })`
-  - L2065 `final ArtifactDocument current`
-  - L2066 `final List<ArtifactDocument> all`
-  - L2067 `final ValueChanged<ArtifactDocument> onSelect`
-  - L2068 `final double fontSize`
-  - L2071 `Widget build(BuildContext context)`
-- L2145 `class _ZoomButton extends StatelessWidget`
-  - L2146 `const _ZoomButton({required this.icon, required this.onTap})`
-  - L2148 `final IconData icon`
-  - L2149 `final VoidCallback onTap`
-  - L2152 `Widget build(BuildContext context)`
+- L772 `class ArtifactBottomSheet extends StatelessWidget`
+  - L773 `const ArtifactBottomSheet({super.key, this.onOpenSourceChat})`
+  - L778 `final void Function(String chatId)? onOpenSourceChat`  — Mobile equivalent of the desktop side panel's source-chat button:
+  - L781 `Widget build(BuildContext context)`
+- L855 `class _TypeBadge extends StatelessWidget`
+  - L856 `const _TypeBadge({required this.type})`
+  - L858 `final ArtifactType type`
+  - L861 `Widget build(BuildContext context)`
+- L881 `class _ArtifactRenderer extends StatelessWidget`
+  - L882 `const _ArtifactRenderer({ required this.type, required this.content, this.language, this.attachmentPath, this.artifactId, this.title, this.captureKey, this.forceCodeView = false, this.codeLanguageHint = '', this.readOnly = false, })`
+  - L895 `final ArtifactType type`
+  - L896 `final String content`
+  - L897 `final String? language`
+  - L898 `final String? attachmentPath`
+  - L899 `final String? artifactId`
+  - L900 `final String? title`
+  - L901 `final bool forceCodeView`
+  - L902 `final String codeLanguageHint`
+  - L907 `final bool readOnly`  — True when the user has selected a non-current snapshot. Forces
+  - L911 `final GlobalKey? captureKey`  — Attached to visual artifacts (SVG, technical drawings) so parent can
+  - L913 `Widget _buildVisualView(BuildContext context, Color iconFg)`
+  - L973 `Widget _buildCodeView(BuildContext context)`
+  - L991 `Widget build(BuildContext context)`
+- L1122 `class _ExcalidrawMarkdrawEditor extends StatefulWidget`  — Native cross-platform Excalidraw editor backed by the `markdraw`
+  - L1123 `const _ExcalidrawMarkdrawEditor({ super.key, required this.jsonString, this.artifactId, this.title, this.readOnly = false, })`
+  - L1131 `final String jsonString`
+  - L1132 `final String? artifactId`
+  - L1138 `final String? title`  — Forwarded to the markdraw controller via `renameDocument` so the
+  - L1145 `final bool readOnly`  — When true, the editor renders the scene but rejects all edits and
+  - L1148 `State<_ExcalidrawMarkdrawEditor> createState()`
+- L1152 `class _ExcalidrawMarkdrawEditorState extends State<_ExcalidrawMarkdrawEditor>`
+  - L1153 `late final markdraw.MarkdrawController _controller`
+  - L1154 `String _lastPersisted = ''`
+  - L1155 `bool _savingSelfTriggered = false`
+  - L1156 `bool _busy = false`
+  - L1157 `bool _hasUnsavedChanges = false`
+  - L1158 `String? _saveError`
+  - L1163 `Future<void> Function()? _registeredFlush`  — The flush callback we registered with [ArtifactStorageService]. Held
+  - L1166 `void initState()`
+  - L1185 `void _scheduleAutoCenter()`  — Auto-fit the scene to the viewport on first paint. Has to wait
+  - L1206 `void _loadIntoController(String json)`
+  - L1231 `void _applyTitleToController(String? title)`
+  - L1244 `void _registerFlusher()`
+  - L1256 `void didUpdateWidget(covariant _ExcalidrawMarkdrawEditor oldWidget)`
+  - L1299 `void dispose()`
+  - L1320 `void _onSceneChanged(markdraw.Scene _)`
+  - L1337 `String _safeSerialize()`
+  - L1352 `Future<void> _persistAsNewVersion()`  — Commits the current scene as a NEW artifact version. Called only
+  - L1388 `Size _lastKnownCanvasSize = const Size(800, 600)`
+  - L1390 `void _centerCanvas()`
+  - L1399 `Widget build(BuildContext context)`
+  - L1408 `Widget _buildStack(BuildContext context)`
+- L1534 `class _TypstPdfRenderer extends StatefulWidget`  — Renders a Typst artifact's PDF. Prefers the persisted encrypted
+  - L1535 `const _TypstPdfRenderer({ super.key, required this.source, this.attachmentPath, this.artifactId, })`
+  - L1542 `final String source`
+  - L1543 `final String? attachmentPath`
+  - L1548 `final String? artifactId`  — When non-null and [attachmentPath] is null, a successful live compile
+  - L1551 `State<_TypstPdfRenderer> createState()`
+- L1554 `class _TypstPdfRendererState extends State<_TypstPdfRenderer>`
+  - L1555 `String? _error`
+  - L1556 `bool _loading = true`
+  - L1557 `Uint8List? _pdfBytes`
+  - L1560 `final PdfViewerController _pdfController = PdfViewerController()`
+  - L1561 `bool _ctrlHeld = false`
+  - L1564 `void initState()`
+  - L1571 `void dispose()`
+  - L1576 `bool _onHardwareKey(KeyEvent event)`
+  - L1584 `void _zoomUp()`
+  - L1585 `void _zoomDown()`
+  - L1586 `void _zoomReset()`
+  - L1594 `void didUpdateWidget(covariant _TypstPdfRenderer old)`
+  - L1602 `Future<void> _load()`
+  - L1650 `Future<void> _compile()`
+  - L1711 `static void _backfillAttachment(Uint8List bytes, String artifactId)`  — Upload compiled PDF and update the artifact row in the background.
+  - L1734 `Widget build(BuildContext context)`
+- L1836 `class _ViewModeToggle extends StatelessWidget`  — Preview / Code toggle shown in the artifact header for types that support
+  - L1837 `const _ViewModeToggle({ required this.mode, required this.onChanged, this.compact = true, })`
+  - L1843 `final _ArtifactViewMode mode`
+  - L1844 `final ValueChanged<_ArtifactViewMode> onChanged`
+  - L1848 `final bool compact`  — Compact = desktop header (small font, shrink-wrap).
+  - L1851 `Widget build(BuildContext context)`
+- L1888 `IconData _iconForType(ArtifactType type)`
+- L1910 `class _ZoomableVisual extends StatefulWidget`  — Zoomable wrapper with +/- buttons for visual artifacts (SVG, drawings).
+  - L1911 `const _ZoomableVisual({super.key, required this.child})`
+  - L1913 `final Widget child`
+  - L1916 `State<_ZoomableVisual> createState()`
+- L1919 `class _ZoomableVisualState extends State<_ZoomableVisual>`
+  - L1920 `final TransformationController _ctrl = TransformationController()`
+  - L1923 `void dispose()`
+  - L1928 `void _zoom(double factor, {Offset? focal})`
+  - L1941 `void _resetZoom()`
+  - L1946 `Widget build(BuildContext context)`
+- L1987 `class _DownloadFormat`
+  - L1988 `const _DownloadFormat(this.label, this.ext)`
+  - L1989 `final String label`
+  - L1990 `final String ext`
+- L1998 `class _HistoryReadOnlyBanner extends StatelessWidget`  — Thin banner shown above the renderer when the user has selected a
+  - L1999 `const _HistoryReadOnlyBanner({ required this.selectedVersion, required this.latestVersion, required this.onSwitchToLatest, })`
+  - L2005 `final int selectedVersion`
+  - L2006 `final int latestVersion`
+  - L2007 `final VoidCallback onSwitchToLatest`
+  - L2010 `Widget build(BuildContext context)`
+- L2059 `class _ArtifactSwitcher extends StatelessWidget`  — Header title + switcher. When the current chat has more than one artifact,
+  - L2060 `const _ArtifactSwitcher({ required this.current, required this.all, required this.onSelect, this.fontSize = 14, })`
+  - L2067 `final ArtifactDocument current`
+  - L2068 `final List<ArtifactDocument> all`
+  - L2069 `final ValueChanged<ArtifactDocument> onSelect`
+  - L2070 `final double fontSize`
+  - L2073 `Widget build(BuildContext context)`
+- L2147 `class _ZoomButton extends StatelessWidget`
+  - L2148 `const _ZoomButton({required this.icon, required this.onTap})`
+  - L2150 `final IconData icon`
+  - L2151 `final VoidCallback onTap`
+  - L2154 `Widget build(BuildContext context)`
 
 ## lib/widgets/ask_user_card.dart  (101 Z.)
 - L10 `class AskUserCard extends StatelessWidget`  — Interactive option buttons shown below messages that used the ask_user tool.
@@ -266,387 +842,970 @@
   - L65 `bool _hovered = false`
   - L68 `Widget build(BuildContext context)`
 
-## lib/widgets/attachment_preview_bar.dart  (1008 Z.)
-- L21 `typedef AttachmentRemoveCallback = void Function(String fileId)`
-- L22 `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
-- L23 `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
-- L26 `_kMaxExtensionChars = 3`
-- L29 `_kImageCardSize = 72.0`
-- L30 `_kImageCardBorderWidth = 2.0`
-- L32 `class AttachmentPreviewBar extends StatefulWidget`
-  - L33 `const AttachmentPreviewBar({ super.key, required this.files, required this.onRemove, this.onCopy, this.onContentChanged, })`
-  - L41 `final List<AttachedFile> files`
-  - L42 `final AttachmentRemoveCallback onRemove`
-  - L43 `final AttachmentCopyCallback? onCopy`
-  - L44 `final AttachmentContentChangedCallback? onContentChanged`
-  - L47 `State<AttachmentPreviewBar> createState()`
-- L50 `class _AttachmentPreviewBarState extends State<AttachmentPreviewBar>`
-  - L51 `final ScrollController _scrollController = ScrollController()`
-  - L54 `void dispose()`
-  - L60 `void _onPointerSignal(PointerSignalEvent event)`  — Convert vertical mouse-wheel events into horizontal scrolling.
-  - L72 `Widget build(BuildContext context)`
-- L117 `class _ImageAttachmentCard extends StatelessWidget`
-  - L118 `const _ImageAttachmentCard({required this.file, required this.onRemove})`
-  - L120 `final AttachedFile file`
-  - L121 `final AttachmentRemoveCallback onRemove`
-  - L122 `static final Map<String, Uint8List> _localThumbnailCache = <String, Uint8List>{}`
-  - L124 `static const int _kLocalThumbnailCacheLimit = 24`
-  - L127 `Widget build(BuildContext context)`
-  - L225 `Widget _buildThumbnail(ThemeData theme)`
-  - L274 `void _openImageViewer(BuildContext context)`
-- L305 `class _RemoveButton extends StatelessWidget`
-  - L306 `const _RemoveButton({required this.onTap, this.tooltip, this.size = 22})`
-  - L308 `final VoidCallback? onTap`
-  - L309 `final String? tooltip`
-  - L310 `final double size`
-  - L313 `Widget build(BuildContext context)`
-- L337 `class _DocumentAttachmentTile extends StatelessWidget`
-  - L338 `const _DocumentAttachmentTile({ required this.file, required this.onRemove, required this.onCopy, this.onContentChanged, required this.textColor, required this.accentColor, required this.cardColor, })`
-  - L348 `final AttachedFile file`
-  - L349 `final AttachmentRemoveCallback onRemove`
-  - L350 `final AttachmentCopyCallback? onCopy`
-  - L351 `final AttachmentContentChangedCallback? onContentChanged`
-  - L352 `final Color textColor`
-  - L353 `final Color accentColor`
-  - L354 `final Color cardColor`
-  - L357 `Widget build(BuildContext context)`
-- L481 `void _showDocumentPreview( BuildContext context, AttachedFile file, Color textColor, { AttachmentContentChangedCallback? onContentChanged, })`
-- L495 `class _DocumentPreviewDialog extends StatefulWidget`
-  - L496 `const _DocumentPreviewDialog({required this.file, this.onContentChanged})`
-  - L498 `final AttachedFile file`
-  - L499 `final AttachmentContentChangedCallback? onContentChanged`
-  - L502 `State<_DocumentPreviewDialog> createState()`
-- L505 `class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog>`
-  - L507 `late final bool _isPlainText`
-  - L508 `late final bool _isPdf`
-  - L511 `bool _isEditing = false`
-  - L512 `bool _isLoading = true`
-  - L513 `String? _content`
-  - L514 `late TextEditingController _editController`
-  - L515 `final ScrollController _scrollController = ScrollController()`
-  - L518 `PdfController? _pdfController`
-  - L519 `bool _pdfError = false`
-  - L522 `void initState()`
-  - L539 `void dispose()`
-  - L548 `Future<void> _loadTextContent()`
-  - L559 `Future<void> _loadPdfContent()`
-  - L603 `void _startEditing()`
-  - L610 `Future<void> _saveEdits()`
-  - L633 `void _cancelEditing()`
-  - L640 `Widget build(BuildContext context)`
-  - L760 `Widget _buildContent(Color textColor, Color accent)`
-  - L794 `Widget _buildPdfViewer(Color textColor, Color accent)`
-  - L885 `Widget _buildTextViewer(Color textColor)`
-  - L905 `Widget _buildEditor(Color textColor, Color accent)`
-  - L931 `Widget _buildEmptyState(Color textColor, Color accent, String message)`
-- L955 `Future<String?> _loadPlainTextContent(AttachedFile file)`
-- L980 `bool _isImageFile(String fileName)`
-- L985 `bool _isPdfFile(String fileName)`
-- L989 `bool _isPlainTextFile(String fileName)`
-- L994 `String _extensionLabel(String fileName)`
-- L1002 `String _extractExtension(String fileName)`
-
-## lib/widgets/auth_gate.dart  (92 Z.)
-- L15 `class AuthGate extends StatefulWidget`  — Switches between [signedInBuilder] and [signedOutBuilder] based on
-  - L16 `const AuthGate({ super.key, required this.signedInBuilder, required this.signedOutBuilder, this.loadingBuilder, })`
-  - L23 `final WidgetBuilder signedInBuilder`
-  - L24 `final WidgetBuilder signedOutBuilder`
-  - L25 `final WidgetBuilder? loadingBuilder`
-  - L28 `State<AuthGate> createState()`
-- L31 `class _AuthGateState extends State<AuthGate>`
-  - L32 `StreamSubscription<AuthState>? _authSubscription`
-  - L33 `Session? _session`
-  - L34 `bool _checkingSession = true`
-  - L37 `void initState()`
-  - L42 `Future<void> _initializeAuthState()`
-  - L73 `void dispose()`
-  - L79 `Widget build(BuildContext context)`
-
-## lib/widgets/brand_wordmark.dart  (36 Z.)
-- L16 `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
-  - L17 `final Color color`
-  - L18 `final double height`
-  - L22 `static const double _lockupRatio = 1.907822`  — Full-lockup height / "Chuk Chat" ink height, printed by
-  - L24 `const BrandWordmark({super.key, required this.color, this.height = 15})`
-  - L27 `Widget build(BuildContext context)`
-
-## lib/widgets/chart_widget.dart  (720 Z.)
-- L8 `_defaultColors = [ Color(0xFF2196F3), // blue Color(0xFFF44336), // red Color(0xFF4CAF50), // green Color(0xFFFF9800), /`  — Default color palette for charts when the AI doesn't specify colors.
-- L22 `Color _parseColor(String hex)`  — Parse a hex color string like "#FF5722" or "FF5722" into a Color.
-- L28 `Color _colorAt(int index)`
-- L33 `class ChartRenderer extends StatelessWidget`  — Top-level widget: parses a JSON map and picks the right chart builder.
-  - L34 `final Map<String, dynamic> data`
-  - L36 `const ChartRenderer({super.key, required this.data})`
-  - L39 `static ChartRenderer? tryParse(String jsonString)`  — Convenience: try to parse a raw JSON string. Returns null on failure.
-  - L50 `Widget build(BuildContext context)`
-  - L93 `static double _niceInterval(double range, {int targetTicks = 5})`  — Pick a "nice" axis interval covering the given range with ~targetTicks
-  - L114 `static double _maxYFromDatasets(List<dynamic> datasets)`  — Largest numeric value across every dataset's `data` list.
-  - L129 `static String _formatAxisValue(double value)`  — Format axis values compactly: 1500 -> "1.5K", 2000000 -> "2M", etc.
-  - L142 `Widget _buildChart(String type, BuildContext context)`
-  - L167 `Widget _buildBarChart(BuildContext context)`
-  - L299 `Widget _buildLineChart(BuildContext context)`
-  - L438 `Widget _buildPieChart(BuildContext context)`
-  - L477 `Widget _buildDatasetLegend(BuildContext context)`  — Generic legend for bar/line/scatter/radar charts with named datasets.
-  - L528 `Widget _buildPieLegend(BuildContext context)`
-  - L570 `Widget _buildScatterChart(BuildContext context)`
-  - L665 `Widget _buildRadarChart(BuildContext context)`
-
-## lib/widgets/chat_mode_selector.dart  (573 Z.)
-- L19 `class ChatModeSelector extends StatelessWidget`
-  - L20 `const ChatModeSelector({ super.key, required this.mode, required this.onModeChanged, this.onModelSelected, this.onOpenModelScreen, this.selectedModelId, this.modelLabel, this.customModelLabel, this.pickedModels = const <ChatModelChoice>[], this.showLabel = true, this.reasoningEffort = ChatModeService.reasoningOff, this.reasoningLevels = const <String>[ChatModeService.reasoningOff], this.onReasoningEffortChanged, this.height = 40, this.menuAbove = false, })`
-  - L38 `final ChatMode mode`
-  - L39 `final ValueChanged<ChatMode> onModeChanged`
-  - L43 `final ValueChanged<String>? onModelSelected`  — Called with the model id the reader picked in the second menu. Omit to
-  - L47 `final VoidCallback? onOpenModelScreen`  — Opens the full model screen, where the whole catalogue is browsed and
-  - L50 `final List<ChatModelChoice> pickedModels`  — The models this reader has picked, in display order.
-  - L53 `final String? selectedModelId`  — Id of the model in use for the active mode, ticked in the model rows.
-  - L56 `final String? modelLabel`  — Human name of that model, shown on the second-menu opener.
-  - L62 `final String? customModelLabel`  — Human name of the model Custom last ran, remembered across mode switches.
-  - L65 `final String reasoningEffort`  — The active mode's reasoning level, ticked in the reasoning rows.
-  - L69 `final List<String> reasoningLevels`  — The reasoning levels the active mode's model+provider allow, `none`
-  - L73 `final ValueChanged<String>? onReasoningEffortChanged`  — Called with the reasoning level the reader picked for the active mode.
-  - L77 `final bool showLabel`  — Whether the pill spells the mode out. The mobile composer sets this
-  - L79 `final double height`
-  - L82 `final bool menuAbove`  — Open the menus above the pill whenever they fit there.
-  - L87 `static const int kMaxModelsInMenu = 40`  — Longest model list shown in the second menu. Beyond this the list stops
-  - L89 `static IconData iconFor(ChatMode mode)`
-  - L100 `static String labelFor(ChatMode mode)`
-  - L111 `static String descriptionFor(ChatMode mode)`
-  - L124 `double get _glyphSize`  — The mode glyph, sized from the pill instead of pinned: the composer
-  - L129 `String get _customPointLabel`  — The label for the third point (Custom). When Custom is active it names
-  - L142 `bool get _hasDeeperMenu`  — Whether the second menu has anything to show.
-  - L148 `Widget build(BuildContext context)`
-  - L209 `Future<void> _openModeMenu(BuildContext context)`
-  - L260 `Future<void> _openModelMenu(BuildContext context)`
-  - L353 `Future<void> _openReasoningMenu(BuildContext rowContext)`  — [rowContext] is the Reasoning row inside the still-open model menu, so
-  - L377 `PopupMenuItem<T> _headerRow<T>({ required Color iconFg, required String label, })`  — A non-interactive section header, dimmer and lighter than a choice.
-  - L399 `PopupMenuItem<T> _menuRow<T>({ required T value, required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, })`  — One row, matching the model dropdown: 40 high, 16 of side padding,
-  - L423 `Widget _rowChild({ required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, })`  — The inner row of a menu entry, shared by [_menuRow] and the submenu
-  - L458 `Future<T?> _showAnchoredMenu<T>( BuildContext context, { required List<PopupMenuEntry<T>> items, bool? alignRight, bool besideAnchor = false, })`  — Open a menu anchored to this control, styled like the model dropdown.
-  - L482 `static String stripLabPrefix(String name)`  — `DeepSeek: DeepSeek V4 Flash` → `DeepSeek V4 Flash`, the way the model
-- L491 `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
-- L513 `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
-  - L514 `const ChatModelChoice({required this.id, required this.name})`
-  - L516 `final String id`
-  - L517 `final String name`
-- L522 `class _MenuChoice`  — What a row in the first menu stands for: a mode, or the way one level
-  - L523 `const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false`
-  - L524 `const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true`
-  - L526 `final ChatMode? mode`
-  - L527 `final bool openModelMenu`
-- L532 `class _DeeperChoice`  — What a row in the second menu stands for: a reasoning level, a model, or
-  - L533 `const _DeeperChoice.model(String this.modelId) : openScreen = false`
-  - L534 `const _DeeperChoice.openScreen() : modelId = null, openScreen = true`
-  - L536 `final String? modelId`
-  - L537 `final bool openScreen`
-- L543 `class _SubmenuOpener<T> extends PopupMenuEntry<T>`  — A menu row that opens a cascading submenu on tap WITHOUT popping the menu
-  - L544 `const _SubmenuOpener({ required this.rowHeight, required this.child, required this.onOpen, })`
-  - L550 `final double rowHeight`
-  - L551 `final Widget child`
-  - L552 `final Future<void> Function(BuildContext rowContext) onOpen`
-  - L555 `double get height`
-  - L558 `bool represents(T? value)`
-  - L561 `State<_SubmenuOpener<T>> createState()`
-- L564 `class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>>`
-  - L566 `Widget build(BuildContext context)`
-
-## lib/widgets/chuk_table.dart  (490 Z.)
-- L19 `class ParsedTable`  — One parsed markdown table plus the metadata needed to render it.
-  - L20 `ParsedTable({ required this.header, required this.rows, required this.alignments, })`
-  - L26 `final List<String> header`
-  - L27 `final List<List<String>> rows`
-  - L28 `final List<TextAlign> alignments`
-  - L30 `int get columnCount`
-- L35 `List<String> _splitRow(String line)`  — Splits a single row of raw cell text on unescaped `|`, dropping the empty
-- L69 `List<String> splitTableRow(String line)`  — Public wrapper around row splitting, used by the markdown splitter to count
-- L71 `_delimiterCell = RegExp(r'^\s*:?-{1,}:?\s*$')`
-- L73 `TextAlign _alignmentOf(String delimiter)`
-- L83 `bool isTableDelimiterRow(String line)`  — Returns true if [line] is a valid GFM delimiter row (`| --- | :-: |`).
-- L92 `ParsedTable? parseTable(List<String> lines)`  — Parses a block of lines (header, delimiter, body rows) into a [ParsedTable].
-- L120 `class ChukTable extends StatefulWidget`  — A rounded, scrollable, copyable rendering of a markdown table.
-  - L121 `const ChukTable({ super.key, required this.table, required this.textColor, required this.accentColor, this.fontFamily, this.fontSize = 13.5, })`
-  - L130 `final ParsedTable table`
-  - L131 `final Color textColor`
-  - L132 `final Color accentColor`
-  - L133 `final String? fontFamily`
-  - L134 `final double fontSize`
-  - L137 `State<ChukTable> createState()`
-- L140 `class _ChukTableState extends State<ChukTable>`
-  - L141 `bool _copied = false`
-  - L145 `final ScrollController _hCtrl = ScrollController()`  — Shared by the horizontal Scrollbar and its SingleChildScrollView so the
-  - L148 `void dispose()`
-  - L153 `String _asMarkdown()`
-  - L165 `Future<void> _copy()`
-  - L175 `Widget build(BuildContext context)`
-  - L304 `Map<int, TableColumnWidth> _flexColumnWidths(ParsedTable t)`  — Column widths proportional to the longest visible cell in each column,
-  - L321 `int _visibleLen(String raw)`  — Rough on-screen length of a cell: drop the inline markdown markers so
-  - L328 `double _estimatedNaturalWidth(ParsedTable t)`  — Rough natural pixel width of the table if every cell sat on one line.
-  - L345 `Widget _cell( String raw, { required TextAlign align, required bool header, required bool firstCol, })`
-  - L404 `TextSpan _inlineSpans(String text, TextStyle base)`  — Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
-- L458 `class _CopyButton extends StatelessWidget`
-  - L459 `const _CopyButton({ required this.copied, required this.color, required this.accent, required this.onTap, })`
-  - L466 `final bool copied`
-  - L467 `final Color color`
-  - L468 `final Color accent`
-  - L469 `final VoidCallback onTap`
-  - L472 `Widget build(BuildContext context)`
-
-## lib/widgets/credit_display.dart  (871 Z.)
-- L15 `_supabase = Supabase.instance.client`
-- L18 `_kCachedCredits = 'cached_credits'`
-- L19 `_kCachedHasSubscription = 'cached_has_subscription'`
-- L20 `_kCachedFreeMessagesRemaining = 'cached_free_messages_remaining'`
-- L21 `_kCachedFreeMessagesTotal = 'cached_free_messages_total'`
-- L24 `_kCachedTotalCreditsAllocated = 'cached_total_credits_allocated'`
-- L25 `_kCachedRemainingCredits = 'cached_remaining_credits'`
-- L26 `_kCachedBillingPeriodStart = 'cached_billing_period_start'`
-- L27 `_kCachedBillingPeriodEnd = 'cached_billing_period_end'`
-- L29 `class CreditBalances`
-  - L30 `const CreditBalances({ required this.totalCredits, required this.usedCredits, required this.remainingCredits, this.billingPeriodStart, this.billingPeriodEnd, })`
-  - L38 `const CreditBalances.empty() : totalCredits = 0, usedCredits = 0, remainingCredits = 0, billingPeriodStart = null, billingPeriodEnd = null`
-  - L45 `final double totalCredits`
-  - L46 `final double usedCredits`
-  - L47 `final double remainingCredits`
-  - L48 `final DateTime? billingPeriodStart`
-  - L49 `final DateTime? billingPeriodEnd`
-  - L51 `double get remainingRatio`
-- L55 `mixin _CreditListenerMixin<T extends StatefulWidget> on State<T>`
-  - L56 `CreditBalances creditBalances = const CreditBalances.empty()`
-  - L57 `bool creditLoading = true`
-  - L59 `RealtimeChannel? _creditChannel`
-  - L60 `bool _hasLoadedOnce = false`
-  - L63 `void initCreditListener({String? channelName})`
-  - L90 `Future<void> _loadCreditsFromCacheThenRemote()`  — Load from cache first for instant UI, then sync from remote in background
-  - L99 `Future<void> _loadCreditsFromCache()`  — Load credits from local cache for instant display
-  - L153 `Future<void> _saveCreditsToCache( double total, double remaining, { DateTime? periodStart, DateTime? periodEnd, })`  — Save credits to cache for offline access
-  - L191 `Future<void> refreshCredits({bool reloadSilently = false})`
-  - L330 `void disposeCreditListener()`
-- L338 `class CreditDisplay extends StatefulWidget`
-  - L339 `const CreditDisplay({super.key})`
-  - L342 `State<CreditDisplay> createState()`
-- L345 `class _CreditDisplayState extends State<CreditDisplay> with _CreditListenerMixin<CreditDisplay>`
-  - L348 `void initState()`
-  - L354 `void dispose()`
+## lib/widgets/attachment_preview_bar.dart  (1015 Z.)
+- L23 `typedef AttachmentRemoveCallback = void Function(String fileId)`
+- L24 `typedef AttachmentCopyCallback = Future<void> Function(AttachedFile file)`
+- L25 `typedef AttachmentContentChangedCallback = void Function(String fileId, String newContent)`
+- L28 `_kMaxExtensionChars = 3`
+- L31 `_kImageCardSize = 72.0`
+- L32 `_kImageCardBorderWidth = 2.0`
+- L34 `class AttachmentPreviewBar extends StatefulWidget`
+  - L35 `const AttachmentPreviewBar({ super.key, required this.files, required this.onRemove, this.onCopy, this.onContentChanged, })`
+  - L43 `final List<AttachedFile> files`
+  - L44 `final AttachmentRemoveCallback onRemove`
+  - L45 `final AttachmentCopyCallback? onCopy`
+  - L46 `final AttachmentContentChangedCallback? onContentChanged`
+  - L49 `State<AttachmentPreviewBar> createState()`
+- L52 `class _AttachmentPreviewBarState extends State<AttachmentPreviewBar>`
+  - L53 `final ScrollController _scrollController = ScrollController()`
+  - L56 `void dispose()`
+  - L62 `void _onPointerSignal(PointerSignalEvent event)`  — Convert vertical mouse-wheel events into horizontal scrolling.
+  - L74 `Widget build(BuildContext context)`
+- L119 `class _ImageAttachmentCard extends StatelessWidget`
+  - L120 `const _ImageAttachmentCard({required this.file, required this.onRemove})`
+  - L122 `final AttachedFile file`
+  - L123 `final AttachmentRemoveCallback onRemove`
+  - L124 `static final Map<String, Uint8List> _localThumbnailCache = <String, Uint8List>{}`
+  - L126 `static const int _kLocalThumbnailCacheLimit = 24`
+  - L129 `Widget build(BuildContext context)`
+  - L229 `Widget _buildThumbnail(ThemeData theme)`
+  - L278 `void _openImageViewer(BuildContext context)`
+- L316 `class _RemoveButton extends StatelessWidget`  — The remove target on an attachment card.
+  - L317 `const _RemoveButton({required this.onTap, this.tooltip})`
+  - L319 `final VoidCallback? onTap`
+  - L320 `final String? tooltip`
+  - L323 `Widget build(BuildContext context)`
+- L340 `class _DocumentAttachmentTile extends StatelessWidget`
+  - L341 `const _DocumentAttachmentTile({ required this.file, required this.onRemove, required this.onCopy, this.onContentChanged, required this.textColor, required this.accentColor, required this.cardColor, })`
+  - L351 `final AttachedFile file`
+  - L352 `final AttachmentRemoveCallback onRemove`
+  - L353 `final AttachmentCopyCallback? onCopy`
+  - L354 `final AttachmentContentChangedCallback? onContentChanged`
+  - L355 `final Color textColor`
+  - L356 `final Color accentColor`
+  - L357 `final Color cardColor`
   - L360 `Widget build(BuildContext context)`
-  - L484 `static String _formatDate(DateTime dt)`
-- L490 `class CreditBadge extends StatefulWidget`
-  - L491 `const CreditBadge({ super.key, this.textStyle, this.placeholderStyle, this.padding, })`
-  - L498 `final TextStyle? textStyle`
-  - L499 `final TextStyle? placeholderStyle`
-  - L500 `final EdgeInsetsGeometry? padding`
-  - L503 `State<CreditBadge> createState()`
-- L506 `class _CreditBadgeState extends State<CreditBadge> with _CreditListenerMixin<CreditBadge>`
-  - L509 `void initState()`
-  - L515 `void dispose()`
-  - L521 `Widget build(BuildContext context)`
-- L568 `class BalanceBadge extends StatefulWidget`  — Smart badge that shows credits for subscribed users OR free messages for non-subscribed users
-  - L569 `const BalanceBadge({ super.key, this.textStyle, this.placeholderStyle, this.padding, })`
-  - L576 `final TextStyle? textStyle`
-  - L577 `final TextStyle? placeholderStyle`
-  - L578 `final EdgeInsetsGeometry? padding`
-  - L581 `State<BalanceBadge> createState()`
-- L584 `class _BalanceBadgeState extends State<BalanceBadge>`
-  - L585 `bool _loading = true`
-  - L586 `double _credits = 0.0`
-  - L587 `int _freeMessagesRemaining = 0`
-  - L588 `int _freeMessagesTotal = 10`
-  - L590 `bool _hasSubscription = true`
-  - L591 `RealtimeChannel? _channel`
-  - L592 `VoidCallback? _networkListener`
-  - L595 `VoidCallback? _readyListener`  — Set while the badge is waiting for the Supabase client to exist.
-  - L598 `void initState()`
-  - L620 `void _dropReadyListener()`
-  - L627 `void dispose()`
-  - L640 `void _initListener()`
-  - L672 `Future<void> _loadFromCacheThenRemote()`  — Load cached data first for instant display, then fetch from remote in background
-  - L681 `Future<void> _loadFromCache()`  — Load balance from local cache for offline display
-  - L718 `Future<void> _saveToCache()`  — Save balance to local cache
-  - L736 `Future<void> _loadBalance({bool silent = false})`
-  - L797 `Widget build(BuildContext context)`
-- L850 `class _MetaLine extends StatelessWidget`  — Two small captions on one line — the pattern used under both bars.
-  - L851 `final String left`
-  - L852 `final String right`
-  - L854 `const _MetaLine({required this.left, required this.right})`
-  - L857 `Widget build(BuildContext context)`
+- L486 `void _showDocumentPreview( BuildContext context, AttachedFile file, Color textColor, { AttachmentContentChangedCallback? onContentChanged, })`
+- L500 `class _DocumentPreviewDialog extends StatefulWidget`
+  - L501 `const _DocumentPreviewDialog({required this.file, this.onContentChanged})`
+  - L503 `final AttachedFile file`
+  - L504 `final AttachmentContentChangedCallback? onContentChanged`
+  - L507 `State<_DocumentPreviewDialog> createState()`
+- L510 `class _DocumentPreviewDialogState extends State<_DocumentPreviewDialog>`
+  - L512 `late final bool _isPlainText`
+  - L513 `late final bool _isPdf`
+  - L516 `bool _isEditing = false`
+  - L517 `bool _isLoading = true`
+  - L518 `String? _content`
+  - L519 `late TextEditingController _editController`
+  - L520 `final ScrollController _scrollController = ScrollController()`
+  - L523 `PdfController? _pdfController`
+  - L524 `bool _pdfError = false`
+  - L527 `void initState()`
+  - L544 `void dispose()`
+  - L553 `Future<void> _loadTextContent()`
+  - L564 `Future<void> _loadPdfContent()`
+  - L608 `void _startEditing()`
+  - L615 `Future<void> _saveEdits()`
+  - L638 `void _cancelEditing()`
+  - L645 `Widget build(BuildContext context)`
+  - L765 `Widget _buildContent(Color textColor, Color accent)`
+  - L799 `Widget _buildPdfViewer(Color textColor, Color accent)`
+  - L892 `Widget _buildTextViewer(Color textColor)`
+  - L912 `Widget _buildEditor(Color textColor, Color accent)`
+  - L938 `Widget _buildEmptyState(Color textColor, Color accent, String message)`
+- L962 `Future<String?> _loadPlainTextContent(AttachedFile file)`
+- L987 `bool _isImageFile(String fileName)`
+- L992 `bool _isPdfFile(String fileName)`
+- L996 `bool _isPlainTextFile(String fileName)`
+- L1001 `String _extensionLabel(String fileName)`
+- L1009 `String _extractExtension(String fileName)`
 
-## lib/widgets/diff_widget.dart  (505 Z.)
-- L7 `enum _LineType`
-  - L7 `added`
-  - L7 `removed`
-  - L7 `context`
-- L9 `class _DiffLine`
-  - L10 `_DiffLine( this.type, this.text, { this.counterpart, this.oldNo, this.newNo, })`
-  - L17 `final _LineType type`
-  - L18 `final String text`
-  - L21 `final String? counterpart`  — For paired removed↔added lines: the opposite side's text for word diff.
-  - L24 `final int? oldNo`  — 1-based line numbers in the old / new document (null if N/A).
-  - L25 `final int? newNo`
-- L28 `class _Span`
-  - L29 `const _Span(this.text, {required this.changed})`
-  - L30 `final String text`
-  - L31 `final bool changed`
-- L35 `_kContextLines = 2`  — Number of unchanged context lines kept around each change before folding.
-- L41 `class DiffWidget extends StatefulWidget`  — Renders a before/after comparison as a VS Code–style unified diff:
-  - L42 `const DiffWidget({ super.key, required this.before, required this.after, this.title, this.type, })`
-  - L50 `final String before`
-  - L51 `final String after`
-  - L52 `final String? title`
-  - L53 `final String? type`
-  - L56 `State<DiffWidget> createState()`
-- L59 `class _DiffWidgetState extends State<DiffWidget>`
-  - L60 `bool _expanded = true`
-  - L64 `static List<T> _lcsOf<T>(List<T> a, List<T> b)`
-  - L92 `static List<_DiffLine> _lineDiff(String before, String after)`
-  - L160 `static List<Object> _foldContext(List<_DiffLine> lines)`  — Marks which lines should be visible (changes + context). Returns a list
-  - L192 `static List<String> _tokenise(String line)`
-  - L201 `static List<_Span> _wordDiff(String source, String other)`  — Spans for [source] highlighting tokens that differ from [other].
-  - L231 `String _typeLabel()`
-  - L249 `Widget build(BuildContext context)`
-  - L343 `Widget _buildFold(int count, bool isDark)`
-  - L359 `Widget _buildLine(_DiffLine line, bool isDark)`
-- L479 `class _Chip extends StatelessWidget`
-  - L480 `const _Chip(this.label, this.color)`
-  - L481 `final String label`
-  - L482 `final Color color`
+## lib/widgets/auth_gate.dart  (347 Z.)
+- L25 `class AuthGate extends StatefulWidget`  — The auth gate: swaps between the login screen and the messenger shell on
+  - L26 `const AuthGate({ super.key, this.themeController, this.stash, this.authChanges, this.currentSession, this.recover, this.pairingStore, this.buildShell, this.buildLogin, this.retryDelay = const Duration(seconds: 5), this.maxAttempts = 6, this.sleep, })`
+  - L43 `final ThemeController? themeController`  — The app's theme controller, handed to the shell so its settings menu can
+  - L47 `final SessionStash? stash`  — The session main() set aside at startup. Null falls back to
+  - L50 `final Stream<AuthState>? authChanges`  — Auth event stream; null falls back to Supabase's. Injectable for tests.
+  - L53 `final Session? Function()? currentSession`  — Current session reader; null falls back to Supabase's. For tests.
+  - L57 `final Future<RecoveryResult> Function(SessionStash stash)? recover`  — The recovery procedure; null runs [SessionRecovery] through the paired
+  - L63 `final Duration retryDelay`  — How long the gate waits before running a recovery again after a call
+  - L68 `final int maxAttempts`  — How many times one run tries before it gives the device a rest. Giving up
+  - L71 `final Future<void> Function(Duration)? sleep`  — Sleeps between those attempts; injectable so a test does not wait.
+  - L74 `final AgentsPairingStore? pairingStore`  — Where the stored pairing is read from for a recovery.
+  - L78 `final WidgetBuilder? buildShell`  — Builders for the two destinations, so a widget test can mount the gate
+  - L79 `final WidgetBuilder? buildLogin`
+  - L82 `State<AuthGate> createState()`
+- L85 `class _AuthGateState extends State<AuthGate> with WidgetsBindingObserver`
+  - L86 `Session? _session`
+  - L89 `Session? _lastSession`  — The last session we held: the pair a runtime recovery starts from.
+  - L91 `bool _recovering = false`
+  - L101 `SessionStash? _recoveringFrom`  — The stash the running recovery started from, when it names a user.
+  - L103 `StreamSubscription<AuthState>? _sub`
+  - L105 `Session? _readCurrent()`
+  - L113 `Stream<AuthState>? _changes()`
+  - L122 `void initState()`
+  - L147 `void dispose()`
+  - L157 `void didChangeAppLifecycleState(AppLifecycleState state)`  — Coming back to the app is the moment the signal is most likely to be
+  - L164 `void _onAuth(AuthState state)`
+  - L214 `Future<RecoveryResult> _recoverThroughHost(SessionStash stash)`
+  - L228 `Future<void> _startRecovery(SessionStash stash)`
+  - L302 `static Future<void> _sleep(Duration d)`
+  - L305 `Widget build(BuildContext context)`
+- L324 `class _RecoveringView extends StatelessWidget`  — Shown while the host is asked for the live session: a quiet wait, not a
+  - L325 `const _RecoveringView()`
+  - L328 `Widget build(BuildContext context)`
+
+## lib/widgets/automation_card.dart  (226 Z.)
+- L25 `class AutomationCard extends StatefulWidget`  — One automation as a settings row: what it is, when it runs, what state it
+  - L26 `const AutomationCard({ super.key, required this.automation, this.onPause, this.onResume, this.onCancel, this.compact = false, })`
+  - L35 `final AgentsAutomation automation`
+  - L36 `final VoidCallback? onPause`
+  - L37 `final VoidCallback? onResume`
+  - L38 `final VoidCallback? onCancel`
+  - L41 `final bool compact`  — A tighter layout for the strip above a chat: no task text, no expanding.
+  - L44 `State<AutomationCard> createState()`
+- L47 `class _AutomationCardState extends State<AutomationCard>`
+  - L48 `bool _open = false`
+  - L51 `Widget build(BuildContext context)`
+  - L182 `Widget _actions()`  — Pause / Resume and Cancel, on the same line as the state badge. Every
+  - L196 `Widget _action(IconData icon, String tooltip, VoidCallback onPressed)`
+  - L209 `static String _relative(DateTime when)`
+
+## lib/widgets/brand_wordmark.dart  (57 Z.)
+- L18 `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
+  - L19 `final Color color`
+  - L20 `final double height`
+  - L24 `static const double _lockupRatio = 1.907822`  — Full-lockup height / "Chuk Chat" ink height, printed by
+  - L26 `const BrandWordmark({super.key, required this.color, this.height = 15})`
+  - L29 `Widget build(BuildContext context)`
+
+## lib/widgets/browser_view_page.dart  (676 Z.)
+- L52 `class BrowserViewPage extends StatefulWidget`  — The live browser view (§9.1): watch and control the agent's sandbox
+  - L53 `const BrowserViewPage({ super.key, required this.controller, this.sessionKey, })`
+  - L59 `final AgentsRelayController controller`
+  - L64 `final String? sessionKey`  — The thread whose box holds the browser. Without it the executor has to
+  - L69 `static Future<void> open( BuildContext context, AgentsRelayController controller, { String? sessionKey, })`  — The one way into the view (Bead cowork-vzm): a full-screen route on every
+  - L84 `State<BrowserViewPage> createState()`
+- L87 `class _BrowserViewPageState extends State<BrowserViewPage>`
+  - L89 `static final bool _useWebView = !kIsWeb && (Platform.isAndroid || Platform.isIOS)`  — Touch platforms get noVNC in a WebView; desktop keeps the Dart client.
+  - L92 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L93 `String _status = 'connecting'`
+  - L94 `String _message = ''`
+  - L99 `String? _password`
+  - L100 `bool _started = false`
+  - L103 `bool _sawBytes = false`
+  - L108 `bool _fullscreen = true`
+  - L111 `VncLocalServer? _local`
+  - L112 `StreamSubscription<Uint8List>? _fromPage`
+  - L113 `final VncWebViewController _vnc = VncWebViewController()`
+  - L114 `final FocusNode _keyFocus = FocusNode(debugLabel: 'vnc remote keyboard')`
+  - L115 `final TextEditingController _keyText = TextEditingController()`
+  - L116 `bool _keyboardOpen = false`
+  - L119 `bool _disposed = false`
+  - L122 `ServerSocket? _server`
+  - L123 `Socket? _rfbSocket`
+  - L124 `int? _port`
+  - L125 `bool _bridgeClosed = false`
+  - L129 `final List<Uint8List> _pending = <Uint8List>[]`
+  - L138 `int _generation = 0`
+  - L142 `final RemoteFrameBufferController _rfbController = RemoteFrameBufferController()`
+  - L156 `final GlobalKey _frameHost = GlobalKey(debugLabel: 'browser view frame')`
+  - L161 `int _meterBytes = 0`
+  - L162 `int _meterChunks = 0`
+  - L163 `Timer? _meter`
+  - L166 `void initState()`
+  - L171 `Future<void> _start()`
+  - L208 `Future<void> _startLocalServer()`
+  - L227 `Future<void> _restartStream()`  — The viewer page lost its socket, so the executor's pipe into x11vnc is
+  - L238 `Future<void> _startLoopbackSocket()`
+  - L247 `void _onRfbClient(Socket socket)`
+  - L287 `void _resetBridge()`  — A fresh RFB session arrived on the tunnel. Let the client dial in again.
+  - L300 `void _safeAdd(Uint8List bytes)`
+  - L314 `void _onStreamStateChanged()`
+  - L318 `void _onInbound(AgentsRelayInbound event)`
+  - L369 `void _teardownBridge(int generation)`
+  - L381 `void dispose()`
+  - L403 `void _toggleFullscreen()`
+  - L405 `void _toggleKeyboard()`
+  - L417 `Widget build(BuildContext context)`
+  - L537 `List<Widget> _webViewChrome(BuildContext context)`  — The controls the WebView path owns: the bar, the reconnect note and the
+  - L569 `bool get _hasPicture`  — True once there is a picture on screen, whichever client draws it.
+  - L579 `Widget _buildFrame()`  — The stream and, over it, the two named steps that say what is missing.
+  - L602 `Widget _buildStream()`  — The live stream. Both the local server and the executor's `started` event
+- L638 `class _StatusBanner extends StatelessWidget`
+  - L639 `const _StatusBanner({required this.status, required this.message})`
+  - L641 `final String status`
+  - L642 `final String message`
+  - L645 `Widget build(BuildContext context)`
+
+## lib/widgets/chart_widget.dart  (939 Z.)
+- L8 `_defaultColors = [ Color(0xFF2196F3), // blue Color(0xFFF44336), // red Color(0xFF4CAF50), // green Color(0xFFFF9800), /`  — Default color palette for charts when the AI doesn't specify colors.
+- L26 `Color? _tryParseColor(Object? raw)`  — Parse a hex color like "#FF5722", "FF5722" or "#CCFF5722" into a Color.
+- L35 `Color _colorAt(int index)`
+- L48 `Map<String, dynamic> normalizeChartData(Map<String, dynamic> raw)`  — Normalize the shorthand chart shapes the model may emit into the canonical
+- L111 `class ChartRenderer extends StatelessWidget`  — Top-level widget: parses a JSON map and picks the right chart builder.
+  - L112 `final Map<String, dynamic> data`
+  - L114 `ChartRenderer({super.key, required Map<String, dynamic> data}) : data = normalizeChartData(data)`
+  - L121 `static ChartRenderer? tryParse(String jsonString)`  — Convenience: try to parse a raw JSON string. Returns null on failure.
+  - L135 `Widget build(BuildContext context)`
+  - L183 `Widget _buildFooter(BuildContext context)`  — Caption and provenance under the chart.
+  - L222 `static double _niceInterval(double range, {int targetTicks = 5})`  — Pick a "nice" axis interval covering the given range with ~targetTicks
+  - L244 `static double? _numField(Map<String, dynamic> data, String key)`  — A finite numeric option, or null. Bounds, heights and radii arrive as
+  - L251 `static List<String> _labelsOf(Map<String, dynamic> data)`  — The axis labels as strings. A model may send numbers as labels, and a
+  - L258 `static List<Map<String, dynamic>> _pieItemsOf(Map<String, dynamic> data)`  — The pie/scatter-style items that carry a label and a numeric value.
+  - L271 `static List<Map<String, dynamic>> _datasetsOf(Map<String, dynamic> data)`  — The datasets that are really maps. A malformed entry is skipped, never
+  - L283 `static List<num?> _valuesOf(Map<String, dynamic> dataset)`  — The values of one dataset, position for position: index i still lines up
+  - L291 `static bool hasPlottableData(Map<String, dynamic> data)`  — True when this map holds at least one number to draw. Used to decide
+  - L315 `static double _maxYFromDatasets(List<dynamic> datasets)`  — Largest numeric value across every dataset's `data` list.
+  - L330 `static String _formatAxisValue(double value)`  — Format axis values compactly: 1500 -> "1.5K", 2000000 -> "2M", etc.
+  - L343 `Widget _buildChart(String type, BuildContext context)`
+  - L368 `Widget _buildBarChart(BuildContext context)`
+  - L517 `Widget _buildLineChart(BuildContext context)`
+  - L661 `Widget _buildPieChart(BuildContext context)`
+  - L698 `Widget _buildDatasetLegend(BuildContext context)`  — Generic legend for bar/line/scatter/radar charts with named datasets.
+  - L745 `Widget _buildPieLegend(BuildContext context)`
+  - L785 `Widget _buildScatterChart(BuildContext context)`
+  - L881 `Widget _buildRadarChart(BuildContext context)`
+
+## lib/widgets/chat_composer_box.dart  (151 Z.)
+- L20 `class ChatComposerBox extends StatelessWidget`
+  - L21 `const ChatComposerBox({ super.key, required this.field, required this.actions, this.notices = const <Widget>[], this.borderColor, })`
+  - L31 `final Widget field`  — Row one: the text field, already wrapped in whatever key handling the
+  - L35 `final List<Widget> actions`  — Row two: the action targets, laid out left to right. A [Spacer] before
+  - L39 `final List<Widget> notices`  — Anything that has to sit above the field: a reply preview, an edit
+  - L43 `final Color? borderColor`  — Overrides the hairline, for a state that has to be said in colour (the
+  - L46 `Widget build(BuildContext context)`
+- L84 `class ChatComposerField extends StatelessWidget`  — The composer's text field, with the chat's typography and its borderless
+  - L85 `const ChatComposerField({ super.key, required this.controller, required this.hintText, this.focusNode, this.enabled = true, this.minLines = 1, this.maxLines = 8, this.onSubmitted, this.semanticsIdentifier = 'message_input', })`
+  - L97 `final TextEditingController controller`
+  - L98 `final String hintText`
+  - L99 `final FocusNode? focusNode`
+  - L100 `final bool enabled`
+  - L101 `final int minLines`
+  - L102 `final int maxLines`
+  - L103 `final VoidCallback? onSubmitted`
+  - L104 `final String semanticsIdentifier`
+  - L107 `Widget build(BuildContext context)`
+
+## lib/widgets/chat_document_inline.dart  (721 Z.)
+- L45 `kInlineDocumentRows = 6`  — How much of a document the thread shows before it defers to the reader.
+- L47 `kInlineDocumentProseHeight = 260`
+- L56 `bool inlineDocumentHasContent(Map<String, dynamic> document)`  — Whether [document] carries content the thread can draw.
+- L76 `bool documentIsChart(Map<String, dynamic> document)`  — Whether [document] draws as a chart.
+- L82 `List<String> documentColumns(Map<String, dynamic> document)`  — The column names of a table document.
+- L87 `List<Map> documentRows(Map<String, dynamic> document)`  — The rows of a table document.
+- L94 `List<Map> documentChartRows(Map<String, dynamic> document)`  — The rows of a chart document that have a bar to draw.
+- L109 `Map<String, Object?> documentChartJson(Map<String, dynamic> document)`  — The chart JSON of [document], in the contract `chart_spec.dart` documents.
+- L134 `String documentSourceName(Object? raw)`  — A source URL as a chart footer says it: the host, not the whole path.
+- L146 `@immutable class DocumentChart`  — A document's chart, ready to draw, with what had to be left out of it.
+  - L148 `const DocumentChart({ required this.spec, required this.total, required this.shown, })`
+  - L155 `final ChartSpec spec`  — The spec as drawn — already sorted, already cut to [shown] categories.
+  - L158 `final int total`  — How many categories the document holds.
+  - L161 `final int shown`  — How many of them this spec draws.
+  - L164 `bool get isCut`  — True when the reader has to open the document to see the rest.
+  - L167 `String get countLabel`  — "6 bars", "30 points" — what the block says it is holding.
+- L184 `DocumentChart documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`  — Reads the chart out of [document].
+- L203 `_documentMemo = Expando<Map<Object, Object>>( 'chat document memo', )`  — Per-document memo for [documentChart] and [documentParsedTable].
+- L207 `DocumentChart _documentChart( Map<String, dynamic> document, { int? maxPoints, bool withSource = true, })`
+- L259 `String documentCellText(Object? raw)`  — One cell as [ChukTable] reads it. A bare URL becomes a markdown link
+- L277 `ParsedTable documentParsedTable(Map<String, dynamic> document, {int? maxRows})`  — A table document in the shape [ChukTable] draws.
+- L286 `ParsedTable _documentParsedTable( Map<String, dynamic> document, { int? maxRows, })`
+- L323 `Future<void> openDocumentLink(BuildContext context, String href)`  — Open a link out of a document cell, in the platform browser.
+- L337 `class InlineChatDocument extends StatefulWidget`  — A document, drawn in the thread in the coworker's bubble.
+  - L338 `const InlineChatDocument({ super.key, required this.document, this.onOpen, this.borderRadius, })`
+  - L345 `final Map<String, dynamic> document`
+  - L351 `final BorderRadius? borderRadius`  — The corners this block draws. A document that follows an answer from the
+  - L356 `final VoidCallback? onOpen`  — What a tap does. Defaults to the full-screen reader the row opened
+  - L359 `State<InlineChatDocument> createState()`
+- L362 `class _InlineChatDocumentState extends State<InlineChatDocument>`
+  - L366 `bool _proseCut = false`  — Whether the prose ran past [kInlineDocumentProseHeight]. Measured, not
+  - L368 `void _open()`
+  - L380 `String _meta()`  — The line under the title: what the document is, how big it is, which
+  - L396 `HugeIconData get _glyph`
+  - L409 `Widget build(BuildContext context)`
+- L555 `class _OpenAction extends StatelessWidget`  — The one action a cut document offers, in the app's button family: a tonal
+  - L556 `const _OpenAction({required this.label, required this.onTap})`
+  - L558 `final String label`
+  - L559 `final VoidCallback onTap`
+  - L562 `Widget build(BuildContext context)`
+- L601 `class _CutAtHeight extends StatelessWidget`  — Shows the top [maxHeight] of its child and fades the cut into the bubble.
+  - L602 `const _CutAtHeight({ required this.maxHeight, required this.fade, required this.cut, required this.onCut, required this.child, })`
+  - L610 `final double maxHeight`
+  - L611 `final Color fade`
+  - L612 `final bool cut`
+  - L613 `final ValueChanged<bool> onCut`
+  - L614 `final Widget child`
+  - L617 `Widget build(BuildContext context)`
+- L645 `class _HeightCap extends SingleChildRenderObjectWidget`
+  - L646 `const _HeightCap({ required this.maxHeight, required this.onOverflow, required Widget super.child, })`
+  - L652 `final double maxHeight`
+  - L653 `final ValueChanged<bool> onOverflow`
+  - L656 `_RenderHeightCap createRenderObject(BuildContext context)`
+  - L660 `void updateRenderObject(BuildContext context, _RenderHeightCap render)`
+- L667 `class _RenderHeightCap extends RenderProxyBox`
+  - L668 `_RenderHeightCap({required double maxHeight, required this.onOverflow}) : _maxHeight = maxHeight`
+  - L671 `double _maxHeight`
+  - L672 `ValueChanged<bool> onOverflow`
+  - L673 `bool? _reported`
+  - L675 `set maxHeight(double value)`
+  - L682 `void performLayout()`
+  - L709 `void paint(PaintingContext context, Offset offset)`
+
+## lib/widgets/chat_document_view.dart  (680 Z.)
+- L25 `DateTime? documentUpdatedAt(Map<String, dynamic> document)`  — The agent stamps `updated_at` in epoch seconds — a float for chat documents,
+- L41 `String? documentFreshness(Map<String, dynamic> document, {DateTime? now})`  — How fresh a document is, as one short line: `v17 · 00:06`.
+- L68 `String documentFileStem(Object? title)`  — A file name for a document, from its title.
+- L77 `class ChatDocumentView extends StatefulWidget`
+  - L78 `const ChatDocumentView({ super.key, required this.document, this.showActions = true, this.topInset = 0, })`
+  - L84 `final Map<String, dynamic> document`
+  - L89 `final bool showActions`  — Whether the body draws its own Save action. The full-screen presentation
+  - L95 `final double topInset`  — Room kept at the top of the SCROLLING content, not around the widget.
+  - L103 `static Future<void> open( BuildContext context, Map<String, dynamic> document, )`  — Show [document].
+  - L181 `static (Uint8List, String) _fileOf(Map<String, dynamic> document)`  — The document as the bytes a file would hold: JSON for a table, the
+  - L193 `static Future<void> save(Map<String, dynamic> document)`  — Write the document to wherever the user keeps their downloads.
+  - L203 `static Future<void> share(Map<String, dynamic> document)`  — Hand the document to whatever the platform offers to share with.
+  - L213 `State<ChatDocumentView> createState()`
+- L216 `class _ChatDocumentViewState extends State<ChatDocumentView>`
+  - L220 `static const Duration _flashDuration = Duration(seconds: 6)`  — How long the "Updated" mark stays up after the agent rewrote the document
+  - L222 `Timer? _flashTimer`
+  - L223 `bool _flashing = false`
+  - L226 `void didUpdateWidget(ChatDocumentView oldWidget)`
+  - L244 `void dispose()`
+  - L250 `Widget build(BuildContext context)`
+  - L343 `static const double _readingMeasure = 720`  — The longest line a reader should have to track back from. Past roughly
+  - L348 `Widget _prose(BuildContext context, String text)`  — A markdown document, at document size rather than chat size: a larger
+  - L364 `Widget _table(BuildContext context)`  — A table document, drawn by the same widget the chat uses.
+  - L392 `Widget _chart(BuildContext context)`  — The chart, whole.
+- L446 `class _UpdatedMark extends StatelessWidget`  — The quiet end of "make an update legible": a mark, not a message. It never
+  - L447 `const _UpdatedMark()`
+  - L450 `Widget build(BuildContext context)`
+- L480 `class _DocumentCell extends StatelessWidget`
+  - L481 `const _DocumentCell(this.value, {this.expanded = false})`
+  - L482 `final String value`
+  - L483 `final bool expanded`
   - L485 `Widget build(BuildContext context)`
+- L554 `class _DocumentScreen extends StatelessWidget`  — The phone presentation of a document: its own screen, a bar that floats on
+  - L555 `const _DocumentScreen({required this.document})`
+  - L557 `final Map<String, dynamic> document`
+  - L560 `Widget build(BuildContext context)`
+- L636 `class _MiddleEllipsis extends StatelessWidget`  — One line that loses its middle, not its end.
+  - L637 `const _MiddleEllipsis({required this.text, this.style})`
+  - L639 `final String text`
+  - L640 `final TextStyle? style`
+  - L643 `Widget build(BuildContext context)`
 
-## lib/widgets/document_viewer.dart  (119 Z.)
-- L10 `class DocumentViewer extends StatefulWidget`  — Document viewer for markdown-converted files
-  - L11 `const DocumentViewer({ super.key, required this.fileName, required this.markdownContent, })`
-  - L17 `final String fileName`
-  - L18 `final String markdownContent`
-  - L21 `State<DocumentViewer> createState()`
-- L24 `class _DocumentViewerState extends State<DocumentViewer>`
-  - L25 `bool _isEditing = false`
-  - L26 `late TextEditingController _controller`
-  - L27 `late ScrollController _scrollController`
-  - L30 `void initState()`
-  - L37 `void dispose()`
-  - L43 `void _copyToClipboard()`
-  - L48 `Widget build(BuildContext context)`
-  - L89 `Widget _buildMarkdownView()`
-  - L100 `Widget _buildEditView()`
+## lib/widgets/chat_documents_explorer.dart  (706 Z.)
+- part of 'chat_documents_panel.dart'
+- L3 `class _ExplorerOptions`
+  - L4 `String query = ''`
+  - L5 `String scope = 'All'`
+  - L6 `List<String> folder = []`
+  - L7 `bool grid = false`
+- L13 `_kScopes = <String>['All', 'Saved', 'Workspace']`  — The three scopes, and the words the phone puts on the switch. The stored
+- L14 `_kScopeLabels = <String>['All', 'Saved', 'Files']`
+- L17 `class _DocumentExplorer extends StatefulWidget`  — A view of the real catalog, never a second filesystem or fabricated tree.
+  - L18 `const _DocumentExplorer({ required this.documents, required this.owner, required this.selectedId, required this.onSelect, required this.options, this.phone = false, this.topInset = 0, this.banner, })`
+  - L28 `final List<Map<String, dynamic>> documents`
+  - L29 `final String owner`
+  - L30 `final String? selectedId`
+  - L31 `final ValueChanged<Map<String, dynamic>> onSelect`
+  - L32 `final _ExplorerOptions options`
+  - L37 `final bool phone`  — The full-screen form: one scroller that carries its own header, so the
+  - L40 `final double topInset`  — Room the floating bar takes at the top of that scroller.
+  - L44 `final Widget? banner`  — A message that belongs to the list (a failed read, say), scrolling with
+  - L47 `State<_DocumentExplorer> createState()`
+- L50 `class _DocumentExplorerState extends State<_DocumentExplorer>`
+  - L51 `_ExplorerOptions get options`
+  - L52 `late final _search = TextEditingController(text: options.query)`
+  - L55 `void dispose()`
+  - L60 `List<String> _parts(Map<String, dynamic> doc)`
+  - L66 `void _setScope(String scope)`
+  - L72 `Widget build(BuildContext context)`
+  - L114 `Widget _buildPhone( BuildContext context, List<Map<String, dynamic>> files, Map<String, int> folders, List<String> folderNames, String query, bool empty, )`
+  - L205 `Widget _buildCrumbs(BuildContext context)`  — Where in the container's tree the list is standing. The root crumb is the
+  - L244 `Widget _buildWide( BuildContext context, List<Map<String, dynamic>> files, Map<String, int> folders, List<String> folderNames, String query, bool empty, )`
+  - L402 `Widget _listItem( int index, List<Map<String, dynamic>> files, Map<String, int> folders, List<String> folderNames, )`
+  - L445 `Widget _gridItem( int index, List<Map<String, dynamic>> files, Map<String, int> folders, List<String> folderNames, )`
+  - L457 `Widget _folder(String name, int count, {bool grid = false})`
+- L549 `class _Crumb extends StatelessWidget`  — One step of the workspace path. It is a target, so it is the app's own
+  - L550 `const _Crumb({ super.key, required this.label, required this.onTap, this.icon, })`
+  - L557 `final String label`
+  - L558 `final HugeIconData? icon`
+  - L559 `final VoidCallback onTap`
+  - L562 `Widget build(BuildContext context)`
+- L592 `class _SearchField extends StatelessWidget`  — The list's search input, in the shape the roster uses: one rounded filled
+  - L593 `const _SearchField({ required this.controller, required this.onChanged, required this.onClear, })`
+  - L599 `final TextEditingController controller`
+  - L600 `final ValueChanged<String> onChanged`
+  - L601 `final VoidCallback onClear`
+  - L604 `Widget build(BuildContext context)`
+- L661 `class _FileGridTile extends StatelessWidget`
+  - L662 `const _FileGridTile({required this.document, required this.onTap})`
+  - L663 `final Map<String, dynamic> document`
+  - L664 `final VoidCallback onTap`
+  - L667 `Widget build(BuildContext context)`
 
-## lib/widgets/encrypted_image_widget.dart  (210 Z.)
-- L9 `class EncryptedImageWidget extends StatefulWidget`  — Widget that downloads, decrypts, and displays an encrypted image from storage
-  - L10 `const EncryptedImageWidget({ super.key, required this.storagePath, this.fit = BoxFit.cover, this.width, this.height, })`
-  - L18 `final String storagePath`
-  - L19 `final BoxFit fit`
-  - L20 `final double? width`
-  - L21 `final double? height`
-  - L24 `State<EncryptedImageWidget> createState()`
-- L27 `class _EncryptedImageWidgetState extends State<EncryptedImageWidget>`
-  - L28 `Uint8List? _imageBytes`
-  - L29 `bool _isLoading = true`
-  - L30 `String? _error`
-  - L31 `bool _isDeleted = false`
-  - L32 `StreamSubscription<String>? _deletionSubscription`
-  - L35 `void initState()`
-  - L42 `void dispose()`
-  - L47 `void _listenForDeletion()`
-  - L63 `void didUpdateWidget(EncryptedImageWidget oldWidget)`
-  - L73 `Future<void> _loadImage()`
-  - L112 `Widget build(BuildContext context)`
+## lib/widgets/chat_documents_panel.dart  (1237 Z.)
+- part 'chat_documents_explorer.dart'
+- L24 `_kTwoPaneWidth = 720`  — Below this width a list column and a reading pane would each be too narrow
+- L28 `_kListWidth = 320`  — The list column on the two-pane layout. Wide enough for a file name plus
+- L30 `class ChatDocumentsPanel extends StatefulWidget`
+  - L31 `const ChatDocumentsPanel({ super.key, required this.sessionKey, this.controller, this.coworkerName, this.fullPage = false, })`
+  - L38 `final String sessionKey`
+  - L39 `final AgentsRelayController? controller`
+  - L42 `final bool fullPage`  — Use inside a normal Navigator route on mobile. Dialog callers are unchanged.
+  - L48 `final String? coworkerName`  — The coworker whose container these documents live in, when the caller
+  - L51 `State<ChatDocumentsPanel> createState()`
+- L54 `class _ChatDocumentsPanelState extends State<ChatDocumentsPanel>`
+  - L55 `final Map<String, Map<String, dynamic>> _documents = {}`
+  - L56 `Map<String, dynamic>? _selected`
+  - L57 `SandboxArtifactPayload? _file`
+  - L58 `String? _error`
+  - L59 `String? _coworker`
+  - L60 `bool _loading = true`
+  - L61 `final _explorerOptions = _ExplorerOptions()`
+  - L62 `StreamSubscription<AgentsRelayInbound>? _subscription`
+  - L65 `void initState()`
+  - L73 `bool _reading = false`
+  - L74 `String? _selectedId`
+  - L75 `int _selectionEpoch = 0`
+  - L76 `AgentsRelayPhase? _phase`
+  - L78 `static String? _clean(String? value)`
+  - L86 `String get _owner`  — The coworker's name, or the honest stand-in. Never a guess: the roster is
+  - L88 `void _connectionChanged()`
+  - L98 `Future<void> _load()`
+  - L125 `bool _hasContent(Map<String, dynamic> doc)`
+  - L130 `bool _adopt(Map<String, dynamic> doc)`
+  - L155 `Future<void> _request({String? id})`
+  - L185 `Future<void> _requestCoworkerName()`  — Asks the host who this thread belongs to. The thread key *is* the agent
+  - L199 `void _receive(AgentsRelayInbound event)`
+  - L248 `void _persist(Map<String, dynamic> doc)`
+  - L254 `void _select(Map<String, dynamic> doc)`
+  - L272 `void _deselect()`  — Leaving the reader on the one-pane layout. The epoch moves so that a read
+  - L283 `Future<void> _openFile(Map<String, dynamic> doc, int epoch)`
+  - L311 `void dispose()`
+  - L319 `List<Map<String, dynamic>> get _rows`  — Chat documents first, then workspace files; each group newest first, so
+  - L336 `Widget build(BuildContext context)`
+  - L382 `Widget _buildScreen(BuildContext context, List<Map<String, dynamic>> rows)`  — The full-screen form: the app's own frame ([ExpressiveScreen]), so the
+  - L438 `Widget _buildScreenList( BuildContext context, List<Map<String, dynamic>> rows, )`
+  - L472 `Widget _buildScreenReader(BuildContext context)`
+  - L533 `Widget _buildHeader(BuildContext context, List<Map<String, dynamic>> rows)`  — The house header: an accent rule on top, the owning coworker in an avatar
+  - L618 `Widget _buildScopeFooter(BuildContext context)`  — The one sentence that answers "whose files am I looking at". It is a
+  - L645 `Widget _buildErrorBanner(BuildContext context, String message)`
+  - L674 `Widget _buildErrorCard(BuildContext context, String message)`  — The same message on the phone, where a band across the top would cut the
+  - L704 `Widget _buildTwoPane(BuildContext context, List<Map<String, dynamic>> rows)`
+  - L721 `Widget _buildOnePane(BuildContext context, List<Map<String, dynamic>> rows)`  — On a narrow dialog the two panes become two views: the list, and the
+  - L765 `Widget _buildList(BuildContext context, List<Map<String, dynamic>> rows)`  — One scrolling list, two named groups. The group headings carry the counts,
+  - L785 `Widget _buildReader(BuildContext context, List<Map<String, dynamic>> rows)`
+- L838 `class _GroupHeading extends StatelessWidget`  — A group heading with its count, in the shape the house uses for the sections
+  - L839 `const _GroupHeading({ required this.title, required this.count, required this.topInset, })`
+  - L845 `final String title`
+  - L846 `final int count`
+  - L847 `final double topInset`
+  - L850 `Widget build(BuildContext context)`
+- L894 `class _DocumentRow extends StatelessWidget`  — One list row, in the shape every other list in the app uses (the roster, the
+  - L895 `const _DocumentRow({ required this.document, required this.selected, required this.onTap, })`
+  - L901 `final Map<String, dynamic> document`
+  - L902 `final bool selected`
+  - L903 `final VoidCallback onTap`
+  - L906 `Widget build(BuildContext context)`
+- L979 `class _KindTile extends StatelessWidget`  — The square that carries a row's type glyph: the corner of the icon targets
+  - L980 `const _KindTile({required this.document, this.selected = false})`
+  - L982 `final Map<String, dynamic> document`
+  - L983 `final bool selected`
+  - L985 `static const double size = 48`
+  - L988 `Widget build(BuildContext context)`
+- L1010 `class _PillAction extends StatelessWidget`  — The app's labelled button, with an icon from the app's own set.
+  - L1011 `const _PillAction({ required this.icon, required this.label, required this.onTap, })`
+  - L1017 `final HugeIconData icon`
+  - L1018 `final String label`
+  - L1019 `final VoidCallback onTap`
+  - L1022 `Widget build(BuildContext context)`
+- L1055 `String? _folderLabel(String path)`  — Where a workspace file sits, short enough for one line. Twenty skills all
+- L1066 `String? _sizeLabel(Map<String, dynamic> document)`  — The house file-size wording, byte for byte the one the workspace file tiles
+- L1078 `String _kindLabel(Map<String, dynamic> document)`
+- L1087 `HugeIconData _documentIcon(Map<String, dynamic> document)`  — The glyph for a row, from the app's own set: the kind first, then the file
+- L1129 `class _EmptyBlock extends StatelessWidget`  — The panel's one empty state, in the house shape: a large quiet icon, the
+  - L1130 `const _EmptyBlock({ required this.icon, required this.title, required this.detail, this.action, this.topInset = 0, })`
+  - L1138 `final HugeIconData icon`
+  - L1139 `final String title`
+  - L1140 `final String detail`
+  - L1141 `final Widget? action`
+  - L1145 `final double topInset`  — Room the floating bar needs above the block, so a short empty state is
+  - L1148 `Widget build(BuildContext context)`
+- L1195 `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
+  - L1196 `const _MiddleEllipsis({required this.text})`
+  - L1198 `final String text`
+  - L1201 `Widget build(BuildContext context)`
+
+## lib/widgets/chat_maintenance_gate.dart  (297 Z.)
+- L17 `class ChatMaintenanceGate extends StatefulWidget`
+  - L18 `const ChatMaintenanceGate({ super.key, required this.child, this.controller, this.syncingHintDelay = const Duration(milliseconds: 400), })`
+  - L26 `final Widget child`  — The shell, built once the chats are ready.
+  - L29 `final ChatMaintenanceController? controller`  — Test seam; the app uses [ChatMaintenanceController.instance].
+  - L32 `final Duration syncingHintDelay`  — How long the check may run before the screen says what it waits for.
+  - L35 `State<ChatMaintenanceGate> createState()`
+- L38 `class _ChatMaintenanceGateState extends State<ChatMaintenanceGate>`
+  - L39 `ChatMaintenanceController get _controller`
+  - L43 `void initState()`
+  - L50 `void dispose()`
+  - L55 `void _onChange()`
+  - L60 `void _start()`  — The session init starts the same run; whoever comes first starts it.
+  - L70 `Widget build(BuildContext context)`
+- L99 `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
+  - L100 `const _Checking({required this.hintDelay})`
+  - L102 `final Duration hintDelay`
+  - L105 `State<_Checking> createState()`
+- L108 `class _CheckingState extends State<_Checking>`
+  - L109 `Timer? _timer`
+  - L110 `bool _showHint = false`
+  - L113 `void initState()`
+  - L121 `void dispose()`
+  - L127 `Widget build(BuildContext context)`
+  - L135 `Widget _hint(BuildContext context, ThemeData theme)`
+- L177 `class ChatMaintenanceScreen extends StatelessWidget`
+  - L178 `const ChatMaintenanceScreen({super.key, required this.controller})`
+  - L180 `final ChatMaintenanceController controller`
+  - L183 `Widget build(BuildContext context)`
+  - L209 `List<Widget> _running(BuildContext context, AppLocalizations l10n)`
+  - L234 `List<Widget> _failure(BuildContext context, AppLocalizations l10n)`
+- L257 `class _ProgressRow extends StatelessWidget`
+  - L258 `const _ProgressRow({ super.key, required this.label, required this.count, required this.value, })`
+  - L265 `final String label`
+  - L266 `final String count`
+  - L267 `final double? value`
+  - L270 `Widget build(BuildContext context)`
+
+## lib/widgets/chat_mode_selector.dart  (605 Z.)
+- L22 `class ChatModeSelector extends StatelessWidget`
+  - L23 `const ChatModeSelector({ super.key, required this.mode, required this.onModeChanged, this.onModelSelected, this.onOpenModelScreen, this.selectedModelId, this.modelLabel, this.customModelLabel, this.pickedModels = const <ChatModelChoice>[], this.showLabel = true, this.reasoningEffort = ChatModeService.reasoningOff, this.reasoningLevels = const <String>[ChatModeService.reasoningOff], this.onReasoningEffortChanged, this.height = MobileLayout.minTouchTarget, this.menuAbove = false, this.agentsMenus = false, this.flat = false, })`
+  - L45 `final bool agentsMenus`  — The Agents thread's menus: the original app's filled tiles at the menu
+  - L49 `final bool flat`  — The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
+  - L53 `bool get _agentsLook`  — Menu rows one touch target high: the Agents build. chuk_chat keeps
+  - L55 `final ChatMode mode`
+  - L56 `final ValueChanged<ChatMode> onModeChanged`
+  - L60 `final ValueChanged<String>? onModelSelected`  — Called with the model id the reader picked in the second menu. Omit to
+  - L64 `final VoidCallback? onOpenModelScreen`  — Opens the full model screen, where the whole catalogue is browsed and
+  - L67 `final List<ChatModelChoice> pickedModels`  — The models this reader has picked, in display order.
+  - L70 `final String? selectedModelId`  — Id of the model in use for the active mode, ticked in the model rows.
+  - L73 `final String? modelLabel`  — Human name of that model, shown on the second-menu opener.
+  - L79 `final String? customModelLabel`  — Human name of the model Custom last ran, remembered across mode switches.
+  - L82 `final String reasoningEffort`  — The active mode's reasoning level, ticked in the reasoning rows.
+  - L86 `final List<String> reasoningLevels`  — The reasoning levels the active mode's model+provider allow, `none`
+  - L90 `final ValueChanged<String>? onReasoningEffortChanged`  — Called with the reasoning level the reader picked for the active mode.
+  - L94 `final bool showLabel`  — Whether the pill spells the mode out. The mobile composer sets this
+  - L96 `final double height`
+  - L99 `final bool menuAbove`  — Open the menus above the pill whenever they fit there.
+  - L104 `static const int kMaxModelsInMenu = 40`  — Longest model list shown in the second menu. Beyond this the list stops
+  - L106 `static IconData iconFor(ChatMode mode)`
+  - L117 `static String labelFor(ChatMode mode)`
+  - L128 `static String descriptionFor(ChatMode mode)`
+  - L141 `double get _glyphSize`  — The mode glyph, sized from the pill instead of pinned: the composer
+  - L146 `String get _customPointLabel`  — The label for the third point (Custom). When Custom is active it names
+  - L159 `bool get _hasDeeperMenu`  — Whether the second menu has anything to show.
+  - L165 `Widget build(BuildContext context)`
+  - L229 `Future<void> _openModeMenu(BuildContext context)`
+  - L282 `Future<void> _openModelMenu(BuildContext context)`
+  - L377 `Future<void> _openReasoningMenu(BuildContext rowContext)`  — [rowContext] is the Reasoning row inside the still-open model menu, so
+  - L402 `PopupMenuItem<T> _headerRow<T>({ required Color iconFg, required String label, })`  — A non-interactive section header, dimmer and lighter than a choice.
+  - L425 `PopupMenuItem<T> _menuRow<T>({ required T value, required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, bool dense = false, })`  — One row, matching the model dropdown: one touch target high, 16 of side
+  - L453 `Widget _rowChild({ required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, })`  — The inner row of a menu entry, shared by [_menuRow] and the submenu
+  - L488 `Future<T?> _showAnchoredMenu<T>( BuildContext context, { required List<PopupMenuEntry<T>> items, bool? alignRight, bool besideAnchor = false, })`  — Open a menu anchored to this control, styled like the model dropdown.
+  - L514 `static String stripLabPrefix(String name)`  — `DeepSeek: DeepSeek V4 Flash` → `DeepSeek V4 Flash`, the way the model
+- L523 `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
+- L545 `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
+  - L546 `const ChatModelChoice({required this.id, required this.name})`
+  - L548 `final String id`
+  - L549 `final String name`
+- L554 `class _MenuChoice`  — What a row in the first menu stands for: a mode, or the way one level
+  - L555 `const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false`
+  - L556 `const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true`
+  - L558 `final ChatMode? mode`
+  - L559 `final bool openModelMenu`
+- L564 `class _DeeperChoice`  — What a row in the second menu stands for: a reasoning level, a model, or
+  - L565 `const _DeeperChoice.model(String this.modelId) : openScreen = false`
+  - L566 `const _DeeperChoice.openScreen() : modelId = null, openScreen = true`
+  - L568 `final String? modelId`
+  - L569 `final bool openScreen`
+- L575 `class _SubmenuOpener<T> extends PopupMenuEntry<T>`  — A menu row that opens a cascading submenu on tap WITHOUT popping the menu
+  - L576 `const _SubmenuOpener({ required this.rowHeight, required this.child, required this.onOpen, })`
+  - L582 `final double rowHeight`
+  - L583 `final Widget child`
+  - L584 `final Future<void> Function(BuildContext rowContext) onOpen`
+  - L587 `double get height`
+  - L590 `bool represents(T? value)`
+  - L593 `State<_SubmenuOpener<T>> createState()`
+- L596 `class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>>`
+  - L598 `Widget build(BuildContext context)`
+
+## lib/widgets/chat_reply_preview.dart  (113 Z.)
+- L6 `class ChatEditNotice extends StatelessWidget`
+  - L7 `const ChatEditNotice({super.key, required this.onCancel})`
+  - L8 `final VoidCallback onCancel`
+  - L11 `Widget build(BuildContext context)`
+- L49 `class ChatReplyPreview extends StatelessWidget`  — A quiet quote above the composer, not a transport/status notification.
+  - L50 `const ChatReplyPreview({ super.key, required this.reply, required this.onCancel, })`
+  - L55 `final ChatReply reply`
+  - L56 `final VoidCallback onCancel`
+  - L59 `Widget build(BuildContext context)`
+
+## lib/widgets/chat_theme.dart  (150 Z.)
+- L10 `abstract final class ChatMetrics`  — Shared look tokens for the Agents chat surface.
+  - L13 `static const double maxColumnWidth = 768`  — The reading column width. ChatGPT caps its text near this value, so a wide
+  - L17 `static const double turnGap = 26`  — Space above the first row of a new turn (a side flip). Big enough that the
+  - L20 `static const double tightGap = 6`  — Space above a row that continues the same side. Small, so a group tucks in.
+  - L23 `static const EdgeInsets listPadding = EdgeInsets.symmetric( horizontal: 16, vertical: 20, )`  — The transcript's own outer padding inside the capped column.
+  - L29 `static const double userBubbleRadius = 22`  — The user pill corner radius and its inner padding.
+  - L30 `static const EdgeInsets userBubblePadding = EdgeInsets.symmetric( horizontal: 16, vertical: 10, )`
+  - L37 `static const double userMaxWidthFactor = 0.82`  — The user pill never spans the whole column; it stops at this fraction of
+  - L41 `static const double assistantFontSize = 16`  — The agent paragraph reads a little larger than default body text, with an
+  - L42 `static const double assistantLineHeight = 1.65`
+- L51 `class ChatPalette`  — Role-based colours for the transcript, derived from the active theme so the
+  - L52 `const ChatPalette({ required this.userBubble, required this.userText, required this.assistantText, required this.muted, required this.hairline, required this.copyIcon, })`
+  - L62 `final Color userBubble`  — The user message pill background.
+  - L65 `final Color userText`  — The text inside the user pill.
+  - L68 `final Color assistantText`  — The agent answer text colour.
+  - L71 `final Color muted`  — A quiet colour for process detail and secondary labels.
+  - L74 `final Color hairline`  — A faint divider colour.
+  - L77 `final Color copyIcon`  — The small action-icon colour under an answer.
+  - L79 `factory ChatPalette.of(BuildContext context)`
+  - L95 `TextStyle assistantParagraph()`  — The paragraph style the agent answer renders with.
+- L107 `class ChatAssistantTextTheme extends StatelessWidget`  — Wraps [child] so any Markdown inside it reads at the chat's paragraph size.
+  - L108 `const ChatAssistantTextTheme({super.key, required this.child})`
+  - L110 `final Widget child`
+  - L113 `Widget build(BuildContext context)`
+- L135 `class ChatColumn extends StatelessWidget`  — Centres its [child] in the reading column: horizontally capped at
+  - L136 `const ChatColumn({super.key, required this.child})`
+  - L138 `final Widget child`
+  - L141 `Widget build(BuildContext context)`
+
+## lib/widgets/chuk_table.dart  (1202 Z.)
+- L43 `class ParsedTable`  — One parsed markdown table plus the metadata needed to render it.
+  - L44 `ParsedTable({ required this.header, required this.rows, required this.alignments, })`
+  - L50 `final List<String> header`
+  - L51 `final List<List<String>> rows`
+  - L52 `final List<TextAlign> alignments`
+  - L54 `int get columnCount`
+- L59 `List<String> _splitRow(String line)`  — Splits a single row of raw cell text on unescaped `|`, dropping the empty
+- L93 `List<String> splitTableRow(String line)`  — Public wrapper around row splitting, used by the markdown splitter to count
+- L95 `_delimiterCell = RegExp(r'^\s*:?-{1,}:?\s*$')`
+- L97 `TextAlign _alignmentOf(String delimiter)`
+- L107 `bool isTableDelimiterRow(String line)`  — Returns true if [line] is a valid GFM delimiter row (`| --- | :-: |`).
+- L116 `ParsedTable? parseTable(List<String> lines)`  — Parses a block of lines (header, delimiter, body rows) into a [ParsedTable].
+- L144 `_wholeCellLink = RegExp(r'^\[([^\]]+)\]\(([^)\s]+)\)$')`  — A whole cell that is nothing but one markdown link: `[label](url)`.
+- L147 `({String label, String href})? chukCellLink(String raw)`  — The label and target of a cell that is exactly one link, else null.
+- L162 `int chukVisibleLength(String raw)`  — The text a cell actually PAINTS, with the inline markdown taken off.
+- L165 `String chukVisibleText(String raw)`  — The same thing as a string: markers dropped, a link reduced to its label.
+- L174 `class ChukTable extends StatefulWidget`  — A rounded, dense, copyable rendering of a markdown table.
+  - L175 `const ChukTable({ super.key, required this.table, required this.textColor, required this.accentColor, this.fontFamily, this.fontSize = 13.5, this.onTapLink, this.surfaceColor, })`
+  - L186 `final ParsedTable table`
+  - L187 `final Color textColor`
+  - L188 `final Color accentColor`
+  - L189 `final String? fontFamily`
+  - L190 `final double fontSize`
+  - L196 `final Color? surfaceColor`  — What the table sits on. Used for one thing only: the fade at the right
+  - L201 `final ValueChanged<String>? onTapLink`  — Opens a link from a cell. Null leaves links unopenable — and a cell that
+  - L204 `State<ChukTable> createState()`
+- L208 `_kEdgePad = 12`  — Room a cell keeps on the outer edges of the table.
+- L211 `_kGutter = 7`  — Half the gap between two neighbouring columns.
+- L216 `_kMinTextWidth = 46`  — A column never narrows past this much room for its text. Below it a cell is
+- L220 `_kActionGlyph = 30`  — Room for the arrow of a collapsed action column: the glyph plus enough
+- L227 `_kRowsSampled = 200`  — How many rows are read to decide column widths and column kinds. A table
+- L231 `_kActionHeader = 54`  — How much of its own header an action column will carry. Past this the
+- L235 `_kMaxTextWidth = 260`  — A single column never claims more than this much text room, so one long
+- L238 `_kRowPadY = 8`  — Air above and below the text of a row.
+- L242 `_kPinnedShare = 0.46`  — How much of the width the pinned first column may take when a table has to
+- L246 `class _Plan`  — The geometry of one drawn table: what each column gets, how tall a row is,
+  - L247 `const _Plan({ required this.widths, required this.collapsed, required this.natural, required this.scrolls, required this.rowHeight, required this.headerHeight, })`
+  - L257 `final List<double> widths`  — Per column, including that column's own left and right padding.
+  - L260 `final List<bool> collapsed`  — Per column: drawn as one arrow instead of a repeated hostname.
+  - L264 `final List<double> natural`  — What each column asked for before the squeeze, so a second pass can see
+  - L265 `final bool scrolls`
+  - L266 `final double rowHeight`
+  - L267 `final double headerHeight`
+  - L269 `double get total`
+- L272 `class _ChukTableState extends State<ChukTable>`
+  - L273 `bool _copied = false`
+  - L278 `final List<TapGestureRecognizer> _linkTaps = <TapGestureRecognizer>[]`  — One recognizer per link span of the current build. Rebuilt with the
+  - L280 `void _releaseLinkTaps()`
+  - L289 `final ScrollController _hCtrl = ScrollController()`  — Shared by the horizontal Scrollbar and its SingleChildScrollView so the
+  - L301 `late List<bool> _collapsedLinkColumns`  — Per column: true when every filled cell is a link, they all paint the
+  - L305 `late List<bool> _linkColumns`  — Per column: true when every filled cell is a link, whatever it is
+  - L311 `late List<bool> _hostLinkColumns`  — Per column: true when every filled cell is a link the APP labelled — the
+  - L317 `late int _subjectColumn`  — The column that reads as the subject of the row: the first one that is
+  - L320 `void initState()`
+  - L326 `void didUpdateWidget(ChukTable old)`
+  - L331 `void _readColumns()`
+  - L339 `static List<bool> _findLinkColumns(ParsedTable t)`
+  - L352 `static String? _hostLabel(String href)`  — The host of [href] the way a cell would print it, or null.
+  - L358 `static List<bool> _findHostLinkColumns(ParsedTable t)`
+  - L371 `static List<bool> _findCollapsedLinkColumns(ParsedTable t)`
+  - L390 `void dispose()`
+  - L396 `String _asMarkdown()`
+  - L408 `Future<void> _copy()`
+  - L419 `TextStyle _bodyStyle({required bool emphasis})`
+  - L432 `TextStyle get _headerStyle`  — The header is a label, not a row: smaller, quieter, spaced. It is the one
+  - L441 `double _padLeft(int c)`
+  - L443 `double _padRight(int c, int columns)`
+  - L450 `String _paintedText(List<bool> collapsed, int column, String raw)`  — What a cell paints, given the collapse decision for its column.
+  - L465 `_Plan _plan(BuildContext context, double maxWidth)`  — The plan, in at most two passes.
+  - L489 `_Plan? _lastPlan`
+  - L490 `ParsedTable? _lastPlanTable`
+  - L491 `Object? _lastPlanKey`
+  - L493 `_Plan _computePlan(BuildContext context, double maxWidth)`
+  - L510 `_Plan _measurePlan( BuildContext context, double maxWidth, List<bool> collapsed, )`
+  - L664 `static final Map<(TextStyle, TextScaler, TextDirection), double> _lineHeights = <(TextStyle, TextScaler, TextDirection), double>{}`  — The painted height of one line in [style], under the reader's text scale.
+  - L667 `double _measuredLine(BuildContext context, TextStyle style)`
+  - L695 `Widget build(BuildContext context)`
+  - L731 `Color get _rule`
+  - L732 `Color get _headerRule`
+  - L734 `Widget _fitting(_Plan plan)`
+  - L744 `Widget _panning(_Plan plan)`  — Wider than the lane: the first column stands still, the rest pans under
+  - L832 `List<Widget> _pane(_Plan plan, {required int first, required int last})`  — The header, its rule, and every row, for the columns `[first, last)`.
+  - L907 `TextAlign _alignOf(_Plan plan, int c)`  — An action column centres under its header; every other column keeps the
+  - L910 `Alignment _boxAlign(TextAlign align)`
+  - L918 `Widget _cell( String raw, { required int column, required List<bool> collapsed, required TextAlign align, required double textWidth, required double rowHeight, })`  — One drawn cell. One line, always: the row height is fixed, so a cell that
+  - L988 `Widget _openAction(String href, {required double height})`  — A link column where every row said the same thing — three rows of
+  - L1020 `TextSpan _inlineSpans(String text, TextStyle base)`  — Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
+- L1113 `class _CopyButton extends StatelessWidget`  — The copy control under a table.
+  - L1114 `const _CopyButton({ required this.copied, required this.color, required this.accent, required this.onTap, })`
+  - L1123 `static const double _height = 38`  — The app's smallest labelled target. Big enough to hit, small enough that
+  - L1125 `final bool copied`
+  - L1126 `final Color color`
+  - L1127 `final Color accent`
+  - L1128 `final VoidCallback onTap`
+  - L1131 `Widget build(BuildContext context)`
+
+## lib/widgets/chuk_table_classic.dart  (399 Z.)
+- L20 `class ChukTableClassic extends StatefulWidget`  — Upstream's rounded-card table: a shaded, bold header row, thin row
+  - L21 `const ChukTableClassic({ super.key, required this.table, required this.textColor, required this.accentColor, this.fontFamily, this.fontSize = 13.5, })`
+  - L30 `final ParsedTable table`
+  - L31 `final Color textColor`
+  - L32 `final Color accentColor`
+  - L33 `final String? fontFamily`
+  - L34 `final double fontSize`
+  - L37 `State<ChukTableClassic> createState()`
+- L41 `_kScrollbarLane = 12`  — Height kept free under the table body for the horizontal scrollbar.
+- L43 `class _ChukTableClassicState extends State<ChukTableClassic>`
+  - L44 `bool _copied = false`
+  - L48 `final ScrollController _hCtrl = ScrollController()`  — Shared by the horizontal Scrollbar and its SingleChildScrollView so the
+  - L51 `void dispose()`
+  - L56 `String _asMarkdown()`
+  - L68 `Future<void> _copy()`
+  - L78 `Widget build(BuildContext context)`
+  - L213 `Map<int, TableColumnWidth> _flexColumnWidths(ParsedTable t)`  — Column widths proportional to the longest visible cell in each column,
+  - L230 `int _visibleLen(String raw)`  — Rough on-screen length of a cell: drop the inline markdown markers so
+  - L237 `double _estimatedNaturalWidth(ParsedTable t)`  — Rough natural pixel width of the table if every cell sat on one line.
+  - L254 `Widget _cell( String raw, { required TextAlign align, required bool header, required bool firstCol, })`
+  - L313 `TextSpan _inlineSpans(String text, TextStyle base)`  — Minimal inline markdown for cells: **bold**, *italic*, `code`, [t](url).
+- L367 `class _CopyButton extends StatelessWidget`
+  - L368 `const _CopyButton({ required this.copied, required this.color, required this.accent, required this.onTap, })`
+  - L375 `final bool copied`
+  - L376 `final Color color`
+  - L377 `final Color accent`
+  - L378 `final VoidCallback onTap`
+  - L381 `Widget build(BuildContext context)`
+
+## lib/widgets/composer_recording.dart  (184 Z.)
+- L25 `class ComposerInputRow extends StatelessWidget`  — Row one of the mobile composer: the text field, and — while the microphone
+  - L26 `const ComposerInputRow({ super.key, required this.isRecording, required this.audioLevels, required this.accentColor, required this.timeColor, required this.child, })`
+  - L35 `final bool isRecording`
+  - L38 `final List<double> audioLevels`  — The recorder's rolling level buffer (0..1, oldest first).
+  - L41 `final Color accentColor`  — The colour of the bars.
+  - L44 `final Color timeColor`  — The colour of the elapsed time.
+  - L47 `final Widget child`  — The text field of the composer.
+  - L50 `Widget build(BuildContext context)`
+- L78 `class RecordingWaveformBar extends StatefulWidget`  — The open microphone: the live waveform, and the elapsed time beside it.
+  - L79 `const RecordingWaveformBar({ super.key, required this.audioLevels, required this.color, required this.timeColor, })`
+  - L86 `final List<double> audioLevels`
+  - L87 `final Color color`
+  - L88 `final Color timeColor`
+  - L91 `State<RecordingWaveformBar> createState()`
+- L94 `class _RecordingWaveformBarState extends State<RecordingWaveformBar>`
+  - L95 `final Stopwatch _clock = Stopwatch()`
+  - L96 `Timer? _ticker`
+  - L97 `Duration _elapsed = Duration.zero`
+  - L100 `void initState()`
+  - L110 `void dispose()`
+  - L116 `static String _format(Duration value)`
+  - L123 `Widget build(BuildContext context)`
+- L164 `class ComposerSelectionControls extends MaterialTextSelectionControls`  — Selection controls for the composer that leave out the collapsed cursor
+  - L165 `ComposerSelectionControls._()`
+  - L167 `static final ComposerSelectionControls instance = ComposerSelectionControls._()`
+  - L171 `Widget buildHandle( BuildContext context, TextSelectionHandleType type, double textHeight, [ VoidCallback? onTap, ])`
+
+## lib/widgets/coworker_name_dialog.dart  (179 Z.)
+- L28 `Future<String?> showCoworkerNameDialog( BuildContext context, { required String title, required String submitLabel, String initialName = '', })`  — Asks for a coworker's name. Returns the trimmed text, or null on Cancel.
+- L42 `class CoworkerNameDialog extends StatefulWidget`
+  - L43 `const CoworkerNameDialog({ super.key, required this.title, required this.submitLabel, this.initialName = '', })`
+  - L50 `final String title`
+  - L51 `final String submitLabel`
+  - L52 `final String initialName`
+  - L55 `State<CoworkerNameDialog> createState()`
+- L58 `class _CoworkerNameDialogState extends State<CoworkerNameDialog>`
+  - L59 `late final TextEditingController _controller = TextEditingController( text: widget.initialName, )`
+  - L64 `void dispose()`
+  - L69 `void _submit()`
+  - L72 `Widget build(BuildContext context)`
+- L175 `_fieldBorder = OutlineInputBorder( borderRadius: BorderRadius.circular(kRadiusField), borderSide: BorderSide.none, )`
+
+## lib/widgets/credit_display.dart  (897 Z.)
+- L16 `_supabase = Supabase.instance.client`
+- L19 `_kCachedCredits = 'cached_credits'`
+- L20 `_kCachedHasSubscription = 'cached_has_subscription'`
+- L21 `_kCachedFreeMessagesRemaining = 'cached_free_messages_remaining'`
+- L22 `_kCachedFreeMessagesTotal = 'cached_free_messages_total'`
+- L25 `_kCachedTotalCreditsAllocated = 'cached_total_credits_allocated'`
+- L26 `_kCachedRemainingCredits = 'cached_remaining_credits'`
+- L27 `_kCachedBillingPeriodStart = 'cached_billing_period_start'`
+- L28 `_kCachedBillingPeriodEnd = 'cached_billing_period_end'`
+- L30 `class CreditBalances`
+  - L31 `const CreditBalances({ required this.totalCredits, required this.usedCredits, required this.remainingCredits, this.billingPeriodStart, this.billingPeriodEnd, })`
+  - L39 `const CreditBalances.empty() : totalCredits = 0, usedCredits = 0, remainingCredits = 0, billingPeriodStart = null, billingPeriodEnd = null`
+  - L46 `final double totalCredits`
+  - L47 `final double usedCredits`
+  - L48 `final double remainingCredits`
+  - L49 `final DateTime? billingPeriodStart`
+  - L50 `final DateTime? billingPeriodEnd`
+  - L52 `double get remainingRatio`
+- L56 `mixin _CreditListenerMixin<T extends StatefulWidget> on State<T>`
+  - L57 `CreditBalances creditBalances = const CreditBalances.empty()`
+  - L58 `bool creditLoading = true`
+  - L60 `RealtimeChannel? _creditChannel`
+  - L61 `bool _hasLoadedOnce = false`
+  - L64 `void initCreditListener({String? channelName})`
+  - L91 `Future<void> _loadCreditsFromCacheThenRemote()`  — Load from cache first for instant UI, then sync from remote in background
+  - L100 `Future<void> _loadCreditsFromCache()`  — Load credits from local cache for instant display
+  - L158 `Future<void> _saveCreditsToCache( double total, double remaining, { DateTime? periodStart, DateTime? periodEnd, })`  — Save credits to cache for offline access
+  - L200 `Future<void> refreshCredits({bool reloadSilently = false})`
+  - L335 `void disposeCreditListener()`
+- L343 `class CreditDisplay extends StatefulWidget`
+  - L344 `const CreditDisplay({super.key})`
+  - L347 `State<CreditDisplay> createState()`
+- L350 `class _CreditDisplayState extends State<CreditDisplay> with _CreditListenerMixin<CreditDisplay>`
+  - L353 `void initState()`
+  - L359 `void dispose()`
+  - L365 `Widget build(BuildContext context)`
+  - L497 `static String _formatDate(DateTime dt)`
+- L503 `class CreditBadge extends StatefulWidget`
+  - L504 `const CreditBadge({ super.key, this.textStyle, this.placeholderStyle, this.padding, })`
+  - L511 `final TextStyle? textStyle`
+  - L512 `final TextStyle? placeholderStyle`
+  - L513 `final EdgeInsetsGeometry? padding`
+  - L516 `State<CreditBadge> createState()`
+- L519 `class _CreditBadgeState extends State<CreditBadge> with _CreditListenerMixin<CreditBadge>`
+  - L522 `void initState()`
+  - L528 `void dispose()`
+  - L534 `Widget build(BuildContext context)`
+- L581 `class BalanceBadge extends StatefulWidget`  — Smart badge that shows credits for subscribed users OR free messages for non-subscribed users
+  - L582 `const BalanceBadge({ super.key, this.textStyle, this.placeholderStyle, this.padding, })`
+  - L589 `final TextStyle? textStyle`
+  - L590 `final TextStyle? placeholderStyle`
+  - L591 `final EdgeInsetsGeometry? padding`
+  - L594 `State<BalanceBadge> createState()`
+- L597 `class _BalanceBadgeState extends State<BalanceBadge>`
+  - L598 `bool _loading = true`
+  - L599 `double _credits = 0.0`
+  - L600 `int _freeMessagesRemaining = 0`
+  - L601 `int _freeMessagesTotal = 10`
+  - L603 `bool _hasSubscription = true`
+  - L604 `RealtimeChannel? _channel`
+  - L605 `VoidCallback? _networkListener`
+  - L608 `VoidCallback? _readyListener`  — Set while the badge is waiting for the Supabase client to exist.
+  - L611 `void initState()`
+  - L633 `void _dropReadyListener()`
+  - L640 `void dispose()`
+  - L653 `void _initListener()`
+  - L685 `Future<void> _loadFromCacheThenRemote()`  — Load cached data first for instant display, then fetch from remote in background
+  - L694 `Future<void> _loadFromCache()`  — Load balance from local cache for offline display
+  - L737 `Future<void> _saveToCache()`  — Save balance to local cache
+  - L759 `Future<void> _loadBalance({bool silent = false})`
+  - L823 `Widget build(BuildContext context)`
+- L876 `class _MetaLine extends StatelessWidget`  — Two small captions on one line — the pattern used under both bars.
+  - L877 `final String left`
+  - L878 `final String right`
+  - L880 `const _MetaLine({required this.left, required this.right})`
+  - L883 `Widget build(BuildContext context)`
+
+## lib/widgets/diff_widget.dart  (515 Z.)
+- L8 `enum _LineType`
+  - L8 `added`
+  - L8 `removed`
+  - L8 `context`
+- L10 `class _DiffLine`
+  - L11 `_DiffLine(this.type, this.text, {this.counterpart, this.oldNo, this.newNo})`
+  - L12 `final _LineType type`
+  - L13 `final String text`
+  - L16 `final String? counterpart`  — For paired removed↔added lines: the opposite side's text for word diff.
+  - L19 `final int? oldNo`  — 1-based line numbers in the old / new document (null if N/A).
+  - L20 `final int? newNo`
+- L23 `class _Span`
+  - L24 `const _Span(this.text, {required this.changed})`
+  - L25 `final String text`
+  - L26 `final bool changed`
+- L30 `_kContextLines = 2`  — Number of unchanged context lines kept around each change before folding.
+- L36 `class DiffWidget extends StatefulWidget`  — Renders a before/after comparison as a VS Code–style unified diff:
+  - L37 `const DiffWidget({ super.key, required this.before, required this.after, this.title, this.type, })`
+  - L45 `final String before`
+  - L46 `final String after`
+  - L47 `final String? title`
+  - L48 `final String? type`
+  - L51 `State<DiffWidget> createState()`
+- L54 `class _DiffWidgetState extends State<DiffWidget>`
+  - L55 `bool _expanded = true`
+  - L59 `static List<T> _lcsOf<T>(List<T> a, List<T> b)`
+  - L87 `static List<_DiffLine> _lineDiff(String before, String after)`
+  - L167 `static List<Object> _foldContext(List<_DiffLine> lines)`  — Marks which lines should be visible (changes + context). Returns a list
+  - L199 `static List<String> _tokenise(String line)`
+  - L208 `static List<_Span> _wordDiff(String source, String other)`  — Spans for [source] highlighting tokens that differ from [other].
+  - L240 `String _typeLabel()`
+  - L258 `Widget build(BuildContext context)`
+  - L355 `Widget _buildFold(int count, bool isDark)`
+  - L371 `Widget _buildLine(_DiffLine line, bool isDark)`
+- L489 `class _Chip extends StatelessWidget`
+  - L490 `const _Chip(this.label, this.color)`
+  - L491 `final String label`
+  - L492 `final Color color`
+  - L495 `Widget build(BuildContext context)`
+
+## lib/widgets/document_viewer.dart  (120 Z.)
+- L12 `class DocumentViewer extends StatefulWidget`  — Document viewer for markdown-converted files
+  - L13 `const DocumentViewer({ super.key, required this.fileName, required this.markdownContent, })`
+  - L19 `final String fileName`
+  - L20 `final String markdownContent`
+  - L23 `State<DocumentViewer> createState()`
+- L26 `class _DocumentViewerState extends State<DocumentViewer>`
+  - L27 `bool _isEditing = false`
+  - L28 `late TextEditingController _controller`
+  - L29 `late ScrollController _scrollController`
+  - L32 `void initState()`
+  - L39 `void dispose()`
+  - L45 `void _copyToClipboard()`
+  - L55 `Widget build(BuildContext context)`
+  - L90 `Widget _buildMarkdownView()`
+  - L101 `Widget _buildEditView()`
+
+## lib/widgets/encrypted_image_widget.dart  (211 Z.)
+- L10 `class EncryptedImageWidget extends StatefulWidget`  — Widget that downloads, decrypts, and displays an encrypted image from storage
+  - L11 `const EncryptedImageWidget({ super.key, required this.storagePath, this.fit = BoxFit.cover, this.width, this.height, })`
+  - L19 `final String storagePath`
+  - L20 `final BoxFit fit`
+  - L21 `final double? width`
+  - L22 `final double? height`
+  - L25 `State<EncryptedImageWidget> createState()`
+- L28 `class _EncryptedImageWidgetState extends State<EncryptedImageWidget>`
+  - L29 `Uint8List? _imageBytes`
+  - L30 `bool _isLoading = true`
+  - L31 `String? _error`
+  - L32 `bool _isDeleted = false`
+  - L33 `StreamSubscription<String>? _deletionSubscription`
+  - L36 `void initState()`
+  - L43 `void dispose()`
+  - L48 `void _listenForDeletion()`
+  - L64 `void didUpdateWidget(EncryptedImageWidget oldWidget)`
+  - L74 `Future<void> _loadImage()`
+  - L113 `Widget build(BuildContext context)`
 
 ## lib/widgets/excalidraw_svg_export.dart  (588 Z.)
 - L12 `String? excalidrawToSvg(String jsonString)`
@@ -674,91 +1833,94 @@
 - L575 `String _fmt(num v)`
 - L583 `double _d(dynamic v)`
 
-## lib/widgets/expressive_settings.dart  (534 Z.)
-- L17 `kExpressiveOuterRadius = 26`  — Corner radius at the outer edges of a group.
-- L20 `kExpressiveInnerRadius = 6`  — Corner radius where two tiles meet.
-- L23 `kExpressiveTileGap = 3`  — Gap between the tiles of a group.
-- L28 `class ExpressiveGroup extends StatelessWidget`  — A group of settings tiles. The first and last tile round outwards, the
-  - L29 `const ExpressiveGroup({super.key, required this.children})`
-  - L31 `final List<Widget> children`
-  - L34 `Widget build(BuildContext context)`
-- L56 `class _ExpressiveTileShape extends InheritedWidget`  — Hands the radii of its place in the group down to the tile.
-  - L57 `const _ExpressiveTileShape({ required this.top, required this.bottom, required super.child, })`
-  - L63 `final double top`
-  - L64 `final double bottom`
-  - L66 `static BorderRadius of(BuildContext context)`
-  - L76 `bool updateShouldNotify(_ExpressiveTileShape old)`
-- L82 `class ExpressiveRow extends StatefulWidget`  — One settings row: a tonal icon, a title, an optional line under it, and
-  - L83 `const ExpressiveRow({ super.key, required this.title, this.icon, this.leading, this.subtitle, this.trailing, this.onTap, this.tone, })`
-  - L94 `final String title`
-  - L95 `final IconData? icon`
-  - L98 `final Widget? leading`  — Replaces the icon tile entirely — for an avatar or a logo.
-  - L99 `final String? subtitle`
-  - L100 `final Widget? trailing`
-  - L101 `final VoidCallback? onTap`
-  - L104 `final Color? tone`  — Colour of the icon tile. Defaults to the primary container.
-  - L107 `State<ExpressiveRow> createState()`
-- L110 `class _ExpressiveRowState extends State<ExpressiveRow>`
-  - L112 `Widget build(BuildContext context)`
-- L168 `class ExpressiveTile extends StatefulWidget`  — The filled tile every row in a group sits in. Anything can go inside —
-  - L169 `const ExpressiveTile({ super.key, required this.child, this.onTap, this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12), })`
-  - L176 `final Widget child`
-  - L177 `final VoidCallback? onTap`
-  - L178 `final EdgeInsets padding`
-  - L181 `State<ExpressiveTile> createState()`
-- L184 `class _ExpressiveTileState extends State<ExpressiveTile>`
-  - L185 `bool _pressed = false`
-  - L188 `Widget build(BuildContext context)`
-- L227 `class ExpressiveSwitchRow extends StatelessWidget`  — A settings row that carries a switch. The whole tile is the target — the
-  - L228 `const ExpressiveSwitchRow({ super.key, required this.title, required this.value, required this.onChanged, this.icon, this.subtitle, this.tone, })`
-  - L238 `final String title`
-  - L239 `final bool value`
-  - L240 `final ValueChanged<bool>? onChanged`
-  - L241 `final IconData? icon`
-  - L242 `final String? subtitle`
-  - L243 `final Color? tone`
-  - L246 `Widget build(BuildContext context)`
-- L266 `class ExpressiveCard extends StatelessWidget`  — A block that is not a row: a slider, a preview, an editor. It carries the
-  - L267 `const ExpressiveCard({ super.key, required this.child, this.padding = const EdgeInsets.all(16), })`
-  - L273 `final Widget child`
-  - L274 `final EdgeInsets padding`
-  - L277 `Widget build(BuildContext context)`
-- L293 `class ExpressiveInfoCard extends StatelessWidget`  — The quiet paragraph under a group: what the setting means, or why it is
-  - L294 `const ExpressiveInfoCard({ super.key, required this.text, this.icon = Icons.info_outline, this.tone, })`
-  - L301 `final String text`
-  - L302 `final IconData icon`
-  - L305 `final Color? tone`  — Background. Defaults to the low container.
-  - L308 `Widget build(BuildContext context)`
-- L346 `class ExpressiveField extends StatelessWidget`  — A filled field that holds a dropdown, a text field or a picker, so that
-  - L347 `const ExpressiveField({ super.key, required this.child, this.padding = const EdgeInsets.symmetric(horizontal: 16), })`
-  - L353 `final Widget child`
-  - L354 `final EdgeInsets padding`
-  - L357 `Widget build(BuildContext context)`
-- L371 `class ExpressiveIconTile extends StatelessWidget`  — The rounded tile an icon sits in.
-  - L372 `const ExpressiveIconTile({ super.key, required this.icon, this.tone, this.size = 42, })`
-  - L379 `final IconData icon`
-  - L380 `final Color? tone`
-  - L381 `final double size`
-  - L384 `Widget build(BuildContext context)`
-- L410 `class ExpressiveSectionHeader extends StatelessWidget`  — The label above a group. Large and heavy, the way Expressive titles are
-  - L411 `const ExpressiveSectionHeader( this.label, { super.key, this.trailing, this.color, })`
-  - L418 `final String label`
-  - L421 `final Widget? trailing`  — An action that belongs to the section, e.g. "Fullscreen" over a field.
-  - L424 `final Color? color`  — Overrides the label colour — for a section that warns, not informs.
+## lib/widgets/expressive_settings.dart  (604 Z.)
+- L19 `kExpressiveOuterRadius = 26`  — Corner radius at the outer edges of a group.
+- L22 `kExpressivePressedRadius = 18`  — Corner radius a tile morphs to while it is held.
+- L25 `kExpressiveInnerRadius = 6`  — Corner radius where two tiles meet.
+- L28 `extension ExpressiveOnColor on ColorScheme`  — Picks the contrast colour of a tone from the scheme.
+  - L35 `Color onColorFor(Color background)`  — The colour that stays legible on top of the given fill.
+- L68 `kExpressiveTileGap = 3`  — Gap between the tiles of a group.
+- L73 `class ExpressiveGroup extends StatelessWidget`  — A group of settings tiles. The first and last tile round outwards, the
+  - L74 `const ExpressiveGroup({super.key, required this.children})`
+  - L76 `final List<Widget> children`
+  - L79 `Widget build(BuildContext context)`
+- L101 `class _ExpressiveTileShape extends InheritedWidget`  — Hands the radii of its place in the group down to the tile.
+  - L102 `const _ExpressiveTileShape({ required this.top, required this.bottom, required super.child, })`
+  - L108 `final double top`
+  - L109 `final double bottom`
+  - L111 `static BorderRadius of(BuildContext context)`
+  - L121 `bool updateShouldNotify(_ExpressiveTileShape old)`
+- L127 `class ExpressiveRow extends StatefulWidget`  — One settings row: a tonal icon, a title, an optional line under it, and
+  - L128 `const ExpressiveRow({ super.key, required this.title, this.icon, this.leading, this.subtitle, this.trailing, this.onTap, this.tone, })`
+  - L139 `final String title`
+  - L140 `final IconData? icon`
+  - L143 `final Widget? leading`  — Replaces the icon tile entirely — for an avatar or a logo.
+  - L144 `final String? subtitle`
+  - L145 `final Widget? trailing`
+  - L146 `final VoidCallback? onTap`
+  - L149 `final Color? tone`  — Colour of the icon tile. Defaults to the primary container.
+  - L152 `State<ExpressiveRow> createState()`
+- L155 `class _ExpressiveRowState extends State<ExpressiveRow>`
+  - L157 `Widget build(BuildContext context)`
+- L213 `class ExpressiveTile extends StatefulWidget`  — The filled tile every row in a group sits in. Anything can go inside —
+  - L214 `const ExpressiveTile({ super.key, required this.child, this.onTap, this.padding = const EdgeInsets.symmetric(horizontal: 14, vertical: 12), })`
+  - L221 `final Widget child`
+  - L222 `final VoidCallback? onTap`
+  - L223 `final EdgeInsets padding`
+  - L226 `State<ExpressiveTile> createState()`
+- L229 `class _ExpressiveTileState extends State<ExpressiveTile>`
+  - L230 `bool _pressed = false`
+  - L233 `Widget build(BuildContext context)`
+- L300 `class ExpressiveSwitchRow extends StatelessWidget`  — A settings row that carries a switch. The whole tile is the target — the
+  - L301 `const ExpressiveSwitchRow({ super.key, required this.title, required this.value, required this.onChanged, this.icon, this.subtitle, this.tone, })`
+  - L311 `final String title`
+  - L312 `final bool value`
+  - L313 `final ValueChanged<bool>? onChanged`
+  - L314 `final IconData? icon`
+  - L315 `final String? subtitle`
+  - L316 `final Color? tone`
+  - L319 `Widget build(BuildContext context)`
+- L339 `class ExpressiveCard extends StatelessWidget`  — A block that is not a row: a slider, a preview, an editor. It carries the
+  - L340 `const ExpressiveCard({ super.key, required this.child, this.padding = const EdgeInsets.all(16), })`
+  - L346 `final Widget child`
+  - L347 `final EdgeInsets padding`
+  - L350 `Widget build(BuildContext context)`
+- L366 `class ExpressiveInfoCard extends StatelessWidget`  — The quiet paragraph under a group: what the setting means, or why it is
+  - L367 `const ExpressiveInfoCard({ super.key, required this.text, this.icon = Icons.info_outline, this.tone, })`
+  - L374 `final String text`
+  - L375 `final IconData icon`
+  - L378 `final Color? tone`  — Background. Defaults to the low container.
+  - L381 `Widget build(BuildContext context)`
+- L416 `class ExpressiveField extends StatelessWidget`  — A filled field that holds a dropdown, a text field or a picker, so that
+  - L417 `const ExpressiveField({ super.key, required this.child, this.padding = const EdgeInsets.symmetric(horizontal: 16), })`
+  - L423 `final Widget child`
+  - L424 `final EdgeInsets padding`
   - L427 `Widget build(BuildContext context)`
-- L452 `class ExpressiveBadge extends StatelessWidget`  — A trailing pill: a short state word on the right of a row.
-  - L453 `const ExpressiveBadge(this.label, {super.key, this.tone, this.icon})`
-  - L455 `final String label`
-  - L456 `final Color? tone`
-  - L457 `final IconData? icon`
-  - L460 `Widget build(BuildContext context)`
-- L499 `class ExpressiveTitle extends StatelessWidget`  — The big page title Expressive puts above a settings list.
-  - L500 `const ExpressiveTitle(this.title, {super.key, this.subtitle})`
-  - L502 `final String title`
-  - L503 `final String? subtitle`
-  - L506 `Widget build(BuildContext context)`
+- L441 `class ExpressiveIconTile extends StatelessWidget`  — The rounded tile an icon sits in.
+  - L442 `const ExpressiveIconTile({ super.key, required this.icon, this.tone, this.size = 42, })`
+  - L449 `final IconData icon`
+  - L450 `final Color? tone`
+  - L451 `final double size`
+  - L454 `Widget build(BuildContext context)`
+- L479 `class ExpressiveSectionHeader extends StatelessWidget`  — The label above a group. Large and heavy, the way Expressive titles are
+  - L480 `const ExpressiveSectionHeader( this.label, { super.key, this.trailing, this.color, })`
+  - L487 `final String label`
+  - L490 `final Widget? trailing`  — An action that belongs to the section, e.g. "Fullscreen" over a field.
+  - L493 `final Color? color`  — Overrides the label colour — for a section that warns, not informs.
+  - L496 `Widget build(BuildContext context)`
+- L524 `class ExpressiveBadge extends StatelessWidget`  — A trailing pill: a short state word on the right of a row.
+  - L525 `const ExpressiveBadge(this.label, {super.key, this.tone, this.icon})`
+  - L527 `final String label`
+  - L528 `final Color? tone`
+  - L529 `final IconData? icon`
+  - L532 `Widget build(BuildContext context)`
+- L569 `class ExpressiveTitle extends StatelessWidget`  — The big page title Expressive puts above a settings list.
+  - L570 `const ExpressiveTitle(this.title, {super.key, this.subtitle})`
+  - L572 `final String title`
+  - L573 `final String? subtitle`
+  - L576 `Widget build(BuildContext context)`
 
-## lib/widgets/floating_app_bar.dart  (227 Z.)
+## lib/widgets/floating_app_bar.dart  (254 Z.)
 - L22 `kFloatingAppBarHeight = 62`  — Height of the header band: the chat top bar's 48 row plus its 8/6 of air
 - L25 `kFloatingAppBarChip = 42`  — Diameter of the round chips: back, and each action. The chat's menu chip.
 - L28 `_kTitleRadius = 18`  — Corner radius of the title pill. The chat's title pill.
@@ -781,19 +1943,37 @@
   - L147 `Widget _styledTitle(BuildContext context, ThemeData theme)`  — The title, in the one size every page uses.
   - L172 `Widget build(BuildContext context)`
 
-## lib/widgets/floating_chrome_surface.dart  (76 Z.)
+## lib/widgets/floating_chrome_surface.dart  (84 Z.)
 - L9 `Color floatingChromeBase(BuildContext context)`  — One step off the page background — the colour a floating card takes so it
 - L20 `class FloatingChromeSurface extends StatelessWidget`  — The one surface every floating piece of chrome uses: the two bars of the
-  - L21 `const FloatingChromeSurface({ super.key, required this.child, this.radius = 26, this.borderRadius, this.padding, this.shape, this.baseColor, })`
-  - L32 `static const double _fillAlpha = 0.98`  — Alpha of the background fill. The composer's value.
-  - L34 `final Widget child`
-  - L38 `final double radius`  — Corner radius. Ignored when [shape] is a circle, or when
-  - L42 `final BorderRadius? borderRadius`  — Per-corner shape, for a bar that joins whatever sits under it. Null
-  - L43 `final EdgeInsetsGeometry? padding`
-  - L46 `final BoxShape? shape`  — A circle for the round chips; null takes the rounded rectangle.
-  - L55 `final Color? baseColor`  — The fill, before [_fillAlpha]. Defaults to [floatingChromeBase] — one
-  - L57 `static Color fillOf(BuildContext context, {Color? baseColor})`
-  - L61 `Widget build(BuildContext context)`
+  - L21 `const FloatingChromeSurface({ super.key, required this.child, this.radius = 26, this.borderRadius, this.padding, this.shape, this.baseColor, this.fillAlpha = _fillAlpha, })`
+  - L33 `static const double _fillAlpha = 0.98`  — Alpha of the background fill. The composer's value.
+  - L35 `final Widget child`
+  - L39 `final double radius`  — Corner radius. Ignored when [shape] is a circle, or when
+  - L43 `final BorderRadius? borderRadius`  — Per-corner shape, for a bar that joins whatever sits under it. Null
+  - L44 `final EdgeInsetsGeometry? padding`
+  - L47 `final BoxShape? shape`  — A circle for the round chips; null takes the rounded rectangle.
+  - L56 `final Color? baseColor`  — The fill, before [_fillAlpha]. Defaults to [floatingChromeBase] — one
+  - L60 `final double fillAlpha`  — How opaque the fill is. The sidebar's bars pass 1: the chat list runs
+  - L62 `static Color fillOf( BuildContext context, { Color? baseColor, double alpha = _fillAlpha, })`
+  - L69 `Widget build(BuildContext context)`
+
+## lib/widgets/fullscreen_text_editor.dart  (181 Z.)
+- L34 `Future<String?> showFullscreenComposer( BuildContext context, { required String initialText, String title = 'Compose', String? hintText, String? closeTooltip, })`  — Opens the message being written on a screen of its own.
+- L54 `class _FullscreenComposerPage extends StatefulWidget`
+  - L55 `const _FullscreenComposerPage({ required this.initialText, required this.title, this.hintText, this.closeTooltip, })`
+  - L62 `final String initialText`
+  - L65 `final String title`  — What is being written — the app bar's title.
+  - L68 `final String? hintText`  — Null takes the chat composer's own hint.
+  - L69 `final String? closeTooltip`
+  - L72 `State<_FullscreenComposerPage> createState()`
+- L76 `class _FullscreenComposerPageState extends State<_FullscreenComposerPage>`
+  - L77 `late final TextEditingController _controller`
+  - L78 `late final FocusNode _focusNode`
+  - L81 `void initState()`
+  - L93 `void dispose()`
+  - L99 `void _close()`
+  - L102 `Widget build(BuildContext context)`
 
 ## lib/widgets/html_artifact_view.dart  (8 Z.)
 - reicht weiter: 'html_artifact_view_io.dart' if (dart.library.js_interop) 'html_artifact_view_web.dart'
@@ -835,38 +2015,38 @@
   - L92 `web.HTMLIFrameElement _buildIframe(String html)`
   - L104 `Widget build(BuildContext context)`
 
-## lib/widgets/image_viewer.dart  (477 Z.)
-- L16 `class ImageViewer extends StatefulWidget`  — Full-screen image viewer with zoom and pan capabilities
-  - L17 `const ImageViewer({ super.key, required this.imageDataUrl, this.initialIndex = 0, this.allImages, this.models, })`
-  - L25 `final String imageDataUrl`
-  - L26 `final int initialIndex`
-  - L27 `final List<String>? allImages`
-  - L32 `final List<String?>? models`  — Per-image generator model labels (aligned with [allImages]). Entries may
-  - L35 `State<ImageViewer> createState()`
-- L38 `class _ImageViewerState extends State<ImageViewer>`
-  - L39 `late PageController _pageController`
-  - L40 `late int _currentIndex`
-  - L41 `final TransformationController _transformationController = TransformationController()`
-  - L43 `final FocusNode _focusNode = FocusNode()`
-  - L44 `final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{}`
-  - L48 `final Map<String, Uint8List> _imageCache = <String, Uint8List>{}`  — Cache for loaded image bytes (storage path -> bytes).
-  - L49 `static const int _kMaxCachedImages = 8`
-  - L52 `final Map<String, Future<Uint8List>> _loadFutures = <String, Future<Uint8List>>{}`  — Stable per-source futures so FutureBuilder doesn't re-trigger on rebuild.
-  - L56 `void initState()`
-  - L63 `void dispose()`
-  - L70 `void _handleKeyEvent(KeyEvent event)`
-  - L95 `Future<Uint8List> _futureFor(String imageSource)`  — Returns a stable Future for the given source. Re-using the same Future
-  - L103 `Future<Uint8List> _loadImageBytes(String imageSource)`  — Load image bytes from Base64 data URL or storage path.
-  - L142 `bool get _hasMultipleImages`
-  - L146 `String? get _currentModel`  — Generator model label for the currently-shown image, or null when none.
-  - L156 `GlobalKey _imageKeyForIndex(int index)`
-  - L163 `void _handleOutsideImageTap(PointerDownEvent event)`
-  - L192 `Widget build(BuildContext context)`
-  - L350 `Widget _buildImageView(String imageSource, int imageIndex)`
-  - L419 `Future<void> _downloadCurrentImage()`
-  - L440 `Future<void> _copyCurrentImage()`
-  - L459 `void _showSaveSnackBar(SaveResult result)`
-  - L473 `void _resetZoom()`
+## lib/widgets/image_viewer.dart  (472 Z.)
+- L20 `class ImageViewer extends StatefulWidget`  — Full-screen image viewer with zoom and pan capabilities
+  - L21 `const ImageViewer({ super.key, required this.imageDataUrl, this.initialIndex = 0, this.allImages, this.models, })`
+  - L29 `final String imageDataUrl`
+  - L30 `final int initialIndex`
+  - L31 `final List<String>? allImages`
+  - L36 `final List<String?>? models`  — Per-image generator model labels (aligned with [allImages]). Entries may
+  - L39 `State<ImageViewer> createState()`
+- L42 `class _ImageViewerState extends State<ImageViewer>`
+  - L43 `late PageController _pageController`
+  - L44 `late int _currentIndex`
+  - L45 `final TransformationController _transformationController = TransformationController()`
+  - L47 `final FocusNode _focusNode = FocusNode()`
+  - L48 `final Map<int, GlobalKey> _imageKeys = <int, GlobalKey>{}`
+  - L52 `final Map<String, Uint8List> _imageCache = <String, Uint8List>{}`  — Cache for loaded image bytes (storage path -> bytes).
+  - L53 `static const int _kMaxCachedImages = 8`
+  - L56 `final Map<String, Future<Uint8List>> _loadFutures = <String, Future<Uint8List>>{}`  — Stable per-source futures so FutureBuilder doesn't re-trigger on rebuild.
+  - L60 `void initState()`
+  - L67 `void dispose()`
+  - L74 `void _handleKeyEvent(KeyEvent event)`
+  - L99 `Future<Uint8List> _futureFor(String imageSource)`  — Returns a stable Future for the given source. Re-using the same Future
+  - L107 `Future<Uint8List> _loadImageBytes(String imageSource)`  — Load image bytes from Base64 data URL or storage path.
+  - L144 `bool get _hasMultipleImages`
+  - L148 `String? get _currentModel`  — Generator model label for the currently-shown image, or null when none.
+  - L158 `GlobalKey _imageKeyForIndex(int index)`
+  - L165 `void _handleOutsideImageTap(PointerDownEvent event)`
+  - L194 `Widget build(BuildContext context)`
+  - L345 `Widget _buildImageView(String imageSource, int imageIndex)`
+  - L414 `Future<void> _downloadCurrentImage()`
+  - L435 `Future<void> _copyCurrentImage()`
+  - L454 `void _showSaveSnackBar(SaveResult result)`
+  - L468 `void _resetZoom()`
 
 ## lib/widgets/linux_webview.dart  (92 Z.)
 - L25 `class LinuxWebView extends StatelessWidget`
@@ -877,166 +2057,208 @@
   - L38 `Future<void> _openInBrowser(BuildContext context)`
   - L58 `Widget build(BuildContext context)`
 
-## lib/widgets/map_block_renderer.dart  (993 Z.)
-- L21 `mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true)`  — Regex to find <map> blocks in message content.
-- L24 `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
-- L27 `class MapContentSegment`  — A segment of message content — either plain text or a map block.
-  - L28 `final bool isMap`
-  - L29 `final String content`
-  - L31 `const MapContentSegment._(this.isMap, this.content)`
-  - L32 `factory MapContentSegment.text(String text)`
-  - L34 `factory MapContentSegment.map(String json)`
-- L38 `class MapBlockWidget extends StatelessWidget`  — Renders a single <map> JSON block as a Flutter widget.
-  - L39 `final String jsonString`
-  - L41 `const MapBlockWidget({super.key, required this.jsonString})`
-  - L44 `Widget build(BuildContext context)`
-- L90 `_kLightTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/`
-- L92 `_kDarkTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y`
-- L94 `_kTileSubdomains = <String>[]`
-- L96 `String _tileUrlForBrightness(BuildContext context)`
-- L102 `double _toDouble(dynamic v)`
-- L114 `bool _isValidLatLon(dynamic latRaw, dynamic lonRaw)`
-- L130 `bool _isExplicitNumericZero(dynamic v)`
-- L139 `List<Map<String, dynamic>> _filterValidCoordItems( List<dynamic>? items, )`
-- L161 `List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items)`  — Drops repeated places / markers from one block. A multi-pass answer often
-- L191 `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems(List<dynamic>? items)`  — Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
-- L194 `double _mapPreviewHeight(BuildContext context)`
-- L201 `double _calculateZoom(List<double> lats, List<double> lons)`
-- L218 `double _calculateRouteZoom( double fromLat, double fromLon, double toLat, double toLon, )`
-- L240 `MapOptions _buildMapOptions({ required LatLng center, required double zoom, List<LatLng>? fitPoints, })`
-- L256 `void _openFullscreenMap( BuildContext context, { required LatLng center, required double zoom, String? title, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, List<LatLng>? fitPoints, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, int? initialSelectedPlaceIndex, })`
-- L293 `Widget _buildMapPreview( BuildContext context, { required LatLng center, required double zoom, required List<Widget> mapChildren, String? title, List<LatLng>? fitPoints, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, int? initialSelectedPlaceIndex, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, })`
-- L374 `class _MarkersMapBlock extends StatelessWidget`
-  - L375 `final Map<String, dynamic> data`
-  - L377 `const _MarkersMapBlock({required this.data})`
-  - L380 `Widget build(BuildContext context)`
-- L482 `class _PlacesMapBlock extends StatelessWidget`
-  - L483 `final Map<String, dynamic> data`
-  - L485 `const _PlacesMapBlock({required this.data})`
-  - L488 `Widget build(BuildContext context)`
-  - L593 `static List<Marker> _buildLabeledPlaceMarkers( List<Map<String, dynamic>> places, )`
-- L661 `class _PlaceCard extends StatelessWidget`
-  - L662 `final Map<String, dynamic> place`
-  - L663 `final int number`
-  - L664 `final VoidCallback? onShowOnMap`
-  - L666 `const _PlaceCard({ required this.place, required this.number, this.onShowOnMap, })`
-  - L673 `Widget build(BuildContext context)`
-  - L880 `Widget _buildInfoChip(IconData icon, String label, {VoidCallback? onTap})`
-  - L903 `static Widget _buildStarRating(double rating, {double size = 14})`
-- L926 `class _RouteMapBlock extends StatelessWidget`
-  - L927 `final Map<String, dynamic> data`
-  - L929 `const _RouteMapBlock({required this.data})`
-  - L932 `Widget build(BuildContext context)`
+## lib/widgets/map_block_renderer.dart  (992 Z.)
+- L22 `mapBlockRegex = RegExp(r'<map>([\s\S]*?)</map>', multiLine: true)`  — Regex to find <map> blocks in message content.
+- L25 `bool hasMapBlocks(String content)`  — Returns true if [content] contains at least one <map> block.
+- L28 `class MapContentSegment`  — A segment of message content — either plain text or a map block.
+  - L29 `final bool isMap`
+  - L30 `final String content`
+  - L32 `const MapContentSegment._(this.isMap, this.content)`
+  - L33 `factory MapContentSegment.text(String text)`
+  - L35 `factory MapContentSegment.map(String json)`
+- L39 `class MapBlockWidget extends StatelessWidget`  — Renders a single <map> JSON block as a Flutter widget.
+  - L40 `final String jsonString`
+  - L42 `const MapBlockWidget({super.key, required this.jsonString})`
+  - L45 `Widget build(BuildContext context)`
+- L91 `_kLightTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/`
+- L93 `_kDarkTilesUrl = 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y`
+- L95 `_kTileSubdomains = <String>[]`
+- L97 `String _tileUrlForBrightness(BuildContext context)`
+- L103 `double _toDouble(dynamic v)`
+- L115 `bool _isValidLatLon(dynamic latRaw, dynamic lonRaw)`
+- L131 `bool _isExplicitNumericZero(dynamic v)`
+- L140 `List<Map<String, dynamic>> _filterValidCoordItems(List<dynamic>? items)`
+- L160 `List<Map<String, dynamic>> _dedupeCoordItems(List<Map<String, dynamic>> items)`  — Drops repeated places / markers from one block. A multi-pass answer often
+- L193 `@visibleForTesting List<Map<String, dynamic>> debugFilterAndDedupeCoordItems( List<dynamic>? items, )`  — Test-only view of [_filterValidCoordItems] + [_dedupeCoordItems].
+- L197 `double _mapPreviewHeight(BuildContext context)`
+- L204 `double _calculateZoom(List<double> lats, List<double> lons)`
+- L221 `double _calculateRouteZoom( double fromLat, double fromLon, double toLat, double toLon, )`
+- L243 `MapOptions _buildMapOptions({ required LatLng center, required double zoom, List<LatLng>? fitPoints, })`
+- L259 `void _openFullscreenMap( BuildContext context, { required LatLng center, required double zoom, String? title, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, List<LatLng>? fitPoints, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, int? initialSelectedPlaceIndex, })`
+- L296 `Widget _buildMapPreview( BuildContext context, { required LatLng center, required double zoom, required List<Widget> mapChildren, String? title, List<LatLng>? fitPoints, List<Map<String, dynamic>>? places, List<Map<String, dynamic>>? markers, int? initialSelectedPlaceIndex, double? routeFromLat, double? routeFromLon, double? routeToLat, double? routeToLon, String? routeFromLabel, String? routeToLabel, })`
+- L377 `class _MarkersMapBlock extends StatelessWidget`
+  - L378 `final Map<String, dynamic> data`
+  - L380 `const _MarkersMapBlock({required this.data})`
+  - L383 `Widget build(BuildContext context)`
+- L485 `class _PlacesMapBlock extends StatelessWidget`
+  - L486 `final Map<String, dynamic> data`
+  - L488 `const _PlacesMapBlock({required this.data})`
+  - L491 `Widget build(BuildContext context)`
+  - L596 `static List<Marker> _buildLabeledPlaceMarkers( List<Map<String, dynamic>> places, )`
+- L664 `class _PlaceCard extends StatelessWidget`
+  - L665 `final Map<String, dynamic> place`
+  - L666 `final int number`
+  - L667 `final VoidCallback? onShowOnMap`
+  - L669 `const _PlaceCard({ required this.place, required this.number, this.onShowOnMap, })`
+  - L676 `Widget build(BuildContext context)`
+  - L879 `Widget _buildInfoChip(IconData icon, String label, {VoidCallback? onTap})`
+  - L902 `static Widget _buildStarRating(double rating, {double size = 14})`
+- L925 `class _RouteMapBlock extends StatelessWidget`
+  - L926 `final Map<String, dynamic> data`
+  - L928 `const _RouteMapBlock({required this.data})`
+  - L931 `Widget build(BuildContext context)`
 
-## lib/widgets/markdown_message.dart  (1762 Z.)
-- L22 `class _MdSegment`  — One slice of a message: either plain markdown or a GFM table block.
-  - L23 `const _MdSegment(this.text, {required this.isTable, this.table})`
-  - L24 `final String text`
-  - L25 `final bool isTable`
-  - L26 `final ParsedTable? table`
-- L32 `List<_MdSegment> _splitMarkdownTables(String text)`  — Splits raw markdown into alternating plain-markdown and table segments so
-- L87 `class MarkdownMessage extends StatefulWidget`
-  - L88 `const MarkdownMessage({ super.key, required this.text, required this.textColor, required this.backgroundColor, this.wrapWithSelectionArea = true, this.paragraphFontSize, this.paragraphHeight, this.fontFamily, })`
-  - L99 `final String text`
-  - L100 `final Color textColor`
-  - L101 `final Color backgroundColor`
-  - L102 `final bool wrapWithSelectionArea`
-  - L103 `final double? paragraphFontSize`
-  - L104 `final double? paragraphHeight`
-  - L105 `final String? fontFamily`
-  - L108 `State<MarkdownMessage> createState()`
-- L111 `class _MarkdownMessageState extends State<MarkdownMessage>`
-  - L112 `List<Widget>? _cachedContent`
-  - L113 `Brightness? _lastBrightness`
-  - L116 `void didChangeDependencies()`
-  - L126 `void didUpdateWidget(covariant MarkdownMessage oldWidget)`
-  - L140 `static const Set<String> _allowedLinkSchemes = { 'http', 'https', 'mailto', 'tel', 'sms', }`  — URL schemes the markdown renderer is allowed to open. Anything else
-  - L148 `Future<void> _onTapLink(String href)`
-  - L242 `Widget build(BuildContext context)`
-  - L259 `void _rebuildCache()`
-  - L550 `Color _codeBackground()`
-  - L565 `Map<String, TextStyle> _getSyntaxTheme(BuildContext context)`
-- L845 `class _AsyncCodeBlock extends StatefulWidget`  — Widget that handles async code highlighting to prevent UI jank
-  - L846 `final String code`
-  - L847 `final String? language`
-  - L848 `final TextStyle textStyle`
-  - L849 `final Color backgroundColor`
-  - L850 `final Color borderColor`
-  - L851 `final Map<String, TextStyle> theme`
-  - L852 `final Color textColor`
-  - L854 `const _AsyncCodeBlock({ required this.code, this.language, required this.textStyle, required this.backgroundColor, required this.borderColor, required this.theme, required this.textColor, })`
-  - L865 `State<_AsyncCodeBlock> createState()`
-- L868 `class _AsyncCodeBlockState extends State<_AsyncCodeBlock>`
-  - L869 `List<InlineSpan>? _highlightedSpans`
-  - L870 `Timer? _debounceTimer`
-  - L871 `String? _displayedCode`
-  - L876 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
-  - L895 `bool _autoDetectJson(String code)`
-  - L907 `String _codeForDisplay()`
-  - L911 `void initState()`
-  - L917 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
-  - L928 `void dispose()`
-  - L933 `void _scheduleHighlight()`
-  - L942 `Future<void> _highlightCode()`
-  - L1033 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
-  - L1060 `Widget build(BuildContext context)`
-- L1121 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
-- L1191 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
-- L1218 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
-- L1249 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
-- L1335 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
-- L1342 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
-  - L1343 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
-  - L1347 `bool onMatch(m.InlineParser parser, Match match)`
-- L1375 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
-  - L1376 `final Map<String, String> attributes`
-  - L1377 `final Color textColor`
-  - L1379 `LatexNode(this.attributes, {required this.textColor})`
-  - L1382 `InlineSpan build()`
-  - L1392 `Widget _buildMathWidget(String tex, bool isBlock)`
-- L1465 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
-  - L1466 `final String code`
-  - L1467 `final Color textColor`
-  - L1469 `const _CopyButton({required this.code, required this.textColor})`
-  - L1472 `State<_CopyButton> createState()`
-- L1475 `class _CopyButtonState extends State<_CopyButton>`
-  - L1476 `bool _copied = false`
-  - L1478 `Future<void> _copyToClipboard()`
-  - L1495 `Widget build(BuildContext context)`
-- L1531 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
-  - L1532 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
-  - L1534 `final m.Element element`
-  - L1535 `final PreConfig preConfig`
-  - L1536 `final WidgetVisitor visitor`
-  - L1538 `String get content`
-  - L1541 `InlineSpan build()`
-  - L1589 `TextStyle get style`
-  - L1591 `static String _extractLanguage(m.Element element)`
-- L1618 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
-  - L1619 `const _MarkdownImage({required this.url, required this.alt})`
-  - L1621 `final String url`
-  - L1622 `final String alt`
-  - L1625 `Widget build(BuildContext context)`
-  - L1693 `Widget _errorTile(ColorScheme colorScheme)`
-  - L1707 `void _openFullscreen(BuildContext context)`
-- L1718 `class _NetworkImageViewer extends StatelessWidget`
-  - L1719 `const _NetworkImageViewer({required this.url})`
-  - L1720 `final String url`
-  - L1723 `Widget build(BuildContext context)`
+## lib/widgets/markdown_message.dart  (2252 Z.)
+- part 'answer_blocks.dart'
+- L38 `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
+- L60 `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
+  - L61 `InlineCodeNode(this.text, this.codeStyle)`
+  - L63 `final String text`
+  - L64 `final TextStyle codeStyle`
+  - L67 `InlineSpan build()`
+  - L70 `TextStyle get style`
+- L80 `class AccentLinkNode extends LinkNode`  — A link that reads as a link: the accent colour plus an underline in that
+  - L81 `AccentLinkNode(super.attributes, super.linkConfig, this.accentColor)`
+  - L83 `final Color accentColor`
+  - L86 `TextStyle get style`
+- L98 `_kBulletSize = 6`  — Diameter of an unordered-list bullet.
+- L102 `BoxDecoration _bulletDecoration(int depth, Color color)`  — Bullet shape per nesting level: filled disc, hollow disc, then square —
+- L118 `class _MdSegment`  — One slice of a message: plain markdown, a GFM table block, or an answer
+  - L119 `const _MdSegment(this.text, {required this.isTable, this.table, this.block})`
+  - L120 `final String text`
+  - L121 `final bool isTable`
+  - L122 `final ParsedTable? table`
+  - L123 `final AnswerBlockSegment? block`
+- L142 `class _MdParseCache`  — Splits raw markdown into alternating plain-markdown and table segments so
+  - L143 `static const int _max = 400`
+  - L144 `static final Map<String, List<_MdSegment>> _segments = <String, List<_MdSegment>>{}`
+  - L146 `static final Map<String, List<m.Node>> _nodes = <String, List<m.Node>>{}`
+  - L147 `static String? _owner`
+  - L149 `static void _syncOwner()`
+  - L159 `static void clear()`  — Drops every kept parse. Sign-out calls this, so the plaintext does not
+  - L165 `static void _put<V>(Map<String, V> map, String key, V value)`
+  - L170 `static List<_MdSegment> segmentsFor(String text, {required bool keep})`
+  - L184 `static List<m.Node> nodesFor( String data, { required bool keep, required MarkdownGenerator generator, })`  — The same parse `MarkdownGenerator.buildWidgets` runs, with the
+- L209 `List<Widget> _buildMarkdownWidgets( MarkdownGenerator generator, String data, MarkdownConfig config, { required bool keepParse, })`  — `MarkdownGenerator.buildWidgets` of markdown_widget 2.3, with the parse
+- L238 `List<_MdSegment> _splitSegments(String text)`  — Answer blocks first, then the tables inside the Markdown between them.
+- L251 `List<_MdSegment> _splitMarkdownTables(String text)`
+- L307 `class MarkdownMessage extends StatefulWidget`
+  - L308 `const MarkdownMessage({ super.key, required this.text, required this.textColor, required this.backgroundColor, this.wrapWithSelectionArea = true, this.paragraphFontSize, this.paragraphHeight, this.paragraphFontWeight, this.fontFamily, })`
+  - L323 `static void clearCaches()`  — Empties the shared parse and highlight caches. They hold one account's
+  - L330 `static int get debugCachedParseCount`  — How many markdown parses are kept, for tests.
+  - L335 `static int get debugCachedHighlightCount`  — How many code highlights are kept, for tests.
+  - L338 `final String text`
+  - L339 `final Color textColor`
+  - L340 `final Color backgroundColor`
+  - L341 `final bool wrapWithSelectionArea`
+  - L342 `final double? paragraphFontSize`
+  - L343 `final double? paragraphHeight`
+  - L346 `final FontWeight? paragraphFontWeight`  — Weight of paragraph text. Answer blocks use it for step titles.
+  - L347 `final String? fontFamily`
+  - L350 `State<MarkdownMessage> createState()`
+- L353 `class _MarkdownMessageState extends State<MarkdownMessage>`
+  - L354 `List<Widget>? _cachedContent`
+  - L355 `Brightness? _lastBrightness`
+  - L359 `Color? _lastAccent`  — Links, inline code chips and the answer blocks paint in the accent, so
+  - L362 `void didChangeDependencies()`
+  - L373 `void didUpdateWidget(covariant MarkdownMessage oldWidget)`
+  - L392 `static const Set<String> _allowedLinkSchemes = { 'http', 'https', 'mailto', 'tel', 'sms', }`  — URL schemes the markdown renderer is allowed to open. Anything else
+  - L400 `Future<void> _onTapLink(String href)`
+  - L494 `Widget build(BuildContext context)`
+  - L511 `void _rebuildCache({bool keepParse = true})`
+  - L952 `Color _codeBackground()`
+  - L967 `Map<String, TextStyle> _getSyntaxTheme(BuildContext context)`
+- L1247 `class _AsyncCodeBlock extends StatefulWidget`  — Widget that handles async code highlighting to prevent UI jank
+  - L1248 `final String code`
+  - L1249 `final String? language`
+  - L1250 `final TextStyle textStyle`
+  - L1251 `final Color backgroundColor`
+  - L1252 `final Color borderColor`
+  - L1253 `final Map<String, TextStyle> theme`
+  - L1254 `final Color textColor`
+  - L1256 `const _AsyncCodeBlock({ required this.code, this.language, required this.textStyle, required this.backgroundColor, required this.borderColor, required this.theme, required this.textColor, })`
+  - L1267 `State<_AsyncCodeBlock> createState()`
+- L1270 `class _AsyncCodeBlockState extends State<_AsyncCodeBlock>`
+  - L1271 `List<InlineSpan>? _highlightedSpans`
+  - L1272 `Timer? _debounceTimer`
+  - L1273 `String? _displayedCode`
+  - L1287 `static final Map<String, List<hi.Node>> _parsedNodes = <String, List<hi.Node>>{}`  — Highlight results by language and code, shared by every code block.
+  - L1289 `static const int _parsedNodesMax = 300`
+  - L1290 `static String? _parsedNodesOwner`
+  - L1295 `static int _parsedGeneration = 0`  — Bumped whenever [_parsedNodes] is emptied. A highlight that started
+  - L1297 `static void _syncParsedOwner()`
+  - L1306 `static void clearParsed()`  — Drops every kept highlight. See [MarkdownMessage.clearCaches].
+  - L1313 `bool _keepHighlight = true`  — False once the code changed under this block (a stream in progress).
+  - L1315 `static String _parsedKey(String code, String? language)`
+  - L1320 `bool _applyParsedFromCache({required bool rebuild})`  — Applies a kept result for the current code, if there is one. Returns
+  - L1339 `static void _keepParsed( String code, String? language, List<hi.Node> nodes, { required int generation, })`
+  - L1357 `String _prettifyIfJson(String code, String? language)`  — Returns a pretty-printed version of [code] if the language is `json`
+  - L1376 `bool _autoDetectJson(String code)`
+  - L1388 `String _codeForDisplay()`
+  - L1392 `void initState()`
+  - L1399 `void didUpdateWidget(covariant _AsyncCodeBlock oldWidget)`
+  - L1413 `void dispose()`
+  - L1418 `void _scheduleHighlight()`
+  - L1427 `Future<void> _highlightCode()`
+  - L1523 `bool _isMostlyNonAscii(String text)`  — Check if text is mostly non-ASCII characters (CJK, Arabic, Cyrillic, etc.)
+  - L1550 `Widget build(BuildContext context)`
+- L1611 `List<hi.Node> _parseCode(Map<String, dynamic> args)`
+- L1681 `bool _isMostlyNonAsciiCode(String text)`  — Top-level helper for checking if text is mostly non-ASCII (for isolate use)
+- L1708 `List<TextSpan> _convertNodesSafely( List<hi.Node>? nodes, Map<String, TextStyle> theme, TextStyle baseStyle, )`
+- L1739 `List<TextSpan> _collectSpans( hi.Node? node, Map<String, TextStyle> theme, TextStyle baseStyle, TextStyle? parentThemeStyle, )`
+- L1825 `_latexTag = 'latex'`  — Tag used to identify LaTeX elements
+- L1832 `class LatexSyntax extends m.InlineSyntax`  — LaTeX inline syntax parser - matches $$...$$ and \(...\) and \[...\].
+  - L1833 `LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\\\([\s\S]+?\\\))|(\\\[[\s\S]+?\\\])')`
+  - L1837 `bool onMatch(m.InlineParser parser, Match match)`
+- L1865 `class LatexNode extends SpanNode`  — LaTeX node that renders math using flutter_math_fork
+  - L1866 `final Map<String, String> attributes`
+  - L1867 `final Color textColor`
+  - L1869 `LatexNode(this.attributes, {required this.textColor})`
+  - L1872 `InlineSpan build()`
+  - L1882 `Widget _buildMathWidget(String tex, bool isBlock)`
+- L1955 `class _CopyButton extends StatefulWidget`  — Copy button widget for code blocks
+  - L1956 `final String code`
+  - L1957 `final Color textColor`
+  - L1959 `const _CopyButton({required this.code, required this.textColor})`
+  - L1962 `State<_CopyButton> createState()`
+- L1965 `class _CopyButtonState extends State<_CopyButton>`
+  - L1966 `bool _copied = false`
+  - L1968 `Future<void> _copyToClipboard()`
+  - L1985 `Widget build(BuildContext context)`
+- L2021 `class _SafeCodeBlockNode extends ElementNode`  — Replacement for markdown_widget's CodeBlockNode that avoids noisy
+  - L2022 `_SafeCodeBlockNode(this.element, this.preConfig, this.visitor)`
+  - L2024 `final m.Element element`
+  - L2025 `final PreConfig preConfig`
+  - L2026 `final WidgetVisitor visitor`
+  - L2028 `String get content`
+  - L2031 `InlineSpan build()`
+  - L2079 `TextStyle get style`
+  - L2081 `static String _extractLanguage(m.Element element)`
+- L2108 `class _MarkdownImage extends StatelessWidget`  — Polished markdown image: full-width on mobile bubbles (capped at 540px wide
+  - L2109 `const _MarkdownImage({required this.url, required this.alt})`
+  - L2111 `final String url`
+  - L2112 `final String alt`
+  - L2115 `Widget build(BuildContext context)`
+  - L2183 `Widget _errorTile(ColorScheme colorScheme)`
+  - L2197 `void _openFullscreen(BuildContext context)`
+- L2208 `class _NetworkImageViewer extends StatelessWidget`
+  - L2209 `const _NetworkImageViewer({required this.url})`
+  - L2210 `final String url`
+  - L2213 `Widget build(BuildContext context)`
 
-## lib/widgets/mcp_connect_card.dart  (199 Z.)
-- L20 `class McpConnectCard extends StatefulWidget`  — A single Connect button for one catalogue server, shown inline under an
-  - L21 `const McpConnectCard({ super.key, required this.entry, required this.onConnected, })`
-  - L28 `final McpCatalogueEntry entry`  — The catalogue server to connect.
-  - L32 `final VoidCallback onConnected`  — Called once the server is connected and its tools are registered — the
-  - L35 `State<McpConnectCard> createState()`
-- L38 `class _McpConnectCardState extends State<McpConnectCard>`
-  - L39 `bool _busy = false`
-  - L40 `String? _error`
-  - L42 `bool get _isActivate`
-  - L46 `bool get _blockedOnWeb`  — Loopback OAuth cannot run on the web, so an OAuth server cannot be
-  - L48 `Future<void> _connect()`
-  - L102 `Widget build(BuildContext context)`
+## lib/widgets/mcp_connect_card.dart  (207 Z.)
+- L26 `class McpConnectCard extends StatefulWidget`  — A single Connect button for one catalogue server, shown inline under an
+  - L27 `const McpConnectCard({ super.key, required this.entry, required this.onConnected, })`
+  - L34 `final McpCatalogueEntry entry`  — The catalogue server to connect.
+  - L38 `final VoidCallback onConnected`  — Called once the server is connected and its tools are registered — the
+  - L41 `State<McpConnectCard> createState()`
+- L44 `class _McpConnectCardState extends State<McpConnectCard>`
+  - L45 `bool _busy = false`
+  - L46 `String? _error`
+  - L48 `bool get _isActivate`
+  - L52 `bool get _blockedOnWeb`  — Loopback OAuth cannot run on the web, so an OAuth server cannot be
+  - L54 `Future<void> _connect()`
+  - L108 `Widget build(BuildContext context)`
 
 ## lib/widgets/measure_size.dart  (49 Z.)
 - L6 `typedef OnWidgetSizeChange = void Function(Size size)`  — Callback invoked whenever the measured child changes size.
@@ -1051,91 +2273,135 @@
   - L36 `Size? _oldSize`
   - L39 `void performLayout()`
 
-## lib/widgets/menu_tile_group.dart  (87 Z.)
-- L12 `kMenuOuterRadius = 26`  — A menu drawn as a run of filled tiles instead of one boxed card.
-- L15 `kMenuInnerRadius = 6`  — Where two tiles of one run meet.
-- L18 `kMenuTileGap = 3`  — Air between two tiles of one run.
-- L21 `kMenuGroupGap = 10`  — Air instead of a divider, between two runs.
-- L23 `class MenuTileGroup extends StatelessWidget`
-  - L24 `const MenuTileGroup({ super.key, required this.groups, required this.color, this.outerRadius = kMenuOuterRadius, })`
-  - L32 `MenuTileGroup.single({ Key? key, required List<Widget> children, required Color color, double outerRadius = kMenuOuterRadius, }) : this( key: key, groups: <List<Widget>>[children], color: color, outerRadius: outerRadius, )`  — One run of rows that belong together.
-  - L45 `final List<List<Widget>> groups`  — Each list is one connected run; the gap between runs replaces a divider.
-  - L49 `final Color color`  — Tile fill. It has to be a step above whatever is behind the menu, or the
-  - L52 `final double outerRadius`  — 26 is nearly a capsule on a 48 px row; take 20 for shorter rows.
-  - L55 `Widget build(BuildContext context)`
+## lib/widgets/menu_tile_group.dart  (439 Z.)
+- L18 `kMenuOuterRadius = 26`  — Corner radius at the outer edges of a run.
+- L21 `kMenuInnerRadius = 6`  — Where two tiles of one run meet.
+- L25 `kMenuTileGap = 3`  — Air between two tiles of one run. The gap is left open, so whatever the
+- L28 `kMenuGroupGap = 10`  — Air instead of a divider, between two runs.
+- L33 `kMenuDenseOuterRadius = 12`  — The desktop menu of the Agents desktop layout (docs/DESIGN.md §14.6): a menu
+- L34 `kMenuDenseInnerRadius = 4`
+- L35 `kMenuDenseTileGap = 2`
+- L36 `kMenuDenseGroupGap = 6`
+- L37 `kMenuDenseRowHeight = 32`
+- L46 `class MenuDensity extends InheritedTheme`  — Marks a subtree as the Agents desktop layout, so every menu opened from it
+  - L47 `const MenuDensity({super.key, this.dense = true, required super.child})`
+  - L49 `final bool dense`
+  - L52 `static bool isDense(BuildContext context)`  — Whether [context] sits in the dense desktop layout.
+  - L56 `Widget wrap(BuildContext context, Widget child)`
+  - L60 `bool updateShouldNotify(MenuDensity oldWidget)`
+- L74 `class MenuTileGroup extends StatelessWidget`  — A menu drawn as a run of filled tiles instead of one boxed card.
+  - L75 `const MenuTileGroup({ super.key, required this.groups, required this.color, this.outerRadius = kMenuOuterRadius, })`
+  - L83 `MenuTileGroup.single({ Key? key, required List<Widget> children, required Color color, double outerRadius = kMenuOuterRadius, }) : this( key: key, groups: <List<Widget>>[children], color: color, outerRadius: outerRadius, )`  — One run of rows that belong together.
+  - L96 `final List<List<Widget>> groups`  — Each list is one connected run; the gap between runs replaces a divider.
+  - L100 `final Color color`  — Tile fill. It has to be a step above whatever is behind the menu, or the
+  - L102 `final double outerRadius`
+  - L105 `Widget build(BuildContext context)`
+  - L152 `Widget _buildDense(BuildContext context, double outer)`  — The desktop menu: each run is one continuous surface with a hairline
+- L191 `class MenuActionRow extends StatelessWidget`  — One row of a menu: an icon, a label, an optional line under it and
+  - L192 `const MenuActionRow({ super.key, required this.label, this.icon, this.leading, this.subtitle, this.trailing, this.onTap, this.tone, this.selected = false, this.enabled = true, this.maxLines, this.shortcut, })`
+  - L207 `final String label`
+  - L211 `final String? shortcut`  — The keyboard shortcut for this row ("Ctrl+N"), printed on the right in
+  - L212 `final IconData? icon`
+  - L215 `final Widget? leading`  — Replaces the icon — for an avatar or a badge.
+  - L216 `final String? subtitle`
+  - L217 `final Widget? trailing`
+  - L218 `final VoidCallback? onTap`
+  - L222 `final Color? tone`  — Colour of the icon and the label. Defaults to the scheme's `onSurface`;
+  - L225 `final bool selected`  — Draws the check on the right, for a row that is a choice.
+  - L228 `final bool enabled`  — A parked row: it still reads, it just does not answer.
+  - L231 `final int? maxLines`  — Cuts a long label after so many lines. Null lets it wrap freely.
+  - L234 `Widget build(BuildContext context)`
+- L313 `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, })`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
+- L373 `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
+  - L374 `const MenuAnchorButton({ super.key, required this.label, required this.onTap, this.leading, this.labelStyle, this.expand = false, })`
+  - L383 `final String label`
+  - L384 `final ValueChanged<BuildContext> onTap`
+  - L387 `final Widget? leading`  — Sits before the label — a swatch, a dot row, an icon.
+  - L390 `final TextStyle? labelStyle`  — Merged over the house style, for a preview in the chosen font.
+  - L393 `final bool expand`  — Fills the width, the way `isExpanded` did.
+  - L396 `Widget build(BuildContext context)`
 
-## lib/widgets/message_bubble.dart  (381 Z.)
+## lib/widgets/message_bubble.dart  (492 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
-- L90 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
-- L95 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
-- L101 `_kCardStackGap = 6`  — Gap between sibling expandable cards stacked inside the expanded
-- L107 `_kInfoBarGap = 2`  — Air under the "Thought for 4s" bar, before the answer starts.
-- L111 `_kMobileBottomBarHeight = 36.0`  — AI action / user long-press action bars share this fixed height on mobile
-- L115 `_richBlockRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\s*>([\s\S]*?)<\s*/\s*\1\s*>', multiLine: true,`  — Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
-- L121 `_visualBlockStartRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\b', caseSensitive: false, )`
-- L127 `_diffBlockRegex = RegExp( r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>', caseSensitive: false, )`  — Matches `<diff>...</diff>` blocks embedded in tool results.
-- L132 `_attachmentHeaderRe = RegExp( r'^\d+ images? attached(?:, Documents: .+)?$', )`
-- L138 `_kAiResponseFontFamilyDefault = kFontFamilyArimo`  — Default chat font family, resolved once. Used when the user has explicitly
-- L143 `_cachedShowReasoningTokens`  — Cross-instance cache of the two display preferences, so a freshly built
-- L144 `_cachedShowModelInfo`
-- L146 `class MessageBubble extends StatefulWidget`
-  - L147 `const MessageBubble({ super.key, required this.message, required this.isUser, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.chatId, this.turnStartedAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, })`
-  - L193 `final String message`
-  - L194 `final bool isUser`
-  - L197 `final bool startsNewGroup`
-  - L198 `final bool endsGroup`
-  - L199 `final double? maxWidth`
-  - L200 `final List<MessageBubbleAction> actions`
-  - L201 `final String? reasoning`
-  - L202 `final bool isReasoningStreaming`
-  - L203 `final String? modelLabel`
-  - L204 `final String? modelProvider`
-  - L205 `final double? tps`
-  - L206 `final bool isEditing`
-  - L207 `final String? initialEditText`
-  - L208 `final ValueChanged<String>? onSubmitEdit`
-  - L209 `final VoidCallback? onCancelEdit`
-  - L210 `final bool? showReasoningTokens`
-  - L211 `final bool? showModelInfo`
-  - L212 `final bool? showTps`
-  - L213 `final List<ToolCall>? toolCalls`
-  - L214 `final bool showToolCalls`
-  - L219 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
-  - L223 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
-  - L228 `final String? chatId`  — The chat this message belongs to. The status header looks the live
-  - L233 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
-  - L238 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
-  - L240 `final List<String>? images`
-  - L244 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
-  - L245 `final List<DocumentAttachment>? attachments`
-  - L246 `final double? imageCostEur`
-  - L247 `final DateTime? imageGeneratedAt`
-  - L252 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
-  - L258 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
-  - L263 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
-  - L264 `final bool useSharedSelectionArea`
-  - L268 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
-  - L271 `final String? lastError`  — Last error text shown in the failed-status tooltip.
-  - L274 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
-  - L279 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
-  - L283 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
-  - L287 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
-  - L291 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
-  - L292 `final VoidCallback? onNextVariant`
-  - L295 `State<MessageBubble> createState()`
-- L298 `class _MessageBubbleState extends State<MessageBubble>`
-  - L299 `bool _complexBubbleLogged = false`
-  - L300 `bool _showUserActions = false`
-  - L303 `bool? _showReasoningTokens`
-  - L304 `bool? _showModelInfo`
-  - L310 `String? _strippedMessageCache`
-  - L311 `String? _strippedMessageSource`
-  - L314 `void initState()`
-  - L319 `Future<void> _loadPreferences()`
-  - L338 `void didUpdateWidget(covariant MessageBubble oldWidget)`
-  - L343 `Widget build(BuildContext context)`
+- L106 `_kBlockGap = 8`  — Gap between two sibling "block" rounds inside the same assistant
+- L111 `_kArtifactGap = 6`  — Gap between a tool-call bar and its attached artifact cards, and
+- L117 `_kCardStackGap = 6`  — Gap between sibling expandable cards stacked inside the expanded
+- L123 `_kInfoBarGap = 2`  — Air under the "Thought for 4s" bar, before the answer starts.
+- L127 `_kMobileBottomBarHeight = 36.0`  — AI action / user long-press action bars share this fixed height on mobile
+- L131 `_richBlockRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\s*>([\s\S]*?)<\s*/\s*\1\s*>', multiLine: true,`  — Regex to find visual output blocks (`<chart>`, `<map>`, `<email>`,
+- L137 `_visualBlockStartRegex = RegExp( r'<\s*(chart|map|email|weather|news|image|diff)\b', caseSensitive: false, )`
+- L143 `_diffBlockRegex = RegExp( r'<\s*diff\s*>([\s\S]*?)<\s*/\s*diff\s*>', caseSensitive: false, )`  — Matches `<diff>...</diff>` blocks embedded in tool results.
+- L148 `_attachmentHeaderRe = RegExp( r'^\d+ images? attached(?:, Documents: .+)?$', )`
+- L154 `_kAiResponseFontFamilyDefault = kFontFamilyArimo`  — Default chat font family, resolved once. Used when the user has explicitly
+- L159 `_cachedShowReasoningTokens`  — Cross-instance cache of the two display preferences, so a freshly built
+- L160 `_cachedShowModelInfo`
+- L162 `class MessageBubble extends StatefulWidget`
+  - L163 `const MessageBubble({ super.key, required this.message, required this.isUser, this.messengerMode = false, this.startsNewGroup = true, this.endsGroup = true, this.maxWidth, this.actions = const <MessageBubbleAction>[], this.reasoning, this.isReasoningStreaming = false, this.modelLabel, this.modelProvider, this.tps, this.isEditing = false, this.initialEditText, this.onSubmitEdit, this.onCancelEdit, this.showReasoningTokens, this.showModelInfo, this.showTps, this.toolCalls, this.showToolCalls = true, this.contentBlocks, this.isStreamingMessage = false, this.chatId, this.turnStartedAt, this.sentAt, this.workedFor, this.images, this.imageMetas, this.attachments, this.imageCostEur, this.imageGeneratedAt, this.onAskUserAnswer, this.onConnectMcpServer, this.userMessageActions = const <MessageBubbleAction>[], this.useSharedSelectionArea = false, this.status, this.lastError, this.onRetryPending, this.onContinueGeneration, this.variantIndex = 0, this.variantCount = 0, this.onPrevVariant, this.onNextVariant, this.onReply, this.onEditRequested, this.reaction, this.onReaction, this.senderLabel, })`
+  - L216 `final String message`
+  - L217 `final VoidCallback? onReply`
+  - L218 `final VoidCallback? onEditRequested`
+  - L219 `final String? reaction`
+  - L220 `final ValueChanged<String>? onReaction`
+  - L229 `final Widget? senderLabel`  — Who is talking, drawn above the first bubble of the run.
+  - L232 `final bool messengerMode`  — Opt-in quiet mobile chrome. Data, model settings and desktop stay intact.
+  - L233 `final bool isUser`
+  - L236 `final bool startsNewGroup`
+  - L237 `final bool endsGroup`
+  - L238 `final double? maxWidth`
+  - L239 `final List<MessageBubbleAction> actions`
+  - L240 `final String? reasoning`
+  - L241 `final bool isReasoningStreaming`
+  - L242 `final String? modelLabel`
+  - L243 `final String? modelProvider`
+  - L244 `final double? tps`
+  - L245 `final bool isEditing`
+  - L246 `final String? initialEditText`
+  - L247 `final ValueChanged<String>? onSubmitEdit`
+  - L248 `final VoidCallback? onCancelEdit`
+  - L249 `final bool? showReasoningTokens`
+  - L250 `final bool? showModelInfo`
+  - L251 `final bool? showTps`
+  - L252 `final List<ToolCall>? toolCalls`
+  - L253 `final bool showToolCalls`
+  - L258 `final List<ContentBlock>? contentBlocks`  — Ordered content blocks for interleaved AI responses.
+  - L262 `final bool isStreamingMessage`  — Whether this message is currently being streamed. Used with
+  - L267 `final String? chatId`  — The chat this message belongs to. The status header looks the live
+  - L272 `final DateTime? turnStartedAt`  — When the request behind this answer went out, so the activity header
+  - L276 `final DateTime? sentAt`  — Actual message timestamp, distinct from the generation stopwatch.
+  - L281 `final Duration? workedFor`  — The finished turn's length as it was written down. Once present the
+  - L283 `final List<String>? images`
+  - L287 `final List<ImageMeta>? imageMetas`  — Per-image metadata aligned with [images]. Distinguishes fetched vs
+  - L288 `final List<DocumentAttachment>? attachments`
+  - L289 `final double? imageCostEur`
+  - L290 `final DateTime? imageGeneratedAt`
+  - L295 `final ValueChanged<String>? onAskUserAnswer`  — Called when the user taps an option button on an ask_user tool call.
+  - L301 `final ValueChanged<String>? onConnectMcpServer`  — Called with the catalogue id when the user taps Connect on an inline
+  - L306 `final List<MessageBubbleAction> userMessageActions`  — Actions shown in a popup menu on long-press for user messages.
+  - L307 `final bool useSharedSelectionArea`
+  - L311 `final ChatMessageStatus? status`  — Local offline-delivery status. Only rendered for user messages. `null`
+  - L314 `final String? lastError`  — Last error text shown in the failed-status tooltip.
+  - L317 `final VoidCallback? onRetryPending`  — Called when the user taps the inline retry button on a failed message.
+  - L322 `final VoidCallback? onContinueGeneration`  — Called when the user taps the inline "Continue generation" button on
+  - L326 `final int variantIndex`  — Zero-based index of the answer variant currently shown, for the
+  - L330 `final int variantCount`  — Total number of answer variants. The pager renders only when this is
+  - L334 `final VoidCallback? onPrevVariant`  — Switch to the previous / next answer variant. Null (or when at the
+  - L335 `final VoidCallback? onNextVariant`
+  - L338 `State<MessageBubble> createState()`
+- L341 `class _MessageBubbleState extends State<MessageBubble>`
+  - L347 `final List<SandboxArtifactPayload> _artifactPayloads = <SandboxArtifactPayload>[]`  — Files this answer produced. They are pulled out of the bubble while the
+  - L350 `bool _complexBubbleLogged = false`
+  - L351 `bool _showUserActions = false`
+  - L352 `late final bool _animateMessengerEntrance`
+  - L355 `bool? _showReasoningTokens`
+  - L356 `bool? _showModelInfo`
+  - L362 `String? _strippedMessageCache`
+  - L363 `String? _strippedMessageSource`
+  - L366 `void initState()`
+  - L378 `Future<void> _loadPreferences()`
+  - L397 `void didUpdateWidget(covariant MessageBubble oldWidget)`
+  - L405 `Widget build(BuildContext context)`
 
-## lib/widgets/message_fly_in.dart  (73 Z.)
+## lib/widgets/message_fly_in.dart  (70 Z.)
 - L12 `class MessageFlyIn extends StatefulWidget`  — A one-shot entrance for a just-sent message: the bubble starts a little
   - L13 `const MessageFlyIn({ super.key, required this.child, this.rise = 40, this.duration = const Duration(milliseconds: 380), })`
   - L20 `final Widget child`
@@ -1149,117 +2415,132 @@
   - L49 `void dispose()`
   - L55 `Widget build(BuildContext context)`
 
-## lib/widgets/model_selection_dropdown.dart  (1428 Z.)
-- L27 `_menuHorizontalPadding = 32.0`
-- L28 `_menuTrailingAllowance = 64.0`
-- L29 `_menuExtraAllowance = 12.0`
-- L30 `_buttonHorizontalPadding = 20.0`
-- L31 `_buttonTrailingAllowance = 56.0`
-- L36 `kAutoCheapestProviderSlug = '__auto_cheapest__'`  — Sentinel value stored in user preferences when the user picks
-- L38 `class ModelProviderSummary`
-  - L39 `final String slug`
-  - L40 `final String name`
-  - L41 `final double promptPrice`
-  - L42 `final double completionPrice`
-  - L44 `const ModelProviderSummary({ required this.slug, required this.name, required this.promptPrice, required this.completionPrice, })`
-- L52 `class _WidthMetrics`
-  - L53 `final double menuWidth`
-  - L54 `final double buttonWidth`
-  - L56 `const _WidthMetrics({required this.menuWidth, required this.buttonWidth})`
-- L59 `class ModelProviderLimits`
-  - L60 `final int? contextLength`
-  - L61 `final int? maxCompletionTokens`
-  - L63 `const ModelProviderLimits({this.contextLength, this.maxCompletionTokens})`
-- L66 `class _AuthRequiredException implements Exception`
-  - L67 `const _AuthRequiredException()`
-- L70 `class _FilteredModelResult`
-  - L71 `const _FilteredModelResult({ required this.models, required this.enabledProviders, required this.invalidModelIds, required this.providerLimits, required this.availableProviders, })`
-  - L79 `final List<ModelItem> models`
-  - L80 `final Map<String, String> enabledProviders`
-  - L81 `final Set<String> invalidModelIds`
-  - L82 `final Map<String, ModelProviderLimits> providerLimits`
-  - L83 `final Map<String, List<ModelProviderSummary>> availableProviders`
-- L86 `class ModelSelectionDropdown extends StatefulWidget`
-  - L87 `final String initialSelectedModelId`
-  - L88 `final ValueChanged<String> onModelSelected`
-  - L89 `final FocusNode textFieldFocusNode`
-  - L90 `final bool isCompactMode`
-  - L91 `final String? compactLabel`
-  - L92 `final bool transparentStyle`
-  - L98 `final bool mergedSegmentStyle`  — Render as the right half of a merged segmented control: no own border,
-  - L100 `const ModelSelectionDropdown({ super.key, required this.initialSelectedModelId, required this.onModelSelected, required this.textFieldFocusNode, this.isCompactMode = false, this.compactLabel, this.transparentStyle = false, this.mergedSegmentStyle = false, })`
-  - L111 `static final ValueNotifier<String> selectedModelNotifier = ValueNotifier<String>('')`
-  - L113 `static final Set<_ModelSelectionDropdownState> _activeStates = <_ModelSelectionDropdownState>{}`
-  - L115 `static bool _isRefreshingAll = false`
-  - L116 `static final Map<String, ModelProviderLimits> _cachedProviderLimits = <String, ModelProviderLimits>{}`
-  - L118 `static StreamSubscription<void>? _refreshSubscription`
-  - L119 `static StreamSubscription<String>? _modelSelectedSubscription`
-  - L123 `static List<ModelItem> _cachedModels = []`
-  - L124 `static Map<String, String> _cachedProviders = {}`
-  - L125 `static final Map<String, List<ModelProviderSummary>> _cachedAvailableProviders = {}`
-  - L127 `static bool _hasEverLoaded = false`
-  - L129 `static ValueListenable<String> get selectedModelListenable`
-  - L132 `static void _registerState(_ModelSelectionDropdownState state)`
-  - L137 `static void _unregisterState(_ModelSelectionDropdownState state)`
-  - L144 `static void _initializeEventBus()`
-  - L157 `static void _disposeEventBus()`
-  - L164 `static Future<void> refreshActiveDropdowns()`
-  - L176 `static String? providerSlugForModel(String modelId)`
-  - L186 `static bool modelSupportsReasoning(String modelId)`
-  - L194 `static ModelProviderLimits? providerLimitsForModel(String modelId)`
-  - L211 `static List<ModelProviderSummary> availableProvidersForModel(String modelId)`  — Static, in-memory list of providers known for [modelId]. Survives
-  - L226 `static ModelProviderSummary? cheapestProviderForModel(String modelId)`  — Pick the cheapest provider for [modelId] by completion (output) price.
-  - L241 `static String? resolveProviderSlugForSend(String modelId, String savedSlug)`  — Resolve [savedSlug] (which may be [kAutoCheapestProviderSlug]) to a
-  - L249 `static void showModelSelectionSheet( BuildContext context, { required String currentModelId, required ValueChanged<String> onModelSelected, })`  — Show a model selection bottom sheet.
-  - L343 `State<ModelSelectionDropdown> createState()`
-- L346 `class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> with ApiAvailabilityPolling<ModelSelectionDropdown>`
-  - L349 `String get apiPollBaseUrl`
-  - L352 `Future<void> onApiReachable()`
-  - L360 `String _selectedModelId = ''`
-  - L361 `String _selectedModelName = 'Loading Models...'`
-  - L362 `List<ModelItem> _allModels = []`
-  - L363 `final Map<String, String> _enabledModelProviders = {}`
-  - L364 `final Map<String, ModelProviderLimits> _providerLimits = <String, ModelProviderLimits>{}`
-  - L366 `final Map<String, List<ModelProviderSummary>> _availableProviders = <String, List<ModelProviderSummary>>{}`
-  - L368 `bool _isLoadingModels = true`
-  - L369 `String _errorMessage = ''`
-  - L370 `Map<String, String> _lastSavedPreferences = {}`
-  - L371 `late final VoidCallback _selectedModelListener`
-  - L372 `final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false)`
-  - L373 `double _lastStableMaxWidth = 220.0`
-  - L374 `DateTime? _lastConstraintWarningAt`
-  - L376 `double _menuWidth = 260.0`
-  - L377 `double _buttonWidth = 180.0`
-  - L379 `static const Duration _backgroundFetchDelay = Duration(seconds: 5)`
-  - L380 `static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8)`
-  - L381 `String get _apiBaseUrl`
-  - L384 `void initState()`
-  - L428 `void _handleSelectedModelNotifierChange()`
-  - L442 `void didUpdateWidget(covariant ModelSelectionDropdown oldWidget)`
-  - L451 `Future<void> _initializeModelSelection()`
-  - L531 `Future<void> _hydrateFromCache()`
-  - L562 `_FilteredModelResult _filterModels( List<Map<String, dynamic>> payload, Map<String, String> providerPrefs, )`
-  - L680 `double _parseDouble(dynamic value)`
-  - L689 `Future<void> _applyModels({ required List<ModelItem> models, required Map<String, String> enabledProviders, required Map<String, ModelProviderLimits> providerLimits, required Map<String, List<ModelProviderSummary>> availableProviders, required Map<String, String> savedPreferences, })`
-  - L758 `String? providerSlugFor(String modelId)`
-  - L762 `ModelProviderLimits? providerLimitsFor(String modelId)`
-  - L766 `bool? supportsReasoningFor(String modelId)`
-  - L775 `Future<void> refreshModels()`
-  - L782 `Future<void> _fetchModels()`
-  - L929 `Future<void> _handleApiUnavailable({required String debugDetails})`
-  - L948 `String _buildApiUnavailableMessage({required bool hasConnectivity})`
-  - L969 `void _updateSelectedModelNameSync()`  — Update name + widths synchronously (no setState — for use in initState).
-  - L984 `void _updateSelectedModelName()`
-  - L1006 `_WidthMetrics _calculateWidthMetrics(String selectedLabel)`
-  - L1050 `double _measureTextWidth( String text, TextStyle textStyle, TextDirection textDirection, TextScaler textScaler, )`
-  - L1065 `double _menuWidthFromTextWidth(double textWidth)`
-  - L1072 `double _buttonWidthFromTextWidth(double textWidth)`
-  - L1076 `double _effectiveButtonWidth(double maxAvailableWidth)`
-  - L1127 `Widget _buildDropdownButtonContent(double buttonWidth)`
-  - L1240 `Widget build(BuildContext context)`
-  - L1387 `void dispose()`
-  - L1404 `int? _parseNullableInt(dynamic value)`
-- L1422 `String _stripLabPrefix(String name)`  — OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
+## lib/widgets/messenger_context_menu.dart  (211 Z.)
+- L10 `Future<String?> showMessengerContextMenu({ required BuildContext context, required Rect anchor, required Widget preview, required bool canEdit, required bool canReply, required bool isUser, bool canReact = false, String? reaction, })`  — A focused message above a separate action sheet, like a messenger's
+
+## lib/widgets/messenger_typing_indicator.dart  (96 Z.)
+- L5 `class MessengerTypingIndicator extends StatefulWidget`  — A local presentation of a real in-flight turn; never a synthetic message.
+  - L6 `const MessengerTypingIndicator({super.key, this.connectedAbove = false})`
+  - L7 `final bool connectedAbove`
+  - L10 `State<MessengerTypingIndicator> createState()`
+- L14 `class _MessengerTypingIndicatorState extends State<MessengerTypingIndicator> with SingleTickerProviderStateMixin`
+  - L16 `late final _animation = AnimationController( vsync: this, duration: const Duration(milliseconds: 1100), )`
+  - L20 `bool _reducedMotion = false`
+  - L23 `void didChangeDependencies()`
+  - L34 `void dispose()`
+  - L40 `Widget build(BuildContext context)`
+
+## lib/widgets/model_selection_dropdown.dart  (1432 Z.)
+- L28 `_menuHorizontalPadding = 32.0`
+- L29 `_menuTrailingAllowance = 64.0`
+- L30 `_menuExtraAllowance = 12.0`
+- L31 `_buttonHorizontalPadding = 20.0`
+- L32 `_buttonTrailingAllowance = 56.0`
+- L37 `kAutoCheapestProviderSlug = '__auto_cheapest__'`  — Sentinel value stored in user preferences when the user picks
+- L39 `class ModelProviderSummary`
+  - L40 `final String slug`
+  - L41 `final String name`
+  - L42 `final double promptPrice`
+  - L43 `final double completionPrice`
+  - L45 `const ModelProviderSummary({ required this.slug, required this.name, required this.promptPrice, required this.completionPrice, })`
+- L53 `class _WidthMetrics`
+  - L54 `final double menuWidth`
+  - L55 `final double buttonWidth`
+  - L57 `const _WidthMetrics({required this.menuWidth, required this.buttonWidth})`
+- L60 `class ModelProviderLimits`
+  - L61 `final int? contextLength`
+  - L62 `final int? maxCompletionTokens`
+  - L64 `const ModelProviderLimits({this.contextLength, this.maxCompletionTokens})`
+- L67 `class _AuthRequiredException implements Exception`
+  - L68 `const _AuthRequiredException()`
+- L71 `class _FilteredModelResult`
+  - L72 `const _FilteredModelResult({ required this.models, required this.enabledProviders, required this.invalidModelIds, required this.providerLimits, required this.availableProviders, })`
+  - L80 `final List<ModelItem> models`
+  - L81 `final Map<String, String> enabledProviders`
+  - L82 `final Set<String> invalidModelIds`
+  - L83 `final Map<String, ModelProviderLimits> providerLimits`
+  - L84 `final Map<String, List<ModelProviderSummary>> availableProviders`
+- L87 `class ModelSelectionDropdown extends StatefulWidget`
+  - L88 `final String initialSelectedModelId`
+  - L89 `final ValueChanged<String> onModelSelected`
+  - L90 `final FocusNode textFieldFocusNode`
+  - L91 `final bool isCompactMode`
+  - L92 `final String? compactLabel`
+  - L93 `final bool transparentStyle`
+  - L99 `final bool mergedSegmentStyle`  — Render as the right half of a merged segmented control: no own border,
+  - L101 `const ModelSelectionDropdown({ super.key, required this.initialSelectedModelId, required this.onModelSelected, required this.textFieldFocusNode, this.isCompactMode = false, this.compactLabel, this.transparentStyle = false, this.mergedSegmentStyle = false, })`
+  - L112 `static final ValueNotifier<String> selectedModelNotifier = ValueNotifier<String>('')`
+  - L114 `static final Set<_ModelSelectionDropdownState> _activeStates = <_ModelSelectionDropdownState>{}`
+  - L116 `static bool _isRefreshingAll = false`
+  - L117 `static final Map<String, ModelProviderLimits> _cachedProviderLimits = <String, ModelProviderLimits>{}`
+  - L119 `static StreamSubscription<void>? _refreshSubscription`
+  - L120 `static StreamSubscription<String>? _modelSelectedSubscription`
+  - L124 `static List<ModelItem> _cachedModels = []`
+  - L125 `static Map<String, String> _cachedProviders = {}`
+  - L126 `static final Map<String, List<ModelProviderSummary>> _cachedAvailableProviders = {}`
+  - L128 `static bool _hasEverLoaded = false`
+  - L130 `static ValueListenable<String> get selectedModelListenable`
+  - L133 `static void _registerState(_ModelSelectionDropdownState state)`
+  - L138 `static void _unregisterState(_ModelSelectionDropdownState state)`
+  - L145 `static void _initializeEventBus()`
+  - L158 `static void _disposeEventBus()`
+  - L165 `static Future<void> refreshActiveDropdowns()`
+  - L177 `static String? providerSlugForModel(String modelId)`
+  - L187 `static bool modelSupportsReasoning(String modelId)`
+  - L195 `static ModelProviderLimits? providerLimitsForModel(String modelId)`
+  - L212 `static List<ModelProviderSummary> availableProvidersForModel(String modelId)`  — Static, in-memory list of providers known for [modelId]. Survives
+  - L227 `static ModelProviderSummary? cheapestProviderForModel(String modelId)`  — Pick the cheapest provider for [modelId] by completion (output) price.
+  - L242 `static String? resolveProviderSlugForSend(String modelId, String savedSlug)`  — Resolve [savedSlug] (which may be [kAutoCheapestProviderSlug]) to a
+  - L250 `static void showModelSelectionSheet( BuildContext context, { required String currentModelId, required ValueChanged<String> onModelSelected, })`  — Show a model selection bottom sheet.
+  - L344 `State<ModelSelectionDropdown> createState()`
+- L347 `class _ModelSelectionDropdownState extends State<ModelSelectionDropdown> with ApiAvailabilityPolling<ModelSelectionDropdown>`
+  - L350 `String get apiPollBaseUrl`
+  - L353 `Future<void> onApiReachable()`
+  - L361 `String _selectedModelId = ''`
+  - L362 `String _selectedModelName = 'Loading Models...'`
+  - L363 `List<ModelItem> _allModels = []`
+  - L364 `final Map<String, String> _enabledModelProviders = {}`
+  - L365 `final Map<String, ModelProviderLimits> _providerLimits = <String, ModelProviderLimits>{}`
+  - L367 `final Map<String, List<ModelProviderSummary>> _availableProviders = <String, List<ModelProviderSummary>>{}`
+  - L369 `bool _isLoadingModels = true`
+  - L370 `String _errorMessage = ''`
+  - L371 `Map<String, String> _lastSavedPreferences = {}`
+  - L372 `late final VoidCallback _selectedModelListener`
+  - L373 `final ValueNotifier<bool> _isHovered = ValueNotifier<bool>(false)`
+  - L374 `double _lastStableMaxWidth = 220.0`
+  - L375 `DateTime? _lastConstraintWarningAt`
+  - L377 `double _menuWidth = 260.0`
+  - L378 `double _buttonWidth = 180.0`
+  - L380 `static const Duration _backgroundFetchDelay = Duration(seconds: 5)`
+  - L381 `static const Duration _linuxBackgroundFetchDelay = Duration(seconds: 8)`
+  - L382 `String get _apiBaseUrl`
+  - L385 `void initState()`
+  - L429 `void _handleSelectedModelNotifierChange()`
+  - L443 `void didUpdateWidget(covariant ModelSelectionDropdown oldWidget)`
+  - L452 `Future<void> _initializeModelSelection()`
+  - L532 `Future<void> _hydrateFromCache()`
+  - L563 `_FilteredModelResult _filterModels( List<Map<String, dynamic>> payload, Map<String, String> providerPrefs, )`
+  - L681 `double _parseDouble(dynamic value)`
+  - L690 `Future<void> _applyModels({ required List<ModelItem> models, required Map<String, String> enabledProviders, required Map<String, ModelProviderLimits> providerLimits, required Map<String, List<ModelProviderSummary>> availableProviders, required Map<String, String> savedPreferences, })`
+  - L759 `String? providerSlugFor(String modelId)`
+  - L763 `ModelProviderLimits? providerLimitsFor(String modelId)`
+  - L767 `bool? supportsReasoningFor(String modelId)`
+  - L776 `Future<void> refreshModels()`
+  - L783 `Future<void> _fetchModels()`
+  - L930 `Future<void> _handleApiUnavailable({required String debugDetails})`
+  - L949 `String _buildApiUnavailableMessage({required bool hasConnectivity})`
+  - L970 `void _updateSelectedModelNameSync()`  — Update name + widths synchronously (no setState — for use in initState).
+  - L985 `void _updateSelectedModelName()`
+  - L1007 `_WidthMetrics _calculateWidthMetrics(String selectedLabel)`
+  - L1051 `double _measureTextWidth( String text, TextStyle textStyle, TextDirection textDirection, TextScaler textScaler, )`
+  - L1066 `double _menuWidthFromTextWidth(double textWidth)`
+  - L1073 `double _buttonWidthFromTextWidth(double textWidth)`
+  - L1077 `double _effectiveButtonWidth(double maxAvailableWidth)`
+  - L1128 `Widget _buildDropdownButtonContent(double buttonWidth)`
+  - L1244 `Widget build(BuildContext context)`
+  - L1391 `void dispose()`
+  - L1408 `int? _parseNullableInt(dynamic value)`
+- L1426 `String _stripLabPrefix(String name)`  — OpenRouter model names arrive as "Lab: Model Name" (e.g. "Qwen: Qwen3.5-9B").
 
 ## lib/widgets/nice_snackbar.dart  (55 Z.)
 - L11 `class NiceSnackBar`  — The old name for [AppNotifications], kept so the call sites that already
@@ -1281,87 +2562,304 @@
   - L119 `(Color, int) _getStrengthVisuals(PasswordStrength strength)`
   - L132 `String _getStrengthLabel(PasswordStrength strength)`
 
-## lib/widgets/per_model_system_prompt_sheet.dart  (290 Z.)
+## lib/widgets/per_model_system_prompt_sheet.dart  (285 Z.)
 - L15 `Future<bool?> showPerModelSystemPromptSheet({ required BuildContext context, required String modelId, required String modelName, ModelPromptConfig? initial, })`  — Bottom sheet for editing a per-model system prompt and merge mode.
-- L42 `class _PerModelSystemPromptEditor extends StatefulWidget`
-  - L43 `const _PerModelSystemPromptEditor({ required this.modelId, required this.modelName, required this.initial, })`
-  - L49 `final String modelId`
-  - L50 `final String modelName`
-  - L51 `final ModelPromptConfig? initial`
-  - L54 `State<_PerModelSystemPromptEditor> createState()`
-- L58 `class _PerModelSystemPromptEditorState extends State<_PerModelSystemPromptEditor>`
-  - L60 `late final TextEditingController _ctrl`
-  - L61 `late ModelPromptMode _mode`
-  - L62 `bool _saving = false`
-  - L65 `void initState()`
-  - L72 `void dispose()`
-  - L77 `Future<void> _save()`
-  - L99 `Future<void> _delete()`
-  - L117 `Widget build(BuildContext context)`
-  - L247 `String _modeDescription(AppLocalizations l, ModelPromptMode mode)`
-- L261 `class _ModeChips extends StatelessWidget`
-  - L262 `const _ModeChips({required this.mode, required this.onChanged})`
-  - L264 `final ModelPromptMode mode`
-  - L265 `final ValueChanged<ModelPromptMode> onChanged`
-  - L268 `Widget build(BuildContext context)`
+- L40 `class _PerModelSystemPromptEditor extends StatefulWidget`
+  - L41 `const _PerModelSystemPromptEditor({ required this.modelId, required this.modelName, required this.initial, })`
+  - L47 `final String modelId`
+  - L48 `final String modelName`
+  - L49 `final ModelPromptConfig? initial`
+  - L52 `State<_PerModelSystemPromptEditor> createState()`
+- L56 `class _PerModelSystemPromptEditorState extends State<_PerModelSystemPromptEditor>`
+  - L58 `late final TextEditingController _ctrl`
+  - L59 `late ModelPromptMode _mode`
+  - L60 `bool _saving = false`
+  - L63 `void initState()`
+  - L70 `void dispose()`
+  - L75 `Future<void> _save()`
+  - L97 `Future<void> _delete()`
+  - L115 `Widget build(BuildContext context)`
+  - L242 `String _modeDescription(AppLocalizations l, ModelPromptMode mode)`
+- L256 `class _ModeChips extends StatelessWidget`
+  - L257 `const _ModeChips({required this.mode, required this.onChanged})`
+  - L259 `final ModelPromptMode mode`
+  - L260 `final ValueChanged<ModelPromptMode> onChanged`
+  - L263 `Widget build(BuildContext context)`
 
-## lib/widgets/route_map_widget.dart  (336 Z.)
-- L14 `class RouteMapWidget extends StatefulWidget`  — Displays a route map with OSRM polyline, start/end markers,
-  - L15 `final double fromLat, fromLon, toLat, toLon`
-  - L16 `final double centerLat, centerLon, zoom`
-  - L17 `final String fromLabel, toLabel, distKm, durMin, routeTitle`
-  - L18 `final List<Map<String, dynamic>> steps`
-  - L19 `final double mapHeight`
-  - L20 `final VoidCallback? onTapFullscreen`
-  - L22 `const RouteMapWidget({ super.key, required this.fromLat, required this.fromLon, required this.toLat, required this.toLon, required this.fromLabel, required this.toLabel, required this.distKm, required this.durMin, required this.routeTitle, required this.centerLat, required this.centerLon, required this.zoom, required this.steps, required this.mapHeight, this.onTapFullscreen, })`
-  - L42 `State<RouteMapWidget> createState()`
-- L45 `class _RouteMapWidgetState extends State<RouteMapWidget>`
-  - L46 `List<LatLng>? _routePoints`
-  - L47 `bool _loading = true`
-  - L50 `void initState()`
-  - L55 `Future<void> _fetchRouteGeometry()`
-  - L113 `Widget build(BuildContext context)`
+## lib/widgets/room_create_sheet.dart  (234 Z.)
+- L22 `kRoomSearchThreshold = 8`  — Above this many candidates the list stops being scannable, so the sheet
+- L24 `class RoomCreateSheet extends StatefulWidget`
+  - L25 `const RoomCreateSheet({ super.key, required this.agents, required this.onSubmit, this.onCancel, })`
+  - L33 `final List<AgentsAgent> agents`  — The coworkers that can join. Usually the roster's visible agents.
+  - L35 `final void Function(AgentsRoomDraft draft) onSubmit`
+  - L36 `final VoidCallback? onCancel`
+  - L39 `State<RoomCreateSheet> createState()`
+- L42 `class _RoomCreateSheetState extends State<RoomCreateSheet>`
+  - L43 `final TextEditingController _nameController = TextEditingController()`
+  - L44 `final TextEditingController _searchController = TextEditingController()`
+  - L45 `final Set<String> _selected = <String>{}`
+  - L46 `String? _nameError`
+  - L47 `bool _agentToAgent = true`
+  - L50 `void dispose()`
+  - L56 `bool get _canCreate`
+  - L60 `bool get _searchable`  — Whether the roster is long enough to earn a search field.
+  - L64 `List<AgentsAgent> get _visible`  — The candidates the search field leaves visible. The selection is kept on
+  - L75 `void _toggle(String agentId, bool? on)`
+  - L85 `void _submit()`
+  - L106 `Widget build(BuildContext context)`
+  - L219 `Widget _memberTile(BuildContext context, AgentsAgent agent)`
 
-## lib/widgets/sandbox_artifact_block.dart  (528 Z.)
-- L35 `_kInlineTextCharCap = 16 * 1024`  — Maximum number of characters of text content we inline. Anything larger
-- L37 `class SandboxArtifactBlock extends StatefulWidget`
-  - L38 `const SandboxArtifactBlock({super.key, required this.payload})`
-  - L40 `final SandboxArtifactPayload payload`
-  - L43 `State<SandboxArtifactBlock> createState()`
-- L46 `class _SandboxArtifactBlockState extends State<SandboxArtifactBlock>`
-  - L47 `Uint8List? _bytes`
+## lib/widgets/room_faces.dart  (190 Z.)
+- L37 `kRoomFacesMax = 2`  — How many member faces a room slot ever shows. See the library doc.
+- L41 `_kFaceOfSlot = 0.74`  — How much of the slot one face of a stack takes. Anything smaller drops the
+- L46 `_kFaceGap = 1.5`  — The air between two overlapping faces, in logical pixels. Flat, not a
+- L49 `kRoomFacesInbox = 48`  — The room slot in the phone inbox — [MobileAgentRow]'s coworker face.
+- L56 `kRoomFacesRail = 40`  — The room slot in the desktop roster. Bigger than that rail's 34 px coworker
+- L61 `String roomMembersLabel(AgentsRoom room)`  — Who is in a room, by the handle they are mentioned with. This is the line
+- L66 `typedef RoomFacePlacement = ({double left, double top, double size})`  — One geometry entry: where a face sits in the slot, and how big it is.
+- L68 `class RoomFaces extends StatelessWidget`
+  - L69 `const RoomFaces({ super.key, required this.members, this.size = kRoomFacesInbox, this.store, this.ringColor, })`
+  - L79 `final List<AgentsRoomMember> members`  — The room's members, in room order. Only the first [kRoomFacesMax] are
+  - L83 `final double size`  — The slot's edge length — the size the single coworker face on a sibling
+  - L85 `final AgentProfileStore? store`
+  - L89 `final Color? ringColor`  — The hairline that separates two overlapping faces. Defaults to the
+  - L97 `static List<RoomFacePlacement> placements(int count, double size)`  — The faces' boxes inside a [size] slot, back to front.
+  - L110 `Widget build(BuildContext context)`
+- L152 `class _RingedFace extends StatelessWidget`  — One member's face with the gap that lifts it off the face beneath it.
+  - L153 `const _RingedFace({ required this.id, required this.label, required this.box, required this.ring, required this.ringColor, required this.store, })`
+  - L162 `final String id`
+  - L163 `final String label`
+  - L164 `final double box`
+  - L165 `final double ring`
+  - L166 `final Color ringColor`
+  - L167 `final AgentProfileStore store`
+  - L170 `Widget build(BuildContext context)`
+
+## lib/widgets/room_list_view.dart  (295 Z.)
+- L19 `class RoomListView extends StatelessWidget`
+  - L20 `const RoomListView({ super.key, required this.source, required this.onSelect, this.onCreate, this.onDelete, this.onRename, this.onManageMembers, this.selectedRoomId, this.showHeader = true, })`
+  - L32 `final RoomSource source`
+  - L35 `final void Function(String roomId) onSelect`  — Called with the room the user picked.
+  - L38 `final VoidCallback? onCreate`  — Opens the create-room flow. Hidden when null.
+  - L41 `final void Function(String roomId)? onDelete`  — Deletes a room. When null, no delete affordance is shown.
+  - L45 `final void Function(String roomId, String name)? onRename`  — Renames a room (called with its id and the chosen name). When null, no
+  - L48 `final void Function(String roomId)? onManageMembers`  — Opens member management for a room. When null, no such affordance is shown.
+  - L50 `final String? selectedRoomId`
+  - L54 `final bool showHeader`  — The list's own "Rooms" title row. The desktop pane has a header of its
+  - L57 `Widget build(BuildContext context)`
+  - L83 `Widget _header(BuildContext context)`
+  - L101 `Widget _emptyState(BuildContext context)`
+  - L126 `Widget _roomTile(BuildContext context, AgentsRoom room)`
+  - L185 `Future<void> _promptRename(BuildContext context, AgentsRoom room)`
+  - L204 `Widget _memberStack(AgentsRoom room)`  — Up to three member avatars, overlapped, followed by a "+N" badge when the
+- L252 `class _RenameDialog extends StatefulWidget`  — The rename dialog. A StatefulWidget so it owns and disposes its own text
+  - L253 `const _RenameDialog({required this.initial})`
+  - L255 `final String initial`
+  - L258 `State<_RenameDialog> createState()`
+- L261 `class _RenameDialogState extends State<_RenameDialog>`
+  - L262 `late final TextEditingController _controller = TextEditingController( text: widget.initial, )`
+  - L267 `void dispose()`
+  - L273 `Widget build(BuildContext context)`
+
+## lib/widgets/room_members_sheet.dart  (177 Z.)
+- L29 `class RoomMembersSheet extends StatelessWidget`
+  - L30 `const RoomMembersSheet({ super.key, required this.room, required this.candidates, required this.onAdd, required this.onRemove, this.onAgentToAgentChanged, })`
+  - L39 `final AgentsRoom room`
+  - L42 `final List<AgentsAgent> candidates`  — Roster agents not already in the room, offered to add.
+  - L44 `final void Function(AgentsRoomMember member) onAdd`
+  - L45 `final void Function(String agentId) onRemove`
+  - L50 `final ValueChanged<bool>? onAgentToAgentChanged`  — Reports a flip of the room's "coworkers can reply to each other" policy
+  - L52 `bool get _atMinimum`
+  - L55 `Widget build(BuildContext context)`
+
+## lib/widgets/room_mention_picker.dart  (421 Z.)
+- L25 `kBroadcastHandle = 'all'`  — The handle `@all` is written as. The manager reads `@all`, `@everyone` and
+- L29 `kBroadcastAliases = <String>['all', 'everyone', 'room']`  — The other spellings the manager accepts. Typing any prefix of one of them
+- L34 `bool _isHandleChar(int code)`  — A character that may sit inside a handle. Mirrors the manager's `_MENTION`
+- L40 `bool _isSpace(int code)`
+- L44 `@immutable class MentionToken`  — The `@token` the caret is inside, as a range over the text.
+  - L46 `const MentionToken({ required this.start, required this.end, required this.query, })`
+  - L53 `final int start`  — Offset of the `@` itself.
+  - L56 `final int end`  — Offset just past the last handle character.
+  - L60 `final String query`  — What was typed after the `@` — empty right after the `@` was typed, which
+  - L63 `bool operator ==(Object other)`
+  - L70 `int get hashCode`
+  - L73 `String toString()`
+- L82 `MentionToken? activeMentionToken(String text, int caret)`  — The `@token` [caret] sits in, or null when it sits nowhere near one.
+- L112 `@immutable class MentionEdit`  — The text and caret after a pick.
+  - L114 `const MentionEdit({required this.text, required this.caret})`
+  - L116 `final String text`
+  - L117 `final int caret`
+  - L120 `bool operator ==(Object other)`
+  - L124 `int get hashCode`
+  - L127 `String toString()`
+- L136 `MentionEdit applyMention({ required String text, required MentionToken token, required String handle, })`  — Replace [token] with `@handle ` and say where the caret goes.
+- L151 `@immutable class MentionEntry`  — One row of the picker: a member of the room, or the broadcast row.
+  - L153 `const MentionEntry({ required this.handle, required this.label, this.agentId, this.role, this.trailing, this.aliases = const <String>[], this.broadcast = false, })`
+  - L164 `final String handle`  — What is written into the composer, without the `@`.
+  - L167 `final String label`  — The display name.
+  - L171 `final String? agentId`  — The agent this row stands for, for the face. Null on the broadcast row,
+  - L174 `final String? role`  — The role the user gave the coworker, when it has one.
+  - L178 `final String? trailing`  — A quiet line on the right for a row with no role — the member count on the
+  - L181 `final List<String> aliases`  — Other spellings that find this row (the manager's `@everyone` / `@room`).
+  - L184 `final bool broadcast`  — True for `@all`: it sorts to the top and draws no face.
+- L191 `List<MentionEntry> mentionEntriesFor({ required List<AgentsRoomMember> members, List<AgentsAgent> agents = const <AgentsAgent>[], })`  — The room's members as picker rows, with `@all` first.
+- L219 `bool _prefix(String value, String query)`
+- L225 `List<MentionEntry> filterMentions(List<MentionEntry> entries, String query)`  — The rows that match what is typed: the broadcast row first, then the ones
+- L251 `class RoomMentionPicker extends StatefulWidget`  — The list that floats over the composer while a token is open.
+  - L252 `const RoomMentionPicker({ super.key, required this.entries, required this.selected, required this.onPick, this.maxHeight = 248, })`
+  - L260 `final List<MentionEntry> entries`
+  - L263 `final int selected`  — Index of the highlighted row.
+  - L265 `final void Function(MentionEntry entry) onPick`
+  - L267 `final double maxHeight`
+  - L270 `State<RoomMentionPicker> createState()`
+- L273 `class _RoomMentionPickerState extends State<RoomMentionPicker>`
+  - L274 `final ScrollController _scroll = ScrollController()`
+  - L275 `final Map<int, GlobalKey> _rowKeys = <int, GlobalKey>{}`
+  - L278 `void didUpdateWidget(RoomMentionPicker old)`
+  - L286 `void dispose()`
+  - L296 `void _revealSelected({required bool down})`  — Keep the highlighted row on screen when the arrows walk past the edge.
+  - L310 `Widget build(BuildContext context)`
+- L335 `class _MentionRow extends StatelessWidget`  — One compact line: the face, the name, the handle in the quiet colour, and
+  - L336 `const _MentionRow({ super.key, required this.entry, required this.selected, required this.onTap, })`
+  - L343 `final MentionEntry entry`
+  - L344 `final bool selected`
+  - L345 `final VoidCallback onTap`
+  - L348 `Widget build(BuildContext context)`
+
+## lib/widgets/room_thread_page.dart  (508 Z.)
+- L32 `class RoomThreadPage extends StatefulWidget`
+  - L33 `const RoomThreadPage({ super.key, required this.roomId, required this.roomName, required this.userMessage, required this.inbound, this.members = const <AgentsRoomMember>[], this.agents = const <AgentsAgent>[], this.rebind, this.onSend, this.onReady, })`
+  - L48 `final String roomId`  — The room this page shows. Frames for any other room on the shared socket
+  - L50 `final String roomName`
+  - L55 `final List<AgentsRoomMember> members`  — The room's members, shown in the header strip and offered by the
+  - L60 `final List<AgentsAgent> agents`  — The roster, only so the mention picker can show a member's display name
+  - L63 `final String userMessage`  — What the user posted to the room, shown at the top.
+  - L68 `final Stream<AgentsRelayInbound> inbound`  — The relay client's inbound event stream. Room turns and the room's end are
+  - L75 `final ValueListenable<AgentsRelayController?>? rebind`  — The shared transport, if the caller wants the page to follow it. When set,
+  - L79 `final void Function(String message)? onSend`  — Sends a message to the room (starts an exchange). When null the composer is
+  - L83 `final VoidCallback? onReady`  — Called once after the page subscribes, so the caller can request the stored
+  - L86 `State<RoomThreadPage> createState()`
+- L89 `class _RoomThreadPageState extends State<RoomThreadPage>`
+  - L90 `final List<AgentsRoomTurn> _turns = <AgentsRoomTurn>[]`
+  - L91 `final TextEditingController _composer = TextEditingController()`
+  - L92 `AgentsRoomStop? _stop`
+  - L93 `bool _running = true`
+  - L94 `bool _disconnected = false`
+  - L95 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L98 `String? _sentMessage`
+  - L105 `MentionToken? _mentionToken`
+  - L106 `List<MentionEntry> _mentionMatches = const <MentionEntry>[]`
+  - L107 `int _mentionIndex = 0`
+  - L111 `int? _dismissedAt`
+  - L114 `void initState()`
+  - L125 `void dispose()`
+  - L135 `Stream<AgentsRelayInbound> _currentInbound()`  — The inbound to listen to now: the live controller's when following one,
+  - L138 `Stream<AgentsRelayInbound> _fromRebind()`
+  - L145 `void _subscribe(Stream<AgentsRelayInbound> stream)`
+  - L150 `void _onRebind()`
+  - L165 `Widget _reconnectBanner(BuildContext context)`
+  - L193 `void _send()`
+  - L210 `bool get _mentionOpen`
+  - L214 `List<MentionEntry> get _mentionEntries`  — Every row the room offers, `@all` first. Rebuilt per keystroke: a room has
+  - L218 `void _syncMention()`  — Read the composer and decide whether the picker is open, and on what.
+  - L263 `void _clearMentionState()`
+  - L270 `void _closeMention()`  — Escape, or a tap anywhere outside the composer.
+  - L278 `void _moveMention(int delta)`
+  - L286 `void _acceptMention(MentionEntry entry)`  — Write the handle into the composer. Setting the value fires the listener,
+  - L305 `KeyEventResult _onComposerKey(FocusNode node, KeyEvent event)`  — The composer's keys, read before the text field sees them.
+  - L344 `void _onSubmitted()`  — The soft keyboard's action key. It never reaches [_onComposerKey], so it
+  - L352 `void _onInbound(AgentsRelayInbound event)`
+  - L403 `void _onStreamClosed()`
+  - L416 `Widget build(BuildContext context)`
+
+## lib/widgets/room_thread_view.dart  (280 Z.)
+- L33 `_kFaceSize = 28`  — The width of the gutter the member faces stand in, and the gap to the
+- L34 `_kFaceGap = 8`
+- L36 `class RoomThreadView extends StatelessWidget`
+  - L37 `const RoomThreadView({ super.key, required this.roomName, required this.userMessage, required this.turns, this.members = const <AgentsRoomMember>[], this.stop, this.running = false, })`
+  - L47 `final String roomName`
+  - L51 `final List<AgentsRoomMember> members`  — The room's members, shown as a compact strip under the name so the user
+  - L55 `final String userMessage`  — What the user posted to the room. Shown at the top so the replies have a
+  - L58 `final List<AgentsRoomTurn> turns`  — The agent turns, in order.
+  - L61 `final AgentsRoomStop? stop`  — Why the exchange ended, or null while it is still running.
+  - L64 `final bool running`  — True while the host is still producing turns.
+  - L67 `Widget build(BuildContext context)`
+  - L105 `bool _startsRun(int i)`  — A run breaks on a different speaker — the only thing that can break one
+  - L107 `bool _endsRun(int i)`
+  - L112 `Widget _roomIntro(BuildContext context)`  — Who you are talking to, in the thread's quiet system voice — the room's
+  - L136 `Widget _memberStrip(BuildContext context)`
+  - L169 `Widget _userMessage(BuildContext context, double lane)`  — The user's own line, in the user's own bubble — the same widget, the same
+  - L179 `Widget _turn(BuildContext context, int i, double lane)`  — One coworker's turn: the chat's coworker bubble, with the member's face
+  - L236 `Widget _runningRow(BuildContext context)`  — The room is still talking: the chat's own typing pill, in the bubble lane
+  - L251 `Widget _stopLine(BuildContext context, AgentsRoomStop stop)`  — Why the exchange ended: one quiet centred line, in the same voice the
+
+## lib/widgets/route_map_widget.dart  (345 Z.)
+- L15 `class RouteMapWidget extends StatefulWidget`  — Displays a route map with OSRM polyline, start/end markers,
+  - L16 `final double fromLat, fromLon, toLat, toLon`
+  - L17 `final double centerLat, centerLon, zoom`
+  - L18 `final String fromLabel, toLabel, distKm, durMin, routeTitle`
+  - L19 `final List<Map<String, dynamic>> steps`
+  - L20 `final double mapHeight`
+  - L21 `final VoidCallback? onTapFullscreen`
+  - L23 `const RouteMapWidget({ super.key, required this.fromLat, required this.fromLon, required this.toLat, required this.toLon, required this.fromLabel, required this.toLabel, required this.distKm, required this.durMin, required this.routeTitle, required this.centerLat, required this.centerLon, required this.zoom, required this.steps, required this.mapHeight, this.onTapFullscreen, })`
+  - L43 `State<RouteMapWidget> createState()`
+- L46 `class _RouteMapWidgetState extends State<RouteMapWidget>`
+  - L47 `List<LatLng>? _routePoints`
   - L48 `bool _loading = true`
-  - L49 `String? _error`
-  - L55 `bool get _shouldEagerLoad`  — We only auto-decrypt previewable mimes (image/pdf/text). For "other"
-  - L62 `bool _isTextLike(String mime)`
-  - L73 `void initState()`
-  - L83 `void didUpdateWidget(SandboxArtifactBlock oldWidget)`
-  - L96 `Future<void> _load()`
-  - L122 `Future<void> _save()`
-  - L158 `static ArtifactType? _panelArtifactType(String mime)`  — Maps a sandbox file's MIME to an artifact type the side panel can render,
-  - L175 `bool get _canOpenInPanel`
-  - L181 `Future<void> _openInPanel(BuildContext context)`  — Opens the file in the shared artifact side panel as an ephemeral
-  - L224 `Widget build(BuildContext context)`
-  - L238 `Widget _buildImage(BuildContext context)`
-  - L268 `Widget _buildPdf(BuildContext context)`
-  - L293 `Widget _buildTextPreview(BuildContext context)`
-  - L365 `Widget _buildFileChip(BuildContext context)`
-  - L375 `Widget _content({required Widget Function(Uint8List bytes) builder})`  — Common loading/error shell around the typed-content builder.
-- L400 `class _ArtifactCard extends StatelessWidget`
-  - L401 `const _ArtifactCard({ required this.payload, required this.onSave, required this.child, this.onOpen, })`
-  - L408 `final SandboxArtifactPayload payload`
-  - L409 `final Future<void> Function() onSave`
-  - L410 `final Widget? child`
-  - L414 `final Future<void> Function()? onOpen`  — When non-null, the card shows an "Open" action that renders the file in
-  - L416 `IconData get _icon`
-  - L436 `Widget build(BuildContext context)`
-- L504 `class _ArtifactErrorRow extends StatelessWidget`
-  - L505 `const _ArtifactErrorRow({required this.message, required this.onSave})`
-  - L507 `final String message`
-  - L508 `final Future<void> Function() onSave`
-  - L511 `Widget build(BuildContext context)`
+  - L51 `void initState()`
+  - L56 `Future<void> _fetchRouteGeometry()`
+  - L114 `Widget build(BuildContext context)`
 
-## lib/widgets/searchable_picker.dart  (219 Z.)
+## lib/widgets/sandbox_artifact_block.dart  (765 Z.)
+- L41 `class SandboxArtifactBlock extends StatefulWidget`
+  - L42 `const SandboxArtifactBlock({ super.key, required this.payload, this.borderRadius, })`
+  - L48 `final SandboxArtifactPayload payload`
+  - L54 `final BorderRadius? borderRadius`  — The corners this block draws. A file that follows an answer from the same
+  - L57 `State<SandboxArtifactBlock> createState()`
+- L60 `class _SandboxArtifactBlockState extends State<SandboxArtifactBlock>`
+  - L61 `Uint8List? _bytes`
+  - L62 `bool _loading = true`
+  - L63 `String? _error`
+  - L70 `bool get _shouldEagerLoad`  — We only auto-decrypt what the bubble itself shows: an image and a PDF are
+  - L75 `bool _isTextLike(String mime)`
+  - L86 `void initState()`
+  - L96 `void didUpdateWidget(SandboxArtifactBlock oldWidget)`
+  - L109 `Future<void> _load()`
+  - L135 `Future<void> _save()`
+  - L169 `static ArtifactType? _panelArtifactType(String mime)`  — Maps a sandbox file's MIME to an artifact type the side panel can render,
+  - L186 `bool get _canOpenInPanel`
+  - L196 `Future<void> Function()? _openAction(BuildContext context)`  — What "Open" does for this file, or null when the file cannot be read.
+  - L206 `Future<void> _openInViewer(BuildContext context)`  — Reads the file and shows it in [ChatDocumentView], the same viewer a
+  - L238 `Future<void> _openInPanel(BuildContext context)`  — Opens the file in the shared artifact side panel as an ephemeral
+  - L281 `Widget build(BuildContext context)`
+  - L309 `Widget _documentRow(BuildContext context, Map<String, dynamic> document)`  — The compact row a document falls back to when its payload carries no body
+  - L340 `Widget _buildImage(BuildContext context)`
+  - L371 `Widget _buildPdf(BuildContext context)`
+  - L397 `Widget _buildFileChip(BuildContext context)`
+  - L408 `Widget _content({required Widget Function(Uint8List bytes) builder})`  — Common loading/error shell around the typed-content builder.
+- L433 `class _ArtifactCard extends StatelessWidget`
+  - L434 `const _ArtifactCard({ required this.payload, required this.onSave, required this.child, this.onOpen, this.borderRadius, })`
+  - L442 `final SandboxArtifactPayload payload`
+  - L446 `final BorderRadius? borderRadius`  — The run's corners, when this card is one block of a run. See
+  - L447 `final Future<void> Function() onSave`
+  - L448 `final Widget? child`
+  - L452 `final Future<void> Function()? onOpen`  — When non-null, the card shows an "Open" action that renders the file in
+  - L460 `HugeIconData get _icon`  — The badge glyph for this file, from the app's own set.
+  - L544 `Widget build(BuildContext context)`
+- L687 `class _FileName extends StatelessWidget`  — The file name, with the extension in the quieter colour.
+  - L688 `const _FileName({required this.filename, required this.scheme})`
+  - L690 `final String filename`
+  - L691 `final ColorScheme scheme`
+  - L694 `Widget build(BuildContext context)`
+- L720 `String _kindLabel(String mime)`  — A short, readable name for a mime type. `text/markdown` says nothing to a
+- L744 `class _ArtifactErrorRow extends StatelessWidget`
+  - L745 `const _ArtifactErrorRow({required this.message, required this.onSave})`
+  - L747 `final String message`
+  - L748 `final Future<void> Function() onSave`
+  - L751 `Widget build(BuildContext context)`
+
+## lib/widgets/searchable_picker.dart  (311 Z.)
 - L24 `class PickerOption<T>`  — One row of a picker.
   - L25 `const PickerOption({ required this.value, required this.label, this.subtitle, this.leading, this.selected = false, this.searchText, })`
   - L34 `final T value`
@@ -1371,22 +2869,23 @@
   - L42 `final bool selected`
   - L45 `final String? searchText`  — What the query is matched against. Null takes the label and subtitle.
   - L47 `String get _haystack`
-- L56 `Future<T?> showSearchablePicker<T>( BuildContext anchorContext, { required List<PickerOption<T>> options, String? hintText, double width = 320, double maxHeight = 360, int searchThreshold = 7, })`  — Opens the picker at [anchorContext]'s widget and returns the chosen value,
-- L83 `class _PickerPanel<T> extends StatefulWidget`
-  - L84 `const _PickerPanel({ required this.options, required this.hintText, required this.width, required this.maxHeight, required this.searchable, })`
-  - L92 `final List<PickerOption<T>> options`
-  - L93 `final String hintText`
-  - L94 `final double width`
-  - L95 `final double maxHeight`
-  - L96 `final bool searchable`
-  - L99 `State<_PickerPanel<T>> createState()`
-- L102 `class _PickerPanelState<T> extends State<_PickerPanel<T>>`
-  - L103 `final TextEditingController _search = TextEditingController()`
-  - L104 `String _query = ''`
-  - L107 `void dispose()`
-  - L112 `List<PickerOption<T>> get _matches`
-  - L120 `Widget build(BuildContext context)`
-  - L167 `Widget _row(BuildContext context, PickerOption<T> option)`
+- L61 `Future<T?> showSearchablePicker<T>( BuildContext anchorContext, { required List<PickerOption<T>> options, String? hintText, String? title, double width = 320, double maxHeight = 360, int searchThreshold = 7, })`  — Opens the picker at [anchorContext]'s widget and returns the chosen value,
+- L99 `Future<T?> _showPickerSheet<T>( BuildContext context, { required List<PickerOption<T>> options, required String hintText, required String? title, required bool searchable, })`
+- L159 `class _PickerPanel<T> extends StatefulWidget`
+  - L160 `const _PickerPanel({ required this.options, required this.hintText, required this.width, required this.maxHeight, required this.searchable, })`
+  - L168 `final List<PickerOption<T>> options`
+  - L169 `final String hintText`
+  - L172 `final double? width`  — Null fills the available width (the bottom sheet).
+  - L175 `final double? maxHeight`  — Null leaves the height to the parent (the bottom sheet caps it).
+  - L176 `final bool searchable`
+  - L179 `State<_PickerPanel<T>> createState()`
+- L182 `class _PickerPanelState<T> extends State<_PickerPanel<T>>`
+  - L183 `final TextEditingController _search = TextEditingController()`
+  - L184 `String _query = ''`
+  - L187 `void dispose()`
+  - L192 `List<PickerOption<T>> get _matches`
+  - L200 `Widget build(BuildContext context)`
+  - L254 `Widget _row(BuildContext context, PickerOption<T> option)`
 
 ## lib/widgets/selection_copy_area.dart  (243 Z.)
 - L13 `class SelectionCopyShortcut`  — Pure decision logic for the copy shortcut, kept out of the widget so it can
@@ -1452,26 +2951,26 @@
   - L218 `Widget build(BuildContext context)`
   - L265 `IconData get _defaultIcon`
 
-## lib/widgets/settings_list_view.dart  (108 Z.)
-- L20 `class SettingsListView extends StatefulWidget`  — Scroll container for settings-style pages with a bounded set of rows.
-  - L21 `const SettingsListView({ super.key, required this.children, this.padding, this.controller, this.physics, this.scrollbarMargin = 8, this.crossAxisAlignment = CrossAxisAlignment.stretch, this.headerInset = true, this.extraHeaderInset = 0, })`
-  - L33 `final List<Widget> children`
-  - L34 `final EdgeInsetsGeometry? padding`
-  - L35 `final ScrollController? controller`
-  - L36 `final ScrollPhysics? physics`
-  - L39 `final double scrollbarMargin`  — Inset of the scrollbar track from both ends, in logical pixels.
-  - L45 `final bool headerInset`  — Leave room at the top for the page's floating header.
-  - L49 `final double extraHeaderInset`  — Height of whatever the floating header carries under itself — a pinned
-  - L50 `final CrossAxisAlignment crossAxisAlignment`
-  - L53 `State<SettingsListView> createState()`
-- L56 `class _SettingsListViewState extends State<SettingsListView>`
-  - L57 `ScrollController? _internal`
-  - L58 `ScrollController get _controller`
-  - L62 `void dispose()`
-  - L67 `EdgeInsetsGeometry _withHeaderInset( BuildContext context, EdgeInsetsGeometry? padding, )`
-  - L77 `Widget build(BuildContext context)`
+## lib/widgets/settings_list_view.dart  (122 Z.)
+- L25 `class SettingsListView extends StatefulWidget`  — Scroll container for settings-style pages with a bounded set of rows.
+  - L26 `const SettingsListView({ super.key, required this.children, this.padding, this.controller, this.physics, this.scrollbarMargin = 8, this.crossAxisAlignment = CrossAxisAlignment.stretch, this.headerInset = true, this.extraHeaderInset = 0, })`
+  - L38 `final List<Widget> children`
+  - L39 `final EdgeInsetsGeometry? padding`
+  - L40 `final ScrollController? controller`
+  - L41 `final ScrollPhysics? physics`
+  - L44 `final double scrollbarMargin`  — Inset of the scrollbar track from both ends, in logical pixels.
+  - L50 `final bool headerInset`  — Leave room at the top for the page's floating header.
+  - L54 `final double extraHeaderInset`  — Height of whatever the floating header carries under itself — a pinned
+  - L55 `final CrossAxisAlignment crossAxisAlignment`
+  - L58 `State<SettingsListView> createState()`
+- L61 `class _SettingsListViewState extends State<SettingsListView>`
+  - L62 `ScrollController? _internal`
+  - L63 `ScrollController get _controller`
+  - L67 `void dispose()`
+  - L72 `EdgeInsetsGeometry _withHeaderInset( BuildContext context, EdgeInsetsGeometry? padding, )`
+  - L82 `Widget build(BuildContext context)`
 
-## lib/widgets/settings_search_bar.dart  (207 Z.)
+## lib/widgets/settings_search_bar.dart  (211 Z.)
 - L20 `kSettingsSearchBarHeight = 60`  — Height the pinned bar reserves under the header: the field plus its air.
 - L24 `_kFieldHeight = 44`  — Height of the field itself. The settings rail's own search field, so the
 - L28 `class SettingsSearchBar extends StatefulWidget`  — The search field of a settings page: a floating pill with the magnifier on
@@ -1491,16 +2990,29 @@
   - L81 `void _onControllerChanged()`
   - L87 `void _clear()`
   - L93 `Widget build(BuildContext context)`
-- L170 `class PinnedSettingsSearchBar extends StatelessWidget implements PreferredSizeWidget`  — The same bar, sized to sit in a [FloatingAppBar]'s `bottom` slot so it
-  - L172 `const PinnedSettingsSearchBar({ super.key, required this.controller, required this.hintText, this.focusNode, this.onChanged, this.onSubmitted, this.textInputAction, })`
-  - L182 `final TextEditingController controller`
-  - L183 `final String hintText`
-  - L184 `final FocusNode? focusNode`
-  - L185 `final ValueChanged<String>? onChanged`
-  - L186 `final ValueChanged<String>? onSubmitted`
-  - L187 `final TextInputAction? textInputAction`
-  - L190 `Size get preferredSize`
-  - L193 `Widget build(BuildContext context)`
+- L174 `class PinnedSettingsSearchBar extends StatelessWidget implements PreferredSizeWidget`  — The same bar, sized to sit in a [FloatingAppBar]'s `bottom` slot so it
+  - L176 `const PinnedSettingsSearchBar({ super.key, required this.controller, required this.hintText, this.focusNode, this.onChanged, this.onSubmitted, this.textInputAction, })`
+  - L186 `final TextEditingController controller`
+  - L187 `final String hintText`
+  - L188 `final FocusNode? focusNode`
+  - L189 `final ValueChanged<String>? onChanged`
+  - L190 `final ValueChanged<String>? onSubmitted`
+  - L191 `final TextInputAction? textInputAction`
+  - L194 `Size get preferredSize`
+  - L197 `Widget build(BuildContext context)`
+
+## lib/widgets/stamped_text.dart  (132 Z.)
+- L22 `class StampedText extends StatelessWidget`  — Text plus an optional bottom-end [stamp], laid out by the messenger rule.
+  - L23 `const StampedText({ super.key, required this.text, required this.style, this.stamp, this.gap = 8, this.fillWidth = false, })`
+  - L34 `final String text`  — The message body. Plain text only — a Markdown body keeps its own
+  - L36 `final TextStyle style`
+  - L39 `final Widget? stamp`  — The stamp to place. Null renders the text alone.
+  - L42 `final double gap`  — Clear space between the end of the last line and the stamp.
+  - L47 `final bool fillWidth`  — Whether the box takes the width it is offered instead of shrink-wrapping.
+  - L50 `Widget build(BuildContext context)`
+- L96 `_kMarkupMarker = RegExp( // Inline markers, HTML, tables, LaTeX and escapes. r'[`*_~#>|\[\]<>\\$]' // An indented code b`  — Everything that means "this is not a plain line of prose": emphasis, code,
+- L111 `_kDialable = RegExp(r'\+?\d[\d ()./-]{5,}\d')`  — A run of digits the phone linkifier would turn into a dial link.
+- L120 `bool isPlainStampableText(String text)`  — Whether [text] renders the same as a plain [Text] does — so the stamp can
 
 ## lib/widgets/technical_drawing_layers.dart  (28 Z.)
 - L15 `int technicalDrawingLayerPriority(Map<String, dynamic> element)`  — Paint order for one element of a technical drawing.
@@ -1581,6 +3093,287 @@
   - L14 `Widget build(BuildContext context)`
   - L24 `Widget _buildBanner(BuildContext context, UpdateInfo info)`
 
+## lib/widgets/vnc_local_server.dart  (353 Z.)
+- L10 `typedef VncAssetReader = Future<Uint8List> Function(String assetKey)`  — Reads one app asset. Injected so the server can be tested without a bundle.
+- L12 `Future<Uint8List> _bundleAsset(String assetKey)`
+- L47 `class VncLocalServer`  — The loopback server that feeds the noVNC viewer page.
+  - L48 `VncLocalServer._( this._server, this._token, this._readAsset, this.onStreamRestartNeeded, )`
+  - L63 `static const Map<String, String> _roots = <String, String>{ 'vnc': 'assets/vnc', 'novnc': 'assets/novnc', }`  — The roots a request may name, mapped to their place in the app bundle.
+  - L69 `static final RegExp _safeSegment = RegExp(r'^[A-Za-z0-9._-]+$')`  — A plain file or folder name: letters, digits, dot, dash, underscore.
+  - L71 `static const Map<String, String> _mimeTypes = <String, String>{ 'html': 'text/html; charset=utf-8', // Required, not cosmetic: a browser refuses to run an ES module that is // not served as JavaScript, and the whole viewer is ES modules. 'js': 'text/javascript; charset=utf-8', 'css': 'text/css; charset=utf-8', 'txt': 'text/plain; charset=utf-8', }`
+  - L80 `final HttpServer _server`
+  - L81 `final String _token`
+  - L82 `final VncAssetReader _readAsset`
+  - L91 `final Future<void> Function()? onStreamRestartNeeded`  — Called when the viewer page loses its socket after bytes had flowed.
+  - L93 `WebSocket? _socket`
+  - L96 `bool _socketBusy = false`
+  - L97 `bool _sawBytes = false`
+  - L98 `bool _closed = false`
+  - L102 `final StreamController<Uint8List> _fromPage = StreamController<Uint8List>.broadcast()`  — Bytes the viewer page sent, which are RFB client messages for the agent's
+  - L107 `final List<Uint8List> _pending = <Uint8List>[]`  — Server bytes that arrived before the page opened its socket. x11vnc
+  - L110 `static Future<VncLocalServer> start({ VncAssetReader? readAsset, Random? random, Future<void> Function()? onStreamRestartNeeded, })`  — Binds on the loopback interface at an ephemeral port.
+  - L131 `static String _mintToken(Random random)`
+  - L139 `int get port`
+  - L142 `String get token`  — The token, for tests. Never logged and never shown.
+  - L146 `Uri get viewerUrl`  — The page to load in the WebView. The WebSocket URL rides the query, so
+  - L156 `String get _origin`  — The origin the viewer page runs at, and the only one allowed to open the
+  - L159 `Stream<Uint8List> get fromPage`  — RFB client messages on their way to the agent's screen.
+  - L162 `bool get hasClient`  — True once the viewer page has its socket. Until then [send] buffers.
+  - L165 `void send(Uint8List bytes)`  — Push RFB server bytes toward the page, or hold them until it dials in.
+  - L191 `void resetStream()`  — Drop the page's socket and every buffered byte, because the stream behind
+  - L203 `Future<void> close()`
+  - L218 `static bool _tokensMatch(String a, String b)`
+  - L227 `Future<void> _handle(HttpRequest request)`
+  - L238 `Future<void> _route(HttpRequest request)`
+  - L263 `Future<void> _serveAsset(HttpRequest request, String assetKey)`
+  - L294 `Future<void> _upgrade(HttpRequest request)`
+  - L336 `void _dropSocket(WebSocket socket)`
+  - L348 `Future<void> _notFound(HttpRequest request)`
+
+## lib/widgets/vnc_trackpad_overlay.dart  (999 Z.)
+- L44 `class VncTrackpadOverlay extends StatefulWidget`  — A touch trackpad over the agent's browser view, for phones and tablets.
+  - L45 `const VncTrackpadOverlay({ super.key, required this.controller, required this.child, this.enabled = true, })`
+  - L53 `final RemoteFrameBufferController controller`  — The handle onto the RFB isolate that carries our pointer events.
+  - L59 `final Widget child`  — The remote-screen widget (a bare [RemoteFrameBufferWidget]). It is laid
+  - L63 `final bool enabled`  — When false the overlay is inert and only shows [child] (used while the
+  - L66 `State<VncTrackpadOverlay> createState()`
+- L72 `enum _TwoFingerMode`  — What a two-finger gesture turned out to be. It starts undecided: the same
+  - L72 `undecided`
+  - L72 `scrolling`
+  - L72 `zooming`
+- L74 `class _VncTrackpadOverlayState extends State<VncTrackpadOverlay>`
+  - L76 `static const double _moveSensitivity = 1.0`
+  - L78 `static const double _scrollStepPx = 22.0`
+  - L80 `static const double _tapSlopPx = 12.0`
+  - L84 `static const double _pinchSlopPx = 18.0`
+  - L86 `static const int _doubleTapMs = 300`
+  - L87 `static const double _doubleTapSlopPx = 28.0`
+  - L89 `static const String _helpSeenKey = 'vnc_trackpad_help_seen_v1'`
+  - L92 `double _cx = 0`
+  - L93 `double _cy = 0`
+  - L94 `bool _cursorSeeded = false`
+  - L97 `double _zoom = 1`
+  - L98 `Offset _pan = Offset.zero`
+  - L99 `Size _box = Size.zero`
+  - L100 `VncViewFit _fit = VncViewFit.empty`
+  - L103 `final Map<int, Offset> _pointers = <int, Offset>{}`
+  - L106 `int _maxFingers = 0`
+  - L107 `bool _moved = false`
+  - L108 `bool _scrolled = false`
+  - L109 `bool _dragging = false`
+  - L110 `Offset _startPos = Offset.zero`
+  - L111 `Offset _lastPos = Offset.zero`
+  - L112 `Offset _lastCentroid = Offset.zero`
+  - L113 `double _scrollAccumY = 0`
+  - L114 `double _scrollAccumX = 0`
+  - L117 `_TwoFingerMode _twoFingers = _TwoFingerMode.undecided`
+  - L118 `double _startSpread = 0`
+  - L119 `Offset _startCentroid = Offset.zero`
+  - L120 `double _zoomAtPinchStart = 1`
+  - L121 `Offset _pinchAnchorFb = Offset.zero`
+  - L123 `int _lastTapEndMs = 0`
+  - L124 `Offset _lastTapPos = Offset.zero`
+  - L126 `bool _showHelp = false`
+  - L131 `final FocusNode _keyFocus = FocusNode(debugLabel: 'vnc remote keyboard')`
+  - L132 `final TextEditingController _keyText = TextEditingController()`
+  - L133 `bool _keyboardOpen = false`
+  - L136 `static const String _sentinel = '​'`
+  - L139 `static const int _xkBackSpace = 0xff08`
+  - L140 `static const int _xkTab = 0xff09`
+  - L141 `static const int _xkReturn = 0xff0d`
+  - L142 `static const int _xkEscape = 0xff1b`
+  - L143 `static const int _xkLeft = 0xff51`
+  - L144 `static const int _xkUp = 0xff52`
+  - L145 `static const int _xkRight = 0xff53`
+  - L146 `static const int _xkDown = 0xff54`
+  - L149 `void initState()`
+  - L158 `void dispose()`
+  - L166 `Future<void> _maybeShowHelp()`
+  - L178 `Future<void> _dismissHelp()`
+  - L188 `void _onControllerChanged()`
+  - L195 `void _seedCursor()`
+  - L203 `Size get _frameBuffer`
+  - L205 `void _recomputeFit()`
+  - L214 `Offset get _cursorFb`
+  - L216 `void _clampCursor()`
+  - L223 `int get _ix`
+  - L224 `int get _iy`
+  - L226 `void _moveCursorBy(Offset screenDelta, {required bool pressed})`
+  - L243 `void _followCursor()`  — Zoomed in, the cursor can be nudged off the part of the remote screen that
+  - L257 `void _setZoom(double zoom, {required Offset anchorScreen, Offset? anchorFb})`
+  - L272 `void _fitToScreen()`
+  - L280 `Offset _centroid()`
+  - L292 `double _spread()`
+  - L298 `void _reanchor()`
+  - L306 `void _emitScroll(Offset centroidDelta)`
+  - L327 `void _onPointerDown(PointerDownEvent e)`
+  - L366 `void _onPointerMove(PointerMoveEvent e)`
+  - L380 `void _handleTwoFingerMove()`
+  - L413 `void _onPointerUp(PointerEvent e, {required bool canceled})`
+  - L441 `void _onKeyFocusChanged()`
+  - L448 `void _resetKeyField()`
+  - L455 `void _toggleKeyboard()`
+  - L464 `void _onKeyFieldChanged(String value)`
+  - L477 `void _sendRune(int rune)`
+  - L487 `void _sendKeySym(int keysym)`
+  - L495 `Widget build(BuildContext context)`
+  - L641 `Widget _buildPicture()`  — The framebuffer, painted at the fit's rectangle.
+- L669 `class _VncCursor extends StatelessWidget`  — The virtual mouse cursor: an arrow you can actually see.
+  - L670 `const _VncCursor()`
+  - L673 `static const Size box = Size(52, 52)`  — The painted box, and where inside it the pointing tip sits.
+  - L674 `static const Offset hotspot = Offset(12, 12)`
+  - L677 `Widget build(BuildContext context)`
+- L686 `class _VncCursorPainter extends CustomPainter`
+  - L688 `static const List<Offset> _arrow = <Offset>[ Offset(0, 0), Offset(0, 17.4), Offset(4.3, 13.3), Offset(7.1, 19.8), Offset(10.2, 18.4), Offset(7.3, 12.1), Offset(12.6, 11.7), ]`
+  - L698 `static const double _arrowScale = 1.65`
+  - L699 `static const double _hotspotRadius = 4.6`
+  - L702 `void paint(Canvas canvas, Size size)`
+  - L737 `bool shouldRepaint(_VncCursorPainter oldDelegate)`
+- L742 `class _ZoomChip extends StatelessWidget`  — The zoom readout. It says how far in the picture is and takes it back to
+  - L743 `const _ZoomChip({ required this.zoom, required this.color, required this.onColor, required this.onTap, })`
+  - L750 `final double zoom`
+  - L751 `final Color color`
+  - L752 `final Color onColor`
+  - L753 `final VoidCallback onTap`
+  - L756 `Widget build(BuildContext context)`
+- L784 `class _SpecialKeyBar extends StatelessWidget`  — The keys a phone keyboard does not give you, and a browser needs: escape a
+  - L785 `const _SpecialKeyBar({ required this.color, required this.onColor, required this.onKey, required this.escape, required this.tab, required this.enter, required this.left, required this.right, required this.up, required this.down, })`
+  - L798 `final Color color`
+  - L799 `final Color onColor`
+  - L800 `final void Function(int keysym) onKey`
+  - L801 `final int escape`
+  - L802 `final int tab`
+  - L803 `final int enter`
+  - L804 `final int left`
+  - L805 `final int right`
+  - L806 `final int up`
+  - L807 `final int down`
+  - L810 `Widget build(BuildContext context)`
+- L853 `class _TrackpadHelpCard extends StatelessWidget`  — The gesture cheat-sheet shown on first use and behind the "?" button.
+  - L854 `const _TrackpadHelpCard({required this.onDismiss, this.remoteSize})`
+  - L856 `final VoidCallback onDismiss`
+  - L860 `final Size? remoteSize`  — The remote screen in pixels, printed at the foot of the card. It answers
+  - L863 `Widget build(BuildContext context)`
+- L968 `class _HelpRow extends StatelessWidget`
+  - L969 `const _HelpRow({required this.icon, required this.title, required this.body})`
+  - L971 `final IconData icon`
+  - L972 `final String title`
+  - L973 `final String body`
+  - L976 `Widget build(BuildContext context)`
+
+## lib/widgets/vnc_view_fit.dart  (195 Z.)
+- L22 `@immutable class VncViewFit`  — Where the remote framebuffer sits on the screen, and how to convert between
+  - L24 `const VncViewFit({ required this.scale, required this.origin, required this.size, })`
+  - L31 `static const VncViewFit empty = VncViewFit( scale: 1, origin: Offset.zero, size: Size.zero, )`  — A fit that paints nothing, for before the framebuffer size is known.
+  - L39 `static const double minZoom = 1`  — The smallest zoom: 1 is "show the whole screen", so the picture can never
+  - L43 `static const double maxZoom = 8`  — The largest zoom. Eight times a contain fit is already far past the point
+  - L46 `final double scale`  — Framebuffer pixels to screen pixels.
+  - L49 `final Offset origin`  — Where framebuffer pixel (0, 0) is painted, in screen pixels.
+  - L52 `final Size size`  — The painted size of the whole framebuffer, in screen pixels.
+  - L54 `Rect get rect`
+  - L57 `Offset toScreen(Offset point)`  — The screen point that shows framebuffer point [point].
+  - L61 `Offset toFrameBuffer(Offset point)`  — The framebuffer point under screen point [point].
+  - L65 `static double baseScale({required Size box, required Size frameBuffer})`  — The scale that fits the whole framebuffer into [box] (a contain fit).
+  - L79 `static VncViewFit compute({ required Size box, required Size frameBuffer, double zoom = 1, Offset pan = Offset.zero, })`  — The fit for a framebuffer of [frameBuffer] shown in [box] at [zoom], moved
+  - L107 `static Offset panFor({ required Size box, required Size frameBuffer, required double zoom, required Offset framebufferPoint, required Offset screenPoint, })`  — The pan that puts framebuffer point [framebufferPoint] under screen point
+  - L137 `static Offset panToKeepVisible({ required Size box, required Size frameBuffer, required double zoom, required Offset pan, required Offset framebufferPoint, double margin = 56, })`  — A pan that brings [framebufferPoint] back inside the box, with [margin]
+  - L176 `static double _axisOrigin(double box, double shown, double pan)`
+  - L183 `bool operator ==(Object other)`
+  - L190 `int get hashCode`
+  - L193 `String toString()`
+
+## lib/widgets/vnc_webview_controls.dart  (356 Z.)
+- L16 `class VncLoadingSteps extends StatelessWidget`  — What the view is still waiting for, as named steps rather than a spinner.
+  - L17 `const VncLoadingSteps({ super.key, required this.machineReady, required this.screenReady, })`
+  - L24 `final bool machineReady`  — The executor answered `started`: there is a box with a screen on it.
+  - L27 `final bool screenReady`  — The first picture is painted. When true this widget is not shown at all.
+  - L30 `Widget build(BuildContext context)`
+- L63 `class _VncStep extends StatelessWidget`
+  - L64 `const _VncStep({ required this.label, required this.done, required this.active, })`
+  - L70 `final String label`
+  - L71 `final bool done`
+  - L72 `final bool active`
+  - L75 `Widget build(BuildContext context)`
+- L116 `class VncReconnectingNote extends StatefulWidget`  — The note over a frozen picture while the socket re-handshakes.
+  - L117 `const VncReconnectingNote({super.key, required this.since})`
+  - L119 `final DateTime since`
+  - L122 `State<VncReconnectingNote> createState()`
+- L125 `class _VncReconnectingNoteState extends State<VncReconnectingNote>`
+  - L126 `Timer? _tick`
+  - L129 `void initState()`
+  - L137 `void dispose()`
+  - L143 `Widget build(BuildContext context)`
+- L187 `class VncControlBar extends StatelessWidget`  — The row of controls under the agent's screen.
+  - L188 `const VncControlBar({ super.key, required this.controller, required this.onToggleKeyboard, required this.keyboardOpen, })`
+  - L195 `final VncWebViewController controller`
+  - L196 `final VoidCallback onToggleKeyboard`
+  - L197 `final bool keyboardOpen`
+  - L199 `Future<void> _paste()`
+  - L206 `Widget build(BuildContext context)`
+- L289 `class VncKeyboardField extends StatelessWidget`  — The invisible field that takes the soft keyboard.
+  - L290 `const VncKeyboardField({ super.key, required this.controller, required this.focusNode, required this.text, })`
+  - L297 `static const String sentinel = '​'`
+  - L299 `final VncWebViewController controller`
+  - L300 `final FocusNode focusNode`
+  - L301 `final TextEditingController text`
+  - L303 `static void reset(TextEditingController text)`
+  - L310 `void _onChanged(String value)`
+  - L331 `Widget build(BuildContext context)`
+
+## lib/widgets/vnc_webview_screen.dart  (268 Z.)
+- L10 `enum VncPhase`  — What the viewer page says about its socket.
+  - L12 `loading`
+  - L15 `connecting`
+  - L19 `reconnecting`
+  - L22 `connected`
+  - L25 `disconnected`
+- L34 `class VncWebViewController extends ChangeNotifier`  — The host side of the noVNC viewer page.
+  - L35 `VncWebViewController()`
+  - L37 `WebViewController? _web`
+  - L38 `String? _password`
+  - L39 `bool _pageReady = false`
+  - L40 `bool _started = false`
+  - L42 `VncPhase _phase = VncPhase.loading`
+  - L43 `bool _zoomed = false`
+  - L44 `bool _trackpad = false`
+  - L45 `DateTime? _frameAsOf`
+  - L48 `VncPhase get phase`  — The viewer's own state, as the page reports it.
+  - L51 `bool get zoomed`  — True while the desktop is magnified, so "Zoom to fit" can light up.
+  - L55 `bool get trackpad`  — True while the relative-pointer mode is on. Off is the default: a tap
+  - L58 `DateTime? get frameAsOf`  — When the picture on screen was last live. Null while it is live now.
+  - L61 `final StreamController<String> _clipboard = StreamController<String>.broadcast()`  — Text the agent's desktop put on its clipboard.
+  - L63 `Stream<String> get clipboard`
+  - L66 `final StreamController<String> _screenshots = StreamController<String>.broadcast()`  — A PNG data URL of the live desktop, one per [screenshot] call.
+  - L68 `Stream<String> get screenshots`
+  - L76 `set password(String? value)`  — The password the page needs at handshake time. It is given to the page
+  - L86 `void attach(WebViewController web)`
+  - L91 `void _maybeStart()`
+  - L97 `void _call(String expression)`
+  - L107 `void handleBridgeMessage(String raw)`  — Handles one message from the page's `AgentsVncBridge` channel.
+  - L154 `void zoomToFit()`  — Back to the fitted view.
+  - L157 `void reconnect()`  — Try the handshake again after a failed recovery.
+  - L160 `void setTrackpad(bool on)`  — Switch between direct touch (default) and the relative pointer.
+  - L169 `void recenterPointer()`  — Put the virtual pointer back in the middle. The agent moves the real one
+  - L172 `void typeText(String text)`  — Printable text from the soft keyboard.
+  - L178 `void sendKeysym(int keysym)`  — One non-printable key, as an X11 keysym.
+  - L181 `static const int keysymBackspace = 0xff08`  — X11 keysyms the on-screen keyboard sends by name.
+  - L182 `static const int keysymReturn = 0xff0d`
+  - L183 `static const int keysymTab = 0xff09`
+  - L184 `static const int keysymEscape = 0xff1b`
+  - L187 `void paste(String text)`  — Stage [text] on the remote clipboard and fire one Ctrl+V.
+  - L193 `void copySelection()`  — Fire one Ctrl+C. The text comes back on [clipboard].
+  - L196 `void screenshot()`  — Ask for a PNG of the live desktop. It arrives on [screenshots].
+  - L199 `void dispose()`
+- L213 `class VncWebView extends StatefulWidget`  — The WebView that runs the viewer page.
+  - L214 `const VncWebView({ super.key, required this.viewerUrl, required this.controller, })`
+  - L220 `final Uri viewerUrl`
+  - L221 `final VncWebViewController controller`
+  - L224 `State<VncWebView> createState()`
+- L227 `class _VncWebViewState extends State<VncWebView>`
+  - L228 `late final WebViewController _web`
+  - L231 `void initState()`
+  - L266 `Widget build(BuildContext context)`
+
 ## lib/widgets/waveform.dart  (143 Z.)
 - L18 `class WaveformPainter extends CustomPainter`  — Paints [bars] (each 0..1) as rounded vertical bars, colouring everything
   - L19 `WaveformPainter({ required this.bars, required this.progress, required this.playedColor, required this.restColor, this.barWidth = 3.0, })`
@@ -1602,27 +3395,27 @@
   - L93 `List<double> _bars(int count)`  — The last [count] levels, right-aligned: the newest level is always the
   - L111 `Widget build(BuildContext context)`
 
-## lib/widgets/weather_widget.dart  (530 Z.)
-- L21 `class WeatherBlockWidget extends StatelessWidget`  — Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
-  - L22 `final Map<String, dynamic> data`
-  - L24 `const WeatherBlockWidget({super.key, required this.data})`
-  - L27 `Widget build(BuildContext context)`
-  - L62 `Widget _buildCurrent(String location, Map<String, dynamic> current)`
-  - L180 `Widget _stat(IconData icon, String value, String label)`
-  - L213 `Widget _buildHourly(List<dynamic> hourly)`
-  - L284 `Widget _buildDaily(List<dynamic> daily)`
-  - L305 `Widget _buildDailyRow(Map<String, dynamic> d)`
-  - L375 `Map<String, dynamic> _asMap(dynamic v)`
-  - L381 `List<dynamic> _asList(dynamic v)`
-  - L386 `num? _asNum(dynamic v)`
-  - L392 `String? _asStr(dynamic v)`
-  - L394 `int? _asInt(dynamic v)`
-  - L401 `String _fmtNum(num v)`
-  - L406 `String _normalizeTempUnit(dynamic raw)`
-  - L412 `String _shortTime(String t)`
-  - L426 `String _dayLabel(String date)`
-  - L441 `IconData _iconForCode(int code)`  — Map WMO weather code -> Material icon.
-  - L457 `LinearGradient _gradientForCode(int code, Brightness brightness)`  — Gradient background keyed on WMO code & light/dark mode.
+## lib/widgets/weather_widget.dart  (519 Z.)
+- L22 `class WeatherBlockWidget extends StatelessWidget`  — Renders `<weather>` JSON blocks emitted by the AI as a polished weather card.
+  - L23 `final Map<String, dynamic> data`
+  - L25 `const WeatherBlockWidget({super.key, required this.data})`
+  - L28 `Widget build(BuildContext context)`
+  - L63 `Widget _buildCurrent(String location, Map<String, dynamic> current)`
+  - L177 `Widget _stat(IconData icon, String value, String label)`
+  - L207 `Widget _buildHourly(List<dynamic> hourly)`
+  - L278 `Widget _buildDaily(List<dynamic> daily)`
+  - L297 `Widget _buildDailyRow(Map<String, dynamic> d)`
+  - L364 `Map<String, dynamic> _asMap(dynamic v)`
+  - L370 `List<dynamic> _asList(dynamic v)`
+  - L375 `num? _asNum(dynamic v)`
+  - L381 `String? _asStr(dynamic v)`
+  - L383 `int? _asInt(dynamic v)`
+  - L390 `String _fmtNum(num v)`
+  - L395 `String _normalizeTempUnit(dynamic raw)`
+  - L401 `String _shortTime(String t)`
+  - L415 `String _dayLabel(String date)`
+  - L430 `IconData _iconForCode(int code)`  — Map WMO weather code -> Material icon.
+  - L446 `LinearGradient _gradientForCode(int code, Brightness brightness)`  — Gradient background keyed on WMO code & light/dark mode.
 
 ## lib/widgets/workspace_file_viewer.dart  (666 Z.)
 - L16 `class WorkspaceFileViewer extends StatefulWidget`  — Dialog to view and edit workspace files and their markdown summaries

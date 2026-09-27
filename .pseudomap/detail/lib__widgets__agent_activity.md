@@ -1,6 +1,6 @@
 # lib/widgets/agent_activity · Signaturen
 
-## lib/widgets/agent_activity/agent_activity_model.dart  (463 Z.)
+## lib/widgets/agent_activity/agent_activity_model.dart  (462 Z.)
 - L12 `enum AgentActivityKind`  — What a timeline line represents. Drives the icon and the wording.
   - L14 `search`
   - L17 `page`
@@ -33,61 +33,61 @@
 - L143 `String _humanizeToolName(String name)`  — Human wording for a tool name: `generate_image` → `generate image`.
 - L153 `String? runningActivityLabel(List<ToolCall> calls)`  — Present-tense name for what a running turn is doing RIGHT NOW, so the
 - L177 `String _runningVerbFor(String name)`  — Present-tense phrase for a non-search, non-page tool the turn is waiting on.
-- L194 `AgentActivityEntry _entryFor(ToolCall call)`
-- L233 `class AgentActivityStep`  — One thing that happened in a round, in the order it happened: either a
-  - L234 `const AgentActivityStep.reasoning(String text) : reasoning = text, toolCall = null`
-  - L237 `const AgentActivityStep.tool(ToolCall call) : toolCall = call, reasoning = null`
-  - L241 `final String? reasoning`
-  - L242 `final ToolCall? toolCall`
-- L251 `AgentActivityEntry reasoningEntry(String text)`  — The line and the body for one stretch of reasoning.
-- L266 `List<AgentActivityEntry> buildAgentActivityEntriesFromSteps( List<AgentActivityStep> steps, )`  — Build the timeline lines for an ordered mix of reasoning and calls.
-- L307 `List<AgentActivityEntry> buildAgentActivityEntries( List<ToolCall> calls, { bool includeRoundThinking = true, })`  — Build the timeline lines for [calls].
-- L325 `maxSourcesPerStep = 8`  — Most source chips shown under one step.
-- L333 `List<AgentActivitySource> extractSourcesFor(ToolCall call)`  — The pages a call pulled in.
-- L390 `String _firstSentence(String text)`  — First sentence of [text], or the whole string when it has no break.
-- L400 `Duration? agentActivityDuration( List<ToolCall> calls, { required DateTime now, bool running = false, })`  — Total wall time of a round: first start to last completion.
-- L435 `String formatAgentDurationLive(Duration duration)`  — Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
-- L442 `String formatAgentDuration(Duration duration)`
+- L193 `AgentActivityEntry _entryFor(ToolCall call)`
+- L234 `class AgentActivityStep`  — One thing that happened in a round, in the order it happened: either a
+  - L235 `const AgentActivityStep.reasoning(String text) : reasoning = text, toolCall = null`
+  - L238 `const AgentActivityStep.tool(ToolCall call) : toolCall = call, reasoning = null`
+  - L242 `final String? reasoning`
+  - L243 `final ToolCall? toolCall`
+- L252 `AgentActivityEntry reasoningEntry(String text)`  — The line and the body for one stretch of reasoning.
+- L267 `List<AgentActivityEntry> buildAgentActivityEntriesFromSteps( List<AgentActivityStep> steps, )`  — Build the timeline lines for an ordered mix of reasoning and calls.
+- L308 `List<AgentActivityEntry> buildAgentActivityEntries( List<ToolCall> calls, { bool includeRoundThinking = true, })`  — Build the timeline lines for [calls].
+- L326 `maxSourcesPerStep = 8`  — Most source chips shown under one step.
+- L334 `List<AgentActivitySource> extractSourcesFor(ToolCall call)`  — The pages a call pulled in.
+- L389 `String _firstSentence(String text)`  — First sentence of [text], or the whole string when it has no break.
+- L399 `Duration? agentActivityDuration( List<ToolCall> calls, { required DateTime now, bool running = false, })`  — Total wall time of a round: first start to last completion.
+- L434 `String formatAgentDurationLive(Duration duration)`  — Compact duration wording: `4s`, `1m 3s`, `2h 5m`.
+- L441 `String formatAgentDuration(Duration duration)`
 
-## lib/widgets/agent_activity/agent_activity_timeline.dart  (511 Z.)
-- L18 `class AgentActivityTimeline extends StatefulWidget`
-  - L19 `const AgentActivityTimeline({ super.key, required this.toolCalls, this.steps, this.isRunning = false, this.clock, this.initiallyExpanded, this.onStepTap, this.onSourceTap, this.footer, this.phase, this.startedAt, this.finalDuration, })`
-  - L36 `final List<ToolCall> toolCalls`  — The round's calls, in the order the model made them. Drives the
-  - L40 `final List<AgentActivityStep>? steps`  — The round as it happened, with reasoning between the calls. Pass this
-  - L44 `final bool isRunning`  — Whether the round is still going. While true the timeline stays open
-  - L48 `final DateTime Function()? clock`  — Injectable clock. Tests pass a fixed value so the counting header is
-  - L52 `final bool? initiallyExpanded`  — Overrides the default open/closed state (open while running, closed
-  - L56 `final void Function(ToolCall toolCall)? onStepTap`  — Called when a reader taps a step, to show its arguments and result.
-  - L59 `final void Function(AgentActivitySource source)? onSourceTap`  — Called when a reader taps a source chip.
-  - L63 `final Widget? footer`  — Shown under the last step when the timeline is open. The model line
-  - L67 `final StreamPhase? phase`  — What the turn is doing right now, so the header can name the wait
-  - L72 `final DateTime? startedAt`  — When the request went out. The clock runs from here, not from the
-  - L77 `final Duration? finalDuration`  — The turn's measured length, kept with the message. Once it is there
-  - L80 `State<AgentActivityTimeline> createState()`
-- L83 `class _AgentActivityTimelineState extends State<AgentActivityTimeline>`
-  - L85 `bool? _expandedOverride`  — Null until the reader taps: before that the state follows the round.
-  - L87 `Timer? _ticker`
-  - L91 `Duration? _settledDuration`  — What the live counter showed when the turn settled. Used only when the
-  - L94 `static const double _badgeSize = 26`  — Diameter of the icon badge sitting on the rail.
-  - L97 `static const double _railCenter = _badgeSize / 2`  — Where the rail runs, measured from the left edge of the timeline.
-  - L100 `void initState()`
-  - L107 `void didUpdateWidget(AgentActivityTimeline oldWidget)`
-  - L125 `void dispose()`
-  - L132 `void _syncTicker()`  — The header counts seconds, so it needs a repaint per second — but
-  - L146 `bool get _isExpanded`
-  - L149 `final Set<int> _openBodies = <int>{}`  — Thinking notes the reader opened, by their position in the list.
-  - L151 `DateTime get _now`
-  - L154 `Widget build(BuildContext context)`
-  - L214 `static Duration _nonNegative(Duration d)`
-  - L216 `Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status)`
-  - L257 `Widget _buildEntry( ThemeData theme, Color muted, AgentActivityEntry entry, { required int index, required bool isFirst, required bool isLast, bool soleStep = false, })`  — One step: the rail with its badge on the left, the line and the
+## lib/widgets/agent_activity/agent_activity_timeline.dart  (507 Z.)
+- L20 `class AgentActivityTimeline extends StatefulWidget`
+  - L21 `const AgentActivityTimeline({ super.key, required this.toolCalls, this.steps, this.isRunning = false, this.clock, this.initiallyExpanded, this.onStepTap, this.onSourceTap, this.footer, this.phase, this.startedAt, this.finalDuration, })`
+  - L38 `final List<ToolCall> toolCalls`  — The round's calls, in the order the model made them. Drives the
+  - L42 `final List<AgentActivityStep>? steps`  — The round as it happened, with reasoning between the calls. Pass this
+  - L46 `final bool isRunning`  — Whether the round is still going. While true the timeline stays open
+  - L50 `final DateTime Function()? clock`  — Injectable clock. Tests pass a fixed value so the counting header is
+  - L54 `final bool? initiallyExpanded`  — Overrides the default open/closed state (open while running, closed
+  - L58 `final void Function(ToolCall toolCall)? onStepTap`  — Called when a reader taps a step, to show its arguments and result.
+  - L61 `final void Function(AgentActivitySource source)? onSourceTap`  — Called when a reader taps a source chip.
+  - L65 `final Widget? footer`  — Shown under the last step when the timeline is open. The model line
+  - L69 `final StreamPhase? phase`  — What the turn is doing right now, so the header can name the wait
+  - L74 `final DateTime? startedAt`  — When the request went out. The clock runs from here, not from the
+  - L79 `final Duration? finalDuration`  — The turn's measured length, kept with the message. Once it is there
+  - L82 `State<AgentActivityTimeline> createState()`
+- L85 `class _AgentActivityTimelineState extends State<AgentActivityTimeline>`
+  - L87 `bool? _expandedOverride`  — Null until the reader taps: before that the state follows the round.
+  - L89 `Timer? _ticker`
+  - L93 `Duration? _settledDuration`  — What the live counter showed when the turn settled. Used only when the
+  - L96 `static const double _badgeSize = 26`  — Diameter of the icon badge sitting on the rail.
+  - L99 `static const double _railCenter = _badgeSize / 2`  — Where the rail runs, measured from the left edge of the timeline.
+  - L102 `void initState()`
+  - L109 `void didUpdateWidget(AgentActivityTimeline oldWidget)`
+  - L127 `void dispose()`
+  - L134 `void _syncTicker()`  — The header counts seconds, so it needs a repaint per second — but
+  - L148 `bool get _isExpanded`
+  - L151 `final Set<int> _openBodies = <int>{}`  — Thinking notes the reader opened, by their position in the list.
+  - L153 `DateTime get _now`
+  - L156 `Widget build(BuildContext context)`
+  - L216 `static Duration _nonNegative(Duration d)`
+  - L218 `Widget _buildHeader(ThemeData theme, Color muted, TurnStatus status)`
+  - L259 `Widget _buildEntry( ThemeData theme, Color muted, AgentActivityEntry entry, { required int index, required bool isFirst, required bool isLast, bool soleStep = false, })`  — One step: the rail with its badge on the left, the line and the
   - L357 `Widget _buildRail( ThemeData theme, AgentActivityEntry entry, { required Color color, required Color railColor, required bool isFirst, required bool isLast, })`  — The badge plus the line above and below it, so the steps read as one
   - L402 `Widget _buildEntryText( ThemeData theme, AgentActivityEntry entry, Color color, )`
-  - L436 `Widget _buildSourceChips( ThemeData theme, List<AgentActivitySource> sources, )`  — The pages a step found, as chips that scroll sideways — the row must
-  - L453 `Widget _buildSourceChip(ThemeData theme, AgentActivitySource source)`
-  - L498 `IconData _iconFor(AgentActivityEntry entry)`
+  - L440 `Widget _buildSourceChips(ThemeData theme, List<AgentActivitySource> sources)`  — The pages a step found, as chips that scroll sideways — the row must
+  - L454 `Widget _buildSourceChip(ThemeData theme, AgentActivitySource source)`
+  - L494 `IconData _iconFor(AgentActivityEntry entry)`
 
-## lib/widgets/agent_activity/turn_status.dart  (116 Z.)
+## lib/widgets/agent_activity/turn_status.dart  (124 Z.)
 - L17 `class TurnStatus`  — The status of one assistant turn, as the header above it reports it.
   - L18 `const TurnStatus({ required this.isRunning, required this.hasToolCalls, this.hasSteps = false, this.phase, this.runningToolLabel, this.elapsed, })`
   - L28 `final bool isRunning`  — Whether the turn is still going.
@@ -97,7 +97,7 @@
   - L45 `final String? runningToolLabel`  — Present-tense name of the tool the turn is waiting on, e.g.
   - L48 `final Duration? elapsed`  — How long the turn has taken so far, or took in total.
   - L55 `String get verb`  — The verb in front of the duration: what the turn is doing, or did.
-  - L74 `bool get showsDuration`  — Whether a duration can be printed next to [verb] — that is, whether
-  - L77 `String get label`  — The whole header line, e.g. `Prompt processing for 3s`.
-- L87 `bool hasRunningToolCall(List<ToolCall> calls)`  — True while any call in [calls] is still pending or running.
-- L100 `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunning, Duration? lastLiveDuration, List<ToolCall> toolCalls = const <ToolCall>[], })`  — How long the turn has taken, from the most trustworthy source available.
+  - L76 `bool get showsDuration`  — Whether a duration is printed next to [verb].
+  - L83 `String get label`  — The whole header line, e.g. `Prompt processing for 3s`.
+- L93 `bool hasRunningToolCall(List<ToolCall> calls)`  — True while any call in [calls] is still pending or running.
+- L106 `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunning, Duration? lastLiveDuration, List<ToolCall> toolCalls = const <ToolCall>[], })`  — How long the turn has taken, from the most trustworthy source available.

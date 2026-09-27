@@ -1,0 +1,80 @@
+# test/layout · Signaturen
+
+## test/layout/chat_documents_phone_layout_test.dart  (194 Z.)
+- L26 `class _Relay implements AgentsRelayController, AgentsDocumentsControl`
+  - L28 `final ValueNotifier<AgentsRelayState> state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.paired), )`
+  - L31 `final StreamController<AgentsRelayInbound> events = StreamController<AgentsRelayInbound>.broadcast(sync: true)`
+  - L34 `Stream<AgentsRelayInbound> get inbound`
+  - L36 `Future<void> requestDocuments(String sessionKey, {String? id})`
+  - L38 `Future<void> requestAgentList()`
+  - L40 `dynamic noSuchMethod(Invocation invocation)`
+  - L42 `void send(List<Map<String, dynamic>> documents)`
+- L50 `_stamp = DateTime(2026, 1, 5, 14, 3)`
+- L52 `Map<String, dynamic> _file(String path, {int size = 4096})`
+- L61 `Map<String, dynamic> _table(String title)`
+- L73 `_catalog = <Map<String, dynamic>>[ _table('Wahlkreise Sachsen-Anhalt 2026'), _file('skills/youtube-transcript/SKILL.md',`
+- L82 `void main()`
+
+## test/layout/every_screen_layout_test.dart  (737 Z.)
+- L71 `_cannotMount = <String, String>{ 'model_selector_page': 'its initState reaches SupabaseService.client, which ' 'throws "`  — Screens left out of the sweep, and why. Never delete a line here to make
+- L102 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
+  - L103 `final List<void Function()> _disposers = <void Function()>[]`
+  - L105 `T keep<T>(T value, void Function() dispose)`
+  - L110 `void dispose()`
+- L119 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
+- L125 `typedef ScreenBuilder = Widget Function(_Bag bag)`
+- L127 `class _Screen`
+  - L128 `const _Screen(this.name, this.build, {this.after})`
+  - L130 `final String name`
+  - L131 `final ScreenBuilder build`
+  - L135 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
+- L142 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
+- L160 `List<AgentsAgent> _roster()`
+- L167 `AgentsRoomMember _member(String id, String handle)`
+- L171 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
+- L185 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
+- L191 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
+- L206 `Future<void> _openSheet(WidgetTester tester)`
+- L215 `List<_Screen> _screens()`
+- L608 `void main()`
+
+## test/layout/layout_harness.dart  (431 Z.)
+- L25 `class LayoutSize`  — One window the app has to fit into.
+  - L26 `const LayoutSize(this.name, this.size)`
+  - L28 `final String name`
+  - L29 `final Size size`
+  - L32 `String toString()`
+- L36 `kLayoutSizes = <LayoutSize>[ LayoutSize('phone-360', Size(360, 800)), LayoutSize('phone-412', Size(412, 892)), LayoutSiz`
+- L43 `kTextScales = <double>[1.0, 1.3]`
+- L51 `Future<void> pumpAt( WidgetTester tester, Widget child, { required Size size, required double textScale, Duration settle = const Duration(seconds: 2), })`  — Pumps [child] into a window of [size] with text scaled by [textScale].
+- L94 `Future<void> unpump(WidgetTester tester)`  — Unmounts the screen and drains what it started, INSIDE the test body.
+- L113 `Future<List<FlutterErrorDetails>> collectErrors( Future<void> Function() body, )`  — Collects every framework error raised while [body] runs.
+- L127 `String describeErrors(List<FlutterErrorDetails> errors)`
+- L131 `bool isOverflow(FlutterErrorDetails d)`
+- L139 `class Bleed`  — A box whose painted rect leaves the window sideways.
+  - L140 `const Bleed(this.what, this.rect)`
+  - L142 `final String what`
+  - L143 `final Rect rect`
+  - L146 `String toString()`
+- L151 `_kEdgeTolerance = 0.5`
+- L155 `bool _scrollsHorizontally(Element element)`  — True when [element] scrolls sideways, so its content is MEANT to be wider
+- L164 `bool _paintsNothing(Element element)`  — True when nothing under [element] paints at all.
+- L178 `bool _paintsElsewhere(Element element)`  — True for a node whose OWN box is measured in its parent's coordinates
+- L191 `bool _mayOverhang(Element element)`  — True for a box that is told to let its child be bigger than itself. What
+- L206 `bool _clipsChildren(Element element)`  — True when [element] cuts its children off at its own edge, so nothing
+- L225 `List<Bleed> findHorizontalBleed(WidgetTester tester, Size screen)`  — Walks the tree under the root and returns every box that paints past the
+- L284 `bool isTarget(Widget w)`  — True for a widget that takes a tap and is therefore a touch target.
+- L303 `bool _ownsItsPadding(Widget w)`  — True for the widgets that build their own ink well INSIDE a 48 dp tap
+- L319 `class SmallTarget`  — A control that is too small to hit.
+  - L320 `const SmallTarget(this.what, this.size)`
+  - L322 `final String what`
+  - L323 `final Size size`
+  - L326 `String toString()`
+- L330 `List<SmallTarget> findSmallTargets(WidgetTester tester)`
+- L373 `kMinFontSize = 10.0`  — Text below this many logical pixels is decoration, not writing. Material
+- L375 `class TinyText`
+  - L376 `const TinyText(this.text, this.fontSize)`
+  - L378 `final String text`
+  - L379 `final double fontSize`
+  - L382 `String toString()`
+- L390 `List<TinyText> findTinyText(WidgetTester tester)`  — Every run of text painted smaller than [kMinFontSize].

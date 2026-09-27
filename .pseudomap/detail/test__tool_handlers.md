@@ -7,5 +7,5 @@
 - L10 `Map<String, dynamic> _decodeTag(String tag)`
 - L20 `void main()`
 
-## test/tool_handlers/weather_tools_test.dart  (157 Z.)
+## test/tool_handlers/weather_tools_test.dart  (316 Z.)
 - L8 `void main()`

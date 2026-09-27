@@ -1,0 +1,1721 @@
+# lib/services/agents · Signaturen
+
+## lib/services/agents/agent_control_source.dart  (496 Z.)
+- L23 `@immutable sealed class ControlValue<T>`  — One block of the control surface: known, loading, or not connected.
+  - L25 `const ControlValue()`
+  - L28 `T? get valueOrNull`  — The value when it is really known, else null.
+- L35 `@immutable class ControlAvailable<T> extends ControlValue<T>`  — The host reported a real value.
+  - L37 `const ControlAvailable(this.value)`
+  - L38 `final T value`
+- L42 `@immutable class ControlLoading<T> extends ControlValue<T>`  — A request is in flight.
+  - L44 `const ControlLoading()`
+- L48 `@immutable class ControlUnavailable<T> extends ControlValue<T>`  — Nothing on the other side reports this yet. [reason] is shown to the user.
+  - L50 `const ControlUnavailable([this.reason = 'Not connected yet.'])`
+  - L51 `final String reason`
+- L55 `@immutable class AgentSkill`  — One skill the agent can load on demand (§11).
+  - L57 `const AgentSkill({ required this.name, required this.description, required this.enabled, })`
+  - L63 `final String name`
+  - L64 `final String description`
+  - L65 `final bool enabled`
+  - L67 `AgentSkill copyWith({bool? enabled})`
+- L75 `@immutable class AgentModelChoice`  — The model this coworker's last run really used.
+  - L77 `const AgentModelChoice({ required this.id, this.provider, this.reasoningEffort, })`
+  - L84 `final String id`  — The model id, as the account's catalogue names it.
+  - L87 `final String? provider`  — Which provider served it, when the host says.
+  - L90 `final String? reasoningEffort`  — How hard it thought — Fast mode is this turned down.
+  - L93 `String? get detail`  — `anthropic · low`, or null when the host named neither.
+  - L102 `static AgentModelChoice? fromPayload(Map<String, dynamic>? payload)`
+- L120 `@immutable class AgentTokenUsage`  — What this coworker has spent, summed over the runs it really made.
+  - L122 `const AgentTokenUsage({ required this.total, required this.runs, required this.lastRun, })`
+  - L128 `final int total`
+  - L129 `final int runs`
+  - L130 `final int lastRun`
+  - L132 `static AgentTokenUsage? fromPayload(Map<String, dynamic>? payload)`
+- L144 `@immutable class AgentSessionRuntime`  — The coworker's clock: when it first ran, and how long it has been working.
+  - L146 `const AgentSessionRuntime({ required this.active, required this.runs, required this.running, this.startedAt, this.current, })`
+  - L156 `final Duration active`  — Time the agent was actually running, summed over its runs. Not wall clock
+  - L159 `final int runs`  — How many runs that time is spread over.
+  - L162 `final bool running`  — True while a run is in flight right now.
+  - L165 `final DateTime? startedAt`  — When this coworker first ran.
+  - L168 `final Duration? current`  — How long the run in flight has been going, when one is.
+  - L170 `static Duration _seconds(Object? value)`
+  - L173 `static AgentSessionRuntime? fromPayload(Map<String, dynamic>? payload)`
+- L197 `@immutable class AgentSandbox`  — The box this coworker works in (§6, bead cowork-jo2).
+  - L199 `const AgentSandbox({ required this.kind, this.container, this.containerId, this.workspace, })`
+  - L207 `final String kind`  — `docker` or `local`.
+  - L210 `final String? container`  — The container's name, with the docker backend.
+  - L213 `final String? containerId`  — Its short id, when the container is already up.
+  - L216 `final String? workspace`  — The host directory the agent works in.
+  - L218 `bool get isContainer`
+  - L220 `static AgentSandbox? fromPayload(Map<String, dynamic>? payload)`
+- L236 `@immutable class AgentControlSnapshot`  — Everything the control surface shows, one [ControlValue] per block.
+  - L238 `const AgentControlSnapshot({ this.model = const ControlUnavailable<AgentModelChoice>(), this.tokens = const ControlUnavailable<AgentTokenUsage>(), this.runtime = const ControlUnavailable<AgentSessionRuntime>(), this.sandbox = const ControlUnavailable<AgentSandbox>(), this.skills = const ControlUnavailable<List<AgentSkill>>(), })`
+  - L246 `final ControlValue<AgentModelChoice> model`
+  - L247 `final ControlValue<AgentTokenUsage> tokens`
+  - L248 `final ControlValue<AgentSessionRuntime> runtime`
+  - L249 `final ControlValue<AgentSandbox> sandbox`
+  - L250 `final ControlValue<List<AgentSkill>> skills`
+  - L252 `AgentControlSnapshot copyWith({ ControlValue<AgentModelChoice>? model, ControlValue<AgentTokenUsage>? tokens, ControlValue<AgentSessionRuntime>? runtime, ControlValue<AgentSandbox>? sandbox, ControlValue<List<AgentSkill>>? skills, })`
+- L269 `abstract interface class AgentControlSource`  — The control surface's data source. One instance for the app; every call
+  - L272 `ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey)`  — The live snapshot of one coworker. Stable for the life of the source, so
+  - L275 `Future<void> refresh(String sessionKey)`  — Re-reads everything for one coworker. Safe to call on every panel open.
+  - L278 `Future<void> setSkillEnabled(String skillName, {required bool enabled})`  — Switch one skill on or off on the host.
+  - L280 `void dispose()`
+- L289 `class RelayAgentControlSource implements AgentControlSource`  — The production source: the host's own figures, over the relay.
+  - L290 `RelayAgentControlSource({SkillsSource? skills}) : _skills = skills ?? SkillsSource.instance`
+  - L299 `final SkillsSource _skills`
+  - L300 `StreamSubscription<AgentsRelayAgentStatus>? _sub`
+  - L301 `final Map<String, ValueNotifier<AgentControlSnapshot>> _snapshots = <String, ValueNotifier<AgentControlSnapshot>>{}`
+  - L303 `bool _disposed = false`
+  - L306 `ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey)`
+  - L309 `ValueNotifier<AgentControlSnapshot> _notifier(String sessionKey)`
+  - L316 `Future<void> refresh(String sessionKey)`
+  - L348 `Future<void> setSkillEnabled( String skillName, { required bool enabled, })`
+  - L357 `void dispose()`
+  - L369 `AgentControlSnapshot _unavailable(String reason)`
+  - L377 `void _onController()`
+  - L387 `void _onStatus(AgentsRelayAgentStatus event)`
+  - L411 `void _onSkills()`
+- L437 `class HostUnavailableControlSource extends RelayAgentControlSource`  — The name the shell constructs. It **is** [RelayAgentControlSource].
+  - L438 `HostUnavailableControlSource({super.skills})`
+- L445 `@visibleForTesting class FakeAgentControlSource implements AgentControlSource`  — A stand-in source with values in it.
+  - L447 `FakeAgentControlSource({AgentControlSnapshot? initial}) : _initial = initial ?? const AgentControlSnapshot()`
+  - L450 `final AgentControlSnapshot _initial`
+  - L451 `final Map<String, ValueNotifier<AgentControlSnapshot>> _snapshots = <String, ValueNotifier<AgentControlSnapshot>>{}`
+  - L454 `final List<String> refreshed = <String>[]`
+  - L455 `final List<String> skillSwitches = <String>[]`
+  - L458 `ValueListenable<AgentControlSnapshot> snapshotFor(String sessionKey)`
+  - L461 `ValueNotifier<AgentControlSnapshot> _notifier(String sessionKey)`
+  - L468 `Future<void> refresh(String sessionKey)`
+  - L471 `Future<void> setSkillEnabled( String skillName, { required bool enabled, })`
+  - L489 `void dispose()`
+
+## lib/services/agents/agent_file_saver.dart  (11 Z.)
+- reicht weiter: 'agent_file_saver_base.dart' · 'agent_file_saver_stub.dart' if (dart.library.io) 'agent_file_saver_io.dart'
+
+## lib/services/agents/agent_file_saver_base.dart  (29 Z.)
+- L12 `abstract interface class AgentFileSaver`  — Writes a received file somewhere the user can find it.
+  - L15 `Future<String> save(AgentsRelayFile file)`  — Saves [file] and returns a short, human-readable location to show the
+- L22 `String sanitizeAgentFileName(String raw)`  — Reduces a name from the wire to a plain, single-segment file name.
+
+## lib/services/agents/agent_file_saver_io.dart  (38 Z.)
+- L13 `class DownloadsAgentFileSaver implements AgentFileSaver`
+  - L14 `const DownloadsAgentFileSaver()`
+  - L17 `Future<String> save(AgentsRelayFile file)`
+
+## lib/services/agents/agent_file_saver_stub.dart  (18 Z.)
+- L10 `class DownloadsAgentFileSaver implements AgentFileSaver`
+  - L11 `const DownloadsAgentFileSaver()`
+  - L14 `Future<String> save(AgentsRelayFile file)`
+
+## lib/services/agents/agent_profile_store.dart  (281 Z.)
+- L41 `enum AgentAvatarShape`  — One coworker's display profile. Every field is optional: an agent with no
+  - L42 `round`
+  - L43 `oval`
+  - L44 `roundedSquare`
+  - L45 `square`
+  - L46 `expressive`
+  - L47 `cookie`
+  - L48 `clover`
+  - L49 `flower`
+  - L50 `diamond`
+  - L51 `gem`
+  - L52 `triangle`
+  - L53 `burst`
+- L56 `@immutable class AgentProfile`
+  - L58 `const AgentProfile({ this.photoPath, this.colorValue, this.role, this.brief, this.shape, })`
+  - L67 `final AgentAvatarShape? shape`  — Null keeps the original stable expressive silhouette.
+  - L71 `final String? photoPath`  — Absolute path of the picture copied into the app's support directory.
+  - L75 `final int? colorValue`  — ARGB value of the accent the user picked for this coworker. Null means
+  - L78 `final String? role`  — A short role line ("researcher", "release manager"). Display only.
+  - L82 `final String? brief`  — The standing job the user wrote for this coworker. Display only until the
+  - L84 `bool get isEmpty`
+  - L94 `AgentProfile copyWith({ String? photoPath, int? colorValue, String? role, String? brief, AgentAvatarShape? shape, bool clearPhoto = false, bool clearColor = false, bool clearRole = false, bool clearBrief = false, bool clearShape = false, })`  — Merges the given fields. A `clear*` flag wins over a value, so an emptied
+  - L113 `Map<String, dynamic> toJson()`
+  - L121 `static AgentProfile fromJson(Map<String, dynamic> json)`
+  - L131 `static AgentAvatarShape? _readShape(Object? value)`
+- L139 `class AgentProfileStore extends ChangeNotifier`
+  - L140 `AgentProfileStore()`
+  - L142 `static final AgentProfileStore instance = AgentProfileStore()`
+  - L144 `static const String _prefsKey = 'cowork_agent_profiles_v1'`
+  - L146 `final Map<String, AgentProfile> _profiles = <String, AgentProfile>{}`
+  - L147 `bool _loaded = false`
+  - L149 `bool get loaded`
+  - L153 `AgentProfile profileOf(String agentId)`  — The stored profile for [agentId], or an empty one. Never null, so callers
+  - L157 `Future<void> load()`  — Reads the store from disk. Safe to call more than once.
+  - L183 `Future<void> update( String agentId, { String? photoPath, int? colorValue, String? role, String? brief, AgentAvatarShape? shape, bool clearPhoto = false, bool clearColor = false, bool clearRole = false, bool clearBrief = false, bool clearShape = false, })`  — Writes one or more fields of [agentId]'s profile and persists the store.
+  - L219 `Future<void> forget(String agentId)`  — Forgets everything stored for [agentId] — called when the coworker is
+  - L228 `Future<String?> setPhotoFromFile(String agentId, String sourcePath)`  — Copies [sourcePath] into the app's support directory and stores it as
+  - L264 `Future<void> _persist()`
+
+## lib/services/agents/agent_read_marks.dart  (175 Z.)
+- L25 `class AgentReadMarks extends ChangeNotifier`
+  - L26 `AgentReadMarks()`
+  - L28 `static final AgentReadMarks instance = AgentReadMarks()`
+  - L30 `static const String _prefsKey = 'cowork_thread_read_marks_v1'`
+  - L32 `final Map<String, DateTime> _marks = <String, DateTime>{}`
+  - L33 `bool _loaded = false`
+  - L42 `static Duration persistDelay = const Duration(seconds: 1)`  — How long a new mark waits before it is written to disk. Marks arrive in
+  - L44 `Timer? _persistTimer`
+  - L45 `Completer<void>? _persistDone`
+  - L47 `bool get loaded`
+  - L50 `DateTime? lastRead(String threadKey)`  — When the user last had [threadKey] open, or null if never.
+  - L54 `bool isUnread(AgentsAgent agent)`  — True when something happened in one of [agent]'s threads after the user
+  - L66 `bool isThreadUnread(AgentsAgent agent, AgentsThreadInfo thread)`  — True when something happened in [thread] of [agent] after the user last
+  - L74 `int unreadCount(Iterable<AgentsAgent> agents)`  — How many of [agents] are unread.
+  - L80 `int unreadThreads(AgentsAgent agent)`  — How many of one coworker's threads have something new in them. This is
+  - L91 `Future<void> load()`
+  - L114 `Future<void> markRead(String threadKey, {DateTime? when})`  — Marks [threadKey] read as of [when] (now by default). A mark never moves
+  - L124 `Future<void> forget(String threadKey)`  — Drops the mark of a thread whose coworker is gone.
+  - L131 `Future<void> flush()`  — Writes a pending mark now instead of after [persistDelay].
+  - L140 `Future<void> _schedulePersist()`  — One write per burst: the future completes when the write that covers
+  - L148 `Future<void> _runPersist()`
+  - L156 `Future<void> _persist()`
+
+## lib/services/agents/agent_roster_source.dart  (517 Z.)
+- L34 `abstract class AgentRosterSource extends ChangeNotifier`  — Read/write access to the roster, as a [ChangeNotifier] the UI listens to.
+  - L35 `List<AgentsAgent> get agents`
+  - L40 `Future<void> load()`  — Reads whatever this device remembers of the roster, so the shell can land
+  - L45 `Set<String> get deletedIds`  — The ids the user deleted on this device, across launches. Fed into
+  - L50 `Set<String> get hiddenIds`  — The ids the user has hidden from the roster (§16.1). Hiding is a view
+  - L53 `List<AgentsAgent> get visibleAgents`  — The agents that show in the roster — [agents] minus [hiddenIds].
+  - L59 `List<AgentsAgent> get hiddenAgents`  — The agents the user has hidden, in roster order.
+  - L65 `void hideAgent(String id)`  — Hides [id] from the roster. A no-op for an unknown or already-hidden id.
+  - L68 `void unhideAgent(String id)`  — Brings [id] back into the roster. A no-op if it was not hidden.
+  - L70 `AgentsAgent? byId(String id)`
+  - L74 `AgentsAgent ensureHostAgent(String peerDeviceId)`  — Makes sure the agent that really runs on the paired host is listed, and
+  - L78 `AgentsAgent addAgent({ required String name, String? role, String? brief, ScheduleSpec? schedule, List<String> attachmentNames, })`  — Adds a coworker the user just onboarded. The returned agent always has its
+  - L89 `void renameAgent(String id, String name)`  — Renames a coworker (bead cowork-817). The trimmed name replaces the old
+  - L97 `void applyHostNames( List<AgentsHostAgentName> names, { required String? peerDeviceId, Set<String> ignore = const <String>{}, })`  — Merges the host's `agent_list` (bead cowork-817, WIRE_CONTRACT "Coworker
+  - L104 `void markRunning(String agentId, bool running)`  — Marks a run as in flight (or finished) for [agentId].
+  - L107 `void markActivity(String agentId, String threadKey, DateTime when)`  — Records that something happened in a thread at [when].
+  - L111 `void setSchedule(String agentId, ScheduleSpec spec)`  — Stores the schedule the user set in the app. It changes nothing on the
+  - L113 `void removeAgent(String id)`
+  - L118 `void flushPendingPersist()`  — Writes a change that is still waiting to be stored (see [markActivity])
+- L128 `class LocalAgentRosterSource extends AgentRosterSource`  — The roster the app ships with, kept in memory and cached on disk.
+  - L129 `LocalAgentRosterSource({ List<AgentsAgent> seed = const <AgentsAgent>[], Random? random, AgentRosterStore? store, }) : _agents = List<AgentsAgent>.of(seed), _random = random ?? Random(), _store = store ?? AgentRosterStore.instance`
+  - L137 `final List<AgentsAgent> _agents`
+  - L138 `final Random _random`
+  - L139 `final AgentRosterStore _store`
+  - L140 `final Set<String> _hidden = <String>{}`
+  - L141 `final Set<String> _deleted = <String>{}`
+  - L142 `bool _loaded = false`
+  - L145 `Set<String> get deletedIds`
+  - L151 `Future<void> load()`  — Reads the cached roster. Safe to call more than once; an agent already in
+  - L184 `void _persist()`  — Writes the roster back to the cache. Called after every change that alters
+  - L198 `Timer? _activityPersistTimer`  — The activity write that waits for the end of a burst. A live run marks
+  - L200 `void _schedulePersistActivity()`
+  - L211 `void flushPendingPersist()`
+  - L217 `void dispose()`
+  - L223 `List<AgentsAgent> get agents`
+  - L226 `Set<String> get hiddenIds`
+  - L229 `void hideAgent(String id)`
+  - L237 `void unhideAgent(String id)`
+  - L244 `AgentsAgent? byId(String id)`
+  - L256 `AgentsAgent ensureHostAgent(String peerDeviceId)`  — Makes sure the agent that really runs on the paired host is in the roster.
+  - L278 `AgentsAgent addAgent({ required String name, String? role, String? brief, ScheduleSpec? schedule, List<String> attachmentNames = const <String>[], })`
+  - L307 `void renameAgent(String id, String name)`
+  - L318 `void applyHostNames( List<AgentsHostAgentName> names, { required String? peerDeviceId, Set<String> ignore = const <String>{}, })`
+  - L358 `void markRunning(String agentId, bool running)`
+  - L366 `void markActivity(String agentId, String threadKey, DateTime when)`
+  - L387 `static AgentsAgent _withStoredActivity(AgentsAgent memory, AgentsAgent stored)`  — [memory] with the stored [stored] activity times filled in where
+  - L408 `void setSchedule(String agentId, ScheduleSpec spec)`
+  - L416 `void removeAgent(String id)`
+  - L431 `int _indexOf(String agentId, {bool orNull = false})`
+- L443 `class AgentNameGenerator`  — Auto-assigned coworker names (§4): adjective-noun, the same shape the
+  - L444 `const AgentNameGenerator({Random? random}) : _random = random`
+  - L446 `final Random? _random`
+  - L448 `static const List<String> adjectives = <String>[ 'amber', 'cobalt', 'crimson', 'azure', 'olive', 'violet', 'teal', 'scarlet', 'indigo', 'coral', 'jade', 'russet', 'slate', 'copper', 'ivory', 'onyx', 'saffron', 'sable', 'bronze', 'cerulean', 'sienna', 'pewter', 'lilac', 'ochre', 'brisk', 'quiet', 'swift', 'clever', 'steady', 'keen', ]`
+  - L481 `static const List<String> nouns = <String>[ 'otter', 'falcon', 'heron', 'lynx', 'marten', 'raven', 'badger', 'ferret', 'osprey', 'ibis', 'stoat', 'kestrel', 'weasel', 'plover', 'shrike', 'tern', 'vole', 'wren', ]`
+  - L503 `String next({Iterable<String> taken = const <String>[]})`  — A fresh name, avoiding any already in [taken] when it can.
+
+## lib/services/agents/agent_roster_store.dart  (258 Z.)
+- L40 `kAgentRosterPrefsKey = 'cowork_agent_roster_v1'`  — The one preferences key this store owns.
+- L43 `@immutable class AgentRosterSnapshot`  — What one launch reads back off disk.
+  - L45 `const AgentRosterSnapshot({ this.agents = const <AgentsAgent>[], this.hidden = const <String>{}, this.deleted = const <String>{}, })`
+  - L51 `final List<AgentsAgent> agents`
+  - L54 `final Set<String> hidden`  — The ids the user hid from the roster.
+  - L58 `final Set<String> deleted`  — The ids the user deleted. Kept for good, so a host list cannot resurrect
+  - L60 `bool get isEmpty`
+- L63 `class AgentRosterStore`
+  - L64 `AgentRosterStore({String prefsKey = kAgentRosterPrefsKey}) : _prefsKey = prefsKey`
+  - L68 `static final AgentRosterStore instance = AgentRosterStore()`  — The process-wide store. A test builds its own with its own key.
+  - L70 `final String _prefsKey`
+  - L72 `List<AgentsAgent> _agents = const <AgentsAgent>[]`
+  - L73 `Set<String> _hidden = const <String>{}`
+  - L74 `Set<String> _deleted = const <String>{}`
+  - L75 `bool _loaded = false`
+  - L79 `Future<void> _chain = Future<void>.value()`  — One write chain, so two mutations in the same turn cost one write and a
+  - L80 `bool _queued = false`
+  - L82 `bool get loaded`
+  - L86 `Future<AgentRosterSnapshot> load()`  — Reads the snapshot. Never throws: a store that cannot be read is an
+  - L132 `void saveRoster(Iterable<AgentsAgent> agents, Set<String> hidden)`  — Replaces the stored roster with [agents] / [hidden] and writes it in the
+  - L139 `void saveDeleted(Set<String> deleted)`  — Replaces the stored set of deleted ids.
+  - L146 `Future<void> flush()`  — Completes when the write queued by the last save is on disk. For tests
+  - L149 `Future<void> clear()`  — Drops everything, in memory and on disk.
+  - L160 `void _schedule()`
+  - L169 `Future<void> _persist()`
+  - L211 `static AgentsAgent? _readAgent(Map<String, dynamic> row)`
+  - L247 `static DateTime? _readTime(Object? value)`
+  - L250 `static Set<String> _readIds(Object? value)`
+
+## lib/services/agents/agents_approved_devices.dart  (126 Z.)
+- L33 `class AgentsApprovedDevices`  — The executor's **local** set of device public keys it will accept frames
+  - L34 `AgentsApprovedDevices([Map<String, SimplePublicKey>? approved]) : _approved = <String, SimplePublicKey>{...?approved}`
+  - L38 `AgentsApprovedDevices.empty() : _approved = <String, SimplePublicKey>{}`  — An empty store. Rejects everything until something is explicitly approved.
+  - L45 `factory AgentsApprovedDevices.fromBase64Map(Map<String, String> entries)`  — Restores a store from persisted `deviceId -> base64 public key` entries.
+  - L53 `final Map<String, SimplePublicKey> _approved`
+  - L55 `bool get isEmpty`
+  - L57 `bool get isNotEmpty`
+  - L59 `int get length`
+  - L62 `Set<String> get deviceIds`  — Device ids currently approved, for a "Devices" UI listing.
+  - L66 `SimplePublicKey? lookup(String deviceId)`  — The approved key for [deviceId], or null if this device has never
+  - L68 `bool isApproved(String deviceId)`
+  - L76 `void approve(String deviceId, SimplePublicKey publicKey)`  — Records a local human approval of [deviceId] holding [publicKey].
+  - L103 `bool revoke(String deviceId)`  — Removes [deviceId]. Returns true if it had been approved.
+  - L106 `void revokeAll()`  — Removes every device — the tray "panic" wipe.
+  - L109 `Map<String, String> toBase64Map()`  — Persistable snapshot: `deviceId -> base64 public key`.
+  - L114 `static String base64EncodePublicKey(SimplePublicKey publicKey)`
+  - L117 `static bool _sameKey(SimplePublicKey a, SimplePublicKey b)`
+
+## lib/services/agents/agents_backoff.dart  (59 Z.)
+- L18 `class AgentsBackoff`  — The delay curve for one kind of work.
+  - L19 `const AgentsBackoff({ this.maxAttempts = 3, this.initialDelay = const Duration(milliseconds: 500), this.maxDelay = const Duration(seconds: 10), this.multiplier = 2.0, this.jitter = 0.1, })`
+  - L28 `static const AgentsBackoff chat = AgentsBackoff()`  — What a chat send waits: upstream's `BackoffConfig.chat`, 500 ms to 10 s.
+  - L33 `final int maxAttempts`  — How many attempts the curve is drawn for. The outbox keeps its own,
+  - L34 `final Duration initialDelay`
+  - L35 `final Duration maxDelay`
+  - L36 `final double multiplier`
+  - L40 `final double jitter`  — Fraction of the delay spent on random spread, so two threads that failed
+  - L46 `Duration delayAfter(int attempt, {math.Random? random})`  — The wait after [attempt] failures. `attempt` is 1-based: 1 is the first
+
+## lib/services/agents/agents_chat_core.dart  (20 Z.)
+- L19 `debugAgentsChatCoreOverride`  — Whether the chat core runs the Agents way: the host runs every tool
+
+## lib/services/agents/agents_chat_transport.dart  (822 Z.)
+- L60 `class AgentsChatTransport`  — Service for handling streaming chat responses.
+  - L73 `static final Map<String, DateTime> _stopIntents = <String, DateTime>{}`  — Sessions whose run the USER asked to stop, with the moment they asked.
+  - L77 `static const Duration _stopIntentWindow = Duration(seconds: 5)`  — How long a declared stop stays valid. Long enough for the cancel it
+  - L83 `static void declareStopIntent(String sessionKey)`  — Declares that the user asked to stop [sessionKey]'s run. Called by the
+  - L90 `static void withdrawStopIntent([String? sessionKey])`  — Takes back a declared stop: this cancel was the page going away, not the
+  - L99 `static bool _takeStopIntent(String sessionKey)`  — Consumes the declared intent for [sessionKey], if it is still fresh.
+  - L107 `static bool hasStopIntent(String sessionKey)`  — True while the user's stop for [sessionKey] is still on record. Test seam.
+  - L111 `static Stream<ChatStreamEvent> sendStreamingChat({ required String accessToken, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Sends a streaming chat request and yields chunks as they arrive.
+  - L691 `static bool _isReplay(AgentsRelayInbound event)`  — True for anything the replay loader owns: a replayed frame of any kind,
+  - L706 `static String _toolOutcomeLine(AgentsRelayTool tool)`  — " ✓ exit 0" / " ✗ exit 2" / " ✗ timed out" — the one-line outcome the
+- L723 `PendingTask _unrecorded(String sessionKey, String taskId)`  — The value a failed [AgentsPendingTasks.record] falls back to.
+- L737 `String mintTaskId()`  — Mints the id that names ONE send on the wire.
+- L743 `_taskSeq = 0`
+- L750 `String _taskRejectionText(String? reason)`  — One plain sentence for a `task_ack` rejection.
+- L766 `Future<OutboxTask?> _queueForLater( String message, String sessionKey, Future<ChatModelSelection> selectedRoute, { String? reasoningEffort, })`  — Puts a prompt the socket would not take into the per-thread outbox.
+- L803 `Future<void> _queueAndMark( String message, String sessionKey, Future<ChatModelSelection> selectedRoute, { String? reasoningEffort, })`  — Queues the prompt, then marks the bubble it came from.
+
+## lib/services/agents/agents_cloud_relay.dart  (767 Z.)
+- L86 `kAgentsRelayPath = '/v2/relay/ws'`  — The endpoint path on the API server.
+- L95 `kAgentsPairChannelParam = 'cw_pair'`  — Query markers that turn a relay base URL into a full dial address.
+- L96 `kAgentsTargetDeviceParam = 'cw_device'`
+- L100 `kAgentsHealChannelParam = 'cw_heal'`  — The heal channel of a stored pairing, added to a reconnect address only for
+- L105 `@immutable class AgentsCloudRelayAddress`  — A dial address for the cloud relay, expressed as a [Uri] so it fits the
+  - L107 `const AgentsCloudRelayAddress({ required this.base, this.pairingChannel, this.targetDeviceId, this.healChannel, })`
+  - L115 `final Uri base`  — The relay base, scheme + host + optional port, no path.
+  - L119 `final String? pairingChannel`  — The high-entropy pairing channel to claim. Set for a first pairing only.
+  - L123 `final String? targetDeviceId`  — The host device this controller addresses. Known from the stored trust on
+  - L127 `final String? healChannel`  — The heal channel to claim when [targetDeviceId] is offline. Set on a
+  - L130 `factory AgentsCloudRelayAddress.forInvite(AgentsPairingInvite invite)`  — The address for a first pairing, built from a scanned or typed invite.
+  - L139 `factory AgentsCloudRelayAddress.forHost({ required Uri base, required String targetDeviceId, })`  — The address a paired app dials forever after: the relay, addressed to the
+  - L145 `Uri toUri()`  — The URL the client is handed. Markers included; see the constants above.
+  - L159 `Uri get dialUri`  — The URL actually opened: the markers removed, so nothing private and
+  - L164 `static AgentsCloudRelayAddress? tryParse(Uri url)`  — Reads an address back out of a URL, or null when [url] is not one of ours
+  - L194 `static Uri forRestoredTrust( Uri stored, String peerDeviceId, { Uri? fallbackBase, })`  — The address a restored trust record should be dialled at.
+  - L210 `bool operator ==(Object other)`
+  - L218 `int get hashCode`
+  - L223 `String toString()`  — The channel is key material, so it is not in here.
+- L230 `class AgentsCloudRelayException implements Exception`  — Raised when the relay refuses the handshake or the pairing claim. The
+  - L231 `const AgentsCloudRelayException(this.message, {this.code})`
+  - L233 `final String message`
+  - L236 `final String? code`  — The server's machine-readable code, when it sent one. Never shown.
+  - L239 `String toString()`
+- L249 `RelaySocketConnector agentsCloudRelayConnector({ required String deviceId, required AccountSessionSource sessionSource, RelaySocketConnector inner = defaultRelaySocketConnector, Duration handshakeTimeout = const Duration(seconds: 20), })`  — Builds the app's production connector: cloud for `…/v2/relay/ws`, the plain
+- L270 `class AgentsCloudRelaySocket implements RelaySocket`  — A [RelaySocket] that speaks the cloud relay downward and the local blind
+  - L271 `AgentsCloudRelaySocket._({ required RelaySocket transport, required String deviceId, required this.address, }) : _transport = transport, _deviceId = deviceId`
+  - L287 `static final Map<String, String> _claimedTargets = <String, String>{}`  — Host device ids learned by claiming a pairing channel, keyed by
+  - L291 `static void resetClaimCache()`  — Clears the learned targets. Tests only.
+  - L296 `static String? learnedTarget({ required Uri base, required String pairingChannel, })`  — The host device id a claim on [pairingChannel] returned, or null when this
+  - L301 `static const Uuid _uuid = Uuid()`
+  - L303 `final RelaySocket _transport`
+  - L304 `final String _deviceId`
+  - L305 `final AgentsCloudRelayAddress address`
+  - L307 `final StreamController<dynamic> _upward = StreamController<dynamic>.broadcast()`
+  - L309 `StreamSubscription<dynamic>? _sub`
+  - L312 `String? _targetDeviceId`  — Where relayed payloads are addressed. Set before the first send.
+  - L317 `final List<String> _pending = <String>[]`  — Envelopes the client handed us before the handshake finished. The client
+  - L318 `bool _ready = false`
+  - L319 `bool _closed = false`
+  - L325 `final Completer<Set<String>> _presence = Completer<Set<String>>()`  — The first presence snapshot the relay sends after `auth_ok`: the device
+  - L329 `static const Duration _presenceWait = Duration(seconds: 3)`  — How long a reconnect waits for that snapshot before it claims the heal
+  - L332 `static const Duration _healClaimTimeout = Duration(seconds: 5)`  — How long a heal claim may take before the reconnect goes on without it.
+  - L337 `static ValueListenable<bool> get healInProgress`  — True while a reconnect is renewing a parked host through its heal
+  - L338 `static final ValueNotifier<bool> _healInProgress = ValueNotifier<bool>(false)`
+  - L342 `static set debugHealInProgress(bool value)`  — Lets a widget test show the heal status without a relay.
+  - L345 `Completer<Map<String, dynamic>>? _awaiting`  — One-shot waiters for a handshake / claim answer.
+  - L346 `bool Function(Map<String, dynamic> frame)? _awaitingMatch`
+  - L350 `static Future<AgentsCloudRelaySocket> connect({ required AgentsCloudRelayAddress address, required String deviceId, required AccountSessionSource sessionSource, RelaySocketConnector inner = defaultRelaySocketConnector, Duration handshakeTimeout = const Duration(seconds: 20), })`  — Opens the socket, authenticates, claims the pairing channel when the
+  - L373 `static Future<AccountSession> _resolveSession( AccountSessionSource source, )`
+  - L392 `Future<void> _handshake(AccountSession session, Duration timeout)`
+  - L474 `Future<String?> _claimPairingChannel( String channel, { required Duration timeout, })`
+  - L520 `Future<void> _healIfOffline(String heal)`  — Claims the heal channel when the target host is not online.
+  - L558 `static Set<String> _onlineExecutors(Map<String, dynamic> frame)`
+  - L576 `static const String _staleCodeText = 'That code is not valid any more. Ask your computer for a new one.'`  — The one sentence every claim refusal gets. The server refuses an expired
+  - L579 `static String? _deviceIdFrom(Map<String, dynamic> frame)`
+  - L598 `String? get targetDeviceId`  — The host device this socket ended up addressing. Read after a successful
+  - L603 `Stream<dynamic> get incoming`
+  - L606 `void send(String data)`
+  - L615 `void _forward(String data)`
+  - L633 `Future<void> close()`
+  - L646 `void _onTransportFrame(dynamic raw)`
+  - L718 `void _onTransportError(Object error, StackTrace _)`
+  - L726 `void _onTransportDone()`
+  - L742 `Future<Map<String, dynamic>> _expect( bool Function(Map<String, dynamic> frame) match, Duration timeout, )`
+  - L754 `static String _authErrorText(String detail)`  — Turns the relay's reason into one plain sentence. The detail strings are
+
+## lib/services/agents/agents_controller_session.dart  (97 Z.)
+- L12 `class AgentsControllerSession`
+  - L13 `AgentsControllerSession(this.deviceId, this.identity, this.trust)`
+  - L15 `final String deviceId`
+  - L16 `final SimpleKeyPair identity`
+  - L17 `final AgentsStoredPairing trust`
+  - L18 `final String nonce = base64Encode(AgentsReconnectCrypto.randomNonce())`
+  - L19 `String? connection`
+  - L20 `String? _public`
+  - L21 `List<int>? _transcript`
+  - L22 `Uint8List? trafficKey`
+  - L23 `bool authenticated = false`
+  - L25 `Future<Map<String, dynamic>> resume()`
+  - L36 `Future<Uint8List> _mac(List<int> key, String label)`
+  - L44 `Future<Map<String, dynamic>?> challenge(Map<String, dynamic> message)`
+  - L80 `Future<bool> ready(Map<String, dynamic> message)`
+
+## lib/services/agents/agents_device_keys.dart  (115 Z.)
+- L19 `class AgentsDeviceKeys`  — Per-device Ed25519 identity helpers.
+  - L20 `const AgentsDeviceKeys._()`
+  - L22 `static final Ed25519 _algorithm = Ed25519()`
+  - L25 `static const int seedLength = 32`  — Ed25519 seed length in bytes — what [exportPrivateKeySeed] returns.
+  - L28 `static const int publicKeyLength = 32`  — Ed25519 public key length in bytes.
+  - L30 `static Ed25519 get algorithm`
+  - L33 `static Future<SimpleKeyPair> generate()`  — Generates a fresh device signing key from the platform's secure RNG.
+  - L36 `static Future<SimpleKeyPair> fromSeed(List<int> seed)`  — Rebuilds a key pair from a stored 32-byte seed.
+  - L49 `static Future<SimpleKeyPair> fromSeedBase64(String seed)`  — Rebuilds a key pair from a base64 seed as written by
+  - L54 `static Future<Uint8List> exportPrivateKeySeed(SimpleKeyPair keyPair)`  — The private seed. Persist this in secure storage and nowhere else — it
+  - L57 `static Future<String> exportPrivateKeySeedBase64( SimpleKeyPair keyPair, )`
+  - L62 `static Future<String> exportPublicKeyBase64(SimpleKeyPair keyPair)`  — The public key, safe to publish to `agents_devices`.
+  - L71 `static SimplePublicKey publicKeyFromBase64(String encoded)`  — Parses a peer public key received from `agents_devices`.
+  - L90 `static const int fingerprintBytes = 10`  — Bytes of the SHA-256 digest shown in a [fingerprint].
+  - L96 `static String fingerprint(SimplePublicKey publicKey)`  — A human-comparable fingerprint of a public key, e.g. `4F2A-9C31-88B0-1D5E-A7C4`.
+  - L107 `static Uint8List _decodeBase64(String value, String label)`
+
+## lib/services/agents/agents_frame.dart  (334 Z.)
+- L23 `kAgentsFrameVersion = '1'`  — Wire format version. Bump only for a breaking change to the frame layout.
+- L26 `kAgentsFrameNonceLength = 12`  — AES-GCM nonce length in bytes.
+- L29 `kAgentsFrameSignatureLength = 64`  — Ed25519 signature length in bytes.
+- L32 `kAgentsFrameMacLength = 16`  — AES-GCM authentication tag length in bytes, appended to [AgentsFrame.ciphertext].
+- L36 `_kDomain = 'chuk.cowork.frame'`  — Domain separator mixed into every signature and AAD, so a Agents signature
+- L41 `enum AgentsFrameRejection`  — Why a frame was refused.
+  - L43 `malformed`
+  - L46 `unsupportedVersion`
+  - L54 `deviceNotApproved`
+  - L57 `badSignature`
+  - L67 `keyVersionMismatch`
+  - L70 `timestampOutOfWindow`
+  - L73 `replayedSequence`
+  - L76 `decryptionFailed`
+- L81 `class AgentsFrameRejectedException implements Exception`  — Thrown whenever a frame is refused. Carries a machine-readable [rejection]
+  - L82 `const AgentsFrameRejectedException(this.rejection, [this.detail])`
+  - L84 `final AgentsFrameRejection rejection`
+  - L87 `final String? detail`  — Short, non-sensitive context. Never contains plaintext, keys or nonces.
+  - L90 `String toString()`
+- L96 `class AgentsFrame`  — A sealed Agents frame, as it travels over the relay.
+  - L97 `AgentsFrame({ required this.deviceId, required this.seq, required this.ts, required this.nonce, required this.ciphertext, required this.sig, this.version = kAgentsFrameVersion, this.keyVersion = 1, })`
+  - L109 `final String version`  — Frame format version (`v`).
+  - L114 `final int keyVersion`  — Account key version (`kv`) the [ciphertext] was sealed under — mirrors
+  - L118 `final String deviceId`  — The signing device. The receiver checks this against its paired peer
+  - L121 `final int seq`  — Strictly monotonic per sending device. `seq <= lastSeen` is dropped.
+  - L124 `final int ts`  — Milliseconds since the Unix epoch, UTC.
+  - L127 `final Uint8List nonce`  — AES-GCM nonce, [kAgentsFrameNonceLength] random bytes, unique per frame.
+  - L130 `final Uint8List ciphertext`  — AES-GCM output: cipher text followed by the [kAgentsFrameMacLength]-byte tag.
+  - L133 `final Uint8List sig`  — Ed25519 signature over [signedBytes].
+  - L140 `Uint8List get headerBytes`  — The authenticated header: everything about the frame except the payload.
+  - L149 `Uint8List get signedBytes`  — Exactly what the Ed25519 signature covers: header, nonce and ciphertext.
+  - L155 `static Uint8List buildHeaderBytes({ required String version, required int keyVersion, required String deviceId, required int seq, required int ts, })`
+  - L172 `static Uint8List buildSignedBytes({ required Uint8List header, required Uint8List nonce, required Uint8List ciphertext, })`
+  - L189 `static void _addField(BytesBuilder builder, List<int> value)`  — Length-prefixed append: 4-byte big-endian length, then the bytes.
+  - L195 `Map<String, dynamic> toJson()`
+  - L206 `String toJsonString()`
+  - L213 `factory AgentsFrame.fromJson(Map<String, dynamic> json)`  — Parses a frame off the wire.
+  - L298 `factory AgentsFrame.fromJsonString(String source)`  — Parses a frame from its JSON text. Invalid JSON is
+  - L317 `static Uint8List _decodeBase64(Object? value, String field)`
+
+## lib/services/agents/agents_frame_codec.dart  (350 Z.)
+- L15 `_cipher = AesGcm.with256bits()`  — AES-256-GCM — the same primitive, and the same per-user account key, that
+- L23 `kAgentsChannelKeyLength = 32`  — Length in bytes of a raw Agents channel key (an AES-256 key).
+- L48 `class AgentsFrameSealer`  — Seals outgoing Agents frames: AES-256-GCM under the account key, then an
+  - L49 `AgentsFrameSealer({ required SecretKey accountKey, required int accountKeyVersion, required String deviceId, required SimpleKeyPair signingKeyPair, int nextSeq = 0, DateTime Function()? clock, Random? random, }) : _accountKey = accountKey, _accountKeyVersion = accountKeyVersion, _deviceId = deviceId, _signingKeyPair = signingKeyPair, _nextSeq = nextSeq, _clock = clock ?? DateTime.now, _random = random ?? Random.secure()`
+  - L75 `factory AgentsFrameSealer.withChannelKey({ required List<int> channelKey, required int keyVersion, required String deviceId, required SimpleKeyPair signingKeyPair, int nextSeq = 0, DateTime Function()? clock, Random? random, })`  — Builds a sealer from a raw 32-byte [channelKey] rather than the account
+  - L102 `final SecretKey _accountKey`
+  - L103 `final int _accountKeyVersion`
+  - L104 `final String _deviceId`
+  - L105 `final SimpleKeyPair _signingKeyPair`
+  - L106 `final DateTime Function() _clock`
+  - L107 `final Random _random`
+  - L109 `int _nextSeq`
+  - L112 `int get nextSeq`  — The `seq` the next [seal] will use. Persist this across restarts.
+  - L114 `String get deviceId`
+  - L117 `Future<AgentsFrame> seal(List<int> plaintext)`  — Seals [plaintext] into a frame ready for the relay.
+  - L168 `Future<AgentsFrame> sealText(String plaintext)`
+- L184 `class AgentsFrameOpener`  — Opens incoming Agents frames, in this order:
+  - L185 `AgentsFrameOpener({ required SecretKey accountKey, required int accountKeyVersion, required AgentsApprovedDevices approvedDevices, Duration replayWindow = const Duration(seconds: 60), DateTime Function()? clock, Map<String, int>? lastSeqByDevice, }) : _accountKey = accountKey, _accountKeyVersion = accountKeyVersion, _approvedDevices = approvedDevices, _replayWindow = replayWindow, _clock = clock ?? DateTime.now, _guards = <String, AgentsReplayGuard>{ for (final entry in (lastSeqByDevice ?? const <String, int>{}).entries) entry.key: AgentsReplayGuard( window: replayWindow, clock: clock ?? DateTime.now, lastSeq: entry.value, ), }`
+  - L210 `factory AgentsFrameOpener.withChannelKey({ required List<int> channelKey, required int keyVersion, required AgentsApprovedDevices approvedDevices, Duration replayWindow = const Duration(seconds: 60), DateTime Function()? clock, Map<String, int>? lastSeqByDevice, })`  — Builds an opener from a raw 32-byte [channelKey] rather than the account
+  - L235 `final SecretKey _accountKey`
+  - L236 `final int _accountKeyVersion`
+  - L237 `final AgentsApprovedDevices _approvedDevices`
+  - L238 `final Duration _replayWindow`
+  - L239 `final DateTime Function() _clock`
+  - L240 `final Map<String, AgentsReplayGuard> _guards`
+  - L243 `AgentsApprovedDevices get approvedDevices`  — The live local trust store. Revoking here takes effect on the next frame.
+  - L247 `Map<String, int> get lastSeqByDevice`  — Highest accepted `seq` per device. Persist to survive a daemon restart;
+  - L253 `Future<Uint8List> open(AgentsFrame frame)`  — Verifies and decrypts [frame], or throws [AgentsFrameRejectedException].
+  - L339 `Future<String> openText(AgentsFrame frame)`
+  - L344 `void _logReject(AgentsFrameRejection rejection)`  — Rejections are worth seeing while debugging, but a frame is attacker
+
+## lib/services/agents/agents_heal_channel.dart  (48 Z.)
+- L24 `kAgentsHealChannelLabel = 'cowork/host/heal-channel/v1/'`  — Domain label; must stay byte-identical to the host's.
+- L28 `Future<String> deriveAgentsHealChannel( List<int> channelKey, String channelId, )`  — HMAC-SHA256(channelKey, label + channelId), url-safe base64, no padding:
+
+## lib/services/agents/agents_host_session.dart  (109 Z.)
+- L25 `kAgentsHostSessionPath = '/v2/agents/host-session'`  — The path of the minting route on the API server.
+- L28 `class AgentsHostSession`  — A session minted for the host. Key material: never logged, never stored.
+  - L29 `const AgentsHostSession({ required this.accessToken, required this.refreshToken, required this.userId, this.expiresAt, })`
+  - L36 `final String accessToken`
+  - L37 `final String refreshToken`
+  - L38 `final String userId`
+  - L39 `final int? expiresAt`
+  - L42 `static AgentsHostSession? fromJson(Object? json)`  — Reads the route's answer. Null when it is not a complete session.
+  - L63 `String toString()`  — The tokens are key material, so they are not in here.
+- L67 `typedef AgentsHostSessionMinter = Future<AgentsHostSession?> Function(AccountSession appSession)`  — Mints a host session for the signed-in account. Null when it could not.
+- L74 `Future<AgentsHostSession?> mintAgentsHostSession( AccountSession appSession, { http.Client? client, String? baseUrl, Duration timeout = const Duration(seconds: 20), })`  — The production minter: one POST with the app's own bearer token.
+
+## lib/services/agents/agents_pairing.dart  (933 Z.)
+- L55 `enum AgentsPairingRole`  — Which side of the ceremony a session drives.
+  - L57 `initiator`
+  - L60 `joiner`
+- L65 `enum AgentsPairingState`  — Ordered lifecycle. Illegal transitions and any use after a terminal state
+  - L66 `created`
+  - L67 `commitSent`
+  - L68 `commitReceived`
+  - L69 `pubkeySent`
+  - L70 `keyEstablished`
+  - L71 `confirmed`
+  - L72 `completed`
+  - L73 `aborted`
+- L77 `enum AgentsPairingRejection`  — Why a pairing step was refused. Every value is a hard stop.
+  - L78 `wrongState`
+  - L79 `expired`
+  - L80 `consumed`
+  - L81 `malformed`
+  - L82 `channelMismatch`
+  - L83 `commitmentMismatch`
+  - L84 `sasMismatch`
+  - L85 `macMismatch`
+  - L86 `badDeviceProof`
+- L92 `class AgentsPairingException implements Exception`  — Thrown whenever a pairing step is refused, carrying a machine-readable
+  - L93 `AgentsPairingException(this.rejection, [this.detail])`
+  - L95 `final AgentsPairingRejection rejection`
+  - L96 `final String? detail`
+  - L99 `String toString()`
+- L106 `class AgentsPairingCrypto`  — Byte-exact protocol constants + pure crypto helpers, shared by both roles and
+  - L107 `const AgentsPairingCrypto._()`
+  - L110 `static const String sasLabel = 'cowork/pairing/sas'`
+  - L111 `static const String confirmDLabel = 'cowork/pairing/confirm-d'`
+  - L112 `static const String confirmCLabel = 'cowork/pairing/confirm-c'`
+  - L113 `static const String deviceDLabel = 'cowork/pairing/device-d'`
+  - L114 `static const String deviceCLabel = 'cowork/pairing/device-c'`
+  - L115 `static const String deviceProofLabel = 'cowork/pairing/device-proof'`
+  - L116 `static const String commitLabel = 'cowork/pairing/commit-v1'`
+  - L120 `static const String channelKeyInfo = 'chuk.cowork.channel-key.v1'`  — HKDF `info` for the channel key — matches `channel_key.py`
+  - L122 `static const int x25519PublicLength = 32`
+  - L123 `static const int commitmentLength = 32`
+  - L124 `static const int macLength = 32`
+  - L125 `static const int channelKeyLength = 32`
+  - L128 `static const int sasHkdfBytes = 8`  — Bytes drawn from HKDF before folding down into the decimal SAS.
+  - L130 `static const int defaultSasDigits = 6`
+  - L133 `static const int defaultExpiryMs = 120000`  — Default pairing-code lifetime in milliseconds (~2 minutes, §15).
+  - L135 `static final X25519 _x25519 = X25519()`
+  - L136 `static final Ed25519 _ed25519 = Ed25519()`
+  - L137 `static final Hkdf _hkdf = Hkdf(hmac: Hmac.sha256(), outputLength: 32)`
+  - L139 `static X25519 get x25519`
+  - L140 `static Ed25519 get ed25519`
+  - L144 `static Future<Uint8List> hkdf( List<int> ikm, List<int> info, int length, )`  — HKDF-SHA256 with an empty salt (== RFC 5869 no-salt == Python `salt=None`)
+  - L163 `static Uint8List commitment(List<int> publicA)`  — `SHA-256(COMMIT_LABEL ‖ A)` — the initiator's binding commitment to its
+  - L176 `static Uint8List transcript(List<int> publicA, List<int> publicB)`  — `T = A ‖ B` — 64 bytes, initiator public first, always.
+  - L185 `static Future<String> deriveSas( List<int> kRaw, List<int> t, String pairingCode, int digits, )`  — The decimal SAS both sides compute and a human compares out of band.
+  - L213 `static Future<Uint8List> deriveConfirmMac( List<int> kRaw, String label, List<int> t, String pairingCode, )`  — A key-confirmation MAC: `HKDF(K_raw, label ‖ T ‖ PC, 32)`.
+  - L224 `static Future<Uint8List> deviceMac( List<int> kRaw, String label, List<int> t, List<int> edPub, String deviceId, String pairingCode, )`
+  - L239 `static Uint8List deviceProofMessage(List<int> t, String deviceId)`
+  - L248 `static Future<Uint8List> deriveChannelKey(List<int> kRaw)`  — The channel key that later seals frames (§14). Matches
+  - L253 `static bool constantTimeEquals(List<int> a, List<int> b)`  — Constant-time byte comparison. Returns false on a length mismatch without
+- L271 `class AgentsPairing`  — A single-use pairing session state machine for one role.
+  - L272 `AgentsPairing._({ required AgentsPairingRole role, required String deviceId, required SimpleKeyPair deviceKeyPair, required SimplePublicKey devicePublicKey, required SimpleKeyPair ephemeralKeyPair, required List<int> ephemeralPublic, required String channelId, required String pairingCode, required int sasDigits, required int expiresAtMs, required int Function() nowMs, required AgentsApprovedDevices approvedDevices, }) : _role = role, _deviceId = deviceId, _deviceKeyPair = deviceKeyPair, _devicePublicKey = devicePublicKey, _ephemeralKeyPair = ephemeralKeyPair, _ephemeralPublic = ephemeralPublic, _channelId = channelId, _pairingCode = pairingCode, _sasDigits = sasDigits, _expiresAtMs = expiresAtMs, _nowMs = nowMs, _approved = approvedDevices`
+  - L298 `final AgentsPairingRole _role`
+  - L299 `final String _deviceId`
+  - L300 `final SimpleKeyPair _deviceKeyPair`
+  - L301 `final SimplePublicKey _devicePublicKey`
+  - L302 `final SimpleKeyPair _ephemeralKeyPair`
+  - L303 `final List<int> _ephemeralPublic`
+  - L304 `final String _channelId`
+  - L305 `final String _pairingCode`
+  - L306 `final int _sasDigits`
+  - L307 `final int Function() _nowMs`
+  - L308 `final AgentsApprovedDevices _approved`
+  - L310 `int _expiresAtMs`
+  - L311 `AgentsPairingState _state = AgentsPairingState.created`
+  - L313 `List<int>? _peerPublic`
+  - L314 `List<int>? _commitment`
+  - L315 `List<int>? _kRaw`
+  - L316 `List<int>? _channelKey`
+  - L317 `String? _sas`
+  - L318 `String? _peerDeviceId`
+  - L319 `bool _sentDeviceKey = false`
+  - L320 `bool _approvedPeer = false`
+  - L329 `static Future<AgentsPairing> initiator({ required String deviceId, required SimpleKeyPair deviceKeyPair, int sasDigits = AgentsPairingCrypto.defaultSasDigits, int expiryMs = AgentsPairingCrypto.defaultExpiryMs, int Function()? nowMs, AgentsApprovedDevices? approvedDevices, SimpleKeyPair? ephemeralKeyPair, String? channelId, String? digits, })`  — Start a pairing session as the Python client (initiator). Generates the
+  - L383 `static Future<AgentsPairing> joiner({ required String deviceId, required SimpleKeyPair deviceKeyPair, required String pairingCode, int Function()? nowMs, AgentsApprovedDevices? approvedDevices, SimpleKeyPair? ephemeralKeyPair, })`  — Join a pairing session as the desktop app, from the human-entered pairing
+  - L429 `AgentsPairingRole get role`
+  - L431 `AgentsPairingState get state`
+  - L434 `String get pairingCode`  — The full `PC` — initiator displays it, joiner echoes it.
+  - L436 `String get channelId`
+  - L440 `String get sas`  — The short authentication string, available once `K` is derived. Compared
+  - L451 `AgentsApprovedDevices get approvedDevices`
+  - L453 `String? get peerDeviceId`
+  - L458 `Uint8List get channelKey`  — The 32-byte Agents channel key — **only** after both confirmation MACs
+  - L473 `void _require(AgentsPairingState expected)`
+  - L489 `void _checkNotExpired()`
+  - L496 `void _abort()`
+  - L506 `Map<String, dynamic> createCommit()`  — [initiator] Publish the commitment `H(A)` and the routing id.
+  - L530 `Future<Map<String, dynamic>> onPubkey(Map<String, dynamic> msg)`  — [initiator] Receive the joiner's `B`, derive `K` and the SAS, and reveal
+  - L556 `Future<Map<String, dynamic>> onConfirmD(Map<String, dynamic> msg)`  — [initiator] Verify the joiner's `MAC_d` (constant-time) and send `MAC_c`.
+  - L585 `void onCommit(Map<String, dynamic> msg)`  — [joiner] Store the commitment and adopt the initiator's expiry.
+  - L623 `Map<String, dynamic> createPubkey()`  — [joiner] Send ephemeral `B`.
+  - L641 `Future<Map<String, dynamic>> onReveal(Map<String, dynamic> msg)`  — [joiner] Receive `A`, check `H(A) == commitment` (constant-time), derive
+  - L677 `Future<void> onConfirmC(Map<String, dynamic> msg)`  — [joiner] Verify the initiator's `MAC_c` (constant-time).
+  - L703 `void confirmPeerSas(String peerSas)`  — **Optional** constant-time compare of the peer's SAS with ours, for UIs
+  - L724 `Future<Map<String, dynamic>> createDeviceKey()`  — Reveal our own Ed25519 device public key, authenticated under `K`.
+  - L765 `Future<void> onPeerDeviceKey(Map<String, dynamic> msg)`  — Verify the peer's device-key message under `K` and its self-signature,
+  - L825 `void _maybeComplete()`
+  - L833 `List<int> _currentTranscript()`
+  - L840 `Future<void> _establishKey({ required List<int> publicA, required List<int> publicB, })`
+  - L861 `Future<void> _verifyConfirm(Map<String, dynamic> msg, String label)`
+  - L875 `List<int> _decodeKey(Object? value, String field)`
+  - L886 `static List<int> _decodeBytes(Object? value, String field)`
+- L904 `int _wallClock()`
+- L906 `String _randomChannelId()`
+- L912 `String _randomDigits(int n)`
+- L926 `bool _isAllDigits(String s)`
+
+## lib/services/agents/agents_pairing_restore.dart  (354 Z.)
+- L42 `enum AgentsPairingRestoreReason`  — Why the last restore pass ended the way it did. The shell reads it to say
+  - L44 `checking`
+  - L47 `paired`
+  - L50 `noSession`
+  - L53 `keyLocked`
+  - L56 `network`
+  - L59 `localStoreFailed`
+  - L62 `noCloudRecord`
+  - L65 `decryptFailed`
+  - L68 `noCloudRoute`
+  - L72 `bool get mayStillRestore`  — True while a later pass can still restore a pairing without the user.
+- L80 `class AgentsPairingRestore`  — Restores the account's pairing onto this device, and keeps trying until it
+  - L81 `AgentsPairingRestore({ required AgentsPairingStore store, required AccountSessionSource sessionSource, required Future<void> Function() onRestored, Stream<AuthState>? authChanges, bool Function()? hasEncryptionKey, Future<bool> Function()? loadEncryptionKey, Future<void> Function(Duration delay)? sleep, List<Duration> backoff = kDefaultBackoff, Duration heartbeat = const Duration(seconds: 1), }) : _store = store, _sessionSource = sessionSource, _onRestored = onRestored, _authChanges = authChanges, _hasEncryptionKey = hasEncryptionKey ?? _defaultHasKey, _loadEncryptionKey = loadEncryptionKey ?? _defaultLoadKey, _sleep = sleep, _backoff = backoff, _heartbeat = heartbeat`
+  - L103 `static const List<Duration> kDefaultBackoff = <Duration>[ Duration(seconds: 1), Duration(seconds: 2), Duration(seconds: 4), Duration(seconds: 8), Duration(seconds: 15), Duration(seconds: 30), Duration(seconds: 60), ]`  — Fast at first — the two blockers that resolve in the first seconds of a
+  - L113 `final AgentsPairingStore _store`
+  - L114 `final AccountSessionSource _sessionSource`
+  - L115 `final Future<void> Function() _onRestored`
+  - L116 `final Stream<AuthState>? _authChanges`
+  - L117 `final bool Function() _hasEncryptionKey`
+  - L118 `final Future<bool> Function() _loadEncryptionKey`
+  - L119 `final Future<void> Function(Duration delay)? _sleep`
+  - L120 `final List<Duration> _backoff`
+  - L121 `final Duration _heartbeat`
+  - L125 `ValueListenable<AgentsPairingRestoreReason> get reason`  — Why the last pass ended as it did. Starts at
+  - L126 `final ValueNotifier<AgentsPairingRestoreReason> _reason = ValueNotifier<AgentsPairingRestoreReason>( AgentsPairingRestoreReason.checking, )`
+  - L131 `StreamSubscription<AuthState>? _authSub`
+  - L132 `Completer<void>? _wake`
+  - L133 `bool _running = false`
+  - L134 `bool _disposed = false`
+  - L135 `bool _done = false`
+  - L136 `String? _published`
+  - L137 `Timer? _timer`
+  - L141 `int get attempts`  — How many passes the loop has made. Test-visible so a test can assert the
+  - L142 `int _attempts = 0`
+  - L145 `bool get isSettled`  — True once a pairing exists locally and the supervisor has stood down.
+  - L148 `void start()`  — Starts the supervisor. Safe to call twice; the second call is a no-op.
+  - L157 `void nudge()`  — Nudges the supervisor to try again now instead of waiting out its sleep.
+  - L162 `Future<void> dispose()`
+  - L173 `bool _end(AgentsPairingRestoreReason reason, {required bool settled})`  — Records why this pass ended, and logs it in a debug build. The reason is
+  - L182 `void _listenForAuth()`
+  - L196 `Future<void> _loop()`
+  - L208 `Future<bool> _attempt()`  — One pass. Returns true when there is nothing left to do — either the
+  - L317 `Future<void> _waitBeforeRetry()`
+  - L338 `static bool _defaultHasKey()`
+  - L340 `static bool _hasCloudRoute(AgentsStoredPairing trust)`
+  - L347 `static Future<bool> _defaultLoadKey()`
+  - L349 `static Stream<AuthState>? _defaultAuthChanges()`
+
+## lib/services/agents/agents_pairing_store.dart  (226 Z.)
+- L32 `abstract interface class AgentsSecureKeyValueStore`  — The minimal secure key/value surface the store needs. Backed by
+  - L33 `Future<String?> read(String key)`
+  - L34 `Future<void> write(String key, String value)`
+  - L35 `Future<void> delete(String key)`
+- L39 `class FlutterSecureKeyValueStore implements AgentsSecureKeyValueStore`  — Production backend over `flutter_secure_storage`.
+  - L40 `const FlutterSecureKeyValueStore([ this._storage = const FlutterSecureStorage(), ])`
+  - L44 `final FlutterSecureStorage _storage`
+  - L47 `Future<String?> read(String key)`
+  - L50 `Future<void> write(String key, String value)`
+  - L54 `Future<void> delete(String key)`
+- L58 `class AgentsDeviceIdentity`  — The app's stable long-term device identity.
+  - L59 `const AgentsDeviceIdentity({required this.deviceId, required this.keyPair})`
+  - L62 `final String deviceId`  — A stable, opaque id the host approves at pairing and sees on every frame.
+  - L65 `final SimpleKeyPair keyPair`  — The long-term Ed25519 signing key pair.
+- L69 `class AgentsStoredPairing`  — A persisted pairing: everything the app needs to reconnect with no code.
+  - L70 `const AgentsStoredPairing({ required this.hostUrl, required this.channelId, required this.channelKey, required this.peerDeviceId, required this.peerPublicKey, })`
+  - L79 `final Uri hostUrl`  — Where the host was reached (`ws://…`). Auto-reconnect dials this.
+  - L82 `final String channelId`  — The stable relay channel the host listens on.
+  - L85 `final Uint8List channelKey`  — The established 32-byte channel key, reused verbatim by the frame codec.
+  - L88 `final String peerDeviceId`  — The host's `device_id`.
+  - L91 `final SimplePublicKey peerPublicKey`  — The host's approved long-term Ed25519 public key.
+  - L93 `Map<String, dynamic> toJson()`
+  - L107 `static AgentsStoredPairing? tryParse(String source)`  — Parses a stored record, or returns null if it is malformed / a future
+- L136 `class AgentsPairingStore`  — Loads and saves the app's stable identity and single trust record.
+  - L137 `AgentsPairingStore({ AgentsSecureKeyValueStore? backend, Uuid? uuid, SupabasePairingSync? cloudSync, }) : _store = backend ?? const FlutterSecureKeyValueStore(), _uuid = uuid ?? const Uuid(), _cloudSync = cloudSync ?? const SupabasePairingSync()`
+  - L145 `static const String _kDeviceId = 'cowork_device_id'`
+  - L146 `static const String _kDeviceSeed = 'cowork_device_seed'`
+  - L147 `static const String _kPairing = 'cowork_pairing'`
+  - L149 `final AgentsSecureKeyValueStore _store`
+  - L150 `final Uuid _uuid`
+  - L155 `final SupabasePairingSync _cloudSync`  — Encrypted Supabase mirror. Every local [savePairing] is also pushed here
+  - L161 `AgentsSecureKeyValueStore get backend`  — The backend everything is written to. Exposed so a test can assert that the
+  - L165 `Future<AgentsDeviceIdentity> loadOrCreateIdentity()`  — Loads the stable device identity, creating and persisting a fresh one on
+  - L182 `Future<AgentsStoredPairing?> loadPairing()`  — The stored trust record, or null when the app has never paired (or the
+  - L194 `Future<void> savePairing(AgentsStoredPairing pairing)`  — Persists the trust record after a successful pairing, then mirrors it to
+  - L208 `Future<AgentsStoredPairing?> loadPairingFromCloud()`  — Loads the trust record from the encrypted Supabase mirror. Returns null
+  - L212 `Future<AgentsCloudPairingRead> readPairingFromCloud()`  — [loadPairingFromCloud] with the reason when there is no record.
+  - L215 `Future<bool> publishPairing(AgentsStoredPairing pairing)`
+  - L221 `Future<void> clearPairing()`  — Deletes the trust record — the "un-pair / forget" action. The stable device
+
+## lib/services/agents/agents_pairing_uri.dart  (195 Z.)
+- L30 `kDefaultAgentsRelayBase = 'wss://api.chuk.chat'`  — The relay every client dials unless an invite names another one.
+- L33 `kAgentsPairingUriScheme = 'cowork'`  — The scheme and host of the pairing URI. `cowork://pair?…`.
+- L34 `kAgentsPairingUriHost = 'pair'`
+- L37 `class AgentsPairingInvite`  — A parsed pairing invite: what to claim, what to prove, where to dial.
+  - L38 `const AgentsPairingInvite({ required this.pairingChannel, required this.pairingCode, required this.relayBase, })`
+  - L46 `final String pairingChannel`  — The host's high-entropy pairing channel — key material, never logged. It
+  - L50 `final String pairingCode`  — The §15 pairing code, in the exact `<channel>-<digits>` shape the
+  - L53 `final Uri relayBase`  — The relay base URL (`wss://api.chuk.chat`), without a path.
+  - L57 `String get codeDigits`  — The digits half of [pairingCode] — what the user sees printed as "the
+  - L64 `Uri toUri()`  — Re-renders the invite as the URI the host prints. The host owns the
+  - L78 `static AgentsPairingInvite? tryParse(String raw)`  — Parses a scanned QR payload, a pasted invite URI, or a typed pairing code.
+  - L89 `static String? _extractLink(String text)`  — Finds the invite link inside whatever was pasted. A person copying the
+  - L97 `static AgentsPairingInvite? _fromUri(String text)`
+  - L131 `static AgentsPairingInvite? _fromBareCode(String text)`  — The typed fallback: the pairing code alone. §15 defines it as the channel
+  - L145 `static String? _resolveCode(String channel, String code)`  — `k` is the digits, so the code is `<c>-<k>`. A host that already prints
+  - L156 `static Uri? _relayBaseFrom(String? raw)`  — Normalises `r` into a `ws://` / `wss://` base with no path. Accepts an
+  - L181 `bool operator ==(Object other)`
+  - L188 `int get hashCode`
+  - L193 `String toString()`  — Deliberately says nothing: the channel and the code are secrets, and a
+
+## lib/services/agents/agents_queued_marks.dart  (168 Z.)
+- L22 `typedef QueuedMarkReader = List<Map<String, dynamic>>? Function(String sessionKey)`  — Reads and writes the transcript. Tests replace both.
+- L24 `typedef QueuedMarkWriter = Future<void> Function(String sessionKey, List<Map<String, dynamic>> rows)`
+- L27 `class AgentsQueuedMarks`
+  - L28 `AgentsQueuedMarks._()`
+  - L31 `static QueuedMarkReader? readRows`
+  - L33 `static QueuedMarkWriter? writeRows`
+  - L41 `static Future<bool> markQueued({ required String sessionKey, required String prompt, required String queueId, })`  — Marks the newest user row whose text is [prompt] as `failed`, and links
+  - L63 `static Future<bool> clearMark({ required String sessionKey, required String queueId, })`  — Takes the mark off the row that carries [queueId]. Called when the prompt
+  - L86 `static Map<String, Map<String, String>> marksIn(List<ChatMessage> messages)`  — The status/queueId pairs the stored transcript holds right now, keyed by
+  - L104 `static bool isUserRole(String role)`  — The imported screen writes `sender: 'user'`; older rows say `me`.
+  - L106 `static String? _statusName(ChatMessageStatus? status)`
+  - L119 `static int _lastUserRow(List<Map<String, dynamic>> rows, String prompt)`
+  - L129 `static Future<bool> _mutate( String sessionKey, bool Function(List<Map<String, dynamic>> rows) change, )`
+  - L151 `static List<Map<String, dynamic>>? _readFromStore(String sessionKey)`
+  - L161 `static Future<void> _writeToStore( String sessionKey, List<Map<String, dynamic>> rows, )`
+
+## lib/services/agents/agents_reconnect.dart  (453 Z.)
+- L47 `enum AgentsReconnectRole`  — Which side of the reconnect a session drives. Same naming as §15 pairing.
+  - L49 `initiator`
+  - L52 `joiner`
+- L56 `enum AgentsReconnectState`  — Ordered lifecycle. Any use after [authenticated] / [aborted] is refused.
+  - L57 `created`
+  - L58 `helloSent`
+  - L59 `responseSent`
+  - L60 `authenticated`
+  - L61 `aborted`
+- L65 `enum AgentsReconnectRejection`  — Why a reconnect step was refused. Every value is a hard stop.
+  - L66 `wrongState`
+  - L67 `malformed`
+  - L68 `channelMismatch`
+  - L69 `wrongPeer`
+  - L70 `badSignature`
+- L75 `class AgentsReconnectException implements Exception`  — Thrown whenever a reconnect step is refused, carrying a machine-readable
+  - L76 `AgentsReconnectException(this.rejection, [this.detail])`
+  - L78 `final AgentsReconnectRejection rejection`
+  - L79 `final String? detail`
+  - L82 `String toString()`
+- L89 `class AgentsReconnectCrypto`  — Byte-exact protocol constants + pure helpers, shared by both roles and the
+  - L90 `const AgentsReconnectCrypto._()`
+  - L93 `static const String proofILabel = 'cowork/reconnect/proof-i'`  — Ed25519 proof label prefixes. One per signing role.
+  - L94 `static const String proofJLabel = 'cowork/reconnect/proof-j'`
+  - L97 `static const int nonceLength = 32`  — Reconnect nonce length in bytes.
+  - L99 `static final Ed25519 _ed25519 = Ed25519()`
+  - L101 `static Ed25519 get ed25519`
+  - L104 `static Uint8List transcript(List<int> nonceI, List<int> nonceJ)`  — `RT = N_i ‖ N_j` — 64 bytes, initiator nonce first, always.
+  - L112 `static Uint8List signedBytes( String label, String channelId, List<int> transcript, )`  — The exact bytes a role signs: `label ‖ channel_id ‖ RT`.
+  - L123 `static Uint8List randomNonce()`  — A fresh 32-byte nonce from the platform's secure RNG.
+- L139 `class AgentsReconnect`  — A single-use, code-free reconnect handshake state machine for one role.
+  - L140 `AgentsReconnect._({ required AgentsReconnectRole role, required String deviceId, required SimpleKeyPair deviceKeyPair, required String peerDeviceId, required SimplePublicKey peerPublicKey, required String channelId, required List<int> nonce, }) : _role = role, _deviceId = deviceId, _deviceKeyPair = deviceKeyPair, _peerDeviceId = peerDeviceId, _peerPublicKey = peerPublicKey, _channelId = channelId, _nonce = nonce`
+  - L156 `final AgentsReconnectRole _role`
+  - L157 `final String _deviceId`
+  - L158 `final SimpleKeyPair _deviceKeyPair`
+  - L159 `final String _peerDeviceId`
+  - L160 `final SimplePublicKey _peerPublicKey`
+  - L161 `final String _channelId`
+  - L162 `final List<int> _nonce`
+  - L164 `AgentsReconnectState _state = AgentsReconnectState.created`
+  - L165 `List<int>? _peerNonce`
+  - L173 `static AgentsReconnect initiator({ required String deviceId, required SimpleKeyPair deviceKeyPair, required String peerDeviceId, required SimplePublicKey peerPublicKey, required String channelId, List<int>? nonce, })`  — Start a reconnect as the host — it sends the first `hello`.
+  - L191 `static AgentsReconnect joiner({ required String deviceId, required SimpleKeyPair deviceKeyPair, required String peerDeviceId, required SimplePublicKey peerPublicKey, required String channelId, List<int>? nonce, })`  — Join a reconnect as the app — it answers the host's `hello`.
+  - L208 `static List<int> _resolveNonce(List<int>? nonce)`
+  - L218 `AgentsReconnectRole get role`
+  - L220 `AgentsReconnectState get state`
+  - L222 `String get channelId`
+  - L224 `String get peerDeviceId`
+  - L226 `bool get authenticated`
+  - L230 `void _require(AgentsReconnectState expected)`
+  - L246 `void _abort()`
+  - L251 `List<int> _currentTranscript()`
+  - L258 `Future<Uint8List> _sign(String label)`
+  - L271 `Future<void> _verifyPeer(String label, List<int> signature)`
+  - L287 `void _checkPeerDevice(Object? wireDeviceId)`
+  - L304 `Map<String, dynamic> createHello()`  — [initiator] Publish the challenge: our `device_id`, `channel_id` and fresh
+  - L324 `Future<Map<String, dynamic>> onResponse(Map<String, dynamic> msg)`  — [initiator] Verify the joiner's proof against the stored key, then sign our
+  - L355 `Future<Map<String, dynamic>> onHello(Map<String, dynamic> msg)`  — [joiner] Adopt the initiator's nonce, sign our proof, and answer with our
+  - L388 `Future<void> onConfirm(Map<String, dynamic> msg)`  — [joiner] Verify the initiator's proof against the stored key. On success
+  - L409 `List<int> _decodeNonce(Object? value)`
+  - L420 `static List<int> _decodeBytes(Object? value, String field)`
+  - L437 `static bool _constantTimeStringEquals(String a, String b)`
+- L451 `SimplePublicKey agentsReconnectPeerKeyFromBase64(String encoded)`  — Parses a peer public key stored in a trust record. Delegates the length +
+
+## lib/services/agents/agents_relay_client.dart  (3267 Z.)
+- L62 `abstract interface class RelaySocket`  — A minimal duplex socket seam: an inbound stream of text frames and a way to
+  - L65 `Stream<dynamic> get incoming`  — Frames arriving from the peer. Each element is the raw String (or bytes)
+  - L68 `void send(String data)`  — Sends one text frame to the peer.
+  - L71 `Future<void> close()`  — Closes the socket.
+- L76 `typedef RelaySocketConnector = Future<RelaySocket> Function(Uri url)`  — Opens a [RelaySocket] to [url]. Default is [defaultRelaySocketConnector];
+- L85 `Future<RelaySocket> defaultRelaySocketConnector(Uri url)`  — Production connector.
+- L93 `class _WebSocketRelaySocket implements RelaySocket`
+  - L94 `_WebSocketRelaySocket(this._channel)`
+  - L96 `final WebSocketChannel _channel`
+  - L99 `Stream<dynamic> get incoming`
+  - L102 `void send(String data)`
+  - L105 `Future<void> close()`
+- L111 `enum AgentsRelayPhase`  — Where the relay client is in its lifecycle. Drives the UI directly.
+  - L113 `idle`
+  - L116 `connecting`
+  - L119 `pairing`
+  - L122 `paired`
+  - L125 `error`
+  - L128 `closed`
+- L132 `@immutable class AgentsRelayState`  — Immutable snapshot of the relay client state, exposed as a [ValueListenable].
+  - L134 `const AgentsRelayState({ required this.phase, this.detail, this.sas, this.peerDeviceId, })`
+  - L141 `final AgentsRelayPhase phase`
+  - L144 `final String? detail`  — Human-readable status or error message (safe to show).
+  - L147 `final String? sas`  — The short authentication string, for optional on-screen reassurance.
+  - L150 `final String? peerDeviceId`  — The approved host device id, once paired.
+  - L152 `bool get isPaired`
+  - L155 `bool operator ==(Object other)`
+  - L163 `int get hashCode`
+- L167 `sealed class AgentsRelayInbound`  — A decoded, opened frame delivered from the executor into the thread.
+  - L168 `const AgentsRelayInbound()`
+- L183 `class AgentsRelayHeartbeat extends AgentsRelayInbound`  — The host says the run for [sessionKey] is still running (wire `heartbeat`).
+  - L184 `const AgentsRelayHeartbeat({ this.runId, this.sessionKey, this.seq = 0, this.elapsedSeconds, })`
+  - L190 `final String? runId`
+  - L191 `final String? sessionKey`
+  - L192 `final int seq`
+  - L193 `final double? elapsedSeconds`
+- L213 `class AgentsRelayTaskAck extends AgentsRelayInbound`  — The host says what it did with one `task` frame (wire `task_ack`).
+  - L214 `const AgentsRelayTaskAck({ required this.taskId, required this.status, this.sessionKey, this.runId, this.reason, })`
+  - L223 `final String taskId`  — The app's own id for the send, echoed back byte for byte.
+  - L226 `final String status`  — `accepted`, `duplicate` or `rejected`.
+  - L229 `final String? sessionKey`  — The thread the task belongs to; null on a host that leaves the key off.
+  - L234 `final String? runId`  — The executor's id for the work, when the host knows one (accepted, and
+  - L238 `final String? reason`  — Short slug, only on a rejection: `not_provisioned`, `queue_full` or
+  - L241 `bool get isHeld`  — True while the host holds the task: nothing to re-send, nothing to draw.
+  - L245 `bool get isDuplicate`  — True when the host already had this task. The app must stay quiet: the
+  - L249 `bool get isRejected`  — True when the host refused the task. This is a real failure, and the
+  - L253 `bool get isRetryable`  — The one rejection the app can do something about: re-provision, then send
+  - L256 `static AgentsRelayTaskAck? fromPayload(Map<String, dynamic> payload)`  — Null for a frame that names no task — there would be nothing to clear.
+- L276 `class AgentsRelayDelta extends AgentsRelayInbound`  — An assistant text delta.
+  - L277 `const AgentsRelayDelta( this.text, { this.replay = false, this.mid, this.sentAt, })`
+  - L283 `final String text`
+  - L284 `final DateTime? sentAt`
+  - L288 `final bool replay`  — True when this delta is part of a transcript replay, not a live run. The
+  - L295 `final int? mid`  — The message-store row id of this event, the replay cursor. Every replayed
+- L302 `class AgentsRelayUser extends AgentsRelayInbound`  — A user turn, only ever produced by a transcript replay (the server is the
+  - L303 `const AgentsRelayUser(this.text, {this.replay = true, this.mid, this.sentAt})`
+  - L304 `final String text`
+  - L305 `final DateTime? sentAt`
+  - L308 `final bool replay`  — Always true: a user event exists only in a replay stream.
+  - L312 `final int? mid`  — The message-store row id of this turn — the replay cursor. See
+- L321 `class AgentsRelayReasoning extends AgentsRelayInbound`  — A reasoning delta — the model's thinking, which is a separate channel from
+  - L322 `const AgentsRelayReasoning( this.text, { this.replay = false, this.mid, this.sentAt, })`
+  - L328 `final String text`
+  - L329 `final DateTime? sentAt`
+  - L334 `final bool replay`  — True when this is a stored turn re-streamed by a replay, not the model
+  - L337 `final int? mid`  — The replay cursor of the row this came from, when the host sent one.
+- L342 `DateTime? epochSecondsToDateTime(Object? value)`  — A host clock value (unix seconds, float) as a local [DateTime]. Null for
+- L357 `class AgentsRelayTool extends AgentsRelayInbound`  — One tool call that ran, as reported by the executor.
+  - L358 `const AgentsRelayTool( this.name, { this.status, this.arguments, this.result, this.detail, this.exitCode, this.timedOut = false, this.duration, this.failed = false, this.replay = false, this.mid, this.argumentMap, this.callId, this.startedAt, this.completedAt, this.raw = const {}, })`
+  - L378 `factory AgentsRelayTool.fromPayload(Map<String, dynamic> payload)`  — Builds a tool line from a decoded `tool` payload.
+  - L431 `final String name`
+  - L432 `final String? status`
+  - L436 `final String? arguments`  — Short form of what the tool was called with (for `run_command`: the
+  - L439 `final String? result`  — Short form of what came back.
+  - L442 `final String? detail`  — The full output, shown only when the line is expanded.
+  - L444 `final int? exitCode`
+  - L445 `final bool timedOut`
+  - L448 `final Duration? duration`  — Wall-clock duration, only when the host reported one.
+  - L452 `final bool failed`  — True when the protocol says the call failed (non-zero exit, timeout, or an
+  - L455 `final bool replay`  — True when this tool line is part of a transcript replay, not a live run.
+  - L459 `final int? mid`  — The message-store row id of this call — the replay cursor. See
+  - L463 `final Map<String, dynamic>? argumentMap`  — The native arguments as the model sent them, when the host forwarded
+  - L467 `final String? callId`  — The host's id for this call, when it sent one. Live and replay carry the
+  - L471 `final DateTime? startedAt`  — The host's clock for the call: when it was dispatched and when its result
+  - L472 `final DateTime? completedAt`
+  - L474 `final Map<String, dynamic> raw`
+  - L476 `static String? _asText(Object? value)`
+  - L478 `static int? _asInt(Object? value)`
+  - L485 `static Duration? _asDuration(Object? value)`
+- L501 `class AgentsRelayFile extends AgentsRelayInbound`  — A file the agent produced and pushed into the thread (§9,
+  - L502 `const AgentsRelayFile({ required this.name, required this.mimeType, required this.declaredSize, this.bytes, this.error, this.replay = false, this.mid, this.document, })`
+  - L513 `final String name`
+  - L514 `final String mimeType`
+  - L515 `final int? declaredSize`
+  - L516 `final Uint8List? bytes`
+  - L517 `final String? error`
+  - L518 `final Map<String, dynamic>? document`
+  - L523 `final bool replay`  — True when this file came back from the host's transcript, not from a
+  - L524 `final int? mid`
+  - L526 `bool get isImage`
+  - L527 `bool get isValid`
+- L531 `class AgentsRelayDone extends AgentsRelayInbound`  — The run finished. The executor reports why, and how many rounds it took.
+  - L532 `const AgentsRelayDone({ this.finalAnswer, this.sessionKey, this.hostNotified = false, this.reason, this.iterations, this.tokensSpent, this.replay = false, this.runId, this.whileAway = false, this.startedAt, this.finishedAt, this.firstMid, this.lastMid, this.hasMore = false, this.oldestMid, this.pageBeforeId, })`
+  - L552 `final String? finalAnswer`  — The loop's own final answer, when it sent one.
+  - L553 `final String? sessionKey`
+  - L554 `final bool hostNotified`
+  - L558 `final DateTime? startedAt`  — The run's clock on the host (docs/WIRE_CONTRACT.md, "Run timestamps on
+  - L559 `final DateTime? finishedAt`
+  - L562 `Duration? get workedFor`  — The run's length as the host measured it, when both clocks came.
+  - L572 `final int? firstMid`  — The message rows of this run. [lastMid] on a LIVE `done` is where the
+  - L573 `final int? lastMid`
+  - L579 `final bool hasMore`  — Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx), on the
+  - L580 `final int? oldestMid`
+  - L581 `final int? pageBeforeId`
+  - L585 `final String? reason`  — The termination reason the runtime reported (`finished`, `estop`,
+  - L588 `final int? iterations`  — How many rounds the loop ran.
+  - L592 `final int? tokensSpent`  — Tokens the run spent (prompt + completion), for a cost readout. Null for a
+  - L598 `bool get wasStopped`  — True when the run ended because the kill switch fired, not because the
+  - L604 `final bool replay`  — True when this ``done`` closes a transcript replay, not a live run. The UI
+  - L607 `bool get isReplay`  — True when the closed stream was a replay, by flag or by reason.
+  - L615 `bool get isHistoryEnd`  — True only for the history-end marker that closes a replay stream
+  - L620 `final String? runId`  — The host's id for the run this `done` closes, when it reported one. The
+  - L624 `final bool whileAway`  — True when a replayed run terminal finished with no app attached (the host
+- L634 `class AgentsRelayRunState extends AgentsRelayInbound`  — The host's answer to a `replay`: is a run for this session in flight right
+  - L635 `const AgentsRelayRunState({ required this.sessionKey, required this.state, this.runId, this.startedAt, this.prompt, this.browserOpen, this.vncAvailable = false, })`
+  - L648 `static AgentsRelayRunState? fromPayload(Map<String, dynamic> payload)`  — Builds a run state from a decoded `run_state` payload, or null when the
+  - L668 `final String sessionKey`  — The thread this state is about — the same key the replay named.
+  - L672 `final String state`  — The raw state string the host reported: `running` or `idle`. Read from the
+  - L675 `final String? runId`  — The in-flight run's id, when one is running.
+  - L678 `final double? startedAt`  — Unix seconds when the run started, for an elapsed readout.
+  - L682 `final String? prompt`  — The prompt the in-flight run is working on, so the app can show what it is
+  - L686 `final bool? browserOpen`  — Whether the agent has a browser open, as the host sees it (Bead
+  - L687 `final bool vncAvailable`
+  - L690 `bool get isRunning`  — True when a run for [sessionKey] is in flight on the host.
+- L698 `class AgentsRelaySubagent extends AgentsRelayInbound`  — A child agent's lifecycle step (§7.6). Only state transitions surface here —
+  - L699 `const AgentsRelaySubagent({ required this.subagentId, required this.title, required this.state, this.result, this.error, this.tokensSpent, this.replay = false, this.mid, })`
+  - L713 `final bool replay`  — True when this state came back from the host's transcript (one frame per
+  - L714 `final int? mid`
+  - L717 `final String subagentId`  — The child's stable id (`sa_…`).
+  - L720 `final String title`  — The child's title, as the parent named it. May be empty.
+  - L724 `final String state`  — The lifecycle state string the runtime reported: `queued`, `running`,
+  - L727 `final String? result`  — The child's final result, on success. Null until then.
+  - L730 `final String? error`  — The child's error text, on failure. Null otherwise.
+  - L734 `final int? tokensSpent`  — Tokens (prompt + completion) the child spent. Null when the runtime did
+  - L737 `bool get isTerminal`  — True once the child has reached a terminal state.
+- L745 `class AgentsRelayAutomation extends AgentsRelayInbound`  — One state change of an automation (docs/WIRE_CONTRACT.md, "Automations"):
+  - L746 `const AgentsRelayAutomation({ required this.event, required this.automation, this.runId, this.reason, this.at, this.replay = false, this.mid, })`
+  - L757 `final String event`  — Which change this is.
+  - L760 `final AgentsAutomation automation`  — The automation's whole state after the change.
+  - L763 `final String? runId`  — On `fired`: the run the automation started.
+  - L766 `final String? reason`  — On `fired` from a watcher: the reason the script gave `trigger()`.
+  - L769 `final DateTime? at`  — When the host recorded the change.
+  - L771 `final bool replay`
+  - L772 `final int? mid`
+  - L776 `static AgentsRelayAutomation? fromPayload(Map<String, dynamic> payload)`  — Builds one from a decoded `automation` payload, or null when it names
+- L796 `class AgentsRelayAutomationList extends AgentsRelayInbound`  — The host's answer to an `automation_list` request: every automation of
+  - L797 `const AgentsRelayAutomationList({required this.automations, this.sessionKey})`
+  - L799 `final List<AgentsAutomation> automations`
+  - L800 `final String? sessionKey`
+  - L802 `static AgentsRelayAutomationList fromPayload(Map<String, dynamic> payload)`
+- L826 `class AgentsRelaySkillsList extends AgentsRelayInbound`  — The host's answer to a `skills_list` request or a `skill_control`
+  - L827 `const AgentsRelaySkillsList({ required this.skills, this.errors = const <String>[], })`
+  - L832 `final List<AgentsSkill> skills`
+  - L833 `final List<String> errors`
+  - L835 `static AgentsRelaySkillsList fromPayload(Map<String, dynamic> payload)`
+- L864 `@immutable class AgentsRelayAgentStatus`  — What one coworker runs on, has spent and how long it has worked
+  - L866 `const AgentsRelayAgentStatus({ required this.sessionKey, this.model, this.tokens, this.runtime, this.sandbox, })`
+  - L874 `final String sessionKey`
+  - L877 `final Map<String, dynamic>? model`  — `{id, provider?, reasoning_effort?, source}`.
+  - L880 `final Map<String, dynamic>? tokens`  — `{total, runs, last_run}`.
+  - L883 `final Map<String, dynamic>? runtime`  — `{started_at, active_seconds, runs, running, current_seconds?}`.
+  - L886 `final Map<String, dynamic>? sandbox`  — `{kind, container?, container_id?, workspace?}`.
+  - L888 `static Map<String, dynamic>? _block(Object? value)`
+  - L893 `static AgentsRelayAgentStatus fromPayload(Map<String, dynamic> payload)`
+- L908 `@immutable class AgentsHostAgentName`  — One coworker name the host keeps for this pairing (bead cowork-817,
+  - L910 `const AgentsHostAgentName({ required this.agentId, required this.name, this.host = false, })`
+  - L916 `final String agentId`
+  - L917 `final String name`
+  - L918 `final bool host`
+  - L921 `bool operator ==(Object other)`
+  - L928 `int get hashCode`
+- L933 `class AgentsRelayAgentList extends AgentsRelayInbound`  — The host's `agent_list`: every coworker name it keeps, sent once per attach
+  - L934 `const AgentsRelayAgentList({required this.agents})`
+  - L936 `final List<AgentsHostAgentName> agents`
+  - L938 `static AgentsRelayAgentList fromPayload(Map<String, dynamic> payload)`
+- L963 `class AgentsRelayRoomTurn extends AgentsRelayInbound`  — One member's turn in a group room (§16.1). Streamed live as the room talks.
+  - L964 `const AgentsRelayRoomTurn({ required this.roomId, required this.round, required this.agentId, required this.handle, required this.text, })`
+  - L974 `final String roomId`  — Which room this turn belongs to, so the app routes it to the right open
+  - L976 `final int round`
+  - L977 `final String agentId`
+  - L978 `final String handle`
+  - L979 `final String text`
+- L985 `class AgentsRelayRoomDone extends AgentsRelayInbound`  — A group-room exchange ended. [reason] is a raw stop string from the host
+  - L986 `const AgentsRelayRoomDone({ required this.roomId, required this.reason, this.messagesSent, this.rounds, })`
+  - L994 `final String roomId`  — Which room ended.
+  - L996 `final String reason`
+  - L997 `final int? messagesSent`
+  - L998 `final int? rounds`
+- L1003 `class AgentsRelayRoomHistory extends AgentsRelayInbound`  — A room's stored transcript, replayed on request (§16.1). Replaces whatever
+  - L1004 `const AgentsRelayRoomHistory({required this.roomId, required this.turns})`
+  - L1006 `final String roomId`
+  - L1007 `final List<AgentsRelayRoomTurn> turns`
+- L1011 `class AgentsRelayRunError extends AgentsRelayInbound`  — The executor reported an error.
+  - L1012 `const AgentsRelayRunError(this.message)`
+  - L1013 `final String message`
+- L1022 `class AgentsRelayDebugContext extends AgentsRelayInbound`  — The raw context the executor sent to the model for one round, echoed back
+  - L1023 `const AgentsRelayDebugContext({ required this.sessionKey, required this.payload, this.round, })`
+  - L1030 `final String sessionKey`  — The session the context belongs to — the same key the task was sent with.
+  - L1033 `final int? round`  — Which round of the run this context is for, when the host reported one.
+  - L1037 `final Map<String, dynamic> payload`  — The whole decoded `debug_context` payload (messages, stats, everything),
+- L1042 `class AgentsRelayBrowserData extends AgentsRelayInbound`  — One raw RFB byte chunk of the live browser view (§9.1). Opaque on purpose —
+  - L1043 `const AgentsRelayBrowserData(this.bytes)`
+  - L1044 `final Uint8List bytes`
+- L1048 `class AgentsRelayBrowserView extends AgentsRelayInbound`  — Status of the live browser view: `started`, `stopped`, or `error` (§9.1).
+  - L1049 `const AgentsRelayBrowserView({ required this.status, this.message = '', this.password, this.vncAvailable = false, this.reason = '', })`
+  - L1056 `final String status`
+  - L1057 `final String message`
+  - L1066 `final String reason`  — The machine-readable half of [message] (`docs/WIRE_CONTRACT.md`,
+  - L1069 `final String? password`  — Per-view VNC secret, only on `started` (§9.1 hardening). Never log it.
+  - L1070 `final bool vncAvailable`
+- L1078 `class AgentsRelayApprovalRequest extends AgentsRelayInbound`  — The executor is asking the user to approve one here.now publish before it
+  - L1079 `const AgentsRelayApprovalRequest({ required this.approvalId, required this.action, required this.path, required this.name, required this.fileCount, required this.totalBytes, required this.baseUrl, required this.public, this.replay = false, this.mid, this.decision, this.decisionReason, this.sessionKey, })`
+  - L1099 `final String? sessionKey`  — The thread whose run is waiting on this decision, when the host says
+  - L1106 `final bool replay`  — True when the request came back from the host's transcript. A replayed
+  - L1107 `final int? mid`
+  - L1110 `final String? decision`  — `approved` / `denied` once the host knows the outcome; null while open.
+  - L1113 `final String? decisionReason`  — `user` / `timeout` / `stopped`; null while open.
+  - L1115 `bool get isDecided`
+  - L1116 `bool get isApproved`
+  - L1121 `static AgentsRelayApprovalRequest? fromPayload(Map<String, dynamic> payload)`  — Builds an approval request from a decoded `approval_request` payload, or
+  - L1156 `final String approvalId`  — Correlates the decision back to this request.
+  - L1159 `final String action`  — What is being approved (today always `herenow_publish`).
+  - L1162 `final String path`  — The workspace path going out, and a friendly name for it.
+  - L1163 `final String name`
+  - L1166 `final int fileCount`  — How much is going out: file count and total byte size.
+  - L1167 `final int totalBytes`
+  - L1170 `final String baseUrl`  — The here.now host the site will live under.
+  - L1174 `final bool public`  — True when the site will be publicly viewable by anyone with the link
+- L1183 `class AgentsRelaySecretRequest extends AgentsRelayInbound`  — The model asked for secrets by name (`request_secrets`) and the run is
+  - L1184 `const AgentsRelaySecretRequest({ required this.requestId, required this.names, this.purpose = '', this.sessionKey, })`
+  - L1192 `final String requestId`  — Correlates the `secrets` answer back to this request.
+  - L1195 `final List<String> names`  — Environment-variable style names, in the order the model asked.
+  - L1198 `final String purpose`  — The model's one-line reason, shown in the card.
+  - L1201 `final String? sessionKey`  — The thread whose run waits; null on an older host means this socket's.
+  - L1205 `static AgentsRelaySecretRequest? fromPayload(Map<String, dynamic> payload)`  — Builds a request from a decoded `secret_request` payload, or null when
+- L1233 `kReplayPageSize = 200`  — Read-only surface the UI depends on, so widget tests can drive a fake
+- L1235 `abstract interface class AgentsRelayController`
+  - L1237 `ValueListenable<AgentsRelayState> get state`  — Current lifecycle state; rebuild the UI when it changes.
+  - L1240 `Stream<AgentsRelayInbound> get inbound`  — Opened frames from the executor (deltas, tools, done, error).
+  - L1245 `Future<void> connect({required Uri hostUrl, required String pairingCode})`  — Connects, joins [pairingCode]'s channel, and runs the joiner ceremony
+  - L1251 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`  — Reconnects to an already-paired host with NO code, running the mutual
+  - L1258 `AgentsStoredPairing? get establishedTrust`  — The trust established by the last successful [connect] / [reconnect], for
+  - L1261 `Future<void> provisionAccount(AccountSession session)`  — Hands the executor the account token over the sealed channel.
+  - L1295 `Future<void> sendTask( String prompt, { String sessionKey, String? modelId, String? providerSlug, String? reasoningEffort, bool debug, bool regenerate, String? taskId, })`  — Seals and sends a task prompt. [sessionKey] selects the thread on the
+  - L1313 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent, })`  — Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
+  - L1321 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`  — Flips [roomId]'s `agent_to_agent` policy on the host (§16.1).
+  - L1325 `Future<void> sendRoomTask(String roomId, String message)`  — Seals and sends a group-room task (§16.1): the host looks [roomId]'s
+  - L1328 `Future<void> deleteRoom(String roomId)`  — Tells the host to forget [roomId] — drop it and its transcript (§16.1).
+  - L1331 `Future<void> renameRoom(String roomId, String name)`  — Renames [roomId] on the host (§16.1).
+  - L1336 `Future<void> createAgent(String agentId, String name)`  — Registers a coworker the app created on the host's roster, so its name
+  - L1339 `Future<void> renameAgent(String agentId, String name)`  — Renames a coworker on the host's roster (bead cowork-817; `agent_rename`).
+  - L1343 `Future<void> requestAgentList()`  — Asks the host for every coworker name it keeps (`agent_list` request;
+  - L1346 `Future<void> addRoomMember(String roomId, String agentId, String handle)`  — Adds a member to [roomId] on the host (§16.1).
+  - L1349 `Future<void> removeRoomMember(String roomId, String agentId)`  — Removes a member from [roomId] on the host (§16.1).
+  - L1353 `Future<void> requestRoomHistory(String roomId)`  — Asks the host to replay [roomId]'s stored transcript; the host answers with
+  - L1367 `Future<void> requestStop({String sessionKey})`  — Asks the executor to abort the run in [sessionKey] — the controller side of
+  - L1391 `Future<void> requestReplay({ String sessionKey, int afterId, int beforeId, int limit, })`  — Ask the executor to re-stream [sessionKey]'s whole stored transcript (the
+  - L1404 `Future<void> sendRunAck(String runId)`  — Tell the host the app rendered the live `done` of [runId] (§ run
+  - L1414 `Future<void> startBrowserView({String? sessionKey})`  — Ask the executor to start streaming the sandbox browser's screen over the
+  - L1417 `Future<void> stopBrowserView()`  — Ask the executor to stop the live browser view and tear the stream down.
+  - L1421 `Future<void> sendBrowserData(Uint8List bytes)`  — Forward raw RFB client bytes (the viewer's handshake and every pointer/key
+  - L1426 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, })`  — Answer a [AgentsRelayApprovalRequest]: approve or deny one here.now
+  - L1435 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`  — Hand the host the user's WHOLE secret set (docs/WIRE_CONTRACT.md,
+  - L1442 `Future<void> dispose()`  — Tears the client down.
+- L1448 `class AgentsRelayDocuments extends AgentsRelayInbound`  — The real transport. Also an [ExecutorTransport]: [provisionAccount] shapes
+  - L1449 `const AgentsRelayDocuments(this.payload)`
+  - L1450 `final Map<String, dynamic> payload`
+- L1453 `abstract interface class AgentsDocumentsControl`
+  - L1454 `Future<void> requestDocuments(String sessionKey, {String? id})`
+- L1460 `abstract interface class AgentsAgentStatusControl`  — Asks the host what a coworker runs on and what it has spent
+  - L1461 `Future<void> requestAgentStatus(String sessionKey)`
+  - L1467 `Stream<AgentsRelayAgentStatus> get agentStatus`  — The host's answers, and the push it sends when a run of that coworker
+- L1470 `class AgentsRelayClient implements AgentsRelayController, ExecutorTransport, AgentsAutomationControl, AgentsDocumentsControl, AgentsAgentStatusControl, AgentsSkillsControl, McpProbeControl`
+  - L1479 `AgentsRelayClient({ required String deviceId, required SimpleKeyPair signingKeyPair, RelaySocketConnector connector = defaultRelaySocketConnector, AgentsApprovedDevices? approvedDevices, int keyVersion = 1, int Function()? nowMs, Duration pairingTimeout = const Duration(seconds: 30), McpStore? mcpStore, HereNowStore? hereNowStore, Future<void> Function()? secretsForwarder, this.onTrustUpdated, Iterable<String> Function()? replaySessions, AccountSessionSource? sessionSource, Stream<AuthState>? authChanges, Future<AccountSession?> Function(String refreshToken)? sessionAdopter, SessionRefreshScheduler? scheduler, AgentsHostSessionMinter? hostSessionMinter, }) : _deviceId = deviceId, _signingKeyPair = signingKeyPair, _connector = connector, _approvedDevices = approvedDevices ?? AgentsApprovedDevices.empty(), _keyVersion = keyVersion, _nowMs = nowMs, _pairingTimeout = pairingTimeout, _mcpStore = mcpStore, _hereNowStore = hereNowStore, _secretsForwarder = secretsForwarder, _replaySessions = replaySessions, _sessionSource = sessionSource, _authChanges = authChanges, _sessionAdopter = sessionAdopter, _hostSessionMinter = hostSessionMinter, _scheduler = scheduler ?? SessionRefreshScheduler.instance`
+  - L1514 `final String _deviceId`
+  - L1515 `final Future<void> Function(AgentsStoredPairing trust)? onTrustUpdated`
+  - L1516 `final SimpleKeyPair _signingKeyPair`
+  - L1517 `final RelaySocketConnector _connector`
+  - L1518 `final AgentsApprovedDevices _approvedDevices`
+  - L1526 `final McpStore? _mcpStore`  — The user's UI-configured MCP servers. When set, each task frame carries the
+  - L1536 `static Future<int> Function(Map<String, dynamic> payload) mcpCredentialsSink = McpService.applyRotatedCredentials`  — Where an `mcp_credentials` frame is applied. Swappable in tests so the
+  - L1543 `static Future<int> Function(Map<String, dynamic> payload) mcpToolsSink = McpService.applyToolsFrame`  — Where an `mcp_tools` frame is applied. Same seam as the credentials sink,
+  - L1551 `final HereNowStore? _hereNowStore`  — The user's here.now publishing setting. When the connector is enabled, each
+  - L1557 `final Future<void> Function()? _secretsForwarder`  — Forwards the user's secret set after every provision
+  - L1565 `final Iterable<String> Function()? _replaySessions`  — Supplies the session keys whose transcript must be replayed after a
+  - L1570 `final Set<String> _autoReplayed = <String>{}`  — Session keys already auto-replayed on the current socket, so a provider that
+  - L1582 `Completer<void>? _provisionGate`  — Completes once this connection has provisioned the account, or once
+  - L1585 `static const Duration _provisionGateTimeout = Duration(seconds: 10)`  — How long a replay waits for the account provision before going anyway.
+  - L1586 `final int _keyVersion`
+  - L1587 `final int Function()? _nowMs`
+  - L1588 `final Duration _pairingTimeout`
+  - L1604 `final AccountSessionSource? _sessionSource`  — Token freshness (docs/WIRE_CONTRACT.md, bead cowork-c91). The host must
+  - L1605 `final Stream<AuthState>? _authChanges`
+  - L1606 `StreamSubscription<AuthState>? _authSub`
+  - L1612 `final Future<AccountSession?> Function(String refreshToken)? _sessionAdopter`  — Adopts a refresh token the host rotated while no app was attached
+  - L1623 `Future<AccountSession?> Function(String)? _effectiveSessionAdopter({ String? accessToken, })`  — [accessToken] is the rotated pair's access token. Handed it, gotrue
+  - L1643 `String? _provisionedAccessToken`  — The access token the host was last given, so an unchanged token is not
+  - L1648 `final AgentsHostSessionMinter? _hostSessionMinter`  — Mints a session of the host's own (`POST /v2/agents/host-session`) when
+  - L1651 `Future<void>? _hostSessionInFlight`  — The mint in flight, so two requests in a row cost one API call.
+  - L1655 `DateTime? _hostSessionSentAt`  — When a host session was last handed over. The host asks at most every
+  - L1658 `static const Duration _hostSessionMinInterval = Duration(seconds: 20)`  — The shortest gap between two mints for this client.
+  - L1664 `final SessionRefreshScheduler _scheduler`  — The app's token-refresh scheduler (bead cowork-2n1). This client tells it
+  - L1666 `late final Future<void> Function() _reattachForScheduler = _reattach`
+  - L1670 `Future<void> _reattach()`  — Reconnects with the stored trust (no code) and re-provisions the current
+  - L1681 `void _publishAttachment(AgentsRelayPhase phase)`
+  - L1698 `AccountSessionSource? get _effectiveSessionSource`
+  - L1706 `Stream<AuthState>? get _effectiveAuthChanges`
+  - L1714 `final ValueNotifier<AgentsRelayState> _state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.idle), )`
+  - L1718 `final StreamController<AgentsRelayInbound> _inbound = StreamController<AgentsRelayInbound>.broadcast()`
+  - L1721 `RelaySocket? _socket`
+  - L1722 `StreamSubscription<dynamic>? _sub`
+  - L1723 `AgentsPairing? _pairing`
+  - L1724 `AgentsReconnect? _reconnect`
+  - L1725 `AgentsControllerSession? _controllerSession`
+  - L1726 `AgentsStoredPairing? _establishedTrust`
+  - L1732 `String? _peerDeviceId`  — The authenticated host device, set by BOTH the first pairing and a code-free
+  - L1733 `Completer<void>? _pairingDone`
+  - L1736 `Future<void> _pairingQueue = Future<void>.value()`  — Serialises inbound pairing steps so awaited transitions never overlap.
+  - L1737 `AgentsFrameSealer? _sealer`
+  - L1738 `AgentsFrameOpener? _opener`
+  - L1739 `bool _disposed = false`
+  - L1742 `ValueListenable<AgentsRelayState> get state`
+  - L1745 `Stream<AgentsRelayInbound> get inbound`
+  - L1747 `final StreamController<AgentsRelayAgentStatus> _agentStatus = StreamController<AgentsRelayAgentStatus>.broadcast()`
+  - L1751 `Stream<AgentsRelayAgentStatus> get agentStatus`
+  - L1754 `AgentsStoredPairing? get establishedTrust`
+  - L1757 `static String channelIdOf(String pairingCode)`  — The channel id is everything before the last '-' in the pairing code.
+  - L1766 `Future<void> connect({ required Uri hostUrl, required String pairingCode, })`
+  - L1915 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
+  - L2020 `Future<void> provisionAccount(AccountSession session)`
+  - L2051 `void _startAuthWatch()`
+  - L2058 `void _onAuthChange(AuthState state)`
+  - L2072 `Future<void> _reprovision(AccountSession session)`  — Send [session] to the host unless it is the token the host already holds.
+  - L2084 `Future<void> _answerReprovisionRequest(Map<String, dynamic> payload)`  — The host cannot use its token (expired, or its own refresh failed) and
+  - L2109 `Future<void> _adoptRotatedSession(Map<String, dynamic> payload)`  — The host refreshed on its own while no app was attached. Supabase rotates
+  - L2157 `Future<void> _answerHostSessionRequest()`  — The host asked for an account session of its own
+  - L2172 `Future<void> _mintAndSendHostSession()`
+  - L2209 `AgentsHostSessionMinter? get _effectiveHostSessionMinter`
+  - L2219 `static Future<Uri> _reconnectDialUrl( Uri hostUrl, AgentsStoredPairing pairing, )`  — The URL a reconnect dials. For the cloud relay it carries the heal
+  - L2245 `Future<void> sendAuthentication( ExecutorHandle target, Map<String, dynamic> payload, )`
+  - L2251 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, })`
+  - L2305 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
+  - L2321 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
+  - L2329 `Future<void> sendRoomTask(String roomId, String message)`
+  - L2337 `Future<void> deleteRoom(String roomId)`
+  - L2343 `Future<void> renameRoom(String roomId, String name)`
+  - L2348 `Future<void> createAgent(String agentId, String name)`
+  - L2356 `Future<void> renameAgent(String agentId, String name)`
+  - L2364 `Future<void> requestAgentList()`
+  - L2375 `Future<void> addRoomMember(String roomId, String agentId, String handle)`
+  - L2384 `Future<void> removeRoomMember(String roomId, String agentId)`
+  - L2392 `Future<void> requestRoomHistory(String roomId)`
+  - L2397 `Future<void> requestStop({String sessionKey = 'default'})`
+  - L2407 `void _openProvisionGate()`  — Let any replay waiting on the account provision proceed. Idempotent.
+  - L2415 `Future<void> _awaitProvisionGate()`  — Waits for the account provision of this connection, or for
+  - L2426 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
+  - L2455 `Future<void> sendRunAck(String runId)`
+  - L2464 `void _maybeAutoReplay()`  — Send one `replay` per session key the provider reports, at most once per
+  - L2475 `Future<void> startBrowserView({String? sessionKey})`
+  - L2483 `Future<void> stopBrowserView()`
+  - L2487 `Future<void> sendBrowserData(Uint8List bytes)`
+  - L2492 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, })`
+  - L2505 `Future<void> sendAutomationControl({ required String id, required String action, })`
+  - L2518 `Future<void> requestAutomationList({String? sessionKey})`
+  - L2526 `Future<void> sendSkillControl({ required String name, required String action, })`
+  - L2539 `Future<void> requestSkillsList()`
+  - L2543 `Future<void> probeMcpServers(List<Map<String, dynamic>> servers)`
+  - L2552 `Future<void> requestAgentStatus(String sessionKey)`
+  - L2561 `Future<void> requestDocuments(String sessionKey, {String? id})`
+  - L2569 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
+  - L2587 `Future<void> dispose()`
+  - L2614 `void _onData(dynamic raw)`
+  - L2669 `Future<void> _handleReconnect(Map<String, dynamic> env)`
+  - L2692 `Future<void> _handlePairing(Map<String, dynamic> env)`
+  - L2721 `void _maybeCompletePairing()`
+  - L2728 `void _sendPairing(String step, Map<String, dynamic> data)`
+  - L2739 `Future<void> _handleFrame(Map<String, dynamic> env)`
+  - L2770 `void _dispatch(Map<String, dynamic> payload)`
+  - L3001 `static AgentsRelaySubagent? _subagentFromPayload( Map<String, dynamic> payload, )`  — Turns a `subagent` frame into a [AgentsRelaySubagent], or null when the
+  - L3030 `static AgentsRelayRoomTurn? _roomTurnFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_turn` frame into a [AgentsRelayRoomTurn], or null when a
+  - L3056 `static AgentsRelayRoomHistory? _roomHistoryFromPayload( Map<String, dynamic> payload, )`  — Turns a `room_history` frame into a [AgentsRelayRoomHistory], or null when
+  - L3087 `static AgentsRelayFile _fileFromPayload(Map<String, dynamic> payload)`  — Turns a `file` payload into a [AgentsRelayFile], decoding the base64 body
+  - L3168 `Future<void> _sendChain = Future<void>.value()`
+  - L3170 `Future<void> _sendFramePayload(Map<String, dynamic> payload)`
+  - L3179 `static Future<void> Function(Map<String, dynamic> payload)? debugBeforeSeal`  — Test seam: awaited before each seal so a test can delay or fail one send
+  - L3181 `Future<void> _sendFramePayloadNow(Map<String, dynamic> payload)`
+  - L3200 `void _onSocketDone()`
+  - L3229 `void _failPairing(Object error)`
+  - L3235 `void _fail(String detail)`
+  - L3239 `Future<void> _closeSocket()`
+  - L3246 `void _set(AgentsRelayState next)`
+  - L3252 `static String _pairingErrorText(Object error)`
+  - L3261 `static String _frameToWire(AgentsFrame frame)`  — A sealed frame as it rides the relay: base64 of the frame's JSON text.
+  - L3264 `static AgentsFrame _frameFromWire(String wire)`
+
+## lib/services/agents/agents_relay_link.dart  (89 Z.)
+- L30 `class AgentsRelayLink`  — Process-wide singleton joining the relay transport to the imported chat UI.
+  - L31 `AgentsRelayLink._()`
+  - L35 `static final AgentsRelayLink instance = AgentsRelayLink._()`  — The one instance every caller uses. Tests reach for it too, and call
+  - L39 `final ValueNotifier<AgentsRelayController?> controller = ValueNotifier<AgentsRelayController?>(null)`  — The live transport, or null while nothing is connected. A [ValueNotifier]
+  - L44 `final ValueNotifier<String> sessionKey = ValueNotifier<String>('default')`  — The thread the app is currently pointed at — the executor's `session_key`.
+  - L49 `final StreamController<AgentsRelayInbound> _fanout = StreamController<AgentsRelayInbound>.broadcast(sync: true)`  — The long-lived fan-out. Never closed, never replaced: an open subscription
+  - L52 `StreamSubscription<AgentsRelayInbound>? _upstream`
+  - L55 `Stream<AgentsRelayInbound> get inbound`  — Everything the host says, from whichever controller is bound right now.
+  - L61 `void bind(AgentsRelayController next)`  — Points the link at [next]: the previous upstream subscription is dropped
+  - L76 `void unbind()`  — Drops the transport without closing [inbound].
+  - L84 `void reset()`  — Test seam: forget the controller and go back to the default session key.
+
+## lib/services/agents/agents_replay_guard.dart  (89 Z.)
+- L16 `class AgentsReplayGuard`  — Replay protection for one peer device: a strictly monotonic `seq` inside a
+  - L17 `AgentsReplayGuard({ this.window = const Duration(seconds: 60), DateTime Function()? clock, int? lastSeq, }) : _clock = clock ?? DateTime.now, _lastSeq = lastSeq`
+  - L28 `final Duration window`  — How far `ts` may sit from local time in either direction.
+  - L30 `final DateTime Function() _clock`
+  - L32 `int? _lastSeq`
+  - L36 `int? get lastSeq`  — Highest `seq` accepted so far, or null if nothing has been accepted yet.
+  - L43 `void check(AgentsFrame frame)`  — Validates [frame]'s freshness without changing any state, or throws
+  - L65 `void commit(AgentsFrame frame)`  — Burns [frame]'s sequence number, or throws if it is no longer ahead.
+  - L71 `void _checkTimestamp(AgentsFrame frame)`
+  - L80 `void _checkSeq(AgentsFrame frame)`
+
+## lib/services/agents/agents_replay_loader.dart  (950 Z.)
+- L51 `kReplayCursorPrefix = 'cowork.replay_cursor.'`  — Prefix of the per-session replay cursor key in SharedPreferences.
+- L52 `kReplayTimestampCursorPrefix = 'cowork.replay_timestamp_cursor.'`
+- L59 `kReplayRepeatRepairKey = 'cowork.replay_repeat_repair.v1'`  — One-time repair flag (bead cowork-4rpt). Caches written before the repeat
+- L62 `class _Draft`  — One session's in-progress replay fold.
+  - L63 `_Draft(this.sessionKey)`
+  - L65 `final String sessionKey`
+  - L68 `final List<Map<String, String>> rows = <Map<String, String>>[]`  — The rows built so far, in the imported screen's raw-map shape.
+  - L71 `Map<String, String>? aiRow`  — The open assistant row, if a delta has arrived since the last user turn.
+  - L72 `final StringBuffer aiText = StringBuffer()`
+  - L77 `final StringBuffer aiReasoning = StringBuffer()`  — What the model thought before it answered, when the host stored it. The
+  - L78 `List<ToolCall> aiToolCalls = <ToolCall>[]`
+  - L79 `List<ContentBlock> aiBlocks = <ContentBlock>[]`
+  - L82 `int afterId = 0`  — The `after_id` this replay was asked with.
+  - L87 `int beforeId = 0`  — Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): the `before_id`
+  - L88 `bool hasMore = false`
+  - L89 `int? oldestMid`
+  - L93 `bool started = false`  — True once a frame has folded into this draft: the host is answering the
+  - L97 `_Draft? next`  — A second request for the same thread made while this one is still being
+  - L100 `int? minMid`  — The lowest and highest `mid` this replay carried.
+  - L101 `int maxMid = 0`
+- L105 `class AgentsReplayLoader extends ChangeNotifier`  — Folds the host's replay stream into the local instant-paint cache.
+  - L106 `AgentsReplayLoader._()`
+  - L108 `static final AgentsReplayLoader instance = AgentsReplayLoader._()`
+  - L110 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L112 `final Map<String, _Draft> _drafts = <String, _Draft>{}`
+  - L113 `final Map<String, int> _cursors = <String, int>{}`
+  - L114 `final Map<String, int> _revisions = <String, int>{}`
+  - L115 `final Map<String, bool> _answerReady = <String, bool>{}`
+  - L116 `final Map<String, String?> _answerReadyRun = <String, String?>{}`
+  - L117 `final Set<String> _replayWanted = <String>{}`
+  - L119 `final Map<String, int> _pagingFloor = <String, int>{}`
+  - L120 `final Map<String, String?> _hostPrompts = <String, String?>{}`
+  - L121 `final Set<String> _hostRunning = <String>{}`
+  - L126 `String? _activeSession`  — The session the current replay belongs to. Replayed events carry no
+  - L136 `final List<AgentsRelayInbound> _queue = <AgentsRelayInbound>[]`  — Frames waiting to be folded, and whether a drain is already running.
+  - L137 `bool _draining = false`
+  - L140 `void attach()`  — Subscribes to the link's long-lived inbound stream. Idempotent.
+  - L151 `void _enqueue(AgentsRelayInbound event)`
+  - L175 `void detach()`
+  - L181 `Future<void> load()`  — Reads the persisted cursors so [cursorFor] answers before any replay.
+  - L224 `void expect(String sessionKey, {int afterId = 0, int beforeId = 0})`  — Names the thread the next replay answer belongs to. Call it immediately
+  - L244 `int cursorFor(String sessionKey)`  — The replay cursor for [sessionKey]: the highest `mid` already stored.
+  - L248 `int revisionFor(String sessionKey)`  — Bumped every time the cache for [sessionKey] is replaced. The thread view
+  - L252 `bool answerReadyFor(String sessionKey)`  — True when a replayed run finished with no app attached — the host never
+  - L257 `String? answerReadyRunFor(String sessionKey)`  — The run the waiting answer belongs to, when the host stamped it. Lets the
+  - L259 `void clearAnswerReady(String sessionKey)`
+  - L267 `bool takeReplayWanted(String sessionKey)`  — True once, when a delta replay could not be applied because the local
+  - L271 `bool hostRunning(String sessionKey)`  — True when the host says a run for [sessionKey] is in flight right now,
+  - L274 `String? hostPrompt(String sessionKey)`  — The prompt an already-in-flight run is working on, when the host said.
+  - L278 `void reset()`  — Test seam.
+  - L296 `Future<void> _handle(AgentsRelayInbound event)`
+  - L504 `_Draft _draftFor()`
+  - L511 `_Draft _openAiRow(_Draft draft)`
+  - L523 `void _closeAiRow(_Draft draft)`
+  - L551 `void _noteMid(_Draft draft, int? mid)`
+  - L562 `static const int repeatWindow = 60`  — How far back a repeat is looked for. A delta only ever carries turns the
+  - L582 `static List<Map<String, String>> appendWithoutRepeats( List<Map<String, String>> existing, List<Map<String, String>> delta, )`  — The host's delta appended to the cache, with the turns the app already
+  - L632 `static int _longestOverlap( List<Map<String, String>> existing, List<Map<String, String>> delta, )`  — The length of the longest tail of [existing] that is also a head of
+  - L668 `static const int _separatorKey = -1`  — A value no row can produce, so the two halves cannot match across it.
+  - L671 `static int _rowKey(Map<String, String> row)`  — The identity [_sameRow] compares, as one integer.
+  - L677 `static bool _sameRow(Map<String, String> a, Map<String, String> b)`  — Two cache rows that stand for the same turn: same side, same words. The
+  - L683 `Future<void> _commit(_Draft draft)`  — Writes the replayed rows into the local cache and tells the UI.
+  - L808 `void _requestOlderPage(_Draft draft)`  — Replay paging (docs/WIRE_CONTRACT.md, Bead cowork-axx): the page just
+  - L840 `Future<void> appendNotice(String session, String notice)`  — Writes one quiet line into [session]'s transcript and repaints it.
+  - L881 `Future<List<Map<String, String>>> _cachedRows(String session)`
+  - L907 `void invalidateCursor(String session)`  — Forget the replay cursor for [session], so the next replay asks for the
+  - L917 `void advanceCursor(String session, int mid)`  — Moves the in-memory cursor and persists it in the background. Synchronous
+  - L919 `void _advanceCursor(String session, int mid)`
+  - L925 `Future<void> _persistCursor(String session, int mid)`
+  - L937 `Future<ContentBlock?> _blockForFile(AgentsRelayFile file)`  — Bytes into the blob store FIRST, then the block that points at them.
+
+## lib/services/agents/agents_run_ledger.dart  (955 Z.)
+- L39 `ToolCall toolCallFromRelay(AgentsRelayTool event, {DateTime? now})`  — The renderer's shape of one host `tool` frame.
+- L70 `enum AgentsRunOutcome`  — How a run ended, once it is over.
+  - L72 `answered`
+  - L75 `stopped`
+  - L78 `failed`
+  - L81 `lost`
+  - L88 `notDelivered`
+- L97 `AgentsRunOutcome agentsRunOutcomeFor({String? reason, String? finalAnswer})`  — What a run terminal means for the thread, from the two fields that say it.
+- L117 `String? agentsRunEndNotice(AgentsRunOutcome outcome)`  — The one quiet line a run that produced nothing leaves in the thread. Null
+- L127 `class AgentsRun`  — Everything one run produced, in renderer shapes.
+  - L128 `AgentsRun(this.sessionKey)`
+  - L131 `final String sessionKey`  — The executor session (thread) this run belongs to.
+  - L135 `final List<ToolCall> toolCalls = <ToolCall>[]`  — Tool calls in the order the host reported them, including the synthetic
+  - L138 `final List<ContentBlock> blocks = <ContentBlock>[]`  — Side-effect blocks — today only `sandboxArtifact`, one per relayed file.
+  - L141 `String modelReasoning = ''`  — The model's own thinking, accumulated across the run.
+  - L144 `String? finalAnswer`  — The final answer the host reported on `done`, when it sent one.
+  - L147 `String? reason`  — Why the run ended, as the host said it (`finished`, `estop`, …).
+  - L149 `int? iterations`
+  - L150 `int? tokensSpent`
+  - L153 `String? runId`  — The host's id for this run, echoed back with `run_ack`.
+  - L156 `Map<String, dynamic>? debugContext`  — The latest `debug_context` payload for this session, for the copy button.
+  - L159 `bool running = false`  — True between [AgentsRunLedger.begin] and [AgentsRunLedger.finish].
+  - L163 `bool hostObserved = false`  — A host running header confirmed this turn; distinguishes it from a newly
+  - L167 `DateTime startedAt = DateTime.now()`  — When the run started, for an elapsed readout. The host's clock once a
+  - L171 `DateTime? finishedAt`  — When the host said the run ended (`done.finished_at`). Null while it
+  - L174 `Duration? get workedFor`  — The run's length as the host measured it, when it sent both clocks.
+  - L182 `bool hostStamped = false`  — True once [startedAt] is the host's clock, not this client's.
+  - L185 `int? firstMid`  — The message rows of this run (`done.first_mid` / `last_mid`).
+  - L186 `int? lastMid`
+  - L190 `String? detachedPrompt`  — The prompt the host says an already-in-flight run is working on, learned
+  - L193 `AgentsRunOutcome? outcome`  — How this run ended. Null while it runs.
+  - L198 `DateTime? stopRequestedAt`  — When the user pressed Stop and the frame went out. The terminal is
+  - L201 `bool get stopRequested`  — True once the user's stop for this run is on the wire.
+  - L206 `DateTime? probedAt`  — When the app last asked the host what happened to a silent run. Cleared
+  - L211 `DateTime lastActivity = DateTime.now()`  — The last time this run produced anything at all — a token, a tool event,
+  - L216 `bool producedOutput = false`  — Anything at all arrived for this run — a token, a tool event, a child
+  - L222 `String? taskId`  — The app's `task_id` for the send this run was started by, once that send
+  - L227 `DateTime? taskSentAt`  — When the newest attempt of [taskId] went to the socket. The pre-run
+  - L233 `int taskWaits = 0`  — How many re-sends the pre-run window has asked for. Counted HERE and
+  - L238 `bool taskAcknowledged = false`  — The host answered `task_ack` with `accepted` or `duplicate`: it holds the
+  - L242 `bool sawHeartbeat = false`  — A `heartbeat` arrived for this run. Proof the host is working on it even
+  - L248 `bool get taskUnproven`  — True while nothing has positively shown that the host has this task: no
+  - L257 `bool get endedWithoutAnswer`  — True once the run is over and it left the thread with nothing: the reader
+- L272 `ToolCall subagentCallFromRelay( ToolCall? existing, { required String subagentId, required String title, required String state, String? result, String? error, DateTime? now, })`  — Process-wide ledger of host runs, keyed by session key.
+- L309 `ContentBlock artifactBlockFromFile(String storagePath, AgentsRelayFile file)`  — The renderer's shape of one relayed file, once its bytes are in the local
+- L330 `ToolCall approvalCallFromRelay( AgentsRelayApprovalRequest request, { bool decided = false, DateTime? now, })`  — The renderer's shape of a here.now publish approval, as a completed
+- L367 `class AgentsRunLedger extends ChangeNotifier`
+  - L368 `AgentsRunLedger._()`
+  - L370 `static final AgentsRunLedger instance = AgentsRunLedger._()`
+  - L372 `final Map<String, AgentsRun> _runs = <String, AgentsRun>{}`
+  - L376 `final Map<String, ToolCall> _subagentCalls = <String, ToolCall>{}`  — Subagent id -> the [ToolCall] standing in for it, keyed
+  - L380 `final Map<String, ToolCall> _automationCalls = <String, ToolCall>{}`  — One transcript line per automation id, like a child agent's
+  - L385 `static Duration ceiling = const Duration(minutes: 3)`  — How long a run may produce nothing before the app asks the host what
+  - L390 `static Duration ceilingGrace = const Duration(seconds: 30)`  — How long the host then has to say "still running" before the run counts
+  - L395 `static Duration stopGrace = const Duration(seconds: 10)`  — How long a stop may stay unanswered before the run is ended anyway. The
+  - L401 `static Future<String> Function(Uint8List bytes) storeFileBytes = ImageStorageService.uploadLocalBlob`  — Where a relayed file's bytes are written before the block that points at
+  - L407 `static Duration idleHeaderGrace = const Duration(seconds: 10)`  — A run this client started that the host has not confirmed yet is left
+  - L420 `static Duration taskAckCeiling = const Duration(seconds: 8)`  — The pre-run window: how long a task may sit with NO `task_ack`, NO
+  - L426 `static const int maxTaskAttempts = 3`  — How often one task may go to a socket before the thread reports it as a
+  - L431 `void Function(String sessionKey)? onTaskUnacknowledged`  — Called when a task has gone unproven for [taskAckCeiling]. The thread
+  - L436 `void Function(String sessionKey)? onRunSilent`  — Called when a run has produced nothing for [ceiling]. The thread view
+  - L449 `void sweep({DateTime? now})`  — The ceiling, applied. Called from the thread view's existing watchdog
+  - L481 `bool _sweepUnproven(AgentsRun run, DateTime clock)`  — The pre-run window, applied to one run. Returns true when this run has
+  - L506 `void taskSent(String sessionKey, String taskId, {DateTime? at})`  — A task frame for [sessionKey] has been handed to the socket.
+  - L525 `void taskAcknowledged(String sessionKey, {String? taskId, String? runId})`  — The host holds the task (`task_ack` with `accepted` or `duplicate`).
+  - L540 `void taskRejected(String sessionKey, {String? reason})`  — The host refused the task (`task_ack` with `rejected`). There is no run
+  - L548 `AgentsRun? runFor(String sessionKey)`  — The run for [sessionKey], if one is on record.
+  - L551 `bool isRunning(String sessionKey)`  — True while a run for [sessionKey] is in flight.
+  - L554 `Iterable<String> get runningSessions`  — Every session with a run in flight.
+  - L560 `AgentsRun begin(String sessionKey)`  — Starts a fresh run for [sessionKey], discarding whatever the previous one
+  - L577 `void touch(String sessionKey)`  — Records that something happened in [sessionKey]'s run, so the ceiling
+  - L592 `void heartbeat(String sessionKey)`  — The host says the run is still running, and nothing else.
+  - L607 `void stopRequested(String sessionKey)`  — The user pressed Stop and the frame went out. The terminal that follows
+  - L617 `void _endWithoutAnswer(String sessionKey, AgentsRunOutcome outcome)`  — Ends a run that produced no answer, with the reason the caller knows.
+  - L628 `void markLost(String sessionKey)`  — Test seam / explicit path: end [sessionKey]'s run as lost.
+  - L637 `void reconcile(String sessionKey, {required bool hostRunning})`  — Reconciles what this client believes against what the host says.
+  - L648 `void adoptRunning( String sessionKey, { String? runId, String? prompt, DateTime? startedAt, })`  — Marks the host as already busy with [sessionKey] — a run that started
+  - L681 `void reconcileIdle(String sessionKey)`  — A fresh host idle header reconciles a run whose terminal was missed
+  - L697 `ToolCall openTool( String sessionKey, String name, { String? arguments, String? callId, })`  — Opens a tool line. The relay reports one `tool` event per *completed*
+  - L725 `ToolCall recordTool(String sessionKey, AgentsRelayTool event)`  — Records one finished tool call as the host reported it — THE path for a
+  - L752 `ToolCall closeTool( String sessionKey, String name, { String? arguments, String? result, int? exitCode, bool failed = false, Duration? duration, })`  — Closes the newest still-running line called [name] (or appends a closed
+  - L788 `ToolCall subagent( String sessionKey, { required String subagentId, required String title, required String state, String? result, String? error, })`  — Records a child agent's lifecycle step as its own tool line, opened on the
+  - L818 `ToolCall automation(String sessionKey, AgentsRelayAutomation event)`  — Records an automation event as its own tool line, one per automation
+  - L838 `Future<ContentBlock?> file(String sessionKey, AgentsRelayFile file)`  — Lands a relayed file: the bytes go into the local blob store FIRST, and
+  - L859 `ToolCall approval(String sessionKey, AgentsRelayApprovalRequest request)`  — Records a here.now publish approval as a completed `ask_user` tool call.
+  - L868 `void reasoning(String sessionKey, String text)`  — Accumulates the model's thinking for the run.
+  - L874 `void debugContext(String sessionKey, Map<String, dynamic> payload)`  — Stashes the latest raw model context for the copy button. Never rendered.
+  - L879 `void finish( String sessionKey, { String? finalAnswer, String? reason, int? iterations, int? tokensSpent, String? runId, DateTime? startedAt, DateTime? finishedAt, int? firstMid, int? lastMid, })`  — Closes the run. The pile stays on record until the fold [take]s it.
+  - L915 `AgentsRun? take(String sessionKey)`  — Hands the run for [sessionKey] to the fold and forgets it. Returns null
+  - L930 `void reset()`  — Test seam: drop every run.
+  - L938 `AgentsRun _ensure(String sessionKey)`
+  - L944 `AgentsRun _live(String sessionKey)`  — [_ensure], plus the proof that the run is alive: every frame that folds
+
+## lib/services/agents/agents_shell_status.dart  (129 Z.)
+- L21 `enum AgentsLinkState`  — The link as the thread view sees it.
+  - L23 `starting`
+  - L26 `unpaired`
+  - L29 `connecting`
+  - L33 `offline`
+  - L36 `connected`
+- L40 `@immutable class AgentsLinkReport`  — One snapshot of the link, published by the thread view for the shell.
+  - L42 `const AgentsLinkReport(this.state, {this.busy = false, this.message})`
+  - L44 `static const AgentsLinkReport initial = AgentsLinkReport( AgentsLinkState.starting, )`
+  - L48 `final AgentsLinkState state`
+  - L51 `final bool busy`  — A connect or reconnect is in flight right now.
+  - L55 `final String? message`  — A plain sentence about the last failure (never a URL, a code or an
+  - L58 `bool operator ==(Object other)`
+  - L65 `int get hashCode`
+  - L68 `String toString()`
+- L72 `enum AgentsShellStatus`  — What the shell shows in place of a conversation.
+  - L74 `starting`
+  - L77 `notPaired`
+  - L81 `lookingForComputer`
+  - L84 `connecting`
+  - L87 `healing`
+  - L90 `offline`
+  - L93 `noAgents`
+  - L96 `ready`
+- L100 `AgentsShellStatus resolveAgentsShellStatus({ required AgentsLinkReport link, required AgentsPairingRestoreReason restore, required bool healing, required bool rosterEmpty, })`  — Resolves the one status the shell shows.
+
+## lib/services/agents/agents_task_outbox.dart  (637 Z.)
+- L53 `kTaskOutboxPrefix = 'agents.task_outbox.'`  — Prefix of the per-thread outbox key in the SQLite `kv_cache` table.
+- L56 `@immutable class OutboxTask`  — One prompt waiting for a socket.
+  - L58 `const OutboxTask({ required this.localId, required this.sessionKey, required this.prompt, required this.createdAt, this.modelId, this.providerSlug, this.reasoningEffort, this.attempts = 0, this.lastError, this.nextAttemptAt, })`
+  - L73 `final String localId`  — This app's own id for the prompt. The host never sees it; it is how the
+  - L74 `final String sessionKey`
+  - L77 `final String prompt`  — Exactly the string that will be sent.
+  - L78 `final DateTime createdAt`
+  - L79 `final String? modelId`
+  - L80 `final String? providerSlug`
+  - L81 `final String? reasoningEffort`
+  - L85 `final int attempts`  — How often a flush has tried and failed. At [AgentsTaskOutbox.maxAttempts]
+  - L86 `final String? lastError`
+  - L91 `final DateTime? nextAttemptAt`  — Not before this instant. A trigger that arrives earlier leaves the entry
+  - L94 `bool isDue(DateTime now)`  — True when [now] is at or past [nextAttemptAt] (or nothing is set).
+  - L97 `OutboxTask copyWith({ int? attempts, String? lastError, DateTime? nextAttemptAt, })`
+  - L114 `Map<String, Object?> toJson()`
+  - L130 `static OutboxTask? fromJson(Object? raw)`  — Null for a row this version cannot read: a queue entry is a convenience,
+- L158 `class AgentsTaskOutbox`  — Reads and writes the per-thread queue. Static because there is one queue
+  - L159 `AgentsTaskOutbox._()`
+  - L163 `static const int maxAttempts = 5`  — After this many failed flushes an entry is dropped and reported, rather
+  - L167 `static const AgentsBackoff backoff = AgentsBackoff.chat`  — How long a failed entry waits before the next trigger may take it.
+  - L171 `static DateTime Function() now = () => DateTime.now().toUtc()`  — The clock. A test moves it forward instead of waiting for real seconds.
+  - L175 `static Future<String?> Function(String key)? read`  — Test seams. Production leaves them null and goes to SQLite.
+  - L177 `static Future<void> Function(String key, String value)? write`
+  - L179 `static Future<void> Function(String key)? delete`
+  - L190 `static Future<void>? _chain`  — Serialises the read-modify-write so two sends in the same frame cannot
+  - L192 `static String _key(String sessionKey)`
+  - L194 `static Future<T> _locked<T>(Future<T> Function() action)`
+  - L207 `static Future<List<OutboxTask>> _load(String sessionKey)`
+  - L229 `static Future<void> _save(String sessionKey, List<OutboxTask> tasks)`
+  - L253 `static Future<OutboxTask> enqueue({ required String sessionKey, required String prompt, String? modelId, String? providerSlug, String? reasoningEffort, String? localId, DateTime? createdAt, })`  — Puts [prompt] at the back of [sessionKey]'s queue and returns the entry.
+  - L279 `static Future<List<OutboxTask>> pendingFor(String sessionKey)`  — What is still waiting for [sessionKey], oldest first.
+  - L283 `static Future<bool> hasPending(String sessionKey)`  — True when anything at all is waiting. Cheap enough for a rebuild.
+  - L286 `static Future<void> remove(String sessionKey, String localId)`
+  - L295 `static Future<bool> markAttempt( String sessionKey, String localId, String error, )`  — Records a failed flush. Returns true while the entry is still worth
+  - L335 `static Future<int> flush( String sessionKey, Future<void> Function(OutboxTask task) send, )`  — Sends everything waiting for [sessionKey], oldest first, through [send].
+  - L357 `static Future<void> clearForTest(String sessionKey)`
+  - L367 `static void resetForTest()`  — Drops whatever is still queued on the serialiser.
+- L375 `kPendingTaskPrefix = 'agents.task_pending_ack.'`  — Prefix of the per-thread unacknowledged-task key in the SQLite `kv_cache`
+- L378 `@immutable class PendingTask`  — One task the socket took, still waiting for the host's `task_ack`.
+  - L380 `const PendingTask({ required this.taskId, required this.sessionKey, required this.prompt, required this.sentAt, this.modelId, this.providerSlug, this.reasoningEffort, this.attempts = 1, })`
+  - L396 `final String taskId`  — The id on the wire, minted once per SEND. Every re-send of that send
+  - L397 `final String sessionKey`
+  - L400 `final String prompt`  — Exactly the string that went out, so a re-send is byte-identical.
+  - L403 `final DateTime sentAt`  — When the newest attempt went to the socket.
+  - L404 `final String? modelId`
+  - L405 `final String? providerSlug`
+  - L406 `final String? reasoningEffort`
+  - L411 `final int attempts`  — How often this task has been handed to a socket, the first send included.
+  - L413 `PendingTask copyWith({int? attempts, DateTime? sentAt})`
+  - L424 `Map<String, Object?> toJson()`
+  - L437 `static PendingTask? fromJson(Object? raw)`  — Null for a row this version cannot read — the same rule as [OutboxTask]:
+- L463 `class AgentsPendingTasks`  — Tasks the socket accepted but the host has not acknowledged.
+  - L464 `AgentsPendingTasks._()`
+  - L470 `static const int maxAttempts = 3`  — How often one task may be handed to a socket before the app gives up and
+  - L472 `static String _key(String sessionKey)`
+  - L474 `static Future<List<PendingTask>> _load(String sessionKey)`
+  - L494 `static Future<void> _save(String sessionKey, List<PendingTask> tasks)`
+  - L524 `static Future<PendingTask> record({ required String sessionKey, required String taskId, required String prompt, String? modelId, String? providerSlug, String? reasoningEffort, })`  — Records that [taskId] has just been handed to the socket.
+  - L559 `static Future<List<PendingTask>> pendingFor(String sessionKey)`  — What [sessionKey] still has no `task_ack` for, oldest first.
+  - L565 `static Future<void> clear(String sessionKey, String taskId)`  — The host holds it (`accepted` or `duplicate`), or its run produced its
+  - L590 `static Future<int> resend( String sessionKey, Future<void> Function(PendingTask task) send, )`  — Sends everything [sessionKey] has no `task_ack` for again, oldest first.
+  - L622 `static Future<bool> mayRetry(String sessionKey, String taskId)`  — True when [taskId] may go out once more, and false once it has used up
+
+## lib/services/agents/agents_tool_call_handler.dart  (158 Z.)
+- L31 `class AgentsToolCallHandler implements ToolCallHandler`  — The Agents fold: one pass per turn, no client-side tool dispatch.
+  - L32 `AgentsToolCallHandler._internal()`
+  - L34 `static final AgentsToolCallHandler instance = AgentsToolCallHandler._internal()`
+  - L37 `final ToolExecutor _toolExecutor = ToolExecutor()`
+  - L43 `ToolExecutor get toolExecutor`  — The stub drops the client tool LOOP, not the executor's registry:
+  - L46 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
+  - L77 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`  — The host owns the system prompt.
+  - L82 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The host owns the tools. An empty list means the request carries no
+  - L98 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`  — ALWAYS a final answer: `shouldContinue` is never true.
+
+## lib/services/agents/browser_presence.dart  (269 Z.)
+- L16 `kBrowserPresenceFreshness = Duration(minutes: 5)`  — How long the host's word on the browser stays good without fresh evidence.
+- L34 `class BrowserPresence extends ValueNotifier<bool>`  — Whether the host explicitly offers a viewable sandbox browser.
+  - L35 `BrowserPresence(this.controller, {this.freshFor = kBrowserPresenceFreshness}) : super(false)`
+  - L44 `final AgentsRelayController controller`
+  - L47 `final Duration freshFor`  — How long one word from the host stays good. Injected by tests.
+  - L49 `StreamSubscription<AgentsRelayInbound>? _sub`
+  - L50 `Timer? _expiry`
+  - L55 `DateTime? _saidAt`  — When the host last said the browser is there. Read at every [value], so a
+  - L60 `String _because = ''`  — Why there is no screen on offer: a `browser_view` reason code, this app's
+  - L62 `bool _wasPaired = false`
+  - L63 `String? _pairedWith`
+  - L67 `static const String playwrightPrefix = 'mcp__playwright__'`  — The tool-name prefix the agent's MCP client gives the Playwright server
+  - L72 `static const String toolCallWrapper = 'tool_call'`  — The deferred-tool wrapper: an MCP tool the model reached through
+  - L75 `static const String closeTool = 'browser_close'`  — The Playwright tool that closes the browser.
+  - L79 `static String toolPart(String name)`  — The tool part of an MCP tool name: `mcp__playwright__browser_navigate`
+  - L86 `static String effectiveName(AgentsRelayTool tool)`  — The effective tool name of a tool frame: the wrapped name for a
+  - L96 `static bool isBrowserTool(String name)`  — True for a Playwright MCP browser tool: the `mcp__playwright__` prefix,
+  - L103 `static bool? stateFromTool(AgentsRelayTool tool)`  — What a tool frame says about the browser: true = open, false = closed,
+  - L115 `static const String openingReason = 'opening'`  — The host is opening the browser right now and the picture grows into the
+  - L119 `static const String staleReason = 'stale'`  — The clock ran out on the host's last word — this app's own code, not the
+  - L130 `static bool? stateFromView(AgentsRelayBrowserView view)`  — What an executor `browser_view` frame says about the browser. `stopped`
+  - L159 `bool get value`  — The host's word, and only while it is still fresh. A memory nobody has
+  - L162 `set value(bool next)`
+  - L164 `bool get _isFresh`
+  - L175 `String get parkedBecause`  — Why the target is parked, for the tap that asks. A `browser_view` reason
+  - L177 `void _onInbound(AgentsRelayInbound event)`
+  - L217 `void _keep({required bool light})`  — A fresh word from the host: restart the clock, and light the target when
+  - L235 `void _revoke({String because = ''})`
+  - L246 `void _onConnectionChanged()`  — The transport changed. A screen is offered by ONE live pairing: a drop,
+  - L257 `void reset()`  — Forget the state (a new pairing, a different coworker).
+  - L260 `void dispose()`
+
+## lib/services/agents/chat_debug_export.dart  (307 Z.)
+- L35 `abstract final class ChatDebugExport`  — Builds and copies the structured debug export for one thread.
+  - L37 `static const String kind = 'cowork_full_chat_debug'`  — The `kind` marker every export carries, so a pasted blob is recognisable.
+  - L46 `static String? _cap(Object? value, int maxChars)`  — Every long field is cut to the length chuk_chat's own debug copy uses
+  - L55 `static Map<String, dynamic> _toolCallJson(ToolCall call)`  — One tool call, with its arguments and its result cut to the upstream
+  - L83 `static Map<String, dynamic> _blockJson(ContentBlock block)`  — One content block. The bytes of an attached file never belong on the
+  - L120 `static Future<Map<String, dynamic>> build({required String threadKey})`  — The whole export for [threadKey] as a map: header, stats, transcript and
+  - L225 `static Future<String> buildJson({required String threadKey})`  — [build], pretty-printed. Falls back to a plain-text transcript if the blob
+  - L238 `static Future<String> copyToClipboard({required String threadKey})`  — Copies the export for [threadKey] to the clipboard and returns the short
+  - L255 `static String plainTranscript(List<Map<String, dynamic>> rows)`  — A plain-text dump of [rows], used as the copy fallback.
+  - L266 `static Future<List<Map<String, dynamic>>> _rowsFor(String threadKey)`  — The thread's cached rows, in the imported renderer's own shape.
+  - L278 `static List<ToolCall> _decodeToolCalls(Object? raw)`
+  - L292 `static List<ContentBlock> _decodeBlocks(Object? raw)`
+
+## lib/services/agents/media_index.dart  (236 Z.)
+- L23 `enum MediaKind`  — What kind of thing an entry points at.
+  - L23 `image`
+  - L23 `file`
+- L26 `@immutable class MediaEntry`  — One thing a coworker handed over.
+  - L28 `const MediaEntry({ required this.kind, required this.reference, required this.name, required this.threadKey, this.mime = '', this.sizeBytes, this.at, })`
+  - L38 `final MediaKind kind`
+  - L42 `final String reference`  — Where the bytes are: a `cowork://blob/<id>` URL for a picture, the storage
+  - L44 `final String name`
+  - L45 `final String threadKey`
+  - L46 `final String mime`
+  - L47 `final int? sizeBytes`
+  - L48 `final DateTime? at`
+  - L50 `Map<String, dynamic> toJson()`
+  - L60 `static MediaEntry? fromJson(Object? value)`
+- L82 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
+- L96 `class MediaIndex extends ChangeNotifier`
+  - L97 `MediaIndex()`
+  - L99 `static final MediaIndex instance = MediaIndex()`
+  - L101 `static const String _prefsKey = 'cowork_media_index_v1'`
+  - L104 `final Map<String, MediaEntry> _entries = <String, MediaEntry>{}`  — Keyed by reference, so the same file indexed twice is one entry.
+  - L105 `bool _loaded = false`
+  - L107 `bool get loaded`
+  - L110 `List<MediaEntry> entries({MediaKind? kind})`  — Newest first. [kind] null returns everything.
+  - L125 `Future<void> load()`
+  - L150 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Read the threads this device already holds, once per thread.
+  - L166 `final Set<String> _scanned = <String>{}`  — Threads already read, so a rebuild does not read them again.
+  - L170 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take every picture and every file out of [rows] and remember where they
+  - L215 `Future<void> _persist()`
+  - L230 `void clearForTest()`
+
+## lib/services/agents/room_source.dart  (214 Z.)
+- L21 `abstract class RoomSource extends ChangeNotifier`  — Read/write access to the app's rooms, as a [ChangeNotifier] the UI listens to.
+  - L22 `List<AgentsRoom> get rooms`
+  - L24 `AgentsRoom? byId(String id)`
+  - L27 `void renameRoom(String id, String name)`  — Renames a room. A no-op for an unknown id or an empty/blank name.
+  - L32 `void setAgentToAgent(String roomId, bool enabled)`  — Sets the room's "coworkers may reply to each other" policy
+  - L36 `void addMemberToRoom(String roomId, AgentsRoomMember member)`  — Adds a member to a room. A no-op for an unknown room or a duplicate
+  - L40 `bool removeMemberFromRoom(String roomId, String agentId)`  — Removes a member from a room. A room that drops below two members is
+  - L46 `List<String> removeAgentFromRooms(String agentId)`  — Removes [agentId] from every room it is in. A room that drops below two
+  - L52 `AgentsRoom addRoom(AgentsRoomDraft draft)`  — Creates a room from a draft, assigning an id. Throws [ArgumentError] if the
+  - L54 `void removeRoom(String id)`
+- L58 `class LocalRoomSource extends RoomSource`  — In-memory room source.
+  - L59 `LocalRoomSource({ List<AgentsRoom> seed = const <AgentsRoom>[], Random? random, }) : _rooms = List<AgentsRoom>.of(seed), _random = random ?? Random()`
+  - L65 `final List<AgentsRoom> _rooms`
+  - L66 `final Random _random`
+  - L69 `List<AgentsRoom> get rooms`
+  - L72 `AgentsRoom? byId(String id)`
+  - L80 `AgentsRoom addRoom(AgentsRoomDraft draft)`
+  - L113 `void renameRoom(String id, String name)`
+  - L127 `void setAgentToAgent(String roomId, bool enabled)`
+  - L138 `List<String> removeAgentFromRooms(String agentId)`
+  - L163 `void addMemberToRoom(String roomId, AgentsRoomMember member)`
+  - L184 `bool removeMemberFromRoom(String roomId, String agentId)`
+  - L208 `void removeRoom(String id)`
+
+## lib/services/agents/schedule_spec.dart  (504 Z.)
+- L8 `enum ScheduleKind`  — The four schedule shapes Agents accepts.
+  - L10 `interval`
+  - L13 `cron`
+  - L16 `oneShotAt`
+  - L19 `oneShotIn`
+- L26 `class ScheduleFormatException implements Exception`  — Thrown when a schedule string cannot be read.
+  - L28 `const ScheduleFormatException(this.message)`  — Creates an exception that carries [message].
+  - L31 `final String message`  — A short description of what is wrong with the input.
+  - L34 `String toString()`
+- L48 `@immutable class ScheduleSpec`  — A parsed schedule, plus the calculation of when it fires next.
+  - L50 `const ScheduleSpec._({ required this.kind, required this.source, this.interval, this.at, _CronSchedule? cronSchedule, }) : _cronSchedule = cronSchedule`
+  - L59 `final ScheduleKind kind`  — Which shape this schedule has.
+  - L62 `final String source`  — The input text as typed, trimmed.
+  - L65 `final Duration? interval`  — Set for [ScheduleKind.interval] and [ScheduleKind.oneShotIn].
+  - L68 `final DateTime? at`  — Set for [ScheduleKind.oneShotAt]. Always a local-time [DateTime].
+  - L70 `final _CronSchedule? _cronSchedule`
+  - L77 `String? get cron`  — The normalised 5-field cron string. Set for [ScheduleKind.cron].
+  - L80 `static const Duration _cronScanWindow = Duration(days: 366)`  — Longest scan [nextRuns] does for a cron schedule.
+  - L83 `static ScheduleSpec parse(String input)`  — Reads [input] or throws [ScheduleFormatException].
+  - L152 `static ScheduleSpec? tryParse(String input)`  — Reads [input] and returns `null` instead of throwing.
+  - L161 `String describe()`  — A short, plain summary of this schedule.
+  - L183 `List<DateTime> nextRuns(DateTime from, {int count = 3})`  — The next [count] run times after [from], in order.
+  - L206 `static final RegExp _isoLike = RegExp(r'^\d{4}-\d{2}-\d{2}([Tt ]|$)')`
+  - L207 `static final RegExp _durationLike = RegExp(r'^\d+[smhdSMHD]$')`
+  - L208 `static final RegExp _duration = RegExp(r'^(\d+)([smhd])$')`
+  - L210 `static Duration _parseDuration(String text)`
+  - L236 `static String _prettyDuration(Duration value)`
+  - L250 `static String _plural(int count, String unit)`
+  - L253 `static String _prettyDateTime(DateTime value)`
+  - L264 `static String _pad(int value, int width)`
+- L269 `@immutable class _CronField`  — One field of a cron expression, expanded into the values it matches.
+  - L271 `const _CronField(this.values, {required this.restricted})`
+  - L274 `final Set<int> values`  — The matching values, already range-checked and normalised.
+  - L277 `final bool restricted`  — `false` when the field is plain `*`. Only the day fields care.
+  - L279 `bool matches(int value)`
+  - L282 `static _CronField parse( String text, String name, int min, int max, { int Function(int value)? normalise, })`  — Reads one field, for example `*`, `5`, `1,3,5`, `1-5`, `*/5` or `1-9/2`.
+  - L352 `static int _positiveInt(String text, String name, String part, String what)`
+  - L362 `static int _boundedInt( String text, String name, String part, int min, int max, )`
+  - L383 `static final RegExp _digits = RegExp(r'^\d+$')`
+  - L385 `static int? _plainInt(String text)`
+- L390 `@immutable class _CronSchedule`  — A parsed 5-field cron expression and the forward scan over it.
+  - L392 `const _CronSchedule({ required this.text, required this.minutes, required this.hours, required this.daysOfMonth, required this.months, required this.daysOfWeek, })`
+  - L402 `final String text`  — The five fields joined by single spaces.
+  - L403 `final _CronField minutes`
+  - L404 `final _CronField hours`
+  - L405 `final _CronField daysOfMonth`
+  - L406 `final _CronField months`
+  - L407 `final _CronField daysOfWeek`
+  - L409 `static _CronSchedule parse(List<String> fields)`
+  - L431 `bool _matchesDay(DateTime when)`  — Standard cron day rule: when the day-of-month field and the day-of-week
+  - L441 `List<DateTime> nextRuns(DateTime from, int count, Duration window)`
+
+## lib/services/agents/supabase_pairing_sync.dart  (215 Z.)
+- L35 `class SupabasePairingSync`  — Reads and writes the encrypted trust-record mirror in Supabase.
+  - L36 `const SupabasePairingSync()`
+  - L39 `static const String table = 'cowork_pairings'`  — Table holding one encrypted trust record per user.
+  - L43 `static const String columnUserId = 'user_id'`  — `uuid` — the owner. Primary key. Row-level security ties every row to
+  - L46 `static const String columnCiphertext = 'ciphertext'`  — `text` — the AES-256-GCM ciphertext produced by [EncryptionService.encrypt].
+  - L49 `static const String columnUpdatedAt = 'updated_at'`  — `timestamptz` — last write, for debugging and last-writer-wins.
+  - L57 `Future<void> saveEncryptedPairing(AgentsStoredPairing pairing)`  — Encrypts [pairing] and upserts it under the signed-in user's id.
+  - L62 `Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing)`  — Returns success so the supervisor can retry a locked key or failed upload.
+  - L94 `Future<AgentsStoredPairing?> loadEncryptedPairing()`  — Fetches and decrypts the mirrored trust record for the signed-in user.
+  - L100 `Future<AgentsCloudPairingRead> readEncryptedPairing()`  — The same read as [loadEncryptedPairing], with the reason when there is no
+  - L159 `Future<void> clearEncryptedPairing()`  — Removes the mirrored record for the signed-in user — the cloud side of the
+  - L178 `Future<bool> _ensureEncryptionKey()`  — Makes sure the per-user encryption key is loaded. It is cached after a
+- L185 `enum AgentsCloudPairingOutcome`  — How a read of the encrypted mirror ended.
+  - L187 `found`
+  - L190 `noSession`
+  - L193 `noRecord`
+  - L196 `keyLocked`
+  - L199 `network`
+  - L202 `decryptFailed`
+- L206 `@immutable class AgentsCloudPairingRead`  — One read of the encrypted mirror: the record, or why there is none.
+  - L208 `const AgentsCloudPairingRead(this.outcome, [this.pairing])`
+  - L210 `final AgentsCloudPairingOutcome outcome`
+  - L213 `final AgentsStoredPairing? pairing`  — Non-null only when [outcome] is [AgentsCloudPairingOutcome.found].
+
+## lib/services/agents/thread_preview_store.dart  (267 Z.)
+- L27 `@immutable class ThreadPreview`  — One thread's last line.
+  - L29 `const ThreadPreview({required this.text, required this.fromUser, this.at})`
+  - L32 `final String text`  — The text as it should appear in the roster, already trimmed and cut.
+  - L35 `final bool fromUser`  — True when the user wrote it. The roster prefixes those with "You: ".
+  - L37 `final DateTime? at`
+  - L39 `Map<String, dynamic> toJson()`
+  - L45 `static ThreadPreview? fromJson(Object? value)`
+- L63 `List<Object?> contentBlocksOf(Map<String, dynamic> row)`  — The content blocks of a stored row.
+- L77 `class ThreadPreviewStore extends ChangeNotifier`
+  - L78 `ThreadPreviewStore()`
+  - L80 `static final ThreadPreviewStore instance = ThreadPreviewStore()`
+  - L82 `static const String _prefsKey = 'agents_thread_previews_v2'`
+  - L86 `static const int _maxChars = 160`  — The longest preview kept. A roster line shows far less; this is only the
+  - L88 `final Map<String, ThreadPreview> _previews = <String, ThreadPreview>{}`
+  - L89 `bool _loaded = false`
+  - L91 `bool get loaded`
+  - L93 `ThreadPreview? of(String threadKey)`
+  - L96 `ThreadPreview? newestOf(Iterable<String> threadKeys)`  — The newest preview among [threadKeys], or null when none is known.
+  - L113 `Future<void> load()`
+  - L139 `Future<void> ensureFor(Iterable<String> threadKeys)`  — Fill in previews for threads this store has never seen, by reading what
+  - L164 `final Set<String> _pending = <String>{}`  — Keys already looked up, so a roster rebuild does not read the same thread
+  - L172 `void noteRows(String threadKey, List<Map<String, dynamic>> rows)`  — Take the last readable line out of [rows] and remember it for [threadKey].
+  - L200 `static String _lineOf(Map<String, dynamic> row)`  — One row as one line, or empty when the row says nothing a reader wants.
+  - L229 `static String _flatten(String text)`  — A chat line is markdown over several lines; a roster line is one line of
+  - L252 `Future<void> _persist()`

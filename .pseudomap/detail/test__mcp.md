@@ -11,15 +11,20 @@
 - L14 `_pngMagic = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]`  — PNG magic bytes — every bundled asset must be a real PNG, never an HTML
 - L16 `void main()`
 
-## test/mcp/mcp_catalogue_test.dart  (306 Z.)
-- L14 `void main()`
+## test/mcp/mcp_catalogue_test.dart  (305 Z.)
+- L13 `void main()`
 
 ## test/mcp/mcp_client_test.dart  (208 Z.)
 - L11 `http.Response _json(Object body, {Map<String, String> headers = const {}})`
 - L17 `void main()`
 
-## test/mcp/mcp_connect_cancel_test.dart  (104 Z.)
-- L20 `void main()`
+## test/mcp/mcp_connect_cancel_test.dart  (122 Z.)
+- L25 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure storage, so the connect path's "is there already a
+  - L26 `final Map<String, String> map = <String, String>{}`
+  - L29 `Future<String?> read(String key)`
+  - L32 `Future<void> write(String key, String value)`
+  - L35 `Future<void> delete(String key)`
+- L38 `void main()`
 
 ## test/mcp/mcp_endpoints_live_test.dart  (151 Z.)
 - L25 `_live = bool.fromEnvironment('MCP_LIVE')`
@@ -44,7 +49,3 @@
 - L14 `http.Response _json(Object body)`
 - L20 `MockClient _server({bool withRegistration = true})`
 - L53 `void main()`
-
-## test/mcp/mcp_sync_service_test.dart  (410 Z.)
-- L12 `McpSyncBlob _remoteBlob(String id, {String? accessToken, McpAuth auth = McpAuth.oauth})`
-- L31 `void main()`

@@ -29,35 +29,35 @@
 - L313 `num _toNum(dynamic v)`  — Safely convert dynamic to num.
 
 ## lib/tool_handlers/chat_search_tools.dart  (807 Z.)
-- L15 `_defaultChatLimit = 10`
-- L16 `_maxChatLimit = 50`
-- L17 `_defaultMessageLimit = 8`
-- L18 `_maxMessageLimit = 50`
-- L19 `_snippetRadius = 180`
-- L20 `_minLocalScanChats = 60`
-- L21 `_maxLocalScanChats = 250`
-- L22 `_localScanMultiplier = 6`
-- L25 `_previewSnippetsTop = 5`
-- L26 `_previewSnippetsRest = 1`
-- L27 `_topCandidatesWithPreview = 3`
-- L29 `_defaultRecentLimit = 10`
-- L30 `_maxRecentLimit = 50`
-- L31 `_recentSnippetChars = 500`
-- L33 `_actionFindChats = 'find_chats'`
-- L34 `_actionSearchInChat = 'search_in_chat'`
-- L35 `_actionRecentMessages = 'recent_messages'`
-- L36 `_validRoles = {'user', 'assistant', 'ai', 'all'}`
-- L38 `Future<String> executeSearchChats(Map<String, dynamic> args)`
-- L101 `String? _resolveAction(dynamic rawAction, {required String chatId})`
-- L116 `String? _normalizeRole(dynamic raw)`
-- L128 `Future<String> _findChats({required String query, required int limit})`
-- L188 `_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower)`
-- L226 `_ChatCandidate? _candidateFromCacheRow( Map<String, dynamic> row, String queryLower, )`
-- L273 `Future<String> _searchInChat({ required String query, required String chatId, required int messageLimit, })`
-- L323 `Future<String> _recentMessages({ required String chatId, required int limit, required String role, })`
-- L379 `String _renderMessageText(ChatMessage message)`
-- L399 `Future<_LoadedChatContent?> _loadChatContent(String chatId)`
-- L430 `_ParsedPayload? _parsePayload(String? payload)`
+- L17 `_defaultChatLimit = 10`
+- L18 `_maxChatLimit = 50`
+- L19 `_defaultMessageLimit = 8`
+- L20 `_maxMessageLimit = 50`
+- L21 `_snippetRadius = 180`
+- L22 `_minLocalScanChats = 60`
+- L23 `_maxLocalScanChats = 250`
+- L24 `_localScanMultiplier = 6`
+- L27 `_previewSnippetsTop = 5`
+- L28 `_previewSnippetsRest = 1`
+- L29 `_topCandidatesWithPreview = 3`
+- L31 `_defaultRecentLimit = 10`
+- L32 `_maxRecentLimit = 50`
+- L33 `_recentSnippetChars = 500`
+- L35 `_actionFindChats = 'find_chats'`
+- L36 `_actionSearchInChat = 'search_in_chat'`
+- L37 `_actionRecentMessages = 'recent_messages'`
+- L38 `_validRoles = {'user', 'assistant', 'ai', 'all'}`
+- L40 `Future<String> executeSearchChats(Map<String, dynamic> args)`
+- L103 `String? _resolveAction(dynamic rawAction, {required String chatId})`
+- L118 `String? _normalizeRole(dynamic raw)`
+- L130 `Future<String> _findChats({required String query, required int limit})`
+- L190 `_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower)`
+- L228 `_ChatCandidate? _candidateFromCacheRow( Map<String, dynamic> row, String queryLower, )`
+- L275 `Future<String> _searchInChat({ required String query, required String chatId, required int messageLimit, })`
+- L325 `Future<String> _recentMessages({ required String chatId, required int limit, required String role, })`
+- L381 `String _renderMessageText(ChatMessage message)`
+- L401 `Future<_LoadedChatContent?> _loadChatContent(String chatId)`
+- L432 `_ParsedPayload? _parsePayload(String? payload)`
 - L462 `Map<String, dynamic> _coerceStringMap(Map raw)`
 - L474 `DateTime _rowTimestamp(Map<String, dynamic> row)`
 - L486 `DateTime? _parseDate(dynamic value)`
@@ -154,68 +154,68 @@
 - L632 `int _coerceInt(dynamic value, {required int fallback})`
 - L649 `String _asString(dynamic value)`  — Coerce a JSON-decoded value to a String. Server tools normally hand back
 
-## lib/tool_handlers/notes_tools.dart  (923 Z.)
-- L14 `_notesPrefsKey = 'tool_notes'`
-- L15 `_memoryPrefsKey = 'identity_memory'`
-- L16 `_soulPrefsKey = 'identity_soul'`
-- L17 `_userInfoPrefsKey = 'identity_user'`
-- L18 `_identityEnabledKey = 'identity_enabled'`
-- L20 `_identitySoulColumn = 'identity_soul'`
-- L21 `_identityUserColumn = 'identity_user'`
-- L22 `_identityMemoryColumn = 'identity_memory'`
-- L23 `_identityEnabledColumn = 'identity_enabled'`
-- L24 `_legacyPreferencesColumn = 'preferences'`
-- L25 `_selectedModelColumn = 'selected_model_id'`
-- L26 `_fallbackSelectedModelId = 'moonshotai/kimi-k2.5'`
-- L28 `_identitySyncCacheTtl = Duration(minutes: 1)`
-- L30 `_cachedIdentityRow`
-- L31 `_cachedIdentityUserId`
-- L32 `_cachedIdentityFetchedAt`
-- L33 `_identityRowInFlight`
-- L35 `String? _safeCurrentUserId()`
-- L43 `Session? _safeCurrentSession()`
-- L51 `void _resetIdentityCacheForUser(String? userId)`
-- L59 `void _invalidateIdentityCache()`
-- L65 `Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase({ bool forceRefresh = false, })`
-- L140 `void _mergeIdentityCache(String userId, Map<String, dynamic> updates)`
-- L147 `String _identitySyncedMarkerKey(String localKey)`
-- L150 `Future<bool> _upsertIdentityFields(Map<String, dynamic> fields)`
-- L189 `Future<String?> _resolveSelectedModelIdForUpsert(String userId)`
-- L217 `Future<bool> _upsertIdentityFieldsLegacy( String userId, Map<String, dynamic> fields, )`
-- L282 `Future<String?> _decryptIdentityValue( dynamic encryptedValue, { required String column, })`
-- L309 `Future<String> _loadIdentityText({ required String localKey, required String remoteColumn, String? localOverride, })`
-- L382 `bool _isMissingIdentityColumnsError(PostgrestException error)`
-- L398 `bool _isMissingLegacyPreferencesError(PostgrestException error)`
-- L411 `Map<String, dynamic> _extractLegacyPreferencesMap(dynamic rawPreferences)`
-- L437 `bool? _coerceIdentityEnabled(dynamic raw)`
-- L455 `Future<Map<String, dynamic>?> _loadIdentityRowFromLegacyPreferences( String userId, )`
-- L499 `Future<void> _saveIdentityText({ required String localKey, required String remoteColumn, required String text, })`
-- L527 `Future<String> _loadLocalMemoryText(SharedPreferences prefs)`
-- L561 `Future<bool> isIdentityEnabled()`  — Whether the identity system (Soul / User / Memory) is active.
-- L583 `Future<void> setIdentityEnabled(bool value)`  — Persist the identity system toggle.
-- L594 `Future<void> syncIdentityFromSupabase({bool forceRefresh = false})`  — Sync identity data (Soul/User/Memory/toggle) from Supabase into
-- L613 `Future<String> executeNotes(Map<String, dynamic> args)`
-- L651 `String _buildDiffResult( String type, String title, String before, String after, )`  — Builds a <diff> visual block showing what changed.
-- L667 `List<ArtifactEdit>? _parseEdits(dynamic rawEdits)`  — Parse `edits` arg into a list of [ArtifactEdit].
-- L679 `Future<String> loadSoulText()`  — Load Soul text. Public for system prompt injection.
-- L687 `Future<void> saveSoulText(String text)`  — Save Soul text. Called from settings UI.
-- L698 `Future<String> loadUserInfoText()`  — Load User info text. Public for system prompt injection.
-- L706 `Future<void> saveUserInfoText(String text)`  — Save User info text. Called from settings UI or AI tool.
-- L715 `Future<String> _updateUserInfo(Map<String, dynamic> args)`  — AI action: update the user info text.
-- L726 `Future<String> _patchUserInfo(Map<String, dynamic> args)`  — AI action: apply targeted edits to the user info text.
-- L741 `Future<String> loadMemoryText()`  — Load Memory text, with one-time migration from legacy key-value store.
-- L752 `Future<void> saveMemoryText(String text)`  — Save Memory text. Called from settings UI.
-- L761 `Future<String> _updateMemory(Map<String, dynamic> args)`  — AI action: update the memory text.
-- L772 `Future<String> _patchMemory(Map<String, dynamic> args)`  — AI action: apply targeted edits to the memory text.
-- L786 `Future<String> _updateSoul(Map<String, dynamic> args)`  — AI action: update the soul (personality) text.
-- L798 `Future<String> _patchSoul(Map<String, dynamic> args)`  — AI action: apply targeted edits to the soul text.
-- L812 `Future<Map<String, String>> loadAllNotes()`  — Load all saved notes. Public so the system prompt builder can inject them.
-- L831 `Future<void> _persistNotes(Map<String, String> notes)`
-- L836 `Future<String> _saveNote(Map<String, dynamic> args)`
-- L858 `Future<String> _getNote(Map<String, dynamic> args)`
-- L884 `Future<String> _listNotes()`
-- L902 `Future<String> _deleteNote(Map<String, dynamic> args)`
-- L918 `Future<String> _clearNotes()`
+## lib/tool_handlers/notes_tools.dart  (926 Z.)
+- L17 `_notesPrefsKey = 'tool_notes'`
+- L18 `_memoryPrefsKey = 'identity_memory'`
+- L19 `_soulPrefsKey = 'identity_soul'`
+- L20 `_userInfoPrefsKey = 'identity_user'`
+- L21 `_identityEnabledKey = 'identity_enabled'`
+- L23 `_identitySoulColumn = 'identity_soul'`
+- L24 `_identityUserColumn = 'identity_user'`
+- L25 `_identityMemoryColumn = 'identity_memory'`
+- L26 `_identityEnabledColumn = 'identity_enabled'`
+- L27 `_legacyPreferencesColumn = 'preferences'`
+- L28 `_selectedModelColumn = 'selected_model_id'`
+- L29 `_fallbackSelectedModelId = 'moonshotai/kimi-k2.5'`
+- L31 `_identitySyncCacheTtl = Duration(minutes: 1)`
+- L33 `_cachedIdentityRow`
+- L34 `_cachedIdentityUserId`
+- L35 `_cachedIdentityFetchedAt`
+- L36 `_identityRowInFlight`
+- L38 `String? _safeCurrentUserId()`
+- L46 `Session? _safeCurrentSession()`
+- L54 `void _resetIdentityCacheForUser(String? userId)`
+- L62 `void _invalidateIdentityCache()`
+- L68 `Future<Map<String, dynamic>?> _loadIdentityRowFromSupabase({ bool forceRefresh = false, })`
+- L143 `void _mergeIdentityCache(String userId, Map<String, dynamic> updates)`
+- L150 `String _identitySyncedMarkerKey(String localKey)`
+- L153 `Future<bool> _upsertIdentityFields(Map<String, dynamic> fields)`
+- L192 `Future<String?> _resolveSelectedModelIdForUpsert(String userId)`
+- L220 `Future<bool> _upsertIdentityFieldsLegacy( String userId, Map<String, dynamic> fields, )`
+- L285 `Future<String?> _decryptIdentityValue( dynamic encryptedValue, { required String column, })`
+- L312 `Future<String> _loadIdentityText({ required String localKey, required String remoteColumn, String? localOverride, })`
+- L385 `bool _isMissingIdentityColumnsError(PostgrestException error)`
+- L401 `bool _isMissingLegacyPreferencesError(PostgrestException error)`
+- L414 `Map<String, dynamic> _extractLegacyPreferencesMap(dynamic rawPreferences)`
+- L440 `bool? _coerceIdentityEnabled(dynamic raw)`
+- L458 `Future<Map<String, dynamic>?> _loadIdentityRowFromLegacyPreferences( String userId, )`
+- L502 `Future<void> _saveIdentityText({ required String localKey, required String remoteColumn, required String text, })`
+- L530 `Future<String> _loadLocalMemoryText(SharedPreferences prefs)`
+- L564 `Future<bool> isIdentityEnabled()`  — Whether the identity system (Soul / User / Memory) is active.
+- L586 `Future<void> setIdentityEnabled(bool value)`  — Persist the identity system toggle.
+- L597 `Future<void> syncIdentityFromSupabase({bool forceRefresh = false})`  — Sync identity data (Soul/User/Memory/toggle) from Supabase into
+- L616 `Future<String> executeNotes(Map<String, dynamic> args)`
+- L654 `String _buildDiffResult( String type, String title, String before, String after, )`  — Builds a <diff> visual block showing what changed.
+- L670 `List<ArtifactEdit>? _parseEdits(dynamic rawEdits)`  — Parse `edits` arg into a list of [ArtifactEdit].
+- L682 `Future<String> loadSoulText()`  — Load Soul text. Public for system prompt injection.
+- L690 `Future<void> saveSoulText(String text)`  — Save Soul text. Called from settings UI.
+- L701 `Future<String> loadUserInfoText()`  — Load User info text. Public for system prompt injection.
+- L709 `Future<void> saveUserInfoText(String text)`  — Save User info text. Called from settings UI or AI tool.
+- L718 `Future<String> _updateUserInfo(Map<String, dynamic> args)`  — AI action: update the user info text.
+- L729 `Future<String> _patchUserInfo(Map<String, dynamic> args)`  — AI action: apply targeted edits to the user info text.
+- L744 `Future<String> loadMemoryText()`  — Load Memory text, with one-time migration from legacy key-value store.
+- L755 `Future<void> saveMemoryText(String text)`  — Save Memory text. Called from settings UI.
+- L764 `Future<String> _updateMemory(Map<String, dynamic> args)`  — AI action: update the memory text.
+- L775 `Future<String> _patchMemory(Map<String, dynamic> args)`  — AI action: apply targeted edits to the memory text.
+- L789 `Future<String> _updateSoul(Map<String, dynamic> args)`  — AI action: update the soul (personality) text.
+- L801 `Future<String> _patchSoul(Map<String, dynamic> args)`  — AI action: apply targeted edits to the soul text.
+- L815 `Future<Map<String, String>> loadAllNotes()`  — Load all saved notes. Public so the system prompt builder can inject them.
+- L834 `Future<void> _persistNotes(Map<String, String> notes)`
+- L839 `Future<String> _saveNote(Map<String, dynamic> args)`
+- L861 `Future<String> _getNote(Map<String, dynamic> args)`
+- L887 `Future<String> _listNotes()`
+- L905 `Future<String> _deleteNote(Map<String, dynamic> args)`
+- L921 `Future<String> _clearNotes()`
 
 ## lib/tool_handlers/platform_tools.dart  (7 Z.)
 - reicht weiter: 'platform_tools_stub.dart' if (dart.library.io) 'platform_tools_native.dart'
@@ -264,31 +264,6 @@
 ## lib/tool_handlers/qr_tools.dart  (61 Z.)
 - L9 `Future<String> executeGenerateQr(Map<String, dynamic> args)`  — Generate a QR code locally using pretty_qr_code — no network call, fully
 
-## lib/tool_handlers/sandbox_tools.dart  (575 Z.)
-- L15 `_stdStreamCap = 8000`
-- L16 `_textFileCap = 16000`
-- L17 `_textInlineByteLimit = 64 * 1024`
-- L18 `_maxTimeoutSeconds = 300`
-- L20 `String _capStream(String s)`
-- L27 `bool _looksLikeText(Uint8List bytes)`
-- L40 `({String dir, String name}) _splitPath(String path)`
-- L51 `bool _isUnderSandbox(String path)`
-- L65 `String _formatError(SandboxServiceException e)`
-- L83 `kSandboxBackedToolNames = { 'code_run', 'bash', 'sandbox_list', 'sandbox_read', 'sandbox_write', 'sandbox_reset', 'send_`  — Tools whose calls are served by (or reach for) the remote sandbox service.
-- L94 `bool isSandboxBackedTool(String name)`  — True when [name] is a sandbox-backed tool (see [kSandboxBackedToolNames]).
-- L99 `kSandboxUnavailableThisTurnMessage = 'Error: The code sandbox is unavailable this turn (infrastructure error, ' 'not a p`  — Terminal, non-retryable result the tool loop returns for a sandbox tool
-- L110 `bool isSandboxInfraError(String result)`  — True when a tool result string signals a sandbox INFRASTRUCTURE failure —
-- L126 `Future<String> executeCodeRun({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-- L200 `Future<String> executeSandboxListFiles({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-- L243 `Future<String> executeSandboxReadFile({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-- L300 `Future<String> executeSandboxWriteFile({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-- L367 `Future<String> executeSandboxReset({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-- L409 `_extensionMimeMap = { // Images 'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg', 'gif': 'image/gif', 'webp`  — Extension-based mime sniffing for filenames whose upstream content-type
-- L467 `String _extOf(String filename)`
-- L473 `String _inferMimeFromFilename(String filename)`
-- L479 `String _lastSegment(String path)`
-- L488 `Future<ToolExecutionResult> executeSandboxSendFileToUser({ required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`
-
 ## lib/tool_handlers/typst_tools.dart  (281 Z.)
 - L14 `class TypstCompileResult`  — Result of a Typst compile: the rendered bytes plus optional layout
   - L15 `const TypstCompileResult({required this.bytes, this.layout})`
@@ -300,7 +275,7 @@
   - L66 `final String message`
   - L69 `String toString()`
 - L75 `Future<String> executeTypstCompile({ required String? serverHttpUrl, required String? accessToken, required String? chatId, required Map<String, dynamic> args, })`  — Tool handler: validate the Typst source by compiling it, then create a
-- L207 `_deliveryNote = ' The PDF is now shown to the user as a downloadable artifact card — it is ' 'delivered. Do NOT call sen`  — Appended to every successful compile result. The compiled PDF is shown to
+- L207 `_deliveryNote = ' The PDF is now shown to the user as a downloadable artifact card — it is ' 'delivered. Do NOT try to s`  — Appended to every successful compile result. The compiled PDF is shown to
 - L215 `class TypstLayoutSnapshot`  — Snapshot of a compiled Typst PDF's layout (page count + last-page
   - L216 `const TypstLayoutSnapshot({ required this.pageCount, required this.lastPageFillPct, })`
   - L220 `final int pageCount`
@@ -310,16 +285,30 @@
 - L246 `String _layoutGuidance(TypstLayoutSnapshot? layout)`  — Builds the layout suffix appended to the tool result string. Always
 - L271 `String _compileErrorGuidance(String compilerError)`  — Wraps a Typst compile error so the AI sees both the compiler output
 
-## lib/tool_handlers/weather_tools.dart  (359 Z.)
-- L14 `Future<String> executeWeather({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Weather via server-side Brave Rich Callback proxy.
-- L111 `String _buildQuery({ required String location, double? latitude, double? longitude, required String action, int? days, int? hours, })`
-- L138 `String _formatWeather({ required String locationLabel, required String action, required String vertical, required Map<String, dynamic> payload, })`
-- L222 `void _writeCurrent(StringBuffer buf, Map<String, dynamic> src)`
-- L275 `void _writeDay(StringBuffer buf, Map<String, dynamic> day)`
-- L297 `void _writeHour(StringBuffer buf, Map<String, dynamic> hour)`
-- L318 `Map<String, dynamic>? _pickMap(Map<String, dynamic> src, List<String> keys)`
-- L328 `List? _pickList(Map<String, dynamic> src, List<String> keys)`
-- L341 `String? _pickString(Map<String, dynamic> src, List<String> keys)`
+## lib/tool_handlers/weather_tools.dart  (653 Z.)
+- L15 `Future<String> executeWeather({ required String? serverHttpUrl, required Map<String, String> serverHeaders, required Map<String, dynamic> args, http.Client? client, })`  — Weather via server-side Brave Rich Callback proxy.
+- L110 `String _buildQuery({ required String location, double? latitude, double? longitude, required String action, int? days, int? hours, })`
+- L135 `String _formatWeather({ required String locationLabel, required String action, int? days, int? hours, required String vertical, required Map<String, dynamic> payload, })`
+- L243 `kWeatherCompleteNote = 'This one result holds the current conditions, the daily forecast and ' 'the hourly outlook for t`  — Line that tells the model this one result is complete for the place.
+- L250 `Map<String, dynamic>? _braveWeather(Map<String, dynamic> payload)`  — The `weather` map of a Brave rich weather payload, or null when the
+- L266 `String _formatBraveWeather( Map<String, dynamic> weather, { required String locationLabel, required String action, int? days, int? hours, required String vertical, })`
+- L397 `num? _asNum(Object? value)`
+- L403 `String _fmt(num? value)`
+- L412 `num? _precipAmount(Object? value)`  — Rain or snow amount: OpenWeatherMap sends a number or `{"1h": n}`.
+- L417 `String? _conditionPart(Object? weather)`
+- L428 `String? _windPart(Object? wind)`
+- L439 `DateTime? _localDateTime(Object? ts, int tzOffsetSeconds)`
+- L448 `String _two(int n)`
+- L450 `String _isoDate(DateTime t)`
+- L452 `String _hhmm(DateTime t)`
+- L456 `@visibleForTesting String compassPoint(num degrees)`  — Eight-point compass direction for a wind bearing in degrees.
+- L465 `@visibleForTesting int owmToWmoCode(int id)`  — Maps an OpenWeatherMap condition id to the WMO weather code the
+- L496 `void _writeCurrent(StringBuffer buf, Map<String, dynamic> src)`
+- L559 `void _writeDay(StringBuffer buf, Map<String, dynamic> day)`
+- L591 `void _writeHour(StringBuffer buf, Map<String, dynamic> hour)`
+- L612 `Map<String, dynamic>? _pickMap(Map<String, dynamic> src, List<String> keys)`
+- L622 `List? _pickList(Map<String, dynamic> src, List<String> keys)`
+- L635 `String? _pickString(Map<String, dynamic> src, List<String> keys)`
 
 ## lib/tool_handlers/web_tools.dart  (715 Z.)
 - L12 `_defaultSearchCount = 8`
