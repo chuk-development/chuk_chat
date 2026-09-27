@@ -1,0 +1,147 @@
+<template>
+<style>
+
+@font-face{font-family:"Chuk Chat Mono";src:url("assets/fonts/jetbrains-mono-latin-wght.woff2") format("woff2");font-weight:100 800;font-display:block;}
+@font-face{font-family:"Arimo";src:url("assets/fonts/Arimo-wght.ttf") format("truetype");font-weight:400 700;font-style:normal;font-display:block;}
+@font-face{font-family:"Ubuntu";src:url("assets/fonts/Ubuntu-wdth-wght.ttf") format("truetype");font-weight:300 800;font-style:normal;font-display:block;}
+
+
+#root{position:absolute;inset:0;overflow:hidden;font-family:"Arimo",sans-serif;color:#26251F;}
+#root *{box-sizing:border-box;}
+.bg{position:absolute;inset:0;}
+.stage{position:absolute;inset:0;}
+
+
+.bg.night{background:radial-gradient(ellipse at 50% 120%, rgba(90,110,190,0.35), transparent 60%),linear-gradient(180deg,#0A0F1F 0%,#131A33 55%,#1D2444 100%);}
+.stars{position:absolute;inset:0;background-image:
+ radial-gradient(1.8px 1.8px at 6% 14%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 14% 38%, #fff 50%, transparent 52%),
+ radial-gradient(2px 2px at 22% 8%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 39% 6%, #fff 50%, transparent 52%),
+ radial-gradient(1.8px 1.8px at 55% 5%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 71% 9%, #fff 50%, transparent 52%),
+ radial-gradient(1.8px 1.8px at 93% 30%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 4% 62%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 96% 66%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 9% 88%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 90% 92%, #fff 50%, transparent 52%);opacity:.7;}
+.moon{position:absolute;left:1604px;top:52px;width:128px;height:128px;border-radius:50%;background:radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8);}
+
+.win{position:absolute;left:260px;top:134px;width:1400px;height:812px;transform-origin:0 0;}
+.app{--fg:#E8E4D8;--fg85:rgba(232,228,216,.85);--fg70:rgba(232,228,216,.7);--fg55:rgba(232,228,216,.55);--fg30:rgba(232,228,216,.3);--fg15:rgba(232,228,216,.15);--bg:#262624;--lift:#333330;--acc:#D97757;--bubble:#B6674D;
+ position:relative;display:flex;width:1000px;height:580px;zoom:1.4;overflow:hidden;border-radius:18px;background:var(--bg);color:var(--fg);
+ font-family:"Ubuntu",sans-serif;font-size:14px;line-height:1.4;text-align:left;
+ box-shadow:0 50px 110px -30px rgba(12,10,6,.6),0 0 0 1px rgba(255,255,255,.07);}
+.app svg{flex:none;}
+.z12{width:10.4px;height:10.4px;}.z15{width:13px;height:13px;}.z16{width:13.8px;height:13.8px;}.z18{width:15.5px;height:15.5px;}
+.z22{width:18.9px;height:18.9px;}.z24{width:20.6px;height:20.6px;}.z26{width:22.4px;height:22.4px;}.i18{width:18px;height:18px;}
+.a-menu{position:absolute;left:7px;top:20px;z-index:3;width:48px;height:40px;display:flex;align-items:center;justify-content:center;color:var(--fg);}
+.a-rail{position:absolute;left:16px;top:70px;z-index:3;display:flex;flex-direction:column;gap:15px;color:var(--acc);}
+.a-rail>span{width:30px;height:30px;display:flex;align-items:center;justify-content:center;}
+.a-chat{position:relative;flex:1 1 0;min-width:0;display:flex;flex-direction:column;margin-left:48px;}
+.a-thread{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;-webkit-mask-image:linear-gradient(180deg,transparent 0,#000 70px);mask-image:linear-gradient(180deg,transparent 0,#000 70px);}
+.a-col{width:760px;margin:0 auto;padding:20px 16px 22px;}
+.a-foot{position:relative;z-index:2;flex:none;display:flex;flex-direction:column;align-items:center;padding:0 0 16px;}
+.a-composer{position:relative;display:flex;flex-direction:column;justify-content:space-between;width:760px;height:135px;padding:14px;border:2px solid #615F5A;border-radius:30px;background:var(--bg);}
+.a-field{min-height:40px;padding:2px 58px 0 4px;font-size:16px;font-weight:500;line-height:1.4;color:var(--fg);white-space:pre;}
+.a-field.ph{color:rgba(232,228,216,.8);font-weight:600;}
+.a-send{position:absolute;top:14px;right:14px;width:44px;height:36px;border-radius:20px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;}
+.a-row{display:flex;align-items:center;gap:8px;}
+.a-grow{flex:1;order:2;}
+.a-btn{width:44px;height:36px;border:2px solid #615F5A;border-radius:18px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg);}
+.a-plus{order:1;}.a-mic{order:4;}
+.a-pill{order:3;height:36px;padding:0 9px;border:2px solid #615F5A;border-radius:18px;display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:var(--fg);white-space:nowrap;}
+.a-dn{margin-left:-3px;color:var(--fg70);}
+.a-disc{margin:8px 0 0;height:15px;font-size:11px;line-height:15px;color:var(--fg70);text-align:center;}
+.a-user{display:flex;justify-content:flex-end;margin-top:10px;}
+.a-bubble{max-width:80%;height:44px;padding:10px 14px;border:1px solid var(--fg30);border-radius:16px 16px 5px 16px;background:var(--bubble);color:var(--fg);font-family:"Chuk Chat Mono",monospace;font-size:16px;font-weight:400;line-height:22px;white-space:pre;}
+.a-tl{margin-top:14px;height:25px;}
+.a-tl-head{display:inline-flex;align-items:center;gap:4px;margin:0;padding:4px 2px;height:25px;font-size:12px;font-weight:500;color:var(--fg55);}
+.a-ai{margin-top:8px;font-family:"Chuk Chat Mono",monospace;font-size:16px;font-weight:400;line-height:23px;color:var(--fg);}
+.a-ai p{margin:0 0 8px;height:23px;white-space:pre;}
+.a-ai strong{font-weight:700;}
+.a-ai ul{list-style:none;margin:0 0 8px;padding-left:32px;}
+.a-ai li{position:relative;margin-bottom:4px;height:23px;white-space:pre;}
+.a-ai li::before{content:"";position:absolute;left:-18px;top:.6em;width:6px;height:6px;border-radius:50%;background:currentColor;}
+.a-acts{display:flex;align-items:center;gap:6px;margin-top:4px;height:32px;}
+.a-act{display:inline-flex;align-items:center;border:1px solid var(--fg15);border-radius:100px;background:var(--lift);padding:4px 8px;}
+.a-act>span{width:34px;height:22px;display:inline-flex;align-items:center;justify-content:center;color:var(--fg);}
+
+.a-thread{-webkit-mask-image:none;mask-image:none;}
+.eyebrow{position:absolute;left:176px;top:58px;font-family:"Chuk Chat Mono",monospace;font-size:40px;font-weight:500;color:#F2C56B;}
+
+</style>
+<div id="root" data-composition-id="07-answer" data-width="1920" data-height="1080" data-duration="5.452">
+
+<div id="f07-answer-bg" class="bg night clip" data-start="0" data-duration="5.452" data-track-index="0"><div class="stars"></div><div class="moon"></div></div>
+<div class="stage">
+  
+<div class="win" style="left:-112px;top:150px;width:2000.0px;height:1000.0px"><div class="app" style="height:500px;zoom:2.0">
+  <span class="a-menu"><svg class="z24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M4 5L20 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M4 12L20 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M4 19L20 19" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+  <span class="a-rail"><span><svg class="z24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M16.4249 4.60509L17.4149 3.6151C18.2351 2.79497 19.5648 2.79497 20.3849 3.6151C21.205 4.43524 21.205 5.76493 20.3849 6.58507L19.3949 7.57506M16.4249 4.60509L9.76558 11.2644C9.25807 11.772 8.89804 12.4078 8.72397 13.1041L8 16L10.8959 15.276C11.5922 15.102 12.228 14.7419 12.7356 14.2344L19.3949 7.57506M16.4249 4.60509L19.3949 7.57506" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5" /> <path d="M18.9999 13.5C18.9999 16.7875 18.9999 18.4312 18.092 19.5376C17.9258 19.7401 17.7401 19.9258 17.5375 20.092C16.4312 21 14.7874 21 11.4999 21H11C7.22876 21 5.34316 21 4.17159 19.8284C3.00003 18.6569 3 16.7712 3 13V12.5C3 9.21252 3 7.56879 3.90794 6.46244C4.07417 6.2599 4.2599 6.07417 4.46244 5.90794C5.56879 5 7.21252 5 10.5 5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span><svg class="z24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><circle cx="7.5" cy="7.5" r="1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M5 21C9.37246 15.775 14.2741 8.88406 21.4975 13.5424" stroke="currentColor" stroke-width="1.5" /></svg></span></span>
+  <div class="a-chat">
+    <div class="a-thread"><div class="a-col"><div class="a-user"><p class="a-bubble">MV6 c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=</p></div><div class="a-tl"><p class="a-tl-head"><span>Thought for 4s</span><svg class="z16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M9.00005 6C9.00005 6 15 10.4189 15 12C15 13.5812 9 18 9 18" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></p></div><div class="a-ai"><p><strong><span class="w">Start</span> <span class="w">with</span> <span class="w">facts,</span> <span class="w">not</span> <span class="w">with</span> <span class="w">blame.</span></strong></p><ul><li><span class="w">Ask</span> <span class="w">for</span> <span class="w">20</span> <span class="w">minutes</span> <span class="w">at</span> <span class="w">a</span> <span class="w">calm</span> <span class="w">moment.</span></li><li><span class="w">Say</span> <span class="w">what</span> <span class="w">changed:</span> <span class="w">sleep,</span> <span class="w">focus,</span> <span class="w">sick</span> <span class="w">days.</span></li><li><span class="w">Bring</span> <span class="w">one</span> <span class="w">clear</span> <span class="w">request,</span> <span class="w">like</span> <span class="w">fewer</span> <span class="w">projects</span> <span class="w">for</span> <span class="w">a</span> <span class="w">month.</span></li></ul></div><div class="a-acts"><span class="a-act"><span><svg class="z18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M7.5 14.5C7.5 11.2002 7.5 9.55025 8.52513 8.52513C9.55025 7.5 11.2002 7.5 14.5 7.5C17.7998 7.5 19.4497 7.5 20.4749 8.52513C21.5 9.55025 21.5 11.2002 21.5 14.5C21.5 17.7998 21.5 19.4497 20.4749 20.4749C19.4497 21.5 17.7998 21.5 14.5 21.5C11.2002 21.5 9.55025 21.5 8.52513 20.4749C7.5 19.4497 7.5 17.7998 7.5 14.5Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M7.5 16.5C6.10355 16.5 5.40533 16.5 4.84402 16.3036C3.83866 15.9518 3.0482 15.1613 2.69641 14.156C2.5 13.5947 2.5 12.8964 2.5 11.5V9.5C2.5 6.20017 2.5 4.55025 3.52513 3.52513C4.55025 2.5 6.20017 2.5 9.5 2.5H11.5C12.8964 2.5 13.5947 2.5 14.156 2.69641C15.1613 3.0482 15.9518 3.83866 16.3036 4.84402C16.5 5.40533 16.5 6.10355 16.5 7.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span><svg class="z18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M20.0092 2V5.13219C20.0092 5.42605 19.6418 5.55908 19.4537 5.33333C17.6226 3.2875 14.9617 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span><svg class="i18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M9.78 11.16l-1.42 1.42c-.68-.69-1.34-1.58-1.79-2.94l1.94-.49c.32.89.77 1.5 1.27 2.01zM11 6L7 2 3 6h3.02c.02.81.08 1.54.19 2.17l1.94-.49C8.08 7.2 8.03 6.63 8.02 6H11zm10 0l-4-4-4 4h2.99c-.1 3.68-1.28 4.75-2.54 5.88-.5.44-1.01.92-1.45 1.55-.34-.49-.73-.88-1.13-1.24L9.46 13.6c.93.85 1.54 1.54 1.54 3.4v5h2v-5c0-2.02.71-2.66 1.79-3.63 1.38-1.24 3.08-2.78 3.2-7.37H21z"/></svg></span></span></div></div></div>
+    <div class="a-foot">
+      <div class="a-composer">
+        <div class="a-field ph">Ask me anything !</div>
+        <div class="a-row">
+          <span class="a-btn a-plus"><svg class="z24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 4V20M20 12H4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+          <span class="a-grow"></span>
+          <span class="a-pill"><svg class="z15" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M5.22576 11.3294L12.224 2.34651C12.7713 1.64397 13.7972 2.08124 13.7972 3.01707V9.96994C13.7972 10.5305 14.1995 10.985 14.6958 10.985H18.0996C18.8729 10.985 19.2851 12.0149 18.7742 12.6706L11.776 21.6535C11.2287 22.356 10.2028 21.9188 10.2028 20.9829V14.0301C10.2028 13.4695 9.80048 13.015 9.3042 13.015H5.90035C5.12711 13.015 4.71494 11.9851 5.22576 11.3294Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg><b>Fast</b><svg class="z12 a-dn" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M18 9.00005C18 9.00005 13.5811 15 12 15C10.4188 15 6 9 6 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+          <span class="a-btn a-mic"><svg class="z22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M12 18V22M12 18H11.5208C8.11765 18 5.28262 15.3914 5 12M12 18H12.4792C15.8824 18 18.7174 15.3914 19 12M12 22H15M12 22H9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M8 6C8 3.79086 9.79086 2 12 2C14.2091 2 16 3.79086 16 6V11C16 13.2091 14.2091 15 12 15C9.79086 15 8 13.2091 8 11V6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+          <span class="a-send"><svg class="z26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10.325 5.33455L16.1084 8.24495C19.3643 9.88342 20.9922 10.7027 20.9922 12C20.9922 13.2973 19.3643 14.1166 16.1084 15.7551L10.325 18.6655C6.63532 20.5223 4.79046 21.4507 3.7862 20.7851C3.57349 20.6441 3.38825 20.4651 3.23962 20.2569C2.53788 19.2741 3.3843 17.381 5.07715 13.5948C5.39957 12.8736 5.56078 12.5131 5.58462 12.1319C5.59011 12.044 5.59011 11.956 5.58462 11.8681C5.56078 11.4869 5.39957 11.1264 5.07715 10.4052C3.3843 6.61898 2.53788 4.72586 3.23962 3.74307C3.38825 3.53492 3.57349 3.35593 3.7862 3.21495C4.79046 2.54933 6.63532 3.47774 10.325 5.33455Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M9.49219 12H13.4922" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+        </div>
+      </div>
+      <p class="a-disc">You're chatting with an AI/LLM — it can be wrong. Check key info.</p>
+    </div>
+  </div>
+</div></div>
+  <div class="eyebrow">Back on your device</div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  var q = function (s) { return root.querySelector(s); };
+  var qa = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+
+  var win = q(".win"), bub = q(".a-bubble"), col = q(".a-col");
+  tl.fromTo(win, { y: 40, opacity: 0.4 }, { y: 0, opacity: 1, duration: 0.6, ease: "expo.out" }, 0);
+  tl.fromTo(q(".eyebrow"), { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.5, ease: "expo.out" }, 0.08);
+  // the bubble arrives as the ciphertext the device holds; the answer waits below
+  tl.set(bub, { backgroundColor: "#33343C", color: "#9DA6C8", borderColor: "rgba(160,180,255,.22)" }, 0);
+  tl.fromTo(col, { y: 203 }, { y: 203, duration: 0.01 }, 0);
+  var hidden = qa(".a-tl, .a-acts, .a-ai li").concat(qa(".a-ai .w"));
+  hidden.forEach(function (h) { tl.fromTo(h, { opacity: 0 }, { opacity: 0, duration: 0.01 }, 0); });
+  // decrypted with the key on this device
+  var rows = ["MV6 c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=", "eR6 c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=", "x4k c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=", "Ho= 9D 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=", "How /Z M 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=", "How do T cNv3 OR =VH5 L4qE s k1 kub=zo uED=", "How do I b=o3 OR =VH5 L4qE s k1 kub=zo uED=", "How do I t7=d OR =VH5 L4qE s k1 kub=zo uED=", "How do I tel7 jY =VH5 L4qE s k1 kub=zo uED=", "How do I tell K3 nVH5 L4qE s k1 kub=zo uED=", "How do I tell my dsh5 L4qE s k1 kub=zo uED=", "How do I tell my boYW p4qE s k1 kub=zo uED=", "How do I tell my boss a85E s k1 kub=zo uED=", "How do I tell my boss tZYQ s k1 kub=zo uED=", "How do I tell my boss thaM L k1 kub=zo uED=", "How do I tell my boss that s =c kub=zo uED=", "How do I tell my boss that I xH oub=zo uED=", "How do I tell my boss that I am IpF=zo uED=", "How do I tell my boss that I am b6Ll8o uED=", "How do I tell my boss that I am burh5q uED=", "How do I tell my boss that I am burne6 83D=", "How do I tell my boss that I am burned out?"];
+  rows.forEach(function (r, i) { tl.set(bub, { textContent: r }, 0.3 + i / 30); });
+  tl.to(bub, { backgroundColor: "#B6674D", color: "#E8E4D8", borderColor: "rgba(232,228,216,.3)", duration: 0.45, ease: "power1.inOut" }, 0.3);
+  // the answer arrives; the thread scrolls up by exactly what appears
+  var off = 203;
+  function step(h, t) { off -= h; tl.to(col, { y: off, duration: 0.28, ease: "power2.out" }, t); }
+  step(39, 1.05);
+  tl.fromTo(q(".a-tl"), { opacity: 0 }, { opacity: 1, duration: 0.25, immediateRender: false }, 1.07);
+  step(39, 1.35);
+  qa(".a-ai p .w").forEach(function (w, i) {
+    tl.fromTo(w, { opacity: 0 }, { opacity: 1, duration: 0.12, immediateRender: false }, 1.37 + i * 0.07);
+  });
+  var liStarts = [1.95, 2.42, 2.86];
+  qa(".a-ai li").forEach(function (li, j) {
+    step(27 + (j === 2 ? 8 : 0), liStarts[j]);
+    tl.fromTo(li, { opacity: 0 }, { opacity: 1, duration: 0.1, immediateRender: false }, liStarts[j] + 0.02);
+    qa(".a-ai li:nth-child(" + (j + 1) + ") .w").forEach(function (w, i) {
+      tl.fromTo(w, { opacity: 0 }, { opacity: 1, duration: 0.1, immediateRender: false }, liStarts[j] + 0.02 + i * 0.045);
+    });
+  });
+  step(36, 3.45);
+  tl.fromTo(q(".a-acts"), { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, 3.49);
+
+  tl.seek(0);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["07-answer"] = tl;
+})();
+</script>
+</template>

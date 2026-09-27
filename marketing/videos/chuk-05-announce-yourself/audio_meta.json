@@ -1,0 +1,132 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track_edit.wav",
+    "source": "marketing/_shared/music/05-announce-yourself.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 61.0,
+    "edit": "tools/make_music_edit.sh: source 7.069-48.069 + 56.069-64.069 + 24.069-36.069, 0.35 s fade-in, 4 s fade-out"
+  },
+  "voices": [],
+  "sfx": [
+    {
+      "file": "assets/sfx/typing.mp3",
+      "at": 0.0,
+      "duration_s": 1.5,
+      "volume": 0.16,
+      "cue": "prompt types"
+    },
+    {
+      "file": "assets/sfx/typing.mp3",
+      "at": 1.25,
+      "duration_s": 1.3,
+      "volume": 0.16,
+      "cue": "prompt types"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 2.98,
+      "duration_s": 0.36,
+      "volume": 0.35,
+      "cue": "send click"
+    },
+    {
+      "file": "assets/sfx/pop.mp3",
+      "at": 3.02,
+      "duration_s": 0.5,
+      "volume": 0.22,
+      "cue": "user bubble lands"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 10.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 10.98,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 11.48,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 11.98,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 12.48,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 12.73,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/click-soft.mp3",
+      "at": 12.98,
+      "duration_s": 0.36,
+      "volume": 0.16,
+      "cue": "model click (lifted menu)"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 17.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 22.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 26.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 31.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 34.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    },
+    {
+      "file": "assets/sfx/whoosh-short.mp3",
+      "at": 38.0,
+      "duration_s": 0.6,
+      "volume": 0.12,
+      "cue": "card lifts out of the window"
+    }
+  ]
+}

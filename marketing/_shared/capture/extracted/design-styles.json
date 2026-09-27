@@ -1,0 +1,340 @@
+{
+  "typography": [
+    {
+      "role": "display",
+      "fontFamily": "-apple-system",
+      "fontSize": "92px",
+      "fontWeight": "500",
+      "lineHeight": "92px",
+      "letterSpacing": "-3.68px",
+      "color": "#26251F",
+      "sampleText": "One private chat.Many worlds."
+    },
+    {
+      "role": "heading",
+      "fontFamily": "-apple-system",
+      "fontSize": "46px",
+      "fontWeight": "500",
+      "lineHeight": "49.68px",
+      "letterSpacing": "-1.288px",
+      "color": "#F6F3EC",
+      "sampleText": "The questions you would not ask anyone else."
+    },
+    {
+      "role": "body",
+      "fontFamily": "-apple-system",
+      "fontSize": "19px",
+      "fontWeight": "400",
+      "lineHeight": "29.45px",
+      "letterSpacing": "normal",
+      "color": "#5F5D55",
+      "sampleText": "Founders, small businesses, developers, students. They use t"
+    },
+    {
+      "role": "heading-3",
+      "fontFamily": "-apple-system",
+      "fontSize": "17px",
+      "fontWeight": "500",
+      "lineHeight": "22.1px",
+      "letterSpacing": "-0.34px",
+      "color": "#26251F",
+      "sampleText": "Open-weight models only"
+    },
+    {
+      "role": "label",
+      "fontFamily": "-apple-system",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "lineHeight": "25.6px",
+      "letterSpacing": "normal",
+      "color": "#26251F",
+      "sampleText": "Burnout talk with my boss +c0 0U W 3WwK ja Ib2t a163 2 fj NO"
+    },
+    {
+      "role": "link",
+      "fontFamily": "-apple-system",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "lineHeight": "14px",
+      "letterSpacing": "normal",
+      "color": "#5F5D55",
+      "sampleText": "Blog"
+    },
+    {
+      "role": "body-small",
+      "fontFamily": "Ubuntu",
+      "fontSize": "12px",
+      "fontWeight": "400",
+      "lineHeight": "16.8px",
+      "letterSpacing": "normal",
+      "color": "#E8E4D8",
+      "sampleText": "HTML · v1"
+    }
+  ],
+  "spacing": {
+    "observed": [
+      2,
+      3,
+      4,
+      6,
+      8,
+      9,
+      10,
+      11,
+      12,
+      14,
+      16,
+      18,
+      20,
+      22,
+      24
+    ],
+    "baseUnit": 4
+  },
+  "radius": [
+    "18px",
+    "50%",
+    "100px",
+    "999px"
+  ],
+  "shadows": [
+    {
+      "value": "rgba(12, 10, 6, 0.6) 0px 50px 110px -30px, rgba(255, 255, 255, 0.07) 0px 0px 0px 1px",
+      "count": 8
+    },
+    {
+      "value": "rgba(0, 0, 0, 0.06) 0px 1px 2px 0px",
+      "count": 1
+    },
+    {
+      "value": "rgba(255, 238, 205, 0.1) 0px 0px 80px 24px",
+      "count": 1
+    },
+    {
+      "value": "rgba(120, 60, 30, 0.12) 0px 6px 24px 0px",
+      "count": 1
+    },
+    {
+      "value": "rgba(38, 37, 31, 0.5) 0px 30px 70px -24px",
+      "count": 1
+    }
+  ],
+  "buttons": [
+    {
+      "label": "Web App",
+      "background": "#26251F",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#FFFFFF",
+      "padding": "8px 15px",
+      "borderRadius": "999px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "500",
+      "height": "30px"
+    },
+    {
+      "label": "EN",
+      "background": "#FFFFFF",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#26251F",
+      "padding": "4px 9px",
+      "borderRadius": "999px",
+      "border": "0px none rgb(38, 37, 31)",
+      "boxShadow": "rgba(0, 0, 0, 0.06) 0px 1px 2px 0px",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "height": "27.1875px"
+    },
+    {
+      "label": "Download for Mac / Windows / Linux\n\nWeb ",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#26251F",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(38, 37, 31)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "40px"
+    },
+    {
+      "label": "Web App →",
+      "background": "#F3F0E8",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#26251F",
+      "padding": "11px 20px",
+      "borderRadius": "999px",
+      "border": "0px none rgb(38, 37, 31)",
+      "boxShadow": "none",
+      "fontSize": "15px",
+      "fontWeight": "500",
+      "height": "40px"
+    }
+  ],
+  "cards": [
+    {
+      "label": "card",
+      "background": "#262624",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E8E4D8",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "734.987px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#E8E4D8",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(232, 228, 216)",
+      "boxShadow": "none",
+      "fontSize": "14px",
+      "fontWeight": "400",
+      "height": "734.987px"
+    },
+    {
+      "label": "card",
+      "background": "#262624",
+      "backgroundImage": "",
+      "backdropFilter": "blur(12px)",
+      "color": "#E8E4D8",
+      "padding": "18px",
+      "borderRadius": "22px",
+      "border": "1.43699px solid rgba(232, 228, 216, 0.157)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "256.907px"
+    },
+    {
+      "label": "card",
+      "background": "transparent",
+      "backgroundImage": "",
+      "backdropFilter": "",
+      "color": "#26251F",
+      "padding": "0px",
+      "borderRadius": "0px",
+      "border": "0px none rgb(38, 37, 31)",
+      "boxShadow": "none",
+      "fontSize": "16px",
+      "fontWeight": "400",
+      "height": "210.469px"
+    }
+  ],
+  "nav": {
+    "label": "navigation",
+    "background": "#FDFBF7",
+    "backgroundImage": "",
+    "backdropFilter": "saturate(1.4) blur(12px)",
+    "color": "#26251F",
+    "padding": "0px 24px",
+    "borderRadius": "0px",
+    "border": "",
+    "boxShadow": "none",
+    "fontSize": "16px",
+    "fontWeight": "400",
+    "height": "56px"
+  },
+  "chips": [
+    {
+      "label": "Fast",
+      "background": "transparent",
+      "color": "#E8E4D8",
+      "padding": "0px 9px",
+      "borderRadius": "18px",
+      "border": "2.37248px solid rgb(97, 95, 90)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "600",
+      "height": "35.995px"
+    },
+    {
+      "label": "What our server stores",
+      "background": "#0E111E",
+      "color": "#DDE4FF",
+      "padding": "9px 16px",
+      "borderRadius": "999px",
+      "border": "1.18624px solid rgba(160, 180, 255, 0.32)",
+      "boxShadow": "rgba(0, 0, 0, 0.35) 0px 10px 30px 0px",
+      "fontSize": "14px",
+      "fontWeight": "600",
+      "height": "39.9429px"
+    },
+    {
+      "label": "Z-Image Turbo",
+      "background": "#000000",
+      "color": "#FFFFFF",
+      "padding": "3px 6px",
+      "borderRadius": "6px",
+      "border": "0px none rgb(255, 255, 255)",
+      "boxShadow": "none",
+      "fontSize": "9px",
+      "fontWeight": "600",
+      "height": "18.5721px"
+    },
+    {
+      "label": "naDP8 sources",
+      "background": "#333330",
+      "color": "#E8E4D8",
+      "padding": "6px 10px",
+      "borderRadius": "100px",
+      "border": "1.18624px solid rgba(232, 228, 216, 0.15)",
+      "boxShadow": "none",
+      "fontSize": "12px",
+      "fontWeight": "500",
+      "height": "31.1203px"
+    }
+  ],
+  "statCells": [],
+  "tabs": [],
+  "backgrounds": [
+    {
+      "value": "linear-gradient(rgba(90, 255, 160, 0.06) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(90, 255, 160, 0.06) 1px, rgba(0, 0, 0, 0) 1px)",
+      "area": 2448000
+    },
+    {
+      "value": "radial-gradient(1.6px 1.6px at 6% 14%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 14% 38%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.8px 1.8px at 22% 8%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 31% 26%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.4px 1.4px at 39% 12%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1px 1px at 46% 34%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.6px 1.6px at 55% 6%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 63% 22%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1px 1px at 71% 40%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.6px 1.6px at 79% 16%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 88% 30%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.4px 1.4px at 95% 10%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1px 1px at 9% 58%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 27% 66%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1px 1px at 51% 60%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.4px 1.4px at 68% 70%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1px 1px at 84% 56%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%), radial-gradient(1.2px 1.2px at 93% 74%, rgb(255, 255, 255) 50%, rgba(0, 0, 0, 0) 52%)",
+      "area": 4976640
+    },
+    {
+      "value": "linear-gradient(90deg, rgba(0, 0, 0, 0) calc(9% - 1px), rgba(200, 90, 80, 0.3) calc(9% - 1px), rgba(200, 90, 80, 0.3) 9%, rgba(0, 0, 0, 0) 9%), repeating-linear-gradient(rgba(0, 0, 0, 0) 0px, rgba(0, 0, 0, 0) 35px, rgba(70, 100, 150, 0.16) 35px, rgba(70, 100, 150, 0.16) 36px)",
+      "area": 2380800
+    },
+    {
+      "value": "linear-gradient(112deg, rgba(0, 0, 0, 0) 28%, rgba(255, 255, 255, 0.6) 36%, rgba(0, 0, 0, 0) 44%, rgba(0, 0, 0, 0) 54%, rgba(255, 255, 255, 0.45) 60%, rgba(0, 0, 0, 0) 67%)",
+      "area": 4064256
+    },
+    {
+      "value": "linear-gradient(rgba(255, 255, 255, 0.14) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.14) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(rgba(255, 255, 255, 0.06) 1px, rgba(0, 0, 0, 0) 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.06) 1px, rgba(0, 0, 0, 0) 1px)",
+      "area": 2713600
+    },
+    {
+      "value": "linear-gradient(rgba(0, 0, 0, 0), rgba(90, 255, 160, 0.05), rgba(0, 0, 0, 0))",
+      "area": 622080
+    }
+  ],
+  "glass": [
+    {
+      "backdropFilter": "saturate(1.4) blur(12px)",
+      "background": "rgba(253, 251, 247, 0.9)",
+      "border": "",
+      "borderRadius": "0px",
+      "boxShadow": "",
+      "area": 107520
+    }
+  ]
+}

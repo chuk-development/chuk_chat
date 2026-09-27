@@ -190,3 +190,20 @@ agents/**/build/
 
 # Loose verification scratch a session dropped in the root instead of `_scratch/`.
 _scratch_*
+
+# Marketing videos: keep the HyperFrames sources, not the heavy media.
+# Rendered MP4s, music WAVs, captures and caches stay local.
+marketing/out/
+marketing/**/renders/
+marketing/**/snapshots/
+marketing/**/node_modules/
+marketing/**/.media/
+marketing/**/*.wav
+marketing/**/*.mp4
+marketing/**/capture/screenshots/
+marketing/_shared/.render.lock
+marketing/_review/
+marketing/**/_work/**/*.png
+marketing/**/_work/**/*.jpg
+marketing/**/_work/media-home/
+marketing/videos/*/capture/

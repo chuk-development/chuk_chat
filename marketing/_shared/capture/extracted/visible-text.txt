@@ -1,0 +1,515 @@
+[span] Chuk Chat
+[span] Private and Secure. Always.
+[a] Downloads
+[a] Blog
+[a] Pricing
+[a] Downloads
+[a] Open Source on GitHub
+[a] Web App
+[a] Support
+[span] Founders
+[span] Small business
+[span] Connectors
+[span] Engineers
+[span] Prototypers
+[span] Research
+[span] On the go
+[p] Private AI chat from Germany
+[h1] One private chat.
+[h1] Many worlds.
+[p] Founders, small businesses, developers, students. They use the same app for very different work. Scroll down. Each world is a real use case.
+[a] Download for Mac / Windows / Linux
+[a] Web App
+[p] 100% open source · monthly subscription · no token stress
+[span] Write the invoice for Mrs Weber: kitchen shelf, 6 hours at €58, material €140. As
+[b] Fast
+[a] Founders
+[a] Small business
+[a] Connectors
+[a] Engineers
+[a] Prototypers
+[a] Research
+[a] On the go
+[p] Scroll to begin
+[p] of 09
+[p] The private questions
+[h2] The questions you would not ask anyone else.
+[p] Health, money, a hard talk with your boss. People ask Chuk Chat the things they would never type into a data-hungry AI. Your chats are encrypted on your device before we store them. We keep only ciphertext.
+[li] End-to-end encrypted storage
+[li] Never used for training
+[li] No tracking
+[span] Burnout talk with my boss
+[span] Thought for 4s
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[span] What our server stores
+[span] AES-256-GCM · the key stays on your device
+[p] of 09
+[p] Building a product to sell
+[h2] From idea to launch page in one chat.
+[p] Founders research the market, write the pitch, draft the code and publish a landing page with a public link. Connect GitHub, Stripe or Vercel and work with your real project. Your idea stays your idea. We do not train on it.
+[li] Web research
+[li] Artifacts with public links
+[li] GitHub · Stripe · Vercel
+[span] Spoke landing page
+[p] Build a landing page for my bike repair service and publish it.
+[span] Worked for 12s
+[span] Ran artifact manager
+[span] Ran create artifact
+[b] Spoke landing page
+[small] HTML · v1
+[span] Download
+[span] Open
+[span] Done.
+[span] Your
+[span] page
+[span] live,
+[span] and
+[span] anyone
+[span] with
+[span] the
+[span] link
+[span] can
+[span] open
+[span] it:
+[span] https://artifacts.chuk.chat/k7f2-spoke
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[span] Spoke landing page
+[span] HTML
+[span] Preview
+[span] Code
+[span] Preview
+[span] Code
+[b] Spoke
+[span] Prices
+[span] Areas
+[span] Book
+[p] Bike repair at your door.
+[p] We come to you. Fixed prices, same-day visits.
+[span] Book a repair
+[span] Same-day visits
+[span] Fixed prices
+[span] All brands
+[b] Version
+[p] of 09
+[p] Running a small business
+[h2] The office work, done between two jobs.
+[p] A carpenter writes the invoice as a clean PDF on the way to the next customer. A café owner answers emails and plans the shifts. Appointments go straight into the calendar. No IT department needed.
+[li] PDF documents
+[li] Email drafts
+[li] Calendar and reminders
+[span] Invoice Mrs Weber
+[p] Write the invoice for Mrs Weber: kitchen shelf, 6 hours at €58, material €140. As PDF.
+[span] Worked for 6s
+[span] Ran typst compile
+[b] Invoice Mrs Weber
+[small] Typst · PDF · v1
+[span] Download
+[span] Open
+[p] Now write Mrs Weber a short email about it.
+[span] Your invoice 2026-031
+[p] weber@example.de
+[p] Dear Mrs Weber, thank you for your order. Here is the invoice for the kitchen shelf. Total: €488.00, payable within 14 days. Kind regards, Jan Brandt
+[span] Open in Mail App
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[span] Invoice Mrs Weber
+[span] Typst
+[span] Preview
+[span] Code
+[span] Preview
+[span] Code
+[p] Brandt Carpentry · Hafenstraße 12 · 24103 Kiel
+[b] Invoice
+[span] No. 2026-031
+[p] Mrs Weber
+[span] Kitchen shelf, labour 6 h × €58
+[span] €348.00
+[span] Material
+[span] €140.00
+[span] Total
+[span] €488.00
+[b] Version
+[p] of 09
+[p] Connecting every tool
+[h2] All your tools. One chat to drive them.
+[p] Knowledge workers connect Notion, Linear, Todoist, Dropbox and 50 more services. You sign in once in the browser. Then you ask in plain words, and Chuk Chat does the clicking across all of them.
+[li] 50+ connectors (MCP)
+[li] Sign in with OAuth
+[li] Desktop and Android
+[span] This week
+[p] What is due this week? Check Linear, Todoist and Notion, then make me a plan.
+[span] Worked for 9s
+[span] Ran linear list issues
+[span] Ran todoist find-tasks
+[span] Searched
+[b] launch plan
+[span] Your
+[span] week,
+[span] order:
+[span] Mon:
+[span] fix
+[span] the
+[span] login
+[span] bug
+[span] (Linear,
+[span] high
+[span] priority)
+[span] Tue:
+[span] send
+[span] the
+[span] report
+[span] (Todoist)
+[span] Thu:
+[span] review
+[span] the
+[span] launch
+[span] plan
+[span] (Notion)
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[p] of 09
+[p] Every model, one budget
+[h2] Stop paying for five AI subscriptions.
+[p] Some models write better. Some think deeper. Some are fast and cheap. Power users pick a different model for each message and pay from one budget: €20 per month, with €16 in AI credits included. No second account, no second invoice.
+[li] Frontier open-weight models
+[li] Switch for each message
+[li] €16 AI credits included
+[span] Cover letter
+[p] Write my cover letter for the office manager job.
+[span] Thought for 3s
+[span] Dear
+[span] Berger,
+[span] applying
+[span] for
+[span] the
+[span] office
+[span] manager
+[span] position…
+[p] Check the salary maths: €4,250 per month, 13 salaries.
+[span] Thought for 6s
+[span] Correct:
+[span] €4,250
+[span] €55,250
+[span] per
+[span] year.
+[p] Translate the letter into German.
+[span] Thought for 2s
+[span] Sehr
+[span] geehrte
+[span] Frau
+[span] Berger,
+[span] hiermit
+[span] bewerbe
+[span] ich
+[span] mich…
+[span] Fast
+[span] Thinking
+[span] DeepSeek V4 Pro 0813
+[span] Reasoning
+[span] Low
+[span] DeepSeek V4 Pro 0813
+[span] Kimi K3
+[span] GLM 5.3
+[span] Qwen3.8 27B
+[span] MiniMax M3
+[span] Mistral Small 4
+[span] gpt-oss-120b
+[span] More models
+[div] Ask me anything !
+[b] Qwen3.8 27B
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[p] of 09
+[p] Many tasks at once
+[h2] Five chats running. None of them waits for you.
+[p] Engineers start a refactor in one chat, a research question in the next and a bug hunt in a third. Answers keep streaming when you switch chats. Code lands in editable panels, and on desktop a sandboxed shell runs commands for you.
+[li] Parallel streaming
+[li] Code artifacts
+[li] Sandboxed shell (desktop)
+[b] Pinned
+[b] Load test the new sync API
+[small] Mon, Sep 21
+[b] Team code style guide
+[small] Wed, Aug 12
+[b] Today
+[b] Refactor the auth service
+[small] 14:32
+[b] Why is the CI build slow?
+[small] 14:28
+[b] Migrate to Dart 3.13
+[small] 14:21
+[b] Explain this stack trace
+[small] 14:09
+[b] Regex for German IBANs
+[small] 13:40
+[b] This week
+[b] Flaky login test on CI
+[small] Sat, Sep 26
+[b] Postgres index for full-text search
+[small] Sat, Sep 26
+[b] Multi-stage Dockerfile for the API
+[small] Fri, Sep 25
+[b] Rate limiter with Redis
+[small] Thu, Sep 24
+[b] Kotlin coroutines vs. Dart isolates
+[small] Wed, Sep 23
+[b] Release notes for 2.3
+[small] Tue, Sep 22
+[b] This month
+[b] Set up Sentry for Flutter
+[small] Sat, Sep 19
+[b] GraphQL or REST for the admin panel
+[small] Thu, Sep 17
+[b] Memory leak in the image cache
+[small] Mon, Sep 14
+[b] Nginx config for WebSockets
+[small] Fri, Sep 11
+[span] New chat
+[span] Media
+[span] Search
+[b] Lena Hartmann
+[span] €24.60
+[p] Refactor the auth service and run the formatter.
+[span] Worked for 21s
+[span] Ran bash
+[span] Searched
+[b] dart token refresh pattern
+[b] auth_service.dart
+[small] Code · v2
+[span] Download
+[span] Open
+[span] moved
+[span] the
+[span] token
+[span] refresh
+[span] into
+[span] its
+[span] own
+[span] method
+[span] and
+[span] added
+[span] retry.
+[span] The
+[span] formatter
+[span] changed
+[span] files.
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[p] of 09
+[p] The prototyper
+[h2] From a sketch to a clickable prototype.
+[p] Prototypers sketch a flow, turn it into a clickable HTML page and generate the images for it. Each idea takes minutes, not days. Keep the good ones. Delete the rest.
+[li] Excalidraw sketches
+[li] HTML previews
+[li] Image generation
+[span] Signup flow
+[p] Sketch a signup flow with an email code.
+[span] Worked for 8s
+[span] Ran artifact manager
+[b] Signup flow
+[small] Excalidraw sketch · v1
+[span] Download
+[span] Open
+[p] Make it a clickable page.
+[span] Worked for 11s
+[b] Signup page
+[small] HTML · v1
+[span] Download
+[span] Open
+[p] Add a hero image.
+[span] Worked for 5s
+[span] Z-Image Turbo
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[span] Signup flow
+[span] Excalidraw
+[span] Preview
+[span] Code
+[span] Preview
+[span] Code
+[span] Signup page
+[span] HTML
+[span] Preview
+[span] Code
+[span] Preview
+[span] Code
+[text] Enter email
+[text] Code sent
+[text] Enter code
+[text] Welcome
+[p] Create your account
+[span] you@example.com
+[span] Send code
+[b] Version
+[p] of 09
+[p] Research and documents
+[h2] Talk to your documents. Get answers with sources.
+[p] Students and researchers attach PDFs, notes and papers and ask questions about them. Chuk Chat searches the web, names its sources, draws charts and writes the result as a typeset PDF. Old chats stay searchable.
+[li] PDF and file attachments
+[li] Web search with sources
+[li] Charts and PDF export
+[span] Survey methods
+[span] thesis_draft.pdf
+[span] miller_2024.pdf
+[span] Compare the methods in both papers. Show the response rates as a chart.
+[span] Worked for 14s
+[span] Searched
+[b] survey response rates by method
+[span] nature.com
+[span] arxiv.org
+[span] destatis.de
+[span] pewresearch.org
+[span] Both
+[span] papers
+[span] measure
+[span] response
+[span] rates,
+[span] but
+[span] Miller
+[span] compares
+[span] four
+[span] survey
+[span] methods.
+[span] person
+[span] works
+[span] best:
+[p] Response rate by survey method (%)
+[span] Online
+[span] Phone
+[span] Mail
+[span] In person
+[span] 8 sources
+[div] Ask me anything !
+[b] Fast
+[p] You're chatting with an AI/LLM — it can be wrong. Check key info.
+[p] of 09
+[p] On the go
+[h2] Hold the home button. Ask. Done.
+[p] On Android, Chuk Chat can be your assistant. Hold the home gesture, and it listens, reads what is on the screen, answers out loud and acts. It sets alarms, finds places and starts the navigation.
+[li] Android assistant
+[li] Voice in, voice out
+[li] Places, routes, alarms
+[span] 18:42
+[span] Fri, Sep 25
+[span] 14°C
+[span] Calendar
+[span] Clock
+[span] Photos
+[span] Weather
+[span] Notes
+[span] Files
+[span] Settings
+[span] Chuk Chat
+[b] Pharmacy
+[b] Pharmacy at the market
+[small] Marktplatz 4
+[small] Pharmacy · open until 20:00
+[b] 4.7
+[small] (128)
+[b] Linden Pharmacy
+[small] Lindenstraße 21
+[small] Pharmacy · open until 19:00
+[b] 4.5
+[small] (86)
+[b] Harbour Pharmacy
+[small] Kaistraße 8
+[small] Pharmacy · open until 18:30
+[b] 4.4
+[small] (51)
+[b] Navigation started
+[small] Pharmacy at the market
+[p] CHUK CHAT
+[span] Listening
+[p] “Find a pharmacy that is open now and take me there.”
+[span] Three
+[span] pharmacies
+[span] are
+[span] open.
+[span] The
+[span] closest
+[span] Pharmacy
+[span] the
+[span] market
+[span] 400
+[span] away.
+[span] Navigation
+[span] running.
+[p] Location
+[p] Places: Pharmacy
+[p] Navigation: Pharmacy at the market
+[span] Pause
+[p] What connects them
+[h2] Nine worlds. One rule:
+[h2] your chats belong to you.
+[p] One thread runs through all of these. Your conversations are the most personal data you create. So they are encrypted on your device, answered by open-weight models and never used for training. No ads, no tracking, run from Germany.
+[h3] Open-weight models only
+[p] Transparent models. You always know what runs your AI.
+[h3] End-to-end encrypted
+[p] Chats are encrypted on your device before we store them.
+[h3] Made in Germany
+[p] Operated from Germany under EU law. GDPR by design.
+[h3] No tracking, no training
+[p] No ads, no profiling. Your data does not train anything.
+[p] Comparison
+[h2] How Chuk Chat Compares
+[p] What the mainstream players skip — and where Chuk Chat draws its line.
+[span] Feature
+[th] ChatGPT
+[th] Claude
+[th] Okara
+[th] Lumo
+[th] Chuk Chat
+[th] Privacy First
+[th] Based in Germany
+[th] Based in EU
+[th] Open Source
+[th] Frontier-Class Models
+[th] Open-Weight Models Only
+[th] End-to-End Encrypted
+[th] Never Trains on Your Data
+[th] No User Tracking
+[th] GDPR by Design
+[th] Platforms
+[span] iOS
+[span] Android
+[span] Mac
+[span] Windows
+[span] Web
+[span] iOS
+[span] Android
+[span] Mac
+[span] Windows
+[span] Web
+[span] Web
+[span] iOS
+[span] Android
+[span] Web
+[a] Android
+[a] Mac
+[a] Windows
+[a] Linux
+[a] Web
+[h2] Find your world.
+[p] €20 per month, €16 of it as AI credits. Web, Mac, Windows, Linux and Android.
+[a] Download Chuk Chat
+[a] Open the Web App
+[a] Pricing
+[a] FAQ
+[a] Chuk Chat
+[p] Private and Secure. Always.
+[a] Downloads
+[p] Resources
+[a] Cancellation
+[a] Impressum
+[p] Open Source
+[a] Chuk Development
+[span] © 2026 Chuk Development
+[span] 100%
+[button] Fit

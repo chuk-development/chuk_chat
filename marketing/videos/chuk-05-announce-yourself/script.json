@@ -1,0 +1,543 @@
+{
+ "length": 61,
+ "prompt": {
+  "type_from": -0.25,
+  "type_to": 2.55,
+  "send_at": 3.0
+ },
+ "work": {
+  "at": 4.0,
+  "rows": [
+   [
+    4.5,
+    "list models"
+   ],
+   [
+    5.0,
+    "list connectors"
+   ],
+   [
+    5.5,
+    "create artifact"
+   ]
+  ],
+  "fold_at": 7.0,
+  "done": "Worked for 3s"
+ },
+ "blocks": [
+  {
+   "id": "intro",
+   "at": 7.0,
+   "text": "Hi, I'm Chuk Chat, a private AI chat from Germany. Here is what I do, in one short reply:",
+   "text_at": 7.2,
+   "text_dur": 1.5
+  },
+  {
+   "id": "models",
+   "at": 9.0,
+   "heading": "Pick a model for each message.",
+   "heading_dur": 0.5,
+   "card": {
+    "kind": "models",
+    "models": [
+     [
+      "DeepSeek V4 Pro 0813",
+      "deepseek"
+     ],
+     [
+      "Kimi K3",
+      "moonshot"
+     ],
+     [
+      "GLM 5.3",
+      "zai"
+     ],
+     [
+      "Qwen3.8 27B",
+      "qwen"
+     ],
+     [
+      "MiniMax M3",
+      "minimax"
+     ],
+     [
+      "Mistral Small 4",
+      "mistral"
+     ]
+    ],
+    "clicks": [
+     [
+      11.0,
+      0
+     ],
+     [
+      11.5,
+      2
+     ],
+     [
+      12.0,
+      3
+     ],
+     [
+      12.5,
+      4
+     ],
+     [
+      12.75,
+      5
+     ],
+     [
+      13.0,
+      1
+     ]
+    ],
+    "lift": {
+     "at": 10.0,
+     "back": 13.5,
+     "sky": "prism"
+    }
+   }
+  },
+  {
+   "id": "conn",
+   "at": 15.0,
+   "heading": "Drives Notion, Linear, GitHub and 50+ more.",
+   "heading_at": 15.35,
+   "heading_dur": 1.4,
+   "card": {
+    "kind": "connectors",
+    "at": 17.0,
+    "every": 0.25,
+    "items": [
+     [
+      "Notion",
+      "notion"
+     ],
+     [
+      "Linear",
+      "linear"
+     ],
+     [
+      "GitHub",
+      "github"
+     ],
+     [
+      "Todoist",
+      "todoist"
+     ],
+     [
+      "Dropbox",
+      "dropbox"
+     ],
+     [
+      "Figma",
+      "figma"
+     ],
+     [
+      "Stripe",
+      "stripe"
+     ]
+    ],
+    "more": "+50 more",
+    "lift": {
+     "at": 17.0,
+     "back": 20.5,
+     "sky": "network"
+    }
+   }
+  },
+  {
+   "id": "page",
+   "at": 21.0,
+   "heading": "Builds pages, PDFs, code.",
+   "card": {
+    "kind": "artifact-page",
+    "reveal": [
+     22.3,
+     22.6,
+     23.0,
+     23.4,
+     23.8
+    ],
+    "lift": {
+     "at": 22.0,
+     "back": 24.5,
+     "sky": "dawn"
+    }
+   }
+  },
+  {
+   "id": "invoice",
+   "at": 25.0,
+   "heading": "Does the office work.",
+   "card": {
+    "kind": "artifact-invoice",
+    "reveal": [
+     26.3,
+     26.6,
+     27.0,
+     27.4,
+     27.8
+    ],
+    "lift": {
+     "at": 26.0,
+     "back": 28.5,
+     "sky": "day"
+    }
+   }
+  },
+  {
+   "id": "enc",
+   "at": 29.0,
+   "heading": "Encrypted on your device.",
+   "heading_at": 29.3,
+   "heading_dur": 0.6,
+   "card": {
+    "kind": "encrypt",
+    "at": 31.0,
+    "restore_at": 33.0,
+    "lift": {
+     "at": 31.0,
+     "back": 32.55,
+     "sky": "night",
+     "scramble_at": 31.5
+    }
+   }
+  },
+  {
+   "id": "price",
+   "at": 33.0,
+   "heading": "€20 / month.",
+   "heading_dur": 0.3,
+   "text": "€16 AI credits included. One budget, one invoice.",
+   "text_at": 33.3,
+   "text_dur": 0.6,
+   "card": {
+    "kind": "quote",
+    "lift": {
+     "at": 34.0,
+     "back": 36.5,
+     "sky": "paper"
+    }
+   }
+  },
+  {
+   "id": "oss",
+   "at": 37.0,
+   "heading": "100% open source.",
+   "heading_dur": 0.35,
+   "card": {
+    "kind": "platforms",
+    "at": 37.25,
+    "every": 0.25,
+    "lead": "Runs on",
+    "items": [
+     "Mac",
+     "Windows",
+     "Linux",
+     "Android",
+     "Web"
+    ],
+    "lift": {
+     "at": 38.0,
+     "until": 41.0,
+     "sky": "library"
+    }
+   }
+  },
+  {
+   "id": "slogan",
+   "at": 47.0,
+   "slogan": "Private and Secure. Always.",
+   "slogan_at": 49.0,
+   "clear_others": true,
+   "space_below": 110
+  }
+ ],
+ "cursor": [
+  {
+   "show": 2.05,
+   "from": [
+    640,
+    640
+   ],
+   "to": "send",
+   "arrive": 2.8,
+   "click": 3.0,
+   "hide_at": 3.7
+  }
+ ],
+ "shots": [
+  {
+   "at": 0.0,
+   "t": [
+    "window"
+   ],
+   "fill": 0.86,
+   "clamp": false,
+   "drift": 1.02
+  },
+  {
+   "at": 1.0,
+   "t": [
+    "composer"
+   ],
+   "sub": [
+    0,
+    0,
+    0.62,
+    1
+   ],
+   "pad": 6,
+   "zoom": 3.0,
+   "clamp": false
+  },
+  {
+   "at": 2.3,
+   "t": [
+    "composer"
+   ],
+   "zoom": 2.4,
+   "clamp": false,
+   "move": "ease",
+   "dur": 0.6,
+   "ease": "power2.inOut"
+  },
+  {
+   "at": 3.0,
+   "t": [
+    "block:user"
+   ],
+   "zoom": 3.0,
+   "dy": -40,
+   "clamp": false,
+   "move": "ease",
+   "dur": 0.8,
+   "ease": "power3.inOut",
+   "drift": 1.015
+  },
+  {
+   "at": 4.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "work"
+   ],
+   "drift": 1.015,
+   "measure": 6.9
+  },
+  {
+   "at": 7.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:intro"
+   ],
+   "move": "ease",
+   "dur": 0.6,
+   "drift": 1.015
+  },
+  {
+   "at": 9.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:models"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 15.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:conn"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 21.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:page"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 25.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:invoice"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 29.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:enc"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 33.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:price"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 37.0,
+   "col": true,
+   "zoom": 2.36,
+   "t": [
+    "block:oss"
+   ],
+   "drift": 1.015
+  },
+  {
+   "at": 47.0,
+   "col": true,
+   "t": [
+    "block:slogan"
+   ],
+   "zoom": 2.63,
+   "cx_target": true,
+   "drift": 1.0,
+   "measure": 48.95
+  },
+  {
+   "at": 49.0,
+   "col": true,
+   "t": [
+    "block:slogan"
+   ],
+   "zoom": 2.63,
+   "cx_target": true,
+   "kick": 1.05,
+   "drift": 1.0,
+   "measure": 50.9
+  },
+  {
+   "at": 51.0,
+   "t": [
+    "window"
+   ],
+   "zoom": 0.34,
+   "clamp": false,
+   "move": "ease",
+   "dur": 3.4,
+   "ease": "power3.inOut"
+  }
+ ],
+ "skies": [
+  [
+   0,
+   "dawn"
+  ]
+ ],
+ "montage": {
+  "at": 41.0,
+  "end": 47.0,
+  "end_sky": "dawn",
+  "steps": [
+   [
+    41.0,
+    "models"
+   ],
+   [
+    41.5,
+    "conn"
+   ],
+   [
+    42.0,
+    "page"
+   ],
+   [
+    42.5,
+    "invoice"
+   ],
+   [
+    43.0,
+    "enc"
+   ],
+   [
+    43.5,
+    "price"
+   ],
+   [
+    44.0,
+    "oss"
+   ],
+   [
+    44.5,
+    "models"
+   ],
+   [
+    44.75,
+    "conn"
+   ],
+   [
+    45.0,
+    "page"
+   ],
+   [
+    45.25,
+    "invoice"
+   ],
+   [
+    45.5,
+    "enc"
+   ],
+   [
+    45.75,
+    "price"
+   ],
+   [
+    46.0,
+    "oss"
+   ],
+   [
+    46.125,
+    "models"
+   ],
+   [
+    46.25,
+    "conn"
+   ],
+   [
+    46.375,
+    "page"
+   ],
+   [
+    46.5,
+    "invoice"
+   ],
+   [
+    46.625,
+    "enc"
+   ],
+   [
+    46.75,
+    "price"
+   ],
+   [
+    46.875,
+    "oss"
+   ]
+  ]
+ },
+ "outro": {
+  "fade_at": 54.2,
+  "fade_dur": 0.8,
+  "sun_rise": [
+   50.5,
+   56.0
+  ]
+ }
+}

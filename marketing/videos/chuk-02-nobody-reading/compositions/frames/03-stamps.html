@@ -1,0 +1,77 @@
+<template>
+<style>
+
+@font-face{font-family:"Chuk Chat Mono";src:url("assets/fonts/jetbrains-mono-latin-wght.woff2") format("woff2");font-weight:100 800;font-display:block;}
+@font-face{font-family:"Arimo";src:url("assets/fonts/Arimo-wght.ttf") format("truetype");font-weight:400 700;font-style:normal;font-display:block;}
+@font-face{font-family:"Ubuntu";src:url("assets/fonts/Ubuntu-wdth-wght.ttf") format("truetype");font-weight:300 800;font-style:normal;font-display:block;}
+
+
+#root{position:absolute;inset:0;overflow:hidden;font-family:"Arimo",sans-serif;color:#26251F;}
+#root *{box-sizing:border-box;}
+.bg{position:absolute;inset:0;}
+.stage{position:absolute;inset:0;}
+
+
+.bg.cold{background:linear-gradient(180deg,#ECEEF1 0%,#E2E5E9 100%);}
+.lab{position:absolute;font-family:"Chuk Chat Mono",monospace;font-size:34px;font-weight:500;letter-spacing:0.02em;color:#5A616B;}
+
+.rec{position:absolute;left:0;top:0;width:1400px;height:420px;transform-origin:0 0;}
+.rec-card{position:absolute;inset:0;background:#F9FAFB;border:1px solid #CDD2D8;border-radius:22px;box-shadow:0 36px 80px -46px rgba(20,24,30,.5);}
+.rec-meta{position:absolute;left:56px;top:40px;right:56px;padding-bottom:22px;border-bottom:1px solid #DDE1E6;font-family:"Chuk Chat Mono",monospace;font-size:24px;color:#5A616B;letter-spacing:0.01em;}
+.rec-msg{position:absolute;left:56px;top:128px;right:120px;font-size:76px;line-height:1.08;letter-spacing:-0.03em;color:#2F343B;}
+.stamp{position:absolute;font-family:"Chuk Chat Mono",monospace;font-weight:800;text-transform:uppercase;letter-spacing:0.06em;font-size:58px;line-height:1;
+ color:#A8463C;border:6px solid #A8463C;border-radius:14px;padding:12px 28px;background:rgba(168,70,60,.05);white-space:nowrap;transform-origin:50% 50%;mix-blend-mode:multiply;}
+.stamp.s1{left:1010px;top:-40px;}
+.stamp.s2{left:60px;top:318px;}
+.stamp.s3{left:410px;top:356px;}
+.hero{left:260px;top:290px;}
+.headline{position:absolute;left:0;right:0;top:170px;text-align:center;font-size:104px;line-height:1;letter-spacing:-0.04em;font-weight:500;color:#2F343B;}
+
+</style>
+<div id="root" data-composition-id="03-stamps" data-width="1920" data-height="1080" data-duration="8.526">
+
+<div id="f03-stamps-bg" class="bg cold clip" data-start="0" data-duration="8.526" data-track-index="0"></div>
+<div class="stage">
+  <div class="lab lab-top" style="left:110px;top:90px">Their server</div>
+  <div class="others"><div class="tile" style="position:absolute;left:118.0px;top:378.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1bbd · 14:10</div><div class="rec-msg">Is this mole something to worry about?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:546.0px;top:378.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1be2 · 14:11</div><div class="rec-msg">How do I pay off my credit card debt?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:974.0px;top:378.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1c07 · 14:12</div><div class="rec-msg">Can my landlord keep my deposit?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:1402.0px;top:378.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1c2c · 14:13</div><div class="rec-msg">Why do I feel tired all the time?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:118.0px;top:528.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1c51 · 14:14</div><div class="rec-msg">Should I tell my partner about the loan?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:974.0px;top:528.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1c9b · 14:16</div><div class="rec-msg">Is it normal to cry at work?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:1402.0px;top:528.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1cc0 · 14:17</div><div class="rec-msg">How do I ask for a raise?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:118.0px;top:678.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1ce5 · 14:18</div><div class="rec-msg">My kid is being bullied. What do I do?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:546.0px;top:678.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1d0a · 14:19</div><div class="rec-msg">Is my contract even legal?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:974.0px;top:678.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1d2f · 14:20</div><div class="rec-msg">How do I stop panic attacks?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div><div class="tile" style="position:absolute;left:1402.0px;top:678.0px;width:400px;height:120px;"><div class="rec mini" style="transform:scale(0.28571)"><div class="rec-card"><div class="rec-meta">log · session 1d54 · 14:21</div><div class="rec-msg">Can I get fired for being sick?</div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div></div></div>
+  <div class="rec hero"><div class="rec-card"><div class="rec-meta">log · 2026-09-27 14:02:17 · session 7f3a91</div><div class="rec-msg"><span style="display:block">How do I tell my boss</span><span style="display:block">that I am burned out?</span></div></div><span class="stamp s1">Stored</span><span class="stamp s2">Logged</span><span class="stamp s3">May be used for training</span></div>
+  <div class="headline">Out of your hands.</div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  var q = function (s) { return root.querySelector(s); };
+  var qa = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+
+  var hero = q(".rec.hero");
+  var st = qa(".rec.hero .stamp");
+  var rots = [-8, 6, -3];
+  // mini tiles: stamps already on, hidden until the pull-back
+  qa(".rec.mini .stamp").forEach(function (s, i) { gsap.set(s, { rotation: rots[i % 3] }); });
+  tl.fromTo(hero, { scale: 1.04, opacity: 0.4 }, { scale: 1, opacity: 1, duration: 0.45, ease: "expo.out" }, 0);
+  tl.fromTo(q(".lab-top"), { opacity: 0 }, { opacity: 1, duration: 0.4 }, 0.1);
+  // three slams on the strong beats
+  [0.947, 3.474, 5.053].forEach(function (t, i) {
+    tl.fromTo(st[i], { scale: 2.3, opacity: 0, rotation: rots[i] }, { scale: 1, opacity: 0.94, rotation: rots[i], duration: 0.13, ease: "power4.in" }, t - 0.13);
+    tl.fromTo(hero, { y: 0 }, { y: 10, duration: 0.05, ease: "power1.out", immediateRender: false }, t);
+    tl.to(hero, { y: 0, duration: 0.3, ease: "power2.out" }, t + 0.05);
+  });
+  // slow creep while it is being stamped (tension)
+  tl.fromTo(q(".stage"), { scale: 1 }, { scale: 1.035, duration: 5.9, ease: "none", transformOrigin: "50% 50%" }, 0);
+  // zoom-out: the record becomes one tile of the archive
+  tl.to(q(".stage"), { scale: 1, duration: 1.1, ease: "power3.inOut" }, 5.95);
+  tl.to(hero, { x: 286.0, y: 238.0, scale: 0.28571, duration: 1.1, ease: "power3.inOut" }, 5.95);
+  qa(".tile").forEach(function (t, i) {
+    tl.fromTo(t, { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 6.35 + i * 0.045);
+  });
+  tl.fromTo(q(".headline"), { opacity: 0, y: 34 }, { opacity: 1, y: 0, duration: 0.8, ease: "expo.out" }, 6.9);
+
+  tl.seek(0);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["03-stamps"] = tl;
+})();
+</script>
+</template>

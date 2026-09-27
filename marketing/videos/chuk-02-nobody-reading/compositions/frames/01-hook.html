@@ -1,0 +1,62 @@
+<template>
+<style>
+
+@font-face{font-family:"Chuk Chat Mono";src:url("assets/fonts/jetbrains-mono-latin-wght.woff2") format("woff2");font-weight:100 800;font-display:block;}
+@font-face{font-family:"Arimo";src:url("assets/fonts/Arimo-wght.ttf") format("truetype");font-weight:400 700;font-style:normal;font-display:block;}
+@font-face{font-family:"Ubuntu";src:url("assets/fonts/Ubuntu-wdth-wght.ttf") format("truetype");font-weight:300 800;font-style:normal;font-display:block;}
+
+
+#root{position:absolute;inset:0;overflow:hidden;font-family:"Arimo",sans-serif;color:#26251F;}
+#root *{box-sizing:border-box;}
+.bg{position:absolute;inset:0;}
+.stage{position:absolute;inset:0;}
+
+
+.bg.paper{background:#FDFBF7;}
+.head{position:absolute;left:0;right:0;top:176px;text-align:center;font-size:128px;line-height:1.06;letter-spacing:-0.04em;font-weight:500;color:#26251F;}
+.head .ln{display:block;}
+.head .w{display:inline-block;}
+.box{position:absolute;left:180px;top:455px;width:1560px;height:170px;background:#FFFFFF;border:1px solid #E6E1D5;border-radius:30px;
+ box-shadow:0 1px 3px rgba(38,37,31,.06),0 28px 70px -34px rgba(38,37,31,.30);display:flex;align-items:center;padding:0 60px;}
+.typed{font-size:72px;letter-spacing:-0.02em;color:#26251F;white-space:pre;line-height:1;}
+.caret{display:inline-block;width:5px;height:80px;margin-left:6px;background:#26251F;border-radius:2px;}
+
+</style>
+<div id="root" data-composition-id="01-hook" data-width="1920" data-height="1080" data-duration="4.264">
+
+<div id="f01-hook-bg" class="bg paper clip" data-start="0" data-duration="4.264" data-track-index="0"></div>
+<div class="stage">
+  <div class="head"><span class="ln"><span class="w">Everything</span> <span class="w">you</span> <span class="w">type</span> <span class="w">into</span> <span class="w">an</span> <span class="w">AI</span></span><span class="ln"><span class="w">goes</span> <span class="w">somewhere.</span></span></div>
+  <div class="box"><span class="typed"></span><span class="caret"></span></div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  var q = function (s) { return root.querySelector(s); };
+  var qa = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+
+  var typed = q(".typed"), caret = q(".caret"), box = q(".box");
+  var sched = [[0.0, "H"], [0.046, "Ho"], [0.074, "How"], [0.126, "How "], [0.168, "How d"], [0.206, "How do"], [0.26, "How do "], [0.308, "How do I"], [0.35, "How do I "], [0.39, "How do I t"], [0.424, "How do I te"], [0.47, "How do I tel"], [0.498, "How do I tell"], [0.55, "How do I tell "], [0.592, "How do I tell m"], [0.63, "How do I tell my"], [0.684, "How do I tell my "], [0.732, "How do I tell my b"], [0.774, "How do I tell my bo"], [0.796, "How do I tell my bos"], [0.83, "How do I tell my boss"], [0.876, "How do I tell my boss "], [0.922, "How do I tell my boss t"], [0.974, "How do I tell my boss th"], [0.998, "How do I tell my boss tha"], [1.036, "How do I tell my boss that"], [1.09, "How do I tell my boss that "], [1.138, "How do I tell my boss that I"], [1.18, "How do I tell my boss that I "], [1.22, "How do I tell my boss that I a"], [1.254, "How do I tell my boss that I am"], [1.3, "How do I tell my boss that I am "], [1.346, "How do I tell my boss that I am b"], [1.398, "How do I tell my boss that I am bu"], [1.422, "How do I tell my boss that I am bur"], [1.46, "How do I tell my boss that I am burn"], [1.514, "How do I tell my boss that I am burne"], [1.544, "How do I tell my boss that I am burned"], [1.586, "How do I tell my boss that I am burned "], [1.626, "How do I tell my boss that I am burned o"], [1.66, "How do I tell my boss that I am burned ou"], [1.706, "How do I tell my boss that I am burned out"], [1.734, "How do I tell my boss that I am burned out?"]];
+  tl.set(typed, { textContent: "" }, 0);
+  sched.forEach(function (s) { tl.set(typed, { textContent: s[1] }, s[0]); });
+  // caret: solid while typing, then a finite blink
+  var tEnd = 1.734;
+  [0.55, 1.08, 1.61, 2.14, 2.67].forEach(function (d, i) {
+    tl.set(caret, { opacity: i % 2 === 0 ? 0 : 1 }, tEnd + d);
+  });
+  tl.fromTo(box, { scale: 0.985 }, { scale: 1, duration: 0.6, ease: "power3.out" }, 0);
+  // strong beat 1.737: the box drops, the headline rises word by word
+  tl.to(box, { y: 150, duration: 0.8, ease: "power3.inOut" }, 1.70);
+  qa(".head .w").forEach(function (w, i) {
+    tl.fromTo(w, { y: 46, opacity: 0 }, { y: 0, opacity: 1, duration: 0.7, ease: "expo.out" }, 1.78 + i * 0.075);
+  });
+
+  tl.seek(0);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["01-hook"] = tl;
+})();
+</script>
+</template>

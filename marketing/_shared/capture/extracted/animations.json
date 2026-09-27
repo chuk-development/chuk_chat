@@ -1,0 +1,410 @@
+{
+  "summary": {
+    "webAnimations": 45,
+    "cssDeclarations": 328,
+    "scrollTargets": 1,
+    "cdpAnimations": 525,
+    "canvases": 0
+  },
+  "namedAnimations": [
+    "uc-twinkle",
+    "uc-drift",
+    "uc-scan",
+    "uc-blink",
+    "uc-spin",
+    "as-wave"
+  ],
+  "scrollTriggeredElements": 1,
+  "representativeAnimations": [
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-twinkle",
+      "targetSelector": "div.sc-stars",
+      "targetRect": {
+        "x": 0,
+        "y": -216,
+        "width": 1920,
+        "height": 1296,
+        "top": -216,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 0
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "1",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "0.45",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 5000,
+        "delay": 0,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-twinkle",
+      "targetSelector": "div.sc-stars.sc-stars--b",
+      "targetRect": {
+        "x": 0,
+        "y": -216,
+        "width": 1920,
+        "height": 1296,
+        "top": -216,
+        "right": 1920,
+        "bottom": 1080,
+        "left": 0
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "1",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "0.45",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 5000,
+        "delay": -2500,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-drift",
+      "targetSelector": "span.sc-blob.sc-blob--a",
+      "targetRect": {
+        "x": -377.39605712890625,
+        "y": -507.59735107421875,
+        "width": 1344,
+        "height": 1344,
+        "top": -507.59735107421875,
+        "right": 966.6039428710938,
+        "bottom": 836.4026489257812,
+        "left": -377.39605712890625
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "0px",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "115.2px 76.8px",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 18000,
+        "delay": 0,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-drift",
+      "targetSelector": "span.sc-blob.sc-blob--b",
+      "targetRect": {
+        "x": 1158.643798828125,
+        "y": -161.96665954589844,
+        "width": 1344,
+        "height": 1344,
+        "top": -161.96665954589844,
+        "right": 2502.643798828125,
+        "bottom": 1182.0333404541016,
+        "left": 1158.643798828125
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "0px",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "115.2px 76.8px",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 18000,
+        "delay": -6000,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-drift",
+      "targetSelector": "span.sc-blob.sc-blob--c",
+      "targetRect": {
+        "x": 197.82305908203125,
+        "y": 507.8820495605469,
+        "width": 1344,
+        "height": 1344,
+        "top": 507.8820495605469,
+        "right": 1541.8230590820312,
+        "bottom": 1851.8820495605469,
+        "left": 197.82305908203125
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "0px",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "115.2px 76.8px",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 18000,
+        "delay": -11000,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-drift",
+      "targetSelector": "span.sc-blob.sc-blob--d",
+      "targetRect": {
+        "x": 845.4853515625,
+        "y": 651.6568603515625,
+        "width": 1344,
+        "height": 1344,
+        "top": 651.6568603515625,
+        "right": 2189.4853515625,
+        "bottom": 1995.6568603515625,
+        "left": 845.4853515625
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "0px",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "translate": "115.2px 76.8px",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 18000,
+        "delay": -3000,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-scan",
+      "targetSelector": "div.sc-scan",
+      "targetRect": {
+        "x": 0,
+        "y": -93.50752258300781,
+        "width": 1920,
+        "height": 324,
+        "top": -93.50752258300781,
+        "right": 1920,
+        "bottom": 230.4924774169922,
+        "left": 0
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "linear",
+          "composite": "auto",
+          "transform": "translateY(-324px)",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "linear",
+          "composite": "auto",
+          "transform": "translateY(1080px)",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 7000,
+        "delay": 0,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "normal"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-twinkle",
+      "targetSelector": "rect",
+      "targetRect": {
+        "x": 304,
+        "y": 829.86669921875,
+        "width": 13.333343505859375,
+        "height": 16,
+        "top": 829.86669921875,
+        "right": 317.3333435058594,
+        "bottom": 845.86669921875,
+        "left": 304
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "1",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "0.45",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 3000,
+        "delay": 0,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-twinkle",
+      "targetSelector": "rect",
+      "targetRect": {
+        "x": 344,
+        "y": 869.86669921875,
+        "width": 13.333343505859375,
+        "height": 16,
+        "top": 869.86669921875,
+        "right": 357.3333435058594,
+        "bottom": 885.86669921875,
+        "left": 344
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "1",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "0.45",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 3000,
+        "delay": 0,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    },
+    {
+      "type": "CSSAnimation",
+      "playState": "running",
+      "animationName": "uc-twinkle",
+      "targetSelector": "rect",
+      "targetRect": {
+        "x": 586.6666870117188,
+        "y": 856.5333251953125,
+        "width": 13.33331298828125,
+        "height": 16,
+        "top": 856.5333251953125,
+        "right": 600,
+        "bottom": 872.5333251953125,
+        "left": 586.6666870117188
+      },
+      "keyframes": [
+        {
+          "offset": 0,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "1",
+          "computedOffset": 0
+        },
+        {
+          "offset": 1,
+          "easing": "ease-in-out",
+          "composite": "auto",
+          "opacity": "0.45",
+          "computedOffset": 1
+        }
+      ],
+      "timing": {
+        "duration": 3000,
+        "delay": -1200,
+        "iterations": null,
+        "easing": "linear",
+        "direction": "alternate"
+      }
+    }
+  ]
+}

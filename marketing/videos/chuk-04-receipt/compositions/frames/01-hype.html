@@ -1,0 +1,267 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Hype Black";
+      src: url("assets/fonts/Montserrat-Black.ttf") format("truetype");
+      font-weight: 900;
+      font-display: block;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      font-family: "Hype Black", sans-serif;
+    }
+    .h-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 62% 58% at 50% 52%, #5b21b6 0%, #321070 34%, #120733 66%, #05030f 100%);
+    }
+    #h-stage {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+    }
+    .h-neb {
+      position: absolute;
+      width: 1500px;
+      height: 1500px;
+      border-radius: 50%;
+      mix-blend-mode: screen;
+    }
+    #h-neb1 {
+      left: -520px;
+      top: -620px;
+      background: radial-gradient(circle, rgba(192, 38, 211, 0.42) 0%, rgba(192, 38, 211, 0.12) 38%, rgba(192, 38, 211, 0) 66%);
+    }
+    #h-neb2 {
+      left: 900px;
+      top: 60px;
+      background: radial-gradient(circle, rgba(79, 70, 229, 0.5) 0%, rgba(79, 70, 229, 0.14) 40%, rgba(79, 70, 229, 0) 68%);
+    }
+    #h-neb3 {
+      left: 210px;
+      top: -210px;
+      background: radial-gradient(circle, rgba(167, 139, 250, 0.34) 0%, rgba(167, 139, 250, 0.08) 42%, rgba(167, 139, 250, 0) 64%);
+    }
+    #h-stars {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+    }
+    .h-star {
+      position: absolute;
+      border-radius: 50%;
+      background: #f5f3ff;
+    }
+    #h-text {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding-bottom: 30px;
+    }
+    #h-kicker {
+      font-size: 34px;
+      letter-spacing: 0.6em;
+      padding-left: 0.6em;
+      color: #c4b5fd;
+      margin-bottom: 22px;
+    }
+    .h-line {
+      display: block;
+      line-height: 0.95;
+      text-align: center;
+    }
+    .h-glow {
+      display: inline-block;
+      background: linear-gradient(180deg, #ffffff 0%, #f5edff 36%, #c9b8ff 50%, #8b5cf6 58%, #e9ddff 76%, #ffffff 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      filter: drop-shadow(0 0 22px rgba(168, 85, 247, 0.85)) drop-shadow(0 0 70px rgba(124, 58, 237, 0.65));
+    }
+    #h-l1 {
+      font-size: 124px;
+      letter-spacing: 0.01em;
+    }
+    #h-l2 {
+      font-size: 262px;
+      letter-spacing: 0.02em;
+      margin-top: 6px;
+    }
+    #h-sub {
+      margin-top: 40px;
+      font-size: 32px;
+      letter-spacing: 0.34em;
+      padding-left: 0.34em;
+      color: #ddd6fe;
+    }
+    #h-flare {
+      position: absolute;
+      inset: 0;
+      mix-blend-mode: screen;
+    }
+    .h-fl {
+      position: absolute;
+      left: 0;
+      top: 0;
+      border-radius: 50%;
+    }
+    #h-streak {
+      width: 2600px;
+      height: 12px;
+      border-radius: 6px;
+      background: linear-gradient(90deg, rgba(129, 140, 248, 0) 0%, rgba(129, 140, 248, 0.25) 22%, rgba(199, 210, 254, 0.9) 46%, #ffffff 50%, rgba(199, 210, 254, 0.9) 54%, rgba(129, 140, 248, 0.25) 78%, rgba(129, 140, 248, 0) 100%);
+    }
+    #h-streak2 {
+      width: 2000px;
+      height: 120px;
+      background: radial-gradient(ellipse 50% 50% at 50% 50%, rgba(165, 180, 252, 0.32) 0%, rgba(165, 180, 252, 0.08) 45%, rgba(165, 180, 252, 0) 70%);
+    }
+    #h-core {
+      width: 300px;
+      height: 300px;
+      background: radial-gradient(circle, #ffffff 0%, rgba(255, 255, 255, 0.95) 7%, rgba(221, 214, 254, 0.6) 20%, rgba(139, 92, 246, 0.22) 42%, rgba(139, 92, 246, 0) 68%);
+    }
+    #h-ring {
+      width: 620px;
+      height: 620px;
+      background: radial-gradient(circle, rgba(196, 181, 253, 0) 57%, rgba(196, 181, 253, 0.2) 61%, rgba(196, 181, 253, 0) 65%);
+    }
+    #h-g1 {
+      width: 110px;
+      height: 110px;
+      background: radial-gradient(circle, rgba(94, 234, 212, 0.3) 0%, rgba(94, 234, 212, 0.12) 60%, rgba(94, 234, 212, 0) 72%);
+    }
+    #h-g2 {
+      width: 190px;
+      height: 190px;
+      background: radial-gradient(circle, rgba(244, 114, 182, 0.08) 0%, rgba(244, 114, 182, 0.22) 62%, rgba(244, 114, 182, 0) 72%);
+    }
+    #h-g3 {
+      width: 70px;
+      height: 70px;
+      background: radial-gradient(circle, rgba(196, 181, 253, 0.45) 0%, rgba(196, 181, 253, 0) 70%);
+    }
+    #h-flash {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 50%, #ffffff 0%, #ede9fe 40%, #a78bfa 100%);
+    }
+  </style>
+
+  <div id="root" data-composition-id="01-hype" data-width="1920" data-height="1080">
+    <div id="h-bg" class="h-bg clip" data-start="0" data-duration="3.8" data-track-index="0"></div>
+    <div id="h-stage" data-layout-allow-overflow>
+      <div class="h-neb" id="h-neb1"></div>
+      <div class="h-neb" id="h-neb2"></div>
+      <div class="h-neb" id="h-neb3"></div>
+      <div id="h-stars"></div>
+      <div id="h-text">
+        <div id="h-kicker">INTRODUCING</div>
+        <div class="h-line" id="h-l1w"><span class="h-glow" id="h-l1">THE MOST POWERFUL</span></div>
+        <div class="h-line" id="h-l2w"><span class="h-glow" id="h-l2">AI EVER</span></div>
+        <div id="h-sub">REVOLUTIONARY. LIMITLESS. BEYOND.</div>
+      </div>
+      <div id="h-flare">
+        <div class="h-fl" id="h-streak2"></div>
+        <div class="h-fl" id="h-streak"></div>
+        <div class="h-fl" id="h-ring"></div>
+        <div class="h-fl" id="h-core"></div>
+        <div class="h-fl" id="h-g1"></div>
+        <div class="h-fl" id="h-g2"></div>
+        <div class="h-fl" id="h-g3"></div>
+      </div>
+    </div>
+    <div id="h-flash"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      // seeded starfield (deterministic)
+      let seed = 20260927;
+      function rnd() {
+        seed |= 0;
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      }
+      const stars = document.getElementById("h-stars");
+      for (let i = 0; i < 240; i++) {
+        const s = document.createElement("div");
+        s.className = "h-star";
+        const size = 1 + rnd() * rnd() * 4;
+        s.style.left = (rnd() * 1920).toFixed(1) + "px";
+        s.style.top = (rnd() * 1080).toFixed(1) + "px";
+        s.style.width = size.toFixed(2) + "px";
+        s.style.height = size.toFixed(2) + "px";
+        s.style.opacity = (0.35 + rnd() * 0.65).toFixed(2);
+        stars.appendChild(s);
+      }
+
+      const tl = gsap.timeline({ paused: true });
+      const STOP = 3.4;
+
+      // frame 0: flash decays, stars already warping
+      tl.fromTo("#h-flash", { opacity: 0.38 }, { opacity: 0, duration: 0.35, ease: "power2.out" }, 0);
+      tl.fromTo("#h-stars", { scale: 1 }, { scale: 1.9, duration: STOP, ease: "power1.in" }, 0);
+      tl.fromTo("#h-neb1", { rotation: 0, scale: 1 }, { rotation: 14, scale: 1.12, duration: STOP, ease: "none" }, 0);
+      tl.fromTo("#h-neb2", { rotation: 0, scale: 1 }, { rotation: -10, scale: 1.1, duration: STOP, ease: "none" }, 0);
+      tl.fromTo("#h-neb3", { scale: 0.9, opacity: 0.6 }, { scale: 1.15, opacity: 1, duration: STOP, ease: "none" }, 0);
+      tl.fromTo("#h-kicker", { opacity: 0, scale: 0.86 }, { opacity: 1, scale: 1, duration: 0.9, ease: "power3.out" }, 0);
+
+      // the two slams
+      tl.fromTo("#h-l1w", { scale: 1.9, opacity: 0.55, filter: "blur(10px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.2, ease: "power4.out" }, 0);
+      tl.fromTo("#h-l2w", { scale: 2.6, opacity: 0, filter: "blur(18px)" }, { scale: 1, opacity: 1, filter: "blur(0px)", duration: 0.24, ease: "power4.out" }, 0.5);
+      // trailer shake on each slam
+      [0.2, 0.62].forEach(function (t0) {
+        const xs = [16, -12, 8, -5, 2, 0];
+        let px = 0;
+        xs.forEach(function (x, i) {
+          tl.fromTo("#h-text", { x: px }, { x: x, duration: 0.03, ease: "none", immediateRender: false }, t0 + i * 0.03);
+          px = x;
+        });
+      });
+      tl.fromTo("#h-sub", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 1.3);
+
+      // anamorphic lens flare sweeps across the headline
+      const C = { x: 960, y: 540 };
+      const P0 = { x: 240, y: 430 };
+      const P1 = { x: 1680, y: 468 };
+      const sweep = { t: 0.3, d: 2.9, ease: "power1.inOut" };
+      const els = [
+        ["#h-streak2", 0],
+        ["#h-streak", 0],
+        ["#h-ring", 0],
+        ["#h-core", 0],
+        ["#h-g1", 0.6],
+        ["#h-g2", 1.1],
+        ["#h-g3", 1.7]
+      ];
+      els.forEach(function (e) {
+        const k = e[1];
+        const a = k === 0 ? P0 : { x: C.x + k * (C.x - P0.x), y: C.y + k * (C.y - P0.y) };
+        const b = k === 0 ? P1 : { x: C.x + k * (C.x - P1.x), y: C.y + k * (C.y - P1.y) };
+        tl.fromTo(e[0], { x: a.x, y: a.y, xPercent: -50, yPercent: -50 }, { x: b.x, y: b.y, xPercent: -50, yPercent: -50, duration: sweep.d, ease: sweep.ease }, sweep.t);
+      });
+      tl.fromTo("#h-flare", { opacity: 0 }, { opacity: 1, duration: 0.45, ease: "power2.out" }, 0.3);
+      tl.fromTo("#h-core", { scale: 0.7 }, { scale: 1.25, duration: 0.7, ease: "power2.out" }, 0.3);
+      tl.fromTo("#h-core", { scale: 1.25 }, { scale: 0.95, duration: 1.2, ease: "sine.inOut", immediateRender: false }, 1.0);
+
+      // slow push-in
+      tl.fromTo("#h-stage", { scale: 1 }, { scale: 1.07, duration: STOP - 0.3, ease: "none" }, 0.3);
+
+      // record stop: everything sags, drains and dies
+      tl.fromTo("#h-stage", { y: 0, rotation: 0, filter: "saturate(1) brightness(1)" }, { y: 90, rotation: 2.6, filter: "saturate(0.1) brightness(0.36)", duration: 0.4, ease: "power2.in", immediateRender: false }, STOP);
+      tl.fromTo("#h-text", { scaleY: 1 }, { scaleY: 0.88, duration: 0.4, ease: "power2.in", immediateRender: false }, STOP);
+      tl.fromTo("#h-flare", { opacity: 1 }, { opacity: 0.2, duration: 0.4, ease: "power2.in", immediateRender: false }, STOP);
+
+      window.__timelines["01-hype"] = tl;
+    })();
+  </script>
+</template>

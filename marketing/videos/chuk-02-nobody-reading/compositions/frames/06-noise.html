@@ -1,0 +1,115 @@
+<template>
+<style>
+
+@font-face{font-family:"Chuk Chat Mono";src:url("assets/fonts/jetbrains-mono-latin-wght.woff2") format("woff2");font-weight:100 800;font-display:block;}
+@font-face{font-family:"Arimo";src:url("assets/fonts/Arimo-wght.ttf") format("truetype");font-weight:400 700;font-style:normal;font-display:block;}
+@font-face{font-family:"Ubuntu";src:url("assets/fonts/Ubuntu-wdth-wght.ttf") format("truetype");font-weight:300 800;font-style:normal;font-display:block;}
+
+
+#root{position:absolute;inset:0;overflow:hidden;font-family:"Arimo",sans-serif;color:#26251F;}
+#root *{box-sizing:border-box;}
+.bg{position:absolute;inset:0;}
+.stage{position:absolute;inset:0;}
+
+
+.bg.night{background:radial-gradient(ellipse at 50% 120%, rgba(90,110,190,0.35), transparent 60%),linear-gradient(180deg,#0A0F1F 0%,#131A33 55%,#1D2444 100%);}
+.stars{position:absolute;inset:0;background-image:
+ radial-gradient(1.8px 1.8px at 6% 14%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 14% 38%, #fff 50%, transparent 52%),
+ radial-gradient(2px 2px at 22% 8%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 39% 6%, #fff 50%, transparent 52%),
+ radial-gradient(1.8px 1.8px at 55% 5%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 71% 9%, #fff 50%, transparent 52%),
+ radial-gradient(1.8px 1.8px at 93% 30%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 4% 62%, #fff 50%, transparent 52%),
+ radial-gradient(1.4px 1.4px at 96% 66%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 9% 88%, #fff 50%, transparent 52%),
+ radial-gradient(1.2px 1.2px at 90% 92%, #fff 50%, transparent 52%);opacity:.7;}
+.moon{position:absolute;left:1604px;top:52px;width:128px;height:128px;border-radius:50%;background:radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8);}
+
+.lab2{position:absolute;font-family:"Chuk Chat Mono",monospace;font-size:36px;font-weight:500;color:#F2C56B;}
+.card6{position:absolute;top:300px;width:700px;height:480px;border-radius:24px;}
+.devc{left:60px;background:#262624;box-shadow:0 50px 110px -30px rgba(12,10,6,.6),0 0 0 1px rgba(255,255,255,.07);}
+.d-bub{position:absolute;right:40px;top:64px;max-width:560px;padding:18px 22px;border:1px solid rgba(160,180,255,.22);border-radius:22px 22px 7px 22px;background:#33343C;color:#9DA6C8;
+ font-family:"Chuk Chat Mono",monospace;font-size:30px;line-height:44px;}
+.d-comp{position:absolute;left:40px;right:40px;bottom:40px;height:118px;border:2px solid #615F5A;border-radius:40px;}
+.d-comp .ph{position:absolute;left:30px;top:24px;font-family:"Ubuntu",sans-serif;font-size:28px;font-weight:600;color:rgba(232,228,216,.8);}
+.d-comp .snd{position:absolute;right:20px;top:18px;width:66px;height:52px;border-radius:28px;background:#D97757;color:#fff;display:flex;align-items:center;justify-content:center;}
+.d-comp .snd svg{width:32px;height:32px;}
+.ndot{position:absolute;top:535px;width:10px;height:10px;border-radius:50%;background:rgba(246,243,236,.28);}
+.pk{position:absolute;left:0;top:516px;padding:6px 14px;border-radius:10px;background:#33343C;border:1px solid rgba(160,180,255,.25);color:#AEB6D6;
+ font-family:"Chuk Chat Mono",monospace;font-size:28px;line-height:36px;white-space:pre;}
+.vault{left:1160px;background:#10152A;border:1px solid rgba(160,180,255,.24);box-shadow:0 50px 110px -30px rgba(0,0,0,.6);}
+.v-badge{position:absolute;left:36px;top:36px;display:inline-flex;align-items:center;gap:14px;padding:16px 30px;border:1px solid rgba(160,180,255,.32);border-radius:999px;
+ background:rgba(14,17,30,.9);color:#DDE4FF;font-family:"Ubuntu",sans-serif;font-size:34px;font-weight:600;}
+.v-badge svg{width:34px;height:34px;}
+.v-bub{position:absolute;left:36px;right:36px;top:136px;min-height:126px;padding:18px 22px;border:1px solid rgba(160,180,255,.22);border-radius:22px 22px 7px 22px;background:#33343C;color:#AEB6D6;
+ font-family:"Chuk Chat Mono",monospace;font-size:30px;line-height:44px;}
+.v-ans{position:absolute;left:36px;right:36px;top:288px;font-family:"Chuk Chat Mono",monospace;font-size:24px;line-height:34px;color:#8F99BD;white-space:pre;overflow:hidden;}
+.v-note{position:absolute;left:36px;right:36px;top:410px;font-family:"Chuk Chat Mono",monospace;font-size:24px;color:#C3CBE8;}
+
+</style>
+<div id="root" data-composition-id="06-noise" data-width="1920" data-height="1080" data-duration="5.053">
+
+<div id="f06-noise-bg" class="bg night clip" data-start="0" data-duration="5.053" data-track-index="0"><div class="stars"></div><div class="moon"></div></div>
+<div class="stage">
+  <div class="lab2 lab-d" style="left:60px;top:232px">Your device</div>
+  <div class="lab2 lab-s" style="left:1160px;top:232px">Our server</div>
+  <div class="ndots"><span class="ndot" style="left:780px"></span><span class="ndot" style="left:802px"></span><span class="ndot" style="left:824px"></span><span class="ndot" style="left:846px"></span><span class="ndot" style="left:868px"></span><span class="ndot" style="left:890px"></span><span class="ndot" style="left:912px"></span><span class="ndot" style="left:934px"></span><span class="ndot" style="left:956px"></span><span class="ndot" style="left:978px"></span><span class="ndot" style="left:1000px"></span><span class="ndot" style="left:1022px"></span><span class="ndot" style="left:1044px"></span><span class="ndot" style="left:1066px"></span><span class="ndot" style="left:1088px"></span><span class="ndot" style="left:1110px"></span><span class="ndot" style="left:1132px"></span></div>
+  <div class="pks"><span class="pk">MV6 c1 6</span><span class="pk">2Nv3 OR</span><span class="pk">=VH5 L4qE</span><span class="pk">s k1 kub=zo</span></div>
+  <div class="card6 devc">
+    <div class="d-bub">MV6 c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED=</div>
+    <div class="d-comp"><span class="ph">Ask me anything !</span><span class="snd"><svg class="sv" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path d="M10.325 5.33455L16.1084 8.24495C19.3643 9.88342 20.9922 10.7027 20.9922 12C20.9922 13.2973 19.3643 14.1166 16.1084 15.7551L10.325 18.6655C6.63532 20.5223 4.79046 21.4507 3.7862 20.7851C3.57349 20.6441 3.38825 20.4651 3.23962 20.2569C2.53788 19.2741 3.3843 17.381 5.07715 13.5948C5.39957 12.8736 5.56078 12.5131 5.58462 12.1319C5.59011 12.044 5.59011 11.956 5.58462 11.8681C5.56078 11.4869 5.39957 11.1264 5.07715 10.4052C3.3843 6.61898 2.53788 4.72586 3.23962 3.74307C3.38825 3.53492 3.57349 3.35593 3.7862 3.21495C4.79046 2.54933 6.63532 3.47774 10.325 5.33455Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M9.49219 12H13.4922" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div>
+  </div>
+  <div class="card6 vault">
+    <span class="v-badge"><svg class="i18" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><path fill="currentColor" d="M12 17c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm6-9h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zM8.9 6c0-1.71 1.39-3.1 3.1-3.1s3.1 1.39 3.1 3.1v2H8.9V6zM18 20H6V10h12v10z"/></svg>What our server stores</span>
+    <div class="v-bub"></div>
+    <div class="v-ans">ryhCD /ijO v/we5d HR5 =f5/ N6lMUB
+Gef fVI ax Wz5c3JB MJ 1 QqAQ r21Fg6e
+QGV lCnS gg0GsXQ3 veB5fN TnQFbB GJ4L hwpiP</div>
+    <div class="v-note">AES-256-GCM · the key stays on your device</div>
+  </div>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+<script>
+(function () {
+  var root = document.getElementById("root");
+  var q = function (s) { return root.querySelector(s); };
+  var qa = function (s) { return Array.prototype.slice.call(root.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+
+  var dev = q(".devc"), vault = q(".vault"), vb = q(".v-bub");
+  tl.fromTo(dev, { opacity: 0, x: -40 }, { opacity: 1, x: 0, duration: 0.7, ease: "expo.out" }, 0.0);
+  tl.fromTo(q(".lab-d"), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.12);
+  tl.fromTo(vault, { opacity: 0, x: 40 }, { opacity: 1, x: 0, duration: 0.7, ease: "expo.out" }, 0.22);
+  tl.fromTo(q(".lab-s"), { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.5, ease: "power3.out" }, 0.34);
+  tl.fromTo(q(".v-badge"), { opacity: 0, y: -10 }, { opacity: 1, y: 0, duration: 0.6, ease: "expo.out" }, 0.5);
+  tl.fromTo([vb, q(".v-ans"), q(".v-note")], { opacity: 0 }, { opacity: 0, duration: 0.01 }, 0);
+  var dots = qa(".ndot");
+  dots.forEach(function (d, i) {
+    tl.fromTo(d, { scale: 0, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.18, ease: "power2.out" }, 0.45 + i * 0.022);
+  });
+  // 0.947: ciphertext leaves the device as packets of noise
+  var pks = qa(".pk"), starts = [0.95, 1.37, 1.79, 2.21], prefixes = ["MV6 c1 6 2N", "MV6 c1 6 2Nv3 OR =VH5 ", "MV6 c1 6 2Nv3 OR =VH5 L4qE s k1 ", "MV6 c1 6 2Nv3 OR =VH5 L4qE s k1 kub=zo uED="];
+  pks.forEach(function (p) { tl.fromTo(p, { x: 530, opacity: 0 }, { x: 530, opacity: 0, duration: 0.01 }, 0); });
+  pks.forEach(function (p, k) {
+    tl.set(p, { opacity: 1 }, starts[k]);
+    tl.fromTo(p, { x: 530 }, { x: 1200, duration: 0.8, ease: "none", immediateRender: false }, starts[k]);
+    tl.set(p, { opacity: 0 }, starts[k] + 0.8);
+    tl.set(vb, { textContent: prefixes[k] }, starts[k] + 0.8);
+  });
+  dots.forEach(function (d, i) {
+    tl.to(d, { backgroundColor: "#F2C56B", duration: 0.08 }, 0.95 + (785 + i * 22 - 530 - 80) / 670 * 0.8);
+  });
+  tl.fromTo(vb, { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, starts[0] + 0.74);
+  // 3.474: the rest of what the server keeps, and the line that explains it
+  tl.fromTo(q(".v-ans"), { opacity: 0 }, { opacity: 1, duration: 0.5, ease: "power2.out", immediateRender: false }, 3.47);
+  tl.fromTo(q(".v-note"), { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.6, ease: "expo.out", immediateRender: false }, 3.85);
+
+  tl.seek(0);
+  window.__timelines = window.__timelines || {};
+  window.__timelines["06-noise"] = tl;
+})();
+</script>
+</template>

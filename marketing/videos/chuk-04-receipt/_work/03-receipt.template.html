@@ -1,0 +1,363 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Chuk Chat Mono";
+      src: url("assets/fonts/chuk-mono.woff2") format("woff2");
+      font-weight: 100 800;
+      font-display: block;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      font-family: "Chuk Chat Mono", monospace;
+    }
+    .r-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 38%, #f7f4ed 0%, #efebe2 55%, #e4dfd2 100%);
+    }
+    .r-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.5;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.15 0 0 0 0 0.14 0 0 0 0 0.12 0 0 0 0.22 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+    #r-tilt {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+    }
+    #r-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      transform-origin: 0 0;
+    }
+    #r-clip {
+      position: absolute;
+      left: -700px;
+      top: -4200px;
+      width: 1400px;
+      height: 4200px;
+      overflow: hidden;
+    }
+    #r-feed {
+      position: absolute;
+      left: 290px;
+      top: 4200px;
+      width: 820px;
+      height: __L__px;
+    }
+    #r-tear {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 820px;
+      height: __L__px;
+      transform-origin: 50% 100%;
+    }
+    #r-shadow {
+      position: absolute;
+      inset: 0;
+      filter: drop-shadow(0 16px 26px rgba(38, 37, 31, 0.14)) drop-shadow(0 1px 1.5px rgba(38, 37, 31, 0.2));
+    }
+    #r-paper {
+      position: absolute;
+      inset: 0;
+      background-color: #fffefa;
+      background-image: linear-gradient(90deg, rgba(38, 37, 31, 0.075) 0%, rgba(38, 37, 31, 0.02) 5%, rgba(38, 37, 31, 0) 12%, rgba(38, 37, 31, 0) 86%, rgba(38, 37, 31, 0.03) 94%, rgba(38, 37, 31, 0.085) 100%), url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.19 0 0 0 0 0.17 0 0 0 0.16 0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>");
+      background-size: 100% 100%, 260px 260px;
+      clip-path: __CLIP__;
+    }
+    #r-curl {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 150px;
+      opacity: 0;
+      background: linear-gradient(180deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.035) 55%, rgba(255, 255, 255, 0.5) 80%, rgba(38, 37, 31, 0.07) 100%);
+    }
+    #r-curltop {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 90px;
+      background: linear-gradient(0deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.03) 60%, rgba(38, 37, 31, 0.06) 100%);
+    }
+    .r-row {
+      position: absolute;
+      left: 0;
+      width: 820px;
+      white-space: pre;
+      color: #1f1e1a;
+      font-size: 36px;
+      font-weight: 500;
+      text-shadow: 0 0 0.7px rgba(31, 30, 26, 0.55);
+    }
+    .r-item,
+    .r-right,
+    .r-left,
+    .r-rule {
+      padding-left: __CX__px;
+    }
+    .r-val {
+      font-weight: 750;
+    }
+    .r-dots {
+      display: inline-block;
+      color: #6e6c64;
+      font-weight: 500;
+    }
+    .r-dots-gag {
+      clip-path: inset(0% 100% 0% 0%);
+    }
+    .r-zero {
+      display: inline-block;
+      opacity: 0;
+      font-size: 58px;
+      font-weight: 800;
+      transform-origin: 50% 55%;
+    }
+    .r-ruletxt {
+      color: #8c8a80;
+    }
+    .r-logoimg {
+      height: 70px;
+      width: 70px;
+      margin-top: 22px;
+      opacity: 0.92;
+    }
+    .r-brand {
+      font-size: 50px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      padding-left: 0.16em;
+    }
+    .r-sub {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      padding-left: 0.3em;
+      color: #4a4842;
+    }
+    .r-total {
+      font-weight: 800;
+    }
+    .r-big {
+      font-size: 62px;
+      font-weight: 800;
+      letter-spacing: -0.005em;
+    }
+    .r-url {
+      font-size: 42px;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+    }
+    .r-bars {
+      margin-top: 17px;
+      opacity: 0.94;
+    }
+    #r-lipshade {
+      position: absolute;
+      left: 290px;
+      width: 820px;
+      top: 4150px;
+      height: 50px;
+      background: linear-gradient(180deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.07) 70%, rgba(38, 37, 31, 0.16) 100%);
+    }
+    #r-printer {
+      position: absolute;
+      left: -560px;
+      top: 0;
+      width: 1120px;
+      height: 1200px;
+    }
+    .p-body {
+      position: absolute;
+      inset: 0;
+      border-radius: 44px 44px 0 0;
+      background: linear-gradient(180deg, #3a3935 0px, #2f2e2b 34px, #292826 35px, #262624 120px, #222220 100%);
+    }
+    .p-edge {
+      position: absolute;
+      left: 36px;
+      right: 36px;
+      top: 1px;
+      height: 2px;
+      background: rgba(232, 228, 216, 0.16);
+      border-radius: 2px;
+    }
+    .p-slot {
+      position: absolute;
+      left: 118px;
+      width: 884px;
+      top: -1px;
+      height: 16px;
+      background: #0d0d0c;
+      border-radius: 0 0 8px 8px;
+    }
+    .p-lip {
+      position: absolute;
+      left: 128px;
+      width: 864px;
+      top: -9px;
+      height: 18px;
+      background: linear-gradient(180deg, #b5b2a8 0%, #8f8c83 45%, #6b6962 100%);
+      border-radius: 3px;
+      clip-path: polygon(0 45%, 1% 0, 2% 45%, 3% 0, 4% 45%, 5% 0, 6% 45%, 7% 0, 8% 45%, 9% 0, 10% 45%, 11% 0, 12% 45%, 13% 0, 14% 45%, 15% 0, 16% 45%, 17% 0, 18% 45%, 19% 0, 20% 45%, 21% 0, 22% 45%, 23% 0, 24% 45%, 25% 0, 26% 45%, 27% 0, 28% 45%, 29% 0, 30% 45%, 31% 0, 32% 45%, 33% 0, 34% 45%, 35% 0, 36% 45%, 37% 0, 38% 45%, 39% 0, 40% 45%, 41% 0, 42% 45%, 43% 0, 44% 45%, 45% 0, 46% 45%, 47% 0, 48% 45%, 49% 0, 50% 45%, 51% 0, 52% 45%, 53% 0, 54% 45%, 55% 0, 56% 45%, 57% 0, 58% 45%, 59% 0, 60% 45%, 61% 0, 62% 45%, 63% 0, 64% 45%, 65% 0, 66% 45%, 67% 0, 68% 45%, 69% 0, 70% 45%, 71% 0, 72% 45%, 73% 0, 74% 45%, 75% 0, 76% 45%, 77% 0, 78% 45%, 79% 0, 80% 45%, 81% 0, 82% 45%, 83% 0, 84% 45%, 85% 0, 86% 45%, 87% 0, 88% 45%, 89% 0, 90% 45%, 91% 0, 92% 45%, 93% 0, 94% 45%, 95% 0, 96% 45%, 97% 0, 98% 45%, 99% 0, 100% 45%, 100% 100%, 0 100%);
+    }
+    .p-logo {
+      position: absolute;
+      left: 74px;
+      top: 78px;
+      width: 46px;
+      height: 46px;
+      opacity: 0.5;
+    }
+    .p-name {
+      position: absolute;
+      left: 136px;
+      top: 86px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.32em;
+      color: #a19e93;
+    }
+    .p-led {
+      position: absolute;
+      right: 84px;
+      top: 94px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #d97757;
+    }
+    .p-btn {
+      position: absolute;
+      right: 126px;
+      top: 84px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #302f2c;
+      border: 2px solid #3d3c38;
+    }
+  </style>
+
+  <div id="root" data-composition-id="03-receipt" data-width="1920" data-height="1080">
+    <div id="r-bg" class="r-bg clip" data-start="0" data-duration="__DUR__" data-track-index="0">
+      <div class="r-grain"></div>
+    </div>
+
+    <div id="r-tilt" data-layout-allow-overflow>
+    <div id="r-cam" data-layout-allow-overflow>
+      <div id="r-clip">
+        <div id="r-feed">
+          <div id="r-tear">
+            <div id="r-shadow">
+              <div id="r-paper">
+                <div id="r-curltop"></div>
+                <div id="r-curl"></div>
+              <!--ROWS-->
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="r-lipshade"></div>
+      </div>
+
+      <div id="r-printer">
+        <div class="p-body"></div>
+        <div class="p-edge"></div>
+        <div class="p-slot"></div>
+        <div class="p-lip"></div>
+        <img class="p-logo" src="assets/logo-soft.svg" alt="" />
+        <div class="p-name">CHUK CHAT</div>
+        <div class="p-btn"></div>
+        <div class="p-led"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      const PLAN = /*PLAN*/;
+      const tl = gsap.timeline({ paused: true });
+
+      // camera: one fromTo per key, each starting where the previous key ended
+      const cam0 = PLAN.cam[0];
+      gsap.set("#r-cam", { x: cam0.x, y: cam0.y, scale: cam0.s });
+      for (let i = 1; i < PLAN.cam.length; i++) {
+        const a = PLAN.cam[i - 1];
+        const b = PLAN.cam[i];
+        tl.fromTo(
+          "#r-cam",
+          { x: a.x, y: a.y, scale: a.s },
+          { x: b.x, y: b.y, scale: b.s, duration: b.d, ease: b.ease, immediateRender: false },
+          b.t
+        );
+      }
+
+      // handheld tilt around the frame centre (life, not a move)
+      gsap.set("#r-tilt", { rotation: PLAN.tilt[0][3] });
+      for (let i = 1; i < PLAN.tilt.length; i++) {
+        const a = PLAN.tilt[i - 1];
+        const b = PLAN.tilt[i];
+        tl.fromTo("#r-tilt", { rotation: a[3] }, { rotation: b[3], duration: b[1], ease: b[2], immediateRender: false }, b[0]);
+      }
+
+      // paper feed: stepper jerks, one row per beat
+      gsap.set("#r-feed", { y: PLAN.initialTop });
+      let prevY = PLAN.initialTop;
+      for (const f of PLAN.feeds) {
+        tl.fromTo(
+          "#r-feed",
+          { y: prevY },
+          { y: f.y, duration: f.d, ease: "power2.inOut", immediateRender: false },
+          f.t
+        );
+        prevY = f.y;
+      }
+
+      // leader dots tick in on the grid
+      for (const rid of Object.keys(PLAN.dots)) {
+        const el = document.getElementById("r-dots-" + rid);
+        const n = el.textContent.length;
+        const times = PLAN.dots[rid];
+        times.forEach(function (t, i) {
+          const k = Math.ceil((n * (i + 1)) / times.length);
+          tl.set(el, { clipPath: "inset(0% " + (((n - k) / n) * 100).toFixed(3) + "% 0% 0%)" }, t);
+        });
+      }
+
+      // the zeros stamp in
+      for (const rid of Object.keys(PLAN.stamps)) {
+        const el = document.getElementById("r-val-" + rid);
+        tl.fromTo(
+          el,
+          { opacity: 0, scale: 1.35, filter: "blur(3px)" },
+          { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.09, ease: "power2.out", immediateRender: false },
+          PLAN.stamps[rid]
+        );
+      }
+
+      // the tear
+      const T = PLAN.tear;
+      tl.fromTo("#r-tear", { rotation: 0, y: 0, x: 0 }, { rotation: -3.2, y: -18, x: -4, duration: 0.08, ease: "power2.out", immediateRender: false }, T);
+      tl.fromTo("#r-tear", { y: -18, x: -4 }, { y: -PLAN.lift, x: 8, duration: 0.42, ease: "power3.out", immediateRender: false }, T + 0.08);
+      tl.fromTo("#r-tear", { rotation: -3.2 }, { rotation: -1.4, duration: 0.7, ease: "power2.inOut", immediateRender: false }, T + 0.08);
+      tl.fromTo("#r-lipshade", { opacity: 1 }, { opacity: 0, duration: 0.2, ease: "power1.out", immediateRender: false }, T + 0.06);
+      tl.fromTo("#r-printer", { y: 0 }, { y: 1300, duration: 0.8, ease: "power2.in", immediateRender: false }, T + 0.2);
+      tl.fromTo("#r-curl", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out", immediateRender: false }, T + 0.3);
+
+      window.__timelines["03-receipt"] = tl;
+    })();
+  </script>
+</template>
