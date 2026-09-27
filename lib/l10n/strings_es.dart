@@ -609,4 +609,6 @@ const Map<String, String> stringsEs = {
   'maintenanceFailedTitle': 'La actualización no terminó',
   'maintenanceFailedBody': 'Tus chats no han cambiado y están a salvo. Puedes intentarlo de nuevo o continuar y usar la app como antes.',
   'maintenanceContinue': 'Continuar',
+  'maintenanceSyncing': 'Sincronizando tus chats...',
+  'maintenanceSyncingHint': 'Esto puede tardar un momento.',
 };

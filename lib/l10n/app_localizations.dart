@@ -323,6 +323,8 @@ class AppLocalizations {
   String get maintenanceFailedTitle => _get('maintenanceFailedTitle');
   String get maintenanceFailedBody => _get('maintenanceFailedBody');
   String get maintenanceContinue => _get('maintenanceContinue');
+  String get maintenanceSyncing => _get('maintenanceSyncing');
+  String get maintenanceSyncingHint => _get('maintenanceSyncingHint');
   String get saved => _get('saved');
   String emailUpdated(String email) =>
       _get('emailUpdated').replaceAll('{email}', email);

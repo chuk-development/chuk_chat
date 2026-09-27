@@ -124,6 +124,13 @@ app language: "Please do not close the app. Your data is being rewritten.",
 with two bars: migration n of N, verification n of N. Not throttled; up to 4
 chats at a time. Code: `lib/services/chat_payload_migration_service.dart`.
 
+While the plan runs (phase `checking`) the gate shows the empty app
+surface. On a normal start that takes milliseconds. The first start after an
+install takes seconds (key set-up, then the cloud scan below), so once the
+check has run for 400 ms a loader fades in with "Syncing your chats..." and
+"This can take a moment." Without it the screen stayed black and the app
+looked broken.
+
 Plan (`ChatPayloadMigrationService.plan`): nothing when `kv_cache` holds the
 done flag (`chat_payload_v3_migration_<user id>`). Otherwise the cache rows
 that are not a frame yet (one SQL query, no payloads read) and the cloud
