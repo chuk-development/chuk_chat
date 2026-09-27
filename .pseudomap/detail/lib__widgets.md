@@ -1339,7 +1339,7 @@
   - L1198 `final String text`
   - L1201 `Widget build(BuildContext context)`
 
-## lib/widgets/chat_maintenance_gate.dart  (297 Z.)
+## lib/widgets/chat_maintenance_gate.dart  (303 Z.)
 - L17 `class ChatMaintenanceGate extends StatefulWidget`
   - L18 `const ChatMaintenanceGate({ super.key, required this.child, this.controller, this.syncingHintDelay = const Duration(milliseconds: 400), })`
   - L26 `final Widget child`  — The shell, built once the chats are ready.
@@ -1353,91 +1353,93 @@
   - L55 `void _onChange()`
   - L60 `void _start()`  — The session init starts the same run; whoever comes first starts it.
   - L70 `Widget build(BuildContext context)`
-- L99 `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
-  - L100 `const _Checking({required this.hintDelay})`
-  - L102 `final Duration hintDelay`
-  - L105 `State<_Checking> createState()`
-- L108 `class _CheckingState extends State<_Checking>`
-  - L109 `Timer? _timer`
-  - L110 `bool _showHint = false`
-  - L113 `void initState()`
-  - L121 `void dispose()`
-  - L127 `Widget build(BuildContext context)`
-  - L135 `Widget _hint(BuildContext context, ThemeData theme)`
-- L177 `class ChatMaintenanceScreen extends StatelessWidget`
-  - L178 `const ChatMaintenanceScreen({super.key, required this.controller})`
-  - L180 `final ChatMaintenanceController controller`
-  - L183 `Widget build(BuildContext context)`
-  - L209 `List<Widget> _running(BuildContext context, AppLocalizations l10n)`
-  - L234 `List<Widget> _failure(BuildContext context, AppLocalizations l10n)`
-- L257 `class _ProgressRow extends StatelessWidget`
-  - L258 `const _ProgressRow({ super.key, required this.label, required this.count, required this.value, })`
-  - L265 `final String label`
-  - L266 `final String count`
-  - L267 `final double? value`
-  - L270 `Widget build(BuildContext context)`
+- L104 `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
+  - L105 `const _Checking({required this.hintDelay, required this.showHint})`
+  - L107 `final Duration hintDelay`
+  - L108 `final bool showHint`
+  - L111 `State<_Checking> createState()`
+- L114 `class _CheckingState extends State<_Checking>`
+  - L115 `Timer? _timer`
+  - L116 `bool _delayPassed = false`
+  - L119 `void initState()`
+  - L127 `void dispose()`
+  - L133 `Widget build(BuildContext context)`
+  - L141 `Widget _hint(BuildContext context, ThemeData theme)`
+- L183 `class ChatMaintenanceScreen extends StatelessWidget`
+  - L184 `const ChatMaintenanceScreen({super.key, required this.controller})`
+  - L186 `final ChatMaintenanceController controller`
+  - L189 `Widget build(BuildContext context)`
+  - L215 `List<Widget> _running(BuildContext context, AppLocalizations l10n)`
+  - L240 `List<Widget> _failure(BuildContext context, AppLocalizations l10n)`
+- L263 `class _ProgressRow extends StatelessWidget`
+  - L264 `const _ProgressRow({ super.key, required this.label, required this.count, required this.value, })`
+  - L271 `final String label`
+  - L272 `final String count`
+  - L273 `final double? value`
+  - L276 `Widget build(BuildContext context)`
 
-## lib/widgets/chat_mode_selector.dart  (605 Z.)
-- L22 `class ChatModeSelector extends StatelessWidget`
-  - L23 `const ChatModeSelector({ super.key, required this.mode, required this.onModeChanged, this.onModelSelected, this.onOpenModelScreen, this.selectedModelId, this.modelLabel, this.customModelLabel, this.pickedModels = const <ChatModelChoice>[], this.showLabel = true, this.reasoningEffort = ChatModeService.reasoningOff, this.reasoningLevels = const <String>[ChatModeService.reasoningOff], this.onReasoningEffortChanged, this.height = MobileLayout.minTouchTarget, this.menuAbove = false, this.agentsMenus = false, this.flat = false, })`
-  - L45 `final bool agentsMenus`  — The Agents thread's menus: the original app's filled tiles at the menu
-  - L49 `final bool flat`  — The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
-  - L53 `bool get _agentsLook`  — Menu rows one touch target high: the Agents build. chuk_chat keeps
-  - L55 `final ChatMode mode`
-  - L56 `final ValueChanged<ChatMode> onModeChanged`
-  - L60 `final ValueChanged<String>? onModelSelected`  — Called with the model id the reader picked in the second menu. Omit to
-  - L64 `final VoidCallback? onOpenModelScreen`  — Opens the full model screen, where the whole catalogue is browsed and
-  - L67 `final List<ChatModelChoice> pickedModels`  — The models this reader has picked, in display order.
-  - L70 `final String? selectedModelId`  — Id of the model in use for the active mode, ticked in the model rows.
-  - L73 `final String? modelLabel`  — Human name of that model, shown on the second-menu opener.
-  - L79 `final String? customModelLabel`  — Human name of the model Custom last ran, remembered across mode switches.
-  - L82 `final String reasoningEffort`  — The active mode's reasoning level, ticked in the reasoning rows.
-  - L86 `final List<String> reasoningLevels`  — The reasoning levels the active mode's model+provider allow, `none`
-  - L90 `final ValueChanged<String>? onReasoningEffortChanged`  — Called with the reasoning level the reader picked for the active mode.
-  - L94 `final bool showLabel`  — Whether the pill spells the mode out. The mobile composer sets this
-  - L96 `final double height`
-  - L99 `final bool menuAbove`  — Open the menus above the pill whenever they fit there.
-  - L104 `static const int kMaxModelsInMenu = 40`  — Longest model list shown in the second menu. Beyond this the list stops
-  - L106 `static IconData iconFor(ChatMode mode)`
-  - L117 `static String labelFor(ChatMode mode)`
-  - L128 `static String descriptionFor(ChatMode mode)`
-  - L141 `double get _glyphSize`  — The mode glyph, sized from the pill instead of pinned: the composer
-  - L146 `String get _customPointLabel`  — The label for the third point (Custom). When Custom is active it names
-  - L159 `bool get _hasDeeperMenu`  — Whether the second menu has anything to show.
-  - L165 `Widget build(BuildContext context)`
-  - L229 `Future<void> _openModeMenu(BuildContext context)`
-  - L282 `Future<void> _openModelMenu(BuildContext context)`
-  - L377 `Future<void> _openReasoningMenu(BuildContext rowContext)`  — [rowContext] is the Reasoning row inside the still-open model menu, so
-  - L402 `PopupMenuItem<T> _headerRow<T>({ required Color iconFg, required String label, })`  — A non-interactive section header, dimmer and lighter than a choice.
-  - L425 `PopupMenuItem<T> _menuRow<T>({ required T value, required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, bool dense = false, })`  — One row, matching the model dropdown: one touch target high, 16 of side
-  - L453 `Widget _rowChild({ required Color iconFg, required String label, IconData? icon, bool isSelected = false, Widget? trailing, })`  — The inner row of a menu entry, shared by [_menuRow] and the submenu
-  - L488 `Future<T?> _showAnchoredMenu<T>( BuildContext context, { required List<PopupMenuEntry<T>> items, bool? alignRight, bool besideAnchor = false, })`  — Open a menu anchored to this control, styled like the model dropdown.
-  - L514 `static String stripLabPrefix(String name)`  — `DeepSeek: DeepSeek V4 Flash` → `DeepSeek V4 Flash`, the way the model
-- L523 `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
-- L545 `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
-  - L546 `const ChatModelChoice({required this.id, required this.name})`
-  - L548 `final String id`
-  - L549 `final String name`
-- L554 `class _MenuChoice`  — What a row in the first menu stands for: a mode, or the way one level
-  - L555 `const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false`
-  - L556 `const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true`
-  - L558 `final ChatMode? mode`
-  - L559 `final bool openModelMenu`
-- L564 `class _DeeperChoice`  — What a row in the second menu stands for: a reasoning level, a model, or
-  - L565 `const _DeeperChoice.model(String this.modelId) : openScreen = false`
-  - L566 `const _DeeperChoice.openScreen() : modelId = null, openScreen = true`
-  - L568 `final String? modelId`
-  - L569 `final bool openScreen`
-- L575 `class _SubmenuOpener<T> extends PopupMenuEntry<T>`  — A menu row that opens a cascading submenu on tap WITHOUT popping the menu
-  - L576 `const _SubmenuOpener({ required this.rowHeight, required this.child, required this.onOpen, })`
-  - L582 `final double rowHeight`
-  - L583 `final Widget child`
-  - L584 `final Future<void> Function(BuildContext rowContext) onOpen`
-  - L587 `double get height`
-  - L590 `bool represents(T? value)`
-  - L593 `State<_SubmenuOpener<T>> createState()`
-- L596 `class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>>`
-  - L598 `Widget build(BuildContext context)`
+## lib/widgets/chat_mode_selector.dart  (622 Z.)
+- L23 `class ChatModeSelector extends StatelessWidget`
+  - L24 `const ChatModeSelector({ super.key, required this.mode, required this.onModeChanged, this.onModelSelected, this.onOpenModelScreen, this.selectedModelId, this.modelLabel, this.customModelLabel, this.pickedModels = const <ChatModelChoice>[], this.showLabel = true, this.reasoningEffort = ChatModeService.reasoningOff, this.reasoningLevels = const <String>[ChatModeService.reasoningOff], this.onReasoningEffortChanged, this.height = MobileLayout.minTouchTarget, this.menuAbove = false, this.agentsMenus = false, this.flat = false, })`
+  - L46 `final bool agentsMenus`  — The Agents thread's menus: the original app's filled tiles at the menu
+  - L50 `final bool flat`  — The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
+  - L54 `bool get _agentsLook`  — Menu rows one touch target high: the Agents build. chuk_chat keeps
+  - L56 `final ChatMode mode`
+  - L57 `final ValueChanged<ChatMode> onModeChanged`
+  - L61 `final ValueChanged<String>? onModelSelected`  — Called with the model id the reader picked in the second menu. Omit to
+  - L65 `final VoidCallback? onOpenModelScreen`  — Opens the full model screen, where the whole catalogue is browsed and
+  - L68 `final List<ChatModelChoice> pickedModels`  — The models this reader has picked, in display order.
+  - L71 `final String? selectedModelId`  — Id of the model in use for the active mode, ticked in the model rows.
+  - L74 `final String? modelLabel`  — Human name of that model, shown on the second-menu opener.
+  - L80 `final String? customModelLabel`  — Human name of the model Custom last ran, remembered across mode switches.
+  - L83 `final String reasoningEffort`  — The active mode's reasoning level, ticked in the reasoning rows.
+  - L87 `final List<String> reasoningLevels`  — The reasoning levels the active mode's model+provider allow, `none`
+  - L91 `final ValueChanged<String>? onReasoningEffortChanged`  — Called with the reasoning level the reader picked for the active mode.
+  - L95 `final bool showLabel`  — Whether the pill spells the mode out. The mobile composer sets this
+  - L97 `final double height`
+  - L100 `final bool menuAbove`  — Open the menus above the pill whenever they fit there.
+  - L105 `static const int kMaxModelsInMenu = 40`  — Longest model list shown in the second menu. Beyond this the list stops
+  - L107 `static IconData iconFor(ChatMode mode)`
+  - L118 `static String labelFor(ChatMode mode)`
+  - L129 `static String descriptionFor(ChatMode mode)`
+  - L142 `double get _glyphSize`  — The mode glyph, sized from the pill instead of pinned: the composer
+  - L147 `String get _customPointLabel`  — The label for the third point (Custom). When Custom is active it names
+  - L160 `bool get _hasDeeperMenu`  — Whether the second menu has anything to show.
+  - L166 `Widget build(BuildContext context)`
+  - L230 `Future<void> _openModeMenu(BuildContext context)`
+  - L283 `Future<void> _openModelMenu(BuildContext context)`
+  - L383 `Future<void> _openReasoningMenu(BuildContext rowContext)`  — [rowContext] is the Reasoning row inside the still-open model menu, so
+  - L408 `PopupMenuItem<T> _headerRow<T>({ required Color iconFg, required String label, })`  — A non-interactive section header, dimmer and lighter than a choice.
+  - L431 `PopupMenuItem<T> _menuRow<T>({ required T value, required Color iconFg, required String label, IconData? icon, Widget? leading, bool isSelected = false, Widget? trailing, bool dense = false, })`  — One row, matching the model dropdown: one touch target high, 16 of side
+  - L461 `static Color _labelColor(Color iconFg, bool isSelected)`  — A row's text colour: full for the current choice, a step back for the
+  - L469 `Widget _rowChild({ required Color iconFg, required String label, IconData? icon, Widget? leading, bool isSelected = false, Widget? trailing, })`  — The inner row of a menu entry, shared by [_menuRow] and the submenu
+  - L505 `Future<T?> _showAnchoredMenu<T>( BuildContext context, { required List<PopupMenuEntry<T>> items, bool? alignRight, bool besideAnchor = false, })`  — Open a menu anchored to this control, styled like the model dropdown.
+  - L531 `static String stripLabPrefix(String name)`  — `DeepSeek: DeepSeek V4 Flash` → `DeepSeek V4 Flash`, the way the model
+- L540 `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
+- L562 `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
+  - L563 `const ChatModelChoice({required this.id, required this.name})`
+  - L565 `final String id`
+  - L566 `final String name`
+- L571 `class _MenuChoice`  — What a row in the first menu stands for: a mode, or the way one level
+  - L572 `const _MenuChoice.mode(ChatMode this.mode) : openModelMenu = false`
+  - L573 `const _MenuChoice.openModelMenu() : mode = null, openModelMenu = true`
+  - L575 `final ChatMode? mode`
+  - L576 `final bool openModelMenu`
+- L581 `class _DeeperChoice`  — What a row in the second menu stands for: a reasoning level, a model, or
+  - L582 `const _DeeperChoice.model(String this.modelId) : openScreen = false`
+  - L583 `const _DeeperChoice.openScreen() : modelId = null, openScreen = true`
+  - L585 `final String? modelId`
+  - L586 `final bool openScreen`
+- L592 `class _SubmenuOpener<T> extends PopupMenuEntry<T>`  — A menu row that opens a cascading submenu on tap WITHOUT popping the menu
+  - L593 `const _SubmenuOpener({ required this.rowHeight, required this.child, required this.onOpen, })`
+  - L599 `final double rowHeight`
+  - L600 `final Widget child`
+  - L601 `final Future<void> Function(BuildContext rowContext) onOpen`
+  - L604 `double get height`
+  - L607 `bool represents(T? value)`
+  - L610 `State<_SubmenuOpener<T>> createState()`
+- L613 `class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>>`
+  - L615 `Widget build(BuildContext context)`
 
 ## lib/widgets/chat_reply_preview.dart  (113 Z.)
 - L6 `class ChatEditNotice extends StatelessWidget`

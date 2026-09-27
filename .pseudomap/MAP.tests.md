@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-319 Dateien · 851 Typen/Funktionen · 762 Member · Stand 2026-09-27
+320 Dateien · 852 Typen/Funktionen · 764 Member · Stand 2026-09-27
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -500,14 +500,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _chatJson({int rounds = 30})`
 - `void main()`
 
-### chat_payload_migration_test.dart  (422 Z.)
+### chat_payload_migration_test.dart  (547 Z.)
 - const: userId
 - `String _id(int i)`
 - `String _updatedAt(int i)`
 - `String _v2Json(int i)`
 - `Future<String> _sealV1(String text, List<int> key)`
 - `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
-  - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion key rows writes offline changeBeforeWrite
+  - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion key rows writes offline keyAvailable listGate changeBeforeWrite
 - `void main()`
 
 ### chat_reaction_service_test.dart  (76 Z.)
@@ -1368,11 +1368,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> file(String path, {int? size})`
 - `void main()`
 
-### chat_maintenance_gate_test.dart  (109 Z.)
+### chat_maintenance_gate_test.dart  (164 Z.)
 - `Widget _app(Widget child, {Locale locale = const Locale('en')})`
 - `void main()`
 
-### chat_mode_selector_test.dart  (400 Z.)
+### chat_mode_selector_test.dart  (474 Z.)
 - const: _fireworksLevels
 - `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, Val …)`
 - `void main()`
@@ -1513,6 +1513,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - flushPendingPersist flushes
 
 ### messenger_typing_indicator_test.dart  (48 Z.)
+- `void main()`
+
+### model_logo_test.dart  (113 Z.)
 - `void main()`
 
 ### room_create_sheet_test.dart  (251 Z.)

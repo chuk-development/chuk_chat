@@ -71,27 +71,29 @@
 - L116 `String _chatJson({int rounds = 30})`
 - L140 `void main()`
 
-## test/services/chat_payload_migration_test.dart  (422 Z.)
-- L25 `userId = 'user-1'`
-- L27 `String _id(int i)`
-- L29 `String _updatedAt(int i)`
-- L31 `String _v2Json(int i)`
-- L52 `Future<String> _sealV1(String text, List<int> key)`
-- L70 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
-  - L71 `_FakeCloud(this.key)`
-  - L73 `final List<int> key`
-  - L74 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
-  - L75 `final List<String> writes = []`
-  - L76 `bool offline = false`
-  - L79 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
-  - L82 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L91 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L97 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L122 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L129 `Future<String> fingerprint(String encrypted)`
-  - L133 `int get currentKeyVersion`
-  - L136 `Future<bool> ensureKey()`
-- L139 `void main()`
+## test/services/chat_payload_migration_test.dart  (547 Z.)
+- L26 `userId = 'user-1'`
+- L28 `String _id(int i)`
+- L30 `String _updatedAt(int i)`
+- L32 `String _v2Json(int i)`
+- L53 `Future<String> _sealV1(String text, List<int> key)`
+- L71 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
+  - L72 `_FakeCloud(this.key)`
+  - L74 `final List<int> key`
+  - L75 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
+  - L76 `final List<String> writes = []`
+  - L77 `bool offline = false`
+  - L78 `bool keyAvailable = true`
+  - L81 `Completer<void>? listGate`  — Holds the cloud list until completed (a slow network).
+  - L84 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
+  - L87 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L97 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L103 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L128 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L135 `Future<String> fingerprint(String encrypted)`
+  - L139 `int get currentKeyVersion`
+  - L142 `Future<bool> ensureKey()`
+- L145 `void main()`
 
 ## test/services/chat_reaction_service_test.dart  (76 Z.)
 - L5 `void main()`

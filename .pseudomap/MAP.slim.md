@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-572 Dateien · 2605 Typen/Funktionen · 14062 Member · 1154/1595 öffentliche Symbole mit Zweckzeile · Stand 2026-09-27
+573 Dateien · 2609 Typen/Funktionen · 14082 Member · 1158/1599 öffentliche Symbole mit Zweckzeile · Stand 2026-09-27
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -21,7 +21,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### env_loader.dart  (158 Z.)
 - `class EnvLoader`  — Loads environment variables from .env file at runtime.
 
-### main.dart  (762 Z.)
+### main.dart  (773 Z.)
 - `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
 - `Future<void> main()`
 - `class AgentsApp extends StatefulWidget`
@@ -913,17 +913,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-### chat_payload_migration_service.dart  (799 Z.)
+### chat_payload_migration_service.dart  (938 Z.)
 - `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
 - `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
+- `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
 - `enum ChatMaintenanceOutcome`  — How a run ended.
 - `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
 - `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
 - `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
 - `class ChatPayloadMigrationService`
 - `enum _CloudResult`
-- `class _MigrationState`  — Persisted progress of one account: the done flag and the chats that are
+- `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
 - `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
 - `enum ChatMaintenancePhase`
 
@@ -2755,7 +2756,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _EmptyBlock extends StatelessWidget`  — The panel's one empty state, in the house shape: a large quiet icon, the
 - `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
 
-### chat_maintenance_gate.dart  (297 Z.)
+### chat_maintenance_gate.dart  (303 Z.)
 - `class ChatMaintenanceGate extends StatefulWidget`
 - `class _ChatMaintenanceGateState extends State<ChatMaintenanceGate>`
 - `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
@@ -2763,7 +2764,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChatMaintenanceScreen extends StatelessWidget`
 - `class _ProgressRow extends StatelessWidget`
 
-### chat_mode_selector.dart  (605 Z.)
+### chat_mode_selector.dart  (622 Z.)
 - `class ChatModeSelector extends StatelessWidget`
 - `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
 - `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
@@ -3338,6 +3339,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _map
 - `HugeIconData? hugeIconFor(IconData icon)`  — The app's icon for [icon], or null when the set has nothing for it.
 - `class AppIcon extends StatelessWidget`  — An icon that prefers the app's set and falls back to Material.
+
+### model_logo.dart  (84 Z.)
+- const: kModelLogoByLab
+- `String? modelLogoAsset(String modelId)`  — The bundled logo for [modelId], or null when its lab has no logo.
+- `class ModelLogo extends StatelessWidget`  — A model row's leading glyph: the lab logo at [logoSize] inside a
 
 ## lib/widgets/message_bubble
 ### cards.dart  (905 Z.)

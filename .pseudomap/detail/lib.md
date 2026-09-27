@@ -58,55 +58,55 @@
   - L151 `static bool has(String key)`  — Check if a key exists in the loaded .env file.
   - L153 `static bool get _isDesktop`
 
-## lib/main.dart  (762 Z.)
-- L77 `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
-- L109 `Future<void> main()`
-- L236 `class AgentsApp extends StatefulWidget`
-  - L237 `const AgentsApp({super.key})`
-  - L240 `State<AgentsApp> createState()`
-- L243 `class _AgentsAppState extends State<AgentsApp>`
-  - L244 `static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>()`
-  - L250 `final AppThemeService _themeService = AppThemeService.instance`  — The single source of truth for theme, accent, fonts, UI scale and the
-  - L251 `final AppLifecycleService _lifecycleService = AppLifecycleService.instance`
-  - L252 `final SessionManagerService _sessionManager = SessionManagerService.instance`
-  - L253 `final AppInitializationService _initService = AppInitializationService.instance`
-  - L262 `final ThemeController _theme = ThemeController()`  — Kept alive only as a bridge: the settings pages that are still Agents's
-  - L265 `bool _bridging = false`  — Guards the two-way bridge against feeding a change straight back.
-  - L267 `late final DateTime _appStartedAt`
-  - L268 `Timer? _resumeSettingsSyncTimer`
-  - L269 `DateTime? _lastResumeSettingsSyncAt`
-  - L270 `static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90)`
-  - L271 `static const Duration _linuxResumeSyncDelay = Duration(seconds: 2)`
-  - L273 `bool get _isLinuxDesktop`
-  - L277 `void initState()`
-  - L297 `Future<void> _initializeDesktopTrayInBackground()`
-  - L316 `void _onThemeChanged()`
-  - L321 `void _pushServiceIntoController()`
-  - L331 `void _onThemeControllerChanged()`
-  - L348 `Future<void> _migrateLegacyThemeMode()`  — One-shot migration off Agents's own `theme_mode_v1` preference.
-  - L371 `void _onPasswordMismatch()`
-  - L380 `void _syncSettingsInBackground()`
-  - L422 `void _scheduleStartupSettingsSync()`
-  - L435 `void _initializeNotificationsInBackground()`
-  - L456 `Future<void> _initializeApp()`
-  - L487 `void dispose()`
-  - L505 `bool get _isAssistantLaunch`  — True when this Flutter engine was started by the Android assist
-  - L530 `Widget _buildHome(AppShellConfig shellConfig)`  — The app home: auth gate, onboarding gate, then the shell.
-  - L546 `Widget build(BuildContext context)`
-  - L615 `ColorScheme? _toFlutterScheme( mui.ColorScheme? scheme, Brightness brightness, )`  — Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
-  - L633 `AppShellConfig _buildShellConfig()`
-- L702 `class _OnboardingFirstLaunchGate extends StatefulWidget`  — Starts the interactive onboarding tour if the signed-in user has never
-  - L703 `const _OnboardingFirstLaunchGate({ required this.child, required this.shellConfig, })`
-  - L708 `final Widget child`
-  - L709 `final AppShellConfig shellConfig`
-  - L712 `State<_OnboardingFirstLaunchGate> createState()`
-- L716 `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
-  - L718 `bool _didStartTour = false`
-  - L719 `StreamSubscription<AuthState>? _authSub`
-  - L722 `void initState()`
-  - L737 `void dispose()`
-  - L742 `Future<void> _maybeStart()`
-  - L760 `Widget build(BuildContext context)`
+## lib/main.dart  (773 Z.)
+- L78 `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
+- L110 `Future<void> main()`
+- L247 `class AgentsApp extends StatefulWidget`
+  - L248 `const AgentsApp({super.key})`
+  - L251 `State<AgentsApp> createState()`
+- L254 `class _AgentsAppState extends State<AgentsApp>`
+  - L255 `static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>()`
+  - L261 `final AppThemeService _themeService = AppThemeService.instance`  — The single source of truth for theme, accent, fonts, UI scale and the
+  - L262 `final AppLifecycleService _lifecycleService = AppLifecycleService.instance`
+  - L263 `final SessionManagerService _sessionManager = SessionManagerService.instance`
+  - L264 `final AppInitializationService _initService = AppInitializationService.instance`
+  - L273 `final ThemeController _theme = ThemeController()`  — Kept alive only as a bridge: the settings pages that are still Agents's
+  - L276 `bool _bridging = false`  — Guards the two-way bridge against feeding a change straight back.
+  - L278 `late final DateTime _appStartedAt`
+  - L279 `Timer? _resumeSettingsSyncTimer`
+  - L280 `DateTime? _lastResumeSettingsSyncAt`
+  - L281 `static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90)`
+  - L282 `static const Duration _linuxResumeSyncDelay = Duration(seconds: 2)`
+  - L284 `bool get _isLinuxDesktop`
+  - L288 `void initState()`
+  - L308 `Future<void> _initializeDesktopTrayInBackground()`
+  - L327 `void _onThemeChanged()`
+  - L332 `void _pushServiceIntoController()`
+  - L342 `void _onThemeControllerChanged()`
+  - L359 `Future<void> _migrateLegacyThemeMode()`  — One-shot migration off Agents's own `theme_mode_v1` preference.
+  - L382 `void _onPasswordMismatch()`
+  - L391 `void _syncSettingsInBackground()`
+  - L433 `void _scheduleStartupSettingsSync()`
+  - L446 `void _initializeNotificationsInBackground()`
+  - L467 `Future<void> _initializeApp()`
+  - L498 `void dispose()`
+  - L516 `bool get _isAssistantLaunch`  — True when this Flutter engine was started by the Android assist
+  - L541 `Widget _buildHome(AppShellConfig shellConfig)`  — The app home: auth gate, onboarding gate, then the shell.
+  - L557 `Widget build(BuildContext context)`
+  - L626 `ColorScheme? _toFlutterScheme( mui.ColorScheme? scheme, Brightness brightness, )`  — Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
+  - L644 `AppShellConfig _buildShellConfig()`
+- L713 `class _OnboardingFirstLaunchGate extends StatefulWidget`  — Starts the interactive onboarding tour if the signed-in user has never
+  - L714 `const _OnboardingFirstLaunchGate({ required this.child, required this.shellConfig, })`
+  - L719 `final Widget child`
+  - L720 `final AppShellConfig shellConfig`
+  - L723 `State<_OnboardingFirstLaunchGate> createState()`
+- L727 `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
+  - L729 `bool _didStartTour = false`
+  - L730 `StreamSubscription<AuthState>? _authSub`
+  - L733 `void initState()`
+  - L748 `void dispose()`
+  - L753 `Future<void> _maybeStart()`
+  - L771 `Widget build(BuildContext context)`
 
 ## lib/model_selector_page.dart  (1988 Z.)
 - L44 `class PricingDetails`

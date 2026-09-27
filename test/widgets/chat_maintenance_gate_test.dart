@@ -59,10 +59,26 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
   });
 
-  testWidgets('a quick check shows nothing; a slow one says it is syncing', (
+  testWidgets('a normal start never says it is syncing, however long', (
     tester,
   ) async {
     controller.debugShow(ChatMaintenancePhase.checking);
+    await tester.pumpWidget(
+      _app(
+        ChatMaintenanceGate(controller: controller, child: const Text('SHELL')),
+        locale: const Locale('de'),
+      ),
+    );
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(find.text('Chats werden synchronisiert...'), findsNothing);
+    expect(find.byType(ExpressiveLoader), findsNothing);
+    expect(find.text('SHELL'), findsNothing);
+  });
+
+  testWidgets('after a sign-in a quick check shows nothing, a slow one says '
+      'it is syncing', (tester) async {
+    controller.debugShow(ChatMaintenancePhase.checking, syncHint: true);
     await tester.pumpWidget(
       _app(
         ChatMaintenanceGate(

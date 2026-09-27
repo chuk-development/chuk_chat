@@ -244,14 +244,14 @@
 - L57 `Map<String, dynamic> file(String path, {int? size})`
 - L66 `void main()`
 
-## test/widgets/chat_maintenance_gate_test.dart  (109 Z.)
-- L17 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
-- L29 `void main()`
+## test/widgets/chat_maintenance_gate_test.dart  (164 Z.)
+- L18 `Widget _app(Widget child, {Locale locale = const Locale('en')})`
+- L30 `void main()`
 
-## test/widgets/chat_mode_selector_test.dart  (400 Z.)
-- L20 `_fireworksLevels = <String>['none', 'low', 'high']`
-- L22 `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, ValueChanged<String>? onModelSelected, String reasoningEffort = 'none', List<String> reasoningLevels = _fireworksLevels, ValueChanged<String>? onReasoningEffortChanged, VoidCallback? onOpenModelScreen, String? selectedModelId, String? modelLabel, List<ChatModelChoice> pickedModels = const <ChatModelChoice>[], })`
-- L57 `void main()`
+## test/widgets/chat_mode_selector_test.dart  (474 Z.)
+- L22 `_fireworksLevels = <String>['none', 'low', 'high']`
+- L24 `Future<void> _pump( WidgetTester tester, { ChatMode mode = ChatMode.thinking, ValueChanged<ChatMode>? onModeChanged, ValueChanged<String>? onModelSelected, String reasoningEffort = 'none', List<String> reasoningLevels = _fireworksLevels, ValueChanged<String>? onReasoningEffortChanged, VoidCallback? onOpenModelScreen, String? selectedModelId, String? modelLabel, List<ChatModelChoice> pickedModels = const <ChatModelChoice>[], })`
+- L59 `void main()`
 
 ## test/widgets/chuk_table_golden_test.dart  (323 Z.)
 - L28 `_shots = 'goldens/chuk_table'`  — Where the shots land: committed next to this file (relative to
@@ -442,6 +442,9 @@
 
 ## test/widgets/messenger_typing_indicator_test.dart  (48 Z.)
 - L5 `void main()`
+
+## test/widgets/model_logo_test.dart  (113 Z.)
+- L12 `void main()`
 
 ## test/widgets/room_create_sheet_test.dart  (251 Z.)
 - L8 `AgentsAgent _agent(String id, String name, {String? role})`

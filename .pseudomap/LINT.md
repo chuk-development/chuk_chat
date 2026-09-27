@@ -1,6 +1,6 @@
 # pseudomap · Regelbefunde · chuk_chat
 
-6089 Befunde aus 891 Dateien · Stand 2026-09-27
+6093 Befunde aus 893 Dateien · Stand 2026-09-27
 
 Rang 1 sind Fehler: Lecks, verschluckte Ausnahmen, Zustand nach await. Rang 2 ist Wartbarkeit, Rang 3 sind Flutter- und Stilregeln. Volle Liste je Regel: `pseudomap lint --rule <name>`.
 
@@ -18,7 +18,7 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/assistant/assistant_cards.dart:111` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/assistant/assistant_microphone.dart:126` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/assistant/assistant_session.dart:491` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/main.dart:366` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/main.dart:377` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/models/workspace_model.dart:161` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/agents_desktop_layout.dart:87` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/agents_desktop_layout.dart:104` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -70,10 +70,10 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/services/app_theme_service.dart:536` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/auth_trace.dart:50` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/auth_trace.dart:70` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:303` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:446` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:585` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:621` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:370` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:520` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:659` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:695` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_reaction_service.dart:30` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_storage_crud.dart:551` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_storage_crud.dart:866` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -237,11 +237,11 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `test/platform_specific/chat/chat_scroll_mixin_test.dart:207` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `test/widgets/charts/chuk_chart_test.dart:402` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 
-## Rang 2 — Wartbarkeit (1143)
+## Rang 2 — Wartbarkeit (1145)
 
-avoid-long-functions 784 · avoid-nested-conditional-expressions 174 · avoid-high-cyclomatic-complexity 136 · avoid-collapsible-if 35 · avoid-long-parameter-list 14
+avoid-long-functions 786 · avoid-nested-conditional-expressions 174 · avoid-high-cyclomatic-complexity 136 · avoid-collapsible-if 35 · avoid-long-parameter-list 14
 
-- `lib/main.dart:372` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/main.dart:383` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/chat/chat_scroll_mixin.dart:452` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/chat/chat_ui_desktop.dart:1167` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/chat/chat_ui_desktop.dart:1253` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
@@ -281,11 +281,11 @@ avoid-long-functions 784 · avoid-nested-conditional-expressions 174 · avoid-hi
 - `lib/models/chat_message.dart:218` **avoid-high-cyclomatic-complexity** — Komplexität 23 (Grenze 20)
 - `lib/models/workspace_model.dart:358` **avoid-high-cyclomatic-complexity** — Komplexität 38 (Grenze 20)
 - `lib/pages/account_settings_page.dart:261` **avoid-high-cyclomatic-complexity** — Komplexität 25 (Grenze 20)
-- … +1103 weitere, siehe `pseudomap lint --rank 2`
+- … +1105 weitere, siehe `pseudomap lint --rank 2`
 
-## Rang 3 — Flutter und Stil (4718)
+## Rang 3 — Flutter und Stil (4720)
 
-avoid-dynamic 2442 · avoid-non-null-assertion 2147 · avoid-border-all 107 · avoid-print 16 · avoid-shrink-wrap-in-lists 6
+avoid-dynamic 2442 · avoid-non-null-assertion 2149 · avoid-border-all 107 · avoid-print 16 · avoid-shrink-wrap-in-lists 6
 
 - `lib/assistant/assistant_overlay.dart:462` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/demo/shared_widgets.dart:153` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
@@ -302,4 +302,4 @@ avoid-dynamic 2442 · avoid-non-null-assertion 2147 · avoid-border-all 107 · a
 - `lib/pages/agent_profile_edit_page.dart:579` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/pages/assistant_settings_page.dart:277` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/pages/fullscreen_map_page.dart:311` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- … +4703 weitere, siehe `pseudomap lint --rank 3`
+- … +4705 weitere, siehe `pseudomap lint --rank 3`

@@ -137,3 +137,14 @@
   - L245 `final Color? color`
   - L246 `final String? semanticLabel`
   - L249 `Widget build(BuildContext context)`
+
+## lib/widgets/icons/model_logo.dart  (84 Z.)
+- L14 `kModelLogoByLab = <String, String>{ 'deepseek': 'deepseek', 'moonshotai': 'moonshot', 'qwen': 'qwen', 'z-ai': 'zai', 'mi`  — The lab prefix of a model id (`deepseek/…`) → the logo file stem.
+- L31 `String? modelLogoAsset(String modelId)`  — The bundled logo for [modelId], or null when its lab has no logo.
+- L42 `class ModelLogo extends StatelessWidget`  — A model row's leading glyph: the lab logo at [logoSize] inside a
+  - L43 `const ModelLogo({ super.key, required this.modelId, required this.color, this.size = 18, this.logoSize = 14, })`
+  - L51 `final String modelId`
+  - L52 `final Color color`
+  - L55 `final double size`  — The slot, the same width as the icon column of the other menu rows.
+  - L59 `final double logoSize`  — The drawn mark. Smaller than the slot: a logo fills its viewBox edge to
+  - L62 `Widget build(BuildContext context)`

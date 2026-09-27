@@ -584,104 +584,117 @@
 - L518 `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - L542 `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-## lib/services/chat_payload_migration_service.dart  (799 Z.)
-- L54 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
-- L81 `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
-  - L83 `const ChatMaintenanceProgress({ this.migrated = 0, this.verified = 0, this.total = 0, })`
-  - L89 `final int migrated`
-  - L90 `final int verified`
-  - L91 `final int total`
-  - L93 `ChatMaintenanceProgress copyWith({int? migrated, int? verified})`
-- L102 `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
-  - L104 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, })`
-  - L111 `final String userId`
-  - L114 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
-  - L117 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
-  - L120 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
-  - L122 `int get total`
-  - L123 `bool get hasWork`
-- L127 `enum ChatMaintenanceOutcome`  — How a run ended.
-  - L129 `complete`
-  - L132 `cloudPending`
-- L136 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
-  - L137 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
-  - L139 `final String stage`
-  - L140 `final Object cause`
-  - L141 `final bool restored`
-  - L144 `String toString()`
-- L148 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
-  - L150 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
-  - L153 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
-  - L160 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
-  - L169 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
-  - L172 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
-  - L175 `int get currentKeyVersion`  — The key version of the current key.
-  - L178 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
-- L182 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
-  - L183 `const SupabaseChatMigrationCloud()`
-  - L186 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L198 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L218 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L238 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L242 `Future<String> fingerprint(String encrypted)`
-  - L246 `int get currentKeyVersion`
-  - L249 `Future<bool> ensureKey()`
-- L262 `class ChatPayloadMigrationService`
-  - L263 `ChatPayloadMigrationService._()`
-  - L266 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
-  - L270 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
-  - L272 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
-  - L275 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
-  - L281 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
-  - L285 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
-  - L287 `static String _stateKey(String userId)`
-  - L291 `static Future<ChatMaintenancePlan> plan(String userId)`  — What is left to do for [userId]; an empty plan when the account is
-  - L353 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
-  - L458 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
-  - L492 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
-  - L510 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
-  - L593 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { bool Function()? shouldStop, })`  — Run [work] over [items], at most [parallelism] at a time.
-  - L612 `static Future<_MigrationState> _loadState(String userId)`
-  - L627 `static Future<void> _saveState(String userId, _MigrationState state)`
-  - L638 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
-- L642 `enum _CloudResult`
-  - L642 `done`
-  - L642 `skipped`
-  - L642 `pending`
-- L647 `class _MigrationState`  — Persisted progress of one account: the done flag and the chats that are
-  - L648 `_MigrationState({this.done = false, Set<String>? skip}) : skip = skip ?? <String>{}`
-  - L651 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
-  - L659 `bool done`
-  - L660 `final Set<String> skip`
-  - L662 `Map<String, dynamic> toJson()`
-- L670 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
-  - L671 `ChatMaintenanceController._()`
-  - L673 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
-  - L676 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
-  - L677 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
-  - L678 `ChatMaintenanceFailure? _failure`
-  - L679 `String? _userId`
-  - L680 `Completer<void>? _released`
-  - L681 `ChatMaintenancePlan? _plan`
-  - L683 `ChatMaintenancePhase get phase`
-  - L684 `ChatMaintenanceProgress get progress`
-  - L685 `ChatMaintenanceFailure? get failure`
-  - L688 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
-  - L696 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
-  - L704 `Future<void> _check(String userId)`
-  - L716 `Future<void> _run()`
-  - L741 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
-  - L756 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
-  - L761 `void _release()`
-  - L767 `void _set(ChatMaintenancePhase phase)`
-  - L774 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, })`  — Put the controller into [phase] with [progress] (widget tests).
-  - L785 `void reset()`  — Forget the run (sign-out, tests).
-- L798 `enum ChatMaintenancePhase`
-  - L798 `idle`
-  - L798 `checking`
-  - L798 `running`
-  - L798 `failed`
-  - L798 `done`
+## lib/services/chat_payload_migration_service.dart  (938 Z.)
+- L62 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
+- L89 `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
+  - L91 `const ChatMaintenanceProgress({ this.migrated = 0, this.verified = 0, this.total = 0, })`
+  - L97 `final int migrated`
+  - L98 `final int verified`
+  - L99 `final int total`
+  - L101 `ChatMaintenanceProgress copyWith({int? migrated, int? verified})`
+- L110 `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
+  - L112 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, })`
+  - L119 `final String userId`
+  - L122 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
+  - L125 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
+  - L128 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
+  - L130 `int get total`
+  - L131 `bool get hasWork`
+- L135 `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
+  - L137 `done`
+  - L140 `background`
+  - L144 `blocking`
+- L148 `enum ChatMaintenanceOutcome`  — How a run ended.
+  - L150 `complete`
+  - L153 `cloudPending`
+- L157 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
+  - L158 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
+  - L160 `final String stage`
+  - L161 `final Object cause`
+  - L162 `final bool restored`
+  - L165 `String toString()`
+- L169 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
+  - L171 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
+  - L174 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
+  - L181 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
+  - L190 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
+  - L193 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
+  - L196 `int get currentKeyVersion`  — The key version of the current key.
+  - L199 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
+- L203 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
+  - L204 `const SupabaseChatMigrationCloud()`
+  - L207 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L219 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L239 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L259 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L263 `Future<String> fingerprint(String encrypted)`
+  - L267 `int get currentKeyVersion`
+  - L270 `Future<bool> ensureKey()`
+- L283 `class ChatPayloadMigrationService`
+  - L284 `ChatPayloadMigrationService._()`
+  - L287 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
+  - L291 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
+  - L293 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
+  - L296 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
+  - L302 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
+  - L306 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
+  - L308 `static String _stateKey(String userId)`
+  - L312 `static Future<ChatStartupCheck> startupCheck(String userId)`  — What a normal start of [userId] waits for. Reads the done flag and the
+  - L337 `static Future<void> checkCloudInBackground(String userId)`  — The cloud half of the check, run behind the app on a normal start. It
+  - L355 `static Future<ChatMaintenancePlan> plan( String userId, { bool needsKey = true, })`  — What is left to do for [userId]; an empty plan when the account is
+  - L424 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
+  - L532 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
+  - L566 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
+  - L584 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
+  - L667 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { bool Function()? shouldStop, })`  — Run [work] over [items], at most [parallelism] at a time.
+  - L686 `static Future<_MigrationState> _loadState(String userId)`
+  - L701 `static Future<void> _saveState(String userId, _MigrationState state)`
+  - L713 `static void _logIncompleteCheck(String reason, [Object? error])`  — Why a check could not set the done flag, for the opt-in diagnostics
+  - L728 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
+  - L733 `static Future<bool> isCloudPending(String userId)`  — Whether a check found cloud chats for the next start.
+- L737 `enum _CloudResult`
+  - L737 `done`
+  - L737 `skipped`
+  - L737 `pending`
+- L743 `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
+  - L744 `_MigrationState({ this.done = false, this.cloudPending = false, Set<String>? skip, }) : skip = skip ?? <String>{}`
+  - L750 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
+  - L759 `bool done`
+  - L760 `bool cloudPending`
+  - L761 `final Set<String> skip`
+  - L763 `Map<String, dynamic> toJson()`
+- L772 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
+  - L773 `ChatMaintenanceController._()`
+  - L775 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
+  - L778 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
+  - L779 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
+  - L780 `ChatMaintenanceFailure? _failure`
+  - L781 `String? _userId`
+  - L782 `Completer<void>? _released`
+  - L783 `ChatMaintenancePlan? _plan`
+  - L786 `String? _restoredUserId`  — The user whose session was already there when the app started.
+  - L787 `bool _showsSyncHint = false`
+  - L789 `ChatMaintenancePhase get phase`
+  - L790 `ChatMaintenanceProgress get progress`
+  - L791 `ChatMaintenanceFailure? get failure`
+  - L795 `bool get showsSyncHint`  — Whether a slow check may say "Syncing your chats": only right after a
+  - L799 `void noteRestoredSession(String? userId)`  — Record the session the app started with (main(), after the Supabase
+  - L802 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
+  - L810 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
+  - L818 `Future<void> _check(String userId)`
+  - L850 `Future<void> _run()`
+  - L875 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
+  - L890 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
+  - L895 `void _release()`
+  - L901 `void _set(ChatMaintenancePhase phase)`
+  - L908 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, bool syncHint = false, })`  — Put the controller into [phase] with [progress] (widget tests).
+  - L922 `void reset()`  — Forget the run (sign-out, tests). A sign-in after this is not the
+- L937 `enum ChatMaintenancePhase`
+  - L937 `idle`
+  - L937 `checking`
+  - L937 `running`
+  - L937 `failed`
+  - L937 `done`
 
 ## lib/services/chat_preload_service.dart  (402 Z.)
 - L23 `class ChatPreloadService`  — Service for background preloading all chat messages.

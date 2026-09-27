@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-572 Dateien · 2605 Typen/Funktionen · 14062 Member · 1154/1595 öffentliche Symbole mit Zweckzeile · Stand 2026-09-27
+573 Dateien · 2609 Typen/Funktionen · 14082 Member · 1158/1599 öffentliche Symbole mit Zweckzeile · Stand 2026-09-27
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -22,7 +22,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class EnvLoader`  — Loads environment variables from .env file at runtime.
   - load loadSync _parseEnvFile get has _isDesktop
 
-### main.dart  (762 Z.)
+### main.dart  (773 Z.)
 - `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
 - `Future<void> main()`
 - `class AgentsApp extends StatefulWidget`
@@ -1314,12 +1314,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-### chat_payload_migration_service.dart  (799 Z.)
+### chat_payload_migration_service.dart  (938 Z.)
 - `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
   - copyWith migrated verified total
 - `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
   - total hasWork userId localIds cloud cloudKnown
+- `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
+  - done background blocking
 - `enum ChatMaintenanceOutcome`  — How a run ended.
   - complete cloudPending
 - `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
@@ -1329,13 +1331,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
   - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion
 - `class ChatPayloadMigrationService`
-  - _stateKey plan Function _migrateLocalRow _verifyLocalRow _migrateCloudChat _loadState _saveState isDone parallelism cloud readKv writeKv debugBeforeLocalVerify hasLocalDatabase
+  - _stateKey startupCheck checkCloudInBackground Function _migrateLocalRow _verifyLocalRow _migrateCloudChat _loadState _saveState _logIncompleteCheck isDone isCloudPending parallelism cloud readKv writeKv debugBeforeLocalVerify hasLocalDatabase needsKey
 - `enum _CloudResult`
   - done skipped pending
-- `class _MigrationState`  — Persisted progress of one account: the done flag and the chats that are
-  - toJson done skip
+- `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
+  - toJson done cloudPending skip
 - `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
-  - ensureReady _check _run retry continueAnyway _release _set reset phase progress failure holdsApp instance
+  - noteRestoredSession ensureReady _check _run retry continueAnyway _release _set reset phase progress failure showsSyncHint holdsApp instance
 - `enum ChatMaintenancePhase`
   - idle checking running failed done
 
@@ -3777,13 +3779,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MiddleEllipsis extends StatelessWidget`  — A screen title that loses its middle, not its end.
   - text
 
-### chat_maintenance_gate.dart  (297 Z.)
+### chat_maintenance_gate.dart  (303 Z.)
 - `class ChatMaintenanceGate extends StatefulWidget`
   - child controller syncingHintDelay
 - `class _ChatMaintenanceGateState extends State<ChatMaintenanceGate>`
   - _onChange _start _controller
 - `class _Checking extends StatefulWidget`  — The app surface while the check runs. On a normal start that is a few
-  - hintDelay
+  - hintDelay showHint
 - `class _CheckingState extends State<_Checking>`
   - _hint
 - `class ChatMaintenanceScreen extends StatelessWidget`
@@ -3791,9 +3793,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ProgressRow extends StatelessWidget`
   - label count value
 
-### chat_mode_selector.dart  (605 Z.)
+### chat_mode_selector.dart  (622 Z.)
 - `class ChatModeSelector extends StatelessWidget`
-  - iconFor labelFor descriptionFor _openModeMenu _openModelMenu _openReasoningMenu _headerRow stripLabPrefix _agentsLook _glyphSize _customPointLabel _hasDeeperMenu agentsMenus flat mode onModeChanged onModelSelected onOpenModelScreen pickedModels selectedModelId modelLabel customModelLabel reasoningEffort reasoningLevels onReasoningEffortChanged showLabel height menuAbove kMaxModelsInMenu isSelected besideAnchor
+  - iconFor labelFor descriptionFor _openModeMenu _openModelMenu _openReasoningMenu _headerRow _labelColor stripLabPrefix _agentsLook _glyphSize _customPointLabel _hasDeeperMenu agentsMenus flat mode onModeChanged onModelSelected onOpenModelScreen pickedModels selectedModelId modelLabel customModelLabel reasoningEffort reasoningLevels onReasoningEffortChanged showLabel height menuAbove kMaxModelsInMenu isSelected besideAnchor
 - `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
 - `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
   - id name
@@ -4597,6 +4599,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `HugeIconData? hugeIconFor(IconData icon)`  — The app's icon for [icon], or null when the set has nothing for it.
 - `class AppIcon extends StatelessWidget`  — An icon that prefers the app's set and falls back to Material.
   - icon size color semanticLabel
+
+### model_logo.dart  (84 Z.)
+- const: kModelLogoByLab
+- `String? modelLogoAsset(String modelId)`  — The bundled logo for [modelId], or null when its lab has no logo.
+- `class ModelLogo extends StatelessWidget`  — A model row's leading glyph: the lab logo at [logoSize] inside a
+  - modelId color size logoSize
 
 ## lib/widgets/message_bubble
 ### cards.dart  (905 Z.)

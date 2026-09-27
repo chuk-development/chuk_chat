@@ -34,12 +34,20 @@
 // separate table and format). Nothing streams while the screen is up.
 //
 // Web: no cache database, so only the cloud part runs, behind the same screen.
+//
+// A normal start (the session was already there when the app started) never
+// waits for the cloud: [ChatPayloadMigrationService.startupCheck] reads only
+// the done flag and the cache, and the cloud list is read behind the app
+// ([ChatPayloadMigrationService.checkCloudInBackground]). Cloud chats found
+// there are rewritten at the next start, behind the screen. Only a sign-in
+// waits for the whole check.
 
 import 'dart:async';
 import 'dart:convert';
 
 import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_payload_codec.dart';
+import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
@@ -106,6 +114,7 @@ class ChatMaintenancePlan {
     required this.localIds,
     required this.cloud,
     required this.cloudKnown,
+    this.localKnown = true,
   });
 
   final String userId;
@@ -119,8 +128,24 @@ class ChatMaintenancePlan {
   /// Whether the cloud list is complete (false: offline, no key, an error).
   final bool cloudKnown;
 
+  /// Whether the cache scan ran (false: it failed). The done flag needs it.
+  final bool localKnown;
+
   int get total => localIds.length + cloud.length;
   bool get hasWork => total > 0;
+}
+
+/// What a normal start has to wait for, from local state only.
+enum ChatStartupCheck {
+  /// The account is done: nothing to check.
+  done,
+
+  /// Only the cloud is unchecked: the app opens, the check runs behind it.
+  background,
+
+  /// Cache rows to rewrite, or cloud chats that an earlier check found: the
+  /// maintenance screen runs before the app opens.
+  blocking,
 }
 
 /// How a run ended.
@@ -275,6 +300,11 @@ class ChatPayloadMigrationService {
   static Future<void> Function(String key, String value) writeKv =
       LocalChatCacheService.kvSet;
 
+  /// The cache scan for rows that are not a v3 frame yet.
+  @visibleForTesting
+  static Future<List<String>> Function(String userId) localUpgradeIds =
+      LocalChatCacheService.idsNeedingPayloadUpgrade;
+
   /// Called between the local rewrite and its verification (tests break a
   /// row here to prove the restore).
   @visibleForTesting
@@ -286,9 +316,55 @@ class ChatPayloadMigrationService {
 
   static String _stateKey(String userId) => 'chat_payload_v3_migration_$userId';
 
+  /// What a normal start of [userId] waits for. Reads the done flag and the
+  /// cache only: no key, no network, so it returns in milliseconds.
+  static Future<ChatStartupCheck> startupCheck(String userId) async {
+    final state = await _loadState(userId);
+    if (state.done) return ChatStartupCheck.done;
+    if (state.cloudPending) return ChatStartupCheck.blocking;
+    if (hasLocalDatabase) {
+      try {
+        final ids = await localUpgradeIds(userId);
+        if (ids.any(
+          (id) => !ChatOrigin.isAgentsThread(id) && !state.skip.contains(id),
+        )) {
+          return ChatStartupCheck.blocking;
+        }
+      } catch (e) {
+        // The blocking plan could not see the rows either. The check behind
+        // the app keeps the done flag unset, so the next start scans again.
+        if (kDebugMode) debugPrint('⚠️ [PayloadV3] cache scan failed: $e');
+      }
+    }
+    return ChatStartupCheck.background;
+  }
+
+  /// The cloud half of the check, run behind the app on a normal start. It
+  /// needs no key: it only lists the chats that still have a v1 envelope.
+  /// None left: the account is done. Some left: the next start rewrites them
+  /// behind the maintenance screen. Never throws.
+  static Future<void> checkCloudInBackground(String userId) async {
+    try {
+      final found = await plan(userId, needsKey: false);
+      if (!found.hasWork) return;
+      final state = await _loadState(userId);
+      state.cloudPending = true;
+      await _saveState(userId, state);
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [PayloadV3] background check failed: ${e.runtimeType}');
+      }
+    }
+  }
+
   /// What is left to do for [userId]; an empty plan when the account is
   /// done. Never throws: a cloud list that cannot be read is left for later.
-  static Future<ChatMaintenancePlan> plan(String userId) async {
+  /// [needsKey] false lists the cloud chats without loading the key (a check
+  /// that rewrites nothing).
+  static Future<ChatMaintenancePlan> plan(
+    String userId, {
+    bool needsKey = true,
+  }) async {
     final state = await _loadState(userId);
     if (state.done) {
       return ChatMaintenancePlan(
@@ -305,15 +381,16 @@ class ChatPayloadMigrationService {
     }
 
     var localIds = const <String>[];
+    var localKnown = !hasLocalDatabase;
     if (hasLocalDatabase) {
       try {
         localIds = [
-          for (final id in await LocalChatCacheService.idsNeedingPayloadUpgrade(
-            userId,
-          ))
+          for (final id in await localUpgradeIds(userId))
             if (!ChatOrigin.isAgentsThread(id) && !state.skip.contains(id)) id,
         ];
+        localKnown = true;
       } catch (e) {
+        _logIncompleteCheck('cache_scan_failed', e);
         if (kDebugMode) debugPrint('⚠️ [PayloadV3] cache scan failed: $e');
       }
     }
@@ -321,14 +398,17 @@ class ChatPayloadMigrationService {
     var cloudIds = const <String>[];
     var cloudKnown = false;
     try {
-      if (await cloud.ensureKey()) {
+      if (!needsKey || await cloud.ensureKey()) {
         cloudIds = [
           for (final id in await cloud.listPlainEnvelopeChats(userId))
             if (!state.skip.contains(id) && !ChatDirtyStore.isDirty(id)) id,
         ];
         cloudKnown = true;
+      } else {
+        _logIncompleteCheck('no_key');
       }
     } catch (e) {
+      _logIncompleteCheck('scan_failed', e);
       if (kDebugMode) {
         debugPrint('⚠️ [PayloadV3] cloud scan failed: ${e.runtimeType}');
       }
@@ -339,9 +419,11 @@ class ChatPayloadMigrationService {
       localIds: localIds,
       cloud: cloudIds,
       cloudKnown: cloudKnown,
+      localKnown: localKnown,
     );
-    if (!plan.hasWork && cloudKnown) {
+    if (!plan.hasWork && cloudKnown && localKnown) {
       state.done = true;
+      state.cloudPending = false;
       await _saveState(userId, state);
     }
     return plan;
@@ -438,7 +520,12 @@ class ChatPayloadMigrationService {
     if (stop) cloudPending = true;
 
     // ── 5. Done ───────────────────────────────────────────────────────────
-    if (!cloudPending && cloudFailure == null) state.done = true;
+    if (!cloudPending && cloudFailure == null && plan.localKnown) {
+      state.done = true;
+    }
+    // Known cloud work left over: the next start runs the screen for it. An
+    // unread cloud list is checked behind the app instead.
+    state.cloudPending = !state.done && plan.cloud.isNotEmpty;
     await _saveState(userId, state);
     if (useBackup) {
       try {
@@ -633,34 +720,62 @@ class ChatPayloadMigrationService {
     }
   }
 
+  /// Why a check could not set the done flag, for the opt-in diagnostics
+  /// log. The error type only, never a message or an id. A log that cannot
+  /// be written never stops the check.
+  static void _logIncompleteCheck(String reason, [Object? error]) {
+    unawaited(
+      DiagnosticsLogService.warning(
+        'maintenance',
+        'Chat check incomplete',
+        data: {
+          'reason': reason,
+          if (error != null) 'error': error.runtimeType.toString(),
+        },
+      ).catchError((Object _) {}),
+    );
+  }
+
   /// Whether the migration of [userId] is recorded as done.
   @visibleForTesting
   static Future<bool> isDone(String userId) async =>
       (await _loadState(userId)).done;
+
+  /// Whether a check found cloud chats for the next start.
+  @visibleForTesting
+  static Future<bool> isCloudPending(String userId) async =>
+      (await _loadState(userId)).cloudPending;
 }
 
 enum _CloudResult { done, skipped, pending }
 
-/// Persisted progress of one account: the done flag and the chats that are
-/// never retried (locked with another key, or failed the proof). Which cloud
-/// chats are left is read from the cloud itself: a `{"v":"1"}` envelope.
+/// Persisted progress of one account: the done flag, whether a check found
+/// cloud chats for the next start, and the chats that are never retried
+/// (locked with another key, or failed the proof). Which cloud chats are
+/// left is read from the cloud itself: a `{"v":"1"}` envelope.
 class _MigrationState {
-  _MigrationState({this.done = false, Set<String>? skip})
-    : skip = skip ?? <String>{};
+  _MigrationState({
+    this.done = false,
+    this.cloudPending = false,
+    Set<String>? skip,
+  }) : skip = skip ?? <String>{};
 
   factory _MigrationState.fromJson(Map<String, dynamic> json) =>
       _MigrationState(
         done: json['done'] == true,
+        cloudPending: json['cloudPending'] == true,
         skip: json['skip'] is List
             ? (json['skip'] as List).whereType<String>().toSet()
             : null,
       );
 
   bool done;
+  bool cloudPending;
   final Set<String> skip;
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     'done': done,
+    'cloudPending': cloudPending,
     'skip': skip.toList(),
   };
 }
@@ -680,9 +795,21 @@ class ChatMaintenanceController extends ChangeNotifier {
   Completer<void>? _released;
   ChatMaintenancePlan? _plan;
 
+  /// The user whose session was already there when the app started.
+  String? _restoredUserId;
+  bool _showsSyncHint = false;
+
   ChatMaintenancePhase get phase => _phase;
   ChatMaintenanceProgress get progress => _progress;
   ChatMaintenanceFailure? get failure => _failure;
+
+  /// Whether a slow check may say "Syncing your chats": only right after a
+  /// sign-in, never on a normal start.
+  bool get showsSyncHint => _showsSyncHint;
+
+  /// Record the session the app started with (main(), after the Supabase
+  /// init). Its check never holds the app for the cloud.
+  void noteRestoredSession(String? userId) => _restoredUserId = userId;
 
   /// Whether the chat UI must wait (the gate shows the screen or nothing).
   bool get holdsApp =>
@@ -702,7 +829,31 @@ class ChatMaintenanceController extends ChangeNotifier {
   }
 
   Future<void> _check(String userId) async {
+    final restored = userId == _restoredUserId;
+    _showsSyncHint = !restored;
     _set(ChatMaintenancePhase.checking);
+    if (restored) {
+      // A normal start: the app opens at once unless the cache has rows to
+      // rewrite or an earlier check found cloud chats. The cloud list is read
+      // behind the app.
+      final start = await ChatPayloadMigrationService.startupCheck(userId);
+      if (_userId != userId) return;
+      switch (start) {
+        case ChatStartupCheck.done:
+          _release();
+          return;
+        case ChatStartupCheck.background:
+          _release();
+          unawaited(ChatPayloadMigrationService.checkCloudInBackground(userId));
+          return;
+        case ChatStartupCheck.blocking:
+          // Real work before the app opens (once): the check that plans it
+          // may say what it waits for, like after a sign-in.
+          _showsSyncHint = true;
+          notifyListeners();
+          break;
+      }
+    }
     final plan = await ChatPayloadMigrationService.plan(userId);
     if (_userId != userId) return;
     if (!plan.hasWork) {
@@ -775,18 +926,23 @@ class ChatMaintenanceController extends ChangeNotifier {
     ChatMaintenancePhase phase, {
     ChatMaintenanceProgress progress = const ChatMaintenanceProgress(),
     ChatMaintenanceFailure? failure,
+    bool syncHint = false,
   }) {
     _progress = progress;
     _failure = failure;
+    _showsSyncHint = syncHint;
     _set(phase);
   }
 
-  /// Forget the run (sign-out, tests).
+  /// Forget the run (sign-out, tests). A sign-in after this is not the
+  /// session the app started with.
   void reset() {
     final released = _released;
     if (released != null && !released.isCompleted) released.complete();
     _released = null;
     _userId = null;
+    _restoredUserId = null;
+    _showsSyncHint = false;
     _plan = null;
     _failure = null;
     _progress = const ChatMaintenanceProgress();
