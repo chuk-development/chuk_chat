@@ -6,12 +6,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
+import 'package:chuk_chat/widgets/icons/model_logo.dart';
 
 import '../support/kv_cache_test_env.dart';
 import '../helpers/icon_finder.dart';
@@ -335,6 +337,78 @@ void main() {
       await tester.pumpAndSettle();
       expect(picked, ['moonshotai/kimi-k3']);
     });
+
+    testWidgets(
+      'each model row carries its lab logo, an unknown lab an empty slot',
+      (tester) async {
+        await _pump(
+          tester,
+          mode: ChatMode.custom,
+          reasoningLevels: const ['none'],
+          selectedModelId: 'deepseek/deepseek-v4-flash',
+          modelLabel: 'DeepSeek: V4 Flash',
+          pickedModels: const [
+            ChatModelChoice(
+              id: 'deepseek/deepseek-v4-flash',
+              name: 'DeepSeek: V4 Flash',
+            ),
+            ChatModelChoice(
+              id: 'moonshotai/kimi-k3',
+              name: 'Moonshot: Kimi K3',
+            ),
+            ChatModelChoice(id: 'acme/foo-1', name: 'Acme: Foo 1'),
+          ],
+          onModelSelected: (_) {},
+          onOpenModelScreen: () {},
+        );
+
+        await tester.tap(find.text('V4 Flash')); // the pill
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('V4 Flash').last); // third point
+        await tester.pumpAndSettle();
+
+        Finder rowOf(String label) => find
+            .ancestor(of: find.text(label).last, matching: find.byType(Row))
+            .first;
+        Finder logoIn(String label) =>
+            find.descendant(of: rowOf(label), matching: find.byType(ModelLogo));
+        // The logo's own picture; the tick on the chosen row is one too.
+        Finder pictureIn(String label) => find.descendant(
+          of: logoIn(label),
+          matching: find.byType(SvgPicture),
+        );
+
+        // A known lab draws its logo, tinted like the row's name: full for
+        // the model in use, a step back for the rest.
+        for (final label in const ['V4 Flash', 'Kimi K3']) {
+          expect(logoIn(label), findsOneWidget, reason: label);
+          expect(pictureIn(label), findsOneWidget, reason: label);
+          final Color? nameColor = tester
+              .widget<Text>(
+                find.descendant(of: rowOf(label), matching: find.text(label)),
+              )
+              .style
+              ?.color;
+          expect(
+            tester.widget<SvgPicture>(pictureIn(label)).colorFilter,
+            ColorFilter.mode(nameColor!, BlendMode.srcIn),
+            reason: label,
+          );
+        }
+
+        // An unknown lab keeps the slot, empty.
+        expect(logoIn('Foo 1'), findsOneWidget);
+        expect(pictureIn('Foo 1'), findsNothing);
+        expect(tester.getSize(logoIn('Foo 1')), const Size(18, 18));
+
+        // So every name starts at the same x, and lines up with the row
+        // below that carries an icon.
+        final double nameX = tester.getTopLeft(find.text('Kimi K3')).dx;
+        expect(tester.getTopLeft(find.text('Foo 1')).dx, nameX);
+        expect(tester.getTopLeft(find.text('V4 Flash').last).dx, nameX);
+        expect(tester.getTopLeft(find.text('More models')).dx, nameX);
+      },
+    );
 
     testWidgets('the deeper menu reaches the full model screen', (
       tester,
