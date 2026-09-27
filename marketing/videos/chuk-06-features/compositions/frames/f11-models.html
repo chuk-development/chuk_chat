@@ -1,0 +1,269 @@
+<template>
+  <style>
+
+@font-face { font-family: "Chuk Chat Mono"; src: url("assets/fonts/ChukChatMono-wght.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Ubuntu"; src: url("assets/fonts/Ubuntu-subset.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/Inter-subset.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+
+.fill { position: absolute; inset: 0; overflow: hidden; }
+
+/* ---------- Worlds (usecases.css "Backdrop scenes", px for 1920x1080) ---------- */
+.sc { position: absolute; inset: 0; overflow: hidden; }
+.sc--paper { background: radial-gradient(ellipse at 50% 38%, #FFFDF8 0%, #FDFBF7 45%, #F3F0E8 100%); }
+.sc--dawn { background: linear-gradient(180deg, #F4E6D4 0%, #F6D4A6 48%, #F1B872 78%, #E8A150 100%); }
+.sc-sun { position: absolute; left: 1060px; bottom: -60px; width: 476px; height: 476px; border-radius: 50%; background: radial-gradient(circle, #FFF3D1 0 34%, #FAD08A 56%, rgba(250, 208, 138, 0) 71%); }
+.sc-hills { position: absolute; left: 0; bottom: 0; width: 1920px; height: 346px; }
+.sc--night { background: radial-gradient(ellipse at 50% 120%, rgba(90, 110, 190, 0.35), transparent 60%), linear-gradient(180deg, #0A0F1F 0%, #131A33 55%, #1D2444 100%); }
+.sc-stars { position: absolute; inset: -20% 0 0; background-image:
+  radial-gradient(1.6px 1.6px at 6% 14%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 14% 38%, #fff 50%, transparent 52%),
+  radial-gradient(1.8px 1.8px at 22% 8%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 31% 26%, #fff 50%, transparent 52%),
+  radial-gradient(1.4px 1.4px at 39% 12%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 46% 34%, #fff 50%, transparent 52%),
+  radial-gradient(1.6px 1.6px at 55% 6%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 63% 22%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 71% 40%, #fff 50%, transparent 52%), radial-gradient(1.6px 1.6px at 79% 16%, #fff 50%, transparent 52%),
+  radial-gradient(1.2px 1.2px at 88% 30%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 95% 10%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 9% 58%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 27% 66%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 51% 60%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 68% 70%, #fff 50%, transparent 52%),
+  radial-gradient(1px 1px at 84% 56%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 93% 74%, #fff 50%, transparent 52%); }
+.sc-stars--b { background-position: 58px 76px; opacity: 0.6; }
+.sc-moon { position: absolute; top: 64px; left: 560px; width: 110px; height: 110px; border-radius: 50%; background: radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8); }
+.sc--day { background: linear-gradient(180deg, #F9F1E4 0%, #F2E4CE 100%); }
+.sc-awning { position: absolute; top: 0; left: 0; right: 0; height: 76px; background: repeating-linear-gradient(90deg, #D7775A 0 64px, #FAF3E8 64px 128px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }
+.sc-awning::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 16px; background:
+  radial-gradient(circle at 32px 0, #D7775A 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x,
+  radial-gradient(circle at 96px 0, #FAF3E8 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x; }
+.sc-beams { position: absolute; inset: -20%; background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.6) 36%, transparent 44%, transparent 54%, rgba(255, 255, 255, 0.45) 60%, transparent 67%); }
+.sc--network { background: radial-gradient(ellipse at 50% 50%, #F4F6F0 0%, #E6ECE2 70%, #DCE4D7 100%); }
+.sc-web { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+.sc--prism { background: #F7F4EF; }
+.sc-blob { position: absolute; width: 1344px; height: 1344px; border-radius: 50%; }
+.sc-blob--a { left: -480px; top: -576px; background: radial-gradient(circle, rgba(77, 107, 254, 0.4), transparent 62%); }
+.sc-blob--b { right: -538px; top: -192px; background: radial-gradient(circle, rgba(124, 92, 255, 0.34), transparent 62%); }
+.sc-blob--c { left: 192px; bottom: -768px; background: radial-gradient(circle, rgba(255, 120, 110, 0.32), transparent 62%); }
+.sc-blob--d { right: -192px; bottom: -864px; background: radial-gradient(circle, rgba(245, 165, 36, 0.3), transparent 62%); }
+.sc--street { background: linear-gradient(180deg, #181C33 0%, #332F52 42%, #9A5E78 74%, #E29B75 100%); }
+.sc-city { position: absolute; left: 0; bottom: 0; width: 1920px; height: 360px; }
+.sc--library { background: linear-gradient(180deg, #F2EAD8 0%, #ECE1C9 100%); }
+.sc-ruled { position: absolute; inset: 0; background:
+  linear-gradient(90deg, transparent 56px, rgba(200, 90, 80, 0.3) 56px, rgba(200, 90, 80, 0.3) 58px, transparent 58px),
+  repeating-linear-gradient(180deg, transparent 0 35px, rgba(70, 100, 150, 0.13) 35px 36px); }
+
+/* ---------- Left text column (same grammar every beat) ---------- */
+.lt { position: absolute; left: 100px; top: 0; width: 610px; height: 100%; display: flex; flex-direction: column; justify-content: center; padding-bottom: 20px; }
+.lt-n { margin: 0; font-family: "Chuk Chat Mono", monospace; font-size: 32px; font-weight: 700; letter-spacing: 0.1em; line-height: 1; color: #7A5A0A; white-space: nowrap; }
+.lt-t { margin: 30px 0 0; font-family: "Inter", sans-serif; font-size: 112px; font-weight: 400; letter-spacing: -0.045em; line-height: 1.0; color: #26251F; }
+.lt-t .ln { display: block; white-space: nowrap; }
+.lt-t .wd { display: inline-block; }
+.lt-s { margin: 36px 0 0; max-width: 580px; font-family: "Inter", sans-serif; font-size: 46px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; color: #4E4C45; text-wrap: balance; }
+.lt-rule { width: 64px; height: 4px; margin-top: 30px; border-radius: 2px; background: #D97757; }
+.dark .lt-n { color: #E9C46A; }
+.dark .lt-t { color: #F6F3EC; }
+.dark .lt-s { color: rgba(246, 243, 236, 0.86); }
+
+/* ---------- Result area and card (app surface, logical px, zoomed) ---------- */
+.ra { position: absolute; left: 744px; top: 0; width: 1104px; height: 100%; display: flex; align-items: center; justify-content: center; }
+.rc, .ph {
+  --fg: #E8E4D8; --fg85: rgba(232, 228, 216, 0.85); --fg82: rgba(232, 228, 216, 0.82); --fg70: rgba(232, 228, 216, 0.72);
+  --fg55: rgba(232, 228, 216, 0.6); --fg30: rgba(232, 228, 216, 0.3); --fg15: rgba(232, 228, 216, 0.15);
+  --bg: #262624; --lift: #333330; --acc: #D97757; --bubble: #AD6048;
+  --chat-font: "Chuk Chat Mono", monospace; --ui-font: "Ubuntu", sans-serif;
+}
+.rc { zoom: 1.9; position: relative; width: 580px; min-height: 360px; padding: 20px; border-radius: 22px; background: var(--bg); color: var(--fg);
+  font-family: var(--ui-font); font-size: 16px; line-height: 1.4; text-align: left;
+  box-shadow: 0 34px 80px -26px rgba(20, 16, 8, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+.rc *, .ph * { box-sizing: border-box; }
+.rc p, .ph p { margin: 0; }
+.rc svg, .ph svg { flex: none; display: block; }
+.z14 { width: 12px; height: 12px; } .z16 { width: 13.8px; height: 13.8px; } .z18 { width: 15.5px; height: 15.5px; }
+.z20 { width: 17.2px; height: 17.2px; } .z22 { width: 18.9px; height: 18.9px; } .z24 { width: 20.6px; height: 20.6px; } .z26 { width: 22.4px; height: 22.4px; }
+.i16 { width: 16px; height: 16px; } .i18 { width: 18px; height: 18px; } .i20 { width: 20px; height: 20px; } .i22 { width: 22px; height: 22px; }
+
+/* The sent prompt: one line, top of the card */
+.a-user { display: flex; justify-content: flex-end; }
+.a-bubble { max-width: 86%; padding: 9px 14px; border: 1px solid var(--fg30); border-radius: 16px 16px 5px 16px; background: var(--bubble);
+  color: #FFFFFF; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.38; white-space: nowrap; }
+.a-docs { display: flex; justify-content: flex-end; margin-bottom: 7px; }
+.a-doc { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px 5px 8px; border-radius: 9px; background: rgba(0, 0, 0, 0.2); font-family: var(--ui-font); font-size: 15px; font-weight: 500; }
+
+/* Answer text (chat font) */
+.a-ai { margin-top: 14px; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.5; color: var(--fg); }
+.a-ai strong, .a-ai b { font-weight: 700; }
+.w { display: inline; }
+
+/* Agent timeline rows */
+.a-step { position: relative; display: flex; align-items: center; gap: 9px; min-height: 30px; margin-top: 14px; font-family: var(--ui-font); font-size: 15px; color: var(--fg55); white-space: nowrap; }
+.a-step b { font-weight: 500; color: var(--fg85); }
+.a-badge { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+.a-badge.ok { color: #86C795; border-color: rgba(134, 199, 149, 0.35); }
+.spin { display: inline-block; flex: none; width: 14px; height: 14px; border: 2px solid rgba(255, 255, 255, 0.16); border-top-color: var(--acc); border-radius: 50%; }
+
+/* Favicon letters (a-src pills of the website mocks) */
+.a-fav { flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-family: var(--ui-font); font-size: 12px; font-weight: 700; font-style: normal; color: #fff; }
+
+/* Pointer */
+.cursor { position: absolute; left: 0; top: 0; z-index: 20; width: 34px; height: 48px; }
+.cursor svg { width: 34px; height: 48px; display: block; }
+.ripple { position: absolute; left: -22px; top: -22px; z-index: 19; width: 44px; height: 44px; border-radius: 50%; border: 3px solid rgba(232, 228, 216, 0.8); opacity: 0; }
+
+    #root { position: absolute; inset: 0; overflow: hidden; background: transparent; }
+
+    .mn { display: flex; flex-direction: column; gap: 3px; padding: 3px; border: 2px solid var(--fg30); border-radius: 21px; background: var(--bg); }
+    .mn-row { position: relative; display: flex; align-items: center; height: 46px; padding: 0 16px; border-radius: 6px; }
+    .mn-row:first-child { border-top-left-radius: 18px; border-top-right-radius: 18px; }
+    .mn-row:last-child { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
+    .mn-hl { position: absolute; inset: 0; border-radius: inherit; background: rgba(204, 204, 204, 0.16); opacity: 0; }
+    .mn-logo { position: relative; flex: none; width: 26px; height: 26px; margin-right: 12px; background: var(--fg); -webkit-mask: var(--logo) center / 25px 25px no-repeat; mask: var(--logo) center / 25px 25px no-repeat; }
+    .mn-l { position: relative; flex: 1; font-size: 17px; font-weight: 600; color: rgba(232, 228, 216, 0.88); white-space: nowrap; }
+    .mn-tick { position: relative; opacity: 0; color: var(--fg); }
+    .md-comp { margin-top: 16px; padding: 12px 14px; border: 2px solid #615F5A; border-radius: 28px; }
+    .md-field { padding: 0 4px 10px; font-size: 17px; font-weight: 600; color: rgba(232, 228, 216, 0.75); }
+    .md-row { display: flex; align-items: center; gap: 8px; }
+    .md-grow { flex: 1; }
+    .md-btn { width: 44px; height: 36px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; }
+    .md-send { width: 44px; height: 36px; border-radius: 20px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; }
+    .md-pill { position: relative; height: 36px; padding: 0 10px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; gap: 6px; font-size: 15px; font-weight: 600; white-space: nowrap; }
+    .md-pill .pl { display: inline-flex; align-items: center; gap: 6px; }
+    .md-pill b { font-weight: 600; }
+    .md-cur { left: 0; top: 0; width: 18px; height: 25px; }
+    .md-cur svg { width: 18px; height: 25px; }
+    .md-rip { left: -12px; top: -12px; width: 24px; height: 24px; border-width: 2px; }
+
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <div id="root" data-composition-id="f11-models" data-start="0" data-duration="4" data-width="1920" data-height="1080">
+    <div id="f11-models-world" class="clip sc sc--dawn" data-start="0" data-duration="4" data-track-index="0"><div class="sc-sun" data-layout-allow-overflow></div><svg class="sc-hills" viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0 210 C240 150 420 190 640 170 C860 150 1080 110 1440 160 L1440 320 L0 320 Z" fill="#E7B070" opacity=".55"/><path d="M0 250 C200 220 460 240 720 225 C980 210 1200 200 1440 230 L1440 320 L0 320 Z" fill="#D9955A" opacity=".6"/></svg></div>
+    <div id="f11-models-stage" class="clip fill" data-start="0" data-duration="4" data-track-index="1">
+      <div class="lt"><p class="lt-n">11 / 13</p><h2 class="lt-t"><span class="ln"><span class="wd">Pick</span> <span class="wd">the</span></span><span class="ln"><span class="wd">model</span></span></h2><div class="lt-rule"></div><p class="lt-s">Every open model. Switch per message.</p></div>
+      <div class="ra"><div class="ra-push"><div class="ra-in"><div class="rc md-c">
+      <div class="mn"><div class="mn-row mn-r0"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/deepseek.svg')"></span><span class="mn-l">DeepSeek V4 Pro 0813</span><span class="mn-tick mn-t0"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div><div class="mn-row mn-r1"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/moonshot.svg')"></span><span class="mn-l">Kimi K3</span><span class="mn-tick mn-t1"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div><div class="mn-row mn-r2"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/zai.svg')"></span><span class="mn-l">GLM 5.3</span><span class="mn-tick mn-t2"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div><div class="mn-row mn-r3"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/qwen.svg')"></span><span class="mn-l">Qwen3.8 27B</span><span class="mn-tick mn-t3"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div><div class="mn-row mn-r4"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/minimax.svg')"></span><span class="mn-l">MiniMax M3</span><span class="mn-tick mn-t4"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div><div class="mn-row mn-r5"><span class="mn-hl"></span><span class="mn-logo" style="--logo: url('assets/logos/models/mistral.svg')"></span><span class="mn-l">Mistral Small 4</span><span class="mn-tick mn-t5"><svg class="z18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 14L8.5 17.5L19 6.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div></div>
+      <div class="md-comp">
+        <p class="md-field">Ask me anything !</p>
+        <div class="md-row"><span class="md-btn"><svg class="z24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4V20M20 12H4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="md-grow"></span>
+          <span class="md-pill"><span class="pl pl0"><svg class="z16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" /></svg><b>DeepSeek V4 Pro 0813</b></span><span class="pl pl1"><svg class="z16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" /></svg><b>Kimi K3</b></span><span class="pl pl2"><svg class="z16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" /></svg><b>Qwen3.8 27B</b></span><span class="pl pl3"><svg class="z16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" /></svg><b>Mistral Small 4</b></span><svg class="z14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 9.00005C18 9.00005 13.5811 15 12 15C10.4188 15 6 9 6 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+          <span class="md-btn"><svg class="z22" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18V22M12 18H11.5208C8.11765 18 5.28262 15.3914 5 12M12 18H12.4792C15.8824 18 18.7174 15.3914 19 12M12 22H15M12 22H9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M8 6C8 3.79086 9.79086 2 12 2C14.2091 2 16 3.79086 16 6V11C16 13.2091 14.2091 15 12 15C9.79086 15 8 13.2091 8 11V6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="md-send"><svg class="z24" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M10.325 5.33455L16.1084 8.24495C19.3643 9.88342 20.9922 10.7027 20.9922 12C20.9922 13.2973 19.3643 14.1166 16.1084 15.7551L10.325 18.6655C6.63532 20.5223 4.79046 21.4507 3.7862 20.7851C3.57349 20.6441 3.38825 20.4651 3.23962 20.2569C2.53788 19.2741 3.3843 17.381 5.07715 13.5948C5.39957 12.8736 5.56078 12.5131 5.58462 12.1319C5.59011 12.044 5.59011 11.956 5.58462 11.8681C5.56078 11.4869 5.39957 11.1264 5.07715 10.4052C3.3843 6.61898 2.53788 4.72586 3.23962 3.74307C3.38825 3.53492 3.57349 3.35593 3.7862 3.21495C4.79046 2.54933 6.63532 3.47774 10.325 5.33455Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M9.49219 12H13.4922" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div>
+      </div>
+      <div class="ripple md-rip"></div>
+      <div class="cursor md-cur"><svg viewBox="0 0 34 48" aria-hidden="true"><path d="M4 3 L4 38 L12.5 30 L18.5 44 L24 41.6 L18 28 L29.5 28 Z" fill="#1E1D19" stroke="#FFFFFF" stroke-width="2.6" stroke-linejoin="round"/></svg></div>
+    </div></div></div></div>
+    </div>
+  </div>
+  <script>
+(function () {
+  var ID = "f11-models", DUR = 4;
+
+  var R = document.querySelector('[data-composition-id="' + ID + '"]');
+  var $ = function (s) { return R.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(R.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+  var ups = [];
+  function c01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function setText(el, s) { if (el.__v !== s) { el.textContent = s; el.__v = s; } }
+  function stream(el, t0, wps, fade) {
+    var ws = Array.prototype.slice.call(el.querySelectorAll('.w'));
+    fade = fade || 0.14;
+    ups.push(function (t) {
+      for (var i = 0; i < ws.length; i++) {
+        var o = c01((t - t0 - i / wps) / fade);
+        if (ws[i].__o !== o) { ws[i].style.opacity = o; ws[i].__o = o; }
+      }
+    });
+    return t0 + ws.length / wps;
+  }
+  function spin(el) {
+    ups.push(function (t) { el.style.transform = 'rotate(' + ((t * 460) % 360).toFixed(1) + 'deg)'; });
+  }
+  function showBetween(el, t0, t1) {
+    ups.push(function (t) { var on = t >= t0 && t < t1; var d = on ? '' : 'none'; if (el.__d !== d) { el.style.display = d; el.__d = d; } });
+  }
+  function count(el, a, b, t0, t1, fmt) {
+    ups.push(function (t) { var k = c01((t - t0) / (t1 - t0)); k = 1 - Math.pow(1 - k, 3); setText(el, fmt(a + (b - a) * k)); });
+  }
+  function rise(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, y: opt.y == null ? 10 : opt.y, scale: opt.s == null ? 1 : opt.s },
+      { opacity: 1, y: 0, scale: 1, duration: opt.d || 0.35, ease: opt.ease || 'power3.out' }, t);
+  }
+  function pop(sel, t, opt) {
+    opt = opt || {};
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0, scale: opt.s || 0.6 }, { opacity: 1, scale: 1, duration: opt.d || 0.32, ease: opt.ease || 'back.out(2.2)' }, t);
+  }
+  function fadeIn(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 0 }, { opacity: 1, duration: d || 0.3, ease: 'power1.out' }, t);
+  }
+  function fadeOut(sel, t, d) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    tl.fromTo(el, { opacity: 1 }, { opacity: 0, duration: d || 0.25, ease: 'power1.in', immediateRender: false }, t);
+  }
+  function draw(sel, t, d, ease) {
+    var el = typeof sel === 'string' ? $(sel) : sel;
+    var L = Math.ceil(el.getTotalLength()) + 2;
+    el.style.strokeDasharray = L + ' ' + L;
+    tl.fromTo(el, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: d, ease: ease || 'power1.inOut' }, t);
+  }
+  function press(el, t, lo, origin) {
+    var o = origin ? { transformOrigin: origin } : {};
+    tl.fromTo(el, Object.assign({ scale: 1 }, o), Object.assign({ scale: lo, duration: 0.08, ease: 'power2.in', immediateRender: false }, o), t - 0.08);
+    tl.fromTo(el, Object.assign({ scale: lo }, o), Object.assign({ scale: 1, duration: 0.3, ease: 'back.out(3)', immediateRender: false }, o), t);
+  }
+  function ripple(rip, t) {
+    tl.fromTo(rip, { scale: 0.3, opacity: 0 }, { scale: 0.3, opacity: 0.9, duration: 0.01, immediateRender: false }, t);
+    tl.fromTo(rip, { scale: 0.3, opacity: 0.9 }, { scale: 1.4, opacity: 0, duration: 0.45, ease: 'power2.out', immediateRender: false }, t + 0.01);
+  }
+  function cursorPath(cur, pts) {
+    tl.fromTo(cur, { x: pts[0][1], y: pts[0][2] }, { x: pts[0][1], y: pts[0][2], duration: 0.01 }, 0);
+    for (var i = 1; i < pts.length; i++) {
+      var d = pts[i][3] || 0.4;
+      tl.fromTo(cur, { x: pts[i - 1][1], y: pts[i - 1][2] },
+        { x: pts[i][1], y: pts[i][2], duration: d, ease: 'power2.inOut', immediateRender: false }, pts[i][0] - d);
+    }
+  }
+  // Same entrance every beat: text column in, card lifts onto the world, slow push.
+  function beatIn() {
+    tl.fromTo($('.lt-n'), { opacity: 0, x: -24 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power3.out' }, 0);
+    $$('.lt-t .wd').forEach(function (w, i) {
+      tl.fromTo(w, { opacity: 0, y: 46 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power3.out' }, 0.03 + i * 0.05);
+    });
+    tl.fromTo($('.lt-rule'), { scaleX: 0, transformOrigin: '0% 50%' }, { scaleX: 1, duration: 0.4, ease: 'power3.out' }, 0.18);
+    tl.fromTo($('.lt-s'), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, 0.22);
+    tl.fromTo($('.ra-in'), { opacity: 0, y: 120, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power3.out' }, 0);
+    tl.fromTo($('.ra-push'), { scale: 1 }, { scale: 1.025, duration: DUR, ease: 'none' }, 0);
+  }
+
+  beatIn();
+
+  var RY = [48, 97, 146, 195, 244, 293];
+  var cur = $('.md-cur'), rip = $('.md-rip');
+  fadeIn(cur, 0.3, 0.2);
+  cursorPath(cur, [[0, 470, 420], [0.9, 300, RY[1] - 2, 0.55], [1.9, 300, RY[3] - 2, 0.5], [2.9, 300, RY[5] - 2, 0.5]]);
+  tl.fromTo(rip, { x: 300, y: RY[1] }, { x: 300, y: RY[1], duration: 0.01 }, 0);
+  var picks = [0, 1, 3, 5], at = [0, 1.0, 2.0, 3.0];
+  tl.set('.mn-t0', { opacity: 1 }, 0);
+  for (var k = 1; k < 4; k++) {
+    (function (k) {
+      var t = at[k], m = picks[k], prev = picks[k - 1];
+      tl.set(rip, { x: 300, y: RY[m] }, t - 0.02);
+      ripple(rip, t);
+      press(cur, t, 0.86, '3px 2px');
+      tl.fromTo('.mn-r' + m + ' .mn-hl', { opacity: 0 }, { opacity: 1, duration: 0.12 }, t - 0.1);
+      tl.fromTo('.mn-r' + m + ' .mn-hl', { opacity: 1 }, { opacity: 0.55, duration: 0.4, immediateRender: false }, t + 0.3);
+      if (k > 1) tl.fromTo('.mn-r' + prev + ' .mn-hl', { opacity: 0.55 }, { opacity: 0, duration: 0.2, immediateRender: false }, t);
+      tl.set('.mn-t' + prev, { opacity: 0 }, t);
+      tl.fromTo('.mn-t' + m, { opacity: 0, scale: 0.4 }, { opacity: 1, scale: 1, duration: 0.25, ease: 'back.out(2)' }, t);
+    })(k);
+  }
+  for (var k = 0; k < 4; k++) showBetween($('.pl' + k), k === 0 ? -1 : at[k], k < 3 ? at[k + 1] : 99);
+  for (var k = 1; k < 4; k++) tl.fromTo('.pl' + k, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.25, ease: 'power3.out' }, at[k]);
+
+
+  var drv = { t: 0 };
+  tl.to(drv, { t: DUR, duration: DUR, ease: 'none', onUpdate: function () {
+    for (var i = 0; i < ups.length; i++) ups[i](drv.t);
+  } }, 0);
+  for (var i = 0; i < ups.length; i++) ups[i](0);
+  window.__timelines[ID] = tl;
+
+})();
+  </script>
+</template>

@@ -27,6 +27,12 @@ completely before you start.
 | 03 2 a.m. | `marketing/videos/chuk-03-2am` | `marketing/_shared/music/03-2am.wav` |
 | 04 The receipt | `marketing/videos/chuk-04-receipt` | `marketing/_shared/music/04-receipt.wav` |
 | 05 Announce yourself | `marketing/videos/chuk-05-announce-yourself` | `marketing/_shared/music/05-announce-yourself.wav` |
+| 06 Features | `marketing/videos/chuk-06-features` | `marketing/_shared/music/05-announce-yourself.wav` (re-edited) |
+
+Status 2026-09-28: the owner rejected round 1 as "all the same". 06 replaces
+01. Every video must have its own job, hook and prompts (see
+`tasks/lessons.md`, 2026-09-27). Proposed line-up: 06 features, 03 privacy,
+04 humour, new "models + price", new "small-business use case".
 
 All paths are relative to the repository root `/home/user/git/chuk_chat`.
 Write only inside your own project directory. Never write to `/tmp` or to a
