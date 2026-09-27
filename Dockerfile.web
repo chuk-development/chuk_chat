@@ -1,26 +1,18 @@
 # syntax=docker/dockerfile:1
 # Stage 1: Build Flutter web
-FROM ubuntu:24.04 AS build
-
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl git unzip ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Flutter
-ENV FLUTTER_VERSION=3.47.0
-RUN git clone --depth 1 --branch ${FLUTTER_VERSION} https://github.com/flutter/flutter.git /opt/flutter
-ENV PATH="/opt/flutter/bin:/opt/flutter/bin/cache/dart-sdk/bin:${PATH}"
-
-RUN flutter precache --web
-RUN flutter doctor -v
+# The base image holds the Flutter SDK, the web artifacts and a warm pub cache
+# (Dockerfile.web-base, published by .github/workflows/web-base-image.yml).
+# Bump FLUTTER_VERSION here only; the workflow builds the matching base tag.
+ARG FLUTTER_VERSION=3.47.0
+FROM ghcr.io/chuk-development/chuk-chat-web-base:${FLUTTER_VERSION} AS build
 
 WORKDIR /app
 COPY pubspec.yaml pubspec.lock ./
 COPY vendor/ ./vendor/
 # Path dependencies (flutter_rfb, dart_rfb) must be present before pub get.
 COPY third_party/ ./third_party/
-# The pub cache survives between builds, so an unchanged lock resolves offline.
-RUN --mount=type=cache,target=/root/.pub-cache flutter pub get
+# PUB_CACHE in the base image is already warm: only changed packages download.
+RUN flutter pub get
 
 COPY . .
 
@@ -35,7 +27,7 @@ RUN echo "// GENERATED - DO NOT EDIT" > lib/web_env.dart && \
 
 # FEATURE_PROJECTS and FEATURE_IMAGE_GEN were removed: nothing in lib/ reads
 # them. --no-wasm-dry-run skips a compatibility scan this build does not use.
-RUN --mount=type=cache,target=/root/.pub-cache flutter build web --release \
+RUN flutter build web --release \
     --no-wasm-dry-run \
     --dart-define=BUILD_TIMESTAMP="${BUILD_TIMESTAMP}" \
     --dart-define=FEATURE_VOICE_MODE=false
