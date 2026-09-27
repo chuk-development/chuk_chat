@@ -18,6 +18,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/icons/model_logo.dart';
 
 class ChatModeSelector extends StatelessWidget {
   const ChatModeSelector({
@@ -330,6 +331,11 @@ class ChatModeSelector extends StatelessWidget {
             dense: MenuDensity.isDense(context),
             value: _DeeperChoice.model(model.id),
             iconFg: iconFg,
+            // The lab's logo in the icon column, in the colour of the name.
+            leading: ModelLogo(
+              modelId: model.id,
+              color: _labelColor(iconFg, model.id == selectedModelId),
+            ),
             label: stripLabPrefix(model.name),
             isSelected: model.id == selectedModelId,
           ),
@@ -427,6 +433,7 @@ class ChatModeSelector extends StatelessWidget {
     required Color iconFg,
     required String label,
     IconData? icon,
+    Widget? leading,
     bool isSelected = false,
     Widget? trailing,
     bool dense = false,
@@ -442,34 +449,44 @@ class ChatModeSelector extends StatelessWidget {
         iconFg: iconFg,
         label: label,
         icon: icon,
+        leading: leading,
         isSelected: isSelected,
         trailing: trailing,
       ),
     );
   }
 
+  /// A row's text colour: full for the current choice, a step back for the
+  /// rest. A model row's logo takes the same colour as its name.
+  static Color _labelColor(Color iconFg, bool isSelected) =>
+      isSelected ? iconFg : iconFg.withValues(alpha: 0.8);
+
   /// The inner row of a menu entry, shared by [_menuRow] and the submenu
   /// opener (which cannot be a [PopupMenuItem] because it must not pop).
+  ///
+  /// The icon column is 18 wide: [icon] draws an app glyph there, [leading]
+  /// puts any other widget of that width there (a model row's lab logo).
   Widget _rowChild({
     required Color iconFg,
     required String label,
     IconData? icon,
+    Widget? leading,
     bool isSelected = false,
     Widget? trailing,
   }) {
+    final Widget? lead =
+        leading ??
+        (icon == null ? null : AppIcon(icon, size: 18, color: iconFg));
     return Row(
       children: [
-        if (icon != null) ...[
-          AppIcon(icon, size: 18, color: iconFg),
-          const SizedBox(width: 10),
-        ],
+        if (lead != null) ...[lead, const SizedBox(width: 10)],
         Expanded(
           child: Text(
             label,
             softWrap: false,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: isSelected ? iconFg : iconFg.withValues(alpha: 0.8),
+              color: _labelColor(iconFg, isSelected),
               fontWeight: FontWeight.w600,
             ),
           ),

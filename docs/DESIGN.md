@@ -100,6 +100,14 @@ The table deliberately collapses synonyms: every "close" is one icon, every
 "edit" is one icon, `chevron_right` and `arrow_forward` are the same arrow. Two
 screens must not pick different glyphs for the same idea.
 
+A lab logo is a brand mark, not an icon, so it does not break the one-set rule.
+The model menu shows one in front of each model (`ModelLogo` in
+`lib/widgets/icons/model_logo.dart`): the same SVGs as the website, bundled in
+`assets/model_logos/`, drawn 14 px in the 18 px icon column as a one-colour
+silhouette in the colour of the row's name. A lab with no logo keeps the empty
+slot, so the names stay in line. The lab comes from the model id prefix
+(`moonshotai/…`); add a lab in `kModelLogoByLab`.
+
 File kinds get their own glyph, read from the extension first and the mime type
 second (`sandbox_artifact_block.dart`): sheet for tables, text for markdown,
 braces for JSON, source-code for markup and code, terminal for shell, pdf,
