@@ -1,0 +1,127 @@
+<template>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <style>
+
+@font-face { font-family: "Chuk Chat Mono"; src: url("assets/fonts/jetbrains-mono-latin-wght.woff2") format("woff2"); font-weight: 100 800; font-display: block; }
+@font-face { font-family: "Chuk Sans"; src: url("assets/fonts/InterVariable.ttf") format("truetype"); font-weight: 100 900; font-display: block; }
+@font-face { font-family: "Ubuntu"; src: url("assets/fonts/Ubuntu-wght.ttf") format("truetype"); font-weight: 300 700; font-display: block; }
+    #root { position: absolute; inset: 0; overflow: hidden; }
+
+.f5-sky { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 120%, rgba(90, 110, 190, 0.35), transparent 60%),
+              linear-gradient(180deg, #0A0F1F 0%, #131A33 55%, #1D2444 100%); }
+.f5-star { position: absolute; border-radius: 50%; background: #ffffff; }
+.f5-moon { position: absolute; left: 196px; top: 0px; width: 124px; height: 124px;
+  border-radius: 50%; background: radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8); }
+.f5-grain { position: absolute; inset: 0; opacity: 0.05; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
+  background-size: 240px 240px; }
+.f5-layer { position: absolute; inset: 0; }
+.f5-lines { position: absolute; left: 120px; right: 120px; top: 404px; text-align: center; font-family: "Chuk Sans"; font-weight: 300;
+  font-size: 100px; line-height: 124px; letter-spacing: -0.03em; color: #F6F3EC; }
+.f5-l { display: block; }
+  </style>
+  <div id="root" data-composition-id="05-claim" data-width="1920" data-height="1080" data-duration="3.82">
+      <div class="clip f5-sky" id="f5-sky" data-start="0" data-duration="3.82" data-track-index="0">
+        <i class="f5-star" data-b="0.447" data-per="4.434" data-ph="4.609" style="left:1117.0px;top:317.7px;width:1.67px;height:1.67px;"></i>
+        <i class="f5-star" data-b="0.270" data-per="3.102" data-ph="2.290" style="left:1331.3px;top:951.6px;width:1.71px;height:1.71px;"></i>
+        <i class="f5-star" data-b="0.288" data-per="3.561" data-ph="4.341" style="left:164.3px;top:781.5px;width:1.53px;height:1.53px;"></i>
+        <i class="f5-star" data-b="0.505" data-per="2.772" data-ph="0.214" style="left:302.2px;top:732.9px;width:1.77px;height:1.77px;"></i>
+        <i class="f5-star" data-b="0.290" data-per="2.735" data-ph="5.655" style="left:197.2px;top:827.1px;width:2.56px;height:2.56px;"></i>
+        <i class="f5-star" data-b="0.308" data-per="3.145" data-ph="0.904" style="left:861.2px;top:887.9px;width:1.32px;height:1.32px;"></i>
+        <i class="f5-star" data-b="0.652" data-per="5.669" data-ph="1.856" style="left:1113.5px;top:750.3px;width:2.07px;height:2.07px;"></i>
+        <i class="f5-star" data-b="0.517" data-per="2.677" data-ph="5.822" style="left:806.3px;top:345.2px;width:1.25px;height:1.25px;"></i>
+        <i class="f5-star" data-b="0.920" data-per="4.212" data-ph="3.732" style="left:352.3px;top:711.1px;width:2.39px;height:2.39px;"></i>
+        <i class="f5-star" data-b="0.798" data-per="5.533" data-ph="3.251" style="left:1460.2px;top:73.7px;width:1.23px;height:1.23px;"></i>
+        <i class="f5-star" data-b="0.432" data-per="6.473" data-ph="4.950" style="left:1199.0px;top:825.6px;width:2.00px;height:2.00px;"></i>
+        <i class="f5-star" data-b="0.762" data-per="3.765" data-ph="6.121" style="left:566.9px;top:473.3px;width:1.37px;height:1.37px;"></i>
+        <i class="f5-star" data-b="0.897" data-per="2.944" data-ph="2.048" style="left:1720.9px;top:585.2px;width:2.28px;height:2.28px;"></i>
+        <i class="f5-star" data-b="0.345" data-per="3.624" data-ph="4.739" style="left:480.4px;top:833.0px;width:2.42px;height:2.42px;"></i>
+        <i class="f5-star" data-b="0.492" data-per="4.840" data-ph="3.455" style="left:948.6px;top:324.8px;width:2.70px;height:2.70px;"></i>
+        <i class="f5-star" data-b="0.802" data-per="4.524" data-ph="1.931" style="left:1206.1px;top:65.4px;width:2.43px;height:2.43px;"></i>
+        <i class="f5-star" data-b="0.839" data-per="5.292" data-ph="5.557" style="left:1338.4px;top:57.2px;width:2.80px;height:2.80px;"></i>
+        <i class="f5-star" data-b="0.859" data-per="5.489" data-ph="3.550" style="left:683.1px;top:385.1px;width:2.21px;height:2.21px;"></i>
+        <i class="f5-star" data-b="0.280" data-per="2.915" data-ph="4.179" style="left:1427.3px;top:945.4px;width:1.29px;height:1.29px;"></i>
+        <i class="f5-star" data-b="0.671" data-per="3.468" data-ph="1.867" style="left:390.2px;top:423.2px;width:1.17px;height:1.17px;"></i>
+        <i class="f5-star" data-b="0.457" data-per="6.411" data-ph="4.515" style="left:1042.6px;top:740.2px;width:2.31px;height:2.31px;"></i>
+        <i class="f5-star" data-b="0.880" data-per="6.673" data-ph="5.320" style="left:1396.5px;top:721.0px;width:1.33px;height:1.33px;"></i>
+        <i class="f5-star" data-b="0.567" data-per="2.945" data-ph="4.042" style="left:863.6px;top:474.6px;width:2.42px;height:2.42px;"></i>
+        <i class="f5-star" data-b="0.512" data-per="2.847" data-ph="6.121" style="left:303.5px;top:561.4px;width:2.83px;height:2.83px;"></i>
+        <i class="f5-star" data-b="0.294" data-per="3.168" data-ph="4.032" style="left:737.1px;top:913.6px;width:2.52px;height:2.52px;"></i>
+        <i class="f5-star" data-b="0.512" data-per="4.974" data-ph="1.184" style="left:591.7px;top:393.0px;width:1.46px;height:1.46px;"></i>
+        <i class="f5-star" data-b="0.692" data-per="3.609" data-ph="2.341" style="left:410.1px;top:659.9px;width:2.40px;height:2.40px;"></i>
+        <i class="f5-star" data-b="0.473" data-per="3.670" data-ph="3.764" style="left:865.6px;top:982.5px;width:2.58px;height:2.58px;"></i>
+        <i class="f5-star" data-b="0.677" data-per="2.758" data-ph="0.563" style="left:1765.9px;top:604.3px;width:2.77px;height:2.77px;"></i>
+        <i class="f5-star" data-b="0.592" data-per="6.706" data-ph="3.630" style="left:1760.9px;top:368.7px;width:2.98px;height:2.98px;"></i>
+        <i class="f5-star" data-b="0.590" data-per="6.098" data-ph="2.181" style="left:60.1px;top:639.6px;width:2.14px;height:2.14px;"></i>
+        <i class="f5-star" data-b="0.488" data-per="2.988" data-ph="5.939" style="left:1843.4px;top:828.3px;width:2.24px;height:2.24px;"></i>
+        <i class="f5-star" data-b="0.981" data-per="5.517" data-ph="3.343" style="left:1912.7px;top:637.7px;width:1.22px;height:1.22px;"></i>
+        <i class="f5-star" data-b="0.963" data-per="6.094" data-ph="1.329" style="left:980.7px;top:2.5px;width:1.41px;height:1.41px;"></i>
+        <i class="f5-star" data-b="0.895" data-per="6.409" data-ph="1.557" style="left:997.7px;top:78.1px;width:1.27px;height:1.27px;"></i>
+        <i class="f5-star" data-b="0.426" data-per="5.796" data-ph="1.735" style="left:780.7px;top:833.3px;width:2.19px;height:2.19px;"></i>
+        <i class="f5-star" data-b="0.514" data-per="3.614" data-ph="3.544" style="left:594.9px;top:660.6px;width:1.43px;height:1.43px;"></i>
+        <i class="f5-star" data-b="0.481" data-per="5.553" data-ph="3.898" style="left:252.5px;top:528.8px;width:2.45px;height:2.45px;"></i>
+        <i class="f5-star" data-b="0.866" data-per="2.980" data-ph="2.769" style="left:1875.3px;top:32.9px;width:2.84px;height:2.84px;"></i>
+        <i class="f5-star" data-b="0.501" data-per="4.354" data-ph="2.330" style="left:1297.7px;top:130.9px;width:1.50px;height:1.50px;"></i>
+        <i class="f5-star" data-b="0.875" data-per="6.170" data-ph="1.563" style="left:1045.3px;top:324.1px;width:1.75px;height:1.75px;"></i>
+        <i class="f5-star" data-b="0.319" data-per="5.701" data-ph="0.138" style="left:1635.4px;top:994.2px;width:2.13px;height:2.13px;"></i>
+        <i class="f5-star" data-b="0.493" data-per="5.592" data-ph="0.071" style="left:1067.0px;top:874.9px;width:2.05px;height:2.05px;"></i>
+        <i class="f5-star" data-b="0.248" data-per="3.278" data-ph="5.415" style="left:1868.0px;top:775.5px;width:2.54px;height:2.54px;"></i>
+        <i class="f5-star" data-b="0.477" data-per="6.401" data-ph="3.103" style="left:1054.7px;top:523.5px;width:2.92px;height:2.92px;"></i>
+        <i class="f5-star" data-b="0.479" data-per="4.449" data-ph="0.299" style="left:297.7px;top:728.0px;width:1.57px;height:1.57px;"></i>
+        <i class="f5-star" data-b="0.944" data-per="5.725" data-ph="6.045" style="left:305.0px;top:43.5px;width:1.57px;height:1.57px;"></i>
+        <i class="f5-star" data-b="0.504" data-per="5.635" data-ph="1.895" style="left:1825.2px;top:434.2px;width:2.88px;height:2.88px;"></i>
+        <i class="f5-star" data-b="0.881" data-per="6.175" data-ph="2.123" style="left:1303.0px;top:323.0px;width:2.35px;height:2.35px;"></i>
+        <i class="f5-star" data-b="0.248" data-per="5.065" data-ph="2.243" style="left:716.2px;top:813.8px;width:1.95px;height:1.95px;"></i>
+        <i class="f5-star" data-b="0.335" data-per="6.098" data-ph="5.522" style="left:306.3px;top:974.6px;width:2.25px;height:2.25px;"></i>
+        <i class="f5-star" data-b="0.424" data-per="3.461" data-ph="5.652" style="left:148.7px;top:394.1px;width:2.16px;height:2.16px;"></i>
+        <i class="f5-star" data-b="0.413" data-per="5.128" data-ph="1.709" style="left:1279.3px;top:267.2px;width:1.54px;height:1.54px;"></i>
+        <i class="f5-star" data-b="0.793" data-per="2.872" data-ph="4.733" style="left:1399.1px;top:135.4px;width:1.79px;height:1.79px;"></i>
+        <i class="f5-star" data-b="0.228" data-per="3.540" data-ph="6.267" style="left:1352.9px;top:926.3px;width:1.75px;height:1.75px;"></i>
+        <i class="f5-star" data-b="0.419" data-per="6.220" data-ph="3.344" style="left:1534.4px;top:797.0px;width:1.80px;height:1.80px;"></i>
+        <i class="f5-star" data-b="0.256" data-per="3.794" data-ph="5.250" style="left:1530.2px;top:913.7px;width:2.49px;height:2.49px;"></i>
+        <i class="f5-star" data-b="0.769" data-per="5.752" data-ph="5.167" style="left:1911.1px;top:566.8px;width:2.19px;height:2.19px;"></i>
+        <i class="f5-star" data-b="0.735" data-per="6.222" data-ph="2.834" style="left:578.8px;top:681.0px;width:1.79px;height:1.79px;"></i>
+        <i class="f5-star" data-b="0.470" data-per="5.907" data-ph="5.621" style="left:881.8px;top:846.6px;width:2.39px;height:2.39px;"></i>
+        <i class="f5-star" data-b="0.593" data-per="6.590" data-ph="3.846" style="left:757.6px;top:105.1px;width:2.32px;height:2.32px;"></i>
+        <i class="f5-star" data-b="0.812" data-per="3.775" data-ph="3.593" style="left:1069.0px;top:189.3px;width:1.12px;height:1.12px;"></i>
+        <i class="f5-star" data-b="0.451" data-per="4.413" data-ph="1.803" style="left:1266.8px;top:472.3px;width:2.46px;height:2.46px;"></i>
+        <i class="f5-star" data-b="0.507" data-per="6.154" data-ph="3.127" style="left:80.0px;top:513.4px;width:2.71px;height:2.71px;"></i>
+        <div class="f5-moon" id="f5-moon"></div>
+        <div class="f5-grain"></div>
+      </div>
+      <div class="clip f5-layer" id="f5-content" data-start="0" data-duration="3.82" data-track-index="1">
+        <div class="f5-lines" id="f5-lines">
+          <span class="f5-l" id="f5-l1" data-layout-allow-overlap>Never used for training.</span>
+          <span class="f5-l" id="f5-l2" data-layout-allow-overlap>No tracking.</span>
+        </div>
+      </div>
+  </div>
+  <script>
+    (function () {
+
+
+      var f5Stars = Array.prototype.map.call(document.querySelectorAll(".f5-star"), function (el) {
+        return { el: el, b: +el.dataset.b, per: +el.dataset.per, ph: +el.dataset.ph };
+      });
+      var f5Moon = document.getElementById("f5-moon");
+      function f5Sky(t) {
+        var G = 49.44 + t;
+        for (var i = 0; i < f5Stars.length; i++) {
+          var s = f5Stars[i];
+          s.el.style.opacity = (s.b * (0.66 + 0.34 * Math.sin((6.28318 * G) / s.per + s.ph))).toFixed(3);
+        }
+        f5Moon.style.transform = "translateY(" + (96 + 0.8 * G).toFixed(2) + "px)";
+      }
+      var tl = gsap.timeline({ paused: true });
+      var drv = { t: 0 };
+      tl.to(drv, { t: 3.22, duration: 3.22, ease: "none", onUpdate: function () { f5Sky(drv.t); } }, 0);
+      tl.fromTo("#f5-l1", { y: 30, opacity: 0, filter: "blur(8px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.9, ease: "power2.out" }, 0.1);
+      tl.fromTo("#f5-l2", { y: 30, opacity: 0, filter: "blur(8px)" }, { y: 0, opacity: 1, filter: "blur(0px)", duration: 0.9, ease: "power2.out" }, 1.0);
+      // clear the sky before the end card lands on the 51.44 hit
+      tl.to("#f5-lines", { opacity: 0, filter: "blur(6px)", duration: 0.4, ease: "power2.in" }, 2.80);
+      f5Sky(0);
+      window.__timelines["05-claim"] = tl;
+    })();
+  </script>
+</template>

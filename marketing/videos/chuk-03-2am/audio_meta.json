@@ -1,0 +1,22 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track-cut.wav",
+    "volume": 0.86,
+    "mode": "supplied",
+    "duration_s": 57.4,
+    "source": "assets/bgm/track.wav (marketing/_shared/music/03-2am.wav)",
+    "source_offset_s": 5.05,
+    "note": "Cut from 5.05 s: first piano note on 1.40 s, swell hit (track 38.45 s) on 33.40 s = app reveal. 0.3 s fade-in, 1.4 s fade-out over the natural decay."
+  },
+  "voices": [],
+  "sfx": [
+    {
+      "frame": 1,
+      "file": "assets/sfx/keys.wav",
+      "offset_s": 0,
+      "duration_s": 57.4,
+      "volume": 0.24,
+      "note": "Pre-mixed keystrokes at the exact tape times (media-use bundled key-press.mp3)."
+    }
+  ]
+}

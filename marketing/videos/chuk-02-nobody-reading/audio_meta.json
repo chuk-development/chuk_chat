@@ -1,0 +1,23 @@
+{
+  "bgm": {
+    "path": "assets/bgm/bed.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 45.6,
+    "source": "marketing/_shared/music/02-nobody-reading.wav (MP3 data) -> assets/bgm/track.wav (PCM) -> bed.wav = track 4.352s..49.952s, fade-in 0.25s, fade-out 2.0s",
+    "release_at_s": 21.0,
+    "track_release_at_s": 25.352
+  },
+  "voices": [],
+  "sfx": [
+    { "frame": 1, "file": "assets/sfx/typing.mp3", "offset_s": 0.0, "duration_s": 1.541, "volume": 0.22 },
+    { "frame": 2, "file": "assets/sfx/click-soft.mp3", "offset_s": 1.578, "duration_s": 0.366, "volume": 0.35 },
+    { "frame": 2, "file": "assets/sfx/whoosh-short.mp3", "offset_s": 1.9, "duration_s": 0.575, "volume": 0.12 },
+    { "frame": 3, "file": "assets/sfx/impact-bass-1.mp3", "offset_s": 0.947, "duration_s": 1.2, "volume": 0.2 },
+    { "frame": 3, "file": "assets/sfx/impact-bass-1.mp3", "offset_s": 3.474, "duration_s": 1.2, "volume": 0.2 },
+    { "frame": 3, "file": "assets/sfx/impact-bass-1.mp3", "offset_s": 5.053, "duration_s": 1.2, "volume": 0.24 },
+    { "frame": 5, "file": "assets/sfx/click-soft.mp3", "offset_s": 0.948, "duration_s": 0.366, "volume": 0.35 },
+    { "frame": 5, "file": "assets/sfx/pop.mp3", "offset_s": 1.0, "duration_s": 0.72, "volume": 0.16 },
+    { "frame": 6, "file": "assets/sfx/whoosh-short.mp3", "offset_s": 0.947, "duration_s": 0.575, "volume": 0.12 }
+  ]
+}

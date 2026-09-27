@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #0A0F1F;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="57.4"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="el-01-hook"
+        class="scene"
+        data-composition-id="01-hook"
+        data-composition-src="compositions/frames/01-hook.html"
+        data-start="0"
+        data-duration="7.4"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-02-questions"
+        class="scene"
+        data-composition-id="02-questions"
+        data-composition-src="compositions/frames/02-questions.html"
+        data-start="7.4"
+        data-duration="21.2"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-03-who-reads"
+        class="scene"
+        data-composition-id="03-who-reads"
+        data-composition-src="compositions/frames/03-who-reads.html"
+        data-start="28.6"
+        data-duration="5.6"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-04-sent"
+        class="scene"
+        data-composition-id="04-sent"
+        data-composition-src="compositions/frames/04-sent.html"
+        data-start="33.4"
+        data-duration="16.64"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-05-claim"
+        class="scene"
+        data-composition-id="05-claim"
+        data-composition-src="compositions/frames/05-claim.html"
+        data-start="49.44"
+        data-duration="3.82"
+        data-track-index="0"
+      ></div>
+
+      <div
+        id="el-06-endcard"
+        class="scene"
+        data-composition-id="06-endcard"
+        data-composition-src="compositions/frames/06-endcard.html"
+        data-start="52.66"
+        data-duration="4.74"
+        data-track-index="1"
+      ></div>
+
+      <!-- BGM -->
+      <audio
+        id="el-bgm"
+        src="assets/bgm/track-cut.wav"
+        data-start="0"
+        data-duration="57.4"
+        data-track-index="11"
+        data-volume="0.86"
+      ></audio>
+
+      <!-- SFX -->
+      <audio
+        id="el-sfx-0"
+        src="assets/sfx/keys.wav"
+        data-start="0"
+        data-duration="57.4"
+        data-track-index="20"
+        data-volume="0.24"
+      ></audio>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+      // ── frame transitions (injected by transitions.mjs) ──
+      (function () { var tl = window.__timelines["main"];
+        tl.to("#el-03-who-reads", { opacity: 1, duration: 0.8, ease: "power2.inOut" }, 33.4);
+        tl.fromTo("#el-04-sent", { opacity: 0 }, { opacity: 1, duration: 0.8, ease: "power2.inOut" }, 33.4);
+        tl.to("#el-04-sent", { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 49.44);
+        tl.fromTo("#el-05-claim", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 49.44);
+        tl.to("#el-05-claim", { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 52.66);
+        tl.fromTo("#el-06-endcard", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power2.inOut" }, 52.66);
+        tl.to({}, { duration: 57.4 }, 0); // full-span anchor — main.duration() == composition total (Studio master duration)
+      })();
+    </script>
+  </body>
+</html>

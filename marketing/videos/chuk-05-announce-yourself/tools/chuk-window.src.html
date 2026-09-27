@@ -1,0 +1,825 @@
+<!doctype html>
+<!--
+  Chuk Chat desktop window — reusable sub-composition (series template).
+
+  Markup and CSS are copied from the chuk.chat website mocks
+  (layouts/partials/uc/*.html, assets/css/usecases.css, uc-menu.css) and set
+  to a 1100 x 660 desktop window. One camera (#cw-cam) moves over it.
+  Cards can LIFT out of the window: the card lands big on one of the
+  website's worlds (sky), holds, then drops back into the reply.
+
+  Variables (host sets them with data-variable-values):
+    prompt      the text the user types into the composer
+    chat_title  the chat title (mobile chrome only, kept for reuse)
+    sky         the first world behind the window
+    script      JSON string: timed beats, reply blocks, cards, lifts, camera
+                shots, montage, outro. Schema: script.json at the project root.
+
+  Card kinds (block.card.kind): models, connectors, platforms,
+  artifact-page, artifact-invoice, encrypt, quote, recap.
+  Lift (block.card.lift): { at, back, sky, fit: [maxW, maxH], dy }.
+  Camera targets: window, composer, send, pill, work, block:<id>,
+  block:<id>:h|text|card. "col": true frames the chat column (see build()).
+-->
+<html
+  data-composition-variables='[
+    {"id":"prompt","type":"string","label":"Prompt","default":"Announce yourself on YouTube. Keep it short."},
+    {"id":"chat_title","type":"string","label":"Chat title","default":"Announce yourself"},
+    {"id":"sky","type":"enum","label":"First sky","default":"dawn","options":[{"value":"dawn","label":"Dawn"},{"value":"night","label":"Night"},{"value":"day","label":"Day"},{"value":"network","label":"Network"},{"value":"prism","label":"Prism"},{"value":"street","label":"Street"},{"value":"library","label":"Library"},{"value":"paper","label":"Paper"}]},
+    {"id":"script","type":"string","label":"Script (JSON)","default":""}
+  ]'
+>
+  <head>
+    <meta charset="UTF-8" />
+  </head>
+  <body>
+    <template>
+      <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+      <style>
+        @font-face { font-family: "Chuk Chat Mono"; src: url("assets/fonts/ChukChatMono-wght.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+        @font-face { font-family: "Ubuntu"; src: url("assets/fonts/Ubuntu-wdth-wght.ttf") format("truetype"); font-weight: 100 800; font-style: normal; font-display: block; }
+
+        #root { position: absolute; inset: 0; overflow: hidden; }
+
+        /* ---------- Skies (usecases.css "Backdrop scenes", px for 1920x1080) ---------- */
+        #cw-sky { position: absolute; inset: 0; overflow: hidden; background: #FDFBF7; }
+        .cw-scene { position: absolute; inset: 0; overflow: hidden; opacity: 0; }
+        .cw-scene--paper { background: radial-gradient(ellipse at 50% 38%, #FFFDF8 0%, #FDFBF7 45%, #F3F0E8 100%); }
+        .cw-scene--dawn { background: linear-gradient(180deg, #F4E6D4 0%, #F6D4A6 48%, #F1B872 78%, #E8A150 100%); }
+        .cw-sun { position: absolute; left: 722px; bottom: -40px; width: 476px; height: 476px; border-radius: 50%; background: radial-gradient(circle, #FFF3D1 0 34%, #FAD08A 56%, rgba(250, 208, 138, 0) 71%); }
+        .cw-hills { position: absolute; left: 0; bottom: 0; width: 1920px; height: 346px; }
+        .cw-scene--night { background: radial-gradient(ellipse at 50% 120%, rgba(90, 110, 190, 0.35), transparent 60%), linear-gradient(180deg, #0A0F1F 0%, #131A33 55%, #1D2444 100%); }
+        .cw-stars { position: absolute; inset: -20% 0 0; background-image:
+          radial-gradient(1.6px 1.6px at 6% 14%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 14% 38%, #fff 50%, transparent 52%),
+          radial-gradient(1.8px 1.8px at 22% 8%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 31% 26%, #fff 50%, transparent 52%),
+          radial-gradient(1.4px 1.4px at 39% 12%, #fff 50%, transparent 52%), radial-gradient(1px 1px at 46% 34%, #fff 50%, transparent 52%),
+          radial-gradient(1.6px 1.6px at 55% 6%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 63% 22%, #fff 50%, transparent 52%),
+          radial-gradient(1px 1px at 71% 40%, #fff 50%, transparent 52%), radial-gradient(1.6px 1.6px at 79% 16%, #fff 50%, transparent 52%),
+          radial-gradient(1.2px 1.2px at 88% 30%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 95% 10%, #fff 50%, transparent 52%),
+          radial-gradient(1px 1px at 9% 58%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 27% 66%, #fff 50%, transparent 52%),
+          radial-gradient(1px 1px at 51% 60%, #fff 50%, transparent 52%), radial-gradient(1.4px 1.4px at 68% 70%, #fff 50%, transparent 52%),
+          radial-gradient(1px 1px at 84% 56%, #fff 50%, transparent 52%), radial-gradient(1.2px 1.2px at 93% 74%, #fff 50%, transparent 52%); }
+        .cw-stars--b { background-position: 58px 76px; opacity: 0.6; }
+        .cw-moon { position: absolute; top: 70px; left: 1640px; width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle at 36% 34%, #FFF7E4, #EDE1C4 58%, #D2C6A8); }
+        .cw-scene--day { background: linear-gradient(180deg, #F9F1E4 0%, #F2E4CE 100%); }
+        .cw-awning { position: absolute; top: 0; left: 0; right: 0; height: 76px; background: repeating-linear-gradient(90deg, #D7775A 0 64px, #FAF3E8 64px 128px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08); }
+        .cw-awning::after { content: ""; position: absolute; left: 0; right: 0; bottom: -16px; height: 16px; background:
+          radial-gradient(circle at 32px 0, #D7775A 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x,
+          radial-gradient(circle at 96px 0, #FAF3E8 16px, transparent 16.5px) 0 0 / 128px 16px repeat-x; }
+        .cw-beams { position: absolute; inset: -20%; background: linear-gradient(112deg, transparent 28%, rgba(255, 255, 255, 0.6) 36%, transparent 44%, transparent 54%, rgba(255, 255, 255, 0.45) 60%, transparent 67%); }
+        .cw-scene--network { background: radial-gradient(ellipse at 50% 50%, #F4F6F0 0%, #E6ECE2 70%, #DCE4D7 100%); }
+        .cw-web { position: absolute; inset: 0; width: 1920px; height: 1080px; }
+        .cw-node { position: absolute; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 16px; background: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.05); }
+        .cw-node img { width: 36px; height: 36px; object-fit: contain; }
+        .cw-scene--prism { background: #F7F4EF; }
+        .cw-blob { position: absolute; width: 1344px; height: 1344px; border-radius: 50%; }
+        .cw-blob--a { left: -480px; top: -576px; background: radial-gradient(circle, rgba(77, 107, 254, 0.4), transparent 62%); }
+        .cw-blob--b { right: -538px; top: -192px; background: radial-gradient(circle, rgba(124, 92, 255, 0.34), transparent 62%); }
+        .cw-blob--c { left: 192px; bottom: -768px; background: radial-gradient(circle, rgba(255, 120, 110, 0.32), transparent 62%); }
+        .cw-blob--d { right: -192px; bottom: -864px; background: radial-gradient(circle, rgba(245, 165, 36, 0.3), transparent 62%); }
+        .cw-scene--street { background: linear-gradient(180deg, #181C33 0%, #332F52 42%, #9A5E78 74%, #E29B75 100%); }
+        .cw-city { position: absolute; left: 0; bottom: 0; width: 1920px; height: 454px; }
+        .cw-scene--library { background: linear-gradient(180deg, #F2EAD8 0%, #ECE1C9 100%); }
+        .cw-ruled { position: absolute; inset: 0; background:
+          linear-gradient(90deg, transparent 172px, rgba(200, 90, 80, 0.3) 172px, rgba(200, 90, 80, 0.3) 174px, transparent 174px),
+          repeating-linear-gradient(180deg, transparent 0 35px, rgba(70, 100, 150, 0.16) 35px 36px); }
+
+        /* ---------- Camera and stage ---------- */
+        #cw-stage { position: absolute; inset: 0; overflow: hidden; }
+        #cw-stagein { position: absolute; inset: 0; transform-origin: 50% 50%; }
+        #cw-cam { position: absolute; left: 0; top: 0; width: 1100px; height: 660px; transform-origin: 0 0; }
+        #cw-lift { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+        /* ---------- Shared UI tokens (window and lifted cards) ---------- */
+        .cw-ui {
+          --fg: #E8E4D8; --fg85: rgba(232, 228, 216, 0.85); --fg82: rgba(232, 228, 216, 0.82); --fg70: rgba(232, 228, 216, 0.7);
+          --fg55: rgba(232, 228, 216, 0.55); --fg30: rgba(232, 228, 216, 0.3); --fg15: rgba(232, 228, 216, 0.15);
+          --bg: #262624; --lift: #333330; --acc: #D97757; --bubble: #AD6048;
+          --chat-font: "Chuk Chat Mono", monospace; --ui-font: "Ubuntu", sans-serif;
+          color: var(--fg); font-family: var(--ui-font); font-size: 14px; line-height: 1.4; text-align: left;
+        }
+        .cw-ui * { box-sizing: border-box; }
+        .cw-ui p { margin: 0; }
+        .cw-ui svg { flex: none; }
+        .cw-ui .z12 { width: 10.4px; height: 10.4px; } .cw-ui .z14 { width: 12px; height: 12px; } .cw-ui .z15 { width: 13px; height: 13px; }
+        .cw-ui .z16 { width: 13.8px; height: 13.8px; } .cw-ui .z18 { width: 15.5px; height: 15.5px; } .cw-ui .z20 { width: 17.2px; height: 17.2px; }
+        .cw-ui .z22 { width: 18.9px; height: 18.9px; } .cw-ui .z24 { width: 20.6px; height: 20.6px; } .cw-ui .z26 { width: 22.4px; height: 22.4px; }
+        .cw-ui .i14 { width: 14px; height: 14px; } .cw-ui .i16 { width: 16px; height: 16px; } .cw-ui .i18 { width: 18px; height: 18px; } .cw-ui .i20 { width: 20px; height: 20px; }
+        .cw-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+        .cw-src { display: none; }
+
+        /* ---------- App mock (usecases.css "App mocks at the real app's proportions") ---------- */
+        #cw-app { position: relative; display: flex; width: 1100px; height: 660px; overflow: hidden; border-radius: 18px; background: var(--bg);
+          box-shadow: 0 50px 110px -30px rgba(12, 10, 6, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.07); }
+        .a-menu { position: absolute; left: 7px; top: 20px; z-index: 3; width: 48px; height: 40px; display: flex; align-items: center; justify-content: center; color: var(--fg); }
+        .a-rail { position: absolute; left: 16px; top: 70px; z-index: 3; display: flex; flex-direction: column; gap: 15px; color: var(--acc); }
+        .a-rail > span { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; }
+        .a-chat { position: relative; flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; margin-left: 48px; }
+        .a-thread { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; overflow: hidden;
+          -webkit-mask-image: linear-gradient(180deg, transparent 0, transparent 60px, #000 160px); mask-image: linear-gradient(180deg, transparent 0, transparent 60px, #000 160px); }
+        /* The newest message sits a little above the composer, so close shots can leave the composer out.
+           Older messages fade out at the top of the thread instead of being cut by the frame. */
+        .a-col { width: min(760px, 100% - 32px); margin: 0 auto; padding: 20px 16px 96px; }
+        .a-foot { position: relative; z-index: 2; flex: none; display: flex; flex-direction: column; align-items: center; padding: 0 0 16px; }
+        .a-composer { position: relative; display: flex; flex-direction: column; justify-content: space-between; width: min(760px, 100% - 32px);
+          min-height: 135px; padding: 14px; border: 2px solid #615F5A; border-radius: 30px; background: var(--bg); font-family: var(--ui-font); }
+        .a-field { min-height: 40px; padding: 2px 58px 0 4px; font-size: 16px; font-weight: 600; line-height: 1.4; color: rgba(232, 228, 216, 0.8); white-space: pre-wrap; }
+        #cw-typed { color: var(--fg); }
+        #cw-caret { display: inline-block; width: 2px; height: 20px; margin-left: 1px; vertical-align: -4px; background: var(--fg); }
+        .a-send { position: absolute; top: 14px; right: 14px; width: 44px; height: 36px; border-radius: 20px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; }
+        .a-row { display: flex; align-items: center; gap: 8px; }
+        .a-grow { flex: 1; order: 2; }
+        .a-btn { width: 44px; height: 36px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; justify-content: center; color: var(--fg); }
+        .a-plus { order: 1; }
+        .a-pill { order: 3; position: relative; height: 36px; padding: 0 9px; border: 2px solid #615F5A; border-radius: 18px; display: inline-flex; align-items: center; gap: 5px;
+          font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap; }
+        .a-pill b { font-weight: 600; }
+        .pl { display: inline-flex; align-items: center; gap: 5px; }
+        .a-dn { margin-left: -3px; color: var(--fg70); }
+        .a-mic { order: 4; }
+        .a-disc { margin: 8px 0 0 !important; font-size: 11px; color: var(--fg70); text-align: center; }
+
+        /* Messages */
+        .cw-blk { display: none; overflow-x: visible; overflow-y: clip; }
+        .a-user { display: flex; justify-content: flex-end; margin-top: 10px; }
+        .a-bubble { position: relative; max-width: 80%; padding: 10px 14px; border: 1px solid var(--fg30); border-radius: 16px 16px 5px 16px; background: var(--bubble);
+          color: #FFFFFF; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.38; }
+        .a-ai { padding-top: 16px; font-family: var(--chat-font); font-size: 16px; font-weight: 400; line-height: 1.45; color: var(--fg); }
+        .cw-h { position: relative; margin: 8px 0 4px !important; font-family: var(--chat-font); font-size: 28px; font-weight: 700; line-height: 1.3; letter-spacing: -0.01em; }
+        .cw-t { position: relative; margin: 0 !important; }
+        .cw-h + .cw-t { margin-top: 2px !important; }
+        .cw-slogan { position: relative; margin: 0 !important; font-family: var(--chat-font); font-size: 42px; font-weight: 700; line-height: 1.25; letter-spacing: -0.02em; white-space: nowrap; }
+        .cw-slogan .cw-caret2 { display: inline-block; width: 3px; height: 46px; background: var(--fg); }
+
+        /* Scramble layers: plain text in flow, cipher layers laid over it */
+        .cw-scr { position: relative; }
+        .cw-ci { position: absolute; left: 0; top: 0; right: 0; opacity: 0; color: #9DA6C8; pointer-events: none; }
+        .a-bubble .cw-ci { left: 14px; top: 10px; right: 14px; }
+        .cw-lab { position: relative; display: inline-block; white-space: nowrap; }
+        .cw-lab .cw-ci { right: auto; white-space: nowrap; }
+
+        /* Agent timeline */
+        .a-tl { padding-top: 14px; font-family: var(--ui-font); }
+        .a-tl-head { display: inline-flex; align-items: center; gap: 4px; margin: 0; padding: 4px 2px; font-size: 12px; font-weight: 500; color: var(--fg55); }
+        .cw-hl { display: none; }
+        .cw-steps { overflow: hidden; }
+        .a-steps { position: relative; padding-top: 4px; }
+        .cw-rail { position: absolute; left: 13px; top: 17px; bottom: 15px; width: 1px; background: var(--fg15); transform-origin: 50% 0; }
+        .a-step { position: relative; display: flex; align-items: center; gap: 10px; min-height: 26px; margin-bottom: 8px; font-size: 12px; color: var(--fg55); white-space: nowrap; }
+        .a-badge { flex: none; width: 26px; height: 26px; border-radius: 50%; border: 1px solid var(--fg15); background: var(--bg); display: flex; align-items: center; justify-content: center; color: var(--fg55); }
+
+        /* Artifact card */
+        .a-art { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px; border: 1px solid rgba(232, 228, 216, 0.17); border-radius: 10px; font-family: var(--ui-font); }
+        .a-art-tile { flex: none; width: 36px; height: 44px; border-radius: 6px; background: #4B4B47; display: flex; align-items: center; justify-content: center; color: var(--fg); }
+        .a-art-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .a-art-txt b { overflow: hidden; font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+        .a-art-txt small { font-size: 12px; color: var(--fg82); }
+        .a-art-btn { padding: 12px 14px; border-radius: 100px; font-size: 14px; font-weight: 600; color: var(--acc); }
+
+        /* Chips (connectors, platforms) after the a-src source pills */
+        .cw-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; font-family: var(--ui-font); }
+        .cw-chip { display: inline-flex; align-items: center; gap: 10px; height: 54px; padding: 0 18px 0 6px; border: 1px solid var(--fg15); border-radius: 27px;
+          background: rgba(232, 228, 216, 0.06); font-size: 17px; font-weight: 500; color: var(--fg85); white-space: nowrap; }
+        .cw-chip i { flex: none; width: 44px; height: 44px; border-radius: 12px; background: #fff; display: flex; align-items: center; justify-content: center; }
+        .cw-chip i img { width: 31px; height: 31px; object-fit: contain; }
+        .cw-chip--plain { padding: 0 18px; }
+        .cw-chip--more { padding: 0 18px; border-color: rgba(217, 119, 87, 0.45); background: rgba(217, 119, 87, 0.15); color: var(--acc); }
+        .cw-lead { display: inline-flex; align-items: center; height: 54px; margin-right: 4px; font-size: 17px; font-weight: 500; color: var(--fg55); }
+
+        /* Recap list (card kind "recap", unused in video 05) */
+        .cw-recap { list-style: none; margin: 8px 0 0; padding: 0; }
+        .cw-recap li { position: relative; display: flex; align-items: center; gap: 12px; margin: 0 0 6px; }
+        .cw-ok { flex: none; width: 22px; height: 22px; border-radius: 50%; background: rgba(134, 199, 149, 0.16); color: #86C795; display: flex; align-items: center; justify-content: center; }
+
+        /* Model menu (uc-menu.css) */
+        .mn { position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 250px; padding: 3px;
+          border: 2px solid var(--fg30); border-radius: 21px; background: var(--bg); font-size: 14px; font-weight: 600; line-height: 1.2; white-space: nowrap; }
+        .mn-g { display: flex; flex-direction: column; gap: 3px; }
+        .mn-row { position: relative; display: flex; align-items: center; height: 40px; padding: 0 16px; border-radius: 6px; color: var(--fg); }
+        .mn-g .mn-row:first-child { border-top-left-radius: 18px; border-top-right-radius: 18px; }
+        .mn-g .mn-row:last-child { border-bottom-left-radius: 18px; border-bottom-right-radius: 18px; }
+        .mn-hl { position: absolute; inset: 0; border-radius: inherit; background: rgba(204, 204, 204, 0.16); opacity: 0; }
+        .mn-ic { position: relative; flex: none; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; }
+        .mn-l { position: relative; flex: 1 1 auto; margin-right: 12px; color: rgba(232, 228, 216, 0.8); }
+        .mn-tick { opacity: 0; }
+        .mn-logo { position: relative; flex: none; width: 24px; height: 24px; margin-right: 10px; background: var(--fg); -webkit-mask: var(--logo) center / 23px 23px no-repeat; mask: var(--logo) center / 23px 23px no-repeat; }
+
+        /* Founders: the HTML preview */
+        .lp { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden; padding: 18px 20px; border-radius: 6px; background: #FFF8EE; color: #29251F; font-family: var(--ui-font); font-size: 13px; }
+        .lp-nav { display: flex; align-items: center; gap: 14px; color: #6B6357; }
+        .lp-nav b { margin-right: auto; font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: #1F6F5C; }
+        .lp-title { margin: 0 0 6px !important; font-size: 28px; font-weight: 750; line-height: 1.05; letter-spacing: -0.035em; }
+        .lp-sub { margin: 0 0 14px !important; color: #6B6357; }
+        .lp-btn { display: inline-block; padding: 9px 16px; border-radius: 999px; background: #1F6F5C; color: #fff; font-weight: 600; }
+        .lp-art { flex: 1; min-height: 80px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 10px; background: linear-gradient(135deg, #F7DDB8, #F0BD84); }
+        .lp-art svg { width: 64%; height: 78%; }
+        .lp-feats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+        .lp-feats span { padding: 9px 6px; border-radius: 8px; background: #F2E6D4; font-size: 12.5px; font-weight: 600; text-align: center; }
+
+        /* Business: the PDF preview */
+        .a-page { width: 380px; padding: 30px 30px; background: #fff; color: #29251F; font-family: var(--ui-font); font-size: 11px; }
+        .doc-from { margin: 0 0 22px !important; font-size: 9.5px; color: #8A8378; }
+        .doc-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 2px solid #29251F; }
+        .doc-top b { font-size: 19px; letter-spacing: -0.02em; }
+        .doc-top span { font-family: var(--chat-font); color: #7A7368; }
+        .doc-to { margin: 0 0 14px !important; color: #5C564C; }
+        .doc-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid #E7E1D6; font-variant-numeric: tabular-nums; }
+        .doc-total { padding-top: 9px; border-bottom: 0; font-size: 12.5px; font-weight: 800; }
+
+        /* Private: what our server stores */
+        .vault-badge { display: inline-flex; align-items: center; gap: 10px; padding: 11px 20px; border: 1px solid rgba(160, 180, 255, 0.32); border-radius: 999px;
+          background: rgba(14, 17, 30, 0.92); color: #DDE4FF; font-size: 19px; font-weight: 600; }
+        .vault-note { font-family: var(--chat-font); font-size: 15px; color: #AEB8DB; }
+
+        /* ---------- Lifted cards ---------- */
+        .cw-liftbox { position: absolute; left: 0; top: 0; transform-origin: 0 0; opacity: 0; }
+        .cw-lift-dark { padding: 30px 32px; border-radius: 24px; background: #262624; box-shadow: 0 40px 90px -24px rgba(20, 16, 8, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.06); }
+        .cw-lift-mn .mn { box-shadow: 0 40px 90px -24px rgba(20, 16, 8, 0.5); }
+        .cw-lift-lp .lp { width: 620px; height: 380px; flex: none; border-radius: 14px; box-shadow: 0 40px 90px -24px rgba(20, 16, 8, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.05); }
+        .cw-lift-page .a-page { border-radius: 6px; box-shadow: 0 40px 90px -24px rgba(20, 16, 8, 0.45), 0 0 0 1px rgba(0, 0, 0, 0.05); }
+        .cw-lift-chips .cw-chips { width: 560px; margin-top: 0; }
+        .cw-lift-quote { width: 560px; }
+        .cw-lift-quote .a-ai { padding-top: 0; }
+        .cw-lift-quote .cw-h { margin-top: 0 !important; }
+        .cw-lift-cipher { width: 600px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+        .cw-lift-cipher .a-user { align-self: stretch; margin-top: 4px; }
+        .cw-lift-cipher .cw-h { margin: 0 !important; }
+        .cw-lptr { position: absolute; left: 0; top: 0; width: 26px; height: 30px; z-index: 5; transform-origin: 2px 2px; }
+        .cw-lptr svg { width: 26px; height: 30px; display: block; }
+
+        /* Pointer */
+        #cw-cursor { position: absolute; left: 0; top: 0; z-index: 20; width: 26px; height: 30px; opacity: 0; }
+        #cw-cursor svg { width: 26px; height: 30px; display: block; }
+        #cw-ring { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 50%; border: 2px solid rgba(232, 228, 216, 0.7); opacity: 0; }
+      </style>
+
+      <div id="root" data-composition-id="chuk-window" data-width="1920" data-height="1080">
+        <div id="cw-sky" class="clip" data-start="0" data-duration="61" data-track-index="0">
+          <div class="cw-scene cw-scene--paper" data-sky="paper"></div>
+          <div class="cw-scene cw-scene--dawn" data-sky="dawn">
+            <div class="cw-sun" id="cw-sun" data-layout-allow-overflow></div>
+            <svg class="cw-hills" viewBox="0 0 1440 320" preserveAspectRatio="none"><path d="M0 210 C240 150 420 190 640 170 C860 150 1080 110 1440 160 L1440 320 L0 320 Z" fill="#E7B070" opacity=".55"/><path d="M0 250 C200 220 460 240 720 225 C980 210 1200 200 1440 230 L1440 320 L0 320 Z" fill="#D9955A" opacity=".6"/></svg>
+          </div>
+          <div class="cw-scene cw-scene--night" data-sky="night">
+            <div class="cw-stars"></div>
+            <div class="cw-stars cw-stars--b"></div>
+            <div class="cw-moon"></div>
+          </div>
+          <div class="cw-scene cw-scene--day" data-sky="day">
+            <div class="cw-beams"></div>
+            <div class="cw-awning"></div>
+          </div>
+          <div class="cw-scene cw-scene--network" data-sky="network">
+            <svg class="cw-web" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice"><g stroke="#9DB39A" stroke-width="1" fill="none" opacity=".55"><path d="M110 140 L720 450 L1320 120"/><path d="M60 520 L720 450 L1380 560"/><path d="M200 820 L720 450 L1240 830"/><path d="M420 60 L720 450 L1010 40"/><path d="M110 140 L60 520 L200 820"/><path d="M1320 120 L1380 560 L1240 830"/></g><circle cx="720" cy="450" r="260" stroke="#B7C8B3" stroke-dasharray="3 7" fill="none"/><circle cx="720" cy="450" r="420" stroke="#C9D6C5" stroke-dasharray="2 9" fill="none"/></svg>
+            <span class="cw-node" style="left: 96px; top: 150px"><img src="assets/logos/connectors/github.png" alt="" /></span>
+            <span class="cw-node" style="left: 70px; top: 360px"><img src="assets/logos/connectors/notion.png" alt="" /></span>
+            <span class="cw-node" style="left: 110px; top: 560px"><img src="assets/logos/connectors/linear.png" alt="" /></span>
+            <span class="cw-node" style="left: 74px; top: 760px"><img src="assets/logos/connectors/figma.png" alt="" /></span>
+            <span class="cw-node" style="left: 120px; top: 950px"><img src="assets/logos/connectors/dropbox.png" alt="" /></span>
+            <span class="cw-node" style="left: 1824px; top: 130px"><img src="assets/logos/connectors/todoist.png" alt="" /></span>
+            <span class="cw-node" style="left: 1850px; top: 330px"><img src="assets/logos/connectors/stripe.png" alt="" /></span>
+            <span class="cw-node" style="left: 1810px; top: 530px"><img src="assets/logos/connectors/supabase.png" alt="" /></span>
+            <span class="cw-node" style="left: 1846px; top: 740px"><img src="assets/logos/connectors/vercel.png" alt="" /></span>
+            <span class="cw-node" style="left: 1800px; top: 940px"><img src="assets/logos/connectors/asana.png" alt="" /></span>
+          </div>
+          <div class="cw-scene cw-scene--prism" data-sky="prism">
+            <span class="cw-blob cw-blob--a" data-layout-allow-overflow></span><span class="cw-blob cw-blob--b" data-layout-allow-overflow></span><span class="cw-blob cw-blob--c" data-layout-allow-overflow></span><span class="cw-blob cw-blob--d" data-layout-allow-overflow></span>
+          </div>
+          <div class="cw-scene cw-scene--street" data-sky="street">
+            <svg class="cw-city" viewBox="0 0 1440 360" preserveAspectRatio="xMidYMax slice"><g fill="#141729"><path d="M0 360 V210 H70 V160 H150 V230 H210 V120 H300 V200 H350 V250 H420 V140 H520 V220 H580 V90 H660 V190 H720 V240 H800 V150 H890 V210 H950 V110 H1040 V200 H1100 V250 H1170 V130 H1260 V200 H1320 V170 H1440 V360 Z"/></g><g fill="#F6C977"><rect x="228" y="140" width="10" height="12"/><rect x="258" y="170" width="10" height="12"/><rect x="440" y="160" width="10" height="12"/><rect x="470" y="190" width="10" height="12"/><rect x="600" y="110" width="10" height="12"/><rect x="630" y="140" width="10" height="12"/><rect x="600" y="170" width="10" height="12"/><rect x="820" y="170" width="10" height="12"/><rect x="850" y="200" width="10" height="12"/><rect x="970" y="130" width="10" height="12"/><rect x="1000" y="160" width="10" height="12"/><rect x="1190" y="150" width="10" height="12"/><rect x="1220" y="180" width="10" height="12"/><rect x="90" y="180" width="10" height="12"/><rect x="120" y="210" width="10" height="12"/></g></svg>
+          </div>
+          <div class="cw-scene cw-scene--library" data-sky="library"><div class="cw-ruled"></div></div>
+        </div>
+
+        <div id="cw-stage" class="clip" data-start="0" data-duration="61" data-track-index="1">
+          <div id="cw-stagein">
+            <div id="cw-cam">
+              <div class="app cw-ui" id="cw-app">
+                <!--SPRITE-->
+                <div class="cw-src" id="cw-src">
+                  <!--LP-->
+                  <!--PAGE-->
+                </div>
+                <span class="a-menu"><svg class="z24"><use href="#h-menu01"/></svg></span>
+                <span class="a-rail">
+                  <span><svg class="z24"><use href="#h-pencil-edit02"/></svg></span>
+                  <span><svg class="z24"><use href="#h-image01"/></svg></span>
+                </span>
+                <div class="a-chat">
+                  <div class="a-thread"><div class="a-col" id="cw-col"></div></div>
+                  <div class="a-foot">
+                    <div class="a-composer" id="cw-composer">
+                      <div class="a-field" id="cw-field"><span id="cw-ph">Ask me anything !</span><span id="cw-typed"></span><i id="cw-caret"></i></div>
+                      <div class="a-row">
+                        <span class="a-btn a-plus"><svg class="z24"><use href="#h-plus-sign"/></svg></span>
+                        <span class="a-grow"></span>
+                        <span class="a-pill" id="cw-pill"><span class="pl" id="cw-pl-fast"><svg class="z15"><use href="#h-flash"/></svg><b>Fast</b></span><svg class="z12 a-dn"><use href="#h-arrow-down01"/></svg></span>
+                        <span class="a-btn a-mic"><svg class="z22"><use href="#h-mic02"/></svg></span>
+                        <span class="a-send" id="cw-send"><svg class="z26"><use href="#h-send-horizontal"/></svg></span>
+                      </div>
+                    </div>
+                    <p class="a-disc">You're chatting with an AI/LLM — it can be wrong. Check key info.</p>
+                  </div>
+                </div>
+                <div id="cw-cursor">
+                  <span id="cw-ring"></span>
+                  <svg viewBox="0 0 26 30"><path d="M2 2 L2 23 L7.4 18 L11.2 26.6 L15 25 L11.3 16.6 L18.6 16.6 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="cw-lift" class="clip" data-start="0" data-duration="61" data-track-index="2"></div>
+      </div>
+
+      <script>
+        (function () {
+          const ID = "chuk-window";
+          const ROOT = document.querySelector('[data-composition-id="' + ID + '"]');
+          const q = (s, el) => (el || ROOT).querySelector(s);
+          const qa = (s, el) => Array.from((el || ROOT).querySelectorAll(s));
+          const APP_W = 1100, APP_H = 660, FW = 1920, FH = 1080;
+          const POINTER = '<svg viewBox="0 0 26 30"><path d="M2 2 L2 23 L7.4 18 L11.2 26.6 L15 25 L11.3 16.6 L18.6 16.6 Z" fill="#111" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+
+          const V = (window.__hyperframes && window.__hyperframes.getVariables) ? window.__hyperframes.getVariables() : {};
+          const PROMPT = V.prompt || "Announce yourself on YouTube. Keep it short.";
+          let S = {};
+          try { S = V.script ? JSON.parse(V.script) : {}; } catch (e) { S = {}; }
+          S.length = S.length || 12;
+          S.prompt = S.prompt || { type_from: 0, type_to: 2.4, send_at: 3.0 };
+          S.blocks = S.blocks || [];
+          S.shots = S.shots && S.shots.length ? S.shots : [{ at: 0, t: ["composer"], pad: 20, max: 3 }, { at: S.prompt.send_at, t: ["window"], fill: 0.86, move: "ease", dur: 0.9 }];
+          S.skies = S.skies && S.skies.length ? S.skies : [[0, V.sky || "dawn"]];
+
+          // Seeded PRNG (mulberry32): typing rhythm and cipher text stay the same on every render.
+          function rng(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+          const rand = rng(20260927);
+          const ALNUM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+          function cipherOf(text) { let o = ""; for (const ch of text) o += (/\s|[-\/]/.test(ch) ? ch : ALNUM[Math.floor(rand() * ALNUM.length)]); return o; }
+          function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+          function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+          // Text with a plain layer (split into chars or words) and three cipher layers on top.
+          function scrText(tag, cls, text, split) {
+            const e = el(tag, cls + " cw-scr");
+            const pl = el("span", "cw-pl");
+            if (split === "chars") { for (const ch of text) { const s = el("span", "cw-c"); s.textContent = ch; pl.appendChild(s); } }
+            else if (split === "words") { text.split(/(\s+)/).forEach((w) => { if (/^\s+$/.test(w)) pl.appendChild(document.createTextNode(w)); else if (w) { const s = el("span", "cw-w"); s.textContent = w; pl.appendChild(s); } }); }
+            else pl.textContent = text;
+            e.appendChild(pl);
+            for (let i = 0; i < 3; i++) { const c = el("span", "cw-ci"); c.setAttribute("data-layout-allow-overlap", ""); c.textContent = cipherOf(text); e.appendChild(c); }
+            return e;
+          }
+
+          const app = q("#cw-app"), cam = q("#cw-cam"), col = q("#cw-col"), stagein = q("#cw-stagein"), liftLayer = q("#cw-lift");
+          const typed = q("#cw-typed"), caret = q("#cw-caret"), ph = q("#cw-ph");
+          const pill = q("#cw-pill"), send = q("#cw-send");
+          const cursor = q("#cw-cursor"), ring = q("#cw-ring");
+          const skies = {}; qa(".cw-scene").forEach((s) => (skies[s.dataset.sky] = s));
+          const allSkies = Object.values(skies);
+
+          const tl = gsap.timeline({ paused: true });
+          const blocks = {};
+          const lifts = [];
+
+          // ---------- Skies: instant switches (they only show while the window is away) ----------
+          qa(".cw-scene").forEach((s) => (s.style.opacity = s.dataset.sky === S.skies[0][1] ? "1" : "0"));
+          function skyAt(t, name) { if (!skies[name]) return; tl.set(allSkies, { opacity: 0 }, t).set(skies[name], { opacity: 1 }, t); }
+          S.skies.slice(1).forEach(([at, name]) => skyAt(at, name));
+
+          // ---------- Prompt ----------
+          const chars = [];
+          for (const ch of PROMPT) { const s = el("span", "cw-tc"); s.textContent = ch; s.style.display = "none"; typed.appendChild(s); chars.push(s); }
+          const P = S.prompt;
+          ph.style.display = P.type_from <= 0 ? "none" : "";
+          if (P.type_from > 0) tl.set(ph, { display: "none" }, P.type_from);
+          const span = P.type_to - P.type_from;
+          let acc = 0; const gaps = chars.map((c, i) => { const g = 0.6 + rand() * 0.8 + (/[ .,]/.test(PROMPT[i - 1] || "") ? 0.5 : 0); acc += g; return g; });
+          let tt = P.type_from;
+          chars.forEach((c, i) => { tt += (gaps[i] / acc) * span; if (tt <= 0) c.style.display = "inline"; else tl.set(c, { display: "inline" }, tt); });
+          for (let t = P.type_to + 0.25; t + 0.25 < P.send_at - 0.02; t += 0.5) tl.set(caret, { opacity: 0 }, t).set(caret, { opacity: 1 }, t + 0.25);
+          tl.set(chars, { display: "none" }, P.send_at).set(caret, { opacity: 0 }, P.send_at).set(ph, { display: "inline" }, P.send_at);
+          tl.fromTo(send, { scale: 1 }, { scale: 0.88, duration: 0.07, ease: "power2.out" }, P.send_at - 0.02)
+            .fromTo(send, { scale: 0.88 }, { scale: 1, duration: 0.25, ease: "power3.out", immediateRender: false }, P.send_at + 0.05);
+
+          const userBlk = el("div", "cw-blk"); userBlk.id = "cw-b-user";
+          const uwrap = el("div", "a-user"); uwrap.appendChild(scrText("p", "a-bubble", PROMPT)); userBlk.appendChild(uwrap); col.appendChild(userBlk);
+          blocks.user = { root: userBlk, at: P.send_at };
+          tl.set(userBlk, { display: "block" }, P.send_at);
+          tl.fromTo(userBlk, { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: "power3.out" }, P.send_at);
+
+          // ---------- Working (agent timeline) ----------
+          if (S.work) {
+            const W = S.work;
+            const wb = el("div", "cw-blk"); wb.id = "cw-b-work";
+            const atl = el("div", "a-tl"); const head = el("p", "a-tl-head");
+            const labels = W.rows.map((r) => { const s = el("span", "cw-hl"); s.textContent = "Running " + r[1]; head.appendChild(s); return s; });
+            const done = el("span", "cw-hl"); done.textContent = W.done; head.appendChild(done);
+            const dn = el("span", "cw-hl", '<svg class="z16"><use href="#h-arrow-down01"/></svg>'); dn.style.display = "inline-flex"; head.appendChild(dn);
+            const rt = el("span", "cw-hl", '<svg class="z16"><use href="#h-arrow-right01"/></svg>'); head.appendChild(rt);
+            const steps = el("div", "cw-steps"); const st = el("div", "a-steps");
+            const rows = W.rows.map((r) => { const d = el("div", "a-step", '<span class="a-badge"><svg class="z14"><use href="#h-flash"/></svg></span><span class="a-step-t">Ran ' + esc(r[1]) + "</span>"); st.appendChild(d); return d; });
+            const rail = el("span", "cw-rail"); st.insertBefore(rail, st.firstChild);
+            steps.appendChild(st); atl.appendChild(head); atl.appendChild(steps); wb.appendChild(atl); col.appendChild(wb);
+            blocks.work = { root: wb, at: W.at };
+            tl.set(wb, { display: "block" }, W.at).fromTo(wb, { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.35, ease: "power3.out" }, W.at);
+            labels[0].style.display = "inline";
+            tl.set(rail, { scaleY: 0 }, 0);
+            W.rows.forEach((r, i) => {
+              tl.fromTo(rows[i], { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power3.out" }, r[0]);
+              if (i > 0) tl.fromTo(rail, { scaleY: (i - 1) / (W.rows.length - 1) }, { scaleY: i / (W.rows.length - 1), duration: 0.3, ease: "power2.out", immediateRender: false }, r[0]);
+              if (i + 1 < labels.length) tl.set(labels[i], { display: "none" }, r[0]).set(labels[i + 1], { display: "inline" }, r[0]);
+            });
+            tl.set(labels[labels.length - 1], { display: "none" }, W.fold_at).set(done, { display: "inline" }, W.fold_at)
+              .set(dn, { display: "none" }, W.fold_at).set(rt, { display: "inline-flex" }, W.fold_at);
+            blocks.work.fold = () => { tl.seek(W.fold_at - 0.01, false); const h = steps.offsetHeight; tl.seek(0, false); tl.fromTo(steps, { height: h, opacity: 1 }, { height: 0, opacity: 0, duration: 0.45, ease: "power3.inOut", immediateRender: false }, W.fold_at); };
+          }
+
+          // ---------- Reply blocks ----------
+          function streamChars(nodes, at, dur) { if (!nodes.length) return; tl.fromTo(nodes, { opacity: 0 }, { opacity: 1, duration: 0.04, ease: "none", stagger: dur / nodes.length }, at); }
+          function streamWords(nodes, at, dur) { if (!nodes.length) return; tl.fromTo(nodes, { opacity: 0 }, { opacity: 1, duration: 0.22, ease: "none", stagger: dur / nodes.length }, at); }
+          const encTargets = [];
+          const cards = [];
+
+          S.blocks.forEach((b) => {
+            const bk = el("div", "cw-blk"); bk.id = "cw-b-" + b.id;
+            const ai = el("div", "a-ai"); bk.appendChild(ai);
+            const B = { root: bk, def: b, at: b.at };
+            if (b.heading) {
+              B.h = scrText("h3", "cw-h", b.heading, "chars"); ai.appendChild(B.h);
+              const n = b.heading.length; const hAt = b.heading_at != null ? b.heading_at : b.at; const hDur = b.heading_dur != null ? b.heading_dur : Math.min(0.55, n * 0.02);
+              streamChars(qa(".cw-c", B.h), hAt, hDur); B.hEnd = hAt + hDur;
+            }
+            if (b.text) {
+              B.text = scrText("p", "cw-t", b.text, "words"); ai.appendChild(B.text);
+              const words = qa(".cw-w", B.text); const tAt = b.text_at != null ? b.text_at : (B.hEnd || b.at) + 0.1; const tDur = b.text_dur != null ? b.text_dur : Math.min(1.2, words.length * 0.09);
+              streamWords(words, tAt, tDur);
+            }
+            if (b.slogan) {
+              B.h = el("p", "cw-slogan"); const pl = el("span", "cw-pl"); pl.textContent = b.slogan; pl.style.opacity = "0"; pl.style.display = "inline-block"; B.h.appendChild(pl);
+              const c2 = el("i", "cw-caret2"); c2.style.position = "absolute"; c2.style.left = "0"; c2.style.top = "3px"; B.h.appendChild(c2); ai.appendChild(B.h);
+              // The caret waits at the start of the empty line, blinking on the beat; the whole line lands at once.
+              for (let t = b.at + 0.25; t < b.slogan_at - 0.05; t += 0.5) tl.set(c2, { opacity: 0 }, t).set(c2, { opacity: 1 }, t + 0.25);
+              tl.set(c2, { opacity: 0 }, b.slogan_at).set(pl, { opacity: 1 }, b.slogan_at);
+              tl.fromTo(pl, { scale: 1.06, transformOrigin: "0% 50%" }, { scale: 1, duration: 0.55, ease: "power3.out", immediateRender: false }, b.slogan_at);
+              if (b.clear_others) B.clear = b.at;
+            }
+            if (b.card) { B.card = el("div", "cw-card"); bk.appendChild(B.card); cards.push([b.card, B]); }
+            if (b.space_below) bk.style.paddingBottom = b.space_below + "px";
+            col.appendChild(bk); blocks[b.id] = B;
+            tl.set(bk, { display: "block" }, b.at).fromTo(bk, { opacity: 0 }, { opacity: 1, duration: 0.3, ease: "power2.out" }, b.at);
+          });
+
+          // ---------- Lifts: a card leaves the window and lands big on a world ----------
+          function liftBox(cls, content) { const box = el("div", "cw-liftbox cw-ui " + cls); box.appendChild(content); liftLayer.appendChild(box); return box; }
+          function addLift(c, B, box, src) {
+            if (!c.lift) return;
+            const L = Object.assign({ id: B.def.id, box: box, src: src || B.card || B.root, back: null, sky: "paper", fit: [1640, 860], dy: 0, max: 3.6 }, c.lift);
+            lifts.push(L);
+          }
+
+          // ---------- Card library ----------
+          const cursorPlan = (S.cursor || []).slice();
+          function reveal(nodes, at, opts) { opts = opts || {}; tl.fromTo(nodes, { opacity: 0, y: opts.y != null ? opts.y : 12 }, { opacity: 1, y: 0, duration: opts.dur || 0.4, ease: "power3.out", stagger: opts.stagger || 0 }, at); }
+          function artCard(host, icon, title, sub) {
+            const c = el("div", "a-art", '<span class="a-art-tile"><svg class="i20"><use href="#h-' + icon + '"/></svg></span><span class="a-art-txt"><b></b><small></small></span><span class="a-art-btn"></span><span class="a-art-btn"></span>');
+            q("b", c).appendChild(scrText("span", "cw-lab", title)); q("small", c).appendChild(scrText("span", "cw-lab", sub));
+            const bt = qa(".a-art-btn", c); bt[0].appendChild(scrText("span", "cw-lab", "Download")); bt[1].appendChild(scrText("span", "cw-lab", "Open"));
+            host.appendChild(c); return c;
+          }
+          function chips(c, withLogos) {
+            const w = el("div", "cw-chips");
+            if (c.lead) w.appendChild(el("span", "cw-lead", esc(c.lead)));
+            const list = c.items.map((it) => {
+              const x = el("span", withLogos ? "cw-chip" : "cw-chip cw-chip--plain", withLogos ? '<i><img src="assets/logos/connectors/' + it[1] + '.png" alt="" /></i>' : "");
+              x.appendChild(scrText("span", "cw-lab", withLogos ? it[0] : it)); w.appendChild(x); return x;
+            });
+            if (c.more) { const m = el("span", "cw-chip cw-chip--more"); m.appendChild(scrText("span", "cw-lab", c.more)); w.appendChild(m); list.push(m); }
+            list.forEach((x, i) => tl.fromTo(x, { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.35, ease: "power3.out" }, c.at + i * c.every));
+            return w;
+          }
+          function quoteCopy(B) {
+            const ai = el("div", "a-ai");
+            if (B.def.heading) ai.appendChild(scrText("h3", "cw-h", B.def.heading, "chars"));
+            if (B.def.text) ai.appendChild(scrText("p", "cw-t", B.def.text, "words"));
+            return ai;
+          }
+
+          const CARD = {
+            models(c, B) {
+              // The model menu opens straight out of the pill as a lifted panel; the pill label follows the clicks.
+              const menu = el("div", "mn"); const g = el("div", "mn-g"); menu.appendChild(g);
+              const rows = c.models.map((m) => {
+                const r = el("div", "mn-row", '<span class="mn-hl"></span><span class="mn-logo" style="--logo: url(\'assets/logos/models/' + m[1] + '.svg\')"></span><span class="mn-l">' + esc(m[0]) + '</span><span class="mn-ic mn-tick"><svg class="z18"><use href="#h-tick02"/></svg></span>');
+                g.appendChild(r); return r;
+              });
+              const ptr = el("span", "cw-lptr", POINTER); menu.appendChild(ptr);
+              const box = liftBox("cw-lift-mn", menu);
+              const fast = q("#cw-pl-fast"); const dnIcon = q(".a-dn", pill);
+              const labels = c.models.map((m) => { const s = el("span", "pl", '<svg class="z15"><use href="#h-settings02"/></svg><b>' + esc(m[0]) + "</b>"); s.style.display = "none"; pill.insertBefore(s, dnIcon); return s; });
+              let prev = null, prevLabel = fast;
+              B.ptrPlan = [];
+              c.clicks.forEach((k) => {
+                const at = k[0], r = rows[k[1]];
+                const hl = q(".mn-hl", r), tick = q(".mn-tick", r), lab = q(".mn-l", r);
+                tl.fromTo(hl, { opacity: 0 }, { opacity: 1, duration: 0.06 }, at).fromTo(hl, { opacity: 1 }, { opacity: 0.35, duration: 0.3, immediateRender: false }, at + 0.12);
+                tl.set(tick, { opacity: 1 }, at).set(lab, { color: "#E8E4D8" }, at);
+                if (prev) { tl.set(q(".mn-tick", prev), { opacity: 0 }, at).set(q(".mn-l", prev), { color: "rgba(232, 228, 216, 0.8)" }, at).set(q(".mn-hl", prev), { opacity: 0 }, at); }
+                tl.set(prevLabel, { display: "none" }, at).set(labels[k[1]], { display: "inline-flex" }, at);
+                prev = r; prevLabel = labels[k[1]];
+                B.ptrPlan.push({ row: r, at: at });
+              });
+              B.ptr = ptr; B.menu = menu;
+              addLift(c, B, box, pill);
+            },
+            connectors(c, B) {
+              B.card.appendChild(chips(c, true));
+              if (c.lift) addLift(c, B, liftBox("cw-lift-dark cw-lift-chips", chips(c, true)));
+            },
+            platforms(c, B) {
+              B.card.appendChild(chips(c, false));
+              if (c.lift) addLift(c, B, liftBox("cw-lift-dark cw-lift-chips", chips(c, false)));
+            },
+            "artifact-page"(c, B) {
+              const a = artCard(B.card, "code-m", "Spoke landing page", "HTML · v1");
+              reveal(a, B.at + 0.15);
+              const lp = q("#cw-src .lp").cloneNode(true); lp.removeAttribute("id");
+              const box = liftBox("cw-lift-lp", lp);
+              qa(".cw-r", lp).forEach((p, i) => reveal(p, c.reveal[i] != null ? c.reveal[i] : c.reveal[c.reveal.length - 1]));
+              addLift(c, B, box, a);
+            },
+            "artifact-invoice"(c, B) {
+              const a = artCard(B.card, "pdf", "Invoice Mrs Weber", "Typst · PDF · v1");
+              reveal(a, B.at + 0.15);
+              const page = q("#cw-src .a-page").cloneNode(true); page.removeAttribute("id");
+              const box = liftBox("cw-lift-page", page);
+              const parts = qa(".cw-r2", page);
+              [[0, 1], [2], [3], [4], [5]].forEach((grp, i) => reveal(grp.map((j) => parts[j]), c.reveal[i], { y: 6, dur: 0.35 }));
+              addLift(c, B, box, a);
+            },
+            encrypt(c, B) {
+              encTargets.push(c);
+              if (!c.lift) return;
+              // The lifted card: what the server keeps. The prompt and the reply turn to ciphertext under the badge.
+              const card = el("div", "cw-lift-cipher");
+              card.appendChild(el("span", "vault-badge", '<svg class="i20"><use href="#h-lock"/></svg>What our server stores'));
+              const u = el("div", "a-user"); const bub = scrText("p", "a-bubble", PROMPT); u.appendChild(bub); card.appendChild(u);
+              const line = scrText("h3", "cw-h", B.def.heading || "Encrypted on your device.", "chars"); card.appendChild(line);
+              card.appendChild(el("p", "vault-note", "AES-256-GCM · the key stays on your device"));
+              const box = liftBox("cw-lift-dark", card);
+              const t0 = c.lift.scramble_at != null ? c.lift.scramble_at : c.lift.at + 0.4;
+              [bub, line].forEach((s, i) => {
+                const d = t0 + i * 0.18, pl = q(".cw-pl", s), ci = qa(".cw-ci", s);
+                tl.fromTo(pl, { opacity: 1 }, { opacity: 0, duration: 0.1 }, d);
+                tl.fromTo(ci[0], { opacity: 0 }, { opacity: 1, duration: 0.05 }, d).fromTo(ci[0], { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, d + 0.12);
+                tl.fromTo(ci[1], { opacity: 0 }, { opacity: 1, duration: 0.05 }, d + 0.12).fromTo(ci[1], { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, d + 0.24);
+                tl.fromTo(ci[2], { opacity: 0 }, { opacity: 1, duration: 0.05 }, d + 0.24);
+              });
+              tl.fromTo(bub, { backgroundColor: "#AD6048" }, { backgroundColor: "#33343C", duration: 0.3, ease: "none" }, t0);
+              addLift(c, B, box, B.h || B.root);
+            },
+            quote(c, B) {
+              if (c.lift) addLift(c, B, liftBox("cw-lift-dark cw-lift-quote", quoteCopy(B)), B.root);
+            },
+            recap(c, B) {
+              const ul = el("ul", "cw-recap");
+              c.items.forEach((it) => {
+                const li = el("li", "", '<span class="cw-ok"><svg class="z14"><use href="#h-tick02"/></svg></span>');
+                li.appendChild(scrText("span", "", it[1])); ul.appendChild(li);
+                tl.fromTo(li, { opacity: 0, x: -14 }, { opacity: 1, x: 0, duration: 0.3, ease: "power3.out" }, it[0]);
+              });
+              B.card.appendChild(ul);
+            },
+          };
+          cards.forEach(([c, B]) => { if (CARD[c.kind]) CARD[c.kind](c, B); });
+
+          // A slogan block can clear the window so the line lands alone.
+          Object.values(blocks).forEach((B) => {
+            if (B.clear == null) return;
+            const others = Array.from(col.children).filter((n) => n !== B.root);
+            tl.set(others, { opacity: 0 }, B.clear);
+          });
+
+          // ---------- Encryption in the window: the chat turns into what the server keeps ----------
+          encTargets.forEach((c) => {
+            const t0 = c.at, t1 = c.restore_at;
+            const bub = q(".a-bubble", userBlk);
+            tl.fromTo(bub, { backgroundColor: "#AD6048" }, { backgroundColor: "#33343C", duration: 0.4, ease: "none" }, t0);
+            tl.fromTo(bub, { backgroundColor: "#33343C" }, { backgroundColor: "#AD6048", duration: 0.3, ease: "none", immediateRender: false }, t1);
+            qa(".cw-scr", col).forEach((s, i) => {
+              const d = t0 + Math.min(0.9, i * 0.05);
+              const pl = q(".cw-pl", s), ci = qa(".cw-ci", s);
+              tl.fromTo(pl, { opacity: 1 }, { opacity: 0, duration: 0.1, immediateRender: false }, d);
+              tl.fromTo(ci[0], { opacity: 0 }, { opacity: 1, duration: 0.05, immediateRender: false }, d).fromTo(ci[0], { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, d + 0.12);
+              tl.fromTo(ci[1], { opacity: 0 }, { opacity: 1, duration: 0.05, immediateRender: false }, d + 0.12).fromTo(ci[1], { opacity: 1 }, { opacity: 0, duration: 0.05, immediateRender: false }, d + 0.24);
+              tl.fromTo(ci[2], { opacity: 0 }, { opacity: 1, duration: 0.05, immediateRender: false }, d + 0.24);
+              const r = t1 + Math.min(0.3, i * 0.015);
+              tl.fromTo(ci[2], { opacity: 1 }, { opacity: 0, duration: 0.12, immediateRender: false }, r);
+              tl.fromTo(pl, { opacity: 0 }, { opacity: 1, duration: 0.12, immediateRender: false }, r);
+            });
+          });
+
+          const sun = q("#cw-sun");
+          tl.set(sun, { y: 150 }, 0);
+          if (S.outro && S.outro.sun_rise) tl.fromTo(sun, { y: 150 }, { y: -40, duration: S.outro.sun_rise[1] - S.outro.sun_rise[0], ease: "power2.out", immediateRender: false }, S.outro.sun_rise[0]);
+
+          // ---------- Geometry helpers ----------
+          function rel(node) {
+            const a = app.getBoundingClientRect(), r = node.getBoundingClientRect(), k = a.width / APP_W;
+            return { x: (r.left - a.left) / k, y: (r.top - a.top) / k, w: r.width / k, h: r.height / k };
+          }
+          function screen(node) {
+            const a = ROOT.getBoundingClientRect(), r = node.getBoundingClientRect(), k = a.width / FW;
+            return { x: (r.left - a.left) / k, y: (r.top - a.top) / k, w: r.width / k, h: r.height / k };
+          }
+          function target(name) {
+            if (name === "window") return app;
+            const fixed = { composer: "#cw-composer", send: "#cw-send", pill: "#cw-pill" };
+            if (fixed[name]) return q(fixed[name]);
+            if (name === "work") return blocks.work && blocks.work.root;
+            const m = /^block:([^:]+)(?::(h|text|card))?$/.exec(name);
+            if (m && blocks[m[1]]) return m[2] ? blocks[m[1]][m[2]] : blocks[m[1]].root;
+            return q(name);
+          }
+          function union(rs) { const x0 = Math.min(...rs.map((r) => r.x)), y0 = Math.min(...rs.map((r) => r.y)), x1 = Math.max(...rs.map((r) => r.x + r.w)), y1 = Math.max(...rs.map((r) => r.y + r.h)); return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }; }
+          // Leaf boxes: text-bearing or childless elements, cipher layers excluded.
+          function leaves(node) {
+            return [node, ...node.querySelectorAll("*")].filter((e) => {
+              if (e.classList.contains("cw-ci")) return false;
+              const blk = e.closest(".cw-blk"); if (blk && blk.style.opacity === "0") return false;
+              if (e.children.length === 0) return true;
+              for (const n of e.childNodes) if (n.nodeType === 3 && n.textContent.trim()) return true;
+              return false;
+            }).map(rel).filter((r) => r.w > 0.5 && r.h > 0.5);
+          }
+          function extent(node) { const rs = leaves(node); return rs.length ? union(rs) : rel(node); }
+
+          function build() {
+            if (blocks.work && blocks.work.fold) blocks.work.fold();
+            // New blocks grow open, so the thread scrolls up smoothly instead of jumping.
+            Object.values(blocks).forEach((B) => {
+              if (B.at == null) return;
+              tl.seek(B.at + 0.001, false); const h = B.root.offsetHeight;
+              tl.fromTo(B.root, { height: 0 }, { height: h, duration: 0.42, ease: "power3.out", immediateRender: false }, B.at);
+              tl.set(B.root, { height: "auto" }, B.at + 0.45);
+            });
+            tl.seek(0, false);
+
+            // ---------- Camera ----------
+            const shots = S.shots.map((sh, i) => Object.assign({}, sh, { end: i + 1 < S.shots.length ? S.shots[i + 1].at : S.length }));
+            shots.forEach((sh) => {
+              const mt = sh.measure != null ? sh.measure : Math.max(sh.at, sh.end - 0.05);
+              tl.seek(mt, false);
+              const tight = (n) => sh.tight !== false && (n === "work" || /^block:/.test(n));
+              let r = union(sh.t.map((n) => [n, target(n)]).filter((p) => p[1]).map((p) => (tight(p[0]) ? extent(p[1]) : rel(p[1]))));
+              if (sh.sub) r = { x: r.x + r.w * sh.sub[0], y: r.y + r.h * sh.sub[1], w: r.w * sh.sub[2], h: r.h * sh.sub[3] };
+              if (sh.col) {
+                // Column framing: every line of the chat column fits with a margin, the composer stays out.
+                const s = sh.zoom || 2.4, hh = FH / 2 / s, cr = rel(col);
+                const cx = sh.cx_target ? r.x + r.w / 2 : cr.x + cr.w / 2;
+                const compTop = rel(q("#cw-composer")).y, m = 84 / s, maxCy = compTop + 10 - hh;
+                let cy = maxCy;
+                if (r.y < cy - hh + m) cy = r.y - m + hh;
+                cy = Math.max(cy, hh + 20);
+                sh.c = { s: s, cx: cx, cy: cy, clamp: false };
+                return;
+              }
+              const pad = sh.pad != null ? sh.pad : 40, fill = sh.fill != null ? sh.fill : 0.9;
+              let s = sh.zoom != null ? sh.zoom : Math.min((FW * fill) / (r.w + 2 * pad), (FH * fill) / (r.h + 2 * pad));
+              if (sh.max && sh.zoom == null) s = Math.min(s, sh.max);
+              sh.c = { s: s, cx: r.x + r.w / 2 + (sh.dx || 0), cy: r.y + r.h / 2 + (sh.dy || 0), clamp: sh.clamp != null ? sh.clamp : s > 1.7 };
+            });
+            const cursorPts = cursorPlan.map((cp) => {
+              if (!cp.to) return cp;
+              tl.seek(cp.arrive, false);
+              const node = typeof cp.to === "string" ? target(cp.to) : cp.to; const r = rel(node);
+              const off = cp.offset || [r.w / 2, r.h / 2];
+              return Object.assign({}, cp, { x: r.x + off[0], y: r.y + off[1] });
+            });
+            tl.seek(0, false);
+
+            function T(c, m) {
+              const s = c.s * (m || 1); let cx = c.cx, cy = c.cy;
+              if (c.clamp) { const M = 20, hw = FW / 2 / s, hh = FH / 2 / s; if (hw * 2 < APP_W - 2 * M) cx = Math.min(Math.max(cx, hw + M), APP_W - M - hw); if (hh * 2 < APP_H - 2 * M) cy = Math.min(Math.max(cy, hh + M), APP_H - M - hh); }
+              return { scale: s, x: FW / 2 - s * cx, y: FH / 2 - s * cy };
+            }
+            let last = null;
+            shots.forEach((sh, i) => {
+              const hold = T(sh.c, 1), endS = T(sh.c, sh.drift || 1);
+              if (i === 0) { gsap.set(cam, Object.assign({ transformOrigin: "0 0" }, sh.kick ? T(sh.c, sh.kick) : hold)); last = hold; }
+              if (sh.move === "ease") {
+                const d = sh.dur || 0.8;
+                tl.fromTo(cam, Object.assign({}, last), Object.assign({}, hold, { duration: d, ease: sh.ease || "power3.inOut", immediateRender: false }), sh.at);
+                if (sh.end - sh.at - d > 0.02) tl.fromTo(cam, Object.assign({}, hold), Object.assign({}, endS, { duration: sh.end - sh.at - d, ease: "none", immediateRender: false }), sh.at + d);
+              } else if (sh.kick) {
+                tl.fromTo(cam, T(sh.c, sh.kick), Object.assign({}, hold, { duration: 0.5, ease: "power3.out", immediateRender: false }), sh.at);
+                tl.fromTo(cam, Object.assign({}, hold), Object.assign({}, endS, { duration: Math.max(0.05, sh.end - sh.at - 0.5), ease: "none", immediateRender: false }), sh.at + 0.5);
+              } else {
+                tl.fromTo(cam, Object.assign({}, hold), Object.assign({}, endS, { duration: Math.max(0.05, sh.end - sh.at), ease: "none", immediateRender: false }), sh.at);
+              }
+              last = endS;
+            });
+
+            // ---------- Pointer in the window ----------
+            let cur = null;
+            cursorPts.forEach((cp) => {
+              if (cp.hide != null) { if (cur) tl.fromTo(cursor, { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, cp.hide); cur = null; return; }
+              if (cp.show != null) {
+                const from = { x: cp.from[0], y: cp.from[1] };
+                tl.set(cursor, { x: from.x, y: from.y }, cp.show);
+                tl.fromTo(cursor, { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, cp.show);
+                cur = from;
+              }
+              const go = Math.max(0.25, Math.min(0.6, cp.arrive - (cp.show != null ? cp.show + 0.05 : cp.arrive - 0.35)));
+              tl.fromTo(cursor, { x: cur.x, y: cur.y }, { x: cp.x, y: cp.y, duration: go, ease: "power2.inOut", immediateRender: false }, cp.arrive - go);
+              cur = { x: cp.x, y: cp.y };
+              if (cp.click != null) {
+                tl.fromTo(cursor, { scale: 1 }, { scale: 0.84, duration: 0.06, ease: "power2.out", immediateRender: false }, cp.click - 0.03)
+                  .fromTo(cursor, { scale: 0.84 }, { scale: 1, duration: 0.18, ease: "power2.out", immediateRender: false }, cp.click + 0.05)
+                  .fromTo(ring, { opacity: 0.9, scale: 0.3 }, { opacity: 0, scale: 1.4, duration: 0.4, ease: "power2.out", immediateRender: false }, cp.click);
+              }
+              if (cp.hide_at != null) { tl.fromTo(cursor, { opacity: 1 }, { opacity: 0, duration: 0.25, immediateRender: false }, cp.hide_at); cur = null; }
+            });
+            gsap.set(cursor, { transformOrigin: "2px 2px" });
+            gsap.set(ring, { opacity: 0 });
+
+            // ---------- Lifts: out of the window, big on a world, back into the reply ----------
+            const landed = {};
+            lifts.forEach((L) => {
+              const w = L.box.offsetWidth, h = L.box.offsetHeight;
+              const s = Math.min(L.fit[0] / w, L.fit[1] / h, L.max);
+              const land = { x: FW / 2 - (s * w) / 2, y: FH / 2 - (s * h) / 2 + L.dy, scale: s };
+              const hold = { x: FW / 2 - (s * 1.02 * w) / 2, y: FH / 2 - (s * 1.02 * h) / 2 + L.dy, scale: s * 1.02 };
+              landed[L.id] = { L: L, land: land, sky: L.sky };
+              tl.seek(L.at, false); const a = screen(L.src);
+              const from = { x: a.x, y: a.y, scale: Math.max(0.05, a.w / w) };
+              skyAt(L.at, L.sky);
+              tl.fromTo(L.box, { opacity: 0 }, { opacity: 1, duration: 0.14, immediateRender: false }, L.at);
+              tl.fromTo(L.box, from, Object.assign({}, land, { duration: 0.55, ease: "power3.inOut", immediateRender: false }), L.at);
+              tl.fromTo(stagein, { opacity: 1, scale: 1 }, { opacity: 0, scale: 0.96, duration: 0.45, ease: "power2.inOut", immediateRender: false }, L.at);
+              const holdEnd = L.back != null ? L.back : (L.until != null ? L.until : L.at + 2);
+              tl.fromTo(L.box, Object.assign({}, land), Object.assign({}, hold, { duration: Math.max(0.1, holdEnd - L.at - 0.55), ease: "none", immediateRender: false }), L.at + 0.55);
+              if (L.back != null) {
+                tl.seek(L.back + 0.45, false); const b = screen(L.src);
+                const to = { x: b.x, y: b.y, scale: Math.max(0.05, b.w / w) };
+                tl.fromTo(L.box, Object.assign({}, hold), Object.assign({}, to, { duration: 0.42, ease: "power3.in", immediateRender: false }), L.back);
+                tl.fromTo(L.box, { opacity: 1 }, { opacity: 0, duration: 0.24, ease: "power1.in", immediateRender: false }, L.back + 0.16);
+                tl.fromTo(stagein, { opacity: 0, scale: 0.96 }, { opacity: 1, scale: 1, duration: 0.42, ease: "power2.out", immediateRender: false }, L.back);
+              }
+            });
+
+            // Pointer inside the lifted model menu: row to row, a click on each beat.
+            Object.values(blocks).forEach((B) => {
+              if (!B.ptrPlan || !B.ptrPlan.length) return;
+              const pts = B.ptrPlan.map((p) => ({ at: p.at, x: p.row.offsetLeft + 150, y: p.row.offsetTop + 22 }));
+              const L = lifts.find((x) => x.box.contains(B.ptr));
+              tl.set(B.ptr, { x: pts[0].x + 60, y: pts[0].y + 70, opacity: 0 }, 0);
+              if (L) tl.fromTo(B.ptr, { opacity: 0 }, { opacity: 1, duration: 0.2, immediateRender: false }, L.at + 0.4);
+              let prev = { x: pts[0].x + 60, y: pts[0].y + 70 };
+              pts.forEach((p) => {
+                tl.fromTo(B.ptr, { x: prev.x, y: prev.y }, { x: p.x, y: p.y, duration: 0.3, ease: "power2.inOut", immediateRender: false }, p.at - 0.34);
+                tl.fromTo(B.ptr, { scale: 1 }, { scale: 0.84, duration: 0.06, immediateRender: false }, p.at - 0.03).fromTo(B.ptr, { scale: 0.84 }, { scale: 1, duration: 0.18, immediateRender: false }, p.at + 0.05);
+                prev = p;
+              });
+            });
+
+            // ---------- Montage: the lifted cards flash on the beat, faster and faster ----------
+            if (S.montage) {
+              const M = S.montage, boxes = lifts.map((L) => L.box);
+              tl.set(stagein, { opacity: 0 }, M.at);
+              M.steps.forEach(([t, id], i) => {
+                const d = landed[id]; if (!d) return;
+                const next = i + 1 < M.steps.length ? M.steps[i + 1][0] : M.end;
+                tl.set(boxes, { opacity: 0 }, t);
+                skyAt(t, d.sky);
+                const k = 1.035, s = d.land.scale, w = d.L.box.offsetWidth, h = d.L.box.offsetHeight;
+                const big = { x: FW / 2 - (s * k * w) / 2, y: FH / 2 - (s * k * h) / 2 + d.L.dy, scale: s * k };
+                tl.set(d.L.box, { opacity: 1 }, t);
+                tl.fromTo(d.L.box, big, Object.assign({}, d.land, { duration: Math.max(0.05, Math.min(0.3, next - t)), ease: "power2.out", immediateRender: false }), t);
+              });
+              tl.set(boxes, { opacity: 0 }, M.end);
+              tl.set(stagein, { opacity: 1, scale: 1 }, M.end);
+              if (M.end_sky) skyAt(M.end, M.end_sky);
+            }
+
+            // Outro: the window fades once the camera has pulled out.
+            if (S.outro && S.outro.fade_at != null) tl.fromTo(cam, { opacity: 1 }, { opacity: 0, duration: S.outro.fade_dur || 0.8, ease: "power1.in", immediateRender: false }, S.outro.fade_at);
+            tl.set({}, {}, S.length);
+            tl.seek(0, false);
+            window.__timelines[ID] = tl;
+          }
+
+          const fontsReady = document.fonts
+            ? Promise.all([
+                document.fonts.load('400 16px "Chuk Chat Mono"'), document.fonts.load('700 24px "Chuk Chat Mono"'),
+                document.fonts.load('500 14px "Ubuntu"'), document.fonts.load('600 16px "Ubuntu"'), document.fonts.load('800 17px "Ubuntu"'),
+              ]).then(() => document.fonts.ready).catch(() => null)
+            : Promise.resolve();
+          const imgsReady = Promise.all(qa("img").map((im) => (im.complete ? null : new Promise((res) => { im.onload = im.onerror = res; }))));
+          Promise.all([fontsReady, imgsReady]).then(build);
+        })();
+      </script>
+    </template>
+  </body>
+</html>

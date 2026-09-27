@@ -1,0 +1,387 @@
+<template>
+  <style>
+    @font-face {
+      font-family: "Chuk Chat Mono";
+      src: url("assets/fonts/chuk-mono.woff2") format("woff2");
+      font-weight: 100 800;
+      font-display: block;
+    }
+    #root {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      font-family: "Chuk Chat Mono", monospace;
+    }
+    .r-bg {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse 70% 80% at 50% 38%, #f7f4ed 0%, #efebe2 55%, #e4dfd2 100%);
+    }
+    .r-grain {
+      position: absolute;
+      inset: 0;
+      opacity: 0.5;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='320' height='320'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.15 0 0 0 0 0.14 0 0 0 0 0.12 0 0 0 0.22 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    }
+    #r-tilt {
+      position: absolute;
+      inset: 0;
+      transform-origin: 50% 50%;
+    }
+    #r-cam {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 1px;
+      height: 1px;
+      transform-origin: 0 0;
+    }
+    #r-clip {
+      position: absolute;
+      left: -700px;
+      top: -4200px;
+      width: 1400px;
+      height: 4200px;
+      overflow: hidden;
+    }
+    #r-feed {
+      position: absolute;
+      left: 290px;
+      top: 4200px;
+      width: 820px;
+      height: 1646px;
+    }
+    #r-tear {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 820px;
+      height: 1646px;
+      transform-origin: 50% 100%;
+    }
+    #r-shadow {
+      position: absolute;
+      inset: 0;
+      filter: drop-shadow(0 16px 26px rgba(38, 37, 31, 0.14)) drop-shadow(0 1px 1.5px rgba(38, 37, 31, 0.2));
+    }
+    #r-paper {
+      position: absolute;
+      inset: 0;
+      background-color: #fffefa;
+      background-image: linear-gradient(90deg, rgba(38, 37, 31, 0.075) 0%, rgba(38, 37, 31, 0.02) 5%, rgba(38, 37, 31, 0) 12%, rgba(38, 37, 31, 0) 86%, rgba(38, 37, 31, 0.03) 94%, rgba(38, 37, 31, 0.085) 100%), url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.2 0 0 0 0 0.19 0 0 0 0 0.17 0 0 0 0.16 0'/></filter><rect width='100%' height='100%' filter='url(%23p)'/></svg>");
+      background-size: 100% 100%, 260px 260px;
+      clip-path: polygon(0.0px 7.8px, 12.1px 0.6px, 24.1px 9.5px, 36.2px 0.1px, 48.2px 6.9px, 60.3px 0.4px, 72.4px 7.8px, 84.4px 0.7px, 96.5px 10.5px, 108.5px 1.0px, 120.6px 7.5px, 132.6px 1.3px, 144.7px 9.1px, 156.8px 1.0px, 168.8px 7.1px, 180.9px 0.9px, 192.9px 8.1px, 205.0px 1.3px, 217.1px 8.9px, 229.1px 1.3px, 241.2px 9.9px, 253.2px 0.6px, 265.3px 10.3px, 277.4px 1.4px, 289.4px 10.7px, 301.5px 0.2px, 313.5px 7.8px, 325.6px 0.7px, 337.6px 9.6px, 349.7px 0.8px, 361.8px 8.5px, 373.8px 0.9px, 385.9px 9.4px, 397.9px 1.0px, 410.0px 10.9px, 422.1px 1.5px, 434.1px 9.8px, 446.2px 1.3px, 458.2px 11.0px, 470.3px 0.9px, 482.4px 9.9px, 494.4px 1.2px, 506.5px 9.3px, 518.5px 0.1px, 530.6px 10.6px, 542.6px 0.1px, 554.7px 10.3px, 566.8px 0.2px, 578.8px 8.1px, 590.9px 1.3px, 602.9px 7.0px, 615.0px 0.1px, 627.1px 10.0px, 639.1px 1.3px, 651.2px 11.1px, 663.2px 1.5px, 675.3px 8.2px, 687.4px 0.9px, 699.4px 6.9px, 711.5px 0.6px, 723.5px 9.5px, 735.6px 0.1px, 747.6px 10.6px, 759.7px 1.4px, 771.8px 10.7px, 783.8px 0.7px, 795.9px 9.1px, 807.9px 0.9px, 820.0px 9.3px, 820.0px 1636.5px, 807.9px 1645.2px, 795.9px 1637.3px, 783.8px 1645.6px, 771.8px 1637.9px, 759.7px 1645.2px, 747.6px 1636.8px, 735.6px 1645.4px, 723.5px 1636.6px, 711.5px 1645.1px, 699.4px 1636.4px, 687.4px 1645.1px, 675.3px 1637.1px, 663.2px 1645.5px, 651.2px 1636.1px, 639.1px 1646.0px, 627.1px 1638.9px, 615.0px 1644.6px, 602.9px 1638.1px, 590.9px 1645.1px, 578.8px 1637.8px, 566.8px 1645.5px, 554.7px 1637.6px, 542.6px 1645.5px, 530.6px 1637.5px, 518.5px 1646.0px, 506.5px 1636.7px, 494.4px 1645.5px, 482.4px 1638.2px, 470.3px 1645.6px, 458.2px 1638.4px, 446.2px 1645.0px, 434.1px 1638.8px, 422.1px 1645.5px, 410.0px 1635.5px, 397.9px 1644.7px, 385.9px 1638.5px, 373.8px 1645.0px, 361.8px 1635.3px, 349.7px 1645.7px, 337.6px 1638.7px, 325.6px 1645.7px, 313.5px 1635.7px, 301.5px 1645.7px, 289.4px 1638.0px, 277.4px 1645.0px, 265.3px 1635.7px, 253.2px 1645.8px, 241.2px 1637.9px, 229.1px 1645.6px, 217.1px 1637.7px, 205.0px 1645.4px, 192.9px 1637.4px, 180.9px 1645.8px, 168.8px 1639.2px, 156.8px 1644.7px, 144.7px 1634.9px, 132.6px 1644.6px, 120.6px 1635.1px, 108.5px 1644.9px, 96.5px 1635.5px, 84.4px 1645.2px, 72.4px 1637.9px, 60.3px 1645.7px, 48.2px 1638.9px, 36.2px 1645.6px, 24.1px 1635.6px, 12.1px 1644.6px, 0.0px 1636.1px);
+    }
+    #r-curl {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 150px;
+      opacity: 0;
+      background: linear-gradient(180deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.035) 55%, rgba(255, 255, 255, 0.5) 80%, rgba(38, 37, 31, 0.07) 100%);
+    }
+    #r-curltop {
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: 0;
+      height: 90px;
+      background: linear-gradient(0deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.03) 60%, rgba(38, 37, 31, 0.06) 100%);
+    }
+    .r-row {
+      position: absolute;
+      left: 0;
+      width: 820px;
+      white-space: pre;
+      color: #1f1e1a;
+      font-size: 36px;
+      font-weight: 500;
+      text-shadow: 0 0 0.7px rgba(31, 30, 26, 0.55);
+    }
+    .r-item,
+    .r-right,
+    .r-left,
+    .r-rule {
+      padding-left: 53.6px;
+    }
+    .r-val {
+      font-weight: 750;
+    }
+    .r-dots {
+      display: inline-block;
+      color: #6e6c64;
+      font-weight: 500;
+    }
+    .r-dots-gag {
+      clip-path: inset(0% 100% 0% 0%);
+    }
+    .r-zero {
+      display: inline-block;
+      opacity: 0;
+      font-size: 58px;
+      font-weight: 800;
+      transform-origin: 50% 55%;
+    }
+    .r-ruletxt {
+      color: #8c8a80;
+    }
+    .r-logoimg {
+      height: 70px;
+      width: 70px;
+      margin-top: 22px;
+      opacity: 0.92;
+    }
+    .r-brand {
+      font-size: 50px;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      padding-left: 0.16em;
+    }
+    .r-sub {
+      font-size: 26px;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      padding-left: 0.3em;
+      color: #4a4842;
+    }
+    .r-total {
+      font-weight: 800;
+    }
+    .r-big {
+      font-size: 62px;
+      font-weight: 800;
+      letter-spacing: -0.005em;
+    }
+    .r-url {
+      font-size: 42px;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+    }
+    .r-bars {
+      margin-top: 17px;
+      opacity: 0.94;
+    }
+    #r-lipshade {
+      position: absolute;
+      left: 290px;
+      width: 820px;
+      top: 4150px;
+      height: 50px;
+      background: linear-gradient(180deg, rgba(38, 37, 31, 0) 0%, rgba(38, 37, 31, 0.07) 70%, rgba(38, 37, 31, 0.16) 100%);
+    }
+    #r-printer {
+      position: absolute;
+      left: -560px;
+      top: 0;
+      width: 1120px;
+      height: 1200px;
+    }
+    .p-body {
+      position: absolute;
+      inset: 0;
+      border-radius: 44px 44px 0 0;
+      background: linear-gradient(180deg, #3a3935 0px, #2f2e2b 34px, #292826 35px, #262624 120px, #222220 100%);
+    }
+    .p-edge {
+      position: absolute;
+      left: 36px;
+      right: 36px;
+      top: 1px;
+      height: 2px;
+      background: rgba(232, 228, 216, 0.16);
+      border-radius: 2px;
+    }
+    .p-slot {
+      position: absolute;
+      left: 118px;
+      width: 884px;
+      top: -1px;
+      height: 16px;
+      background: #0d0d0c;
+      border-radius: 0 0 8px 8px;
+    }
+    .p-lip {
+      position: absolute;
+      left: 128px;
+      width: 864px;
+      top: -9px;
+      height: 18px;
+      background: linear-gradient(180deg, #b5b2a8 0%, #8f8c83 45%, #6b6962 100%);
+      border-radius: 3px;
+      clip-path: polygon(0 45%, 1% 0, 2% 45%, 3% 0, 4% 45%, 5% 0, 6% 45%, 7% 0, 8% 45%, 9% 0, 10% 45%, 11% 0, 12% 45%, 13% 0, 14% 45%, 15% 0, 16% 45%, 17% 0, 18% 45%, 19% 0, 20% 45%, 21% 0, 22% 45%, 23% 0, 24% 45%, 25% 0, 26% 45%, 27% 0, 28% 45%, 29% 0, 30% 45%, 31% 0, 32% 45%, 33% 0, 34% 45%, 35% 0, 36% 45%, 37% 0, 38% 45%, 39% 0, 40% 45%, 41% 0, 42% 45%, 43% 0, 44% 45%, 45% 0, 46% 45%, 47% 0, 48% 45%, 49% 0, 50% 45%, 51% 0, 52% 45%, 53% 0, 54% 45%, 55% 0, 56% 45%, 57% 0, 58% 45%, 59% 0, 60% 45%, 61% 0, 62% 45%, 63% 0, 64% 45%, 65% 0, 66% 45%, 67% 0, 68% 45%, 69% 0, 70% 45%, 71% 0, 72% 45%, 73% 0, 74% 45%, 75% 0, 76% 45%, 77% 0, 78% 45%, 79% 0, 80% 45%, 81% 0, 82% 45%, 83% 0, 84% 45%, 85% 0, 86% 45%, 87% 0, 88% 45%, 89% 0, 90% 45%, 91% 0, 92% 45%, 93% 0, 94% 45%, 95% 0, 96% 45%, 97% 0, 98% 45%, 99% 0, 100% 45%, 100% 100%, 0 100%);
+    }
+    .p-logo {
+      position: absolute;
+      left: 74px;
+      top: 78px;
+      width: 46px;
+      height: 46px;
+      opacity: 0.5;
+    }
+    .p-name {
+      position: absolute;
+      left: 136px;
+      top: 86px;
+      font-size: 22px;
+      font-weight: 600;
+      letter-spacing: 0.32em;
+      color: #a19e93;
+    }
+    .p-led {
+      position: absolute;
+      right: 84px;
+      top: 94px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #d97757;
+    }
+    .p-btn {
+      position: absolute;
+      right: 126px;
+      top: 84px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #302f2c;
+      border: 2px solid #3d3c38;
+    }
+  </style>
+
+  <div id="root" data-composition-id="03-receipt" data-width="1920" data-height="1080">
+    <div id="r-bg" class="r-bg clip" data-start="0" data-duration="26.182" data-track-index="0">
+      <div class="r-grain"></div>
+    </div>
+
+    <div id="r-tilt" data-layout-allow-overflow>
+    <div id="r-cam" data-layout-allow-overflow>
+      <div id="r-clip">
+        <div id="r-feed">
+          <div id="r-tear">
+            <div id="r-shadow">
+              <div id="r-paper">
+                <div id="r-curltop"></div>
+                <div id="r-curl"></div>
+              <div class="r-row r-blank" id="r-row-leader" style="top:0px;height:110px;line-height:110px;text-align:left"></div>
+              <div class="r-row r-logo" id="r-row-logo" style="top:110px;height:100px;line-height:100px;text-align:center"><img class="r-logoimg" src="assets/logo-ink.svg" alt="" /></div>
+              <div class="r-row r-center" id="r-row-brand" style="top:210px;height:70px;line-height:70px;text-align:center"><span class="r-brand" data-layout-allow-overlap>CHUK CHAT</span></div>
+              <div class="r-row r-center" id="r-row-sub" style="top:280px;height:50px;line-height:50px;text-align:center"><span class="r-sub" data-layout-allow-overlap>THE SHORT VERSION</span></div>
+              <div class="r-row r-rule" id="r-row-rule1" style="top:330px;height:50px;line-height:50px;text-align:left"><span class="r-ruletxt" data-layout-allow-overlap>---------------------------------</span></div>
+              <div class="r-row r-item" id="r-row-chats" style="top:380px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Your chats</span> <span class="r-dots" id="r-dots-chats" data-layout-allow-overlap>............</span> <b class="r-val" id="r-val-chats" data-layout-allow-overlap>encrypted</b></span></div>
+              <div class="r-row r-right" id="r-row-device" style="top:438px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap>                   <b class="r-val" data-layout-allow-overlap>on your device</b></span></div>
+              <div class="r-row r-item" id="r-row-training" style="top:496px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Training on your data</span> <span class="r-dots r-dots-gag" id="r-dots-training" data-layout-allow-overlap>.........</span> <b class="r-val r-zero" id="r-val-training" data-layout-allow-overlap>0</b></span></div>
+              <div class="r-row r-item" id="r-row-tracking" style="top:554px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Tracking</span> <span class="r-dots r-dots-gag" id="r-dots-tracking" data-layout-allow-overlap>......................</span> <b class="r-val r-zero" id="r-val-tracking" data-layout-allow-overlap>0</b></span></div>
+              <div class="r-row r-item" id="r-row-models" style="top:612px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Models</span> <span class="r-dots" id="r-dots-models" data-layout-allow-overlap>.........</span> <b class="r-val" id="r-val-models" data-layout-allow-overlap>open-weight only</b></span></div>
+              <div class="r-row r-item" id="r-row-switch" style="top:670px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Model switch</span> <span class="r-dots" id="r-dots-switch" data-layout-allow-overlap>......</span> <b class="r-val" id="r-val-switch" data-layout-allow-overlap>every message</b></span></div>
+              <div class="r-row r-item" id="r-row-connectors" style="top:728px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Connectors</span> <span class="r-dots" id="r-dots-connectors" data-layout-allow-overlap>..................</span> <b class="r-val" id="r-val-connectors" data-layout-allow-overlap>50+</b></span></div>
+              <div class="r-row r-item" id="r-row-opensource" style="top:786px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Open source</span> <span class="r-dots" id="r-dots-opensource" data-layout-allow-overlap>................</span> <b class="r-val" id="r-val-opensource" data-layout-allow-overlap>100%</b></span></div>
+              <div class="r-row r-item" id="r-row-price" style="top:844px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Price</span> <span class="r-dots" id="r-dots-price" data-layout-allow-overlap>...............</span> <b class="r-val" id="r-val-price" data-layout-allow-overlap>€20 / month</b></span></div>
+              <div class="r-row r-item" id="r-row-credits" style="top:902px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>incl. AI credits</span> <span class="r-dots" id="r-dots-credits" data-layout-allow-overlap>............</span> <b class="r-val" id="r-val-credits" data-layout-allow-overlap>€16</b></span></div>
+              <div class="r-row r-item" id="r-row-from" style="top:960px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>From</span> <span class="r-dots" id="r-dots-from" data-layout-allow-overlap>....................</span> <b class="r-val" id="r-val-from" data-layout-allow-overlap>Germany</b></span></div>
+              <div class="r-row r-item" id="r-row-flares" style="top:1018px;height:58px;line-height:58px;text-align:left"><span class="r-grid" data-layout-allow-overlap><span class="r-lab" data-layout-allow-overlap>Lens flares</span> <span class="r-dots r-dots-gag" id="r-dots-flares" data-layout-allow-overlap>...................</span> <b class="r-val r-zero" id="r-val-flares" data-layout-allow-overlap>0</b></span></div>
+              <div class="r-row r-rule" id="r-row-rule2" style="top:1076px;height:46px;line-height:46px;text-align:left"><span class="r-ruletxt" data-layout-allow-overlap>=================================</span></div>
+              <div class="r-row r-left" id="r-row-total" style="top:1122px;height:58px;line-height:58px;text-align:left"><span class="r-total" data-layout-allow-overlap>TOTAL</span></div>
+              <div class="r-row r-left" id="r-row-slogan1" style="top:1180px;height:84px;line-height:84px;text-align:left"><span class="r-big" data-layout-allow-overlap>Private and Secure.</span></div>
+              <div class="r-row r-left" id="r-row-slogan2" style="top:1264px;height:84px;line-height:84px;text-align:left"><span class="r-big" data-layout-allow-overlap>Always.</span></div>
+              <div class="r-row r-rule" id="r-row-rule3" style="top:1348px;height:46px;line-height:46px;text-align:left"><span class="r-ruletxt" data-layout-allow-overlap>=================================</span></div>
+              <div class="r-row r-barcode" id="r-row-barcode" style="top:1394px;height:130px;line-height:130px;text-align:center"><svg class="r-bars" width="670" height="96" viewBox="0 0 670 96" xmlns="http://www.w3.org/2000/svg" fill="#1F1E1A"><rect x="0" y="0" width="10" height="96"/><rect x="15" y="0" width="5" height="96"/><rect x="30" y="0" width="5" height="96"/><rect x="55" y="0" width="5" height="96"/><rect x="80" y="0" width="5" height="96"/><rect x="90" y="0" width="10" height="96"/><rect x="110" y="0" width="5" height="96"/><rect x="125" y="0" width="10" height="96"/><rect x="155" y="0" width="5" height="96"/><rect x="165" y="0" width="5" height="96"/><rect x="180" y="0" width="20" height="96"/><rect x="210" y="0" width="5" height="96"/><rect x="220" y="0" width="10" height="96"/><rect x="250" y="0" width="5" height="96"/><rect x="265" y="0" width="5" height="96"/><rect x="275" y="0" width="5" height="96"/><rect x="290" y="0" width="10" height="96"/><rect x="310" y="0" width="15" height="96"/><rect x="330" y="0" width="5" height="96"/><rect x="355" y="0" width="5" height="96"/><rect x="365" y="0" width="10" height="96"/><rect x="385" y="0" width="5" height="96"/><rect x="400" y="0" width="10" height="96"/><rect x="430" y="0" width="5" height="96"/><rect x="440" y="0" width="5" height="96"/><rect x="455" y="0" width="5" height="96"/><rect x="465" y="0" width="10" height="96"/><rect x="495" y="0" width="5" height="96"/><rect x="510" y="0" width="20" height="96"/><rect x="535" y="0" width="5" height="96"/><rect x="550" y="0" width="10" height="96"/><rect x="575" y="0" width="10" height="96"/><rect x="590" y="0" width="10" height="96"/><rect x="605" y="0" width="10" height="96"/><rect x="630" y="0" width="15" height="96"/><rect x="650" y="0" width="5" height="96"/><rect x="660" y="0" width="10" height="96"/></svg></div>
+              <div class="r-row r-center" id="r-row-url" style="top:1524px;height:62px;line-height:62px;text-align:center"><span class="r-url" data-layout-allow-overlap>chuk.chat</span></div>
+              <div class="r-row r-blank" id="r-row-tail" style="top:1586px;height:60px;line-height:60px;text-align:left"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="r-lipshade"></div>
+      </div>
+
+      <div id="r-printer">
+        <div class="p-body"></div>
+        <div class="p-edge"></div>
+        <div class="p-slot"></div>
+        <div class="p-lip"></div>
+        <img class="p-logo" src="assets/logo-soft.svg" alt="" />
+        <div class="p-name">CHUK CHAT</div>
+        <div class="p-btn"></div>
+        <div class="p-led"></div>
+      </div>
+    </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    (function () {
+      const PLAN = {"dur": 26.182, "L": 1646, "PW": 820, "initialTop": -116, "feeds": [{"t": 0.0, "d": 0.22, "y": -216, "row": "logo"}, {"t": 0.273, "d": 0.16, "y": -286, "row": "brand"}, {"t": 0.545, "d": 0.14, "y": -336, "row": "sub"}, {"t": 1.091, "d": 0.14, "y": -386, "row": "rule1"}, {"t": 2.182, "d": 0.16, "y": -444, "row": "chats"}, {"t": 3.273, "d": 0.16, "y": -502, "row": "device"}, {"t": 4.364, "d": 0.16, "y": -560, "row": "training"}, {"t": 8.727, "d": 0.16, "y": -618, "row": "tracking"}, {"t": 13.091, "d": 0.16, "y": -676, "row": "models"}, {"t": 14.182, "d": 0.16, "y": -734, "row": "switch"}, {"t": 15.273, "d": 0.16, "y": -792, "row": "connectors"}, {"t": 16.364, "d": 0.16, "y": -850, "row": "opensource"}, {"t": 17.455, "d": 0.16, "y": -908, "row": "price"}, {"t": 18.546, "d": 0.16, "y": -966, "row": "credits"}, {"t": 19.636, "d": 0.16, "y": -1024, "row": "from"}, {"t": 20.727, "d": 0.16, "y": -1082, "row": "flares"}, {"t": 21.818, "d": 0.24, "y": -1186, "row": "total"}, {"t": 22.091, "d": 0.18, "y": -1270, "row": "slogan1"}, {"t": 22.364, "d": 0.18, "y": -1354, "row": "slogan2"}, {"t": 22.909, "d": 0.14, "y": -1400, "row": "rule3"}, {"t": 23.182, "d": 0.28, "y": -1530, "row": "barcode"}, {"t": 23.455, "d": 0.16, "y": -1592, "row": "url"}], "cam": [{"t": 0.0, "d": 0.0, "ease": "none", "s": 1.45, "x": 960.0, "y": 850.0}, {"t": 1.0, "d": 0.4, "ease": "power3.inOut", "s": 1.7, "x": 960.0, "y": 639.5}, {"t": 1.4, "d": 4.637, "ease": "sine.inOut", "s": 1.76, "x": 935.36, "y": 641.6}, {"t": 6.087, "d": 0.09, "ease": "power4.out", "s": 4.2, "x": -329.24, "y": 680.6}, {"t": 6.177, "d": 1.983, "ease": "sine.inOut", "s": 4.4, "x": -399.68, "y": 689.2}, {"t": 8.16, "d": 0.13, "ease": "power3.out", "s": 1.7, "x": 960.0, "y": 639.5}, {"t": 9.427, "d": 2.0, "ease": "sine.inOut", "s": 1.85, "x": 568.43, "y": 599.55}, {"t": 11.604, "d": 0.08, "ease": "power4.out", "s": 4.6, "x": -470.12, "y": 697.8}, {"t": 11.684, "d": 0.836, "ease": "sine.inOut", "s": 4.75, "x": -522.95, "y": 704.25}, {"t": 12.52, "d": 0.14, "ease": "power3.out", "s": 1.7, "x": 960.0, "y": 639.5}, {"t": 12.72, "d": 8.553, "ease": "sine.inOut", "s": 1.78, "x": 988.48, "y": 642.3}, {"t": 21.303, "d": 0.08, "ease": "power4.out", "s": 2.3, "x": 960.0, "y": 638.9}, {"t": 21.818, "d": 0.1, "ease": "power4.out", "s": 2.1, "x": 960.0, "y": 773.5}, {"t": 22.909, "d": 0.5, "ease": "sine.inOut", "s": 1.72, "x": 960.0, "y": 783.6}, {"t": 24.05, "d": 0.8, "ease": "power2.out", "s": 1.62, "x": 960.0, "y": 981.2}, {"t": 24.9, "d": 0.5, "ease": "power3.inOut", "s": 0.6, "x": 960.0, "y": 1067.4}], "dots": {"training": [4.5, 4.636, 4.773, 4.909, 5.045, 5.182, 5.318, 5.455], "tracking": [9.0, 9.272, 9.545, 9.818, 10.091, 10.363, 10.636, 10.909], "flares": [20.864, 21.0, 21.136]}, "stamps": {"training": 5.727, "tracking": 11.454, "flares": 21.273}, "tear": 24.0, "lift": 110, "tilt": [[0.0, 0.0, "none", -1.0], [0.0, 5.9, "sine.inOut", -2.2], [8.16, 13.1, "none", -1.4], [21.818, 0.1, "power4.out", -2.6], [22.909, 0.5, "sine.inOut", -1.8], [24.0, 0.9, "power2.inOut", 0.0]]};
+      const tl = gsap.timeline({ paused: true });
+
+      // camera: one fromTo per key, each starting where the previous key ended
+      const cam0 = PLAN.cam[0];
+      gsap.set("#r-cam", { x: cam0.x, y: cam0.y, scale: cam0.s });
+      for (let i = 1; i < PLAN.cam.length; i++) {
+        const a = PLAN.cam[i - 1];
+        const b = PLAN.cam[i];
+        tl.fromTo(
+          "#r-cam",
+          { x: a.x, y: a.y, scale: a.s },
+          { x: b.x, y: b.y, scale: b.s, duration: b.d, ease: b.ease, immediateRender: false },
+          b.t
+        );
+      }
+
+      // handheld tilt around the frame centre (life, not a move)
+      gsap.set("#r-tilt", { rotation: PLAN.tilt[0][3] });
+      for (let i = 1; i < PLAN.tilt.length; i++) {
+        const a = PLAN.tilt[i - 1];
+        const b = PLAN.tilt[i];
+        tl.fromTo("#r-tilt", { rotation: a[3] }, { rotation: b[3], duration: b[1], ease: b[2], immediateRender: false }, b[0]);
+      }
+
+      // paper feed: stepper jerks, one row per beat
+      gsap.set("#r-feed", { y: PLAN.initialTop });
+      let prevY = PLAN.initialTop;
+      for (const f of PLAN.feeds) {
+        tl.fromTo(
+          "#r-feed",
+          { y: prevY },
+          { y: f.y, duration: f.d, ease: "power2.inOut", immediateRender: false },
+          f.t
+        );
+        prevY = f.y;
+      }
+
+      // leader dots tick in on the grid
+      for (const rid of Object.keys(PLAN.dots)) {
+        const el = document.getElementById("r-dots-" + rid);
+        const n = el.textContent.length;
+        const times = PLAN.dots[rid];
+        times.forEach(function (t, i) {
+          const k = Math.ceil((n * (i + 1)) / times.length);
+          tl.set(el, { clipPath: "inset(0% " + (((n - k) / n) * 100).toFixed(3) + "% 0% 0%)" }, t);
+        });
+      }
+
+      // the zeros stamp in
+      for (const rid of Object.keys(PLAN.stamps)) {
+        const el = document.getElementById("r-val-" + rid);
+        tl.fromTo(
+          el,
+          { opacity: 0, scale: 1.35, filter: "blur(3px)" },
+          { opacity: 1, scale: 1, filter: "blur(0px)", duration: 0.09, ease: "power2.out", immediateRender: false },
+          PLAN.stamps[rid]
+        );
+      }
+
+      // the tear
+      const T = PLAN.tear;
+      tl.fromTo("#r-tear", { rotation: 0, y: 0, x: 0 }, { rotation: -3.2, y: -18, x: -4, duration: 0.08, ease: "power2.out", immediateRender: false }, T);
+      tl.fromTo("#r-tear", { y: -18, x: -4 }, { y: -PLAN.lift, x: 8, duration: 0.42, ease: "power3.out", immediateRender: false }, T + 0.08);
+      tl.fromTo("#r-tear", { rotation: -3.2 }, { rotation: -1.4, duration: 0.7, ease: "power2.inOut", immediateRender: false }, T + 0.08);
+      tl.fromTo("#r-lipshade", { opacity: 1 }, { opacity: 0, duration: 0.2, ease: "power1.out", immediateRender: false }, T + 0.06);
+      tl.fromTo("#r-printer", { y: 0 }, { y: 1300, duration: 0.8, ease: "power2.in", immediateRender: false }, T + 0.2);
+      tl.fromTo("#r-curl", { opacity: 0 }, { opacity: 1, duration: 0.6, ease: "power1.out", immediateRender: false }, T + 0.3);
+
+      window.__timelines["03-receipt"] = tl;
+    })();
+  </script>
+</template>

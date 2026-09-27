@@ -1,0 +1,13 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track.cut.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 61.0,
+    "source": "marketing/_shared/music/01-introducing.wav (MP3 stream, transcoded to PCM WAV as assets/bgm/track.wav; cut 0-61.0 s, 0.06 s fade-in, 2.0 s fade-out from 59.0 s)",
+    "bpm": 100,
+    "downbeats_s": [0.105, 2.505, 4.905, 7.305, 9.705, 12.105, 14.505, 16.905, 19.305, 21.705, 24.105, 26.505, 28.905, 31.305, 33.705, 36.105, 38.505, 40.905, 43.305, 45.705, 48.105, 50.505, 52.905, 55.305, 57.705, 60.105]
+  },
+  "voices": [],
+  "sfx": []
+}

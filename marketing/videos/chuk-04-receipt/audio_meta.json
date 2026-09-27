@@ -1,0 +1,45 @@
+{
+  "bgm": {
+    "path": "assets/bgm/bed.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 35.307,
+    "source": "marketing/_shared/music/04-receipt.wav (assets/bgm/track.wav), cut by _work/make_audio.py: silence 0-5.33 s, track 7.10-12.859 s at 5.331 s, track 28.092-52.349 s at 11.050 s, natural ending"
+  },
+  "voices": [],
+  "sfx": [
+    {
+      "frame": 1,
+      "file": "assets/sfx/hype.wav",
+      "offset_s": 0,
+      "duration_s": 3.9,
+      "volume": 0.8,
+      "source": "media-use bundled SFX (Pixabay): whoosh-cinematic, impact-bass-1/2, riser, sparkle; tape stop applied locally"
+    },
+    {
+      "frame": 2,
+      "file": "assets/sfx/keys.wav",
+      "offset_s": 0,
+      "duration_s": 1.2,
+      "volume": 0.55,
+      "source": "media-use bundled SFX (Pixabay): key-press"
+    },
+    {
+      "frame": 3,
+      "file": "assets/sfx/printer.wav",
+      "offset_s": 0,
+      "duration_s": 26.182,
+      "volume": 0.75,
+      "source": "synthesised locally (_work/make_audio.py), thermal printer buzz, dot ticks, stamps"
+    },
+    {
+      "frame": 3,
+      "file": "assets/sfx/rip.wav",
+      "offset_s": 24.0,
+      "duration_s": 0.55,
+      "volume": 0.85,
+      "source": "synthesised locally (_work/make_audio.py), paper rip"
+    }
+  ],
+  "total_duration_s": 35.307
+}

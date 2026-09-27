@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #000;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: #FDFBF7;
+      }
+      .scene {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="61"
+      data-width="1920"
+      data-height="1080"
+    >
+      <div
+        id="el-01-hook"
+        class="scene"
+        data-composition-id="01-hook"
+        data-composition-src="compositions/frames/01-hook.html"
+        data-start="0"
+        data-duration="5.205"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-02-title"
+        class="scene"
+        data-composition-id="02-title"
+        data-composition-src="compositions/frames/02-title.html"
+        data-start="5.205"
+        data-duration="4.5"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-03-private"
+        class="scene"
+        data-composition-id="03-private"
+        data-composition-src="compositions/frames/03-private.html"
+        data-start="9.705"
+        data-duration="7.2"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-04-founders"
+        class="scene"
+        data-composition-id="04-founders"
+        data-composition-src="compositions/frames/04-founders.html"
+        data-start="16.905"
+        data-duration="7.2"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-05-business"
+        class="scene"
+        data-composition-id="05-business"
+        data-composition-src="compositions/frames/05-business.html"
+        data-start="24.105"
+        data-duration="7.2"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-06-connectors"
+        class="scene"
+        data-composition-id="06-connectors"
+        data-composition-src="compositions/frames/06-connectors.html"
+        data-start="31.305"
+        data-duration="7.2"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-07-models"
+        class="scene"
+        data-composition-id="07-models"
+        data-composition-src="compositions/frames/07-models.html"
+        data-start="38.505"
+        data-duration="6"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-08-onthego"
+        class="scene"
+        data-composition-id="08-onthego"
+        data-composition-src="compositions/frames/08-onthego.html"
+        data-start="44.505"
+        data-duration="4.8"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-09-proof"
+        class="scene"
+        data-composition-id="09-proof"
+        data-composition-src="compositions/frames/09-proof.html"
+        data-start="49.305"
+        data-duration="6"
+        data-track-index="1"
+      ></div>
+
+      <div
+        id="el-10-endcard"
+        class="scene"
+        data-composition-id="10-endcard"
+        data-composition-src="compositions/frames/10-endcard.html"
+        data-start="55.305"
+        data-duration="5.695"
+        data-track-index="1"
+      ></div>
+
+      <!-- BGM -->
+      <audio
+        id="el-bgm"
+        src="assets/bgm/track.cut.wav"
+        data-start="0"
+        data-duration="61"
+        data-track-index="11"
+        data-volume="0.9"
+      ></audio>
+
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["main"] = gsap.timeline({ paused: true });
+    </script>
+  </body>
+</html>
