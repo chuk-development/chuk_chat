@@ -77,10 +77,13 @@ class _ChatMaintenanceGateState extends State<ChatMaintenanceGate> {
             SupabaseService.isInitialized &&
             SupabaseService.auth.currentUser != null;
         return signedIn
-            ? _Checking(hintDelay: widget.syncingHintDelay)
+            ? _Checking(hintDelay: widget.syncingHintDelay, showHint: false)
             : widget.child;
       case ChatMaintenancePhase.checking:
-        return _Checking(hintDelay: widget.syncingHintDelay);
+        return _Checking(
+          hintDelay: widget.syncingHintDelay,
+          showHint: _controller.showsSyncHint,
+        );
       case ChatMaintenancePhase.running:
       case ChatMaintenancePhase.failed:
         return PopScope(
@@ -92,14 +95,17 @@ class _ChatMaintenanceGateState extends State<ChatMaintenanceGate> {
 }
 
 /// The app surface while the check runs. On a normal start that is a few
-/// milliseconds, so the surface stays empty and no text flashes. The first
-/// start after an install takes seconds (the key is set up and the cloud
-/// chats are listed), and an empty screen for that long looks like a broken
-/// app, so after [hintDelay] a loader and a line of text fade in.
+/// milliseconds (the cloud is checked behind the app), so the surface stays
+/// empty and no text flashes. Right after a sign-in the whole check runs
+/// first (the key is set up and the cloud chats are listed), which takes
+/// seconds on a new install; an empty screen for that long looks like a
+/// broken app, so there [showHint] is set and after [hintDelay] a loader and
+/// a line of text fade in.
 class _Checking extends StatefulWidget {
-  const _Checking({required this.hintDelay});
+  const _Checking({required this.hintDelay, required this.showHint});
 
   final Duration hintDelay;
+  final bool showHint;
 
   @override
   State<_Checking> createState() => _CheckingState();
@@ -107,13 +113,13 @@ class _Checking extends StatefulWidget {
 
 class _CheckingState extends State<_Checking> {
   Timer? _timer;
-  bool _showHint = false;
+  bool _delayPassed = false;
 
   @override
   void initState() {
     super.initState();
     _timer = Timer(widget.hintDelay, () {
-      if (mounted) setState(() => _showHint = true);
+      if (mounted) setState(() => _delayPassed = true);
     });
   }
 
@@ -128,7 +134,7 @@ class _CheckingState extends State<_Checking> {
     final ThemeData theme = Theme.of(context);
     return Material(
       color: theme.colorScheme.surface,
-      child: _showHint ? _hint(context, theme) : null,
+      child: widget.showHint && _delayPassed ? _hint(context, theme) : null,
     );
   }
 

@@ -124,12 +124,24 @@ app language: "Please do not close the app. Your data is being rewritten.",
 with two bars: migration n of N, verification n of N. Not throttled; up to 4
 chats at a time. Code: `lib/services/chat_payload_migration_service.dart`.
 
-While the plan runs (phase `checking`) the gate shows the empty app
-surface. On a normal start that takes milliseconds. The first start after an
-install takes seconds (key set-up, then the cloud scan below), so once the
-check has run for 400 ms a loader fades in with "Syncing your chats..." and
-"This can take a moment." Without it the screen stayed black and the app
-looked broken.
+**A normal start never waits for the cloud.** When the session was already
+there at app start (`ChatMaintenanceController.noteRestoredSession`, called
+in `main()` after the Supabase init), the gate reads only local state
+(`ChatPayloadMigrationService.startupCheck`: the done flag, a `cloudPending`
+mark, the cache rows to rewrite) and opens the app in milliseconds. The cloud
+list is then read behind the app, without the key
+(`checkCloudInBackground`): none left sets the done flag; some left sets
+`cloudPending`, and the next start rewrites them behind the screen. Nothing
+is rewritten behind the app. Before this, the done flag could stay unset (a
+key that loads slowly, a scan that fails) and every start waited for the
+whole check (seen on desktop: `done=false` with 944 cached chats).
+
+Only a sign-in waits for the whole check. There the gate shows the empty app
+surface first; the first sign-in on a new install takes seconds (key set-up,
+then the cloud scan below), so after 400 ms a loader fades in with "Syncing
+your chats..." and "This can take a moment." A normal start never shows it.
+A check that ends without the done flag writes the reason (`no_key`,
+`scan_failed` + error type) to the opt-in diagnostics log.
 
 Plan (`ChatPayloadMigrationService.plan`): nothing when `kv_cache` holds the
 done flag (`chat_payload_v3_migration_<user id>`). Otherwise the cache rows

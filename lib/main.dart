@@ -56,6 +56,7 @@ import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/services/offline_send_executor.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/services/session_manager_service.dart';
+import 'package:chuk_chat/services/chat_payload_migration_service.dart';
 import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/settings/theme_controller.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -157,6 +158,16 @@ Future<void> main() async {
       debugPrint('⚠️ [Main] Supabase init failed: $error');
     }
   }
+
+  // A session that is already there is a normal start: the chat maintenance
+  // check then reads only local state and checks the cloud behind the app.
+  // Only a sign-in waits for the whole check (with the "Syncing" hint).
+  ChatMaintenanceController.instance.noteRestoredSession(
+    (SupabaseService.isInitialized
+            ? SupabaseService.auth.currentUser?.id
+            : null) ??
+        SessionStash.pending?.userId,
+  );
 
   // Keep chat storage cache deterministic to avoid early access races.
   await initChatStorageCache();
