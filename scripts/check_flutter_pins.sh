@@ -23,7 +23,7 @@ check() { # file, found version
 }
 
 check Dockerfile.web \
-  "$(grep -oP '^ENV FLUTTER_VERSION=\K[0-9.]+' Dockerfile.web)"
+  "$(grep -oP '^ARG FLUTTER_VERSION=\K[0-9.]+' Dockerfile.web)"
 check dev.chuk.chat.yml \
   "$(grep -oP 'flutter_linux_\K[0-9.]+(?=-stable)' dev.chuk.chat.yml)"
 check .github/workflows/release-macos.yml \

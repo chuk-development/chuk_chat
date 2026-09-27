@@ -22,6 +22,8 @@ on:
       - 'web/**'
       - 'assets/**'
       - 'vendor/**'
+      - 'third_party/**'
+      - 'Dockerfile.web-base'
       - '.github/workflows/web-image.yml'
       # Every file the pin check reads, so a drifting pin cannot slip in.
       - 'scripts/check_flutter_pins.sh'
@@ -42,6 +44,8 @@ on:
       - 'web/**'
       - 'assets/**'
       - 'vendor/**'
+      - 'third_party/**'
+      - 'Dockerfile.web-base'
       - '.github/workflows/web-image.yml'
       - 'scripts/check_flutter_pins.sh'
       - 'dev.chuk.chat.yml'
