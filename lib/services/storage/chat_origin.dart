@@ -9,9 +9,11 @@
 /// | chuk_chat     | `encrypted_chats` | `OfflineQueueService`  |
 /// | Agents thread | `cowork_chats`    | `AgentsTaskOutbox`     |
 ///
-/// Every place that must pick one of the two asks [isAgentsThread]. With the
-/// Agents build flag off it always answers false, so every chat takes
-/// upstream's path.
+/// Every place that must pick one of the two asks [isAgentsThread]: storage,
+/// the transport (hosted API or relay), the tool loop and the idle timeout.
+/// With the Agents build flag off it always answers false, so every chat
+/// takes upstream's path. With it on, a chuk_chat chat still takes upstream's
+/// path; only an Agents thread takes the Agents one.
 ///
 /// How a thread is recognised:
 ///
@@ -31,14 +33,16 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 class ChatOrigin {
   ChatOrigin._();
 
-  /// Whether the Agents storage paths are live. Follows [agentsChatCore], the
-  /// one switch for every Agents code path.
+  /// Whether this is the Agents build, so Agents threads can exist at all.
+  /// Follows [agentsChatCore].
   static bool get agentsEnabled => agentsChatCore;
 
-  /// A test picks a side here (tests run with the flag off). Sets the one
+  /// A test picks the build here (tests run with the flag off). Sets the one
   /// shared override, so storage, transport and tools always agree.
   @visibleForTesting
-  static set agentsEnabled(bool value) => debugAgentsChatCoreOverride = value;
+  static set agentsEnabled(bool value) =>
+      // ignore: invalid_use_of_visible_for_testing_member
+      debugAgentsChatCoreOverride = value;
 
   static final RegExp _uuid = RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
@@ -65,6 +69,7 @@ class ChatOrigin {
 
   @visibleForTesting
   static void reset() {
+    // ignore: invalid_use_of_visible_for_testing_member
     debugAgentsChatCoreOverride = null;
     _claimed.clear();
   }

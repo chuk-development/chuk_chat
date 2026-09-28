@@ -30,8 +30,18 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
   separate `cowork` repository and its `agents` branch are history only.
 - **One build flag:** `FEATURE_AGENTS` (`lib/platform_config.dart`,
   `kFeatureAgents`). Off (default) = the app is plain chuk_chat, byte for
-  byte in behaviour. On = the app is Agents: `MessengerShell` replaces
-  `RootWrapper` (`lib/main.dart`). There is no runtime switch between the two.
+  byte in behaviour. On = one app with two halves: `MessengerShell`
+  (`lib/main.dart`) holds chuk's `RootWrapperMobile`/`RootWrapperDesktop`
+  ("Chat") and the Agents inbox/desktop ("Agents"), switched at runtime by
+  the **Chat | Agents** switch (`lib/services/app_mode_service.dart`,
+  `lib/widgets/app_mode_switch.dart`). Both halves stay mounted.
+- **Routing is per chat, not per build.** In the Agents build a chat id that
+  `ChatOrigin.isAgentsThread` claims goes to the host relay
+  (`AgentsChatTransport`, `AgentsToolCallHandler`, no idle timeout); every
+  other chat is plain chuk_chat (hosted API, `ToolCallHandler.forChat`,
+  chuk sync). `agentsChatCore` only means "this is the Agents build". The
+  Agents UI draws chuk's components (`docs/AGENTS_UI_UNIFY.md`): no second
+  look, no `TourKeyRegistry.keyFor` in widgets (use `anchorFor`).
 - **Pairing is automatic and happens once.** The trust record is mirrored,
   encrypted, to Supabase; any install that signs in to the same account is
   linked again with no code, no QR and no host address

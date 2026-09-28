@@ -22,6 +22,7 @@ import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
 import 'package:chuk_chat/services/tray_action_bus.dart';
+import 'package:chuk_chat/widgets/top_centre_slot.dart';
 import 'package:chuk_chat/widgets/artifact_panel.dart';
 import 'package:chuk_chat/utils/debug_chat_formatter.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -34,13 +35,37 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 class RootWrapperDesktop extends StatefulWidget {
   final AppShellConfig config;
 
-  const RootWrapperDesktop({super.key, required this.config});
+  /// Floats at the top centre of the window, on the line of the chrome
+  /// buttons, kept clear of the menu button, the copy button and any open
+  /// panel. The Agents build puts its Chat | Agents switch here. Null draws
+  /// nothing, as chuk_chat always has.
+  final Widget? headerCenter;
+
+  /// Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
+  /// the app-wide pointer, as chuk_chat always has. The Agents build shares
+  /// that pointer with its coworker thread, so it hands in a reader that
+  /// always answers with this chat.
+  final ValueGetter<String?>? selectedChatIdReader;
+
+  const RootWrapperDesktop({
+    super.key,
+    required this.config,
+    this.headerCenter,
+    this.selectedChatIdReader,
+  });
 
   @override
   State<RootWrapperDesktop> createState() => _RootWrapperDesktopState();
 }
 
 class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
+  /// What [RootWrapperDesktop.headerCenter] keeps clear on the right: the
+  /// copy button (48 wide, 12 from the edge) and a gap.
+  static const double _kCopyButtonReserve = 12 + 48 + 8;
+
+  /// The same in a workspace chat: the workspace panel's 300 px and a gap.
+  static const double _kWorkspacePanelReserve = 300 + 8;
+
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
 
@@ -54,6 +79,12 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   double? _userArtifactPanelWidth;
 
   final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey();
+
+  /// The chat in view (see [RootWrapperDesktop.selectedChatIdReader]).
+  String? get _selectedChatId {
+    final ValueGetter<String?>? read = widget.selectedChatIdReader;
+    return read != null ? read() : ChatStorageService.selectedChatId;
+  }
 
   @override
   void initState() {
@@ -98,7 +129,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           if (!mounted) return;
           try {
             await ArtifactStorageService.setActiveChat(
-              ChatStorageService.selectedChatId,
+              _selectedChatId,
               forceRefresh: false,
             );
           } catch (error) {
@@ -427,7 +458,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
   Future<void> _handleChatDeleted(String deletedChatId) async {
     // deleteChat() clears selectedChatId when the active chat is deleted.
     // If selectedChatId is null here, reset the chat UI to a fresh state.
-    final shouldStartFresh = ChatStorageService.selectedChatId == null;
+    final shouldStartFresh = _selectedChatId == null;
     if (shouldStartFresh) {
       _activeProjectId = null;
       _chatUIKey.currentState?.newChat();
@@ -462,7 +493,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
     final Widget chatArea = ChukChatUIDesktop(
       key: _chatUIKey,
       onToggleSidebar: _toggleSidebar,
-      selectedChatId: ChatStorageService.selectedChatId,
+      selectedChatId: _selectedChatId,
       onChatIdChanged: (newId) {
         // Update the global state when chat UI creates/changes a chat
         // Use setState to ensure parent rebuilds with new ID
@@ -650,7 +681,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     onMediaTapped: _openMediaPage,
                     onNewChatTapped: _handleNewChatFromSidebar,
                     onChatDeleted: _handleChatDeleted,
-                    selectedChatId: ChatStorageService.selectedChatId,
+                    selectedChatId: _selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
                   ),
@@ -673,7 +704,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
             // the panel edge: its box is wider than theirs.
             left: kSbNavIconCentre - kMenuButtonHeight / 2,
             child: KeyedSubtree(
-              key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
+              key: TourKeyRegistry.instance.anchorFor(TourSlots.menuButton),
               child: SizedBox(
                 width: kMenuButtonHeight,
                 height: kButtonVisualHeight,
@@ -707,6 +738,36 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                 icon: AppIcon(Icons.copy_all_rounded, color: iconFg, size: 20),
                 onPressed: _copyDebugChat,
                 tooltip: 'Copy full chat',
+              ),
+            ),
+
+          // The optional header slot: a 48 px band centred on the line of
+          // the chrome buttons, across the whole window. Its free part starts
+          // right of the menu button (or of the open sidebar) and ends left
+          // of the copy button, the workspace panel and the side panel.
+          if (widget.headerCenter != null &&
+              (!isCompactMode || !_isSidebarExpanded))
+            Positioned(
+              key: const ValueKey<String>('root-desktop-header-center'),
+              top:
+                  kTopInitialSpacing +
+                  (kButtonVisualHeight - kMinInteractiveDimension) / 2,
+              left: 0,
+              right: 0,
+              height: kMinInteractiveDimension,
+              child: TopCentreSlot(
+                left:
+                    math.max(
+                      _isSidebarExpanded ? effectiveSidebarWidth : 0,
+                      kSbNavIconCentre + kMenuButtonHeight / 2,
+                    ) +
+                    8,
+                right:
+                    (showPanel ? panelWidth : 0) +
+                    (_activeProjectId != null
+                        ? _kWorkspacePanelReserve
+                        : _kCopyButtonReserve),
+                child: widget.headerCenter!,
               ),
             ),
         ],

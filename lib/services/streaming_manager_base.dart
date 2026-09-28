@@ -40,8 +40,8 @@ abstract class StreamingManagerBase {
 
   /// Arm the idle timer for a stream that has just been created, before it is
   /// registered in [activeStreams]. No-op where there is no idle handling.
-  /// In an Agents build the io manager arms a log-only silence watch here
-  /// instead (see `StreamingManager.idleTimeoutEnabled`).
+  /// For an Agents thread the io manager arms a log-only silence watch here
+  /// instead (see `StreamingManager.idleTimeoutEnabledFor`).
   @protected
   void armIdleTimer({
     required String chatId,
@@ -651,9 +651,9 @@ class ActiveStream {
   // considered dead and will be cleaned up with an error.
   Timer? idleTimer;
 
-  /// Agents: the log-only silence watch that replaces [idleTimer] there (see
-  /// `StreamingManager.idleTimeoutEnabled`). It reports gaps; it has no power
-  /// to end the stream.
+  /// Agents threads: the log-only silence watch that replaces [idleTimer]
+  /// there (see `StreamingManager.idleTimeoutEnabledFor`). It reports gaps; it
+  /// has no power to end the stream.
   Timer? silenceTimer;
 
   /// When the last event of any kind arrived, null while none has.

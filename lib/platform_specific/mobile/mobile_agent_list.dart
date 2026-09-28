@@ -8,7 +8,11 @@
 ///    group All / Unread in the middle with the unread count on its second
 ///    segment ([AgentReadMarks] answers what is unread), the accent "+" on the
 ///    right; the search fades that whole row through into a rounded field that
-///    carries its own glyph and its own clear target;
+///    carries its own glyph and its own clear target. When the shell hands in
+///    [MobileAgentList.headerCenter] (the Chat | Agents switch), that takes
+///    the middle, the row takes chuk's floating-bar geometry so the switch
+///    sits where it sits over chuk's chat, and All / Unread moves to a
+///    compact row under it;
 ///  * one row per coworker: its blob face with the presence dot, the name, the
 ///    role tag, the time of the last activity, one line of preview, and an
 ///    unread dot. The row springs and morphs on press, and the list cascades in.
@@ -32,6 +36,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart'
+    show kMobileChromeChip, kMobileChromeRow;
 import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
@@ -47,9 +53,12 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/ui/expressive/pill_geometry.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/ui/expressive/staggered.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
 
 /// The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
@@ -89,9 +98,17 @@ class MobileAgentList extends StatefulWidget {
     this.onOpenRoom,
     this.onCreateRoom,
     this.emptyState,
+    this.headerCenter,
   });
 
   final AgentRosterSource source;
+
+  /// Takes the middle of the header row: the Agents build's Chat | Agents
+  /// switch. With it, the row is chuk's floating bar — its padding, its 48 px
+  /// row, its 42 px chips — so the switch lands on the same pixels as over
+  /// chuk's chat, and All / Unread moves to a compact row under the bar.
+  /// Null keeps All / Unread in the middle of the row.
+  final Widget? headerCenter;
 
   /// Shown instead of the plain "No agents yet" when the list is empty and
   /// neither a search nor a filter is narrowing it — the shell's status panel
@@ -390,11 +407,63 @@ class _MobileAgentListState extends State<MobileAgentList> {
     // The two faces of the same row. They do not swap hard: one fades through
     // the other, so opening the search reads as the row changing its mind and
     // not as a screen replacing another.
+    // All / Unread. In the middle of the row at the row's height, or — when
+    // the row carries the app's Chat | Agents switch — at the height of a
+    // switch that sits over a list on its own, in a compact row of its own.
+    Widget filters({double? height}) => ConnectedGroup(
+      labels: _filters,
+      selected: _filter,
+      badges: <int, int>{1: unread},
+      margin: EdgeInsets.zero,
+      height: height,
+      onSelected: (int i) => setState(() {
+        _reverse = i < _filter;
+        _filter = i;
+        _animate = true;
+      }),
+    );
+
+    final bool bar = widget.headerCenter != null;
+    final bool canAdd = widget.onAddAgent != null || widget.onCreateRoom != null;
+    final bool addAsks =
+        widget.onAddAgent != null && widget.onCreateRoom != null;
+    final String addTooltip = addAsks
+        ? 'Add a coworker or a room'
+        : (widget.onAddAgent != null ? 'Add a coworker' : 'Add a room');
+    VoidCallback? addAction(BuildContext anchor) => addAsks
+        ? () => _openAddMenu(anchor)
+        : (widget.onAddAgent ?? widget.onCreateRoom);
+
     // The home bar, left to right: the search target, the All/Unread switch,
     // the accent "+". The page headline is gone — the switch says what the
     // list under it is showing, and a headline that repeated the app's own
-    // name said nothing the roster did not already say.
-    final Widget titleRow = Row(
+    // name said nothing the roster did not already say. With the app switch
+    // it is chuk's bar instead: search chip, Chat | Agents, the accent "+".
+    final Widget titleRow = bar
+        ? _buildBarRow(
+            leading: _BarChip(
+              icon: HugeIcons.search01,
+              onTap: _openSearch,
+              tooltip: 'Search coworkers',
+              semanticsId: 'mobile_home_search',
+            ),
+            middle: Align(
+              alignment: Alignment.centerLeft,
+              child: widget.headerCenter,
+            ),
+            trailing: canAdd
+                ? Builder(
+                    builder: (BuildContext anchor) => _BarChip(
+                      icon: HugeIcons.plusSign,
+                      accent: true,
+                      onTap: addAction(anchor),
+                      tooltip: addTooltip,
+                      semanticsId: 'mobile_home_add',
+                    ),
+                  )
+                : null,
+          )
+        : Row(
       key: const ValueKey<bool>(false),
       children: <Widget>[
         ExpressiveIconButton(
@@ -409,46 +478,43 @@ class _MobileAgentListState extends State<MobileAgentList> {
         const SizedBox(width: 10),
         // The switch takes the middle and the whole width left between the
         // two targets, so it is the thing the eye lands on first.
-        Expanded(
-          child: ConnectedGroup(
-            labels: _filters,
-            selected: _filter,
-            badges: <int, int>{1: unread},
-            margin: EdgeInsets.zero,
-            height: _barControlHeight,
-            onSelected: (int i) => setState(() {
-              _reverse = i < _filter;
-              _filter = i;
-              _animate = true;
-            }),
-          ),
-        ),
+        Expanded(child: filters(height: _barControlHeight)),
         const SizedBox(width: 10),
-        if (widget.onAddAgent != null || widget.onCreateRoom != null)
+        if (canAdd)
           Builder(
             builder: (BuildContext anchor) => ExpressiveIconButton(
               hugeIcon: HugeIcons.plusSign,
               // One action goes straight there. Both offered: the target asks.
               // It is not hijacked — "New coworker" is still the first item.
-              onTap: widget.onAddAgent != null && widget.onCreateRoom != null
-                  ? () => _openAddMenu(anchor)
-                  : (widget.onAddAgent ?? widget.onCreateRoom),
+              onTap: addAction(anchor),
               size: _barControlHeight,
               width: _barControlWidth,
               color: scheme.primary,
               onColor: scheme.onPrimary,
-              tooltip: widget.onAddAgent != null && widget.onCreateRoom != null
-                  ? 'Add a coworker or a room'
-                  : (widget.onAddAgent != null
-                        ? 'Add a coworker'
-                        : 'Add a room'),
+              tooltip: addTooltip,
               semanticsId: 'mobile_home_add',
             ),
           ),
       ],
     );
 
-    final Widget searchRow = Row(
+    final Widget searchRow = bar
+        ? _buildBarRow(
+            key: const ValueKey<bool>(true),
+            leading: _BarChip(
+              icon: HugeIcons.arrowLeft02,
+              onTap: _closeSearch,
+              tooltip: 'Close search',
+              semanticsId: 'mobile_home_search_close',
+            ),
+            middle: _SearchField(
+              controller: _query,
+              focusNode: _searchFocus,
+              height: kMobileChromeChip,
+              onClear: () => setState(_query.clear),
+            ),
+          )
+        : Row(
       key: const ValueKey<bool>(true),
       children: <Widget>[
         // Only the search back target lives on the left. The account used to
@@ -474,33 +540,66 @@ class _MobileAgentListState extends State<MobileAgentList> {
       ],
     );
 
-    final Widget header = Padding(
-      padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
-      child: SizedBox(
-        height: _barHeight,
-        child: PageTransitionSwitcher(
-          duration: const Duration(milliseconds: 280),
-          transitionBuilder:
-              (
-                Widget child,
-                Animation<double> primary,
-                Animation<double> secondary,
-              ) => FadeThroughTransition(
-                animation: primary,
-                secondaryAnimation: secondary,
-                fillColor: Colors.transparent,
-                child: child,
-              ),
-          child: _searching ? searchRow : titleRow,
-        ),
-      ),
+    final Widget rowSwitcher = PageTransitionSwitcher(
+      duration: const Duration(milliseconds: 280),
+      transitionBuilder:
+          (
+            Widget child,
+            Animation<double> primary,
+            Animation<double> secondary,
+          ) => FadeThroughTransition(
+            animation: primary,
+            secondaryAnimation: secondary,
+            fillColor: Colors.transparent,
+            child: child,
+          ),
+      child: _searching ? searchRow : titleRow,
     );
 
-    // Status bar + the header row: what the list has to clear before its
-    // first row is readable. The switch rides inside that row now, so there is
-    // no second row to make room for.
-    final double headerSpace =
-        MediaQuery.paddingOf(context).top + _barHeight + 12;
+    final Widget header = bar
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                // chuk's floating bar: 10 / 8 / 10 / 6 around a 48 px row,
+                // less the reach of the 48 px presses around 42 px chips.
+                padding: const EdgeInsets.fromLTRB(
+                  10 - _kBarReach,
+                  8,
+                  10 - _kBarReach,
+                  6,
+                ),
+                child: SizedBox(height: kMobileChromeRow, child: rowSwitcher),
+              ),
+              // All / Unread, compact and under the bar, lined up with the
+              // left edge of the first chip. It stays in view while a search
+              // is open: the filter still narrows what the search finds.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  // Two equal segments, each as wide as the longer label.
+                  child: IntrinsicWidth(child: filters()),
+                ),
+              ),
+            ],
+          )
+        : Padding(
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: SizedBox(height: _barHeight, child: rowSwitcher),
+          );
+
+    // Status bar + the header: what the list has to clear before its first
+    // row is readable. Without the app switch, All / Unread rides inside the
+    // row; with it, the compact filter row sits under the bar.
+    final double headerSpace = bar
+        ? MediaQuery.paddingOf(context).top +
+              8 +
+              kMobileChromeRow +
+              6 +
+              PillGeometry.filterTapHeight +
+              6
+        : MediaQuery.paddingOf(context).top + _barHeight + 12;
 
     return Stack(
       children: <Widget>[
@@ -625,6 +724,97 @@ class _MobileAgentListState extends State<MobileAgentList> {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// How far a 48 px press reaches past a 42 px chip on each side.
+const double _kBarReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2;
+
+/// One row of chuk's floating bar: a chip, the middle, and optionally a chip
+/// on the right. The gaps are chuk's 8 px between the painted chips.
+Widget _buildBarRow({
+  Key? key,
+  required Widget leading,
+  required Widget middle,
+  Widget? trailing,
+}) {
+  return Row(
+    key: key ?? const ValueKey<bool>(false),
+    children: <Widget>[
+      leading,
+      const SizedBox(width: 8 - _kBarReach),
+      Expanded(child: middle),
+      if (trailing != null) ...<Widget>[
+        const SizedBox(width: 8 - _kBarReach),
+        trailing,
+      ],
+    ],
+  );
+}
+
+/// A chip of the inbox bar when it carries the app switch: chuk's floating
+/// chip — the chrome surface, a 22 px glyph in the icon colour — or, with
+/// [accent], chuk's accent-filled one. It paints 42 px and takes a 48 px
+/// press; the ink stays on the chip. The same shape as the chips over a
+/// coworker's chat (`mobile_chat_chrome.dart`).
+class _BarChip extends StatelessWidget {
+  const _BarChip({
+    required this.icon,
+    required this.tooltip,
+    required this.semanticsId,
+    required this.onTap,
+    this.accent = false,
+  });
+
+  final HugeIconData icon;
+  final String tooltip;
+  final String semanticsId;
+  final VoidCallback? onTap;
+  final bool accent;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color fill = accent
+        ? theme.colorScheme.primary
+        : FloatingChromeSurface.fillOf(context);
+    final Color glyph = accent
+        ? theme.accentButtonForeground(fill)
+        : theme.resolvedIconColor;
+    return Semantics(
+      identifier: semanticsId,
+      button: true,
+      enabled: onTap != null,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkResponse(
+            onTap: onTap,
+            // Not contained: the press covers 48 px, the ink only the chip.
+            containedInkWell: false,
+            highlightShape: BoxShape.circle,
+            radius: kMobileChromeChip / 2,
+            child: SizedBox.square(
+              dimension: MobileLayout.minTouchTarget,
+              child: Center(
+                child: Ink(
+                  width: kMobileChromeChip,
+                  height: kMobileChromeChip,
+                  decoration: BoxDecoration(
+                    color: fill,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Center(
+                    child: HugeIcon(icon, size: 22, color: glyph),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

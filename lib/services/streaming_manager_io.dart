@@ -5,11 +5,11 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/streaming_manager_base.dart';
 import 'package:chuk_chat/services/streaming_foreground_service.dart';
 import 'package:chuk_chat/services/notification_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
 
 /// Manages multiple concurrent chat streams across different chats
@@ -35,20 +35,24 @@ class StreamingManager extends StreamingManagerBase {
   /// hanging forever when the server silently drops the connection.
   static const _idleTimeout = Duration(seconds: 60);
 
-  /// Whether silence ends a stream.
+  /// Whether silence ends [chatId]'s stream.
   ///
-  /// chuk_chat (`FEATURE_AGENTS` off): yes — the [_idleTimeout] watchdog below.
+  /// A chuk_chat chat, in either build: yes — the [_idleTimeout] watchdog
+  /// below.
   ///
-  /// Agents (`FEATURE_AGENTS` on): no. A run on the user's own host can be
-  /// silent far longer than a minute while working perfectly: turns carrying
-  /// 170k–290k prompt tokens run 405 s to 1851 s end to end, and a provider
-  /// sends nothing at all until the prefill is done. There the idle timer is
-  /// replaced by a log-only silence watch ([silenceReportInterval]); a real
-  /// failure (socket drop, `error` frame, failed run, user stop) still ends
-  /// the stream at once, because those are events, not silence.
+  /// An Agents thread ([ChatOrigin.isAgentsThread]): no. A run on the user's
+  /// own host can be silent far longer than a minute while working
+  /// perfectly: turns carrying 170k–290k prompt tokens run 405 s to 1851 s
+  /// end to end, and a provider sends nothing at all until the prefill is
+  /// done. There the idle timer is replaced by a log-only silence watch
+  /// ([silenceReportInterval]); a real failure (socket drop, `error` frame,
+  /// failed run, user stop) still ends the stream at once, because those are
+  /// events, not silence.
   ///
-  /// Tests reach the Agents side through `debugAgentsChatCoreOverride`.
-  static bool get idleTimeoutEnabled => !agentsChatCore;
+  /// Tests reach the Agents side through `debugAgentsChatCoreOverride` and a
+  /// chat id that is not a UUID.
+  static bool idleTimeoutEnabledFor(String chatId) =>
+      !ChatOrigin.isAgentsThread(chatId);
 
   /// Agents: how often the silence watch checks for a gap worth logging.
   /// Not `const`: a test drives the clock through it instead of waiting.
@@ -56,8 +60,8 @@ class StreamingManager extends StreamingManagerBase {
   static Duration silenceReportInterval = const Duration(seconds: 60);
 
   /// Start the idle timer — if no events arrive within [_idleTimeout],
-  /// treat the stream as dead and clean up. In an Agents build this arms the
-  /// log-only silence watch instead (see [idleTimeoutEnabled]).
+  /// treat the stream as dead and clean up. For an Agents thread this arms
+  /// the log-only silence watch instead (see [idleTimeoutEnabledFor]).
   @override
   void armIdleTimer({
     required String chatId,
@@ -66,7 +70,7 @@ class StreamingManager extends StreamingManagerBase {
     onComplete,
     required StreamErrorCallback onError,
   }) {
-    if (!idleTimeoutEnabled) {
+    if (!idleTimeoutEnabledFor(chatId)) {
       _armSilenceWatch(stream);
       return;
     }
@@ -125,7 +129,7 @@ class StreamingManager extends StreamingManagerBase {
     });
   }
 
-  /// Agents: arms the log-only silence watch for [stream].
+  /// Agents threads: arms the log-only silence watch for [stream].
   ///
   /// Fires every [silenceReportInterval] for as long as the stream is active
   /// and writes one line when nothing has arrived for at least that long. It
@@ -203,7 +207,7 @@ class StreamingManager extends StreamingManagerBase {
 
     // Reset idle timer on every event — connection is still alive. The
     // Agents silence watch is not reset: it measures from `lastEventAt`.
-    if (idleTimeoutEnabled) {
+    if (idleTimeoutEnabledFor(chatId)) {
       stream.cancelIdleTimer();
       stream.idleTimer = _startIdleTimer(
         chatId: chatId,

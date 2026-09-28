@@ -2,14 +2,25 @@ import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/platform_config.dart';
 
-/// Whether the chat core runs the Agents way: the host runs every tool
-/// (`AgentsToolCallHandler`), sends go over the paired relay
-/// (`AgentsChatTransport`) and silence never ends a stream.
+/// Whether this is the Agents build. Follows `FEATURE_AGENTS`.
 ///
-/// Follows `FEATURE_AGENTS`. The ONE switch for every Agents code path: the
-/// chat core (`ToolCallHandler()`, `WebSocketChatService`, `StreamingManager`),
-/// storage routing (`ChatOrigin`) and file blocks (`ContentBlock`) all read
-/// this and nothing else, so a test selects one side for all of them at once.
+/// It says what the build carries, not how one chat runs. The Agents build
+/// holds both kinds of chat, and each chat takes its side by its id
+/// (`ChatOrigin.isAgentsThread`, which is false for every chat outside this
+/// build):
+///
+/// | | chuk_chat chat | Agents thread |
+/// |---|---|---|
+/// | send | hosted API | paired relay (`AgentsChatTransport`) |
+/// | tools | client loop | host (`AgentsToolCallHandler`) |
+/// | silence | idle timeout | log-only watch |
+/// | cloud | `encrypted_chats` | `cowork_chats` |
+///
+/// The chat screen takes its side from the surface that mounts it
+/// (`messengerMode` / `agentsThread`). This flag itself gates only what
+/// belongs to the whole build: the relay and pairing, the session refresh,
+/// the Agents storage bootstrap, settings and file blocks. Tests set
+/// [debugAgentsChatCoreOverride] to get the Agents build.
 bool get agentsChatCore => debugAgentsChatCoreOverride ?? kFeatureAgents;
 
 /// Test seam for [agentsChatCore]. Tests run with `FEATURE_AGENTS` off; an

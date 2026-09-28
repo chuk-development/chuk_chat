@@ -3,11 +3,11 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/models/chat_stream_event.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_chat_transport.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/multiplex_connection.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/tool_result_cache_registry.dart';
 import 'package:chuk_chat/utils/stream_error_notice.dart';
 
@@ -20,22 +20,41 @@ import 'package:chuk_chat/utils/stream_error_notice.dart';
 /// session carries everything, multiplexed by `req_id`. (The backend keeps
 /// `/v1/ai/chat/ws` only so older app builds still work.)
 ///
-/// An Agents build (`FEATURE_AGENTS`) does not talk to the hosted API at all:
-/// [sendStreamingChat] hands every send to [AgentsChatTransport], which relays
-/// it to the paired host. The stop-intent calls exist only for that transport
-/// and do nothing in a chuk_chat build.
+/// The Agents build (`FEATURE_AGENTS`) carries both kinds of chat, and the
+/// chat id picks the path ([usesAgentsTransport]): an Agents thread goes to
+/// [AgentsChatTransport], which relays it to the paired host; a chuk_chat chat
+/// goes to the hosted API exactly as in a chuk_chat build. A send with no chat
+/// id (title generation, the offline executor, the assistant overlay) is not
+/// an Agents thread either, so it is hosted too. The stop-intent calls exist
+/// only for the Agents transport and do nothing for a chuk_chat chat.
 class WebSocketChatService {
-  /// Declares that the user asked to stop [sessionKey]'s run. Agents only; see
-  /// [AgentsChatTransport.declareStopIntent].
+  /// Whether a send for [chatId] goes to the paired host. True only for an
+  /// Agents thread ([ChatOrigin.isAgentsThread]), which is never true outside
+  /// the Agents build.
+  static bool usesAgentsTransport(String? chatId) =>
+      ChatOrigin.isAgentsThread(chatId);
+
+  /// Declares that the user asked to stop [sessionKey]'s run. Agents threads
+  /// only; see [AgentsChatTransport.declareStopIntent].
   static void declareStopIntent(String sessionKey) {
-    if (agentsChatCore) AgentsChatTransport.declareStopIntent(sessionKey);
+    if (usesAgentsTransport(sessionKey)) {
+      AgentsChatTransport.declareStopIntent(sessionKey);
+    }
   }
 
-  /// Takes back a declared stop. Agents only; see
-  /// [AgentsChatTransport.withdrawStopIntent].
+  /// Takes back a declared stop. Agents threads only; see
+  /// [AgentsChatTransport.withdrawStopIntent]. With no key it takes back
+  /// every declared stop, as before, but only in the Agents build.
   static void withdrawStopIntent([String? sessionKey]) {
-    if (agentsChatCore) AgentsChatTransport.withdrawStopIntent(sessionKey);
+    if (!ChatOrigin.agentsEnabled) return;
+    if (sessionKey != null && !usesAgentsTransport(sessionKey)) return;
+    AgentsChatTransport.withdrawStopIntent(sessionKey);
   }
+
+  /// Test seam: stands in for the hosted send, so a test can see which path a
+  /// chat takes without a network. Null (the default) sends for real.
+  @visibleForTesting
+  static Stream<ChatStreamEvent> Function(String? chatId)? debugHostedSend;
 
   /// Sends a streaming chat request and yields chunks as they arrive.
   ///
@@ -50,7 +69,7 @@ class WebSocketChatService {
   /// it is not used to build the request payload.
   ///
   /// [regenerate] and [modelSelectionCaptured] are Agents-only send flags and
-  /// are ignored on this path.
+  /// are ignored on the hosted path.
   static Stream<ChatStreamEvent> sendStreamingChat({
     required String accessToken,
     required String message,
@@ -67,7 +86,7 @@ class WebSocketChatService {
     bool regenerate = false,
     bool modelSelectionCaptured = false,
   }) {
-    if (agentsChatCore) {
+    if (usesAgentsTransport(chatId)) {
       return AgentsChatTransport.sendStreamingChat(
         accessToken: accessToken,
         message: message,
@@ -85,6 +104,8 @@ class WebSocketChatService {
         modelSelectionCaptured: modelSelectionCaptured,
       );
     }
+    final hostedSeam = debugHostedSend;
+    if (hostedSeam != null) return hostedSeam(chatId);
     return _sendHosted(
       message: message,
       modelId: modelId,

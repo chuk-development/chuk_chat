@@ -25,6 +25,29 @@
 /// Settings tab. Pages this shell pushes (Control Rooms and "Host & activity"
 /// on a phone, a room, the model list) wear chuk's [FloatingAppBar].
 ///
+/// ## Two halves: Chat and Agents
+///
+/// The shell holds the whole of chuk_chat too. The Chat | Agents switch
+/// ([AppModeSwitch], state in [AppModeService]) sits in the same place in
+/// both halves: in the phone's top bar (chuk's title pill slot in Chat, the
+/// inbox header in Agents), and floating at the top centre of a desktop
+/// window. Chat is chuk's own root wrapper — [RootWrapperMobile] for the same
+/// narrow widths the Agents half lays out as a phone, [RootWrapperDesktop]
+/// otherwise — with chuk's sidebar, history and settings. Agents is
+/// everything above.
+///
+/// Both halves stay mounted once shown and fade through each other
+/// ([FadeThroughTabs]): the thread view owns the socket, and chuk's chat keeps
+/// its draft and scroll. Chat is built the first time it is shown, not at
+/// startup, so a device that lives in Agents pays nothing for it. Without a
+/// shell config there is no chuk_chat to show, and no switch.
+///
+/// The two halves share one app-wide pointer, `ChatStorageService
+/// .selectedChatId`, which each of them sets to its own chat. The pointer
+/// belongs to the half in front ([_onSharedChatPointer]); chuk's wrapper reads
+/// its own chat from the shell instead ([_readChatModeChatId]), so the
+/// Agents thread reconnecting behind it can never swap chuk's chat out.
+///
 /// ## Why it is not chuk's root wrapper
 ///
 /// * **The chat area owns a socket.** chuk's root wrappers hold no state worth
@@ -52,7 +75,6 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -64,7 +86,14 @@ import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
+import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
+import 'package:chuk_chat/services/chat_storage_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
+import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
+import 'package:chuk_chat/widgets/top_centre_slot.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
@@ -138,6 +167,8 @@ class MessengerShell extends StatefulWidget {
     this.readMarks,
     this.agentProfiles,
     this.pairingRestoreBuilder,
+    this.appMode,
+    this.chatModeBuilder,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -207,6 +238,23 @@ class MessengerShell extends StatefulWidget {
   )?
   pairingRestoreBuilder;
 
+  /// Which half is in front: Chat or Agents. Null builds one that remembers
+  /// the choice in the preferences and, with nothing remembered, opens on
+  /// Agents when this device holds a pairing and on Chat otherwise.
+  final AppModeService? appMode;
+
+  /// Builds the Chat half. Null builds chuk_chat's own root wrapper from
+  /// [shellConfig]. A widget test hands in a light stand-in, because chuk's
+  /// wrapper starts the whole chat stack. [modeSwitch] is the switch, for the
+  /// stand-in's top bar; [phone] is the shell's phone rule.
+  @visibleForTesting
+  final Widget Function(
+    BuildContext context, {
+    required bool phone,
+    required Widget modeSwitch,
+  })?
+  chatModeBuilder;
+
   @override
   State<MessengerShell> createState() => _MessengerShellState();
 }
@@ -262,6 +310,33 @@ class _MessengerShellState extends State<MessengerShell>
   /// the layout it is in, it does not travel into it.
   double? _pushTarget;
 
+  // --- Chat | Agents ---------------------------------------------------------
+
+  late final AppModeService _appMode = widget.appMode ?? AppModeService();
+  late final bool _ownsAppMode = widget.appMode == null;
+
+  /// Whether there is a chuk_chat to switch to. Without a shell config (a
+  /// widget test, the auth gate's fallback) the shell is Agents alone.
+  /// Whether [initState] added the mode and chat-pointer listeners. Kept
+  /// apart from [_chatModeAvailable], which a parent rebuild can change, so
+  /// [dispose] removes exactly what was added.
+  bool _chatListening = false;
+
+  bool get _chatModeAvailable =>
+      widget.shellConfig != null || widget.chatModeBuilder != null;
+
+  /// The half on screen. Follows [_appMode], and is always Agents when there
+  /// is no Chat half.
+  AppMode _shownMode = AppMode.agents;
+
+  /// Whether the Chat half has been shown yet. It is built on first show and
+  /// kept from then on.
+  bool _chatModeBuilt = false;
+
+  /// chuk_chat's chat as the Chat half last had it: null is a new chat. See
+  /// [_onSharedChatPointer].
+  String? _chatModeChatId;
+
   @override
   void initState() {
     super.initState();
@@ -269,7 +344,134 @@ class _MessengerShellState extends State<MessengerShell>
     _deskInit();
     _push.addStatusListener(_onPushStatus);
     _controller.addListener(_onControllerForBrowser);
+    _chatListening = _chatModeAvailable;
+    if (_chatListening) {
+      _shownMode = _appMode.value;
+      _chatModeBuilt = _shownMode == AppMode.chat;
+      _appMode.addListener(_onModeChanged);
+      ChatStorageService.selectedChatIdNotifier.addListener(
+        _onSharedChatPointer,
+      );
+      if (!_appMode.loaded) {
+        unawaited(_appMode.load(hasPairing: _hasPairing));
+      }
+      if (_shownMode == AppMode.chat) {
+        // After the frame: the pointer notifies, and nothing may listen to it
+        // from inside this build.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _handOverChatPointer();
+        });
+      }
+    }
   }
+
+  /// Whether this device holds a pairing: the default half with nothing
+  /// remembered.
+  Future<bool> _hasPairing() async =>
+      (await _pairingStore.loadPairing()) != null;
+
+  /// The switch, wired to [_appMode]. One widget for every place it sits.
+  Widget _buildModeSwitch() => AppModeSwitch(
+    mode: _shownMode,
+    onChanged: (AppMode mode) => unawaited(_appMode.select(mode)),
+  );
+
+  void _onModeChanged() {
+    if (!mounted) return;
+    final AppMode next = _appMode.value;
+    if (next == _shownMode) return;
+    setState(() {
+      _shownMode = next;
+      if (next == AppMode.chat) _chatModeBuilt = true;
+    });
+    _handOverChatPointer();
+    // Back on the Agents desktop: its keyboard (Ctrl+K and the rest) listens
+    // on the shell's focus node, which lost the focus while Chat was in front.
+    if (next == AppMode.agents && !_isPhone) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _shownMode != AppMode.agents) return;
+        if (!_deskFocus.hasFocus) _deskFocus.requestFocus();
+      });
+    }
+  }
+
+  /// Points the shared pointer at the chat of the half in front.
+  void _handOverChatPointer() {
+    if (_shownMode == AppMode.chat) {
+      ChatStorageService.selectedChatId = _chatModeChatId;
+    } else if (_selectedThreadKey.isNotEmpty) {
+      ChatStorageService.selectedChatId = _selectedThreadKey;
+    }
+  }
+
+  /// What chuk's wrapper reads as the chat in view.
+  String? _readChatModeChatId() => _chatModeChatId;
+
+  bool _isAgentsChatId(String id) =>
+      ChatOrigin.isAgentsThread(id) || _agentIdForThread(id) != null;
+
+  /// The shared pointer moved.
+  ///
+  /// `ChatStorageService.selectedChatId` is one value for the whole app, and
+  /// each half sets it to its own chat: chuk's wrapper when the user opens or
+  /// starts a chat, the Agents thread view on mount, on a thread switch and on
+  /// every reconnect. The half in front owns it. A write by the half in front
+  /// is taken as it is (for Chat, it is also what chuk's wrapper shows next).
+  /// A write by the half behind is noted — chuk's chat, off stage, may have
+  /// just created its chat with a reply — and the pointer goes back to the
+  /// half in front after the current call stack, never inside it.
+  void _onSharedChatPointer() {
+    if (!mounted) return;
+    final String? id = ChatStorageService.selectedChatId;
+    final bool agentsId = id != null && _isAgentsChatId(id);
+    if (_shownMode == AppMode.chat) {
+      if (!agentsId) {
+        _chatModeChatId = id;
+        return;
+      }
+    } else {
+      // A cleared pointer or an Agents thread is the Agents half's own.
+      if (id == null || agentsId) return;
+      _chatModeChatId = id;
+    }
+    scheduleMicrotask(() {
+      if (!mounted || ChatStorageService.selectedChatId != id) return;
+      _handOverChatPointer();
+    });
+  }
+
+  /// The Chat half: chuk_chat's own root wrapper, with the switch in its top
+  /// bar. A narrow window gets chuk's phone wrapper, by the same rule the
+  /// Agents half uses — on Linux too, where chuk's own `RootWrapper` always
+  /// picks the desktop one. The web keeps the desktop wrapper at every width,
+  /// as chuk_chat's web does: the phone wrapper asks the platform for
+  /// permissions, and a browser has no such platform.
+  Widget _buildChatMode(BuildContext context, bool phone) {
+    final Widget modeSwitch = _buildModeSwitch();
+    final builder = widget.chatModeBuilder;
+    if (builder != null) {
+      return builder(context, phone: phone, modeSwitch: modeSwitch);
+    }
+    final AppShellConfig config = widget.shellConfig!;
+    if (phone && !kIsWeb) {
+      return RootWrapperMobile(
+        config: config,
+        headerCenter: modeSwitch,
+        selectedChatIdReader: _readChatModeChatId,
+      );
+    }
+    return RootWrapperDesktop(
+      config: config,
+      headerCenter: modeSwitch,
+      selectedChatIdReader: _readChatModeChatId,
+    );
+  }
+
+  /// The switch for the Agents half's own layouts, or null without a Chat
+  /// half.
+  @override
+  Widget? _agentsModeSwitch() =>
+      _chatModeAvailable ? _buildModeSwitch() : null;
 
   /// The travel is fully back: the row the chat grew out of belongs to the list
   /// again. Held until now so the row is not drawn twice — once in the list and
@@ -285,6 +487,13 @@ class _MessengerShellState extends State<MessengerShell>
 
   @override
   void dispose() {
+    if (_chatListening) {
+      _appMode.removeListener(_onModeChanged);
+      ChatStorageService.selectedChatIdNotifier.removeListener(
+        _onSharedChatPointer,
+      );
+    }
+    if (_ownsAppMode) _appMode.dispose();
     _push.removeStatusListener(_onPushStatus);
     _push.dispose();
     _controller.removeListener(_onControllerForBrowser);
@@ -358,6 +567,11 @@ class _MessengerShellState extends State<MessengerShell>
         agent.threads.first.key != threadKey) {
       return;
     }
+    // A thread opened from behind chuk's chat (a tapped notification): the
+    // Agents half comes to the front with it.
+    if (_chatModeAvailable && _shownMode == AppMode.chat) {
+      unawaited(_appMode.select(AppMode.agents));
+    }
     // The user picked this one: remember it for the next launch, and stop the
     // restore from moving the selection out from under them.
     _rememberSelection(agentId, threadKey);
@@ -380,9 +594,11 @@ class _MessengerShellState extends State<MessengerShell>
   }
 
   /// On a phone the inbox can cover the thread; a desktop window always shows
-  /// it. Read by the read marks in [AgentsShellHost].
+  /// it, unless chuk's chat is in front. Read by the read marks in
+  /// [AgentsShellHost].
   @override
-  bool get _threadIsOnScreen => !_isPhone || _showThreadOnNarrow;
+  bool get _threadIsOnScreen =>
+      _shownMode == AppMode.agents && (!_isPhone || _showThreadOnNarrow);
 
   /// The screen target's action, or null while the coworker has no screen open.
   /// It sits in the header's video-call slot now, not in the action row.
@@ -583,14 +799,29 @@ class _MessengerShellState extends State<MessengerShell>
           _isPhone = phone;
           final agent = _selectedAgent;
 
+          final Widget agents = phone
+              ? _buildPhoneBody(context, agent)
+              : _buildDesktopBody(context, width, agent);
+
           return Scaffold(
             key: _scaffoldKey,
             // No end drawer any more: the agent controls are the desktop's
             // details pane, in chuk's artifact panel slot.
             endDrawerEnableOpenDragGesture: false,
-            body: phone
-                ? _buildPhoneBody(context, agent)
-                : _buildDesktopBody(context, width, agent),
+            // The two halves are peers, so they fade through each other, and
+            // both stay mounted (see the library doc). The slots follow
+            // [AppMode]: Chat first, Agents second.
+            body: _chatModeAvailable
+                ? FadeThroughTabs(
+                    index: _shownMode.index,
+                    children: <Widget>[
+                      _chatModeBuilt
+                          ? _buildChatMode(context, phone)
+                          : const SizedBox.shrink(),
+                      agents,
+                    ],
+                  )
+                : agents,
           );
         },
       ),
@@ -752,6 +983,8 @@ class _MessengerShellState extends State<MessengerShell>
           // with the computer — never a bare "no agents" while there is no
           // computer to hold one.
           emptyState: _buildStatusPanel(),
+          // The Chat | Agents switch, where it sits over chuk's chat too.
+          headerCenter: _agentsModeSwitch(),
         ),
         settings: widget.shellConfig == null
             ? const SizedBox.shrink()

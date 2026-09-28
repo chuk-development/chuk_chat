@@ -16,7 +16,6 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/current_user.dart';
@@ -114,16 +113,18 @@ class MessageRenderData {
 /// message list. Cache keys are the raw JSON payloads, so an updated field
 /// naturally gets a new decoded entry during streaming.
 ///
-/// In the Agents build every instance reads and writes ONE process-wide set
-/// of maps. There the chat screen is mounted again on every agent switch, so a
-/// cache owned by the screen died with it and every switch decoded every tool
-/// call again. The keys are the raw payloads, so an entry can never belong to
-/// the wrong message; [clear] leaves the shared maps alone, and their size is
-/// bounded like the per-screen maps, only higher.
+/// The Agents thread surface passes [shared]: every such instance reads and
+/// writes ONE process-wide set of maps. There the chat screen is mounted again
+/// on every agent switch, so a cache owned by the screen died with it and
+/// every switch decoded every tool call again. The keys are the raw payloads,
+/// so an entry can never belong to the wrong message; [clear] leaves the
+/// shared maps alone, and their size is bounded like the per-screen maps,
+/// only higher. chuk_chat's screen keeps its own maps, in the Agents build
+/// too.
 class MessageRenderCache {
-  MessageRenderCache()
-    : _shared = agentsChatCore,
-      _maps = agentsChatCore ? _sharedMaps : _MessageRenderMaps() {
+  MessageRenderCache({bool shared = false})
+    : _shared = shared,
+      _maps = shared ? _sharedMaps : _MessageRenderMaps() {
     // The shared maps hold one account's decoded plaintext: a screen that
     // mounts for another user starts them empty.
     if (_shared) {

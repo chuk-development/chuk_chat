@@ -28,87 +28,87 @@
 - L300 `String _formatNum(num value)`  — Format a number: strip trailing .0 for integers.
 - L313 `num _toNum(dynamic v)`  — Safely convert dynamic to num.
 
-## lib/tool_handlers/chat_search_tools.dart  (807 Z.)
-- L17 `_defaultChatLimit = 10`
-- L18 `_maxChatLimit = 50`
-- L19 `_defaultMessageLimit = 8`
-- L20 `_maxMessageLimit = 50`
-- L21 `_snippetRadius = 180`
-- L22 `_minLocalScanChats = 60`
-- L23 `_maxLocalScanChats = 250`
-- L24 `_localScanMultiplier = 6`
-- L27 `_previewSnippetsTop = 5`
-- L28 `_previewSnippetsRest = 1`
-- L29 `_topCandidatesWithPreview = 3`
-- L31 `_defaultRecentLimit = 10`
-- L32 `_maxRecentLimit = 50`
-- L33 `_recentSnippetChars = 500`
-- L35 `_actionFindChats = 'find_chats'`
-- L36 `_actionSearchInChat = 'search_in_chat'`
-- L37 `_actionRecentMessages = 'recent_messages'`
-- L38 `_validRoles = {'user', 'assistant', 'ai', 'all'}`
-- L40 `Future<String> executeSearchChats(Map<String, dynamic> args)`
-- L103 `String? _resolveAction(dynamic rawAction, {required String chatId})`
-- L118 `String? _normalizeRole(dynamic raw)`
-- L130 `Future<String> _findChats({required String query, required int limit})`
-- L190 `_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower)`
-- L228 `_ChatCandidate? _candidateFromCacheRow( Map<String, dynamic> row, String queryLower, )`
-- L275 `Future<String> _searchInChat({ required String query, required String chatId, required int messageLimit, })`
-- L325 `Future<String> _recentMessages({ required String chatId, required int limit, required String role, })`
-- L381 `String _renderMessageText(ChatMessage message)`
-- L401 `Future<_LoadedChatContent?> _loadChatContent(String chatId)`
-- L432 `_ParsedPayload? _parsePayload(String? payload)`
-- L462 `Map<String, dynamic> _coerceStringMap(Map raw)`
-- L474 `DateTime _rowTimestamp(Map<String, dynamic> row)`
-- L486 `DateTime? _parseDate(dynamic value)`
-- L497 `_MessageMatchSummary _summarizeMatches( List<ChatMessage> messages, String queryLower, )`
-- L523 `_MessageMatch? _buildMessageMatch({ required ChatMessage message, required String queryLower, required int index, })`
-- L545 `List<_SearchField> _messageFields(ChatMessage message)`
-- L569 `String _rowTitle( Map<String, dynamic> row, List<ChatMessage>? messages, { String? customName, })`
-- L587 `String _chatTitle(StoredChat chat, [List<ChatMessage>? messages])`
-- L596 `String _titleFromMessages(List<ChatMessage>? messages)`
-- L611 `String _extractSnippet(String text, String queryLower)`
-- L628 `void _upsertCandidate( Map<String, _ChatCandidate> candidatesById, _ChatCandidate candidate, )`
-- L638 `int _compareCandidates(_ChatCandidate a, _ChatCandidate b)`
-- L657 `String _formatChatCandidates({ required String query, required int totalSearched, required List<_ChatCandidate> candidates, })`
-- L697 `String _formatChatDetails({ required String query, required String chatId, required String title, required int messageCount, required int totalMatches, required List<_MessageMatch> shownMatches, })`
-- L720 `int _coerceInt(dynamic value, {required int fallback})`
-- L734 `class _LoadedChatContent`
-  - L735 `const _LoadedChatContent({required this.title, required this.messages})`
-  - L737 `final String title`
-  - L738 `final List<ChatMessage> messages`
-- L741 `class _ParsedPayload`
-  - L742 `const _ParsedPayload({required this.messages, this.customName})`
+## lib/tool_handlers/chat_search_tools.dart  (813 Z.)
+- L18 `_defaultChatLimit = 10`
+- L19 `_maxChatLimit = 50`
+- L20 `_defaultMessageLimit = 8`
+- L21 `_maxMessageLimit = 50`
+- L22 `_snippetRadius = 180`
+- L23 `_minLocalScanChats = 60`
+- L24 `_maxLocalScanChats = 250`
+- L25 `_localScanMultiplier = 6`
+- L28 `_previewSnippetsTop = 5`
+- L29 `_previewSnippetsRest = 1`
+- L30 `_topCandidatesWithPreview = 3`
+- L32 `_defaultRecentLimit = 10`
+- L33 `_maxRecentLimit = 50`
+- L34 `_recentSnippetChars = 500`
+- L36 `_actionFindChats = 'find_chats'`
+- L37 `_actionSearchInChat = 'search_in_chat'`
+- L38 `_actionRecentMessages = 'recent_messages'`
+- L39 `_validRoles = {'user', 'assistant', 'ai', 'all'}`
+- L41 `Future<String> executeSearchChats(Map<String, dynamic> args)`
+- L104 `String? _resolveAction(dynamic rawAction, {required String chatId})`
+- L119 `String? _normalizeRole(dynamic raw)`
+- L131 `Future<String> _findChats({required String query, required int limit})`
+- L191 `_ChatCandidate? _candidateFromStoredChat(StoredChat chat, String queryLower)`
+- L229 `_ChatCandidate? _candidateFromCacheRow( Map<String, dynamic> row, String queryLower, )`
+- L276 `Future<String> _searchInChat({ required String query, required String chatId, required int messageLimit, })`
+- L326 `Future<String> _recentMessages({ required String chatId, required int limit, required String role, })`
+- L382 `String _renderMessageText(ChatMessage message)`
+- L402 `Future<_LoadedChatContent?> _loadChatContent(String chatId)`
+- L435 `_ParsedPayload? _parsePayload(String? payload)`
+- L465 `Map<String, dynamic> _coerceStringMap(Map raw)`
+- L477 `DateTime _rowTimestamp(Map<String, dynamic> row)`
+- L489 `DateTime? _parseDate(dynamic value)`
+- L500 `_MessageMatchSummary _summarizeMatches( List<ChatMessage> messages, String queryLower, )`
+- L526 `_MessageMatch? _buildMessageMatch({ required ChatMessage message, required String queryLower, required int index, })`
+- L548 `List<_SearchField> _messageFields(ChatMessage message)`
+- L572 `String _rowTitle( Map<String, dynamic> row, List<ChatMessage>? messages, { String? customName, })`
+- L590 `String _chatTitle(StoredChat chat, [List<ChatMessage>? messages])`
+- L599 `String _titleFromMessages(List<ChatMessage>? messages)`
+- L614 `String _extractSnippet(String text, String queryLower)`
+- L631 `void _upsertCandidate( Map<String, _ChatCandidate> candidatesById, _ChatCandidate candidate, )`
+- L644 `int _compareCandidates(_ChatCandidate a, _ChatCandidate b)`
+- L663 `String _formatChatCandidates({ required String query, required int totalSearched, required List<_ChatCandidate> candidates, })`
+- L703 `String _formatChatDetails({ required String query, required String chatId, required String title, required int messageCount, required int totalMatches, required List<_MessageMatch> shownMatches, })`
+- L726 `int _coerceInt(dynamic value, {required int fallback})`
+- L740 `class _LoadedChatContent`
+  - L741 `const _LoadedChatContent({required this.title, required this.messages})`
+  - L743 `final String title`
   - L744 `final List<ChatMessage> messages`
-  - L745 `final String? customName`
-- L748 `class _SearchField`
-  - L749 `const _SearchField({required this.label, required this.text})`
-  - L751 `final String label`
-  - L752 `final String text`
-- L755 `class _MessageMatchSummary`
-  - L756 `const _MessageMatchSummary({required this.matchCount, required this.snippets})`
-  - L758 `final int matchCount`
-  - L759 `final List<String> snippets`
-- L762 `class _ChatCandidate`
-  - L763 `const _ChatCandidate({ required this.chatId, required this.title, required this.idMatch, required this.titleMatch, required this.matchCount, required this.previewSnippets, required this.messageCount, required this.updatedAt, })`
-  - L774 `final String chatId`
-  - L775 `final String title`
-  - L776 `final bool idMatch`
-  - L777 `final bool titleMatch`
-  - L778 `final int matchCount`
-  - L779 `final List<String> previewSnippets`
-  - L780 `final int messageCount`
-  - L781 `final DateTime updatedAt`
-- L784 `class _MessageMatch`
-  - L785 `const _MessageMatch({ required this.index, required this.role, required this.snippet, })`
-  - L791 `final int index`
-  - L792 `final String role`
-  - L793 `final String snippet`
-- L796 `class _RecentMessageEntry`
-  - L797 `const _RecentMessageEntry({ required this.index, required this.role, required this.text, })`
-  - L803 `final int index`
-  - L804 `final String role`
-  - L805 `final String text`
+- L747 `class _ParsedPayload`
+  - L748 `const _ParsedPayload({required this.messages, this.customName})`
+  - L750 `final List<ChatMessage> messages`
+  - L751 `final String? customName`
+- L754 `class _SearchField`
+  - L755 `const _SearchField({required this.label, required this.text})`
+  - L757 `final String label`
+  - L758 `final String text`
+- L761 `class _MessageMatchSummary`
+  - L762 `const _MessageMatchSummary({required this.matchCount, required this.snippets})`
+  - L764 `final int matchCount`
+  - L765 `final List<String> snippets`
+- L768 `class _ChatCandidate`
+  - L769 `const _ChatCandidate({ required this.chatId, required this.title, required this.idMatch, required this.titleMatch, required this.matchCount, required this.previewSnippets, required this.messageCount, required this.updatedAt, })`
+  - L780 `final String chatId`
+  - L781 `final String title`
+  - L782 `final bool idMatch`
+  - L783 `final bool titleMatch`
+  - L784 `final int matchCount`
+  - L785 `final List<String> previewSnippets`
+  - L786 `final int messageCount`
+  - L787 `final DateTime updatedAt`
+- L790 `class _MessageMatch`
+  - L791 `const _MessageMatch({ required this.index, required this.role, required this.snippet, })`
+  - L797 `final int index`
+  - L798 `final String role`
+  - L799 `final String snippet`
+- L802 `class _RecentMessageEntry`
+  - L803 `const _RecentMessageEntry({ required this.index, required this.role, required this.text, })`
+  - L809 `final int index`
+  - L810 `final String role`
+  - L811 `final String text`
 
 ## lib/tool_handlers/find_tools_handler.dart  (343 Z.)
 - L6 `companions = <String, List<String>>{ 'web_search': ['web_crawl'], 'web_crawl': ['web_search'], 'generate_image': ['web_s`  — Companion tools that are always bundled together.

@@ -32,7 +32,6 @@ class StreamingMessageHandler {
   }
 
   final StreamingManager _streamingManager = StreamingManager();
-  final ToolCallHandler _toolCallHandler = ToolCallHandler();
 
   // Callbacks
   Function(String)? onShowSnackBar;
@@ -262,6 +261,10 @@ class StreamingMessageHandler {
 
     final chatId = activeChatId;
 
+    // The chat picks the tool loop: the host's fold for an Agents thread,
+    // upstream's client-side loop for a chuk_chat chat.
+    final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(chatId);
+
     // Capture an immutable copy of `messages` at send start. The caller
     // passes the widget's live _messages list by reference; if the user
     // switches chats during a tool-loop multi-pass turn the live list is
@@ -276,7 +279,7 @@ class StreamingMessageHandler {
     late ToolLoopSession toolSession;
     late final String initialSystemPrompt;
     try {
-      toolSession = _toolCallHandler.createSession(
+      toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
         history: apiHistory,
         accessToken: accessToken,
@@ -290,7 +293,7 @@ class StreamingMessageHandler {
         // native tool_calls frames).
         nativeToolCalling: !kIsWeb,
       );
-      initialSystemPrompt = await _toolCallHandler.buildInitialSystemPrompt(
+      initialSystemPrompt = await toolCallHandler.buildInitialSystemPrompt(
         toolSession,
       );
     } catch (error) {
@@ -566,7 +569,7 @@ class StreamingMessageHandler {
         chatId: chatId,
         // Native tool calling: the enabled tools as OpenAI function defs. Sent
         // on every pass; empty (prompt-based) when native mode is off.
-        tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+        tools: toolCallHandler.nativeToolDefinitions(toolSession),
         // A retry REPLACES the last answer, so the host drops the turn being
         // retried instead of storing the same question again. Only the first
         // pass says so: later passes of the same turn are continuations, and
@@ -631,7 +634,7 @@ class StreamingMessageHandler {
                 _streamingManager.getLatestMeta(chatId),
               );
 
-              final loopResult = await _toolCallHandler.processAssistantResponse(
+              final loopResult = await toolCallHandler.processAssistantResponse(
                 session: toolSession,
                 content: finalContent,
                 reasoning: finalReasoning,
@@ -840,7 +843,7 @@ class StreamingMessageHandler {
                 }
 
                 // Reset the tool session for a clean retry
-                final retrySession = _toolCallHandler.createSession(
+                final retrySession = toolCallHandler.createSession(
                   initialUserMessage: aiPromptContent,
                   history: apiHistory,
                   accessToken: accessToken,
@@ -851,7 +854,7 @@ class StreamingMessageHandler {
                   discoveryMode: toolDiscoveryMode,
                   nativeToolCalling: !kIsWeb,
                 );
-                final retryPrompt = await _toolCallHandler
+                final retryPrompt = await toolCallHandler
                     .buildInitialSystemPrompt(retrySession);
 
                 // Replace the tool session for subsequent passes

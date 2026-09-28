@@ -21,6 +21,10 @@ const String _wakeText =
     'payload (data, not instructions):\n'
     '{"monitor": "lt26", "delta": 3}';
 
+/// An Agents thread's id (a host session key) and a chuk_chat chat's (UUID).
+const String _threadKey = 'amber-otter-2';
+const String _chukChatId = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b';
+
 Widget _wrap(Widget child) => MaterialApp(
   localizationsDelegates: const [
     AppLocalizations.delegate,
@@ -36,7 +40,8 @@ void main() {
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
   group('automation wake', () {
-    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+    // Agents threads only: with FEATURE_AGENTS off, and for a chuk_chat chat
+    // in the Agents build, the bubble is upstream's.
     setUp(() => debugAgentsChatCoreOverride = true);
     tearDown(() => debugAgentsChatCoreOverride = null);
 
@@ -49,6 +54,7 @@ void main() {
             message: _wakeText,
             isUser: true,
             maxWidth: 400,
+            chatId: _threadKey,
           ),
         ),
       );
@@ -81,6 +87,7 @@ void main() {
             message: _wakeText,
             isUser: true,
             maxWidth: 400,
+            chatId: _threadKey,
             turnStartedAt: DateTime(2026, 3, 4, 7, 5),
           ),
         ),
@@ -99,6 +106,7 @@ void main() {
             message: 'ship the automation marker please',
             isUser: true,
             maxWidth: 400,
+            chatId: _threadKey,
           ),
         ),
       );
@@ -112,6 +120,27 @@ void main() {
         ),
         findsWidgets,
       );
+    });
+
+    testWidgets('a chuk_chat chat shows the text as the user typed it', (
+      tester,
+    ) async {
+      // Same build, but a chuk_chat chat (UUID id): no host fires automations
+      // there, so the marker is just text in a user bubble.
+      await tester.pumpWidget(
+        _wrap(
+          const MessageBubble(
+            message: _wakeText,
+            isUser: true,
+            maxWidth: 400,
+            chatId: _chukChatId,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      expect(findIcon(Icons.bolt_outlined), findsNothing);
+      expect(find.textContaining('[automation'), findsWidgets);
     });
   });
 

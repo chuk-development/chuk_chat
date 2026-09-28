@@ -175,6 +175,37 @@
 ## test/widgets/app_lifecycle_observer_test.dart  (43 Z.)
 - L9 `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 
+## test/widgets/app_mode_switch_test.dart  (669 Z.)
+- L44 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L45 `final Map<String, String> map = <String, String>{}`
+  - L48 `Future<String?> read(String key)`
+  - L51 `Future<void> write(String key, String value)`
+  - L54 `Future<void> delete(String key)`
+- L58 `class _EmptyMirror extends SupabasePairingSync`  — The encrypted mirror, with nothing in it.
+  - L60 `Future<AgentsCloudPairingRead> readEncryptedPairing()`
+  - L64 `Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing)`
+  - L68 `Future<void> saveEncryptedPairing(AgentsStoredPairing pairing)`
+  - L71 `Future<void> clearEncryptedPairing()`
+- L74 `class _Session implements AccountSessionSource`
+  - L75 `const _Session()`
+  - L78 `AccountSession? current()`
+  - L85 `Future<AccountSession?> refresh()`
+- L91 `class _FakeChatHalf extends StatefulWidget`  — Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
+  - L92 `const _FakeChatHalf({required this.phone, required this.modeSwitch})`
+  - L94 `final bool phone`
+  - L95 `final Widget modeSwitch`
+  - L98 `State<_FakeChatHalf> createState()`
+- L101 `class _FakeChatHalfState extends State<_FakeChatHalf>`
+  - L102 `int taps = 0`
+  - L103 `final TextEditingController draft = TextEditingController()`
+  - L106 `void dispose()`
+  - L112 `Widget build(BuildContext context)`
+- L170 `kPhone = Size(360, 800)`
+- L174 `kSwitchOnPhone = Rect.fromLTWH( 10 + 42 + 8, 24 + 8, AppModeSwitch.width, AppModeSwitch.boxHeight, )`  — Where the switch sits on a 360 px phone with a 24 px status bar, over
+- L183 `kWidePhone = Size(412, 800)`  — A phone wide enough for the "Add your computer" panel an unpaired device
+- L184 `kPhoneInsets = EdgeInsets.only(top: 24)`
+- L186 `void main()`
+
 ## test/widgets/app_notification_test.dart  (87 Z.)
 - L8 `void main()`
 
@@ -360,10 +391,12 @@
 ## test/widgets/message_bubble_sources_test.dart  (88 Z.)
 - L7 `void main()`
 
-## test/widgets/message_bubble_test.dart  (213 Z.)
+## test/widgets/message_bubble_test.dart  (242 Z.)
 - L18 `_wakeText = '[automation a2f1d3d1 fired: Wahlradar LT Sachsen-Anhalt 2026]\n' 'check the seat projection and tell me wha`  — The exact text the host submits when an automation fires, header +
-- L24 `Widget _wrap(Widget child)`
-- L35 `void main()`
+- L25 `_threadKey = 'amber-otter-2'`  — An Agents thread's id (a host session key) and a chuk_chat chat's (UUID).
+- L26 `_chukChatId = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b'`
+- L28 `Widget _wrap(Widget child)`
+- L39 `void main()`
 
 ## test/widgets/message_bubble_variant_pager_test.dart  (89 Z.)
 - L7 `void main()`
@@ -371,7 +404,7 @@
 ## test/widgets/messenger_context_menu_test.dart  (57 Z.)
 - L5 `void main()`
 
-## test/widgets/messenger_message_bubble_test.dart  (808 Z.)
+## test/widgets/messenger_message_bubble_test.dart  (848 Z.)
 - L19 `Widget wrap(Widget child)`
 - L30 `void main()`
 

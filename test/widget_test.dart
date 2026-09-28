@@ -10,6 +10,7 @@ import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/pages/login_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
@@ -259,7 +260,11 @@ void main() {
   group('MessengerShell', () {
     testWidgets('is a chat: connect affordance, no account-models panel',
         (tester) async {
-      SharedPreferences.setMockInitialValues(<String, Object>{});
+      // The Agents half: with no pairing and nothing remembered the shell
+      // would open on chuk_chat's Chat half (bead chuk_chat-18v).
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AppModeService.prefsKey: 'agents',
+      });
       tester.view.physicalSize = const Size(1200, 800);
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);

@@ -5,12 +5,14 @@
 // settings entry, chat input).
 //
 // Widgets attach the key via `KeyedSubtree(key: TourKeyRegistry.instance
-// .keyFor('slot'), child: ...)` (or directly as `key:` when the widget has
+// .anchorFor('slot'), child: ...)` (or directly as `key:` when the widget has
 // no existing key). The [OnboardingTourController] uses the key's
 // `currentContext` to find a [RenderBox] and project a pulsing pointer +
 // banner over the real widget.
 
 import 'package:flutter/widgets.dart';
+
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 /// Known target slots used by the onboarding tour.
 class TourSlots {
@@ -41,6 +43,15 @@ class TourKeyRegistry {
   /// Returns the [GlobalKey] for [slot], creating it lazily on first access.
   GlobalKey keyFor(String slot) =>
       _keys.putIfAbsent(slot, () => GlobalKey(debugLabel: 'tour:$slot'));
+
+  /// The key a widget attaches for [slot], or null when this build runs no
+  /// tour.
+  ///
+  /// The Agents build has no onboarding tour, and it mounts chuk's chat
+  /// screens more than once (the Chat half and every Agents thread use the
+  /// same composer). One [GlobalKey] under two parents makes Flutter move
+  /// the element between them mid-layout, so there the widgets take no key.
+  GlobalKey? anchorFor(String slot) => agentsChatCore ? null : keyFor(slot);
 
   /// Returns the current [BuildContext] mounted under [slot], or null if the
   /// widget isn't currently in the tree.

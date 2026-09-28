@@ -289,8 +289,8 @@
   - L40 `final double jitter`  — Fraction of the delay spent on random spread, so two threads that failed
   - L46 `Duration delayAfter(int attempt, {math.Random? random})`  — The wait after [attempt] failures. `attempt` is 1-based: 1 is the first
 
-## lib/services/agents/agents_chat_core.dart  (20 Z.)
-- L19 `debugAgentsChatCoreOverride`  — Whether the chat core runs the Agents way: the host runs every tool
+## lib/services/agents/agents_chat_core.dart  (31 Z.)
+- L30 `debugAgentsChatCoreOverride`  — Whether this is the Agents build. Follows `FEATURE_AGENTS`.
 
 ## lib/services/agents/agents_chat_transport.dart  (822 Z.)
 - L60 `class AgentsChatTransport`  — Service for handling streaming chat responses.
@@ -1501,16 +1501,16 @@
   - L590 `static Future<int> resend( String sessionKey, Future<void> Function(PendingTask task) send, )`  — Sends everything [sessionKey] has no `task_ack` for again, oldest first.
   - L622 `static Future<bool> mayRetry(String sessionKey, String taskId)`  — True when [taskId] may go out once more, and false once it has used up
 
-## lib/services/agents/agents_tool_call_handler.dart  (158 Z.)
-- L31 `class AgentsToolCallHandler implements ToolCallHandler`  — The Agents fold: one pass per turn, no client-side tool dispatch.
-  - L32 `AgentsToolCallHandler._internal()`
-  - L34 `static final AgentsToolCallHandler instance = AgentsToolCallHandler._internal()`
-  - L37 `final ToolExecutor _toolExecutor = ToolExecutor()`
-  - L43 `ToolExecutor get toolExecutor`  — The stub drops the client tool LOOP, not the executor's registry:
-  - L46 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
-  - L77 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`  — The host owns the system prompt.
-  - L82 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The host owns the tools. An empty list means the request carries no
-  - L98 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`  — ALWAYS a final answer: `shouldContinue` is never true.
+## lib/services/agents/agents_tool_call_handler.dart  (160 Z.)
+- L33 `class AgentsToolCallHandler implements ToolCallHandler`  — The Agents fold: one pass per turn, no client-side tool dispatch.
+  - L34 `AgentsToolCallHandler._internal()`
+  - L36 `static final AgentsToolCallHandler instance = AgentsToolCallHandler._internal()`
+  - L39 `final ToolExecutor _toolExecutor = ToolExecutor()`
+  - L45 `ToolExecutor get toolExecutor`  — The stub drops the client tool LOOP, not the executor's registry.
+  - L48 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
+  - L79 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`  — The host owns the system prompt.
+  - L84 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The host owns the tools. An empty list means the request carries no
+  - L100 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`  — ALWAYS a final answer: `shouldContinue` is never true.
 
 ## lib/services/agents/browser_presence.dart  (269 Z.)
 - L16 `kBrowserPresenceFreshness = Duration(minutes: 5)`  — How long the host's word on the browser stays good without fresh evidence.

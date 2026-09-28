@@ -1,106 +1,117 @@
 # lib/platform_specific/mobile · Signaturen
 
-## lib/platform_specific/mobile/mobile_agent_list.dart  (1240 Z.)
-- L56 `String accountMonogram(String? label)`  — The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
-- L70 `class MobileAgentList extends StatefulWidget`
-  - L71 `const MobileAgentList({ super.key, required this.source, required this.onSelect, this.selectedAgentId, this.selectedThreadKey, this.onAddAgent, this.onOpenAccount, this.onOpenProfile, this.onRenameAgent, this.onDeleteAgent, this.accountLabel, this.now, this.readMarks, this.profiles, this.onOpenFrom, this.hiddenAgentId, this.rooms, this.onOpenRoom, this.onCreateRoom, this.emptyState, })`
-  - L94 `final AgentRosterSource source`
-  - L99 `final Widget? emptyState`  — Shown instead of the plain "No agents yet" when the list is empty and
-  - L103 `final RoomSource? rooms`  — The group rooms, listed above the coworkers in the same list. Null (or an
-  - L106 `final void Function(String roomId)? onOpenRoom`  — Opens a room. Rooms are not tappable without it.
-  - L110 `final VoidCallback? onCreateRoom`  — Starts a new room. With both this and [onAddAgent] set, the "+" target
-  - L113 `final void Function(String agentId, String threadKey) onSelect`  — Opens a coworker's thread — the same callback the desktop sidebar uses.
-  - L115 `final String? selectedAgentId`
-  - L116 `final String? selectedThreadKey`
-  - L119 `final VoidCallback? onAddAgent`  — The accent "+" target. Null hides it.
-  - L122 `final VoidCallback? onOpenAccount`  — The account face on the left. Null hides it.
-  - L125 `final void Function(AgentsAgent agent)? onOpenProfile`  — Opens a coworker's profile page (long-press → Profile).
-  - L129 `final void Function(AgentsAgent agent)? onRenameAgent`  — Renames a coworker (long-press → Rename). This is the one profile field
-  - L132 `final void Function(AgentsAgent agent)? onDeleteAgent`  — Deletes a coworker (long-press → Delete).
-  - L135 `final String? accountLabel`  — Text the account monogram is taken from (the user's name or e-mail).
-  - L138 `final DateTime Function()? now`  — Injectable clock for tests.
-  - L141 `final AgentReadMarks? readMarks`  — Injectable stores for tests; default to the app-wide ones.
-  - L142 `final AgentProfileStore? profiles`
-  - L148 `final void Function(ContainerTransformSource source)? onOpenFrom`  — Where the tapped row is, and a copy of it — everything the chat-open
-  - L153 `final String? hiddenAgentId`  — The coworker whose row is currently inside the growing container. Its row
-  - L156 `State<MobileAgentList> createState()`
-- L159 `class _MobileAgentListState extends State<MobileAgentList>`
-  - L160 `static const List<String> _filters = <String>['All', 'Unread']`
-  - L167 `static const double _barControlHeight = 56`  — The home bar runs taller than [MobileLayout.controlHeight] and its two
-  - L171 `static const double _barControlWidth = 74`  — Width of the search and add targets. Wider than they are tall, so both
-  - L174 `static const double _barHeight = 68`  — What the row takes, its own breathing room included.
-  - L176 `final TextEditingController _query = TextEditingController()`
-  - L177 `final FocusNode _searchFocus = FocusNode()`
-  - L179 `int _filter = 0`
-  - L182 `bool _reverse = false`  — Direction of the last filter change — drives the shared-axis slide.
-  - L186 `bool _animate = true`  — Whether the rows play their cascade. Off right after a search closes, so
-  - L188 `bool _searching = false`
-  - L190 `AgentReadMarks get _marks`
-  - L191 `AgentProfileStore get _profiles`
-  - L195 `void dispose()`
-  - L201 `DateTime _now()`
-  - L203 `void _openSearch()`
-  - L210 `void _closeSearch()`
-  - L222 `List<AgentsRoom> _visibleRooms()`  — The rooms this list shows. A room has no read marks, so the Unread filter
-  - L243 `Future<void> _openAddMenu(BuildContext anchor)`  — What the "+" target does. One action goes straight there; two ask, on the
-  - L265 `List<AgentsAgent> _visible()`
-  - L285 `String? _roleOf(AgentsAgent agent)`  — The role line: the one the user set in the profile wins over the one the
-  - L292 `Future<void> _openRowMenu(BuildContext rowContext, AgentsAgent agent)`
-  - L356 `Widget build(BuildContext context)`
-  - L370 `Widget _buildList(BuildContext context)`
-- L641 `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
-  - L642 `const _SearchField({ required this.controller, required this.focusNode, required this.height, required this.onClear, })`
-  - L649 `final TextEditingController controller`
-  - L650 `final FocusNode focusNode`
-  - L653 `final double height`  — The height of the row's other controls, so the field is their sibling.
-  - L655 `final VoidCallback onClear`
-  - L658 `Widget build(BuildContext context)`
-- L735 `class MobileAgentRow extends StatelessWidget`
-  - L736 `const MobileAgentRow({ super.key, required this.agent, required this.now, this.selected = false, this.unread = false, this.unreadThreads = 1, this.role, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
-  - L750 `final AgentsAgent agent`
-  - L751 `final DateTime now`
-  - L752 `final bool selected`
-  - L753 `final bool unread`
-  - L757 `final int unreadThreads`  — How many of this coworker's threads have something new in them. Shown as
-  - L760 `final String? role`  — The role line to show; null hides the tag.
-  - L765 `final void Function(Rect globalRect)? onTap`  — Opens the coworker's thread. It is handed the row's own rounded rect, in
-  - L768 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
-  - L770 `final AgentProfileStore? profiles`
-  - L774 `final bool padded`  — False builds the row without the list's outer padding, so it fills the
-  - L778 `static const double height = 64`  — One row's minimum height. Tight enough that a screen holds the roster,
-  - L783 `static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles})`  — The preview line under the name. What the coworker is doing now beats a
-  - L816 `Widget build(BuildContext context)`
-- L958 `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
-  - L959 `const MobileRoomRow({ super.key, required this.room, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
-  - L968 `final AgentsRoom room`
-  - L971 `final VoidCallback? onTap`  — Opens the room. Null makes the row inert.
-  - L974 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
-  - L976 `final AgentProfileStore? profiles`
-  - L979 `final bool padded`  — False drops the list's outer padding, matching [MobileAgentRow.padded].
-  - L983 `static String previewOf(AgentsRoom room)`  — The line under the name: who is in the room, by the handle they are
-  - L986 `Widget build(BuildContext context)`
-- L1055 `class _RoleTag extends StatelessWidget`  — The small grey tag next to the name (the coworker's role).
-  - L1056 `const _RoleTag({required this.role})`
-  - L1058 `final String role`
-  - L1061 `Widget build(BuildContext context)`
-- L1088 `class _MenuRow extends StatelessWidget`
-  - L1089 `const _MenuRow({required this.icon, required this.label, this.color})`
-  - L1091 `final IconData icon`
-  - L1092 `final String label`
-  - L1093 `final Color? color`
-  - L1096 `Widget build(BuildContext context)`
-- L1111 `class _EmptyState extends StatelessWidget`
-  - L1112 `const _EmptyState({ required this.filter, required this.query, this.onAddAgent, })`
-  - L1118 `final String filter`
-  - L1119 `final String query`
-  - L1120 `final VoidCallback? onAddAgent`
-  - L1123 `Widget build(BuildContext context)`
-- L1183 `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
-- L1213 `class _UnreadBadge extends StatelessWidget`  — The number of new threads on a coworker, in that coworker's colour.
-  - L1214 `const _UnreadBadge({required this.count, required this.colour})`
-  - L1216 `final int count`
-  - L1217 `final Color colour`
-  - L1220 `Widget build(BuildContext context)`
+## lib/platform_specific/mobile/mobile_agent_list.dart  (1430 Z.)
+- L65 `String accountMonogram(String? label)`  — The account monogram: "alex.smith@…" → "A", "Alex Smith" → "AS".
+- L79 `class MobileAgentList extends StatefulWidget`
+  - L80 `const MobileAgentList({ super.key, required this.source, required this.onSelect, this.selectedAgentId, this.selectedThreadKey, this.onAddAgent, this.onOpenAccount, this.onOpenProfile, this.onRenameAgent, this.onDeleteAgent, this.accountLabel, this.now, this.readMarks, this.profiles, this.onOpenFrom, this.hiddenAgentId, this.rooms, this.onOpenRoom, this.onCreateRoom, this.emptyState, this.headerCenter, })`
+  - L104 `final AgentRosterSource source`
+  - L111 `final Widget? headerCenter`  — Takes the middle of the header row: the Agents build's Chat | Agents
+  - L116 `final Widget? emptyState`  — Shown instead of the plain "No agents yet" when the list is empty and
+  - L120 `final RoomSource? rooms`  — The group rooms, listed above the coworkers in the same list. Null (or an
+  - L123 `final void Function(String roomId)? onOpenRoom`  — Opens a room. Rooms are not tappable without it.
+  - L127 `final VoidCallback? onCreateRoom`  — Starts a new room. With both this and [onAddAgent] set, the "+" target
+  - L130 `final void Function(String agentId, String threadKey) onSelect`  — Opens a coworker's thread — the same callback the desktop sidebar uses.
+  - L132 `final String? selectedAgentId`
+  - L133 `final String? selectedThreadKey`
+  - L136 `final VoidCallback? onAddAgent`  — The accent "+" target. Null hides it.
+  - L139 `final VoidCallback? onOpenAccount`  — The account face on the left. Null hides it.
+  - L142 `final void Function(AgentsAgent agent)? onOpenProfile`  — Opens a coworker's profile page (long-press → Profile).
+  - L146 `final void Function(AgentsAgent agent)? onRenameAgent`  — Renames a coworker (long-press → Rename). This is the one profile field
+  - L149 `final void Function(AgentsAgent agent)? onDeleteAgent`  — Deletes a coworker (long-press → Delete).
+  - L152 `final String? accountLabel`  — Text the account monogram is taken from (the user's name or e-mail).
+  - L155 `final DateTime Function()? now`  — Injectable clock for tests.
+  - L158 `final AgentReadMarks? readMarks`  — Injectable stores for tests; default to the app-wide ones.
+  - L159 `final AgentProfileStore? profiles`
+  - L165 `final void Function(ContainerTransformSource source)? onOpenFrom`  — Where the tapped row is, and a copy of it — everything the chat-open
+  - L170 `final String? hiddenAgentId`  — The coworker whose row is currently inside the growing container. Its row
+  - L173 `State<MobileAgentList> createState()`
+- L176 `class _MobileAgentListState extends State<MobileAgentList>`
+  - L177 `static const List<String> _filters = <String>['All', 'Unread']`
+  - L184 `static const double _barControlHeight = 56`  — The home bar runs taller than [MobileLayout.controlHeight] and its two
+  - L188 `static const double _barControlWidth = 74`  — Width of the search and add targets. Wider than they are tall, so both
+  - L191 `static const double _barHeight = 68`  — What the row takes, its own breathing room included.
+  - L193 `final TextEditingController _query = TextEditingController()`
+  - L194 `final FocusNode _searchFocus = FocusNode()`
+  - L196 `int _filter = 0`
+  - L199 `bool _reverse = false`  — Direction of the last filter change — drives the shared-axis slide.
+  - L203 `bool _animate = true`  — Whether the rows play their cascade. Off right after a search closes, so
+  - L205 `bool _searching = false`
+  - L207 `AgentReadMarks get _marks`
+  - L208 `AgentProfileStore get _profiles`
+  - L212 `void dispose()`
+  - L218 `DateTime _now()`
+  - L220 `void _openSearch()`
+  - L227 `void _closeSearch()`
+  - L239 `List<AgentsRoom> _visibleRooms()`  — The rooms this list shows. A room has no read marks, so the Unread filter
+  - L260 `Future<void> _openAddMenu(BuildContext anchor)`  — What the "+" target does. One action goes straight there; two ask, on the
+  - L282 `List<AgentsAgent> _visible()`
+  - L302 `String? _roleOf(AgentsAgent agent)`  — The role line: the one the user set in the profile wins over the one the
+  - L309 `Future<void> _openRowMenu(BuildContext rowContext, AgentsAgent agent)`
+  - L373 `Widget build(BuildContext context)`
+  - L387 `Widget _buildList(BuildContext context)`
+- L732 `_kBarReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2`  — How far a 48 px press reaches past a 42 px chip on each side.
+- L736 `Widget _buildBarRow({ Key? key, required Widget leading, required Widget middle, Widget? trailing, })`  — One row of chuk's floating bar: a chip, the middle, and optionally a chip
+- L761 `class _BarChip extends StatelessWidget`  — A chip of the inbox bar when it carries the app switch: chuk's floating
+  - L762 `const _BarChip({ required this.icon, required this.tooltip, required this.semanticsId, required this.onTap, this.accent = false, })`
+  - L770 `final HugeIconData icon`
+  - L771 `final String tooltip`
+  - L772 `final String semanticsId`
+  - L773 `final VoidCallback? onTap`
+  - L774 `final bool accent`
+  - L777 `Widget build(BuildContext context)`
+- L831 `class _SearchField extends StatelessWidget`  — The roster's search input: one rounded, filled field that carries its own
+  - L832 `const _SearchField({ required this.controller, required this.focusNode, required this.height, required this.onClear, })`
+  - L839 `final TextEditingController controller`
+  - L840 `final FocusNode focusNode`
+  - L843 `final double height`  — The height of the row's other controls, so the field is their sibling.
+  - L845 `final VoidCallback onClear`
+  - L848 `Widget build(BuildContext context)`
+- L925 `class MobileAgentRow extends StatelessWidget`
+  - L926 `const MobileAgentRow({ super.key, required this.agent, required this.now, this.selected = false, this.unread = false, this.unreadThreads = 1, this.role, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
+  - L940 `final AgentsAgent agent`
+  - L941 `final DateTime now`
+  - L942 `final bool selected`
+  - L943 `final bool unread`
+  - L947 `final int unreadThreads`  — How many of this coworker's threads have something new in them. Shown as
+  - L950 `final String? role`  — The role line to show; null hides the tag.
+  - L955 `final void Function(Rect globalRect)? onTap`  — Opens the coworker's thread. It is handed the row's own rounded rect, in
+  - L958 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L960 `final AgentProfileStore? profiles`
+  - L964 `final bool padded`  — False builds the row without the list's outer padding, so it fills the
+  - L968 `static const double height = 64`  — One row's minimum height. Tight enough that a screen holds the roster,
+  - L973 `static String previewOf(AgentsAgent agent, {AgentProfileStore? profiles})`  — The preview line under the name. What the coworker is doing now beats a
+  - L1006 `Widget build(BuildContext context)`
+- L1148 `class MobileRoomRow extends StatelessWidget`  — One ROOM, in the inbox's own row grammar.
+  - L1149 `const MobileRoomRow({ super.key, required this.room, this.onTap, this.onLongPress, this.profiles, this.padded = true, })`
+  - L1158 `final AgentsRoom room`
+  - L1161 `final VoidCallback? onTap`  — Opens the room. Null makes the row inert.
+  - L1164 `final void Function(BuildContext rowContext)? onLongPress`  — Long press, with the row's own context so a menu can anchor to it.
+  - L1166 `final AgentProfileStore? profiles`
+  - L1169 `final bool padded`  — False drops the list's outer padding, matching [MobileAgentRow.padded].
+  - L1173 `static String previewOf(AgentsRoom room)`  — The line under the name: who is in the room, by the handle they are
+  - L1176 `Widget build(BuildContext context)`
+- L1245 `class _RoleTag extends StatelessWidget`  — The small grey tag next to the name (the coworker's role).
+  - L1246 `const _RoleTag({required this.role})`
+  - L1248 `final String role`
+  - L1251 `Widget build(BuildContext context)`
+- L1278 `class _MenuRow extends StatelessWidget`
+  - L1279 `const _MenuRow({required this.icon, required this.label, this.color})`
+  - L1281 `final IconData icon`
+  - L1282 `final String label`
+  - L1283 `final Color? color`
+  - L1286 `Widget build(BuildContext context)`
+- L1301 `class _EmptyState extends StatelessWidget`
+  - L1302 `const _EmptyState({ required this.filter, required this.query, this.onAddAgent, })`
+  - L1308 `final String filter`
+  - L1309 `final String query`
+  - L1310 `final VoidCallback? onAddAgent`
+  - L1313 `Widget build(BuildContext context)`
+- L1373 `String mobileTimeLabel(DateTime? when, {required DateTime now})`  — The time column of an inbox row, like a messenger: a clock time today,
+- L1403 `class _UnreadBadge extends StatelessWidget`  — The number of new threads on a coworker, in that coworker's colour.
+  - L1404 `const _UnreadBadge({required this.count, required this.colour})`
+  - L1406 `final int count`
+  - L1407 `final Color colour`
+  - L1410 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_agent_sheet.dart  (189 Z.)
 - L27 `class MobileAgentSheet extends StatelessWidget`
@@ -117,7 +128,7 @@
   - L88 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the coworker's own actions, the parked
   - L176 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_chat_chrome.dart  (485 Z.)
+## lib/platform_specific/mobile/mobile_chat_chrome.dart  (486 Z.)
 - L38 `kMobileChromeChip = 42`  — Diameter of a round chip: chuk's floating chip.
 - L41 `kMobileChromeRow = 48`  — Height of the bar's row: chuk's top bar row.
 - L44 `kMobileChromePillRadius = 18`  — Corner radius of the title pill: chuk's title pill.
@@ -145,17 +156,17 @@
   - L217 `final bool accent`  — chuk's accent-filled chip: the one thing on the bar that is ready.
   - L221 `final bool parked`  — Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
   - L224 `Widget build(BuildContext context)`
-- L274 `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
-  - L275 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
-  - L282 `final AgentsAgent agent`
-  - L283 `final VoidCallback? onTap`
-  - L284 `final VoidCallback? onReconnect`
-  - L285 `final AgentProfileStore? profiles`
-  - L288 `Widget build(BuildContext context)`
-  - L301 `Widget _surface(BuildContext context, {required bool paired})`
-  - L377 `Widget _status(BuildContext context, {required bool paired})`  — What the coworker is doing: offline with a way back, working, or here.
-  - L455 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
-  - L478 `String? _roleOf(AgentProfileStore store)`
+- L275 `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
+  - L276 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
+  - L283 `final AgentsAgent agent`
+  - L284 `final VoidCallback? onTap`
+  - L285 `final VoidCallback? onReconnect`
+  - L286 `final AgentProfileStore? profiles`
+  - L289 `Widget build(BuildContext context)`
+  - L302 `Widget _surface(BuildContext context, {required bool paired})`
+  - L378 `Widget _status(BuildContext context, {required bool paired})`  — What the coworker is doing: offline with a way back, working, or here.
+  - L456 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
+  - L479 `String? _roleOf(AgentProfileStore store)`
 
 ## lib/platform_specific/mobile/mobile_chat_screen.dart  (220 Z.)
 - L28 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
@@ -210,7 +221,7 @@
   - L78 `final ContainerTransformSource? closed`  — The row the travel starts from. Null before any row has been tapped (a
   - L81 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_home.dart  (258 Z.)
+## lib/platform_specific/mobile/mobile_home.dart  (273 Z.)
 - L26 `class MobileHome extends StatefulWidget`
   - L27 `const MobileHome({ super.key, required this.roster, required this.chats, required this.settings, this.readMarks, })`
   - L36 `final AgentRosterSource roster`  — The roster, for the media tab's thread keys and the unread badge.
@@ -222,24 +233,24 @@
   - L52 `int _index = 0`
   - L54 `AgentReadMarks get _marks`
   - L57 `Widget build(BuildContext context)`
-- L140 `class _FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
-  - L141 `const _FadeThroughTabs({required this.index, required this.children})`
-  - L143 `final int index`
-  - L144 `final List<Widget> children`
-  - L147 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
-  - L150 `State<_FadeThroughTabs> createState()`
-- L153 `class _FadeThroughTabsState extends State<_FadeThroughTabs> with SingleTickerProviderStateMixin`
-  - L155 `late final AnimationController _c = AnimationController( vsync: this, duration: _FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
-  - L162 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
-  - L165 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
-  - L167 `bool _reducedMotion = false`
-  - L169 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
-  - L173 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
-  - L178 `void _onStatus(AnimationStatus status)`
-  - L185 `void didChangeDependencies()`
-  - L196 `void didUpdateWidget(covariant _FadeThroughTabs oldWidget)`
-  - L212 `void dispose()`
-  - L218 `Widget build(BuildContext context)`
+- L145 `class FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
+  - L146 `const FadeThroughTabs({ super.key, required this.index, required this.children, })`
+  - L152 `final int index`
+  - L153 `final List<Widget> children`
+  - L156 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
+  - L159 `State<FadeThroughTabs> createState()`
+- L162 `class _FadeThroughTabsState extends State<FadeThroughTabs> with SingleTickerProviderStateMixin`
+  - L164 `late final AnimationController _c = AnimationController( vsync: this, duration: FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
+  - L171 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
+  - L174 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
+  - L176 `bool _reducedMotion = false`
+  - L178 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
+  - L182 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
+  - L187 `void _onStatus(AnimationStatus status)`
+  - L194 `void didChangeDependencies()`
+  - L205 `void didUpdateWidget(covariant FadeThroughTabs oldWidget)`
+  - L221 `void dispose()`
+  - L227 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_layout.dart  (96 Z.)
 - L20 `class MobileLayout`

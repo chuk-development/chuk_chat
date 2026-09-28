@@ -13,6 +13,10 @@ part of 'messenger_shell.dart';
 ///    chuk's artifact panel slot: its header, its left border and its
 ///    divider. Resizable between [kDeskDetailsMin] and [kDeskDetailsMax]. It
 ///    pushes the thread; it never covers it.
+///  * **Top centre** — the Chat | Agents switch, where chuk's desktop floats
+///    it in the Chat half: on the line of the thread's buttons, clear of the
+///    roster and of those buttons. A centre pane too narrow for both gives
+///    the switch a line of its own above the thread.
 ///
 /// The keyboard reaches everything: the shell's focus node sits above the
 /// whole body, so a shortcut works from the composer as well as from anywhere
@@ -25,6 +29,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   // --- hooks the state implements --------------------------------------------
 
   void _openSettings();
+
+  /// The Chat | Agents switch, or null when there is no Chat half.
+  Widget? _agentsModeSwitch();
 
   // --- state -------------------------------------------------------------------
 
@@ -354,6 +361,41 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       onOpenSettings: widget.shellConfig == null ? null : _openSettings,
     );
 
+    // The Chat | Agents switch: at the top centre of the window on the line
+    // of the thread's buttons, kept between the roster and those buttons.
+    // What the buttons take is counted from what this layout hands the
+    // thread (the thread adds its screen, Documents and "…"), or a room's
+    // two. When the centre pane cannot hold both, the switch takes a line of
+    // its own and the centre pane starts under it.
+    final Widget? modeSwitch = _agentsModeSwitch();
+    double centreTop = 0;
+    Widget? switchSlot;
+    if (modeSwitch != null) {
+      final double buttons =
+          (room != null ? 2 : _deskBarActions(agent).length + 3) *
+          AgentsThreadHeader.slot;
+      final double left = rosterW + 12;
+      final double paneRight = (showRight ? rightW : 0) + 12;
+      final double besideButtons = paneRight + buttons + 8;
+      final bool inline =
+          width - left - besideButtons >= AppModeSwitch.preferredWidth(context);
+      if (!inline) centreTop = kTopInitialSpacing + kButtonVisualHeight;
+      switchSlot = Positioned(
+        key: const ValueKey<String>('desk-mode-switch'),
+        top:
+            kTopInitialSpacing +
+            (kButtonVisualHeight - AppModeSwitch.boxHeight) / 2,
+        left: 0,
+        right: 0,
+        height: AppModeSwitch.boxHeight,
+        child: TopCentreSlot(
+          left: left,
+          right: inline ? besideButtons : paneRight,
+          child: modeSwitch,
+        ),
+      );
+    }
+
     final Widget centre = Stack(
       children: <Widget>[
         // The thread owns the socket: behind an open room it is off stage,
@@ -390,7 +432,12 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             SizedBox(width: rosterW, child: roster),
-            Expanded(child: centre),
+            Expanded(
+              child: Padding(
+                padding: EdgeInsets.only(top: centreTop),
+                child: centre,
+              ),
+            ),
             if (right != null)
               // chuk's artifact panel slot: the page colour, a left border.
               Container(
@@ -453,6 +500,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               },
             ),
           ),
+        ?switchSlot,
       ],
     );
 

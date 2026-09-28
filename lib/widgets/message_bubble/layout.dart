@@ -228,8 +228,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
 
     // A fired automation reaches the thread as a user turn because that is how
     // the Agents host submits it. It is not a person talking, so it never gets
-    // a bubble.
-    final AutomationWake? wake = agentsChatCore || widget.messengerMode
+    // a bubble. Agents threads and rooms only: a chuk_chat chat has no host.
+    final AutomationWake? wake =
+        ChatOrigin.isAgentsThread(widget.chatId) || widget.messengerMode
         ? parseAutomationWake(widget.message)
         : null;
     if (wake != null) return _buildAutomationWakeLine(context, wake);

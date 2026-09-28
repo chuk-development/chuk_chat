@@ -606,6 +606,10 @@ class _CustomizationPageState extends State<CustomizationPage> {
           // step, or just the answer (docs/PRODUCT_PHILOSOPHY.md). Default off.
           // Agents put this where it had deleted upstream's auto-title rows;
           // the merged app keeps both, so it sits next to them instead.
+          // Only an Agents thread reads it (the relay transport and the thread
+          // view); a chuk_chat chat in the same build shows its tool calls as
+          // it always did. So it stays an Agents-build row, and says whose
+          // threads it changes.
           if (agentsChatCore) ExpressiveSectionHeader('Detail'),
           if (agentsChatCore)
             ListenableBuilder(
@@ -616,8 +620,8 @@ class _CustomizationPageState extends State<CustomizationPage> {
                     icon: Icons.terminal_outlined,
                     title: 'Full log',
                     subtitle:
-                        'Show every command, tool call and browser step in the '
-                        'thread, not just the answer.',
+                        'Show every command, tool call and browser step in an '
+                        'Agents thread, not just the answer.',
                     value: VerboseService.instance.enabled,
                     onChanged: (bool value) =>
                         VerboseService.instance.setEnabled(value),

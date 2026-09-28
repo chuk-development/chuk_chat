@@ -18,6 +18,9 @@
 - L14 `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - L28 `void main()`
 
+## test/pages/desktop_settings_modal_test.dart  (180 Z.)
+- L20 `void main()`  — The desktop settings modal lists the same destinations as the phone's
+
 ## test/pages/mcp_connectors_page_test.dart  (212 Z.)
 - L19 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - L20 `final Map<String, String> map = <String, String>{}`
@@ -45,8 +48,8 @@
 - L37 `String _j(Map<String, String> m)`
 - L39 `void main()`
 
-## test/pages/settings_page_test.dart  (162 Z.)
-- L22 `void main()`  — One settings page for both builds. With Agents on it is upstream
+## test/pages/settings_page_test.dart  (213 Z.)
+- L25 `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ## test/pages/skills_settings_page_test.dart  (357 Z.)
 - L22 `Widget _host(Widget child)`

@@ -8,6 +8,9 @@
 ## test/services/api_config_base_test.dart  (26 Z.)
 - L10 `void main()`  — The model catalogue (`/v1/models_info`) is fetched from this base URL by
 
+## test/services/app_mode_service_test.dart  (117 Z.)
+- L8 `void main()`
+
 ## test/services/app_theme_contrast_uifont_test.dart  (94 Z.)
 - L12 `void main()`
 
@@ -240,8 +243,9 @@
 ## test/services/streaming_final_content_test.dart  (55 Z.)
 - L7 `void main()`
 
-## test/services/streaming_idle_timeout_test.dart  (112 Z.)
-- L16 `void main()`
+## test/services/streaming_idle_timeout_test.dart  (139 Z.)
+- L18 `_chukChatId = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b'`  — A chuk_chat chat id: always a UUID.
+- L20 `void main()`
 
 ## test/services/streaming_manager_test.dart  (585 Z.)
 - L12 `void main()`
@@ -254,7 +258,7 @@
   - L574 `final String? Function() getError`
   - L576 `_TestStreamContext({ required this.controller, required this.getContent, required this.getReasoning, required this.getTps, required this.isCompleted, required this.getError, })`
 
-## test/services/streaming_silence_test.dart  (203 Z.)
+## test/services/streaming_silence_test.dart  (206 Z.)
 - L28 `class _Rig`  — One run under test: the input the host would write to, and everything the
   - L29 `_Rig(this.chatId)`
   - L31 `final String chatId`

@@ -70,9 +70,9 @@
 - L51 `Widget _app(Widget child)`
 - L62 `void main()`
 
-## test/platform_specific/chat/message_render_cache_shared_test.dart  (82 Z.)
-- L12 `List<Map<String, String>> _messages()`
-- L29 `void main()`
+## test/platform_specific/chat/message_render_cache_shared_test.dart  (91 Z.)
+- L13 `List<Map<String, String>> _messages()`
+- L30 `void main()`
 
 ## test/platform_specific/chat/mode_provider_resolution_test.dart  (146 Z.)
 - L12 `class _Host extends StatefulWidget`

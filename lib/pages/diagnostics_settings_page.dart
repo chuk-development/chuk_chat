@@ -234,7 +234,8 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                   ],
                 ),
                 // Agents only: the endpoint this build talks to, and the
-                // full-log switch the host's thread reads.
+                // full-log switch that only an Agents thread reads. Neither is
+                // about one chat, so the gate stays on the build.
                 if (agentsChatCore) ...[
                   const ExpressiveSectionHeader('Agents'),
                   ExpressiveGroup(
@@ -258,7 +259,7 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                           title: 'Verbose view',
                           subtitle:
                               'Show every command, tool call, and browser '
-                              'action in the thread',
+                              'action in an Agents thread',
                           value: VerboseService.instance.enabled,
                           onChanged: VerboseService.instance.setEnabled,
                         ),

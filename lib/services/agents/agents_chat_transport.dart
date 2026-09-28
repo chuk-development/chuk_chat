@@ -2,8 +2,8 @@
 // ADAPTER. Upstream chuk_chat talks to a hosted API over the multiplexed
 // /v2/ws socket; Agents talks to the paired local Python host through
 // AgentsRelayController. `WebSocketChatService.sendStreamingChat` hands the
-// request here when `kFeatureAgents` is on and keeps upstream's path when it
-// is off, so no call site branches on the flag.
+// request here for an Agents thread (`ChatOrigin.isAgentsThread`) and keeps
+// upstream's path for every other chat, so no call site branches on the flag.
 //
 // It must NEVER emit ToolCallsEvent: that is the invariant that keeps the
 // client-side tool loop dead. Every host tool is RENDERED (through the run
@@ -26,8 +26,8 @@ import 'package:chuk_chat/services/chat_model_selection_service.dart';
 /// Service for handling streaming chat responses.
 ///
 /// Same static signature as upstream's `WebSocketChatService.sendStreamingChat`,
-/// which forwards here in an Agents build. It sends one task over the paired
-/// relay and folds the host's event stream into `ChatStreamEvent`s.
+/// which forwards an Agents thread's send here. It sends one task over the
+/// paired relay and folds the host's event stream into `ChatStreamEvent`s.
 ///
 /// ## What is ignored, and why
 ///

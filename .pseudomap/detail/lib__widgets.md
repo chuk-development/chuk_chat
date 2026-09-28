@@ -240,7 +240,7 @@
   - L264 `final VoidCallback onTap`
   - L267 `Widget build(BuildContext context)`
 
-## lib/widgets/agents_thread_header.dart  (425 Z.)
+## lib/widgets/agents_thread_header.dart  (427 Z.)
 - L18 `enum AgentsThreadConnection`  — One button in the thread's floating row.
   - L18 `live`
   - L18 `connecting`
@@ -277,17 +277,17 @@
   - L271 `final bool parked`  — Not ready: the glyph is quieter, and a tap still reaches [onPressed],
   - L273 `final String? semanticsId`
   - L276 `Widget build(BuildContext context)`
-- L310 `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
-  - L311 `const _OfflineChip({super.key, this.onReconnect})`
-  - L313 `final VoidCallback? onReconnect`
-  - L316 `Widget build(BuildContext context)`
-- L366 `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
-  - L367 `const _AutomationChip({ required this.label, required this.paused, required this.expanded, this.onTap, })`
-  - L374 `final String label`
-  - L375 `final bool paused`
-  - L376 `final bool expanded`
-  - L377 `final VoidCallback? onTap`
-  - L380 `Widget build(BuildContext context)`
+- L312 `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
+  - L313 `const _OfflineChip({super.key, this.onReconnect})`
+  - L315 `final VoidCallback? onReconnect`
+  - L318 `Widget build(BuildContext context)`
+- L368 `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
+  - L369 `const _AutomationChip({ required this.label, required this.paused, required this.expanded, this.onTap, })`
+  - L376 `final String label`
+  - L377 `final bool paused`
+  - L378 `final bool expanded`
+  - L379 `final VoidCallback? onTap`
+  - L382 `Widget build(BuildContext context)`
 
 ## lib/widgets/agents_thread_view.dart  (2277 Z.)
 - L48 `kAgentsThreadHeaderInset = kTopInitialSpacing + AgentsThreadHeader.slot`  — Room a desktop thread keeps above its first message for the header that
@@ -567,6 +567,18 @@
   - L43 `void dispose()`
   - L49 `void didChangeAppLifecycleState(AppLifecycleState state)`
   - L57 `Widget build(BuildContext context)`
+
+## lib/widgets/app_mode_switch.dart  (76 Z.)
+- L21 `class AppModeSwitch extends StatelessWidget`
+  - L22 `const AppModeSwitch({ super.key, required this.mode, required this.onChanged, })`
+  - L29 `final AppMode mode`  — The half in front.
+  - L33 `final ValueChanged<AppMode> onChanged`  — Called with the other half when the user picks it. A press on the half
+  - L36 `static const List<String> labels = <String>['Chat', 'Agents']`  — The labels, in [AppMode] order.
+  - L40 `static const double height = 42`  — The painted height of the strip: chuk's floating chip is 42 px, and the
+  - L44 `static const double boxHeight = 48`  — The height of the box it takes: the strip plus the press reach above and
+  - L48 `static const double width = 176`  — Its width at normal text size. It grows with the text, and a slot that is
+  - L51 `static double preferredWidth(BuildContext context)`  — The width it asks for at the current text scale.
+  - L55 `Widget build(BuildContext context)`
 
 ## lib/widgets/app_notification.dart  (209 Z.)
 - L22 `enum AppNotificationKind`  — What kind of thing happened. Picks the glyph and the accent down the side.
@@ -2935,6 +2947,21 @@
   - L833 `const _ErrorCard({required this.message})`
   - L835 `final String message`
   - L838 `Widget build(BuildContext context)`
+
+## lib/widgets/top_centre_slot.dart  (69 Z.)
+- L20 `class TopCentreSlot extends StatelessWidget`  — Lays [child] out on the centre line of the box it fills, pushed sideways
+  - L21 `const TopCentreSlot({ super.key, required this.left, required this.right, required this.child, })`
+  - L28 `final double left`
+  - L29 `final double right`
+  - L30 `final Widget child`
+  - L33 `Widget build(BuildContext context)`
+- L41 `class _TopCentreDelegate extends SingleChildLayoutDelegate`
+  - L42 `const _TopCentreDelegate({required this.left, required this.right})`
+  - L44 `final double left`
+  - L45 `final double right`
+  - L48 `BoxConstraints getConstraintsForChild(BoxConstraints constraints)`
+  - L55 `Offset getPositionForChild(Size size, Size childSize)`
+  - L66 `bool shouldRelayout(_TopCentreDelegate oldDelegate)`
 
 ## lib/widgets/update_banner.dart  (97 Z.)
 - L10 `class UpdateBanner extends StatelessWidget`  — A compact banner shown in the sidebar when a new app version is available.

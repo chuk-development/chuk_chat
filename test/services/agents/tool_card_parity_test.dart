@@ -172,10 +172,12 @@ void main() {
   });
 
   /// The live path, end to end: the adapter streams the run into the ledger,
-  /// the fold hands the renderer its tool calls, as `onComplete` does.
+  /// the fold hands the renderer its tool calls, as `onComplete` does. It
+  /// enters where the chat screen does, so the thread key has to pick the
+  /// relay and the fold on its own.
   Future<List<ToolCall>> live(List<AgentsRelayInbound> events) async {
     final seen = <ChatStreamEvent>[];
-    final sub = AgentsChatTransport.sendStreamingChat(
+    final sub = WebSocketChatService.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
       modelId: 'gpt-5',
@@ -190,7 +192,8 @@ void main() {
     await sub.cancel();
     expect(seen.whereType<DoneEvent>(), hasLength(1));
 
-    final handler = AgentsToolCallHandler.instance;
+    final handler = ToolCallHandler.forChat(sessionKey);
+    expect(handler, same(AgentsToolCallHandler.instance));
     final session = handler.createSession(
       initialUserMessage: 'do the thing',
       history: const <Map<String, dynamic>>[],

@@ -13,6 +13,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/current_user.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 
 const int _defaultChatLimit = 10;
 const int _maxChatLimit = 50;
@@ -399,6 +400,8 @@ String _renderMessageText(ChatMessage message) {
 // cache holds all synced chats in plaintext, so in-memory + SQLite cache
 // are the only sources.
 Future<_LoadedChatContent?> _loadChatContent(String chatId) async {
+  // chuk_chat chats only (see [_upsertCandidate]).
+  if (ChatOrigin.isAgentsThread(chatId)) return null;
   final inMemory = ChatStorageState.chatsById[chatId];
   if (inMemory != null && inMemory.isFullyLoaded) {
     final messages = inMemory.messagesOrNull ?? const <ChatMessage>[];
@@ -629,6 +632,9 @@ void _upsertCandidate(
   Map<String, _ChatCandidate> candidatesById,
   _ChatCandidate candidate,
 ) {
+  // The tool runs in chuk_chat chats and finds chuk_chat chats. An Agents
+  // thread shares the memory map and the cache but is not one of them.
+  if (ChatOrigin.isAgentsThread(candidate.chatId)) return;
   final existing = candidatesById[candidate.chatId];
   if (existing == null || _compareCandidates(candidate, existing) < 0) {
     candidatesById[candidate.chatId] = candidate;

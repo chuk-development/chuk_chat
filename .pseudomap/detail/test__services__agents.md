@@ -261,6 +261,13 @@
 ## test/services/agents/browser_presence_test.dart  (345 Z.)
 - L6 `void main()`
 
+## test/services/agents/chat_core_routing_test.dart  (308 Z.)
+- L35 `chukChatId = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b'`
+- L36 `threadKey = 'amber-otter-2'`
+- L38 `StoredChat _chat(String id, String text)`
+- L47 `void main()`
+- L303 `Future<void> _drain()`
+
 ## test/services/agents/chat_debug_export_size_test.dart  (102 Z.)
 - L16 `void main()`  — The debug copy has to be the size chuk_chat's is. A thread that carries a
 
@@ -279,14 +286,14 @@
 ## test/services/agents/schedule_spec_test.dart  (431 Z.)
 - L7 `void main()`  — 2026-02-03 is a Tuesday. Every date in this file is built from local
 
-## test/services/agents/tool_card_parity_test.dart  (314 Z.)
+## test/services/agents/tool_card_parity_test.dart  (317 Z.)
 - L33 `Map<String, dynamic> _visible(Map<String, dynamic> call)`  — The fields of a card the reader can see: everything the renderer reads
 - L43 `_t0 = DateTime.fromMillisecondsSinceEpoch(1_757_040_000_000)`  — The host's clock, as a current host sends it: unix seconds.
 - L44 `DateTime _at(int seconds)`
 - L47 `_liveRun = <AgentsRelayInbound>[ const AgentsRelayDelta('Let me look.'), AgentsRelayTool( 'run_command', arguments: 'ls `  — One run: a command that worked, one that failed, a child agent.
 - L92 `_replayedRun = <AgentsRelayInbound>[ const AgentsRelayUser('do the thing', mid: 1), const AgentsRelayDelta('Let me look.`  — The same run as the host replays it: every frame marked, in row order,
 - L144 `void main()`
-- L309 `Future<void> _drain()`
+- L312 `Future<void> _drain()`
 
 ## test/services/agents/tool_events_contract_test.dart  (178 Z.)
 - L11 `void main()`

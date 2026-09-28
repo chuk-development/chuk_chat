@@ -18,33 +18,33 @@
   - L205 `static String _fileNameOf(String chatId)`  — P2b's file name for a session key (`chat_storage_service.dart` stub,
   - L210 `static Future<void> _markMigrated(File file)`  — A rename in two steps, because the web `File` stub has no rename: the
 
-## lib/services/storage/agents_chat_storage_bootstrap.dart  (257 Z.)
-- L26 `class AgentsChatStorageBootstrap`
-  - L27 `AgentsChatStorageBootstrap._()`
-  - L29 `static StreamSubscription<AuthState>? _sub`
-  - L30 `static String? _activeUserId`
-  - L31 `static Timer? _flushTimer`
-  - L37 `static Duration flushInterval = const Duration(seconds: 30)`  — How often the cloud outbox is flushed while signed in. chuk_chat's
-  - L42 `static Future<void> Function()? flushHook`  — Test seam: what a tick does. Defaults to [AgentsChatStore.flushOutbox]
-  - L47 `static Future<void> Function(String userId)? migrationHook`  — Test seam: the one-time repairs at sign-in. Defaults to
-  - L51 `static Stream<AuthState>? authStream`  — Test seam: the auth events to follow. Defaults to Supabase's stream.
-  - L55 `static String? Function()? currentUserId`  — Test seam: who is signed in right now. Defaults to Supabase's session.
-  - L59 `static Future<void> Function()? onSignedInHook`  — Test seams for the two side effects.
-  - L61 `static Future<void> Function()? onSignedOutHook`
-  - L70 `static void start()`  — Idempotent. Safe to call before Supabase is initialised: it then does
-  - L88 `static Future<void> stop()`
-  - L99 `static Future<void> flushNow()`  — Flushes the cloud outbox now (on sign-in, and every [flushInterval]),
-  - L118 `static Future<void>? _inFlight`
-  - L120 `static void _startFlushing()`
-  - L126 `static void _stopFlushing()`
-  - L132 `static Future<void> reset()`
-  - L144 `static String? get activeUserId`
-  - L148 `static Future<void> _onAuthState(AuthState state)`
-  - L172 `static Future<void> _signedIn(String userId)`
-  - L215 `static Future<void> _repair(String userId)`
-  - L222 `static Future<void> _signedOut()`
-  - L238 `static String? _userId()`
-  - L248 `static Stream<AuthState>? _supabaseAuthStream()`
+## lib/services/storage/agents_chat_storage_bootstrap.dart  (267 Z.)
+- L36 `class AgentsChatStorageBootstrap`
+  - L37 `AgentsChatStorageBootstrap._()`
+  - L39 `static StreamSubscription<AuthState>? _sub`
+  - L40 `static String? _activeUserId`
+  - L41 `static Timer? _flushTimer`
+  - L47 `static Duration flushInterval = const Duration(seconds: 30)`  — How often the cloud outbox is flushed while signed in. chuk_chat's
+  - L52 `static Future<void> Function()? flushHook`  — Test seam: what a tick does. Defaults to [AgentsChatStore.flushOutbox]
+  - L57 `static Future<void> Function(String userId)? migrationHook`  — Test seam: the one-time repairs at sign-in. Defaults to
+  - L61 `static Stream<AuthState>? authStream`  — Test seam: the auth events to follow. Defaults to Supabase's stream.
+  - L65 `static String? Function()? currentUserId`  — Test seam: who is signed in right now. Defaults to Supabase's session.
+  - L69 `static Future<void> Function()? onSignedInHook`  — Test seams for the two side effects.
+  - L71 `static Future<void> Function()? onSignedOutHook`
+  - L80 `static void start()`  — Idempotent. Safe to call before Supabase is initialised: it then does
+  - L98 `static Future<void> stop()`
+  - L109 `static Future<void> flushNow()`  — Flushes the cloud outbox now (on sign-in, and every [flushInterval]),
+  - L128 `static Future<void>? _inFlight`
+  - L130 `static void _startFlushing()`
+  - L136 `static void _stopFlushing()`
+  - L142 `static Future<void> reset()`
+  - L154 `static String? get activeUserId`
+  - L158 `static Future<void> _onAuthState(AuthState state)`
+  - L182 `static Future<void> _signedIn(String userId)`
+  - L225 `static Future<void> _repair(String userId)`
+  - L232 `static Future<void> _signedOut()`
+  - L248 `static String? _userId()`
+  - L258 `static Stream<AuthState>? _supabaseAuthStream()`
 
 ## lib/services/storage/agents_chat_store.dart  (1479 Z.)
 - L93 `kAgentsChatsTable = 'cowork_chats'`  — The Supabase table Agents threads live in. Same columns and RLS as
@@ -156,13 +156,13 @@
   - L1463 `final String? customName`
   - L1465 `StoredChat chat(StoredChat? existing)`
 
-## lib/services/storage/chat_origin.dart  (72 Z.)
-- L31 `class ChatOrigin`
-  - L32 `ChatOrigin._()`
-  - L36 `static bool get agentsEnabled`  — Whether the Agents storage paths are live. Follows [agentsChatCore], the
-  - L41 `static set agentsEnabled(bool value)`  — A test picks a side here (tests run with the flag off). Sets the one
-  - L43 `static final RegExp _uuid = RegExp( r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' r'[0-9a-fA-F]{12}$', )`
-  - L48 `static final Set<String> _claimed = <String>{}`
-  - L52 `static bool isAgentsThread(String? chatId)`  — True when [chatId] names an Agents thread. Always false with the flag
-  - L61 `static void claimAgentsThread(String sessionKey)`  — Records [sessionKey] as an Agents thread. Called by the Agents write
-  - L67 `static void reset()`
+## lib/services/storage/chat_origin.dart  (77 Z.)
+- L33 `class ChatOrigin`
+  - L34 `ChatOrigin._()`
+  - L38 `static bool get agentsEnabled`  — Whether this is the Agents build, so Agents threads can exist at all.
+  - L43 `static set agentsEnabled(bool value)`  — A test picks the build here (tests run with the flag off). Sets the one
+  - L47 `static final RegExp _uuid = RegExp( r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-' r'[0-9a-fA-F]{12}$', )`
+  - L52 `static final Set<String> _claimed = <String>{}`
+  - L56 `static bool isAgentsThread(String? chatId)`  — True when [chatId] names an Agents thread. Always false with the flag
+  - L65 `static void claimAgentsThread(String sessionKey)`  — Records [sessionKey] as an Agents thread. Called by the Agents write
+  - L71 `static void reset()`

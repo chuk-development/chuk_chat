@@ -1,8 +1,9 @@
-// chuk_chat's idle timeout, with FEATURE_AGENTS off (the default in tests).
+// chuk_chat's idle timeout, with FEATURE_AGENTS off (the default in tests),
+// and for a chuk_chat chat in the Agents build.
 //
 // No event of any kind for 60 seconds ends the stream: an error with the
 // `idle_timeout` code when nothing had arrived, a completion with the partial
-// content when something had. The Agents build replaces this with a log-only
+// content when something had. An Agents thread replaces this with a log-only
 // silence watch; that side is pinned by streaming_silence_test.dart.
 
 import 'dart:async';
@@ -12,6 +13,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/models/chat_stream_event.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/streaming_manager_io.dart';
+
+/// A chuk_chat chat id: always a UUID.
+const String _chukChatId = '3f2b8c1e-4a5d-4e6f-9a7b-1c2d3e4f5a6b';
 
 void main() {
   late StreamController<ChatStreamEvent> input;
@@ -47,8 +51,31 @@ void main() {
     await tester.pump();
   }
 
+  tearDown(() => debugAgentsChatCoreOverride = null);
+
   test('the idle timeout is on in a chuk_chat build', () {
-    expect(StreamingManager.idleTimeoutEnabled, isTrue);
+    expect(StreamingManager.idleTimeoutEnabledFor(_chukChatId), isTrue);
+    // No Agents threads without the Agents build, whatever the id looks like.
+    expect(StreamingManager.idleTimeoutEnabledFor('amber-otter-2'), isTrue);
+  });
+
+  test('Agents build: on for a chuk_chat chat, off for an Agents thread', () {
+    debugAgentsChatCoreOverride = true;
+    expect(StreamingManager.idleTimeoutEnabledFor(_chukChatId), isTrue);
+    expect(StreamingManager.idleTimeoutEnabledFor('amber-otter-2'), isFalse);
+  });
+
+  testWidgets('Agents build: a silent chuk_chat stream still times out', (
+    tester,
+  ) async {
+    debugAgentsChatCoreOverride = true;
+    await start(_chukChatId);
+
+    await tester.pump(const Duration(seconds: 61));
+    expect(errorCodes, <String?>[StreamErrorCodes.idleTimeout]);
+    expect(manager.isStreaming(_chukChatId), isFalse);
+
+    await dispose(tester, _chukChatId);
   });
 
   testWidgets('a silent stream errors with idle_timeout after 60 s', (

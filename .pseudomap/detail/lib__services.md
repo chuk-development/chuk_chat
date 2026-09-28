@@ -115,7 +115,24 @@
   - L153 `void dispose()`  — Dispose all resources
   - L159 `bool get _isDesktopPlatform`
 
-## lib/services/app_theme_service.dart  (861 Z.)
+## lib/services/app_mode_service.dart  (108 Z.)
+- L22 `enum AppMode`  — The two halves, in the order the switch shows them: Chat on the left,
+  - L22 `chat`
+  - L22 `agents`
+- L30 `class AppModeService extends ValueNotifier<AppMode>`  — The current [AppMode], with its persistence.
+  - L34 `AppModeService({AppMode initial = AppMode.agents}) : super(initial)`  — [initial] is what the shell shows until [load] has answered. Agents, by
+  - L37 `static const String prefsKey = 'app_home_mode'`  — The preference key of the remembered choice (`chat` or `agents`).
+  - L42 `static const Duration pairingTimeout = Duration(seconds: 2)`  — How long the default may wait for the pairing store. It lives in secure
+  - L44 `bool _loaded = false`
+  - L45 `bool _chosen = false`
+  - L46 `bool _disposed = false`
+  - L49 `bool get loaded`  — Whether [load] has answered.
+  - L56 `Future<void> load({required Future<bool> Function() hasPairing})`  — Reads the remembered choice, or works out the default.
+  - L79 `Future<void> select(AppMode mode)`  — The user picked [mode]: show it and remember it.
+  - L96 `static AppMode? parse(String? raw)`  — The mode a stored value names, or null for anything else.
+  - L103 `void dispose()`
+
+## lib/services/app_theme_service.dart  (870 Z.)
 - L17 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
 - L20 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
   - L21 `AppThemeService._()`
@@ -231,44 +248,44 @@
   - L274 `String _sanitizeUiFontFamily(String? id)`
   - L282 `Future<void> loadFromSupabaseAsync({bool forceRefresh = false})`  — Load theme from Supabase in background
   - L311 `Future<void> _loadFromSupabase()`
-  - L420 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
-  - L433 `Future<void> _persistToPrefs()`
-  - L484 `void _debouncedSyncTheme()`
-  - L491 `void _debouncedSyncCustomization()`
-  - L498 `Future<void> _syncThemeToSupabase()`
-  - L525 `Future<void> _syncCustomizationToSupabase()`
-  - L569 `void setThemeMode(Brightness mode)`
-  - L576 `void setAccentColor(Color color)`
-  - L583 `void setIconFgColor(Color color)`
-  - L590 `void setBgColor(Color color)`
-  - L603 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
-  - L613 `void setShowReasoningTokens(bool show)`
-  - L619 `void setShowModelInfo(bool show)`
-  - L625 `void setShowTps(bool show)`
-  - L631 `void setAutoSendVoiceTranscription(bool autoSend)`
-  - L637 `void setImageGenEnabled(bool enabled)`
-  - L643 `void setImageGenDefaultSize(String size)`
-  - L649 `void setImageGenCustomWidth(int width)`
-  - L655 `void setImageGenCustomHeight(int height)`
-  - L661 `void setImageGenUseCustomSize(bool useCustom)`
-  - L667 `void setIncludeRecentImagesInHistory(bool value)`
-  - L673 `void setIncludeAllImagesInHistory(bool value)`
-  - L679 `void setIncludeReasoningInHistory(bool value)`
-  - L685 `void setIncludeToolResultsInHistory(bool value)`
-  - L691 `void setToolCallingEnabled(bool value)`
-  - L697 `void setToolDiscoveryMode(bool value)`
-  - L703 `void setShowToolCalls(bool value)`
-  - L709 `void setUiLocale(String locale)`
-  - L715 `void setChatFontSize(double size)`
-  - L723 `void setChatFontFamily(String id)`
-  - L733 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
-  - L747 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
-  - L762 `Future<void> setUiFontFamily(String id)`  — The app-chrome font is part of a theme pack, so it syncs with the rest of
-  - L775 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
-  - L793 `void resetSupabaseThemeFlag()`
-  - L810 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
-  - L846 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
-  - L855 `void dispose()`
+  - L429 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
+  - L442 `Future<void> _persistToPrefs()`
+  - L493 `void _debouncedSyncTheme()`
+  - L500 `void _debouncedSyncCustomization()`
+  - L507 `Future<void> _syncThemeToSupabase()`
+  - L534 `Future<void> _syncCustomizationToSupabase()`
+  - L578 `void setThemeMode(Brightness mode)`
+  - L585 `void setAccentColor(Color color)`
+  - L592 `void setIconFgColor(Color color)`
+  - L599 `void setBgColor(Color color)`
+  - L612 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
+  - L622 `void setShowReasoningTokens(bool show)`
+  - L628 `void setShowModelInfo(bool show)`
+  - L634 `void setShowTps(bool show)`
+  - L640 `void setAutoSendVoiceTranscription(bool autoSend)`
+  - L646 `void setImageGenEnabled(bool enabled)`
+  - L652 `void setImageGenDefaultSize(String size)`
+  - L658 `void setImageGenCustomWidth(int width)`
+  - L664 `void setImageGenCustomHeight(int height)`
+  - L670 `void setImageGenUseCustomSize(bool useCustom)`
+  - L676 `void setIncludeRecentImagesInHistory(bool value)`
+  - L682 `void setIncludeAllImagesInHistory(bool value)`
+  - L688 `void setIncludeReasoningInHistory(bool value)`
+  - L694 `void setIncludeToolResultsInHistory(bool value)`
+  - L700 `void setToolCallingEnabled(bool value)`
+  - L706 `void setToolDiscoveryMode(bool value)`
+  - L712 `void setShowToolCalls(bool value)`
+  - L718 `void setUiLocale(String locale)`
+  - L724 `void setChatFontSize(double size)`
+  - L732 `void setChatFontFamily(String id)`
+  - L742 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
+  - L756 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
+  - L771 `Future<void> setUiFontFamily(String id)`  — The app-chrome font is part of a theme pack, so it syncs with the rest of
+  - L784 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
+  - L802 `void resetSupabaseThemeFlag()`
+  - L819 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
+  - L855 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
+  - L864 `void dispose()`
 
 ## lib/services/approval_config.dart  (140 Z.)
 - L4 `enum ApprovalCategory`  — Categories of actions that may require approval
@@ -697,7 +714,7 @@
   - L954 `failed`
   - L954 `done`
 
-## lib/services/chat_preload_service.dart  (402 Z.)
+## lib/services/chat_preload_service.dart  (403 Z.)
 - L23 `class ChatPreloadService`  — Service for background preloading all chat messages.
   - L24 `ChatPreloadService._()`
   - L27 `static bool _isPreloading = false`  — Whether preload is currently running
@@ -718,12 +735,12 @@
   - L59 `static const int _batchSize = 5`  — Batch size for loading
   - L62 `static const int _batchDelayMs = 100`  — Delay between batches to yield to UI thread (ms)
   - L66 `static Future<void> startBackgroundPreload()`  — Start background preload of all chat messages.
-  - L251 `static Future<void> _fetchFromRemote( List<String> chatIds, String userId, )`  — Fetch chats from Supabase, decrypt, and cache as plaintext.
-  - L283 `static Future<void> _decryptAndStoreRows( List<Map<String, dynamic>> rows, String userId, )`  — Decrypt Supabase rows, store them in memory, and write plaintext to cache.
-  - L356 `static Future<void> awaitPreload()`  — Wait for the cache warm-up to complete.
-  - L374 `static Future<void> preloadNewChats()`  — Re-run the warm-up after the sync service discovered new chats.
-  - L383 `static int get fullyLoadedCount`  — Get the number of fully loaded chats
-  - L390 `static void reset()`  — Reset preload state (call on logout)
+  - L252 `static Future<void> _fetchFromRemote( List<String> chatIds, String userId, )`  — Fetch chats from Supabase, decrypt, and cache as plaintext.
+  - L284 `static Future<void> _decryptAndStoreRows( List<Map<String, dynamic>> rows, String userId, )`  — Decrypt Supabase rows, store them in memory, and write plaintext to cache.
+  - L357 `static Future<void> awaitPreload()`  — Wait for the cache warm-up to complete.
+  - L375 `static Future<void> preloadNewChats()`  — Re-run the warm-up after the sync service discovered new chats.
+  - L384 `static int get fullyLoadedCount`  — Get the number of fully loaded chats
+  - L391 `static void reset()`  — Reset preload state (call on logout)
 
 ## lib/services/chat_reaction_service.dart  (91 Z.)
 - L9 `class ChatReactionService extends ChangeNotifier`  — Personal, device-local reactions. They are never sent as model feedback.
@@ -963,35 +980,34 @@
   - L281 `static Future<void> mergeSyncedChatsBatch( List<Map<String, dynamic>> rows, )`  — Batch merge multiple synced chats efficiently.
   - L450 `static void removeChatLocally(String chatId)`  — Remove a chat from local state only (without database operation).
 
-## lib/services/chat_sync_service.dart  (446 Z.)
-- L18 `class ChatSyncService`  — Service for syncing chats between local state and Supabase.
-  - L19 `ChatSyncService._()`
-  - L21 `static Timer? _syncTimer`
-  - L22 `static bool _isSyncing = false`
-  - L23 `static bool _isEnabled = false`
-  - L24 `static bool _hasCompletedFirstSync = false`
-  - L25 `static DateTime? _lastResumeTitleSyncAt`
-  - L26 `static DateTime? _lastSyncAt`
-  - L27 `static String? _lastSyncOutcome`
-  - L30 `static bool get isEnabled`  — Public sync state for debug exports / status UI.
-  - L31 `static bool get isSyncing`
-  - L32 `static bool get hasCompletedFirstSync`
-  - L33 `static DateTime? get lastSyncAt`
-  - L34 `static String? get lastSyncOutcome`
-  - L38 `static Completer<void>? _firstSyncCompleter`  — Completer that resolves when the first sync cycle finishes.
-  - L42 `static Future<void> get firstSyncComplete`  — Future that resolves when the first sync cycle finishes.
-  - L49 `static const int _pollIntervalSeconds = 30`  — How often to poll for changes (in seconds)
-  - L50 `static const Duration _resumeTitleSyncDelay = Duration(seconds: 2)`
-  - L51 `static const Duration _resumeTitleSyncCooldown = Duration(seconds: 60)`
-  - L52 `static Duration get _initialSyncDelay`
-  - L61 `static void start()`  — Start the sync service
-  - L84 `static void stop()`  — Stop the sync service
-  - L104 `static void pause()`  — Pause syncing (e.g., when app is backgrounded)
-  - L113 `static void resume()`  — Resume syncing (e.g., when app comes to foreground)
-  - L136 `static Future<void> _syncTitlesOnResume()`  — Sync titles when app resumes - fetches latest from network.
-  - L168 `static Future<void> syncNow()`  — Force an immediate sync
-  - L181 `static Future<void> _performAgentsSync()`  — The tick of the Agents build.
-  - L197 `static Future<void> _performSync()`  — Perform the actual sync operation
+## lib/services/chat_sync_service.dart  (424 Z.)
+- L23 `class ChatSyncService`  — Service for syncing chats between local state and Supabase.
+  - L24 `ChatSyncService._()`
+  - L26 `static Timer? _syncTimer`
+  - L27 `static bool _isSyncing = false`
+  - L28 `static bool _isEnabled = false`
+  - L29 `static bool _hasCompletedFirstSync = false`
+  - L30 `static DateTime? _lastResumeTitleSyncAt`
+  - L31 `static DateTime? _lastSyncAt`
+  - L32 `static String? _lastSyncOutcome`
+  - L35 `static bool get isEnabled`  — Public sync state for debug exports / status UI.
+  - L36 `static bool get isSyncing`
+  - L37 `static bool get hasCompletedFirstSync`
+  - L38 `static DateTime? get lastSyncAt`
+  - L39 `static String? get lastSyncOutcome`
+  - L43 `static Completer<void>? _firstSyncCompleter`  — Completer that resolves when the first sync cycle finishes.
+  - L47 `static Future<void> get firstSyncComplete`  — Future that resolves when the first sync cycle finishes.
+  - L54 `static const int _pollIntervalSeconds = 30`  — How often to poll for changes (in seconds)
+  - L55 `static const Duration _resumeTitleSyncDelay = Duration(seconds: 2)`
+  - L56 `static const Duration _resumeTitleSyncCooldown = Duration(seconds: 60)`
+  - L57 `static Duration get _initialSyncDelay`
+  - L66 `static void start()`  — Start the sync service
+  - L89 `static void stop()`  — Stop the sync service
+  - L109 `static void pause()`  — Pause syncing (e.g., when app is backgrounded)
+  - L118 `static void resume()`  — Resume syncing (e.g., when app comes to foreground)
+  - L141 `static Future<void> _syncTitlesOnResume()`  — Sync titles when app resumes - fetches latest from network.
+  - L171 `static Future<void> syncNow()`  — Force an immediate sync
+  - L176 `static Future<void> _performSync()`  — Perform the actual sync operation
 
 ## lib/services/chat_titles_prefs_cleanup.dart  (86 Z.)
 - L30 `class ChatTitlesPrefsCleanup`
@@ -2649,7 +2665,7 @@
   - L644 `StreamPhase phase = StreamPhase.connecting`  — What this turn is doing, for the header above the answer.
   - L647 `DateTime? completedAt`
   - L652 `Timer? idleTimer`
-  - L657 `Timer? silenceTimer`  — Agents: the log-only silence watch that replaces [idleTimer] there (see
+  - L657 `Timer? silenceTimer`  — Agents threads: the log-only silence watch that replaces [idleTimer]
   - L660 `DateTime? lastEventAt`  — When the last event of any kind arrived, null while none has.
   - L664 `int eventCount = 0`  — How many events of any kind this stream has seen, and how many of those
   - L665 `int heartbeatCount = 0`
@@ -2663,7 +2679,7 @@
   - L689 `void cancelIdleTimer()`
   - L696 `void cancelUiThrottle()`
 
-## lib/services/streaming_manager_io.dart  (403 Z.)
+## lib/services/streaming_manager_io.dart  (407 Z.)
 - L16 `class StreamingManager extends StreamingManagerBase`  — Manages multiple concurrent chat streams across different chats
   - L17 `static final StreamingManager _instance = StreamingManager._internal()`
   - L18 `factory StreamingManager()`
@@ -2672,23 +2688,23 @@
   - L23 `static const _notificationUpdateInterval = Duration(milliseconds: 500)`
   - L31 `static const _uiUpdateInterval = Duration(milliseconds: 33)`  — Coalesce UI updates to roughly one per frame. Each onUpdate triggers a
   - L36 `static const _idleTimeout = Duration(seconds: 60)`  — Idle timeout: if no event arrives for this duration, the stream
-  - L51 `static bool get idleTimeoutEnabled`  — Whether silence ends a stream.
-  - L56 `static Duration silenceReportInterval = const Duration(seconds: 60)`  — Agents: how often the silence watch checks for a gap worth logging.
-  - L62 `void armIdleTimer({ required String chatId, required ActiveStream stream, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Start the idle timer — if no events arrive within [_idleTimeout],
-  - L96 `Timer _startIdleTimer({ required String chatId, required ActiveStream stream, required String emptyMessage, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — The idle watchdog: nothing arrived for [_idleTimeout], so the connection
-  - L134 `void _armSilenceWatch(ActiveStream stream)`  — Agents: arms the log-only silence watch for [stream].
-  - L155 `void _reportSilence(ActiveStream stream, Duration gap)`  — One log line about an observed gap: which phase it happened in, how long
-  - L192 `void onEventBookkeeping({ required String chatId, required ActiveStream stream, required ChatStreamEvent event, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`
-  - L240 `void deliverUpdate( ActiveStream stream, Function(String content, String reasoning) onUpdate, )`  — Schedule a coalesced UI flush: at most one onUpdate per
-  - L257 `void beforeCompletion(ActiveStream stream)`
-  - L263 `Future<void>? completionNotification({ required String chatId, required ActiveStream stream, required String contentPreview, })`
-  - L277 `Future<void>? onAllStreamsCancelled()`
-  - L283 `void stopBackgroundServiceIfIdle()`
-  - L291 `String contentForSnapshot(String rawContent)`
-  - L296 `void _updateNotificationThrottled(String content)`  — Update notification with content (throttled to avoid excessive updates)
-  - L316 `void onAppBackgroundChanged(bool isInBackground)`  — Called when app lifecycle changes - manages foreground service
-  - L357 `bool _shouldShowCompletionNotification()`
-  - L377 `Future<void> handleStreamEvent({ required String chatId, required ChatStreamEvent event, required Function(String content, String reasoning) onUpdate, required Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Agents: the host's canonical final answer (`FinalContentEvent`, emitted by
+  - L54 `static bool idleTimeoutEnabledFor(String chatId)`  — Whether silence ends [chatId]'s stream.
+  - L60 `static Duration silenceReportInterval = const Duration(seconds: 60)`  — Agents: how often the silence watch checks for a gap worth logging.
+  - L66 `void armIdleTimer({ required String chatId, required ActiveStream stream, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Start the idle timer — if no events arrive within [_idleTimeout],
+  - L100 `Timer _startIdleTimer({ required String chatId, required ActiveStream stream, required String emptyMessage, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — The idle watchdog: nothing arrived for [_idleTimeout], so the connection
+  - L138 `void _armSilenceWatch(ActiveStream stream)`  — Agents threads: arms the log-only silence watch for [stream].
+  - L159 `void _reportSilence(ActiveStream stream, Duration gap)`  — One log line about an observed gap: which phase it happened in, how long
+  - L196 `void onEventBookkeeping({ required String chatId, required ActiveStream stream, required ChatStreamEvent event, required void Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`
+  - L244 `void deliverUpdate( ActiveStream stream, Function(String content, String reasoning) onUpdate, )`  — Schedule a coalesced UI flush: at most one onUpdate per
+  - L261 `void beforeCompletion(ActiveStream stream)`
+  - L267 `Future<void>? completionNotification({ required String chatId, required ActiveStream stream, required String contentPreview, })`
+  - L281 `Future<void>? onAllStreamsCancelled()`
+  - L287 `void stopBackgroundServiceIfIdle()`
+  - L295 `String contentForSnapshot(String rawContent)`
+  - L300 `void _updateNotificationThrottled(String content)`  — Update notification with content (throttled to avoid excessive updates)
+  - L320 `void onAppBackgroundChanged(bool isInBackground)`  — Called when app lifecycle changes - manages foreground service
+  - L361 `bool _shouldShowCompletionNotification()`
+  - L381 `Future<void> handleStreamEvent({ required String chatId, required ChatStreamEvent event, required Function(String content, String reasoning) onUpdate, required Function(String content, String reasoning, double? tps) onComplete, required StreamErrorCallback onError, })`  — Agents: the host's canonical final answer (`FinalContentEvent`, emitted by
 
 ## lib/services/streaming_manager_stub.dart  (54 Z.)
 - L10 `class StreamingManager extends StreamingManagerBase`  — Manages multiple concurrent chat streams across different chats
@@ -2817,58 +2833,58 @@
   - L157 `final String message`
   - L160 `String toString()`
 
-## lib/services/title_generation_service.dart  (870 Z.)
-- L23 `class TitleGenerationService`  — Service for automatically generating chat titles using AI.
-  - L46 `static const String _titleModel = 'openai/gpt-oss-20b'`
-  - L53 `static const String _preferredTitleProvider = 'groq'`
-  - L56 `static String? _resolvedTitleProvider`
-  - L64 `static String _settingsKey(String userId)`
-  - L65 `static String _systemPromptKey(String userId)`
-  - L71 `static const String _legacySettingsKey = 'auto_generate_titles'`  — Pre-namespacing keys. Dropped rather than migrated — their values cannot
-  - L72 `static const String _legacySystemPromptKey = 'title_gen_system_prompt'`
-  - L74 `static const String _decryptFailedSentinel = '__decrypt_failed__'`
-  - L75 `static const String _remoteEnabledColumn = 'auto_generate_titles'`
-  - L76 `static const String _remotePromptColumn = 'title_gen_system_prompt'`
-  - L79 `static const String defaultSystemPrompt = '''Generate a brief title for this conversation based on the user's first message. Rules: - 2-6 words maximum - Capture the main topic or intent - No quotes or punctuation - No explanations, just the title'''`
-  - L89 `static bool? _autoGenerateTitlesEnabled`
-  - L90 `static String? _customSystemPrompt`
-  - L91 `static DateTime? _lastRemoteSyncAt`
-  - L92 `static Future<void>? _remoteSyncInFlight`
-  - L102 `static String? _cacheOwnerUserId`  — The user the cached settings above belong to.
-  - L104 `static void _syncCacheToCurrentUser(String? userId)`
-  - L113 `static Future<void> _dropLegacyKeys(SharedPreferences prefs)`
-  - L122 `static Duration get _remoteSyncTtl`
-  - L129 `static const Duration _chatLookupRetryDelay = Duration(milliseconds: 450)`
-  - L130 `static const int _maxChatLookupAttempts = 8`
-  - L131 `static const int _maxRenameAttempts = 6`
-  - L132 `static final Set<String> _inFlightTitleChats = <String>{}`
-  - L135 `static Future<bool> isEnabled()`  — Check if auto title generation is enabled
-  - L159 `static Future<void> setEnabled(bool enabled)`  — Enable or disable auto title generation
-  - L196 `static Future<String> getSystemPrompt()`  — Get the current system prompt (custom or default)
-  - L219 `static Future<void> setSystemPrompt(String prompt)`  — Set a custom system prompt
-  - L273 `static Future<void> resetSystemPrompt()`  — Reset system prompt to default
-  - L308 `static Future<void> syncSettingsFromSupabase({bool forceRefresh = false})`  — Refresh title settings from Supabase and cache them locally.
-  - L395 `static bool _isMissingTitleColumnsError(PostgrestException error)`
-  - L405 `static Future<String?> _decryptRemotePrompt(String raw)`
-  - L428 `static Future<String> _resolveTitleProvider()`  — Resolve the provider slug to use for the title model.
-  - L466 `static Future<bool> hasCustomSystemPrompt()`  — Check if using custom system prompt
-  - L484 `static Future<String?> generateTitle( String firstMessage, { String? chatId, })`  — Generate a title for a chat based on the first user message.
-  - L637 `static Future<void> generateAndApplyTitle( String chatId, String firstMessage, )`  — Generate and apply a title to a chat.
-  - L737 `static bool _hasCustomName(String? name)`
-  - L741 `static String _stripWrappingMarkdown(String value)`
-  - L766 `static String _normalizeGeneratedTitle(String raw)`
-  - L779 `static Future<bool> _waitUntilChatAvailable(String chatId)`
-  - L802 `static Future<bool> _applyTitleWithRetry(String chatId, String title)`
-  - L829 `static bool debugStillOwns(String? userId)`
-  - L832 `static void debugPrimeCachesForUser( String? userId, { bool? autoGenerateTitles, String? customSystemPrompt, })`
-  - L844 `static void debugSyncCacheToUser(String? userId)`
-  - L848 `static String? get debugCustomSystemPrompt`
-  - L851 `static bool? get debugAutoGenerateTitlesEnabled`
-  - L854 `static String settingsKeyForUser(String userId)`
-  - L857 `static String systemPromptKeyForUser(String userId)`
-  - L861 `static const String legacySettingsKey = _legacySettingsKey`
-  - L864 `static const String legacySystemPromptKey = _legacySystemPromptKey`
-  - L867 `static Future<void> debugDropLegacyKeys(SharedPreferences prefs)`
+## lib/services/title_generation_service.dart  (877 Z.)
+- L25 `class TitleGenerationService`  — Service for automatically generating chat titles using AI.
+  - L48 `static const String _titleModel = 'openai/gpt-oss-20b'`
+  - L55 `static const String _preferredTitleProvider = 'groq'`
+  - L58 `static String? _resolvedTitleProvider`
+  - L66 `static String _settingsKey(String userId)`
+  - L67 `static String _systemPromptKey(String userId)`
+  - L73 `static const String _legacySettingsKey = 'auto_generate_titles'`  — Pre-namespacing keys. Dropped rather than migrated — their values cannot
+  - L74 `static const String _legacySystemPromptKey = 'title_gen_system_prompt'`
+  - L76 `static const String _decryptFailedSentinel = '__decrypt_failed__'`
+  - L77 `static const String _remoteEnabledColumn = 'auto_generate_titles'`
+  - L78 `static const String _remotePromptColumn = 'title_gen_system_prompt'`
+  - L81 `static const String defaultSystemPrompt = '''Generate a brief title for this conversation based on the user's first message. Rules: - 2-6 words maximum - Capture the main topic or intent - No quotes or punctuation - No explanations, just the title'''`
+  - L91 `static bool? _autoGenerateTitlesEnabled`
+  - L92 `static String? _customSystemPrompt`
+  - L93 `static DateTime? _lastRemoteSyncAt`
+  - L94 `static Future<void>? _remoteSyncInFlight`
+  - L104 `static String? _cacheOwnerUserId`  — The user the cached settings above belong to.
+  - L106 `static void _syncCacheToCurrentUser(String? userId)`
+  - L115 `static Future<void> _dropLegacyKeys(SharedPreferences prefs)`
+  - L124 `static Duration get _remoteSyncTtl`
+  - L131 `static const Duration _chatLookupRetryDelay = Duration(milliseconds: 450)`
+  - L132 `static const int _maxChatLookupAttempts = 8`
+  - L133 `static const int _maxRenameAttempts = 6`
+  - L134 `static final Set<String> _inFlightTitleChats = <String>{}`
+  - L137 `static Future<bool> isEnabled()`  — Check if auto title generation is enabled
+  - L161 `static Future<void> setEnabled(bool enabled)`  — Enable or disable auto title generation
+  - L198 `static Future<String> getSystemPrompt()`  — Get the current system prompt (custom or default)
+  - L221 `static Future<void> setSystemPrompt(String prompt)`  — Set a custom system prompt
+  - L275 `static Future<void> resetSystemPrompt()`  — Reset system prompt to default
+  - L310 `static Future<void> syncSettingsFromSupabase({bool forceRefresh = false})`  — Refresh title settings from Supabase and cache them locally.
+  - L397 `static bool _isMissingTitleColumnsError(PostgrestException error)`
+  - L407 `static Future<String?> _decryptRemotePrompt(String raw)`
+  - L430 `static Future<String> _resolveTitleProvider()`  — Resolve the provider slug to use for the title model.
+  - L468 `static Future<bool> hasCustomSystemPrompt()`  — Check if using custom system prompt
+  - L486 `static Future<String?> generateTitle( String firstMessage, { String? chatId, })`  — Generate a title for a chat based on the first user message.
+  - L639 `static Future<void> generateAndApplyTitle( String chatId, String firstMessage, )`  — Generate and apply a title to a chat.
+  - L744 `static bool _hasCustomName(String? name)`
+  - L748 `static String _stripWrappingMarkdown(String value)`
+  - L773 `static String _normalizeGeneratedTitle(String raw)`
+  - L786 `static Future<bool> _waitUntilChatAvailable(String chatId)`
+  - L809 `static Future<bool> _applyTitleWithRetry(String chatId, String title)`
+  - L836 `static bool debugStillOwns(String? userId)`
+  - L839 `static void debugPrimeCachesForUser( String? userId, { bool? autoGenerateTitles, String? customSystemPrompt, })`
+  - L851 `static void debugSyncCacheToUser(String? userId)`
+  - L855 `static String? get debugCustomSystemPrompt`
+  - L858 `static bool? get debugAutoGenerateTitlesEnabled`
+  - L861 `static String settingsKeyForUser(String userId)`
+  - L864 `static String systemPromptKeyForUser(String userId)`
+  - L868 `static const String legacySettingsKey = _legacySettingsKey`
+  - L871 `static const String legacySystemPromptKey = _legacySystemPromptKey`
+  - L874 `static Future<void> debugDropLegacyKeys(SharedPreferences prefs)`
 
 ## lib/services/token_activity_stats.dart  (285 Z.)
 - L14 `enum HeatmapMode`  — How the token-activity heatmap colours each day cell.
@@ -2905,7 +2921,7 @@
   - L282 `int tokens = 0`
   - L283 `int requests = 0`
 
-## lib/services/tool_call_handler.dart  (2162 Z.)
+## lib/services/tool_call_handler.dart  (2179 Z.)
 - L33 `_readOnlyToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_route',`  — Tools that only read. A round made up entirely of these can run its
 - L54 `repeatableLookupToolNames = <String>{ 'web_search', 'web_crawl', 'search_places', 'search_restaurants', 'geocode', 'get_`  — Read-only lookups whose result does not change within one turn: the same
 - L70 `kRepeatedToolCallNote = '[REPEATED CALL] This exact call already ran in this turn. The result ' 'below is the one it ret`  — Prefix of a tool result that was answered from an identical earlier call
@@ -2985,56 +3001,58 @@
 - L397 `class ToolCallHandler`
   - L398 `ToolCallHandler._internal()`
   - L425 `static final ToolCallHandler _instance = ToolCallHandler._internal()`
-  - L430 `factory ToolCallHandler()`  — The build picks the loop. With `FEATURE_AGENTS` off this is upstream's
-  - L433 `final ToolExecutor _toolExecutor = ToolExecutor()`
-  - L434 `static const int _maxEmptyFinalRecoveryAttempts = 3`
-  - L435 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
-  - L436 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
-  - L437 `static const int _maxDeferredActionRecoveryAttempts = 2`
-  - L438 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
-  - L441 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
-  - L448 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
-  - L477 `static const int _maxDiscoveryContexts = 200`
-  - L483 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
-  - L484 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
-  - L487 `ToolExecutor get toolExecutor`
-  - L489 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
-  - L546 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
-  - L577 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
-  - L599 `String _buildSafetyLimitMessage(ToolLoopSession session)`  — Message shown when the tool-call safety limit trips. If the turn already
-  - L660 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
-  - L1440 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
-  - L1483 `static int _countToolGroups(List<RoundSegment> segments)`
-  - L1504 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
-  - L1547 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
-  - L1576 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
-  - L1619 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
-  - L1665 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
-  - L1838 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
-  - L1867 `String _stripToolCallBlocks(String content)`
-  - L1871 `String _extractPreToolText(String content)`
-  - L1881 `String? _extractRoundThinking({ required String content, required String reasoning, })`
-  - L1902 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
-  - L1916 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
-  - L1919 `int? _trailingToolCallBlockStart(String text)`
-  - L1922 `static int? _trailingToolCallBlockStartImpl(String text)`
-  - L1940 `int _indexOfFirstToolCallBlock(String content)`
-  - L1953 `bool _hasInterimTextBeforeToolCalls(String content)`
-  - L1977 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
-  - L1980 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
-  - L2010 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
-  - L2019 `static bool _isDeferredIntentSentence(String sentence)`
-  - L2061 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
-  - L2065 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
-  - L2069 `void _restoreDiscoveryContext(ToolLoopSession session)`
-  - L2093 `void _storeDiscoveryContext(ToolLoopSession session)`
-  - L2118 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
-  - L2133 `void _pruneDiscoveryContextsIfNeeded()`
-- L2155 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
-  - L2156 `_DiscoveryContextState()`
-  - L2158 `DateTime lastUsedAt = DateTime.now()`
-  - L2159 `final Set<String> discoveredToolNames = <String>{}`
-  - L2160 `final List<String> activeSkillNames = <String>[]`
+  - L432 `factory ToolCallHandler()`  — Upstream's client-side tool loop below. The first call builds it, which
+  - L439 `static ToolCallHandler forChat(String? chatId)`  — The loop for [chatId]'s turn. An Agents thread
+  - L448 `static void warmUp()`  — Builds upstream's loop now instead of at the first send, so the tool
+  - L450 `final ToolExecutor _toolExecutor = ToolExecutor()`
+  - L451 `static const int _maxEmptyFinalRecoveryAttempts = 3`
+  - L452 `static const int _maxMalformedToolProtocolRecoveryAttempts = 2`
+  - L453 `static const int _maxTruncatedCompletionRecoveryAttempts = 2`
+  - L454 `static const int _maxDeferredActionRecoveryAttempts = 2`
+  - L455 `static const int _maxNonFinalTurnRecoveryAttempts = 1`
+  - L458 `static const int _maxFactCheckRecoveryAttempts = 1`  — One-shot self-verification pass before a tool-grounded answer is shown.
+  - L465 `static const Set<String> _nonFactualToolNames = { 'find_tools', 'notes', 'ask_user', // Returns a Connect-button marker, not a real-world fact. Without this a // turn whose only tool call was request_mcp_server would fire a spurious // [VERIFY] round against nothing. 'request_mcp_server', 'flip_coin', 'roll_dice', 'random_number', 'countdown', 'password_generator', 'uuid_generator', 'generate_qr', 'calculate', 'generate_image', 'fetch_image', // `skill` returns an acknowledgement, not facts. Without this entry a // turn whose only tool call was `skill()` would trigger a full [VERIFY] // round-trip that fact-checks an ack against nothing. 'skill', // Artifact hosting returns a published URL, not verifiable facts. Without // these entries a turn whose only tool call was create/update_artifact // would fire a spurious [VERIFY] fact-check round against nothing. 'create_artifact', 'update_artifact', }`  — Tools whose results carry no verifiable real-world facts. When EVERY
+  - L494 `static const int _maxDiscoveryContexts = 200`
+  - L500 `static const int _maxActiveSkillsPerChat = 3`  — Ceiling on skills active in one chat. Every active skill's body is
+  - L501 `final Map<String, _DiscoveryContextState> _discoveryContextStates = <String, _DiscoveryContextState>{}`
+  - L504 `ToolExecutor get toolExecutor`
+  - L506 `ToolLoopSession createSession({ required String initialUserMessage, required List<Map<String, dynamic>> history, required String accessToken, String? discoveryContextKey, String? baseSystemPrompt, String? modelId, bool toolCallingEnabled = true, bool discoveryMode = true, bool skipIdentity = false, bool nativeToolCalling = false, })`
+  - L563 `Future<String> buildInitialSystemPrompt(ToolLoopSession session)`
+  - L594 `List<Map<String, dynamic>> nativeToolDefinitions(ToolLoopSession session)`  — The enabled tools as native OpenAI function definitions, for the request's
+  - L616 `String _buildSafetyLimitMessage(ToolLoopSession session)`  — Message shown when the tool-call safety limit trips. If the turn already
+  - L677 `Future<ToolLoopResult> processAssistantResponse({ required ToolLoopSession session, required String content, required String reasoning, ToolTurnSignals? turnSignals, void Function(List<ToolCall>)? onToolCallsUpdated, List<NativeToolCall> nativeToolCalls = const <NativeToolCall>[], })`
+  - L1457 `List<RoundSegment> _splitInterleavedSegments( String content, List<ToolCall> uiCalls, )`  — Walks [content] in source order and splits it into text chunks /
+  - L1500 `static int _countToolGroups(List<RoundSegment> segments)`
+  - L1521 `List<Map<String, dynamic>> _nativeCallsToParsed(List<NativeToolCall> calls)`  — Convert native (structured) tool calls into the parsed-call shape the
+  - L1564 `void _appendRoundToHistory( ToolLoopSession session, { required String assistantContent, String? assistantReasoning, })`
+  - L1593 `void _updateDiscoveredTools(ToolLoopSession session, String findToolsResult)`
+  - L1636 `void _updateActiveSkills(ToolLoopSession session, String skillResult)`  — Records a skill activation from the `skill` tool's acknowledgement.
+  - L1682 `Future<String> _buildSystemPrompt({ required String? baseSystemPrompt, required bool isToolResult, required bool discoveryMode, required List<Map<String, dynamic>> discoveredTools, List<String> activeSkillNames = const [], bool skipIdentity = false, bool nativeToolCalling = false, String? modelId, })`
+  - L1855 `Future<String?> _applyPerModelPrompt({ required String? base, required String? modelId, })`  — Merge the per-model prompt for [modelId] into [base] using the saved
+  - L1884 `String _stripToolCallBlocks(String content)`
+  - L1888 `String _extractPreToolText(String content)`
+  - L1898 `String? _extractRoundThinking({ required String content, required String reasoning, })`
+  - L1919 `static String _stripThinkingTags(String text)`  — Some providers (Kimi on Fireworks, DeepSeek) wrap reasoning in
+  - L1933 `static int? trailingToolCallBlockStart(String text)`  — Returns the start index of the contiguous run of tool-call blocks
+  - L1936 `int? _trailingToolCallBlockStart(String text)`
+  - L1939 `static int? _trailingToolCallBlockStartImpl(String text)`
+  - L1957 `int _indexOfFirstToolCallBlock(String content)`
+  - L1970 `bool _hasInterimTextBeforeToolCalls(String content)`
+  - L1994 `static bool looksLikeDeferredActionWithoutToolCall(String content)`  — Detects "I'll search/check/lookup..." style deferred-action text that
+  - L1997 `static bool _looksLikeDeferredActionWithoutToolCall(String content)`
+  - L2027 `static String _lastSentence(String normalized)`  — Last sentence of [normalized], or the whole string when it has only one.
+  - L2036 `static bool _isDeferredIntentSentence(String sentence)`
+  - L2078 `List<Map<String, dynamic>> _cloneHistory(List<Map<String, dynamic>> history)`
+  - L2082 `List<ToolCall> _cloneToolCalls(List<ToolCall> calls)`
+  - L2086 `void _restoreDiscoveryContext(ToolLoopSession session)`
+  - L2110 `void _storeDiscoveryContext(ToolLoopSession session)`
+  - L2135 `void _refreshDiscoveredToolDefinitions(ToolLoopSession session)`
+  - L2150 `void _pruneDiscoveryContextsIfNeeded()`
+- L2172 `class _DiscoveryContextState`  — Per-chat context that survives across user turns (in memory only — it does
+  - L2173 `_DiscoveryContextState()`
+  - L2175 `DateTime lastUsedAt = DateTime.now()`
+  - L2176 `final Set<String> discoveredToolNames = <String>{}`
+  - L2177 `final List<String> activeSkillNames = <String>[]`
 
 ## lib/services/tool_enforcer.dart  (420 Z.)
 - L10 `class ToolEnforcer`  — Client-side Tool Call Enforcer (inspired by Kimi K2's Enforcer).
@@ -3241,27 +3259,28 @@
   - L127 `void _evictIfNeeded()`
 - L138 `kCacheMissErrorCode = 'cache_miss'`  — Stable marker the server attaches (`code`) and the client matches to detect
 
-## lib/services/tour_key_registry.dart  (78 Z.)
-- L16 `class TourSlots`  — Known target slots used by the onboarding tour.
-  - L17 `static const String modelDropdown = 'model_dropdown'`
-  - L18 `static const String modelProviderPill = 'model_provider_pill'`
-  - L19 `static const String menuButton = 'menu_button'`
-  - L20 `static const String settingsEntry = 'settings_entry'`
-  - L21 `static const String chatInput = 'chat_input'`
-  - L22 `static const String settingsPricingTile = 'settings_pricing_tile'`
-  - L23 `static const String settingsAiIdentityTile = 'settings_ai_identity_tile'`
-  - L24 `static const String settingsModelSelectionTile = 'settings_model_selection_tile'`
-  - L26 `static const String kSettingsAssistantTile = 'settings_assistant_tile'`
-  - L28 `const TourSlots._()`
-- L33 `class TourKeyRegistry`  — Singleton store of [GlobalKey]s by slot name. Always returns the SAME
-  - L34 `TourKeyRegistry._()`
-  - L37 `static final TourKeyRegistry instance = TourKeyRegistry._()`  — Shared instance.
-  - L39 `final Map<String, GlobalKey> _keys = <String, GlobalKey>{}`
-  - L42 `GlobalKey keyFor(String slot)`  — Returns the [GlobalKey] for [slot], creating it lazily on first access.
-  - L47 `BuildContext? contextFor(String slot)`  — Returns the current [BuildContext] mounted under [slot], or null if the
-  - L50 `bool isMounted(String slot)`  — True when [slot] is mounted in the widget tree right now.
-  - L61 `bool isVisibleOnScreen(String slot, Size screenSize)`  — True when [slot] is mounted AND visible on screen — i.e. its top-left
-  - L76 `void clear()`  — Drops every registered key. Intended for tests.
+## lib/services/tour_key_registry.dart  (89 Z.)
+- L18 `class TourSlots`  — Known target slots used by the onboarding tour.
+  - L19 `static const String modelDropdown = 'model_dropdown'`
+  - L20 `static const String modelProviderPill = 'model_provider_pill'`
+  - L21 `static const String menuButton = 'menu_button'`
+  - L22 `static const String settingsEntry = 'settings_entry'`
+  - L23 `static const String chatInput = 'chat_input'`
+  - L24 `static const String settingsPricingTile = 'settings_pricing_tile'`
+  - L25 `static const String settingsAiIdentityTile = 'settings_ai_identity_tile'`
+  - L26 `static const String settingsModelSelectionTile = 'settings_model_selection_tile'`
+  - L28 `static const String kSettingsAssistantTile = 'settings_assistant_tile'`
+  - L30 `const TourSlots._()`
+- L35 `class TourKeyRegistry`  — Singleton store of [GlobalKey]s by slot name. Always returns the SAME
+  - L36 `TourKeyRegistry._()`
+  - L39 `static final TourKeyRegistry instance = TourKeyRegistry._()`  — Shared instance.
+  - L41 `final Map<String, GlobalKey> _keys = <String, GlobalKey>{}`
+  - L44 `GlobalKey keyFor(String slot)`  — Returns the [GlobalKey] for [slot], creating it lazily on first access.
+  - L54 `GlobalKey? anchorFor(String slot)`  — The key a widget attaches for [slot], or null when this build runs no
+  - L58 `BuildContext? contextFor(String slot)`  — Returns the current [BuildContext] mounted under [slot], or null if the
+  - L61 `bool isMounted(String slot)`  — True when [slot] is mounted in the widget tree right now.
+  - L72 `bool isVisibleOnScreen(String slot, Size screenSize)`  — True when [slot] is mounted AND visible on screen — i.e. its top-left
+  - L87 `void clear()`  — Drops every registered key. Intended for tests.
 
 ## lib/services/tray_action_bus.dart  (21 Z.)
 - L10 `class TrayActionBus`  — Decouples the desktop system tray menu from the widget tree.
@@ -3393,55 +3412,55 @@
   - L87 `void _handleProviderChange(PostgresChangePayload payload)`
   - L97 `void _handleSelectedModelChange(PostgresChangePayload payload)`
 
-## lib/services/user_preferences_service.dart  (975 Z.)
-- L13 `class UserPreferencesService`
-  - L14 `const UserPreferencesService._()`
-  - L15 `static Map<String, String>? _cachedProviderPreferences`
-  - L16 `static DateTime? _providerPrefsFetchedAt`
-  - L17 `static Future<Map<String, String>>? _providerPrefsInFlight`
-  - L18 `static const Duration _kProviderPreferencesTtl = Duration(minutes: 1)`
-  - L21 `static String? _cachedSelectedModel`
-  - L22 `static DateTime? _selectedModelFetchedAt`
-  - L23 `static Future<String?>? _selectedModelInFlight`
-  - L24 `static const Duration _kSelectedModelTtl = Duration(minutes: 1)`
-  - L28 `static String? _lastSavedModelId`  — The model id this process last wrote to `user_preferences` for the
-  - L42 `static String? _cacheOwnerUserId`  — The user every static cache in this class currently belongs to.
-  - L46 `static void _syncCacheToCurrentUser(String? userId)`  — Drops every per-user cache in this class when the active user changed.
-  - L67 `static Future<bool> saveSelectedModel(String modelId)`  — Save the user's selected model to Supabase
-  - L125 `static Future<void> refreshModelSelections()`  — Force all active model dropdowns to re-query preferences and models.
-  - L131 `static Future<String?> loadSelectedModel()`  — Load the user's selected model - cache first, then sync from network
-  - L198 `static Future<String?> forceLoadSelectedModel()`  — Force-load the selected model directly from Supabase, bypassing cache.
-  - L206 `static Future<String?> _fetchModelFromNetwork(String userId)`  — Fetch model preference from network (blocking)
-  - L254 `static Future<void> _syncModelFromNetwork(String userId)`  — Sync model preference from network in background
-  - L294 `static Future<bool> clearSelectedModel()`  — Clear the user's model preference
-  - L338 `static Future<bool> saveSelectedProvider( String modelId, String providerSlug, )`  — Save the user's selected provider for a specific model
-  - L407 `static Future<bool> clearSelectedProvider(String modelId)`  — Remove the saved provider preference for a specific model
-  - L457 `static Future<String?> loadSelectedProvider(String modelId)`  — Load the user's selected provider for a specific model
-  - L519 `static Future<Map<String, String>> loadAllProviderPreferences()`  — Load all user's provider preferences
-  - L600 `static void invalidateProviderPreferencesCache()`  — Drop the in-memory provider-preferences cache so the next
-  - L610 `static void noteRemoteSelectedModel(String? modelId)`  — The server holds [modelId] now (a read, or a realtime event). When that
-  - L617 `static void invalidateSelectedModelCache()`  — Drop the in-memory selected-model cache so the next [loadSelectedModel]
-  - L631 `static String _systemPromptCacheKey(String userId)`  — SharedPreferences key holding [userId]'s cached system-prompt ciphertext.
-  - L638 `static const String _legacySystemPromptCacheKey = 'cached_system_prompt'`  — The pre-namespacing key. Its value cannot be attributed to a user, so it
-  - L640 `static Future<void> _dropLegacySystemPromptCache( SharedPreferences prefs, )`
-  - L655 `static String? _systemPromptMemCache`  — In-memory decrypted system prompt. Populated by [loadSystemPrompt] /
-  - L662 `static Future<String?> loadSystemPromptFast()`  — Fast system-prompt read for the send path: in-memory → local
-  - L687 `static Future<String?> loadSystemPromptLocal()`  — Load the system prompt from local SharedPreferences only (no network).
-  - L694 `static Future<String?> _loadSystemPromptLocalForUser(String userId)`
-  - L711 `static Future<bool> saveSystemPrompt(String systemPrompt)`  — Save the user's system prompt (encrypted)
-  - L796 `static Future<String?> loadSystemPromptForMount()`  — The system prompt for a chat screen that has just mounted.
-  - L806 `static Future<String?> loadSystemPrompt()`  — Load the user's system prompt (decrypted)
-  - L874 `static Future<bool> clearSystemPrompt()`  — Clear the user's system prompt
-  - L928 `static bool debugStillOwns(String? userId)`
-  - L931 `static void debugPrimeCachesForUser( String? userId, { String? systemPrompt, String? selectedModel, Map<String, String>? providerPreferences, })`
-  - L948 `static void debugSyncCacheToUser(String? userId)`
-  - L952 `static String systemPromptCacheKeyForUser(String userId)`
-  - L956 `static const String legacySystemPromptCacheKey = _legacySystemPromptCacheKey`
-  - L959 `static Future<String?> debugLoadSystemPromptLocalForUser(String userId)`
-  - L963 `static String? get debugSystemPromptMemCache`
-  - L966 `static String? get debugSelectedModelCache`
-  - L969 `static Map<String, String>? get debugProviderPreferencesCache`
-  - L973 `static String? get debugCacheOwnerUserId`
+## lib/services/user_preferences_service.dart  (980 Z.)
+- L12 `class UserPreferencesService`
+  - L13 `const UserPreferencesService._()`
+  - L14 `static Map<String, String>? _cachedProviderPreferences`
+  - L15 `static DateTime? _providerPrefsFetchedAt`
+  - L16 `static Future<Map<String, String>>? _providerPrefsInFlight`
+  - L17 `static const Duration _kProviderPreferencesTtl = Duration(minutes: 1)`
+  - L20 `static String? _cachedSelectedModel`
+  - L21 `static DateTime? _selectedModelFetchedAt`
+  - L22 `static Future<String?>? _selectedModelInFlight`
+  - L23 `static const Duration _kSelectedModelTtl = Duration(minutes: 1)`
+  - L27 `static String? _lastSavedModelId`  — The model id this process last wrote to `user_preferences` for the
+  - L41 `static String? _cacheOwnerUserId`  — The user every static cache in this class currently belongs to.
+  - L45 `static void _syncCacheToCurrentUser(String? userId)`  — Drops every per-user cache in this class when the active user changed.
+  - L67 `static Future<bool> saveSelectedModel( String modelId, { bool skipIfUnchanged = false, })`  — Save the user's selected model to Supabase
+  - L128 `static Future<void> refreshModelSelections()`  — Force all active model dropdowns to re-query preferences and models.
+  - L134 `static Future<String?> loadSelectedModel()`  — Load the user's selected model - cache first, then sync from network
+  - L201 `static Future<String?> forceLoadSelectedModel()`  — Force-load the selected model directly from Supabase, bypassing cache.
+  - L209 `static Future<String?> _fetchModelFromNetwork(String userId)`  — Fetch model preference from network (blocking)
+  - L257 `static Future<void> _syncModelFromNetwork(String userId)`  — Sync model preference from network in background
+  - L297 `static Future<bool> clearSelectedModel()`  — Clear the user's model preference
+  - L341 `static Future<bool> saveSelectedProvider( String modelId, String providerSlug, )`  — Save the user's selected provider for a specific model
+  - L410 `static Future<bool> clearSelectedProvider(String modelId)`  — Remove the saved provider preference for a specific model
+  - L460 `static Future<String?> loadSelectedProvider(String modelId)`  — Load the user's selected provider for a specific model
+  - L522 `static Future<Map<String, String>> loadAllProviderPreferences()`  — Load all user's provider preferences
+  - L603 `static void invalidateProviderPreferencesCache()`  — Drop the in-memory provider-preferences cache so the next
+  - L613 `static void noteRemoteSelectedModel(String? modelId)`  — The server holds [modelId] now (a read, or a realtime event). When that
+  - L620 `static void invalidateSelectedModelCache()`  — Drop the in-memory selected-model cache so the next [loadSelectedModel]
+  - L634 `static String _systemPromptCacheKey(String userId)`  — SharedPreferences key holding [userId]'s cached system-prompt ciphertext.
+  - L641 `static const String _legacySystemPromptCacheKey = 'cached_system_prompt'`  — The pre-namespacing key. Its value cannot be attributed to a user, so it
+  - L643 `static Future<void> _dropLegacySystemPromptCache( SharedPreferences prefs, )`
+  - L658 `static String? _systemPromptMemCache`  — In-memory decrypted system prompt. Populated by [loadSystemPrompt] /
+  - L665 `static Future<String?> loadSystemPromptFast()`  — Fast system-prompt read for the send path: in-memory → local
+  - L690 `static Future<String?> loadSystemPromptLocal()`  — Load the system prompt from local SharedPreferences only (no network).
+  - L697 `static Future<String?> _loadSystemPromptLocalForUser(String userId)`
+  - L714 `static Future<bool> saveSystemPrompt(String systemPrompt)`  — Save the user's system prompt (encrypted)
+  - L799 `static Future<String?> loadSystemPromptForMount({ bool reuseCached = false, })`  — The system prompt for a chat screen that has just mounted.
+  - L811 `static Future<String?> loadSystemPrompt()`  — Load the user's system prompt (decrypted)
+  - L879 `static Future<bool> clearSystemPrompt()`  — Clear the user's system prompt
+  - L933 `static bool debugStillOwns(String? userId)`
+  - L936 `static void debugPrimeCachesForUser( String? userId, { String? systemPrompt, String? selectedModel, Map<String, String>? providerPreferences, })`
+  - L953 `static void debugSyncCacheToUser(String? userId)`
+  - L957 `static String systemPromptCacheKeyForUser(String userId)`
+  - L961 `static const String legacySystemPromptCacheKey = _legacySystemPromptCacheKey`
+  - L964 `static Future<String?> debugLoadSystemPromptLocalForUser(String userId)`
+  - L968 `static String? get debugSystemPromptMemCache`
+  - L971 `static String? get debugSelectedModelCache`
+  - L974 `static Map<String, String>? get debugProviderPreferencesCache`
+  - L978 `static String? get debugCacheOwnerUserId`
 
 ## lib/services/user_status_service.dart  (177 Z.)
 - L25 `class UserStatusService`
@@ -3461,15 +3480,17 @@
   - L152 `static Future<Map<String, dynamic>?> _readCache(String uid)`
   - L165 `static Future<void> _writeCache( String uid, Map<String, dynamic> value, )`
 
-## lib/services/websocket_chat_service.dart  (354 Z.)
-- L27 `class WebSocketChatService`  — Service for handling streaming chat responses.
-  - L30 `static void declareStopIntent(String sessionKey)`  — Declares that the user asked to stop [sessionKey]'s run. Agents only; see
-  - L36 `static void withdrawStopIntent([String? sessionKey])`  — Takes back a declared stop. Agents only; see
-  - L54 `static Stream<ChatStreamEvent> sendStreamingChat({ required String accessToken, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Sends a streaming chat request and yields chunks as they arrive.
-  - L104 `static Stream<ChatStreamEvent> _sendHosted({ required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Upstream chuk_chat's send: the shared multiplex connection.
-  - L153 `static Stream<ChatStreamEvent> _sendViaMultiplex({ required MultiplexConnection connection, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Send a chat through the multiplexed `/v2/ws` connection. Yields the
-  - L298 `static List<Map<String, dynamic>> _foldHistoryRefs( List<Map<String, dynamic>> history, ToolResultCacheRegistry registry, )`  — Replace large `history` entries whose content was already uploaded (and
-  - L326 `static Future<List<String>> _convertImagesToBase64( List<String> imagePaths, )`  — Convert image storage paths or existing Base64 URLs to Base64 data URLs.
+## lib/services/websocket_chat_service.dart  (375 Z.)
+- L30 `class WebSocketChatService`  — Service for handling streaming chat responses.
+  - L34 `static bool usesAgentsTransport(String? chatId)`  — Whether a send for [chatId] goes to the paired host. True only for an
+  - L39 `static void declareStopIntent(String sessionKey)`  — Declares that the user asked to stop [sessionKey]'s run. Agents threads
+  - L48 `static void withdrawStopIntent([String? sessionKey])`  — Takes back a declared stop. Agents threads only; see
+  - L57 `static Stream<ChatStreamEvent> Function(String? chatId)? debugHostedSend`  — Test seam: stands in for the hosted send, so a test can see which path a
+  - L73 `static Stream<ChatStreamEvent> sendStreamingChat({ required String accessToken, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Sends a streaming chat request and yields chunks as they arrive.
+  - L125 `static Stream<ChatStreamEvent> _sendHosted({ required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Upstream chuk_chat's send: the shared multiplex connection.
+  - L174 `static Stream<ChatStreamEvent> _sendViaMultiplex({ required MultiplexConnection connection, required String message, required String modelId, required String providerSlug, List<Map<String, dynamic>>? history, String? systemPrompt, int maxTokens = 512, double temperature = 0.7, List<String>? images, String? reasoningEffort, String? chatId, List<Map<String, dynamic>>? tools, })`  — Send a chat through the multiplexed `/v2/ws` connection. Yields the
+  - L319 `static List<Map<String, dynamic>> _foldHistoryRefs( List<Map<String, dynamic>> history, ToolResultCacheRegistry registry, )`  — Replace large `history` entries whose content was already uploaded (and
+  - L347 `static Future<List<String>> _convertImagesToBase64( List<String> imagePaths, )`  — Convert image storage paths or existing Base64 URLs to Base64 data URLs.
 
 ## lib/services/websocket_connector.dart  (10 Z.)
 - reicht weiter: 'websocket_connector_web.dart' if (dart.library.io) 'websocket_connector_io.dart'

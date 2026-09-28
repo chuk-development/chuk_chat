@@ -178,70 +178,69 @@
 - L20 `Future<void> replaceWithScannedPages({ required List<String> dataUrls, required String fileId, required String fileName, required String? note, required List<AttachedFile> attachedFiles, void Function()? onUpdate, void Function(String message)? onError, })`  — Replaces a scanned PDF in [attachedFiles] with its rendered pages.
 - L82 `void discardScannedPages(List<String> paths)`  — Deletes pages that were uploaded before the replacement failed, so a
 
-## lib/platform_specific/chat/handlers/streaming_message_handler.dart  (1657 Z.)
+## lib/platform_specific/chat/handlers/streaming_message_handler.dart  (1660 Z.)
 - L26 `class StreamingMessageHandler`  — Handles message streaming and sending
   - L27 `StreamingMessageHandler()`
   - L34 `final StreamingManager _streamingManager = StreamingManager()`
-  - L35 `final ToolCallHandler _toolCallHandler = ToolCallHandler()`
-  - L38 `Function(String)? onShowSnackBar`
-  - L39 `Function()? onUpdateUI`
-  - L40 `Function(int index, String content, String reasoning, String chatId)? onMessageUpdate`
-  - L42 `Function( int index, String content, String reasoning, String chatId, double? tps, )? onMessageFinalize`
-  - L50 `Function(int index, List<ToolCall> toolCalls, String chatId)? onToolCallsUpdate`
-  - L52 `Function( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )? onToolImagesProcessed`
-  - L65 `Function(int index, String contentBlocksJson, String chatId)? onContentBlocksUpdate`  — Called when content blocks are updated during or after the tool loop.
-  - L70 `Function(int index, String requestPayloadJson, String chatId)? onRequestPayloadUpdate`  — Called when an outbound request payload is prepared for a streaming pass.
-  - L73 `Function(String chatId, int index, String content, String reasoning)? onBackgroundUpdate`
-  - L81 `Function(String chatId, int index)? onStreamInterrupted`  — Called when the active stream is torn down (dispose / cancel /
-  - L93 `Function( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )? onStreamTick`  — Fires on a periodic timer (and immediately on lifecycle pause /
-  - L103 `Function()? onPaymentRequired`
-  - L105 `bool _isStreaming = false`
-  - L106 `bool _isSending = false`
-  - L107 `bool _isDisposed = false`
-  - L112 `bool _cancelRequested = false`
-  - L117 `String? _stopIntentChatId`  — The chat whose stop this handler declared last. Only that one is taken
-  - L118 `bool _hasForegroundKeepAliveLock = false`
-  - L119 `Future<void>? _activeToolLoopFuture`
-  - L129 `static const Duration _snapshotInterval = Duration(milliseconds: 500)`
-  - L130 `Timer? _snapshotTimer`
-  - L131 `_StreamingSnapshot? _currentSnapshot`
-  - L132 `bool _streamFinalized = false`
-  - L134 `bool get isStreaming`
-  - L135 `bool get isSending`
-  - L136 `Future<void>? get activeToolLoopFuture`
-  - L141 `Future<void> sendMessage({ required String userInput, required List<AttachedFile> attachedFiles, required String selectedModelId, required String? selectedProviderSlug, required List<Map<String, String>> messages, required String? systemPrompt, required String? activeChatId, required int placeholderIndex, required Future<String?> Function() getProviderSlug, required bool isOffline, bool includeRecentImagesInHistory = true, bool includeAllImagesInHistory = false, bool includeReasoningInHistory = false, bool includeToolResultsInHistory = true, bool toolCallingEnabled = true, bool toolDiscoveryMode = true, String? reasoningEffort, String? continuePriorText, String? continuePriorContentBlocksJson, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Send a message with streaming response
-  - L1234 `Future<void> cancelStream(String? chatId)`  — Cancel active stream
-  - L1271 `String? _imageTurnChatId`  — Images already persisted for the message being streamed, so a second
-  - L1272 `int? _imageTurnIndex`
-  - L1273 `final List<String> _turnImagePaths = <String>[]`
-  - L1274 `final List<Map<String, dynamic>> _turnImageMetas = <Map<String, dynamic>>[]`
-  - L1277 `Future<void> _processToolImages( List<ToolCall> toolCalls, int index, String chatId, )`  — Download tool-generated images, encrypt, and persist to Supabase storage.
-  - L1337 `Future<void> _acquireForegroundKeepAlive()`
-  - L1356 `Future<void> _releaseForegroundKeepAlive()`
-  - L1371 `Future<void> _updateForegroundNotification({ required String title, required String content, })`
-  - L1392 `void resetState()`  — Reset state (use when stuck in invalid state)
-  - L1407 `bool isChatStreaming(String chatId)`  — Check if a specific chat is streaming
-  - L1412 `String? getBufferedContent(String chatId)`  — Get buffered content for a streaming chat
-  - L1417 `String? getBufferedReasoning(String chatId)`  — Get buffered reasoning for a streaming chat
-  - L1422 `int? getStreamingMessageIndex(String chatId)`  — Get the streaming message index for a chat
-  - L1427 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
-  - L1432 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed
-  - L1437 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, )`  — Store background messages for a streaming chat when user switches away
-  - L1448 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get the most recent background snapshot for a chat, with the live buffer
-  - L1453 `bool hasBackgroundMessages(String chatId)`  — Whether a background snapshot exists for this chat.
-  - L1459 `Future<List<Map<String, dynamic>>> _buildApiHistory( List<Map<String, String>> messages, String pendingUserText, { bool includeRecentImages = true, bool includeAllImages = false, bool includeReasoning = false, bool includeToolResults = true, })`  — Delegates to [ChatHistoryBuilder] — see that file for why this must not
-  - L1476 `Future<dynamic> getSessionSafely()`  — Get session safely with network error handling
-  - L1519 `void _markStreamFinalized()`  — Mark the active stream as cleanly finished (a final-answer event ran).
-  - L1533 `void _recordSnapshot({ required String chatId, required int index, required String content, required String reasoning, String? contentBlocksJson, })`
-  - L1554 `void _flushSnapshot({bool forceImmediate = false})`
-  - L1589 `void _clearSnapshot()`
-  - L1598 `void _handleAppPaused()`  — Called by the lifecycle service when the app moves to background.
-  - L1604 `void _markInterruptedIfStreaming()`
-  - L1620 `void dispose()`  — Dispose resources
-- L1642 `class _StreamingSnapshot`
-  - L1643 `_StreamingSnapshot({ required this.chatId, required this.index, required this.content, required this.reasoning, this.contentBlocksJson, })`
-  - L1651 `final String chatId`
-  - L1652 `final int index`
-  - L1653 `final String content`
-  - L1654 `final String reasoning`
-  - L1655 `final String? contentBlocksJson`
+  - L37 `Function(String)? onShowSnackBar`
+  - L38 `Function()? onUpdateUI`
+  - L39 `Function(int index, String content, String reasoning, String chatId)? onMessageUpdate`
+  - L41 `Function( int index, String content, String reasoning, String chatId, double? tps, )? onMessageFinalize`
+  - L49 `Function(int index, List<ToolCall> toolCalls, String chatId)? onToolCallsUpdate`
+  - L51 `Function( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )? onToolImagesProcessed`
+  - L64 `Function(int index, String contentBlocksJson, String chatId)? onContentBlocksUpdate`  — Called when content blocks are updated during or after the tool loop.
+  - L69 `Function(int index, String requestPayloadJson, String chatId)? onRequestPayloadUpdate`  — Called when an outbound request payload is prepared for a streaming pass.
+  - L72 `Function(String chatId, int index, String content, String reasoning)? onBackgroundUpdate`
+  - L80 `Function(String chatId, int index)? onStreamInterrupted`  — Called when the active stream is torn down (dispose / cancel /
+  - L92 `Function( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )? onStreamTick`  — Fires on a periodic timer (and immediately on lifecycle pause /
+  - L102 `Function()? onPaymentRequired`
+  - L104 `bool _isStreaming = false`
+  - L105 `bool _isSending = false`
+  - L106 `bool _isDisposed = false`
+  - L111 `bool _cancelRequested = false`
+  - L116 `String? _stopIntentChatId`  — The chat whose stop this handler declared last. Only that one is taken
+  - L117 `bool _hasForegroundKeepAliveLock = false`
+  - L118 `Future<void>? _activeToolLoopFuture`
+  - L128 `static const Duration _snapshotInterval = Duration(milliseconds: 500)`
+  - L129 `Timer? _snapshotTimer`
+  - L130 `_StreamingSnapshot? _currentSnapshot`
+  - L131 `bool _streamFinalized = false`
+  - L133 `bool get isStreaming`
+  - L134 `bool get isSending`
+  - L135 `Future<void>? get activeToolLoopFuture`
+  - L140 `Future<void> sendMessage({ required String userInput, required List<AttachedFile> attachedFiles, required String selectedModelId, required String? selectedProviderSlug, required List<Map<String, String>> messages, required String? systemPrompt, required String? activeChatId, required int placeholderIndex, required Future<String?> Function() getProviderSlug, required bool isOffline, bool includeRecentImagesInHistory = true, bool includeAllImagesInHistory = false, bool includeReasoningInHistory = false, bool includeToolResultsInHistory = true, bool toolCallingEnabled = true, bool toolDiscoveryMode = true, String? reasoningEffort, String? continuePriorText, String? continuePriorContentBlocksJson, bool regenerate = false, bool modelSelectionCaptured = false, })`  — Send a message with streaming response
+  - L1237 `Future<void> cancelStream(String? chatId)`  — Cancel active stream
+  - L1274 `String? _imageTurnChatId`  — Images already persisted for the message being streamed, so a second
+  - L1275 `int? _imageTurnIndex`
+  - L1276 `final List<String> _turnImagePaths = <String>[]`
+  - L1277 `final List<Map<String, dynamic>> _turnImageMetas = <Map<String, dynamic>>[]`
+  - L1280 `Future<void> _processToolImages( List<ToolCall> toolCalls, int index, String chatId, )`  — Download tool-generated images, encrypt, and persist to Supabase storage.
+  - L1340 `Future<void> _acquireForegroundKeepAlive()`
+  - L1359 `Future<void> _releaseForegroundKeepAlive()`
+  - L1374 `Future<void> _updateForegroundNotification({ required String title, required String content, })`
+  - L1395 `void resetState()`  — Reset state (use when stuck in invalid state)
+  - L1410 `bool isChatStreaming(String chatId)`  — Check if a specific chat is streaming
+  - L1415 `String? getBufferedContent(String chatId)`  — Get buffered content for a streaming chat
+  - L1420 `String? getBufferedReasoning(String chatId)`  — Get buffered reasoning for a streaming chat
+  - L1425 `int? getStreamingMessageIndex(String chatId)`  — Get the streaming message index for a chat
+  - L1430 `bool hasCompletedStream(String chatId)`  — Check if a chat has a completed stream with buffered content
+  - L1435 `void consumeCompletedStream(String chatId)`  — Remove a completed stream entry after its content has been consumed
+  - L1440 `void setBackgroundMessages( String chatId, List<Map<String, dynamic>> messages, )`  — Store background messages for a streaming chat when user switches away
+  - L1451 `List<Map<String, dynamic>>? getBackgroundMessages(String chatId)`  — Get the most recent background snapshot for a chat, with the live buffer
+  - L1456 `bool hasBackgroundMessages(String chatId)`  — Whether a background snapshot exists for this chat.
+  - L1462 `Future<List<Map<String, dynamic>>> _buildApiHistory( List<Map<String, String>> messages, String pendingUserText, { bool includeRecentImages = true, bool includeAllImages = false, bool includeReasoning = false, bool includeToolResults = true, })`  — Delegates to [ChatHistoryBuilder] — see that file for why this must not
+  - L1479 `Future<dynamic> getSessionSafely()`  — Get session safely with network error handling
+  - L1522 `void _markStreamFinalized()`  — Mark the active stream as cleanly finished (a final-answer event ran).
+  - L1536 `void _recordSnapshot({ required String chatId, required int index, required String content, required String reasoning, String? contentBlocksJson, })`
+  - L1557 `void _flushSnapshot({bool forceImmediate = false})`
+  - L1592 `void _clearSnapshot()`
+  - L1601 `void _handleAppPaused()`  — Called by the lifecycle service when the app moves to background.
+  - L1607 `void _markInterruptedIfStreaming()`
+  - L1623 `void dispose()`  — Dispose resources
+- L1645 `class _StreamingSnapshot`
+  - L1646 `_StreamingSnapshot({ required this.chatId, required this.index, required this.content, required this.reasoning, this.contentBlocksJson, })`
+  - L1654 `final String chatId`
+  - L1655 `final int index`
+  - L1656 `final String content`
+  - L1657 `final String reasoning`
+  - L1658 `final String? contentBlocksJson`

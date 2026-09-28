@@ -84,7 +84,7 @@
   - L524 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
   - L577 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
 
-## lib/widgets/message_bubble/layout.dart  (1128 Z.)
+## lib/widgets/message_bubble/layout.dart  (1134 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleLayout on _MessageBubbleState`
   - L12 `Future<void> _showMessengerMenu(Offset? position)`
@@ -100,15 +100,15 @@
   - L140 `Widget _buildAutomationWakeLine(BuildContext context, AutomationWake wake)`  — The entire on-screen trace of a fired automation: one quiet line.
   - L185 `Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls)`  — A turn that really did work but has nothing left to read: one quiet
   - L225 `Widget _buildUserBubble(BuildContext context)`
-  - L322 `Widget _buildAiBubble(BuildContext context)`
-  - L495 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
-  - L541 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
-  - L637 `Widget _buildFramedUserImageGrid(Widget child)`
-  - L645 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
-  - L999 `String _stripAttachmentHeaderForUser(String text)`
-  - L1020 `Widget _buildUserText(String text, Color color)`  — A user's text as chuk_chat draws it: plain [Text], so taps pass through
-  - L1036 `Widget _buildReplyQuote(ChatReply reply, Color color)`  — The quote a reply carries above its own text: a plain bar, the author
-  - L1075 `Widget? _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`  — The turn's own text, or null when it has none to show. Null — not an
+  - L323 `Widget _buildAiBubble(BuildContext context)`
+  - L496 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
+  - L542 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
+  - L638 `Widget _buildFramedUserImageGrid(Widget child)`
+  - L646 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
+  - L1005 `String _stripAttachmentHeaderForUser(String text)`
+  - L1026 `Widget _buildUserText(String text, Color color)`  — A user's text as chuk_chat draws it: plain [Text], so taps pass through
+  - L1042 `Widget _buildReplyQuote(ChatReply reply, Color color)`  — The quote a reply carries above its own text: a plain bar, the author
+  - L1081 `Widget? _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`  — The turn's own text, or null when it has none to show. Null — not an
 
 ## lib/widgets/message_bubble/models.dart  (135 Z.)
 - part of '../message_bubble.dart'

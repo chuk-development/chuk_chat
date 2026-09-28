@@ -62,6 +62,12 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
 
   // --- Hooks the host State may override ---------------------------------
 
+  /// True on the Agents thread screen. It restores its chat mode on every
+  /// mount, so a save of the model id this process already wrote is skipped
+  /// there (see [UserPreferencesService.saveSelectedModel]). chuk_chat's
+  /// screen saves every time, in the Agents build too.
+  bool get skipRepeatedModelSave => false;
+
   /// Present the full model screen (add models, pin providers).
   ///
   /// The default pushes the standalone page. Desktop overrides this to prefer
@@ -246,7 +252,10 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
     });
     await ChatModeService.save(ChatMode.custom);
     ModelSelectionDropdown.selectedModelNotifier.value = modelId;
-    await UserPreferencesService.saveSelectedModel(modelId);
+    await UserPreferencesService.saveSelectedModel(
+      modelId,
+      skipIfUnchanged: skipRepeatedModelSave,
+    );
     if (!mounted) return;
     await loadProviderSlugForModel(modelId, forceFromPrefs: true);
     final config = await ChatModeService.setModelForMode(
@@ -286,7 +295,10 @@ mixin ChatModelSelectionMixin<W extends StatefulWidget>
       selectedProviderSlug = config.providerSlug;
     });
     ModelSelectionDropdown.selectedModelNotifier.value = config.modelId;
-    await UserPreferencesService.saveSelectedModel(config.modelId);
+    await UserPreferencesService.saveSelectedModel(
+      config.modelId,
+      skipIfUnchanged: skipRepeatedModelSave,
+    );
     // Fast and Thinking keep their own provider, which the lookup below
     // prefers; the per-model pin applies only in custom mode or when the mode
     // pins nothing. Awaited so it cannot race the unawaited read the

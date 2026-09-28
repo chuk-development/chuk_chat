@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-318 Dateien · 844 Typen/Funktionen · 764 Member · Stand 2026-09-28
+322 Dateien · 864 Typen/Funktionen · 783 Member · Stand 2026-09-28
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -57,7 +57,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### verify_languages.dart  (19 Z.)
 - `void main()`
 
-### widget_test.dart  (313 Z.)
+### widget_test.dart  (318 Z.)
 - `class _FailingAuthService extends AuthService`  — Auth service that always fails, so the login test can exercise the error
   - signInWithPassword
 - `class _FakeSessionSource implements AccountSessionSource`  — Session source returning fixed tokens, so tests never touch Supabase.
@@ -102,7 +102,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (756 Z.)
+### every_screen_layout_test.dart  (780 Z.)
 - const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
@@ -251,6 +251,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - `void main()`
 
+### desktop_settings_modal_test.dart  (180 Z.)
+- `void main()`  — The desktop settings modal lists the same destinations as the phone's
+
 ### mcp_connectors_page_test.dart  (212 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - read write delete map
@@ -272,7 +275,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _j(Map<String, String> m)`
 - `void main()`
 
-### settings_page_test.dart  (162 Z.)
+### settings_page_test.dart  (213 Z.)
 - `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ### skills_settings_page_test.dart  (357 Z.)
@@ -379,7 +382,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`
 
-### message_render_cache_shared_test.dart  (82 Z.)
+### message_render_cache_shared_test.dart  (91 Z.)
 - `List<Map<String, String>> _messages()`
 - `void main()`
 
@@ -406,13 +409,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/platform_specific/mobile
-### mobile_agent_list_test.dart  (313 Z.)
+### mobile_agent_list_test.dart  (368 Z.)
 - `void main()`
 
 ### mobile_agent_sheet_test.dart  (82 Z.)
 - `void main()`
 
-### mobile_chat_chrome_test.dart  (526 Z.)
+### mobile_chat_chrome_test.dart  (528 Z.)
 - `void main()`
 
 ### mobile_chat_screen_test.dart  (129 Z.)
@@ -445,6 +448,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### api_config_base_test.dart  (26 Z.)
 - `void main()`  — The model catalogue (`/v1/models_info`) is fetched from this base URL by
+
+### app_mode_service_test.dart  (117 Z.)
+- `void main()`
 
 ### app_theme_contrast_uifont_test.dart  (94 Z.)
 - `void main()`
@@ -621,7 +627,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### streaming_final_content_test.dart  (55 Z.)
 - `void main()`
 
-### streaming_idle_timeout_test.dart  (112 Z.)
+### streaming_idle_timeout_test.dart  (139 Z.)
+- const: _chukChatId
 - `void main()`
 
 ### streaming_manager_test.dart  (585 Z.)
@@ -629,7 +636,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _TestStreamContext`  — Helper class to hold test stream state
   - controller getContent getReasoning getTps isCompleted getError
 
-### streaming_silence_test.dart  (203 Z.)
+### streaming_silence_test.dart  (206 Z.)
 - `class _Rig`  — One run under test: the input the host would write to, and everything the
   - start chatId input manager updates completions errors errorCodes
 - `void main()`
@@ -818,6 +825,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### browser_presence_test.dart  (345 Z.)
 - `void main()`
 
+### chat_core_routing_test.dart  (308 Z.)
+- const: chukChatId threadKey
+- `StoredChat _chat(String id, String text)`
+- `void main()`
+- `Future<void> _drain()`
+
 ### chat_debug_export_size_test.dart  (102 Z.)
 - `void main()`  — The debug copy has to be the size chuk_chat's is. A thread that carries a
 
@@ -836,7 +849,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### schedule_spec_test.dart  (431 Z.)
 - `void main()`  — 2026-02-03 is a Tuesday. Every date in this file is built from local
 
-### tool_card_parity_test.dart  (314 Z.)
+### tool_card_parity_test.dart  (317 Z.)
 - const: _t0 _liveRun _replayedRun
 - `Map<String, dynamic> _visible(Map<String, dynamic> call)`  — The fields of a card the reader can see: everything the renderer reads
 - `DateTime _at(int seconds)`
@@ -1314,6 +1327,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_lifecycle_observer_test.dart  (43 Z.)
 - `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 
+### app_mode_switch_test.dart  (669 Z.)
+- const: kPhone kSwitchOnPhone kWidePhone kPhoneInsets
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _EmptyMirror extends SupabasePairingSync`  — The encrypted mirror, with nothing in it.
+  - readEncryptedPairing publishEncryptedPairing saveEncryptedPairing clearEncryptedPairing
+- `class _Session implements AccountSessionSource`
+  - current refresh
+- `class _FakeChatHalf extends StatefulWidget`  — Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
+  - phone modeSwitch
+- `class _FakeChatHalfState extends State<_FakeChatHalf>`
+  - taps draft
+- `void main()`
+
 ### app_notification_test.dart  (87 Z.)
 - `void main()`
 
@@ -1481,8 +1508,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble_sources_test.dart  (88 Z.)
 - `void main()`
 
-### message_bubble_test.dart  (213 Z.)
-- const: _wakeText
+### message_bubble_test.dart  (242 Z.)
+- const: _wakeText _threadKey _chukChatId
 - `Widget _wrap(Widget child)`
 - `void main()`
 
@@ -1492,7 +1519,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### messenger_context_menu_test.dart  (57 Z.)
 - `void main()`
 
-### messenger_message_bubble_test.dart  (808 Z.)
+### messenger_message_bubble_test.dart  (848 Z.)
 - `Widget wrap(Widget child)`
 - `void main()`
 

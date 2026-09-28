@@ -540,8 +540,9 @@ class _SkillRow extends StatelessWidget {
 // Agents's (below) lists the skills that live on the coworker host and toggles
 // them over the relay. Neither replaces the other, so the Agents one keeps its
 // own name and every existing `SkillsSettingsPage` call site is untouched.
-// SettingsPage and the desktop settings modal open `AgentsSkillsSettingsPage`
-// when FEATURE_AGENTS is on.
+// With FEATURE_AGENTS on, SettingsPage and the desktop settings modal show
+// both: chuk's Skills (the Chat half reads them) and this page as "Host
+// skills" in the Agents section.
 
 /// The host's skills, one switch each (docs/WIRE_CONTRACT.md, "Skills").
 ///
@@ -612,7 +613,9 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l = AppLocalizations.of(context);
-    final title = l?.skills ?? 'Skills';
+    // Not "Skills": the Agents build shows chuk_chat's Skills page too, and
+    // the two lists hold different skills.
+    const title = 'Host skills';
     final builtin = _source.builtin;
     final workspace = _source.workspace;
     final errors = _source.errors;

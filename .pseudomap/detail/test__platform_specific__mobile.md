@@ -1,12 +1,12 @@
 # test/platform_specific/mobile · Signaturen
 
-## test/platform_specific/mobile/mobile_agent_list_test.dart  (313 Z.)
+## test/platform_specific/mobile/mobile_agent_list_test.dart  (368 Z.)
 - L11 `void main()`
 
 ## test/platform_specific/mobile/mobile_agent_sheet_test.dart  (82 Z.)
 - L9 `void main()`
 
-## test/platform_specific/mobile/mobile_chat_chrome_test.dart  (526 Z.)
+## test/platform_specific/mobile/mobile_chat_chrome_test.dart  (528 Z.)
 - L16 `void main()`
 
 ## test/platform_specific/mobile/mobile_chat_screen_test.dart  (129 Z.)

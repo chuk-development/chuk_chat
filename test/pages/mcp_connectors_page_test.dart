@@ -105,38 +105,68 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
-  testWidgets('with Agents on a connected row says what the host found, and '
-      'the device dials nobody', (tester) async {
-    debugAgentsChatCoreOverride = true;
-    addTearDown(() => debugAgentsChatCoreOverride = null);
-    final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
-    McpService.resetForTest(store: store);
-    await store.upsert(
-      const McpConnection(
-        id: 'example',
-        name: 'Example',
-        url: 'https://mcp.example.com/mcp',
-      ),
-    );
-    var dials = 0;
-    final previousProbeClientFactory = McpService.probeClientFactory;
-    addTearDown(
-      () => McpService.probeClientFactory = previousProbeClientFactory,
-    );
-    McpService.probeClientFactory = () => MockClient((_) async {
-      dials++;
-      return http.Response('', 200);
+  // With Agents on, one connector serves two kinds of chat: the host dials it
+  // for an Agents thread, and this device calls it for a chuk_chat chat. The
+  // badge is the host's view, the line under the name this device's.
+  group('with Agents on a connected row shows both views', () {
+    http.Client Function()? previousProbeClientFactory;
+
+    setUp(() async {
+      debugAgentsChatCoreOverride = true;
+      final store = McpStore(secrets: _MemorySecrets(), list: memoryMcpList());
+      McpService.resetForTest(store: store);
+      McpService.unreachable.value = <String>{};
+      await store.upsert(
+        const McpConnection(
+          id: 'example',
+          name: 'Example',
+          url: 'https://mcp.example.com/mcp',
+        ),
+      );
+      previousProbeClientFactory = McpService.probeClientFactory;
     });
 
-    await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
-    await tester.pumpAndSettle();
+    tearDown(() {
+      McpService.probeClientFactory = previousProbeClientFactory;
+      McpService.unreachable.value = <String>{};
+      debugAgentsChatCoreOverride = null;
+    });
 
-    // The host has not reported on it yet, so the row says so instead of
-    // "0 tools" or "Offline".
-    expect(find.text('Example'), findsOneWidget);
-    expect(find.text('not checked'), findsOneWidget);
-    expect(find.text('Offline'), findsNothing);
-    expect(dials, 0);
+    testWidgets('the host has not reported yet and this device reaches it',
+        (tester) async {
+      var dials = 0;
+      McpService.probeClientFactory = () => MockClient((_) async {
+        dials++;
+        return http.Response('', 200);
+      });
+
+      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
+      await tester.pumpAndSettle();
+
+      // The host has not reported on it yet, so the badge says so instead of
+      // "0 tools" or "Offline".
+      expect(find.text('Example'), findsOneWidget);
+      expect(find.text('not checked'), findsOneWidget);
+      expect(find.text('Offline'), findsNothing);
+      // A chuk_chat chat calls it from here, so this device checks it too.
+      expect(dials, 1);
+      expect(find.text('This device cannot reach the server'), findsNothing);
+    });
+
+    testWidgets('this device cannot reach it, and the host view stays',
+        (tester) async {
+      McpService.probeClientFactory = () =>
+          MockClient((_) async => throw http.ClientException('down'));
+
+      await tester.pumpWidget(const MaterialApp(home: McpConnectorsPage()));
+      await tester.pumpAndSettle();
+
+      expect(find.text('This device cannot reach the server'), findsOneWidget);
+      // The badge is still the host's: the host may reach a server this
+      // device cannot.
+      expect(find.text('not checked'), findsOneWidget);
+      expect(find.text('Offline'), findsNothing);
+    });
   });
 
   group('detail page of a connector the host could not use', () {
@@ -157,6 +187,7 @@ void main() {
       await store.upsert(failing.copyWith(checkedAt: DateTime(2026, 9, 1)));
       McpService.connections.value = await store.load();
       dials = 0;
+      McpService.unreachable.value = <String>{};
       previousProbeClientFactory = McpService.probeClientFactory;
       // The server answers any device-side check, so only the host's report
       // can call the connector broken.
@@ -168,6 +199,7 @@ void main() {
 
     tearDown(() {
       McpService.probeClientFactory = previousProbeClientFactory;
+      McpService.unreachable.value = <String>{};
       debugAgentsChatCoreOverride = null;
     });
 
@@ -187,8 +219,37 @@ void main() {
         findsOneWidget,
       );
       expect(find.text('Remove this connector'), findsOneWidget);
-      // The host dials the server; this device does not.
-      expect(dials, 0);
+      // This device checks too (a chuk_chat chat calls the server from
+      // here). It got through, so only the host's line is shown.
+      expect(dials, 1);
+      expect(
+        find.textContaining('This device could not reach the server'),
+        findsNothing,
+      );
+    });
+
+    testWidgets('with Agents on a device that cannot reach it offers '
+        'Reconnect, though the host can', (tester) async {
+      debugAgentsChatCoreOverride = true;
+      // The host reported the connector as fine this time.
+      await McpService.store.upsert(
+        failing.copyWith(checkedAt: DateTime(2026, 9, 1), clearError: true),
+      );
+      McpService.connections.value = await McpService.store.load();
+      McpService.probeClientFactory = () =>
+          MockClient((_) async => throw http.ClientException('down'));
+
+      await tester.pumpWidget(
+        const MaterialApp(home: McpConnectorDetailPage(id: 'example')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.widgetWithText(FilledButton, 'Reconnect'), findsOneWidget);
+      expect(
+        find.textContaining('This device could not reach the server'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('The host could not use'), findsNothing);
     });
 
     testWidgets('with Agents off the device check decides, as before',

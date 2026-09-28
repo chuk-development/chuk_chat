@@ -5,13 +5,15 @@
 // list is the catalogue, the registry search, and a field to paste any
 // other MCP address into.
 //
-// One page for both builds. With FEATURE_AGENTS on, the paired host dials the
-// servers, not this device: the page asks the host to check them
-// ([McpService.probe]) and shows what the host found, instead of dialling
-// each server from here.
+// One page for both builds. With FEATURE_AGENTS on, one connector serves two
+// kinds of chat: an Agents thread has the paired host dial the server, and a
+// chuk_chat chat calls it from this device, as in the plain build. So the page
+// shows both views: it asks the host to check the servers ([McpService.probe])
+// and shows what the host found, and it checks from this device too.
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -57,16 +59,26 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   void initState() {
     super.initState();
     if (agentsChatCore) {
-      // Agents: ask the host what the connectors hold. The device cannot
-      // know — it signs them in, the host speaks to them — and without
-      // asking, this list can only show what the last task reported.
-      unawaited(McpService.load());
+      // Agents: ask the host what the connectors hold. The host speaks to
+      // them for an Agents thread, and it is the side that lists their
+      // tools; without asking, this list can only show what the last task
+      // reported.
       unawaited(McpService.probe());
-      return;
     }
     // Ask every stored server whether it is still there, so the list is
-    // about the servers as they are and not about the tokens we kept.
-    unawaited(McpService.load().then((_) => McpService.verifyAllReachable()));
+    // about the servers as they are and not about the tokens we kept. In the
+    // Agents build too: a chuk_chat chat there calls them from this device.
+    unawaited(
+      McpService.load()
+          .then((_) => McpService.verifyAllReachable())
+          .catchError((Object error) {
+            // The rows keep their last known state; a later open checks again.
+            if (kDebugMode) {
+              debugPrint('[McpConnectors] reachability check failed: '
+                  '${error.runtimeType}');
+            }
+          }),
+    );
   }
 
   /// The right-hand line of a connected row in the Agents build.
@@ -205,13 +217,19 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                         icon: connection.iconUrl,
                         assetPath: bundledIconAsset(connection.id),
                         name: connection.name,
+                        // Agents: the line under the name is this device's
+                        // check (a chuk_chat chat), the badge is the host's
+                        // (an Agents thread). One can fail while the other
+                        // works, so neither hides the other.
                         subtitle: unreachable.contains(connection.id)
-                            ? 'The server did not answer'
+                            ? (agentsChatCore
+                                  ? 'This device cannot reach the server'
+                                  : 'The server did not answer')
                             : subtitleFor(connection),
-                        trailing: unreachable.contains(connection.id)
-                            ? 'Offline'
-                            : agentsChatCore
+                        trailing: agentsChatCore
                             ? _hostStatusOf(connection)
+                            : unreachable.contains(connection.id)
+                            ? 'Offline'
                             : '${connection.tools.length} tools',
                         onTap: () => _open(connection.id, null),
                       ),
@@ -410,9 +428,9 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   }
 
   Future<void> _checkReachable() async {
-    // Agents: the host dials the connector, from its own network. A check
-    // from this device would answer a different question.
-    if (agentsChatCore) return;
+    // Both builds. In the Agents build the host dials the connector for an
+    // Agents thread, but a chuk_chat chat calls it from this device, so this
+    // device's answer counts there too.
     if (McpService.connectionFor(widget.id) == null) return;
     final alive = await McpService.verifyReachable(widget.id);
     if (!mounted) return;
@@ -422,22 +440,27 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   /// Whether the last check says the stored connector does not work.
   ///
   /// chuk asks the server from this device, so the answer is [_reachable].
-  /// In the Agents build the device never asks and [_reachable] stays null:
-  /// the host dials the server and reports a failure through
-  /// [McpConnection.lastError], the same field the connected row reads for
-  /// "not reachable". Without it the page offered Disconnect for a
-  /// connector the list had just called broken.
+  /// The Agents build has two users of the connector: the host dials it for
+  /// an Agents thread and reports a failure through
+  /// [McpConnection.lastError] (the field the connected row reads for "not
+  /// reachable"), and this device calls it for a chuk_chat chat. Either one
+  /// failing is a connector that does not work for one kind of chat. Without
+  /// the host's report the page offered Disconnect for a connector the list
+  /// had just called broken.
   bool _checkFailed(McpConnection? connection) {
     if (connection == null) return false;
-    if (agentsChatCore) return connection.lastError != null;
+    if (agentsChatCore && connection.lastError != null) return true;
     return _reachable == false;
   }
 
   /// What the failed check found, in words.
   String _failureText(McpConnection connection) {
     if (agentsChatCore) {
-      return 'The host could not use this connector: '
-          '${connection.lastError}';
+      return <String>[
+        if (_reachable == false) 'This device could not reach the server.',
+        if (connection.lastError != null)
+          'The host could not use this connector: ${connection.lastError}',
+      ].join('\n');
     }
     return 'The server did not answer. The sign-in may have expired.';
   }

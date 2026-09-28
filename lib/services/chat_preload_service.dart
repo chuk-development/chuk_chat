@@ -5,7 +5,6 @@
 
 import 'dart:async';
 
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_dirty_store.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/chat_storage_sync.dart';
@@ -14,6 +13,7 @@ import 'package:chuk_chat/services/diagnostics_log_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:flutter/foundation.dart';
 
@@ -64,9 +64,6 @@ class ChatPreloadService {
   /// Start background preload of all chat messages.
   /// Safe to call multiple times - will only run once.
   static Future<void> startBackgroundPreload() async {
-    // The Agents build lists no chuk_chat chats, so it does not copy all of
-    // them into SQLite either (see `ChatSyncService._performAgentsSync`).
-    if (agentsChatCore) return;
     // Already complete or in progress
     if (_isPreloadComplete || _isPreloading) {
       if (kDebugMode) {
@@ -141,8 +138,12 @@ class ChatPreloadService {
           if (row['id'] is String) row['id'] as String,
       };
 
+      // Only chuk_chat chats: an Agents thread shares the map but lives in
+      // `cowork_chats`, which `AgentsChatStore` keeps in the cache itself.
       final chatsToFetch = ChatStorageState.chatsById.keys
-          .where((id) => !cachedIds.contains(id))
+          .where(
+            (id) => !cachedIds.contains(id) && !ChatOrigin.isAgentsThread(id),
+          )
           .toList(growable: false);
 
       _totalCount = chatsToFetch.length;

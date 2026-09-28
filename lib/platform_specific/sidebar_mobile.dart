@@ -410,7 +410,7 @@ class _SidebarMobileState extends State<SidebarMobile>
               children: [
                 const UpdateBanner(),
                 KeyedSubtree(
-                  key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
+                  key: TourKeyRegistry.instance.anchorFor(TourSlots.settingsEntry),
                   child: Padding(
                     // The home indicator sits below the box, so it keeps its
                     // own 6 px and adds what the device reserves.

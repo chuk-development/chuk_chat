@@ -3,41 +3,46 @@
 ## lib/platform_specific/root_wrapper.dart  (5 Z.)
 - reicht weiter: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-## lib/platform_specific/root_wrapper_desktop.dart  (717 Z.)
-- L34 `class RootWrapperDesktop extends StatefulWidget`
-  - L35 `final AppShellConfig config`
-  - L37 `const RootWrapperDesktop({super.key, required this.config})`
-  - L40 `State<RootWrapperDesktop> createState()`
-- L43 `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
-  - L44 `bool _isSidebarExpanded = false`
-  - L45 `bool _hasOpenedSidebar = false`
-  - L47 `String? _activeProjectId`
-  - L49 `String? _activePanel`  — 'workspaces' for the full-page workspace list, or null.
-  - L50 `ArtifactDocument? _activeArtifact`
-  - L51 `bool _panelOpen = true`
-  - L54 `double? _userArtifactPanelWidth`  — User-preferred artifact panel width. Null = default 50%.
-  - L56 `final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey()`
-  - L59 `void initState()`
-  - L117 `void dispose()`
-  - L135 `void _onArtifactChanged()`
-  - L147 `void _onPanelOpenChanged()`
-  - L154 `void _onArtifactOpenRequested()`
-  - L161 `void _closeArtifactPanel()`
-  - L168 `void _openSourceChatForArtifact(String chatId)`
-  - L182 `void _openSettingsPage()`
-  - L189 `void _openWorkspacesPage()`
-  - L199 `void _openWorkspace(String workspaceId)`
-  - L219 `void _startWorkspaceChat(String workspaceId)`
-  - L230 `void _exitProject()`
-  - L239 `void _openMediaPage()`
-  - L243 `void _handleChatSelected(String? chatId)`
-  - L311 `void _toggleSidebar()`
-  - L321 `void _copyDebugChat()`
-  - L342 `List<Widget> _buildMiniRail(AppLocalizations l)`
-  - L401 `void _onTrayNewChat()`
-  - L406 `void _handleNewChatFromSidebar()`
-  - L427 `Future<void> _handleChatDeleted(String deletedChatId)`
-  - L444 `Widget build(BuildContext context)`
+## lib/platform_specific/root_wrapper_desktop.dart  (778 Z.)
+- L35 `class RootWrapperDesktop extends StatefulWidget`
+  - L36 `final AppShellConfig config`
+  - L42 `final Widget? headerCenter`  — Floats at the top centre of the window, on the line of the chrome
+  - L48 `final ValueGetter<String?>? selectedChatIdReader`  — Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
+  - L50 `const RootWrapperDesktop({ super.key, required this.config, this.headerCenter, this.selectedChatIdReader, })`
+  - L58 `State<RootWrapperDesktop> createState()`
+- L61 `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
+  - L64 `static const double _kCopyButtonReserve = 12 + 48 + 8`  — What [RootWrapperDesktop.headerCenter] keeps clear on the right: the
+  - L67 `static const double _kWorkspacePanelReserve = 300 + 8`  — The same in a workspace chat: the workspace panel's 300 px and a gap.
+  - L69 `bool _isSidebarExpanded = false`
+  - L70 `bool _hasOpenedSidebar = false`
+  - L72 `String? _activeProjectId`
+  - L74 `String? _activePanel`  — 'workspaces' for the full-page workspace list, or null.
+  - L75 `ArtifactDocument? _activeArtifact`
+  - L76 `bool _panelOpen = true`
+  - L79 `double? _userArtifactPanelWidth`  — User-preferred artifact panel width. Null = default 50%.
+  - L81 `final GlobalKey<ChukChatUIDesktopState> _chatUIKey = GlobalKey()`
+  - L84 `String? get _selectedChatId`  — The chat in view (see [RootWrapperDesktop.selectedChatIdReader]).
+  - L90 `void initState()`
+  - L148 `void dispose()`
+  - L166 `void _onArtifactChanged()`
+  - L178 `void _onPanelOpenChanged()`
+  - L185 `void _onArtifactOpenRequested()`
+  - L192 `void _closeArtifactPanel()`
+  - L199 `void _openSourceChatForArtifact(String chatId)`
+  - L213 `void _openSettingsPage()`
+  - L220 `void _openWorkspacesPage()`
+  - L230 `void _openWorkspace(String workspaceId)`
+  - L250 `void _startWorkspaceChat(String workspaceId)`
+  - L261 `void _exitProject()`
+  - L270 `void _openMediaPage()`
+  - L274 `void _handleChatSelected(String? chatId)`
+  - L342 `void _toggleSidebar()`
+  - L352 `void _copyDebugChat()`
+  - L373 `List<Widget> _buildMiniRail(AppLocalizations l)`
+  - L432 `void _onTrayNewChat()`
+  - L437 `void _handleNewChatFromSidebar()`
+  - L458 `Future<void> _handleChatDeleted(String deletedChatId)`
+  - L475 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_io.dart  (76 Z.)
 - L30 `class RootWrapper extends StatelessWidget`
@@ -46,42 +51,45 @@
   - L36 `Widget build(BuildContext context)`
   - L57 `bool _isMobilePhone(BuildContext context)`
 
-## lib/platform_specific/root_wrapper_mobile.dart  (784 Z.)
+## lib/platform_specific/root_wrapper_mobile.dart  (807 Z.)
 - L37 `class RootWrapperMobile extends StatefulWidget`
   - L38 `final AppShellConfig config`
-  - L40 `const RootWrapperMobile({super.key, required this.config})`
-  - L43 `State<RootWrapperMobile> createState()`
-- L46 `class _RootWrapperMobileState extends State<RootWrapperMobile> with WidgetsBindingObserver, SingleTickerProviderStateMixin`
-  - L51 `static bool _batteryPromptedThisLaunch = false`  — Guards the battery-optimization prompt to once per app process so the
-  - L53 `bool _isSidebarExpanded = false`
-  - L54 `bool _artifactSheetOpen = false`
-  - L56 `final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey()`
-  - L57 `late AnimationController _sidebarAnimController`
-  - L58 `late Animation<double> _sidebarAnimation`
-  - L61 `void initState()`
-  - L131 `void dispose()`
-  - L145 `void _onPanelOpenRequested()`
-  - L150 `void _onArtifactChanged()`
-  - L156 `void _maybeOpenArtifactSheet()`
-  - L165 `void didChangeAppLifecycleState(AppLifecycleState state)`
-  - L182 `Future<void> _refreshSessionOnResume()`
-  - L205 `Future<void> _ensurePermissions()`  — Re-check and request runtime permissions.
-  - L234 `Future<void> _ensureBatteryOptimizationDisabled()`  — Ask the user to exempt the app from battery optimization.
-  - L274 `void _showPermissionBlockedSnackBar(String permissionName)`
-  - L285 `void _toggleSidebar()`
-  - L300 `void _openSettingsPage()`
-  - L310 `void _openWorkspacesPage()`
-  - L343 `void _openMediaPage()`
-  - L350 `void _handleChatSelected(String? chatId)`
-  - L404 `Future<void> _handleChatDeleted(String deletedChatId)`
-  - L422 `void _newChatFromAppBar()`
-  - L432 `String? _currentChatTitle()`  — Title of the chat in view, or null for a fresh/unsaved chat.
-  - L448 `Widget _buildFloatingTopBar(Color iconFg)`  — The composer's top row, rebuilt as free-floating blocks: a round menu
-  - L546 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round, frosted icon chip for the floating top bar.
-  - L576 `void _newChatFromSidebar()`
-  - L585 `void _openArtifactSheet()`
-  - L609 `void _copyDebugChat()`
-  - L624 `Widget build(BuildContext context)`
+  - L43 `final Widget? headerCenter`  — Takes the place of the title pill in the floating top bar. The Agents
+  - L49 `final ValueGetter<String?>? selectedChatIdReader`  — Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
+  - L51 `const RootWrapperMobile({ super.key, required this.config, this.headerCenter, this.selectedChatIdReader, })`
+  - L59 `State<RootWrapperMobile> createState()`
+- L62 `class _RootWrapperMobileState extends State<RootWrapperMobile> with WidgetsBindingObserver, SingleTickerProviderStateMixin`
+  - L67 `static bool _batteryPromptedThisLaunch = false`  — Guards the battery-optimization prompt to once per app process so the
+  - L69 `bool _isSidebarExpanded = false`
+  - L70 `bool _artifactSheetOpen = false`
+  - L72 `final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey()`
+  - L75 `String? get _selectedChatId`  — The chat in view (see [RootWrapperMobile.selectedChatIdReader]).
+  - L79 `late AnimationController _sidebarAnimController`
+  - L80 `late Animation<double> _sidebarAnimation`
+  - L83 `void initState()`
+  - L153 `void dispose()`
+  - L167 `void _onPanelOpenRequested()`
+  - L172 `void _onArtifactChanged()`
+  - L178 `void _maybeOpenArtifactSheet()`
+  - L187 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L204 `Future<void> _refreshSessionOnResume()`
+  - L227 `Future<void> _ensurePermissions()`  — Re-check and request runtime permissions.
+  - L256 `Future<void> _ensureBatteryOptimizationDisabled()`  — Ask the user to exempt the app from battery optimization.
+  - L296 `void _showPermissionBlockedSnackBar(String permissionName)`
+  - L307 `void _toggleSidebar()`
+  - L322 `void _openSettingsPage()`
+  - L332 `void _openWorkspacesPage()`
+  - L365 `void _openMediaPage()`
+  - L372 `void _handleChatSelected(String? chatId)`
+  - L426 `Future<void> _handleChatDeleted(String deletedChatId)`
+  - L444 `void _newChatFromAppBar()`
+  - L454 `String? _currentChatTitle()`  — Title of the chat in view, or null for a fresh/unsaved chat.
+  - L470 `Widget _buildFloatingTopBar(Color iconFg)`  — The composer's top row, rebuilt as free-floating blocks: a round menu
+  - L569 `Widget _floatIconChip({ required IconData icon, required VoidCallback onTap, required Color iconFg, required String tooltip, required String semanticsId, })`  — One round, frosted icon chip for the floating top bar.
+  - L599 `void _newChatFromSidebar()`
+  - L608 `void _openArtifactSheet()`
+  - L632 `void _copyDebugChat()`
+  - L647 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/root_wrapper_stub.dart  (19 Z.)
 - L8 `class RootWrapper extends StatelessWidget`  — Web wrapper - renders desktop UI since web is a desktop-like environment

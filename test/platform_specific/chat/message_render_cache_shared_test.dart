@@ -1,6 +1,7 @@
-// In the Agents build the chat screen is mounted again on every agent switch,
-// so the decoded message payloads are kept in one process-wide cache instead
-// of one per screen. With the flag off each screen keeps its own, as upstream.
+// The Agents thread screen is mounted again on every agent switch, so it
+// keeps the decoded message payloads in one process-wide cache instead of one
+// per screen. chuk_chat's screen keeps its own, as upstream, in the Agents
+// build too: the Agents thread asks for sharing, the build flag does not.
 
 import 'dart:convert';
 
@@ -35,16 +36,24 @@ void main() {
   MessageRenderData render(MessageRenderCache cache) =>
       cache.build(messages: _messages(), index: 0, isStreaming: false);
 
-  test('Agents: a new screen reuses what the last one decoded', () {
+  test('Agents thread: a new screen reuses what the last one decoded', () {
     debugAgentsChatCoreOverride = true;
-    final first = MessageRenderCache();
+    final first = MessageRenderCache(shared: true);
     final decoded = render(first).toolCalls;
     expect(decoded, hasLength(1));
 
     // The switch: the old screen clears its cache and a new one mounts.
     first.clear();
-    final second = MessageRenderCache();
+    final second = MessageRenderCache(shared: true);
     expect(identical(render(second).toolCalls, decoded), isTrue);
+  });
+
+  test("Agents build: chuk_chat's screen decodes for itself", () {
+    debugAgentsChatCoreOverride = true;
+    final first = render(MessageRenderCache()).toolCalls;
+    final second = render(MessageRenderCache()).toolCalls;
+    expect(first, hasLength(1));
+    expect(identical(first, second), isFalse);
   });
 
   test('flag off: every screen decodes for itself', () {

@@ -37,7 +37,23 @@ import 'package:chuk_chat/widgets/icons/icon_map.dart';
 class RootWrapperMobile extends StatefulWidget {
   final AppShellConfig config;
 
-  const RootWrapperMobile({super.key, required this.config});
+  /// Takes the place of the title pill in the floating top bar. The Agents
+  /// build puts its Chat | Agents switch here. Null draws the title pill, as
+  /// chuk_chat always has.
+  final Widget? headerCenter;
+
+  /// Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
+  /// the app-wide pointer, as chuk_chat always has. The Agents build shares
+  /// that pointer with its coworker thread, so it hands in a reader that
+  /// always answers with this chat.
+  final ValueGetter<String?>? selectedChatIdReader;
+
+  const RootWrapperMobile({
+    super.key,
+    required this.config,
+    this.headerCenter,
+    this.selectedChatIdReader,
+  });
 
   @override
   State<RootWrapperMobile> createState() => _RootWrapperMobileState();
@@ -54,6 +70,12 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
   bool _artifactSheetOpen = false;
 
   final GlobalKey<ChukChatUIMobileState> _chatUIMobileKey = GlobalKey();
+
+  /// The chat in view (see [RootWrapperMobile.selectedChatIdReader]).
+  String? get _selectedChatId {
+    final ValueGetter<String?>? read = widget.selectedChatIdReader;
+    return read != null ? read() : ChatStorageService.selectedChatId;
+  }
   late AnimationController _sidebarAnimController;
   late Animation<double> _sidebarAnimation;
 
@@ -97,7 +119,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           if (!mounted) return;
           try {
             await ArtifactStorageService.setActiveChat(
-              ChatStorageService.selectedChatId,
+              _selectedChatId,
               forceRefresh: false,
             );
           } catch (error) {
@@ -408,7 +430,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
     }
     // deleteChat() clears selectedChatId when the active chat is deleted.
     // If selectedChatId is null here, reset the chat UI to a fresh state.
-    if (ChatStorageService.selectedChatId == null) {
+    if (_selectedChatId == null) {
       _chatUIMobileKey.currentState?.newChat();
       if (kFeatureArtifacts) {
         unawaited(
@@ -430,7 +452,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
 
   /// Title of the chat in view, or null for a fresh/unsaved chat.
   String? _currentChatTitle() {
-    final String? id = ChatStorageService.selectedChatId;
+    final String? id = _selectedChatId;
     if (id == null) return null;
     for (final c in ChatStorageService.savedChats) {
       if (c.id == id) {
@@ -474,7 +496,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
           child: Row(
             children: [
               KeyedSubtree(
-                key: TourKeyRegistry.instance.keyFor(TourSlots.menuButton),
+                key: TourKeyRegistry.instance.anchorFor(TourSlots.menuButton),
                 child: _floatIconChip(
                   icon: Icons.menu,
                   onTap: _toggleSidebar,
@@ -488,12 +510,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               // the room left after the two right-hand buttons, so a long
               // title ellipsises with "…" instead of pushing the buttons off
               // the right edge. Left-aligned so a short title hugs the menu.
+              // A [RootWrapperMobile.headerCenter] takes the pill's place.
               Expanded(
                 child: _isSidebarExpanded
                     ? const SizedBox.shrink()
                     : Align(
                         alignment: Alignment.centerLeft,
-                        child: FloatingChromeSurface(
+                        child: widget.headerCenter ?? FloatingChromeSurface(
                           radius: 18,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
@@ -668,7 +691,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
                 key: _chatUIMobileKey,
                 topInset: topBarInset,
                 onToggleSidebar: _toggleSidebar,
-                selectedChatId: ChatStorageService.selectedChatId,
+                selectedChatId: _selectedChatId,
                 onChatIdChanged: (newId) {
                   // Update the global state when chat UI creates/changes a chat
                   // Use setState to ensure parent rebuilds with new ID
@@ -743,7 +766,7 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         onChatDeleted: _handleChatDeleted,
         // The drawer had no visible close control, only the swipe.
         onCollapseTapped: _toggleSidebar,
-        selectedChatId: ChatStorageService.selectedChatId,
+        selectedChatId: _selectedChatId,
         isCompactMode: true,
       ),
     );

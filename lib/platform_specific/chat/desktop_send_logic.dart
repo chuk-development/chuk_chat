@@ -377,7 +377,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
       final int resendMaxTokens = resendBudget.maxResponseTokens ?? 512;
 
-      var toolSession = _toolCallHandler.createSession(
+      // The chat picks the tool loop: the host's fold for an Agents thread,
+      // upstream's client-side loop for a chuk_chat chat.
+      final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
+        _activeChatId,
+      );
+      var toolSession = toolCallHandler.createSession(
         initialUserMessage: messageForSend,
         history: conversationHistory,
         accessToken: accessToken,
@@ -389,7 +394,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await _toolCallHandler
+      final initialSystemPrompt = await toolCallHandler
           .buildInitialSystemPrompt(toolSession);
 
       // Capture chatId for this streaming operation
@@ -449,7 +454,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           chatId: chatIdForStream,
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
-          tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
           // A retry REPLACES the last answer, so the host drops the turn being
           // retried instead of storing the same question again. Only the first
           // pass says so: the later passes of the same turn are continuations,
@@ -498,7 +503,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                 final turnSignals = ToolTurnSignals.fromMeta(
                   _streamingManager.getLatestMeta(chatIdForStream),
                 );
-                final loopResult = await _toolCallHandler
+                final loopResult = await toolCallHandler
                     .processAssistantResponse(
                       session: toolSession,
                       content: finalContent,
@@ -620,7 +625,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     );
                   }
 
-                  toolSession = _toolCallHandler.createSession(
+                  toolSession = toolCallHandler.createSession(
                     initialUserMessage: messageForSend,
                     history: conversationHistory,
                     accessToken: accessToken,
@@ -632,7 +637,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                     skipIdentity: skipIdentity,
                     nativeToolCalling: !kIsWeb,
                   );
-                  final retryPrompt = await _toolCallHandler
+                  final retryPrompt = await toolCallHandler
                       .buildInitialSystemPrompt(toolSession);
 
                   contentBlocks.clear();
@@ -1617,7 +1622,12 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
       });
 
-      var toolSession = _toolCallHandler.createSession(
+      // The chat picks the tool loop: the host's fold for an Agents thread,
+      // upstream's client-side loop for a chuk_chat chat.
+      final ToolCallHandler toolCallHandler = ToolCallHandler.forChat(
+        chatIdForStream,
+      );
+      var toolSession = toolCallHandler.createSession(
         initialUserMessage: aiPromptContent,
         history: apiHistory,
         accessToken: accessToken,
@@ -1629,7 +1639,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         skipIdentity: skipIdentity,
         nativeToolCalling: !kIsWeb,
       );
-      final initialSystemPrompt = await _toolCallHandler
+      final initialSystemPrompt = await toolCallHandler
           .buildInitialSystemPrompt(toolSession);
 
       if (_isSendOperationCancelled(sendOperationId)) {
@@ -1697,7 +1707,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           chatId: chatIdForStream,
           // Native tool calling: enabled tools as OpenAI function defs, sent on
           // every pass; empty (prompt-based) when native mode is off.
-          tools: _toolCallHandler.nativeToolDefinitions(toolSession),
+          tools: toolCallHandler.nativeToolDefinitions(toolSession),
         );
 
         await _streamingManager.startStream(
@@ -1739,7 +1749,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                   final turnSignals = ToolTurnSignals.fromMeta(
                     _streamingManager.getLatestMeta(chatIdForStream),
                   );
-                  final loopResult = await _toolCallHandler
+                  final loopResult = await toolCallHandler
                       .processAssistantResponse(
                         session: toolSession,
                         content: finalContent,
@@ -1867,7 +1877,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       );
                     }
 
-                    toolSession = _toolCallHandler.createSession(
+                    toolSession = toolCallHandler.createSession(
                       initialUserMessage: aiPromptContent,
                       history: apiHistory,
                       accessToken: accessToken,
@@ -1879,7 +1889,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
                       skipIdentity: skipIdentity,
                       nativeToolCalling: !kIsWeb,
                     );
-                    final retryPrompt = await _toolCallHandler
+                    final retryPrompt = await toolCallHandler
                         .buildInitialSystemPrompt(toolSession);
 
                     contentBlocks2
