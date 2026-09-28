@@ -71,7 +71,7 @@
 - L116 `String _chatJson({int rounds = 30})`
 - L140 `void main()`
 
-## test/services/chat_payload_migration_test.dart  (547 Z.)
+## test/services/chat_payload_migration_test.dart  (591 Z.)
 - L26 `userId = 'user-1'`
 - L28 `String _id(int i)`
 - L30 `String _updatedAt(int i)`

@@ -30,8 +30,8 @@
 - L6 `Widget _host(Widget child, {Brightness brightness = Brightness.light})`
 - L13 `void main()`
 
-## test/widgets/agent_roster_view_test.dart  (863 Z.)
-- L22 `void main()`
+## test/widgets/agent_roster_view_test.dart  (927 Z.)
+- L23 `void main()`
 
 ## test/widgets/agent_run_views_test.dart  (288 Z.)
 - L14 `_pngBytes = base64.decode( 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842' 'iQAAAABJRU5Er`  — A 1x1 transparent PNG — the smallest real image to prove a preview renders.
@@ -61,24 +61,20 @@
 - L387 `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 - L397 `_guard = Timeout(Duration(seconds: 60))`  — A wall-clock guard on every test in this file. Nothing here should take
 
-## test/widgets/agents_desktop_controls_test.dart  (176 Z.)
-- L12 `Widget _app(Widget child)`
-- L16 `void main()`
-
-## test/widgets/agents_desktop_shell_test.dart  (513 Z.)
-- L31 `class _MemoryStore implements AgentsSecureKeyValueStore`
-  - L32 `final Map<String, String> map = <String, String>{}`
-  - L34 `Future<String?> read(String key)`
-  - L36 `Future<void> write(String key, String value)`
-  - L38 `Future<void> delete(String key)`
-- L42 `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
-  - L43 `bool failNext = false`
-  - L46 `Future<void> refresh(String sessionKey)`
-- L52 `class _Session implements AccountSessionSource`
-  - L53 `const _Session()`
-  - L55 `AccountSession? current()`
-  - L61 `Future<AccountSession?> refresh()`
-- L64 `void main()`
+## test/widgets/agents_desktop_shell_test.dart  (502 Z.)
+- L30 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L31 `final Map<String, String> map = <String, String>{}`
+  - L33 `Future<String?> read(String key)`
+  - L35 `Future<void> write(String key, String value)`
+  - L37 `Future<void> delete(String key)`
+- L41 `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
+  - L42 `bool failNext = false`
+  - L45 `Future<void> refresh(String sessionKey)`
+- L51 `class _Session implements AccountSessionSource`
+  - L52 `const _Session()`
+  - L54 `AccountSession? current()`
+  - L60 `Future<AccountSession?> refresh()`
+- L63 `void main()`
 
 ## test/widgets/agents_shell_states_test.dart  (327 Z.)
 - L37 `class _MemoryStore implements AgentsSecureKeyValueStore`
@@ -106,10 +102,10 @@
 - L110 `kPhone = Size(412, 915)`
 - L112 `void main()`
 
-## test/widgets/agents_thread_header_test.dart  (258 Z.)
-- L12 `Widget _wrap(Widget child, {double width = 900})`  — The header only ever gets the width its parent has, so every test states
-- L21 `AgentsThreadAction _action(String tooltip, List<String> log)`
-- L28 `void main()`
+## test/widgets/agents_thread_header_test.dart  (250 Z.)
+- L10 `Widget _wrap(Widget child, {double width = 900})`  — The row only ever gets the width its parent has, so every test states
+- L19 `AgentsThreadAction _action(String tooltip, List<String> log)`
+- L26 `void main()`
 
 ## test/widgets/agents_thread_view_notifications_test.dart  (201 Z.)
 - L35 `class _FakeSessionSource implements AccountSessionSource`
@@ -148,7 +144,7 @@
 - L39 `Widget _app(Widget child)`
 - L53 `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-## test/widgets/agents_thread_view_test.dart  (1478 Z.)
+## test/widgets/agents_thread_view_test.dart  (1456 Z.)
 - L41 `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - L42 `final Map<String, String> map = <String, String>{}`
   - L45 `Future<String?> read(String key)`
@@ -162,7 +158,7 @@
   - L71 `Future<AccountSession?> refresh()`
 - L76 `Widget _app(Widget child)`  — The app shell the imported chat screen expects around it: localisations and
 - L87 `void main()`
-- L1474 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
+- L1452 `Future<void> _flushIdleTimers(WidgetTester tester)`  — The imported chat screen schedules a 60 s idle-close timer for its
 
 ## test/widgets/anchored_menu_test.dart  (181 Z.)
 - L9 `_screen = Size(400, 800)`
@@ -213,17 +209,17 @@
 - L62 `Map<String, dynamic> specChartDocument()`  — A chart document as the tool writes one now: the spec itself, under `chart`.
 - L93 `void main()`
 
-## test/widgets/chat_document_reading_test.dart  (415 Z.)
-- L26 `_briefText = ''' # Wahlradar Ein eigener Beobachter für die **Landtagswahl Sachsen-Anhalt 2026** — läuft. - **Quelle:** `  — A saved document has to read like a document on the phone it is read on.
-- L47 `Map<String, dynamic> _markdownDocument()`
-- L55 `Map<String, dynamic> _tableDocument()`
-- L78 `Map<String, dynamic> _chartDocument()`
-- L98 `void _phone(WidgetTester tester)`  — Puts the tester on a Pixel 7 Pro at [scale], for the lifetime of one test.
-- L104 `Widget _host(Widget child, {double scale = 1.0})`
-- L114 `Future<void> _open( WidgetTester tester, Map<String, dynamic> document, { double scale = 1.0, })`  — Opens the document the way a reader does — through the dialog, so the test
-- L141 `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
-- L152 `List<String> _pastRightEdge(WidgetTester tester, Finder root)`  — Every box inside [root] that paints past its right edge.
-- L196 `void main()`
+## test/widgets/chat_document_reading_test.dart  (417 Z.)
+- L27 `_briefText = ''' # Wahlradar Ein eigener Beobachter für die **Landtagswahl Sachsen-Anhalt 2026** — läuft. - **Quelle:** `  — A saved document has to read like a document on the phone it is read on.
+- L48 `Map<String, dynamic> _markdownDocument()`
+- L56 `Map<String, dynamic> _tableDocument()`
+- L79 `Map<String, dynamic> _chartDocument()`
+- L99 `void _phone(WidgetTester tester)`  — Puts the tester on a Pixel 7 Pro at [scale], for the lifetime of one test.
+- L105 `Widget _host(Widget child, {double scale = 1.0})`
+- L115 `Future<void> _open( WidgetTester tester, Map<String, dynamic> document, { double scale = 1.0, })`  — Opens the document the way a reader does — through the dialog, so the test
+- L142 `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
+- L153 `List<String> _pastRightEdge(WidgetTester tester, Finder root)`  — Every box inside [root] that paints past its right edge.
+- L197 `void main()`
 
 ## test/widgets/chat_document_view_test.dart  (212 Z.)
 - L9 `void main()`
@@ -290,17 +286,16 @@
 - L5 `_sampleScene = ''' { "type": "excalidraw", "version": 2, "source": "https://excalidraw.com", "elements": [ {"type":"rect`
 - L29 `void main()`
 
-## test/widgets/expressive_settings_test.dart  (189 Z.)
-- L9 `double _tileScale(WidgetTester tester)`  — The scale [MorphTap] currently applies to the tile.
-- L20 `Widget _host({required Widget child, bool reducedMotion = false})`
-- L29 `void main()`
+## test/widgets/expressive_settings_test.dart  (89 Z.)
+- L8 `Widget _host({required Widget child})`
+- L14 `void main()`
 
-## test/widgets/flag_off_parity_test.dart  (122 Z.)
-- L21 `Widget _wrap(Widget child)`
-- L34 `_sent = DateTime(2026, 9, 22, 14, 5)`
-- L36 `Widget _turn()`
-- L61 `Iterable<BoxDecoration> _decorations(WidgetTester tester)`  — Every decorated box the bubbles draw, by fill colour.
-- L71 `void main()`
+## test/widgets/flag_off_parity_test.dart  (119 Z.)
+- L18 `Widget _wrap(Widget child)`
+- L31 `_sent = DateTime(2026, 9, 22, 14, 5)`
+- L33 `Widget _turn({bool messengerMode = false})`
+- L60 `Iterable<BoxDecoration> _decorations(WidgetTester tester)`  — Every decorated box the bubbles draw, by fill colour.
+- L70 `void main()`
 
 ## test/widgets/floating_app_bar_test.dart  (66 Z.)
 - L7 `void main()`
@@ -312,16 +307,16 @@
 ## test/widgets/map_block_dedupe_test.dart  (72 Z.)
 - L5 `void main()`
 
-## test/widgets/markdown_message_test.dart  (581 Z.)
-- L19 `kAccent = Color(0xFF1565C0)`
-- L20 `kText = Color(0xFF111111)`
-- L21 `kBubble = Color(0xFFFFFFFF)`
-- L23 `ThemeData _theme()`
-- L31 `Future<void> _pumpMarkdown( WidgetTester tester, String markdown, { double width = 360, double? fontSize, Color textColor = kText, })`
-- L63 `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
-- L70 `List<TextSpan> _leafSpans(WidgetTester tester)`  — Every leaf `TextSpan` in the widget tree, with its resolved style.
-- L89 `TextSpan _span(WidgetTester tester, String text)`  — The leaf span whose text is exactly [text].
-- L97 `void main()`
+## test/widgets/markdown_message_test.dart  (541 Z.)
+- L18 `kAccent = Color(0xFF1565C0)`
+- L19 `kText = Color(0xFF111111)`
+- L20 `kBubble = Color(0xFFFFFFFF)`
+- L22 `ThemeData _theme()`
+- L30 `Future<void> _pumpMarkdown( WidgetTester tester, String markdown, { double width = 360, double? fontSize, Color textColor = kText, })`
+- L62 `Future<void> _settleCodeBlocks(WidgetTester tester)`  — Lets an `_AsyncCodeBlock` finish: the 50 ms highlight debounce and then the
+- L69 `List<TextSpan> _leafSpans(WidgetTester tester)`  — Every leaf `TextSpan` in the widget tree, with its resolved style.
+- L88 `TextSpan _span(WidgetTester tester, String text)`  — The leaf span whose text is exactly [text].
+- L96 `void main()`
 
 ## test/widgets/measure_size_test.dart  (57 Z.)
 - L5 `void main()`
@@ -332,14 +327,17 @@
 ## test/widgets/message_bubble_dangling_lt_test.dart  (44 Z.)
 - L7 `void main()`
 
-## test/widgets/message_bubble_grouping_test.dart  (284 Z.)
-- L23 `big = Radius.circular(kBubbleRadiusBig)`
-- L24 `small = Radius.circular(kBubbleRadiusSmall)`
-- L26 `Widget wrap(Widget child)`
-- L41 `Widget threeMessageRun({required bool isUser})`  — A run of three messages from the same sender, followed by one message that
-- L62 `Rect paintedBubble(WidgetTester tester, int index)`  — The painted rectangle of the bubble at [index] — the decorated box, not the
-- L75 `BorderRadius radiusOf(WidgetTester tester, int index)`
-- L85 `void main()`
+## test/widgets/message_bubble_grouping_test.dart  (265 Z.)
+- L21 `full = Radius.circular(16)`
+- L22 `tail = Radius.circular(5)`
+- L26 `gapInRun = 2 + 2`  — chuk_chat's bubble margins: 10 above the first bubble of a run, 2 above
+- L27 `gapBetweenRuns = 2 + 10`
+- L29 `Widget wrap(Widget child)`
+- L44 `Widget threeMessageRun({required bool isUser})`  — A run of three messages from the same sender, followed by one message that
+- L63 `decoratedBoxes = find.byWidgetPredicate( (Widget widget) => widget is Container && widget.decoration is BoxDecoration, )`
+- L69 `Rect paintedBubble(WidgetTester tester, int index)`  — The painted rectangle of the bubble at [index] — the decorated box, not the
+- L78 `BorderRadius radiusOf(WidgetTester tester, int index)`
+- L86 `void main()`
 
 ## test/widgets/message_bubble_image_block_test.dart  (35 Z.)
 - L5 `void main()`
@@ -362,83 +360,83 @@
 ## test/widgets/message_bubble_sources_test.dart  (88 Z.)
 - L7 `void main()`
 
-## test/widgets/message_bubble_test.dart  (273 Z.)
-- L19 `_wakeText = '[automation a2f1d3d1 fired: Wahlradar LT Sachsen-Anhalt 2026]\n' 'check the seat projection and tell me wha`  — The exact text the host submits when an automation fires, header +
-- L25 `Widget _wrap(Widget child)`
-- L36 `void main()`
+## test/widgets/message_bubble_test.dart  (213 Z.)
+- L18 `_wakeText = '[automation a2f1d3d1 fired: Wahlradar LT Sachsen-Anhalt 2026]\n' 'check the seat projection and tell me wha`  — The exact text the host submits when an automation fires, header +
+- L24 `Widget _wrap(Widget child)`
+- L35 `void main()`
 
 ## test/widgets/message_bubble_variant_pager_test.dart  (89 Z.)
 - L7 `void main()`
 
-## test/widgets/messenger_context_menu_test.dart  (71 Z.)
-- L6 `void main()`
+## test/widgets/messenger_context_menu_test.dart  (57 Z.)
+- L5 `void main()`
 
-## test/widgets/messenger_message_bubble_test.dart  (836 Z.)
-- L20 `Widget wrap(Widget child)`
-- L31 `void main()`
+## test/widgets/messenger_message_bubble_test.dart  (808 Z.)
+- L19 `Widget wrap(Widget child)`
+- L30 `void main()`
 
-## test/widgets/messenger_shell_test.dart  (1981 Z.)
-- L51 `class _MemoryStore implements AgentsSecureKeyValueStore`
-  - L52 `final Map<String, String> map = <String, String>{}`
-  - L55 `Future<String?> read(String key)`
-  - L58 `Future<void> write(String key, String value)`
-  - L61 `Future<void> delete(String key)`
-- L66 `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
-  - L67 `final ValueNotifier<AgentsRelayState> _state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.idle), )`
-  - L71 `final StreamController<AgentsRelayInbound> _inbound = StreamController<AgentsRelayInbound>.broadcast()`
-  - L74 `final List<String> sessionKeys = <String>[]`
-  - L77 `ValueListenable<AgentsRelayState> get state`
-  - L80 `Stream<AgentsRelayInbound> get inbound`
-  - L83 `Future<void> connect({ required Uri hostUrl, required String pairingCode, })`
-  - L89 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
-  - L97 `AgentsStoredPairing? get establishedTrust`
-  - L100 `Future<void> provisionAccount(AccountSession session)`
-  - L103 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, })`
-  - L114 `final List<(String, String)> roomTasks = <(String, String)>[]`
-  - L115 `final List<String> createdRooms = <String>[]`
-  - L116 `final List<bool> createdRoomPolicies = <bool>[]`
-  - L117 `final List<(String, bool)> agentToAgentSets = <(String, bool)>[]`
-  - L120 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
-  - L131 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
-  - L135 `Future<void> sendRoomTask(String roomId, String message)`
-  - L138 `final List<String> historyRequests = <String>[]`
-  - L139 `final List<String> deletedRooms = <String>[]`
-  - L142 `Future<void> requestRoomHistory(String roomId)`
-  - L146 `Future<void> deleteRoom(String roomId)`
-  - L148 `final List<(String, String)> renamedRooms = <(String, String)>[]`
-  - L151 `Future<void> renameRoom(String roomId, String name)`
-  - L154 `final List<(String, String)> createdAgents = <(String, String)>[]`
-  - L155 `final List<(String, String)> renamedAgents = <(String, String)>[]`
-  - L158 `Future<void> createAgent(String agentId, String name)`
-  - L162 `Future<void> renameAgent(String agentId, String name)`
-  - L165 `int agentListRequests = 0`
-  - L168 `Future<void> requestAgentList()`
-  - L170 `final List<(String, String)> removedMembers = <(String, String)>[]`
-  - L173 `Future<void> addRoomMember( String roomId, String agentId, String handle, )`
-  - L180 `Future<void> removeRoomMember(String roomId, String agentId)`
-  - L184 `Future<void> requestStop({String sessionKey = 'default'})`
-  - L187 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
-  - L195 `Future<void> sendRunAck(String runId)`
-  - L198 `Future<void> startBrowserView({String? sessionKey})`
-  - L201 `Future<void> stopBrowserView()`
-  - L204 `Future<void> sendBrowserData(Uint8List bytes)`
-  - L207 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, })`
-  - L213 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
-  - L220 `Future<void> dispose()`
-  - L225 `void pair()`
-  - L230 `void emit(AgentsRelayInbound event)`
-- L233 `class _FakeSessionSource implements AccountSessionSource`
-  - L234 `const _FakeSessionSource()`
-  - L237 `AccountSession? current()`
-  - L244 `Future<AccountSession?> refresh()`
-- L253 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
-- L259 `void main()`
-- L1962 `class _CountingReadMarks extends AgentReadMarks`
-  - L1963 `int flushes = 0`
-  - L1966 `Future<void> flush()`
-- L1972 `class _CountingRoster extends LocalAgentRosterSource`
-  - L1973 `int flushes = 0`
-  - L1976 `void flushPendingPersist()`
+## test/widgets/messenger_shell_test.dart  (1963 Z.)
+- L52 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L53 `final Map<String, String> map = <String, String>{}`
+  - L56 `Future<String?> read(String key)`
+  - L59 `Future<void> write(String key, String value)`
+  - L62 `Future<void> delete(String key)`
+- L67 `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
+  - L68 `final ValueNotifier<AgentsRelayState> _state = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.idle), )`
+  - L72 `final StreamController<AgentsRelayInbound> _inbound = StreamController<AgentsRelayInbound>.broadcast()`
+  - L75 `final List<String> sessionKeys = <String>[]`
+  - L78 `ValueListenable<AgentsRelayState> get state`
+  - L81 `Stream<AgentsRelayInbound> get inbound`
+  - L84 `Future<void> connect({ required Uri hostUrl, required String pairingCode, })`
+  - L90 `Future<void> reconnect({ required Uri hostUrl, required AgentsStoredPairing pairing, })`
+  - L98 `AgentsStoredPairing? get establishedTrust`
+  - L101 `Future<void> provisionAccount(AccountSession session)`
+  - L104 `Future<void> sendTask( String prompt, { String sessionKey = 'default', String? modelId, String? providerSlug, String? reasoningEffort, bool debug = false, bool regenerate = false, String? taskId, })`
+  - L115 `final List<(String, String)> roomTasks = <(String, String)>[]`
+  - L116 `final List<String> createdRooms = <String>[]`
+  - L117 `final List<bool> createdRoomPolicies = <bool>[]`
+  - L118 `final List<(String, bool)> agentToAgentSets = <(String, bool)>[]`
+  - L121 `Future<void> createRoom( String roomId, String name, List<Map<String, String>> members, { bool agentToAgent = true, })`
+  - L132 `Future<void> setRoomAgentToAgent(String roomId, bool enabled)`
+  - L136 `Future<void> sendRoomTask(String roomId, String message)`
+  - L139 `final List<String> historyRequests = <String>[]`
+  - L140 `final List<String> deletedRooms = <String>[]`
+  - L143 `Future<void> requestRoomHistory(String roomId)`
+  - L147 `Future<void> deleteRoom(String roomId)`
+  - L149 `final List<(String, String)> renamedRooms = <(String, String)>[]`
+  - L152 `Future<void> renameRoom(String roomId, String name)`
+  - L155 `final List<(String, String)> createdAgents = <(String, String)>[]`
+  - L156 `final List<(String, String)> renamedAgents = <(String, String)>[]`
+  - L159 `Future<void> createAgent(String agentId, String name)`
+  - L163 `Future<void> renameAgent(String agentId, String name)`
+  - L166 `int agentListRequests = 0`
+  - L169 `Future<void> requestAgentList()`
+  - L171 `final List<(String, String)> removedMembers = <(String, String)>[]`
+  - L174 `Future<void> addRoomMember( String roomId, String agentId, String handle, )`
+  - L181 `Future<void> removeRoomMember(String roomId, String agentId)`
+  - L185 `Future<void> requestStop({String sessionKey = 'default'})`
+  - L188 `Future<void> requestReplay({ String sessionKey = 'default', int afterId = 0, int beforeId = 0, int limit = 0, })`
+  - L196 `Future<void> sendRunAck(String runId)`
+  - L199 `Future<void> startBrowserView({String? sessionKey})`
+  - L202 `Future<void> stopBrowserView()`
+  - L205 `Future<void> sendBrowserData(Uint8List bytes)`
+  - L208 `Future<void> sendApprovalDecision({ required String approvalId, required bool approved, })`
+  - L214 `Future<void> sendSecrets({ required Map<String, String> values, required int revision, String? requestId, })`
+  - L221 `Future<void> dispose()`
+  - L226 `void pair()`
+  - L231 `void emit(AgentsRelayInbound event)`
+- L234 `class _FakeSessionSource implements AccountSessionSource`
+  - L235 `const _FakeSessionSource()`
+  - L238 `AccountSession? current()`
+  - L245 `Future<AccountSession?> refresh()`
+- L254 `Future<void> settle(WidgetTester tester)`  — Pump a few frames without waiting for the tree to go quiet.
+- L260 `void main()`
+- L1944 `class _CountingReadMarks extends AgentReadMarks`
+  - L1945 `int flushes = 0`
+  - L1948 `Future<void> flush()`
+- L1954 `class _CountingRoster extends LocalAgentRosterSource`
+  - L1955 `int flushes = 0`
+  - L1958 `void flushPendingPersist()`
 
 ## test/widgets/messenger_typing_indicator_test.dart  (48 Z.)
 - L5 `void main()`
@@ -450,7 +448,7 @@
 - L8 `AgentsAgent _agent(String id, String name, {String? role})`
 - L15 `void main()`
 
-## test/widgets/room_faces_test.dart  (369 Z.)
+## test/widgets/room_faces_test.dart  (365 Z.)
 - L21 `AgentsRoomMember _m(String id, String handle)`
 - L24 `AgentsRoomDraft _draft(String name, int members)`
 - L31 `AgentsAgent _agent(String id, String name)`
@@ -488,23 +486,9 @@
 ## test/widgets/selection_copy_area_test.dart  (284 Z.)
 - L9 `void main()`
 
-## test/widgets/settings_kit_test.dart  (106 Z.)
-- L7 `Widget _host(Widget child)`
-- L11 `void main()`
-
-## test/widgets/settings_list_view_test.dart  (87 Z.)
-- L8 `Widget _host({required List<Widget> children, bool reducedMotion = false})`
-- L17 `List<double> _opacities(WidgetTester tester)`
-- L29 `void main()`
-
-## test/widgets/stamped_text_test.dart  (255 Z.)
-- L14 `kFontSize = 10`  — The test font draws every glyph as a square of the font size, so a line of
-- L15 `kStyle = TextStyle(fontSize: kFontSize, height: 1)`
-- L18 `kStamp = SizedBox(width: 40, height: 8)`  — A stand-in stamp with a width the test can do arithmetic with.
-- L21 `kReserved = 8 + 40`  — Reserved footprint: the default gap plus the stamp.
-- L23 `Widget host(Widget child, {double width = 300})`
-- L31 `Widget wrapApp(Widget child)`
-- L42 `void main()`
+## test/widgets/settings_list_view_test.dart  (51 Z.)
+- L8 `Widget _host({required List<Widget> children})`
+- L14 `void main()`
 
 ## test/widgets/turn_status_test.dart  (238 Z.)
 - L16 `void main()`

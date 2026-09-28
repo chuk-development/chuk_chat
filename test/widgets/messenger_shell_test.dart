@@ -38,6 +38,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 
@@ -346,11 +347,9 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Picks [label] from the title bar's "…" menu.
-  Future<void> tapMoreAction(WidgetTester tester, String label) async {
-    await tester.tap(find.byTooltip('More actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(label).last);
+  /// Presses one of the thread's floating buttons by its tooltip.
+  Future<void> tapThreadAction(WidgetTester tester, String tooltip) async {
+    await tester.tap(find.byTooltip(tooltip));
     await tester.pumpAndSettle();
   }
 
@@ -365,20 +364,20 @@ void main() {
     (tester) async {
       await pumpShell(tester);
 
-      // Three panes, not a phone made wide (docs/DESIGN.md §14.1): the roster
-      // is docked from the first frame, there is no hamburger and no mini rail.
+      // chuk's desktop with coworkers in it: the roster is chuk's sidebar,
+      // docked from the first frame, with chuk's menu button folding it.
       expect(find.byType(AgentRosterView), findsOneWidget);
       expect(find.byType(AgentsThreadView), findsOneWidget);
       expect(threadOffstage(tester), isFalse);
       expect(find.byType(BrandWordmark), findsOneWidget);
       expect(find.text('No agents yet.'), findsOneWidget);
-      expect(findIcon(Icons.menu_rounded), findsNothing);
+      expect(findIcon(Icons.menu_rounded), findsOneWidget);
       expect(find.byType(AppBar), findsNothing);
       // The roster sits left of the thread, side by side.
       final Rect roster = tester.getRect(find.byType(AgentRosterView));
       final Rect thread = tester.getRect(find.byType(AgentsThreadView));
       expect(roster.width, kDeskRosterDefault);
-      expect(thread.left, greaterThan(roster.right));
+      expect(thread.left, roster.right);
       expect(thread.right, 1200);
       // Nothing sits on top of the chat: the connection is not the user's job.
       expect(find.textContaining('Connected to'), findsNothing);
@@ -386,56 +385,44 @@ void main() {
     },
   );
 
-  testWidgets('the title bar holds call, screen, files, details and more', (
-    tester,
-  ) async {
+  testWidgets("the thread's actions float at the top right, as chuk's copy "
+      'button does', (tester) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
 
-    // §14.2: call, screen, files, the details toggle and the "…" menu, each
-    // a 32 px button with a tooltip.
-    for (final String tooltip in <String>[
-      'Voice call is not available yet',
+    // Screen, files, Control Rooms, the details toggle, the copy and the "…"
+    // menu: chuk's 40 px icon buttons, each with a tooltip, in that order.
+    const List<String> order = <String>[
       'No screen open right now',
       'Documents',
+      'Control Rooms',
       'Details (Ctrl+.)',
+      'Copy full chat',
       'More actions',
-    ]) {
+    ];
+    for (final String tooltip in order) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
       expect(
         tester.getSize(
-          find.descendant(
+          find.ancestor(
             of: find.byTooltip(tooltip),
-            matching: find.byType(AnimatedContainer),
+            matching: find.byType(ChromeIconButton),
           ),
         ),
-        const Size(32, 32),
+        const Size(40, 40),
         reason: tooltip,
       );
     }
-    // In that order, left to right.
     final List<double> xs = <double>[
-      for (final String t in <String>[
-        'Voice call is not available yet',
-        'No screen open right now',
-        'Documents',
-        'Details (Ctrl+.)',
-        'More actions',
-      ])
-        tester.getCenter(find.byTooltip(t)).dx,
+      for (final String t in order) tester.getCenter(find.byTooltip(t)).dx,
     ];
     expect(xs, orderedEquals(List<double>.of(xs)..sort()));
-    // The bar is 48 px and part of the frame.
-    expect(
-      tester.getSize(find.byType(AgentsThreadHeader)).height,
-      kDeskBarHeight,
-    );
+    // No bar: the row is as tall as its buttons and floats over the chat.
+    expect(tester.getSize(find.byType(AgentsThreadHeader)).height, 40);
     // The rest is in the menu.
     await tester.tap(find.byTooltip('More actions'));
     await tester.pumpAndSettle();
-    expect(find.text('Control Rooms'), findsOneWidget);
-    expect(find.text('Copy Debug Chat'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
@@ -603,9 +590,7 @@ void main() {
   ) async {
     await pumpShell(tester);
 
-    await tester.tap(find.byTooltip('More actions'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Control Rooms'));
+    await tester.tap(find.byTooltip('Control Rooms'));
     await tester.pumpAndSettle();
 
     expect(find.byType(RoomListView), findsOneWidget);
@@ -618,7 +603,7 @@ void main() {
     );
     expect(
       tester.getRect(find.byType(AgentsThreadView)).right,
-      lessThan(pane.left),
+      lessThanOrEqualTo(pane.left),
     );
 
     await tester.tap(find.byTooltip('Close'));
@@ -1056,28 +1041,27 @@ void main() {
     AgentsRunLedger.instance.begin(threadKey);
     await tester.pump();
 
-    // Twice: the roster row's bucket label, and the header's status line under
-    // the coworker's name.
-    expect(find.textContaining('working'), findsNWidgets(2));
+    // The roster row carries chuk's dot for a chat still being written.
+    SbChatTile row() => tester.widget<SbChatTile>(
+      find.byKey(ValueKey<String>('agent-tile-${roster.agents.single.id}')),
+    );
+    expect(row().streaming, isTrue);
 
     AgentsRunLedger.instance.finish(threadKey, reason: 'finished');
     await tester.pump();
 
-    expect(find.textContaining('working'), findsNothing);
-    // The row's time says when it last did something.
-    expect(
-      find.descendant(
-        of: find.byKey(
-          ValueKey<String>('agent-tile-${roster.agents.single.id}'),
-        ),
-        matching: find.text('now'),
-      ),
-      findsOneWidget,
-    );
-    // Idle is still reachable: the header says so where a messenger would say
-    // "Active now".
-    expect(find.text('Active now'), findsOneWidget);
+    expect(row().streaming, isFalse);
+    // The row's date line says when it last did something: today, so the
+    // time.
     expect(roster.agents.single.lastActivity, isNotNull);
+    expect(
+      row().dateLine,
+      sbChatDateLine(
+        tester.element(find.byType(AgentRosterView)),
+        roster.agents.single.lastActivity,
+      ),
+    );
+    expect(row().dateLine, isNotEmpty);
   });
 
   testWidgets(
@@ -1100,7 +1084,7 @@ void main() {
       expect(pane.right, 1200);
       expect(
         tester.getRect(find.byType(AgentsThreadView)).right,
-        lessThan(pane.left),
+        lessThanOrEqualTo(pane.left),
       );
       // Every block the host can fill has a heading; the schedule field and the
       // integrations list are gone, because nothing ever filled them.
@@ -1225,7 +1209,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapMoreAction(tester, 'Control Rooms');
+    await tapThreadAction(tester, 'Control Rooms');
 
     // The room list is the right panel (chuk's Workspaces slot); at 800 px
     // the sidebar folds to make room for it.
@@ -1306,7 +1290,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapMoreAction(tester, 'Control Rooms');
+    await tapThreadAction(tester, 'Control Rooms');
     // Empty -> the New room button is offered.
     await tester.tap(find.widgetWithText(FilledButton, 'New room'));
     await tester.pumpAndSettle();
@@ -1505,7 +1489,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tapMoreAction(tester, 'Control Rooms');
+    await tapThreadAction(tester, 'Control Rooms');
     await tester.tap(findIcon(Icons.more_vert));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Manage members'));
@@ -1557,9 +1541,7 @@ void main() {
       // pumps: the thread view animates while its transport is still pending,
       // and the panel sits next to it now instead of behind a route that muted
       // its ticker.
-      await tester.tap(find.byTooltip('More actions'));
-      await settle(tester);
-      await tester.tap(find.text('Control Rooms').last);
+      await tester.tap(find.byTooltip('Control Rooms'));
       await settle(tester);
       await tester.tap(findIcon(Icons.more_vert));
       await settle(tester);
@@ -1576,7 +1558,7 @@ void main() {
     },
   );
 
-  testWidgets('"Copy Debug Chat" in the title bar menu exports the thread', (
+  testWidgets('"Copy full chat" over the thread exports the thread', (
     tester,
   ) async {
     final List<String> exported = <String>[];
@@ -1600,7 +1582,7 @@ void main() {
     );
     await tester.pump();
 
-    await tapMoreAction(tester, 'Copy Debug Chat');
+    await tapThreadAction(tester, 'Copy full chat');
 
     // Nothing is selected: no pairing, no stored roster, no remembered pick,
     // so this shell has no conversation. The export names no thread rather
@@ -1610,7 +1592,7 @@ void main() {
     expect(find.text('debug chat copied'), findsOneWidget);
   });
 
-  testWidgets('Copy Debug Chat uses the real clipboard export by default', (
+  testWidgets('Copy full chat uses the real clipboard export by default', (
     tester,
   ) async {
     String? clipboardText;
@@ -1644,7 +1626,7 @@ void main() {
       ),
     );
     await tester.pump();
-    await tapMoreAction(tester, 'Copy Debug Chat');
+    await tapThreadAction(tester, 'Copy full chat');
 
     expect(clipboardText, isNotNull);
     final payload = jsonDecode(clipboardText!) as Map<String, dynamic>;
@@ -1655,7 +1637,7 @@ void main() {
     expect(find.text('could not copy the chat'), findsNothing);
   });
 
-  testWidgets('a failed "Copy Debug Chat" says so instead of staying silent', (
+  testWidgets('a failed "Copy full chat" says so instead of staying silent', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -1675,7 +1657,7 @@ void main() {
     );
     await tester.pump();
 
-    await tapMoreAction(tester, 'Copy Debug Chat');
+    await tapThreadAction(tester, 'Copy full chat');
 
     expect(find.text('could not copy the chat'), findsOneWidget);
   });

@@ -20,8 +20,9 @@
 // Deliberately not brought back, because upstream has the same thing:
 //   * the per-payload MessageDecodeCache (upstream's MessageRenderCache),
 //   * the payment-required dialog (upstream's `_showPaymentRequiredDialog`).
-// Kept from Agents as well: the day divider in the message list, the "never
-// grab the keyboard on a phone" rule and the keyboard re-pin observer.
+// Kept from Agents as well: the "never grab the keyboard on a phone" rule and
+// the keyboard re-pin observer. The look is upstream's in both modes
+// (docs/AGENTS_UI_UNIFY.md).
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollCacheExtent;
@@ -37,7 +38,6 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/models/chat_reply.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/chat_reaction_service.dart';
-import 'package:chuk_chat/widgets/chat_reply_preview.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
@@ -64,7 +64,6 @@ import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/chat_mode_selector.dart';
 import 'package:chuk_chat/widgets/model_selection_dropdown.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -95,8 +94,6 @@ import 'package:chuk_chat/services/artifact_context_service.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
-import 'package:chuk_chat/ui/expressive/day_divider.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// What the plus menu can start.
@@ -1694,10 +1691,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       borderColor: theme.resolvedIconColor.withValues(alpha: 0.3),
       // The attach and workspace menus are read against the chat behind
       // them, the same as the model picker, so they keep the frame that says
-      // where the list ends. The Agents thread keeps the original app's
-      // menu instead: filled tiles, no frame, the menu radius.
-      outlined: !widget.messengerMode,
-      borderRadius: widget.messengerMode ? kMenuOuterRadius : 18,
+      // where the list ends.
+      outlined: true,
+      borderRadius: 18,
     );
   }
 
@@ -2427,7 +2423,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         'reasoning': '',
         'modelId': selectedModelId,
         'provider': selectedProviderSlug ?? '',
-        // Messenger bubbles carry the time the reader sent it.
+        // Messenger mode: the send time. The bubble no longer draws it, but
+        // the reaction key and the roster's newest-message time read it.
         if (widget.messengerMode) 'sentAt': DateTime.now().toIso8601String(),
       };
 
@@ -3346,19 +3343,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           hasTopPin &&
           _pinnedUiKey != null &&
           ChatUiHelpers.stableUiKey(_messages[i], _uuid) == _pinnedUiKey;
-      // Agents's day break, kept: one date chip
-      // where the day changes, like a messenger.
-      // A row with no timestamp gets none. The
-      // rules live in chat_ui_helpers.
-      // The bubble RUN breaks on the same rules
-      // (ChatMessageListItem.agentsRuns).
-      final DateTime? rowDay = messageRowTime(_messages[i]);
-      // Agents only: upstream's chat draws no
-      // day chips.
-      final bool opensDay =
-          widget.messengerMode &&
-          messageOpensDay(i == 0 ? null : _messages[i - 1], _messages[i]);
-      final Widget row = ChatMessageListItem(
+      return ChatMessageListItem(
         key: isPinned ? pinnedTopKey : null,
         messages: _messages,
         index: i,
@@ -3386,7 +3371,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ? () => _continueGenerationAt(i)
             : null,
         messengerMode: widget.messengerMode,
-        agentsRuns: widget.messengerMode,
         reaction: widget.messengerMode
             ? ChatReactionService.instance.peek(
                 _messengerChatKey,
@@ -3403,14 +3387,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             widget.messengerMode && data.isUser && !_isCurrentChatStreaming
             ? () => editMessageAt(i)
             : null,
-      );
-      if (!opensDay || rowDay == null) return row;
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          ChatDayDivider(when: rowDay.toLocal()),
-          row,
-        ],
       );
     }
 
@@ -3596,12 +3572,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           // above the composer either: the mark belongs in
                           // the middle of the window, which is where the eye
                           // looks for it.
-                          // The Agents thread keeps the original app's
-                          // placement, a little above centre.
                           child: Align(
-                            alignment: widget.messengerMode
-                                ? const Alignment(0.0, -0.3)
-                                : Alignment.center,
+                            alignment: Alignment.center,
                             // The alpha lives in the tint colour instead of
                             // an Opacity widget: Opacity pushes an offscreen
                             // save layer on every paint, and cacheWidth stops
@@ -3682,12 +3654,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                                 // has already taken the keyboard out of the
                                 // insets, so reading them here always said
                                 // "no keyboard".
-                                // The Agents thread keeps the original app's
-                                // line: its wording, and it folds away with
-                                // the focus instead of popping.
-                                if (widget.messengerMode)
-                                  _buildMessengerDisclaimer(iconFg)
-                                else if (!composerFocusNode.hasFocus &&
+                                if (!composerFocusNode.hasFocus &&
                                     MediaQuery.viewInsetsOf(context).bottom <
                                         80) ...[
                                   const SizedBox(height: 8),
@@ -3726,33 +3693,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             ),
         ],
       ),
-    );
-  }
-
-  /// The AI notice under the Agents composer, as in the original app.
-  ///
-  /// It is for the reader who is looking at the thread, not for the one who
-  /// is typing: with the keyboard up it eats a line of the little room that
-  /// is left, so it goes with the focus and comes back with it. Focus, not
-  /// viewInsets: the hosting Scaffold strips viewInsets from this subtree.
-  Widget _buildMessengerDisclaimer(Color iconFg) {
-    return AnimatedSize(
-      duration: kExpressiveShort,
-      curve: kExpressiveDecelerate,
-      alignment: Alignment.topCenter,
-      child: composerFocusNode.hasFocus
-          ? const SizedBox(width: double.infinity, height: 0)
-          : Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                AppLocalizations.of(context)!.agentsAiDisclaimer,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: iconFg.withValues(alpha: 0.7),
-                  fontSize: 11,
-                ),
-              ),
-            ),
     );
   }
 
@@ -3806,7 +3746,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
           onOpenModelScreen: openModelScreen,
-          agentsMenus: widget.messengerMode,
         ),
       ),
     );
@@ -3883,9 +3822,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 onRemove: removeComposerAttachment,
               ),
             ),
-          if (messageActionsHandler.isEditing && widget.messengerMode)
-            ChatEditNotice(onCancel: cancelEditMessage)
-          else if (messageActionsHandler.isEditing)
+          if (messageActionsHandler.isEditing)
             _buildComposerNotice(
               theme: theme,
               icon: Icons.edit,
@@ -3893,11 +3830,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               actionLabel: 'Cancel',
               onAction: cancelEditMessage,
             ),
+          // Messenger mode: the message the next send quotes, on the same
+          // one-line notice as an edit or a queued message.
           if (widget.messengerMode)
             if (_replyDrafts[_messengerChatKey] case final reply?)
-              ChatReplyPreview(
-                reply: reply,
-                onCancel: () =>
+              _buildComposerNotice(
+                theme: theme,
+                icon: Icons.reply_rounded,
+                label:
+                    'Reply to ${reply.author}: '
+                    '"${reply.text.replaceAll(RegExp(r'\s+'), ' ').trim()}"',
+                actionLabel: AppLocalizations.of(context)!.cancel,
+                onAction: () =>
                     setState(() => _replyDrafts.remove(_messengerChatKey)),
               ),
           if (_pendingMessageText != null)
@@ -3977,26 +3921,6 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                           right: 6,
                         ),
                         isDense: true,
-                        // The Agents thread keeps the original app's small
-                        // expand glyph inside the field; upstream's sits in
-                        // the microphone's slot below.
-                        suffixIcon:
-                            widget.messengerMode && _showFullscreenButton
-                            ? GestureDetector(
-                                onTap: _openFullscreenEditor,
-                                child: Padding(
-                                  padding: const EdgeInsets.only(left: 4),
-                                  child: AppIcon(
-                                    Icons.open_in_full_rounded,
-                                    size: 14,
-                                    color: iconFg.withValues(alpha: 0.4),
-                                  ),
-                                ),
-                              )
-                            : null,
-                        suffixIconConstraints: widget.messengerMode
-                            ? const BoxConstraints(minWidth: 24, minHeight: 24)
-                            : null,
                       ),
                       cursorColor: accent,
                       cursorWidth: 1.5,
@@ -4062,9 +3986,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                   semanticsId: 'mic_button',
                 ),
                 const SizedBox(width: ComposerMetrics.targetGap),
-              ] else if (!widget.messengerMode &&
-                  _showFullscreenButton &&
-                  !showStopAction) ...[
+              ] else if (_showFullscreenButton && !showStopAction) ...[
                 // Takes the microphone's slot: the microphone only shows with
                 // an empty field and this only with a long one, so the two
                 // never want the place at the same time. Out here instead of

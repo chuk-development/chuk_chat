@@ -24,6 +24,7 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/widgets/excalidraw_svg_export.dart';
 import 'package:chuk_chat/widgets/html_artifact_view.dart';
+import 'package:chuk_chat/widgets/pane_header.dart';
 import 'package:chuk_chat/widgets/technical_drawing_svg_export.dart';
 import 'package:chuk_chat/widgets/technical_drawing_widget.dart';
 import 'package:pdfrx/pdfrx.dart';
@@ -625,60 +626,48 @@ class _ArtifactPanelState extends State<ArtifactPanel> {
         ),
       );
     } else {
-      header = Container(
-        height: 56,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        decoration: BoxDecoration(
-          border: Border(
-            bottom: BorderSide(color: iconFg.withValues(alpha: 0.12)),
+      header = PaneHeader(
+        icon: _iconForType(_effectiveType),
+        title: _ArtifactSwitcher(
+          current: widget.artifact,
+          all: _chatArtifacts,
+          onSelect: _switchActiveArtifact,
+        ),
+        actions: [
+          _TypeBadge(type: _effectiveType),
+          const SizedBox(width: 8),
+          if (_hasDualView)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _ViewModeToggle(
+                mode: _viewMode,
+                onChanged: (mode) => setState(() => _viewMode = mode),
+              ),
+            ),
+          if (widget.onOpenSourceChat != null)
+            IconButton(
+              icon: const AppIcon(Icons.forum_outlined, size: 18),
+              onPressed: () =>
+                  widget.onOpenSourceChat!(widget.artifact.chatId),
+              tooltip: 'Open source chat',
+            ),
+          IconButton(
+            icon: const AppIcon(Icons.copy_outlined, size: 18),
+            onPressed: _copyContent,
+            tooltip: 'Copy source',
           ),
-        ),
-        child: Row(
-          children: [
-            const AppIcon(Icons.article_outlined, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _ArtifactSwitcher(
-                current: widget.artifact,
-                all: _chatArtifacts,
-                onSelect: _switchActiveArtifact,
-              ),
-            ),
-            _TypeBadge(type: _effectiveType),
-            const SizedBox(width: 8),
-            if (_hasDualView)
-              Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: _ViewModeToggle(
-                  mode: _viewMode,
-                  onChanged: (mode) => setState(() => _viewMode = mode),
-                ),
-              ),
-            if (widget.onOpenSourceChat != null)
-              IconButton(
-                icon: const AppIcon(Icons.forum_outlined, size: 18),
-                onPressed: () =>
-                    widget.onOpenSourceChat!(widget.artifact.chatId),
-                tooltip: 'Open source chat',
-              ),
+          IconButton(
+            icon: const AppIcon(Icons.download_outlined, size: 18),
+            onPressed: _busy ? null : _showDownloadMenu,
+            tooltip: 'Download',
+          ),
+          if (widget.onClose != null)
             IconButton(
-              icon: const AppIcon(Icons.copy_outlined, size: 18),
-              onPressed: _copyContent,
-              tooltip: 'Copy source',
+              icon: const AppIcon(Icons.close, size: 18),
+              onPressed: widget.onClose,
+              tooltip: 'Close',
             ),
-            IconButton(
-              icon: const AppIcon(Icons.download_outlined, size: 18),
-              onPressed: _busy ? null : _showDownloadMenu,
-              tooltip: 'Download',
-            ),
-            if (widget.onClose != null)
-              IconButton(
-                icon: const AppIcon(Icons.close, size: 18),
-                onPressed: widget.onClose,
-                tooltip: 'Close',
-              ),
-          ],
-        ),
+        ],
       );
     }
 

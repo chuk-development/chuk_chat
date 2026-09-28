@@ -15,28 +15,29 @@
 - L73 `_catalog = <Map<String, dynamic>>[ _table('Wahlkreise Sachsen-Anhalt 2026'), _file('skills/youtube-transcript/SKILL.md',`
 - L82 `void main()`
 
-## test/layout/every_screen_layout_test.dart  (737 Z.)
+## test/layout/every_screen_layout_test.dart  (756 Z.)
 - L71 `_cannotMount = <String, String>{ 'model_selector_page': 'its initState reaches SupabaseService.client, which ' 'throws "`  — Screens left out of the sweep, and why. Never delete a line here to make
-- L102 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
-  - L103 `final List<void Function()> _disposers = <void Function()>[]`
-  - L105 `T keep<T>(T value, void Function() dispose)`
-  - L110 `void dispose()`
-- L119 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
-- L125 `typedef ScreenBuilder = Widget Function(_Bag bag)`
-- L127 `class _Screen`
-  - L128 `const _Screen(this.name, this.build, {this.after})`
-  - L130 `final String name`
-  - L131 `final ScreenBuilder build`
-  - L135 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
-- L142 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
-- L160 `List<AgentsAgent> _roster()`
-- L167 `AgentsRoomMember _member(String id, String handle)`
-- L171 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
-- L185 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
-- L191 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
-- L206 `Future<void> _openSheet(WidgetTester tester)`
-- L215 `List<_Screen> _screens()`
-- L608 `void main()`
+- L106 `_chukSizes = <String, String>{ 'theme_page': 'upstream\'s 32 dp colour swatches', 'desktop_settings_modal': 'upstream\'s`  — Screens that draw upstream chuk_chat's settings frame and rows in BOTH
+- L117 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
+  - L118 `final List<void Function()> _disposers = <void Function()>[]`
+  - L120 `T keep<T>(T value, void Function() dispose)`
+  - L125 `void dispose()`
+- L134 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
+- L140 `typedef ScreenBuilder = Widget Function(_Bag bag)`
+- L142 `class _Screen`
+  - L143 `const _Screen(this.name, this.build, {this.after})`
+  - L145 `final String name`
+  - L146 `final ScreenBuilder build`
+  - L150 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
+- L157 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
+- L175 `List<AgentsAgent> _roster()`
+- L182 `AgentsRoomMember _member(String id, String handle)`
+- L186 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
+- L200 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
+- L206 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
+- L221 `Future<void> _openSheet(WidgetTester tester)`
+- L230 `List<_Screen> _screens()`
+- L624 `void main()`
 
 ## test/layout/layout_harness.dart  (431 Z.)
 - L25 `class LayoutSize`  — One window the app has to fit into.

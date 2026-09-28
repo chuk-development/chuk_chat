@@ -1,15 +1,15 @@
 # test/platform_specific/chat · Signaturen
 
-## test/platform_specific/chat/agents_thread_composer_test.dart  (196 Z.)
-- L29 `Finder findId(String id)`  — The composer's targets carry a semantics identifier, not a label.
-- L34 `class _NoopSaver implements AgentFileSaver`
-  - L36 `Future<String> save(AgentsRelayFile file)`
-- L39 `class _FakeSessionSource implements AccountSessionSource`
-  - L40 `const _FakeSessionSource()`
-  - L43 `AccountSession? current()`
-  - L50 `Future<AccountSession?> refresh()`
-- L53 `Widget _app(Widget child)`
-- L64 `void main()`
+## test/platform_specific/chat/agents_thread_composer_test.dart  (197 Z.)
+- L30 `Finder findId(String id)`  — The composer's targets carry a semantics identifier, not a label.
+- L35 `class _NoopSaver implements AgentFileSaver`
+  - L37 `Future<String> save(AgentsRelayFile file)`
+- L40 `class _FakeSessionSource implements AccountSessionSource`
+  - L41 `const _FakeSessionSource()`
+  - L44 `AccountSession? current()`
+  - L51 `Future<AccountSession?> refresh()`
+- L54 `Widget _app(Widget child)`
+- L65 `void main()`
 
 ## test/platform_specific/chat/anchored_transcript_test.dart  (340 Z.)
 - L13 `void main()`  — The bottom-anchored transcript (Agents).

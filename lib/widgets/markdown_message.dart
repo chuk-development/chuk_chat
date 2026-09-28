@@ -14,7 +14,6 @@ import 'package:markdown/markdown.dart' as m;
 import 'package:markdown_widget/markdown_widget.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/current_user.dart';
 import 'package:chuk_chat/utils/answer_blocks_parser.dart';
 import 'package:chuk_chat/utils/input_validator.dart';
@@ -92,25 +91,6 @@ class AccentLinkNode extends LinkNode {
       decorationThickness: 1.2,
     ),
   );
-}
-
-/// Diameter of an unordered-list bullet.
-const double _kBulletSize = 6;
-
-/// Bullet shape per nesting level: filled disc, hollow disc, then square —
-/// the convention readers already know from HTML lists.
-BoxDecoration _bulletDecoration(int depth, Color color) {
-  switch (depth % 3) {
-    case 0:
-      return BoxDecoration(shape: BoxShape.circle, color: color);
-    case 1:
-      return BoxDecoration(
-        shape: BoxShape.circle,
-        border: Border.all(color: color, width: 1.2),
-      );
-    default:
-      return BoxDecoration(color: color);
-  }
 }
 
 /// One slice of a message: plain markdown, a GFM table block, or an answer
@@ -517,22 +497,16 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
     final Color defaultCodeColor = theme.brightness == Brightness.dark
         ? const Color(0xFF9CDCFE) // Light blue - same as variables in VS Code
         : const Color(0xFF2E3440); // Dark for light mode
-    // The Agents build carries its typography fixes (derived heading sizes,
-    // inline code and links that survive a themed parent style, bubble-
-    // coloured list markers). chuk_chat keeps upstream's rendering as is.
-    final bool agents = agentsChatCore;
     final TextStyle codeTextStyle = TextStyle(
       fontFamily: 'monospace',
       fontSize: 13,
       height: 1.4,
-      letterSpacing: agents ? 0 : null,
       color: defaultCodeColor,
     );
     final Color codeBorderColor = widget.textColor.withValues(alpha: 0.2);
     final Color accentColor = theme.colorScheme.primary;
     final String? proseFontFamily = widget.fontFamily;
     final double baseFontSize = widget.paragraphFontSize ?? 14;
-    final double baseLineHeight = widget.paragraphHeight ?? 1.45;
 
     // Inline code keeps its own font and colour; the size is decided per
     // context by [InlineCodeNode].
@@ -691,25 +665,17 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
         // underline and the accent colour survive inside a heading or bold
         // text instead of resetting the text to body size.
         LinkConfig(
-          style: agents
-              ? TextStyle(
-                  color: accentColor,
-                  decoration: TextDecoration.underline,
-                  decorationColor: accentColor,
-                  decorationThickness: 1.2,
-                  fontFamily: proseFontFamily,
-                  fontSize: baseFontSize,
-                )
-              : (theme.textTheme.bodyMedium?.copyWith(
-                      color: accentColor,
-                      decoration: TextDecoration.underline,
-                      fontFamily: proseFontFamily,
-                    )) ??
-                    TextStyle(
-                      color: accentColor,
-                      decoration: TextDecoration.underline,
-                      fontFamily: proseFontFamily,
-                    ),
+          style:
+              (theme.textTheme.bodyMedium?.copyWith(
+                color: accentColor,
+                decoration: TextDecoration.underline,
+                fontFamily: proseFontFamily,
+              )) ??
+              TextStyle(
+                color: accentColor,
+                decoration: TextDecoration.underline,
+                fontFamily: proseFontFamily,
+              ),
           onTap: (url) {
             _onTapLink(url);
           },
@@ -745,55 +711,7 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
               )) ??
               TextStyle(color: widget.textColor, fontFamily: proseFontFamily),
         ),
-        // The package's own markers colour themselves from the global text
-        // theme, not from the bubble. On a coloured bubble that made the
-        // bullets nearly invisible. These markers use the bubble text colour
-        // and the reading size.
-        if (!agents) ListConfig(),
-        if (agents)
-          ListConfig(
-            marginLeft: 28,
-            marginBottom: 4,
-            marker: (bool isOrdered, int depth, int index) {
-              if (isOrdered) {
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  child: SelectionContainer.disabled(
-                    child: Align(
-                      alignment: Alignment.topRight,
-                      child: Text(
-                        '${index + 1}.',
-                        maxLines: 1,
-                        softWrap: false,
-                        style: TextStyle(
-                          color: widget.textColor,
-                          fontSize: baseFontSize,
-                          height: baseLineHeight,
-                          fontFamily: proseFontFamily,
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              }
-              final double dotTop =
-                  ((baseFontSize * baseLineHeight) - _kBulletSize) / 2;
-              return Padding(
-                padding: EdgeInsets.only(
-                  top: dotTop < 0 ? 0 : dotTop,
-                  right: 8,
-                ),
-                child: Align(
-                  alignment: Alignment.topRight,
-                  child: Container(
-                    width: _kBulletSize,
-                    height: _kBulletSize,
-                    decoration: _bulletDecoration(depth, widget.textColor),
-                  ),
-                ),
-              );
-            },
-          ),
+        ListConfig(),
         HrConfig(color: widget.textColor.withValues(alpha: 0.2), height: 1),
         CheckBoxConfig(
           builder: (checked) => AppIcon(
@@ -886,24 +804,12 @@ class _MarkdownMessageState extends State<MarkdownMessage> {
       }
       if (segment.isTable && segment.table != null) {
         builtWidgets.add(
-          agents
-              ? ChukTable(
-                  table: segment.table!,
-                  textColor: widget.textColor,
-                  accentColor: accentColor,
-                  fontFamily: proseFontFamily,
-                  // A link in a table cell goes through the same
-                  // confirm-then-open path as a link in prose (bead
-                  // cowork-94s9).
-                  onTapLink: _onTapLink,
-                )
-              // chuk_chat keeps upstream's table unchanged.
-              : ChukTableClassic(
-                  table: segment.table!,
-                  textColor: widget.textColor,
-                  accentColor: accentColor,
-                  fontFamily: proseFontFamily,
-                ),
+          ChukTableClassic(
+            table: segment.table!,
+            textColor: widget.textColor,
+            accentColor: accentColor,
+            fontFamily: proseFontFamily,
+          ),
         );
         continue;
       }

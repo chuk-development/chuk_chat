@@ -84,39 +84,31 @@
   - L524 `Future<void> _confirmDeleteImage(String path)`  — Confirms and deletes a stored image's encrypted object. Mirrors the Media
   - L577 `Widget _buildAttachmentsChips(List<DocumentAttachment> attachments)`  — Renders document attachment chips as a Wrap. Renders NO external
 
-## lib/widgets/message_bubble/layout.dart  (1564 Z.)
+## lib/widgets/message_bubble/layout.dart  (1128 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleLayout on _MessageBubbleState`
   - L12 `Future<void> _showMessengerMenu(Offset? position)`
   - L45 `Widget _withMessengerMenu(Widget child)`
   - L59 `String get _chatFontFamily`  — Returns the user-selected chat font family, falling back to the historic
-  - L70 `double get _chatFontSize`
-  - L75 `bool get _hasReasoning`
-  - L90 `bool get _hasModelInfo`
-  - L101 `bool get _shouldShowTps`
-  - L107 `bool get _isQrImageMessage`
-  - L132 `String get _strippedMessage`
-  - L141 `String _stripForPresentation(String text)`
-  - L160 `bool get _agentsLook`  — Whether this bubble wears the Agents look: filled bubbles, run-shaped
-  - L164 `BubblePosition get _bubblePosition`  — Where this bubble sits in a run of messages from the same sender. Drives
-  - L172 `String? get _clockLabel`  — The wall clock of the turn as `HH:mm`, or null when the row carries no
-  - L183 `Widget? _buildBubbleFooter({ required BuildContext context, required bool isUser, required Color fill, required Color onFill, bool? endsRun, })`  — The stamp in the bubble's bottom-right corner: the time, plus the queue
-  - L214 `AgentBubbleKind get _agentBubbleKind`  — The kind of a coworker's message, which decides the bubble colour.
-  - L238 `Widget _buildAutomationWakeLine(BuildContext context, AutomationWake wake)`  — The entire on-screen trace of a fired automation: one quiet line.
-  - L286 `Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls)`  — A turn that really did work but has nothing left to read: one quiet
-  - L329 `Widget _buildUserBubble(BuildContext context)`
-  - L493 `Widget _buildAiBubble(BuildContext context)`
-  - L780 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
-  - L826 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
-  - L923 `Widget _buildFramedUserImageGrid(Widget child)`
-  - L931 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
-  - L1287 `String _stripAttachmentHeaderForUser(String text)`
-  - L1306 `bool get _isPlainMessengerText`
-  - L1338 `bool get _stampRidesInText`  — Whether this bubble's body carries the stamp itself, at the end of its
-  - L1350 `bool get _isPlainAgentText`  — A coworker's turn that is one plain line of prose and nothing else.
-  - L1385 `TextStyle _agentProseStyle(Color foreground)`  — The prose style the Markdown renderer gives a paragraph, so a plain line
-  - L1401 `Widget _buildMessengerText( String text, Color foreground, Color background, { TextStyle? style, bool fillWidth = false, })`
-  - L1434 `Widget? _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`  — The turn's own text, or null when it has none to show. Null — not an
+  - L66 `double get _chatFontSize`
+  - L68 `bool get _hasReasoning`
+  - L80 `bool get _hasModelInfo`
+  - L90 `bool get _shouldShowTps`
+  - L95 `bool get _isQrImageMessage`
+  - L120 `String get _strippedMessage`
+  - L132 `double get _runGapAbove`  — The top margin of a bubble: the run gap when it opens a run, the tight
+  - L140 `Widget _buildAutomationWakeLine(BuildContext context, AutomationWake wake)`  — The entire on-screen trace of a fired automation: one quiet line.
+  - L185 `Widget _buildQuietWorkLine(BuildContext context, List<ToolCall> calls)`  — A turn that really did work but has nothing left to read: one quiet
+  - L225 `Widget _buildUserBubble(BuildContext context)`
+  - L322 `Widget _buildAiBubble(BuildContext context)`
+  - L495 `Widget _buildContinueButton(BuildContext context, Color accentColor)`
+  - L541 `List<Widget> _buildClassicLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool isUserMessage, required bool alignRight, required bool hasInfoStatusBar, required bool hasVisibleToolCalls, })`  — Classic flat layout: single tool calls bar + single text block.
+  - L637 `Widget _buildFramedUserImageGrid(Widget child)`
+  - L645 `List<Widget> _buildContentBlocksLayout({ required Color iconFgColor, required Color accentColor, required Color bgColor, required bool alignRight, })`  — Interleaved content blocks layout: renders text, tool calls, and
+  - L999 `String _stripAttachmentHeaderForUser(String text)`
+  - L1020 `Widget _buildUserText(String text, Color color)`  — A user's text as chuk_chat draws it: plain [Text], so taps pass through
+  - L1036 `Widget _buildReplyQuote(ChatReply reply, Color color)`  — The quote a reply carries above its own text: a plain bar, the author
+  - L1075 `Widget? _buildMessageBody({ required Color iconFgColor, required Color bgColor, required bool isUserMessage, })`  — The turn's own text, or null when it has none to show. Null — not an
 
 ## lib/widgets/message_bubble/models.dart  (135 Z.)
 - part of '../message_bubble.dart'
@@ -175,7 +167,7 @@
   - L516 `Widget _buildBlockText(String text, Color textColor, Color bgColor)`  — Renders a text content block as a MarkdownMessage.
   - L539 `List<Widget> _buildTextParagraphs({ required String text, required Color textColor, required Color bgColor, })`
 
-## lib/widgets/message_bubble/tools.dart  (826 Z.)
+## lib/widgets/message_bubble/tools.dart  (828 Z.)
 - part of '../message_bubble.dart'
 - L11 `extension _MessageBubbleTools on _MessageBubbleState`
   - L15 `Widget _buildBlockReasoning( String text, Color accentColor, { bool live = false, bool carriesTurnStatus = false, })`  — Renders a reasoning content block as an expandable card. Renders
@@ -186,16 +178,16 @@
   - L163 `List<Widget> _buildArtifactCards(List<ToolCall> toolCalls)`  — Renders inline artifact cards for artifact_manager tool calls, so users
   - L270 `List<Widget> _stackArtifactCards(List<Widget> cards)`  — Wrap a list of artifact cards into one cohesive "artifact stack":
   - L292 `Widget _buildActivityTimeline( List<ToolCall> toolCalls, { List<_ToolTimelineEntry>? contentBlockTimeline, bool live = false, bool carriesTurnStatus = true, })`  — Returns a self-contained tool-calls bar (the pill with the
-  - L344 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
-  - L360 `void _showToolCallDetails(ToolCall toolCall)`
-  - L398 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
-  - L477 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
-  - L559 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
-  - L584 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
-  - L675 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
-  - L709 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
-  - L752 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
-  - L787 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
+  - L346 `Future<void> _openSourceUrl(AgentActivitySource source)`  — Open a source chip's page in the browser.
+  - L362 `void _showToolCallDetails(ToolCall toolCall)`
+  - L400 `Widget _buildToolCallExpandedWidget(ToolCall toolCall)`
+  - L479 `Widget _buildToolSection({ required String label, required String body, bool mono = false, })`
+  - L561 `Widget _buildToolSectionFrame({ required String label, required Color labelColor, required Widget child, })`  — The label above a tool-detail body, and the spacing around the pair.
+  - L586 `List<Widget> _buildToolResultSections(ToolCall toolCall, String result)`
+  - L677 `ToolCall? _findAskUserToolCall()`  — Find the last completed ask_user tool call across all tool call sources.
+  - L711 `List<Widget> _buildAskUserOptions()`  — Build ask_user interactive option buttons if applicable. Returns
+  - L754 `ToolCall? _findRequestMcpToolCall()`  — Find the last completed request_mcp_server tool call across all sources.
+  - L789 `List<Widget> _buildMcpConnectOptions()`  — Build the inline MCP Connect card if the last turn asked for a server.
 
 ## lib/widgets/message_bubble/web_search_sources.dart  (289 Z.)
 - L16 `class WebSearchSource`  — One parsed hit from a web_search result.

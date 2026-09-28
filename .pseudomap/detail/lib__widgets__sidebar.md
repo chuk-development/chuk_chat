@@ -20,7 +20,7 @@
   - L95 `void _stop()`
   - L111 `Widget build(BuildContext context)`
 
-## lib/widgets/sidebar/sidebar_chrome.dart  (1670 Z.)
+## lib/widgets/sidebar/sidebar_chrome.dart  (1795 Z.)
 - L33 `Color sbPanelBackground(BuildContext context)`  — The colour the sidebar panel is painted in — the same step off the page
 - L37 `kSbCardGap = 3.0`  — Gap between two cards inside one block. Matches `kExpressiveTileGap`: the
 - L40 `kSbBlockInset = 8.0`  — Horizontal inset of every block from the sidebar edge.
@@ -112,136 +112,151 @@
   - L548 `final VoidCallback? onToggle`
   - L551 `Widget build(BuildContext context)`
 - L621 `class SbSearchField extends StatefulWidget`  — The pill-shaped search field of the bottom bar.
-  - L622 `const SbSearchField({ super.key, required this.controller, required this.focusNode, required this.onClear, this.hintText, this.transparent = false, })`
-  - L631 `final TextEditingController controller`
-  - L632 `final FocusNode focusNode`
-  - L633 `final VoidCallback onClear`
-  - L636 `final String? hintText`  — Null takes the localized default.
-  - L640 `final bool transparent`  — Draws no fill of its own, for a field that sits where a card already
-  - L643 `State<SbSearchField> createState()`
-- L646 `class _SbSearchFieldState extends State<SbSearchField>`
-  - L651 `bool _hasText = false`  — Whether the clear button belongs on screen. Tracked here, from the
-  - L654 `void initState()`
-  - L661 `void didUpdateWidget(covariant SbSearchField oldWidget)`
-  - L671 `void dispose()`
-  - L676 `void _onControllerChanged()`
-  - L683 `Widget build(BuildContext context)`
-- L754 `class SbAccountLine extends StatelessWidget`  — The bottom bar of the phone sidebar: who is signed in, what is left on the
-  - L755 `const SbAccountLine({ super.key, required this.name, this.balance, this.onTap, this.onSettings, this.settingsTooltip, this.onNewChat, this.newChatTooltip, })`
-  - L766 `final String name`
-  - L769 `final Widget? balance`  — The remaining balance, drawn on the right.
-  - L770 `final VoidCallback? onTap`
-  - L771 `final VoidCallback? onSettings`
-  - L772 `final String? settingsTooltip`
-  - L775 `final VoidCallback? onNewChat`  — The one accent action of the panel. Null leaves it out.
-  - L776 `final String? newChatTooltip`
-  - L779 `Widget build(BuildContext context)`
-- L853 `class SbChatTile extends StatelessWidget`  — One chat in a group block: the title, the date under it, and the actions
-  - L854 `const SbChatTile({ super.key, required this.title, this.dateLine, this.selected = false, this.locked = false, this.streaming = false, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.trailing, this.hoverTrailing, })`
-  - L869 `final String title`
-  - L870 `final String? dateLine`
-  - L871 `final bool selected`
-  - L872 `final bool locked`
-  - L873 `final bool streaming`
-  - L874 `final VoidCallback? onTap`
-  - L875 `final VoidCallback? onLongPress`
-  - L878 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press with the position of the finger, for a menu that opens there.
-  - L879 `final void Function(Offset globalPosition)? onSecondaryTap`
-  - L882 `final Widget? trailing`  — Always visible — the three-dot menu.
-  - L886 `final Widget? hoverTrailing`  — Revealed only while the pointer is over the card, for a control that
-  - L889 `Widget build(BuildContext context)`
-- L912 `class _SbChatTileBody extends StatelessWidget`  — Split out so it can read the card's hover state, which the card publishes
-  - L913 `const _SbChatTileBody({ required this.title, required this.dateLine, required this.selected, required this.locked, required this.streaming, required this.trailing, required this.hoverTrailing, })`
-  - L923 `final String title`
-  - L924 `final String? dateLine`
-  - L925 `final bool selected`
-  - L926 `final bool locked`
-  - L927 `final bool streaming`
-  - L928 `final Widget? trailing`
-  - L929 `final Widget? hoverTrailing`
-  - L932 `Widget build(BuildContext context)`
-- L1015 `class SbChatGroup<T>`  — A time group: the header label and the chats that fall into it.
-  - L1016 `const SbChatGroup(this.label, this.items)`
-  - L1017 `final String label`
-  - L1018 `final List<T> items`
-- L1028 `List<SbChatGroup<T>> sbGroupByTime<T>( List<T> items, DateTime Function(T item) dateOf, { required String Function(DateTime date) monthLabel, String todayLabel = 'Today', String weekLabel = 'This week', String thisMonthLabel = 'This month', DateTime? now, })`  — Buckets chats into Today / This week / This month / one group per older
-- L1074 `String sbChatDateLine(BuildContext context, DateTime? date)`  — The muted line under a chat title: the time for anything from today, the
-- L1091 `class SbOfflineNotice extends StatelessWidget`  — The strip that says the list is stale because the device is offline, with
-  - L1092 `const SbOfflineNotice({ super.key, required this.label, required this.onRetry, this.retryTooltip, })`
-  - L1099 `final String label`
-  - L1100 `final VoidCallback onRetry`
-  - L1103 `final String? retryTooltip`  — Null takes the localized default.
-  - L1106 `Widget build(BuildContext context)`
-- L1163 `class SbFloatingBar extends StatelessWidget`  — A card that floats over the scrolling list — the app name at the top of
-  - L1164 `const SbFloatingBar({super.key, required this.child, this.borderRadius})`
-  - L1166 `final Widget child`
-  - L1170 `final BorderRadius? borderRadius`  — Per-corner shape. A bar that the block below it joins tightens the
-  - L1173 `Widget build(BuildContext context)`
-- L1197 `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + text. Trailing widget on the right.
-  - L1198 `final Widget? trailing`
-  - L1199 `final EdgeInsets padding`
-  - L1200 `final String label`
-  - L1201 `final bool showLogo`
-  - L1202 `final double fontSize`
-  - L1203 `final FontWeight fontWeight`
-  - L1204 `const SbBrand({ super.key, this.trailing, this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12), this.label = 'Chuk Chat', this.showLogo = false, this.fontSize = 20, this.fontWeight = FontWeight.w700, })`
-  - L1215 `Widget build(BuildContext context)`
-- L1265 `class SbSearchTrigger extends StatelessWidget`  — Subtle search trigger — rounded icon button with "Search" label.
-  - L1266 `final VoidCallback onTap`
-  - L1267 `final String label`
-  - L1268 `const SbSearchTrigger({ super.key, required this.onTap, this.label = 'Search', })`
-  - L1275 `Widget build(BuildContext context)`
-- L1310 `class SbNewChatPill extends StatelessWidget`  — Compact accent pill — used for mobile top-right "New chat".
-  - L1311 `final VoidCallback onTap`
-  - L1312 `final String label`
-  - L1313 `final IconData icon`
-  - L1314 `const SbNewChatPill({ super.key, required this.onTap, this.label = 'New', this.icon = Icons.edit_rounded, })`
-  - L1322 `Widget build(BuildContext context)`
-- L1355 `class SbNavItem extends StatelessWidget`  — Sidebar nav row (icon + label, stacked vertically). Primary highlights accent.
-  - L1356 `final IconData icon`
-  - L1357 `final String label`
-  - L1358 `final VoidCallback onTap`
-  - L1359 `final bool primary`
-  - L1360 `const SbNavItem({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, })`
-  - L1369 `Widget build(BuildContext context)`
-- L1407 `class SbRailRow extends StatelessWidget`  — Rail-aligned nav row. 48 px tall, icon centred inside a 48x48 square at
-  - L1408 `final IconData icon`
-  - L1409 `final String label`
-  - L1410 `final VoidCallback onTap`
-  - L1411 `final bool primary`
-  - L1417 `final double leftPadding`  — Inner padding inside the rounded hover pill. Combined with the 6 px
-  - L1418 `final double rowHeight`
-  - L1419 `final double iconBoxWidth`
-  - L1420 `final double iconSize`
-  - L1421 `const SbRailRow({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.leftPadding = 2.0, this.rowHeight = 40.0, this.iconBoxWidth = 48.0, this.iconSize = 24.0, })`
-  - L1434 `Widget build(BuildContext context)`
-- L1486 `class SbSectionLabel extends StatelessWidget`  — Mixed-case section label with optional count. Claude.ai style.
-  - L1487 `final String label`
-  - L1488 `final int? count`
-  - L1489 `final EdgeInsets padding`
-  - L1490 `final Color? color`
-  - L1491 `const SbSectionLabel({ super.key, required this.label, this.count, this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 4), this.color, })`
-  - L1500 `Widget build(BuildContext context)`
-- L1541 `class SbPinnedBento extends StatelessWidget`  — Accent-tinted "Pinned" bento card. Caller supplies the row widgets.
-  - L1542 `final int count`
-  - L1543 `final List<Widget> children`
-  - L1544 `final EdgeInsets margin`
-  - L1545 `const SbPinnedBento({ super.key, required this.count, required this.children, this.margin = const EdgeInsets.symmetric(horizontal: 6), })`
-  - L1553 `Widget build(BuildContext context)`
-- L1615 `class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate`  — Sliver delegate that renders an SbSectionLabel as a pinned header. The
-  - L1616 `final String label`
-  - L1617 `final Color background`
-  - L1618 `final Color? color`
-  - L1619 `final double height`
-  - L1620 `const SbStickyLabelDelegate({ required this.label, required this.background, this.color, this.height = 40, })`
-  - L1628 `Widget build( BuildContext context, double shrinkOffset, bool overlapsContent, )`
-  - L1644 `double get maxExtent`
-  - L1646 `double get minExtent`
-  - L1649 `bool shouldRebuild(covariant SbStickyLabelDelegate oldDelegate)`
-- L1658 `class SbHairline extends StatelessWidget`  — Hairline divider matching app palette.
-  - L1659 `final EdgeInsets margin`
-  - L1660 `const SbHairline({super.key, this.margin = EdgeInsets.zero})`
-  - L1662 `Widget build(BuildContext context)`
+  - L622 `const SbSearchField({ super.key, required this.controller, required this.focusNode, required this.onClear, this.hintText, this.transparent = false, this.onSubmitted, this.autofocus = false, })`
+  - L633 `final TextEditingController controller`
+  - L634 `final FocusNode focusNode`
+  - L635 `final VoidCallback onClear`
+  - L638 `final String? hintText`  — Null takes the localized default.
+  - L642 `final bool transparent`  — Draws no fill of its own, for a field that sits where a card already
+  - L645 `final ValueChanged<String>? onSubmitted`  — Enter in the field. Null does nothing, as the sidebar's filter needs.
+  - L649 `final bool autofocus`  — Takes the focus when it first shows — for a field that is the whole
+  - L652 `State<SbSearchField> createState()`
+- L655 `class _SbSearchFieldState extends State<SbSearchField>`
+  - L660 `bool _hasText = false`  — Whether the clear button belongs on screen. Tracked here, from the
+  - L663 `void initState()`
+  - L670 `void didUpdateWidget(covariant SbSearchField oldWidget)`
+  - L680 `void dispose()`
+  - L685 `void _onControllerChanged()`
+  - L692 `Widget build(BuildContext context)`
+- L765 `class SbAccountLine extends StatelessWidget`  — The bottom bar of the phone sidebar: who is signed in, what is left on the
+  - L766 `const SbAccountLine({ super.key, required this.name, this.balance, this.onTap, this.onSettings, this.settingsTooltip, this.onNewChat, this.newChatTooltip, })`
+  - L777 `final String name`
+  - L780 `final Widget? balance`  — The remaining balance, drawn on the right.
+  - L781 `final VoidCallback? onTap`
+  - L782 `final VoidCallback? onSettings`
+  - L783 `final String? settingsTooltip`
+  - L786 `final VoidCallback? onNewChat`  — The one accent action of the panel. Null leaves it out.
+  - L787 `final String? newChatTooltip`
+  - L790 `Widget build(BuildContext context)`
+- L864 `class SbChatTile extends StatelessWidget`  — One chat in a group block: the title, the date under it, and the actions
+  - L865 `const SbChatTile({ super.key, required this.title, this.dateLine, this.selected = false, this.locked = false, this.streaming = false, this.onTap, this.onLongPress, this.onLongPressAt, this.onSecondaryTap, this.trailing, this.hoverTrailing, this.leading, this.unread = false, })`
+  - L882 `final String title`
+  - L883 `final String? dateLine`
+  - L884 `final bool selected`
+  - L885 `final bool locked`
+  - L886 `final bool streaming`
+  - L887 `final VoidCallback? onTap`
+  - L888 `final VoidCallback? onLongPress`
+  - L891 `final void Function(Offset globalPosition)? onLongPressAt`  — Long press with the position of the finger, for a menu that opens there.
+  - L892 `final void Function(Offset globalPosition)? onSecondaryTap`
+  - L895 `final Widget? trailing`  — Always visible — the three-dot menu.
+  - L899 `final Widget? hoverTrailing`  — Revealed only while the pointer is over the card, for a control that
+  - L903 `final Widget? leading`  — A picture in front of the title — the Agents roster puts the coworker's
+  - L907 `final bool unread`  — Something new is waiting in this row: the title takes the weight of a
+  - L910 `Widget build(BuildContext context)`
+- L935 `class _SbChatTileBody extends StatelessWidget`  — Split out so it can read the card's hover state, which the card publishes
+  - L936 `const _SbChatTileBody({ required this.title, required this.dateLine, required this.selected, required this.locked, required this.streaming, required this.trailing, required this.hoverTrailing, required this.leading, required this.unread, })`
+  - L948 `final String title`
+  - L949 `final String? dateLine`
+  - L950 `final bool selected`
+  - L951 `final bool locked`
+  - L952 `final bool streaming`
+  - L953 `final Widget? trailing`
+  - L954 `final Widget? hoverTrailing`
+  - L955 `final Widget? leading`
+  - L956 `final bool unread`
+  - L959 `Widget build(BuildContext context)`
+- L1045 `class SbChatGroup<T>`  — A time group: the header label and the chats that fall into it.
+  - L1046 `const SbChatGroup(this.label, this.items)`
+  - L1047 `final String label`
+  - L1048 `final List<T> items`
+- L1058 `List<SbChatGroup<T>> sbGroupByTime<T>( List<T> items, DateTime Function(T item) dateOf, { required String Function(DateTime date) monthLabel, String todayLabel = 'Today', String weekLabel = 'This week', String thisMonthLabel = 'This month', DateTime? now, })`  — Buckets chats into Today / This week / This month / one group per older
+- L1107 `String sbChatDateLine(BuildContext context, DateTime? date, {DateTime? now})`  — The muted line under a chat title: the time for anything from today, the
+- L1124 `class SbOfflineNotice extends StatelessWidget`  — The strip that says the list is stale because the device is offline, with
+  - L1125 `const SbOfflineNotice({ super.key, required this.label, required this.onRetry, this.retryTooltip, })`
+  - L1132 `final String label`
+  - L1133 `final VoidCallback onRetry`
+  - L1136 `final String? retryTooltip`  — Null takes the localized default.
+  - L1139 `Widget build(BuildContext context)`
+- L1199 `class SbRailSlot extends StatelessWidget`  — One target of the folded rail: the round ink the mini rail's icons take,
+  - L1200 `const SbRailSlot({ super.key, required this.child, required this.tooltip, required this.onTap, this.selected = false, this.badge = false, this.size = kSbNavIconTile, })`
+  - L1210 `final Widget child`
+  - L1211 `final String tooltip`
+  - L1212 `final VoidCallback? onTap`
+  - L1213 `final bool selected`
+  - L1214 `final bool badge`
+  - L1218 `final double size`  — Side of the tile. The icon tile by default, so a face and a glyph line
+  - L1221 `Widget build(BuildContext context)`
+- L1289 `class SbFloatingBar extends StatelessWidget`  — A card that floats over the scrolling list — the app name at the top of
+  - L1290 `const SbFloatingBar({super.key, required this.child, this.borderRadius})`
+  - L1292 `final Widget child`
+  - L1296 `final BorderRadius? borderRadius`  — Per-corner shape. A bar that the block below it joins tightens the
+  - L1299 `Widget build(BuildContext context)`
+- L1322 `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + text. Trailing widget on the right.
+  - L1323 `final Widget? trailing`
+  - L1324 `final EdgeInsets padding`
+  - L1325 `final String label`
+  - L1326 `final bool showLogo`
+  - L1327 `final double fontSize`
+  - L1328 `final FontWeight fontWeight`
+  - L1329 `const SbBrand({ super.key, this.trailing, this.padding = const EdgeInsets.fromLTRB(16, 16, 10, 12), this.label = 'Chuk Chat', this.showLogo = false, this.fontSize = 20, this.fontWeight = FontWeight.w700, })`
+  - L1340 `Widget build(BuildContext context)`
+- L1390 `class SbSearchTrigger extends StatelessWidget`  — Subtle search trigger — rounded icon button with "Search" label.
+  - L1391 `final VoidCallback onTap`
+  - L1392 `final String label`
+  - L1393 `const SbSearchTrigger({ super.key, required this.onTap, this.label = 'Search', })`
+  - L1400 `Widget build(BuildContext context)`
+- L1435 `class SbNewChatPill extends StatelessWidget`  — Compact accent pill — used for mobile top-right "New chat".
+  - L1436 `final VoidCallback onTap`
+  - L1437 `final String label`
+  - L1438 `final IconData icon`
+  - L1439 `const SbNewChatPill({ super.key, required this.onTap, this.label = 'New', this.icon = Icons.edit_rounded, })`
+  - L1447 `Widget build(BuildContext context)`
+- L1480 `class SbNavItem extends StatelessWidget`  — Sidebar nav row (icon + label, stacked vertically). Primary highlights accent.
+  - L1481 `final IconData icon`
+  - L1482 `final String label`
+  - L1483 `final VoidCallback onTap`
+  - L1484 `final bool primary`
+  - L1485 `const SbNavItem({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, })`
+  - L1494 `Widget build(BuildContext context)`
+- L1532 `class SbRailRow extends StatelessWidget`  — Rail-aligned nav row. 48 px tall, icon centred inside a 48x48 square at
+  - L1533 `final IconData icon`
+  - L1534 `final String label`
+  - L1535 `final VoidCallback onTap`
+  - L1536 `final bool primary`
+  - L1542 `final double leftPadding`  — Inner padding inside the rounded hover pill. Combined with the 6 px
+  - L1543 `final double rowHeight`
+  - L1544 `final double iconBoxWidth`
+  - L1545 `final double iconSize`
+  - L1546 `const SbRailRow({ super.key, required this.icon, required this.label, required this.onTap, this.primary = false, this.leftPadding = 2.0, this.rowHeight = 40.0, this.iconBoxWidth = 48.0, this.iconSize = 24.0, })`
+  - L1559 `Widget build(BuildContext context)`
+- L1611 `class SbSectionLabel extends StatelessWidget`  — Mixed-case section label with optional count. Claude.ai style.
+  - L1612 `final String label`
+  - L1613 `final int? count`
+  - L1614 `final EdgeInsets padding`
+  - L1615 `final Color? color`
+  - L1616 `const SbSectionLabel({ super.key, required this.label, this.count, this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 4), this.color, })`
+  - L1625 `Widget build(BuildContext context)`
+- L1666 `class SbPinnedBento extends StatelessWidget`  — Accent-tinted "Pinned" bento card. Caller supplies the row widgets.
+  - L1667 `final int count`
+  - L1668 `final List<Widget> children`
+  - L1669 `final EdgeInsets margin`
+  - L1670 `const SbPinnedBento({ super.key, required this.count, required this.children, this.margin = const EdgeInsets.symmetric(horizontal: 6), })`
+  - L1678 `Widget build(BuildContext context)`
+- L1740 `class SbStickyLabelDelegate extends SliverPersistentHeaderDelegate`  — Sliver delegate that renders an SbSectionLabel as a pinned header. The
+  - L1741 `final String label`
+  - L1742 `final Color background`
+  - L1743 `final Color? color`
+  - L1744 `final double height`
+  - L1745 `const SbStickyLabelDelegate({ required this.label, required this.background, this.color, this.height = 40, })`
+  - L1753 `Widget build( BuildContext context, double shrinkOffset, bool overlapsContent, )`
+  - L1769 `double get maxExtent`
+  - L1771 `double get minExtent`
+  - L1774 `bool shouldRebuild(covariant SbStickyLabelDelegate oldDelegate)`
+- L1783 `class SbHairline extends StatelessWidget`  — Hairline divider matching app palette.
+  - L1784 `final EdgeInsets margin`
+  - L1785 `const SbHairline({super.key, this.margin = EdgeInsets.zero})`
+  - L1787 `Widget build(BuildContext context)`
 
 ## lib/widgets/sidebar/sidebar_common.dart  (512 Z.)
 - L19 `kSidebarPageSize = 40`

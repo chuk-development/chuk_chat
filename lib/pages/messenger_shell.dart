@@ -1,48 +1,40 @@
-/// The messenger shell: chuk_chat's root-wrapper layout around Agents's content.
+/// The messenger shell: chuk_chat's layout around the Agents content.
 ///
-/// ## What is chuk's here, and what is not
+/// ## What it does
 ///
-/// The LAYOUT is `root_wrapper_desktop.dart` from chuk_chat master, rebuilt
-/// with Agents's content in each slot (plan WS-1, docs/PLAN_2026-09-04_
-/// AGENTS_CHUK_ALIGN.md): one `Stack`; the chat area in a `Positioned.fill`
-/// that is inset by the sidebar and the right panel and hidden with `Offstage`
-/// rather than unmounted; a sidebar that slides in from the left and is faded
-/// out and pointer-blocked when closed; the hamburger anchored top-left at
-/// chuk's `kTopInitialSpacing` / `kFixedLeftPadding`; the mini rail under it
-/// when the sidebar is closed, one `kButtonVisualHeight` per row so the icons
-/// line up with the sidebar's rail rows; a right panel at chuk's
-/// Workspaces / Media / Artifacts slot with the same header, the same 400 px
-/// cap and the same draggable divider for the one panel the user resizes; and
-/// the floating top-right row at chuk's anchor. There is no `AppBar`: chuk has
-/// none.
+/// It owns everything a thread needs to live ([AgentsShellHost],
+/// `agents_shell_state.dart`) and lays it out for the width it is given:
 ///
-/// The CONTENT is Agents's. The sidebar lists coworkers, not chats
-/// (`AgentRosterView`, on chuk's sidebar chrome). The two mini-rail slots are
-/// New coworker and Control Rooms. The right panel shows the room list. The
-/// top-right row has up to FOUR buttons — Agent controls, Control Rooms,
-/// Agent's browser (only while the agent has a browser open; it opens as a
-/// full-screen route, Bead cowork-vzm) and, in chuk's own slot, Copy full
-/// chat. Settings is where chuk keeps it: the gear in the sidebar's footer
-/// pill, opening chuk's settings modal (desktop) or hub (phone); Sign out is
-/// in the settings footer and in the phone sheet.
+/// * **A desktop window** (`agents_desktop_layout.dart`): the roster on the
+///   left is chuk's desktop sidebar with coworkers and rooms in it
+///   ([AgentRosterView]), folding to chuk's mini rail. The thread sits on the
+///   page, its actions floating at the top right as chuk floats "Copy full
+///   chat": the coworker's screen, Documents, Control Rooms, the details pane
+///   and the copy, with Profile and Rename behind "…". The details pane and
+///   Control Rooms open on the right, in chuk's artifact panel slot, and
+///   push the thread instead of covering it. A room opens in the centre. The
+///   keyboard reaches all of it (Ctrl+K switcher, Ctrl+N, Ctrl+Shift+N,
+///   Ctrl+1 … Ctrl+9, Ctrl+., Ctrl+B, Esc).
+/// * **A phone, or a window under 600 px**: the home (inbox, media and
+///   settings behind the floating navigation pill) and, over it, the chat
+///   with chuk's floating top bar ([MobileChatScreen]). The thread view stays
+///   mounted off stage behind the inbox.
 ///
-/// ## Deliberate divergences from chuk
+/// Settings is where chuk keeps it: the gear in the roster's account line
+/// opens chuk's settings modal on a desktop window; on a phone it is the
+/// Settings tab. Pages this shell pushes (Control Rooms and "Host & activity"
+/// on a phone, a room, the model list) wear chuk's [FloatingAppBar].
+///
+/// ## Why it is not chuk's root wrapper
 ///
 /// * **The chat area owns a socket.** chuk's root wrappers hold no state worth
-///   keeping; ours hosts `AgentsThreadView`, which builds the relay controller
-///   and reconnects from the stored pairing. Everything the shell owns lives in
-///   [AgentsShellHost] (`agents_shell_state.dart`), ABOVE the desktop / phone
-///   split, and the thread view is built by one method with one [GlobalKey], so
-///   a resize across any breakpoint moves it and never rebuilds it.
-/// * **Opening a panel folds the sidebar when they cannot share the width.**
-///   chuk drops the panel silently in that case; with a sidebar that is open by
-///   default that would make Control Rooms look broken at 800 px.
-/// * **Opening settings leaves the sidebar alone.** chuk closes it first; here
-///   it is the navigation, not an overlay the user pulled out.
-///
-/// Below 600 px (or on a real phone) the body is cowork-c6's mobile layer
-/// (`platform_specific/mobile/**`): the coworker inbox and the chat with the
-/// floating chrome, the thread view kept mounted off stage behind the inbox.
+///   keeping; this one hosts `AgentsThreadView`, which builds the relay
+///   controller and reconnects from the stored pairing. The thread view is
+///   built by one method with one [GlobalKey], above the desktop / phone
+///   split, so a resize across any breakpoint moves it and never rebuilds it.
+/// * **The roster is docked.** It is the navigation, not an overlay the user
+///   pulls out, so opening settings or a pane leaves it alone; a pane that
+///   cannot share the width with it folds it to the rail instead.
 library;
 
 import 'dart:async';
@@ -55,6 +47,7 @@ import 'package:flutter/services.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -69,7 +62,7 @@ import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
-import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
+import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
@@ -108,9 +101,11 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
-import 'package:chuk_chat/widgets/room_faces.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/pane_header.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
@@ -346,9 +341,11 @@ class _MessengerShellState extends State<MessengerShell>
         'No screen yet. Ask the coworker to open a page, then take over '
             'here.',
     };
-    ScaffoldMessenger.of(context)
-      ..removeCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(text)));
+    AppNotifications.show(
+      context,
+      text,
+      duration: const Duration(seconds: 4),
+    );
   }
 
   @override
@@ -404,8 +401,17 @@ class _MessengerShellState extends State<MessengerShell>
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Control Rooms')),
-          body: _buildRoomList(),
+          appBar: FloatingAppBar(
+            title: const Text('Control Rooms'),
+            actions: <Widget>[
+              FloatingHeaderButton(
+                icon: Icons.group_add_outlined,
+                tooltip: 'New room',
+                onPressed: () => unawaited(_openRoomCreate()),
+              ),
+            ],
+          ),
+          body: _buildRoomList(showHeader: false),
         ),
       ),
     );
@@ -469,8 +475,9 @@ class _MessengerShellState extends State<MessengerShell>
           ),
           onControls: () => open(
             Scaffold(
-              appBar: AppBar(title: const Text('Host & activity')),
+              appBar: FloatingAppBar(title: const Text('Host & activity')),
               body: SafeArea(
+                top: false,
                 child: AgentControlPanel(agent: agent, source: _controlSource),
               ),
             ),
@@ -482,7 +489,7 @@ class _MessengerShellState extends State<MessengerShell>
             if (chatKey == null) return;
             open(AutomationsPage(sessionKey: chatKey, chatName: agent.name));
           },
-          onSkills: () => open(const SkillsSettingsPage()),
+          onSkills: () => open(const AgentsSkillsSettingsPage()),
           onConnectors: () => open(const McpConnectorsPage()),
           onSecrets: () => open(const SecretsSettingsPage()),
           onRooms: _openRooms,
@@ -579,7 +586,7 @@ class _MessengerShellState extends State<MessengerShell>
           return Scaffold(
             key: _scaffoldKey,
             // No end drawer any more: the agent controls are the desktop's
-            // docked details pane (docs/DESIGN.md §14.1).
+            // details pane, in chuk's artifact panel slot.
             endDrawerEnableOpenDragGesture: false,
             body: phone
                 ? _buildPhoneBody(context, agent)
@@ -710,14 +717,12 @@ class _MessengerShellState extends State<MessengerShell>
             ),
           );
 
-    // The home is four places now, not one list (docs/DESIGN.md): chats,
-    // artefacts, files, settings.
+    // The home is three places, not one list (docs/DESIGN.md): chats,
+    // media, settings.
     final Widget home = RepaintBoundary(
       child: MobileHome(
         roster: _roster,
-        controller: _controller.value,
         readMarks: _readMarks,
-        profiles: _agentProfiles,
         chats: MobileAgentList(
           source: _roster,
           selectedAgentId: _selectedAgentId,

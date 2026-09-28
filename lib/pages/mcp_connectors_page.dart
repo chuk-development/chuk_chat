@@ -4,6 +4,11 @@
 // screen that connects them. A connector is a URL plus a sign-in, so the
 // list is the catalogue, the registry search, and a field to paste any
 // other MCP address into.
+//
+// One page for both builds. With FEATURE_AGENTS on, the paired host dials the
+// servers, not this device: the page asks the host to check them
+// ([McpService.probe]) and shows what the host found, instead of dialling
+// each server from here.
 
 import 'dart:async';
 
@@ -18,6 +23,7 @@ import 'package:chuk_chat/widgets/settings_search_bar.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';
 import 'package:chuk_chat/services/mcp/mcp_icon_cache.dart';
@@ -50,9 +56,29 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   @override
   void initState() {
     super.initState();
+    if (agentsChatCore) {
+      // Agents: ask the host what the connectors hold. The device cannot
+      // know — it signs them in, the host speaks to them — and without
+      // asking, this list can only show what the last task reported.
+      unawaited(McpService.load());
+      unawaited(McpService.probe());
+      return;
+    }
     // Ask every stored server whether it is still there, so the list is
     // about the servers as they are and not about the tokens we kept.
     unawaited(McpService.load().then((_) => McpService.verifyAllReachable()));
+  }
+
+  /// The right-hand line of a connected row in the Agents build.
+  ///
+  /// Three states, and they must not look alike: nobody has asked the host
+  /// yet, the host asked and the server refused, the host asked and got a
+  /// list. Printing "0 tools" for all three said nothing.
+  static String _hostStatusOf(McpConnection connection) {
+    if (connection.lastError != null) return 'not reachable';
+    if (connection.checkedAt == null) return 'not checked';
+    final int count = connection.tools.length;
+    return count == 1 ? '1 tool' : '$count tools';
   }
 
   @override
@@ -184,6 +210,8 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
                             : subtitleFor(connection),
                         trailing: unreachable.contains(connection.id)
                             ? 'Offline'
+                            : agentsChatCore
+                            ? _hostStatusOf(connection)
                             : '${connection.tools.length} tools',
                         onTap: () => _open(connection.id, null),
                       ),
@@ -314,33 +342,14 @@ class _McpConnectorsPageState extends State<McpConnectorsPage> {
   }
 
   Future<void> _addByUrl() async {
-    final controller = TextEditingController();
+    // The dialog owns its text controller, so the controller is disposed only
+    // after the dialog route is gone. Disposing it here, right after
+    // showDialog returns, would free it while the exit animation still paints
+    // the field, which throws "used after disposed".
     final url = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Add a connector'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: TextInputType.url,
-          decoration: const InputDecoration(
-            labelText: 'Server URL',
-            hintText: 'https://mcp.example.com/mcp',
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Connect'),
-          ),
-        ],
-      ),
+      builder: (dialogContext) => const _AddByUrlDialog(),
     );
-    controller.dispose();
     if (url == null || url.trim().isEmpty || !mounted) return;
 
     final canceler = McpConnectCanceler();
@@ -401,10 +410,36 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
   }
 
   Future<void> _checkReachable() async {
+    // Agents: the host dials the connector, from its own network. A check
+    // from this device would answer a different question.
+    if (agentsChatCore) return;
     if (McpService.connectionFor(widget.id) == null) return;
     final alive = await McpService.verifyReachable(widget.id);
     if (!mounted) return;
     setState(() => _reachable = alive);
+  }
+
+  /// Whether the last check says the stored connector does not work.
+  ///
+  /// chuk asks the server from this device, so the answer is [_reachable].
+  /// In the Agents build the device never asks and [_reachable] stays null:
+  /// the host dials the server and reports a failure through
+  /// [McpConnection.lastError], the same field the connected row reads for
+  /// "not reachable". Without it the page offered Disconnect for a
+  /// connector the list had just called broken.
+  bool _checkFailed(McpConnection? connection) {
+    if (connection == null) return false;
+    if (agentsChatCore) return connection.lastError != null;
+    return _reachable == false;
+  }
+
+  /// What the failed check found, in words.
+  String _failureText(McpConnection connection) {
+    if (agentsChatCore) {
+      return 'The host could not use this connector: '
+          '${connection.lastError}';
+    }
+    return 'The server did not answer. The sign-in may have expired.';
   }
 
   void _remember(McpConnection? connection) {
@@ -424,6 +459,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
       builder: (context, _, _) {
         final connection = McpService.connectionFor(widget.id);
         _remember(connection);
+        final bool failed = _checkFailed(connection);
         final name =
             connection?.name ?? widget.entry?.name ?? _name ?? 'Connector';
         final url = connection?.url ?? widget.entry?.url ?? _url ?? '';
@@ -495,22 +531,20 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                         ),
                         onPressed: url.isEmpty
                             ? null
-                            : (connection == null || _reachable == false
+                            : (connection == null || failed
                                   ? () => _connect(url, name)
                                   : _disconnect),
                         child: Text(
                           connection == null
                               ? 'Connect'
-                              : (_reachable == false
-                                    ? 'Reconnect'
-                                    : 'Disconnect'),
+                              : (failed ? 'Reconnect' : 'Disconnect'),
                         ),
                       ),
               ),
               // A connection is a stored token and a stored URL, not a live
               // socket, so a server that has gone away still reads as
               // connected. Say so, and offer the one thing that helps.
-              if (connection != null && _reachable == false) ...[
+              if (connection != null && failed) ...[
                 const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -523,8 +557,7 @@ class _McpConnectorDetailPageState extends State<McpConnectorDetailPage> {
                     const SizedBox(width: 8),
                     Flexible(
                       child: Text(
-                        'The server did not answer. The sign-in may have '
-                        'expired.',
+                        _failureText(connection),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.error,
                         ),
@@ -1000,5 +1033,52 @@ Future<T> _withProgress<T>(
     return await work();
   } finally {
     messenger.hideCurrentSnackBar();
+  }
+}
+
+/// The "Add a connector" dialog. It owns its text controller, so the
+/// controller lives as long as the dialog route and is freed only in
+/// [dispose], after the route is gone. Pops the entered URL, or null on
+/// cancel.
+class _AddByUrlDialog extends StatefulWidget {
+  const _AddByUrlDialog();
+
+  @override
+  State<_AddByUrlDialog> createState() => _AddByUrlDialogState();
+}
+
+class _AddByUrlDialogState extends State<_AddByUrlDialog> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Add a connector'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        decoration: const InputDecoration(
+          labelText: 'Server URL',
+          hintText: 'https://mcp.example.com/mcp',
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, _controller.text),
+          child: const Text('Connect'),
+        ),
+      ],
+    );
   }
 }

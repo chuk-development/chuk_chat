@@ -1,20 +1,20 @@
 # pseudomap · Regelbefunde · chuk_chat
 
-6093 Befunde aus 893 Dateien · Stand 2026-09-27
+5988 Befunde aus 883 Dateien · Stand 2026-09-28
 
 Rang 1 sind Fehler: Lecks, verschluckte Ausnahmen, Zustand nach await. Rang 2 ist Wartbarkeit, Rang 3 sind Flutter- und Stilregeln. Volle Liste je Regel: `pseudomap lint --rule <name>`.
 
-## Rang 1 — Fehler (228)
+## Rang 1 — Fehler (229)
 
-avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener 7 · avoid-only-rethrow 1
+avoid-empty-catch 177 · use-setstate-synchronously 44 · always-remove-listener 7 · avoid-only-rethrow 1
 
 - `lib/model_selector_page.dart:174` **always-remove-listener** — 1x addListener, 0x removeListener in `_ModelSelectorPageState`
 - `lib/pages/login_page.dart:34` **always-remove-listener** — 1x addListener, 0x removeListener in `_LoginPageState`
-- `lib/pages/messenger_shell.dart:219` **always-remove-listener** — 2x addListener, 1x removeListener in `_MessengerShellState`
+- `lib/pages/messenger_shell.dart:214` **always-remove-listener** — 2x addListener, 1x removeListener in `_MessengerShellState`
 - `lib/pages/set_new_password_page.dart:30` **always-remove-listener** — 1x addListener, 0x removeListener in `_SetNewPasswordPageState`
 - `lib/pages/workspace_detail_page.dart:941` **always-remove-listener** — 1x addListener, 0x removeListener in `_ChatSelectorDialogState`
 - `lib/services/system_tray_service_io.dart:17` **always-remove-listener** — 3x addListener, 2x removeListener in `SystemTrayService`
-- `lib/widgets/agents_desktop/quick_switcher.dart:70` **always-remove-listener** — 1x addListener, 0x removeListener in `_QuickSwitcherState`
+- `lib/widgets/agents_desktop/quick_switcher.dart:75` **always-remove-listener** — 1x addListener, 0x removeListener in `_QuickSwitcherState`
 - `lib/assistant/assistant_cards.dart:111` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/assistant/assistant_microphone.dart:126` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/assistant/assistant_session.dart:491` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -33,11 +33,11 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/pages/fullscreen_map_page.dart:446` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/fullscreen_map_page.dart:661` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/pages/fullscreen_map_page.dart:670` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/settings_page.dart:887` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:347` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:376` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:405` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/pages/theme_page.dart:688` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/settings_page.dart:686` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:341` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:370` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:399` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/pages/theme_page.dart:682` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_model_selection_mixin.dart:135` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_ui_helpers.dart:349` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/platform_specific/chat/chat_ui_helpers.dart:674` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -67,13 +67,13 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/services/agents/thread_preview_store.dart:156` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/agents/thread_preview_store.dart:262` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/app_initialization_service.dart:120` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/app_theme_service.dart:536` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/app_theme_service.dart:520` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/auth_trace.dart:50` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/auth_trace.dart:70` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:370` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:520` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:659` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/services/chat_payload_migration_service.dart:695` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:379` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:533` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:672` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/services/chat_payload_migration_service.dart:708` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_reaction_service.dart:30` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_storage_crud.dart:551` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/services/chat_storage_crud.dart:866` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -161,12 +161,12 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/utils/tool_parser.dart:179` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/utils/tool_parser.dart:251` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/utils/tool_parser.dart:273` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/agent_roster_view.dart:87` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/agent_roster_view.dart:102` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/agent_roster_view.dart:260` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/agents_thread_view.dart:1346` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/agents_thread_view.dart:1361` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/artifact_panel.dart:119` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/agent_roster_view.dart:90` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/agent_roster_view.dart:105` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/agent_roster_view.dart:318` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/agents_thread_view.dart:1328` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/agents_thread_view.dart:1343` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/artifact_panel.dart:120` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/attachment_preview_bar.dart:623` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/attachment_preview_bar.dart:973` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/browser_view_page.dart:233` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -177,8 +177,8 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/widgets/chat_documents_panel.dart:194` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/message_bubble/cards.dart:477` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/message_bubble/images.dart:530` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/message_bubble/tools.dart:355` **avoid-empty-catch** — leerer catch verschluckt den Fehler
-- `lib/widgets/message_bubble/tools.dart:598` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/message_bubble/tools.dart:357` **avoid-empty-catch** — leerer catch verschluckt den Fehler
+- `lib/widgets/message_bubble/tools.dart:600` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/message_bubble/web_search_sources.dart:144` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/route_map_widget.dart:99` **avoid-empty-catch** — leerer catch verschluckt den Fehler
 - `lib/widgets/sidebar/sidebar_common.dart:207` **avoid-empty-catch** — leerer catch verschluckt den Fehler
@@ -198,6 +198,7 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/model_selector_page.dart:716` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/agents_desktop_layout.dart:121` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/agents_desktop_layout.dart:127` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/pages/customization_page.dart:716` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/github_connection_page.dart:177` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/media_manager_page.dart:352` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/media_manager_page.dart:465` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
@@ -206,30 +207,30 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `lib/pages/recover_chats_page.dart:331` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/system_prompt_page.dart:578` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/pages/workspace_management_page.dart:92` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_desktop.dart:504` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_desktop.dart:1186` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_desktop.dart:1436` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_mobile.dart:535` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_mobile.dart:1823` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/platform_specific/chat/chat_ui_mobile.dart:3026` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_desktop.dart:499` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_desktop.dart:1181` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_desktop.dart:1431` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_mobile.dart:532` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_mobile.dart:1819` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/platform_specific/chat/chat_ui_mobile.dart:3023` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/chat/model_provider_resolution_mixin.dart:69` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/chat/model_provider_resolution_mixin.dart:76` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/chat/model_provider_resolution_mixin.dart:87` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/chat/model_provider_resolution_mixin.dart:100` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/chat/model_provider_resolution_mixin.dart:112` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/platform_specific/sidebar_mobile.dart:170` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:639` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:659` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:956` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:966` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:969` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/agents_thread_view.dart:1022` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/artifact_panel.dart:347` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/artifact_panel.dart:1629` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/artifact_panel.dart:1652` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:621` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:641` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:938` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:948` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:951` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/agents_thread_view.dart:1004` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/artifact_panel.dart:348` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/artifact_panel.dart:1618` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/artifact_panel.dart:1641` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/widgets/auth_gate.dart:230` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/markdown_message.dart:1970` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
-- `lib/widgets/message_bubble.dart:385` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/markdown_message.dart:1876` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
+- `lib/widgets/message_bubble.dart:378` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/widgets/workspace_panel.dart:100` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/widgets/workspace_panel.dart:259` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `lib/widgets/workspace_panel.dart:262` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
@@ -237,16 +238,16 @@ avoid-empty-catch 177 · use-setstate-synchronously 43 · always-remove-listener
 - `test/platform_specific/chat/chat_scroll_mixin_test.dart:207` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 - `test/widgets/charts/chuk_chart_test.dart:402` **use-setstate-synchronously** — setState nach await ohne mounted-Prüfung — wirft, wenn das Widget weg ist
 
-## Rang 2 — Wartbarkeit (1145)
+## Rang 2 — Wartbarkeit (1097)
 
-avoid-long-functions 786 · avoid-nested-conditional-expressions 174 · avoid-high-cyclomatic-complexity 136 · avoid-collapsible-if 35 · avoid-long-parameter-list 14
+avoid-long-functions 767 · avoid-nested-conditional-expressions 149 · avoid-high-cyclomatic-complexity 132 · avoid-collapsible-if 35 · avoid-long-parameter-list 14
 
 - `lib/main.dart:383` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/chat/chat_scroll_mixin.dart:452` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/platform_specific/chat/chat_ui_desktop.dart:1167` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/platform_specific/chat/chat_ui_desktop.dart:1253` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/platform_specific/chat/chat_ui_mobile.dart:2608` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/platform_specific/chat/chat_ui_mobile.dart:2682` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/platform_specific/chat/chat_ui_desktop.dart:1162` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/platform_specific/chat/chat_ui_desktop.dart:1248` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/platform_specific/chat/chat_ui_mobile.dart:2605` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/platform_specific/chat/chat_ui_mobile.dart:2679` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/root_wrapper_desktop.dart:538` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/platform_specific/root_wrapper_mobile.dart:188` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/services/agents/agents_chat_transport.dart:155` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
@@ -273,19 +274,19 @@ avoid-long-functions 786 · avoid-nested-conditional-expressions 174 · avoid-hi
 - `lib/utils/url_launcher_helper.dart:14` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/widgets/credit_display.dart:202` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
 - `lib/widgets/image_viewer.dart:86` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/widgets/markdown_message.dart:486` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/widgets/markdown_message.dart:1507` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/widgets/markdown_message.dart:1753` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
-- `lib/constants.dart:143` **avoid-high-cyclomatic-complexity** — Komplexität 36 (Grenze 20)
+- `lib/widgets/markdown_message.dart:466` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/widgets/markdown_message.dart:1413` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/widgets/markdown_message.dart:1659` **avoid-collapsible-if** — zwei if lassen sich zusammenfassen
+- `lib/constants.dart:140` **avoid-high-cyclomatic-complexity** — Komplexität 31 (Grenze 20)
 - `lib/model_selector_page.dart:478` **avoid-high-cyclomatic-complexity** — Komplexität 23 (Grenze 20)
 - `lib/models/chat_message.dart:218` **avoid-high-cyclomatic-complexity** — Komplexität 23 (Grenze 20)
 - `lib/models/workspace_model.dart:358` **avoid-high-cyclomatic-complexity** — Komplexität 38 (Grenze 20)
-- `lib/pages/account_settings_page.dart:261` **avoid-high-cyclomatic-complexity** — Komplexität 25 (Grenze 20)
-- … +1105 weitere, siehe `pseudomap lint --rank 2`
+- `lib/pages/account_settings_page.dart:256` **avoid-high-cyclomatic-complexity** — Komplexität 22 (Grenze 20)
+- … +1057 weitere, siehe `pseudomap lint --rank 2`
 
-## Rang 3 — Flutter und Stil (4720)
+## Rang 3 — Flutter und Stil (4662)
 
-avoid-dynamic 2442 · avoid-non-null-assertion 2149 · avoid-border-all 107 · avoid-print 16 · avoid-shrink-wrap-in-lists 6
+avoid-dynamic 2442 · avoid-non-null-assertion 2098 · avoid-border-all 100 · avoid-print 16 · avoid-shrink-wrap-in-lists 6
 
 - `lib/assistant/assistant_overlay.dart:462` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/demo/shared_widgets.dart:153` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
@@ -297,9 +298,9 @@ avoid-dynamic 2442 · avoid-non-null-assertion 2149 · avoid-border-all 107 · a
 - `lib/demo/variants/variant_6_final.dart:123` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/model_selector_page.dart:1089` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/model_selector_page.dart:1090` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- `lib/pages/agent_profile_edit_page.dart:485` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- `lib/pages/agent_profile_edit_page.dart:507` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- `lib/pages/agent_profile_edit_page.dart:579` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
+- `lib/pages/agent_profile_edit_page.dart:494` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
+- `lib/pages/agent_profile_edit_page.dart:516` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
+- `lib/pages/agent_profile_edit_page.dart:588` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/pages/assistant_settings_page.dart:277` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
 - `lib/pages/fullscreen_map_page.dart:311` **avoid-border-all** — Border.all ohne const erzeugt bei jedem Build neu
-- … +4705 weitere, siehe `pseudomap lint --rank 3`
+- … +4647 weitere, siehe `pseudomap lint --rank 3`

@@ -12,11 +12,9 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/icons/model_logo.dart';
 
@@ -37,21 +35,7 @@ class ChatModeSelector extends StatelessWidget {
     this.onReasoningEffortChanged,
     this.height = MobileLayout.minTouchTarget,
     this.menuAbove = false,
-    this.agentsMenus = false,
-    this.flat = false,
   });
-
-  /// The Agents thread's menus: the original app's filled tiles at the menu
-  /// radius, with no frame. Off, upstream's framed picker is kept.
-  final bool agentsMenus;
-
-  /// The Agents desktop composer's control (docs/DESIGN.md §14.5): no ring,
-  /// a small corner and a hover fill, like every other button on that row.
-  final bool flat;
-
-  /// Menu rows one touch target high: the Agents build. chuk_chat keeps
-  /// upstream's 40 dp rows and 30 dp section headers.
-  bool get _agentsLook => agentsMenus || agentsChatCore;
 
   final ChatMode mode;
   final ValueChanged<ChatMode> onModeChanged;
@@ -182,22 +166,19 @@ class ChatModeSelector extends StatelessWidget {
       label: 'Mode: $pillLabel',
       child: InkWell(
         onTap: () => _openModeMenu(context),
-        borderRadius: BorderRadius.circular(flat ? 8 : height / 2),
-        hoverColor: flat ? theme.colorScheme.surfaceContainerHigh : null,
+        borderRadius: BorderRadius.circular(height / 2),
         child: Container(
           height: height,
           padding: EdgeInsets.symmetric(
-            horizontal: flat ? 8 : (showLabel ? height * 0.25 : height * 0.30),
+            horizontal: showLabel ? height * 0.25 : height * 0.30,
           ),
-          decoration: flat
-              ? null
-              : BoxDecoration(
-                  borderRadius: BorderRadius.circular(height / 2),
-                  border: Border.all(
-                    color: iconFg.withValues(alpha: 0.3),
-                    width: 1.8,
-                  ),
-                ),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(height / 2),
+            border: Border.all(
+              color: iconFg.withValues(alpha: 0.3),
+              width: 1.8,
+            ),
+          ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -239,7 +220,6 @@ class ChatModeSelector extends StatelessWidget {
         // reached through the model-and-reasoning menu.
         for (final option in const <ChatMode>[ChatMode.fast, ChatMode.thinking])
           _menuRow<_MenuChoice>(
-            dense: MenuDensity.isDense(context),
             value: _MenuChoice.mode(option),
             iconFg: iconFg,
             icon: iconFor(option),
@@ -248,7 +228,6 @@ class ChatModeSelector extends StatelessWidget {
           ),
         if (_hasDeeperMenu)
           _menuRow<_MenuChoice>(
-            dense: MenuDensity.isDense(context),
             value: const _MenuChoice.openModelMenu(),
             iconFg: iconFg,
             icon: iconFor(ChatMode.custom),
@@ -328,7 +307,6 @@ class ChatModeSelector extends StatelessWidget {
       if (showModels)
         for (final model in models)
           _menuRow<_DeeperChoice>(
-            dense: MenuDensity.isDense(context),
             value: _DeeperChoice.model(model.id),
             iconFg: iconFg,
             // The lab's logo in the icon column, in the colour of the name.
@@ -341,7 +319,6 @@ class ChatModeSelector extends StatelessWidget {
           ),
       if (onOpenModelScreen != null)
         _menuRow<_DeeperChoice>(
-          dense: MenuDensity.isDense(context),
           value: const _DeeperChoice.openScreen(),
           iconFg: iconFg,
           icon: Icons.add,
@@ -390,7 +367,6 @@ class ChatModeSelector extends StatelessWidget {
         _headerRow<String>(iconFg: iconFg, label: 'Reasoning'),
         for (final level in reasoningLevels)
           _menuRow<String>(
-            dense: MenuDensity.isDense(rowContext),
             value: level,
             iconFg: iconFg,
             label: ChatModeService.reasoningLabel(level),
@@ -411,7 +387,7 @@ class ChatModeSelector extends StatelessWidget {
   }) {
     return PopupMenuItem<T>(
       enabled: false,
-      height: _agentsLook ? MobileLayout.minTouchTarget : 30,
+      height: 30,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: Text(
         label.toUpperCase(),
@@ -436,14 +412,10 @@ class ChatModeSelector extends StatelessWidget {
     Widget? leading,
     bool isSelected = false,
     Widget? trailing,
-    bool dense = false,
   }) {
     return PopupMenuItem<T>(
       value: value,
-      // The Agents desktop menu (docs/DESIGN.md §14.6): 32 px rows.
-      height: dense
-          ? kMenuDenseRowHeight
-          : (_agentsLook ? MobileLayout.minTouchTarget : 40),
+      height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _rowChild(
         iconFg: iconFg,
@@ -519,10 +491,9 @@ class ChatModeSelector extends StatelessWidget {
       alignRight: alignRight,
       besideAnchor: besideAnchor,
       // This is the model picker, a list being read against the chat behind
-      // it — it keeps the frame that says where the list ends. Not in the
-      // Agents thread, see [agentsMenus].
-      outlined: !agentsMenus,
-      borderRadius: agentsMenus ? kMenuOuterRadius : 18,
+      // it — it keeps the frame that says where the list ends.
+      outlined: true,
+      borderRadius: 18,
     );
   }
 

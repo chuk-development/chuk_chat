@@ -10,57 +10,23 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// Corner radius at the outer edges of a group.
 const double kExpressiveOuterRadius = 26;
 
-/// Corner radius a tile morphs to while it is held.
-const double kExpressivePressedRadius = 18;
-
 /// Corner radius where two tiles meet.
 const double kExpressiveInnerRadius = 6;
 
 /// Picks the contrast colour of a tone from the scheme.
 extension ExpressiveOnColor on ColorScheme {
-  /// The colour that stays legible on top of the given fill.
-  ///
-  /// A tone handed to a tile, a badge or an info card is usually a scheme
-  /// colour, so the scheme already knows its partner. Only when the tone
-  /// comes from somewhere else does this fall back to a brightness test — and
-  /// even then it picks the scheme's own extremes, never pure white or black.
+  /// The colour that stays legible on top of the given fill: plain white on a
+  /// dark tone, plain black on a light one.
   Color onColorFor(Color background) {
-    final List<(Color, Color)> pairs = <(Color, Color)>[
-      (primary, onPrimary),
-      (primaryContainer, onPrimaryContainer),
-      (secondary, onSecondary),
-      (secondaryContainer, onSecondaryContainer),
-      (tertiary, onTertiary),
-      (tertiaryContainer, onTertiaryContainer),
-      (error, onError),
-      (errorContainer, onErrorContainer),
-      (inverseSurface, onInverseSurface),
-      (surface, onSurface),
-    ];
-    // chuk_chat picks plain white or black on a tone; the scheme pairing is
-    // the Agents app's.
-    if (!agentsChatCore) {
-      return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
-          ? Colors.white
-          : Colors.black;
-    }
-    for (final (Color fill, Color on) in pairs) {
-      if (fill == background) return on;
-    }
-    final bool darkBackground =
-        ThemeData.estimateBrightnessForColor(background) == Brightness.dark;
-    final bool onSurfaceIsLight =
-        ThemeData.estimateBrightnessForColor(onSurface) == Brightness.light;
-    if (darkBackground) return onSurfaceIsLight ? onSurface : surface;
-    return onSurfaceIsLight ? surface : onSurface;
+    return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
   }
 }
 
@@ -237,60 +203,37 @@ class _ExpressiveTileState extends State<ExpressiveTile> {
     final EdgeInsets padding = widget.padding;
     final Widget child = widget.child;
 
-    if (!agentsChatCore) {
-      final bool enabled = onTap != null;
-      // The squeeze: pressing rounds every corner and shrinks the tile a
-      // little. It is the whole of the expressive feedback — no ripple is
-      // needed on top of it.
-      return AnimatedScale(
-        scale: _pressed ? 0.985 : 1,
+    final bool enabled = onTap != null;
+    // The squeeze: pressing rounds every corner and shrinks the tile a
+    // little. It is the whole of the expressive feedback — no ripple is
+    // needed on top of it.
+    return AnimatedScale(
+      scale: _pressed ? 0.985 : 1,
+      duration: const Duration(milliseconds: 130),
+      curve: Curves.easeOutCubic,
+      child: AnimatedContainer(
         duration: const Duration(milliseconds: 130),
         curve: Curves.easeOutCubic,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 130),
-          curve: Curves.easeOutCubic,
-          decoration: BoxDecoration(
-            color: _pressed ? m3.surfaceContainerHigh : m3.surfaceContainer,
-            borderRadius: _pressed
-                ? BorderRadius.circular(kExpressiveOuterRadius)
-                : resting,
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: Material(
-            type: MaterialType.transparency,
-            child: InkWell(
-              onTap: onTap,
-              onTapDown: enabled
-                  ? (_) => setState(() => _pressed = true)
-                  : null,
-              onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
-              onTapCancel: enabled
-                  ? () => setState(() => _pressed = false)
-                  : null,
-              child: Padding(padding: padding, child: child),
-            ),
-          ),
+        decoration: BoxDecoration(
+          color: _pressed ? m3.surfaceContainerHigh : m3.surfaceContainer,
+          borderRadius: _pressed
+              ? BorderRadius.circular(kExpressiveOuterRadius)
+              : resting,
         ),
-      );
-    }
-
-    // The squeeze: pressing shrinks the tile a little and squares its corners
-    // off, then a spring carries it back. It is the same [MorphTap] every
-    // chat control is built on, so a settings row answers a finger exactly
-    // the way the rest of the app does — no ripple is needed on top of it.
-    return MorphTap(
-      onTap: onTap,
-      color: m3.surfaceContainer,
-      pressedColor: m3.surfaceContainerHigh,
-      pressedScale: 0.985,
-      shape: RoundedRectangleBorder(borderRadius: resting),
-      pressedShape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.all(
-          Radius.circular(kExpressivePressedRadius),
+        clipBehavior: Clip.antiAlias,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            onTapDown: enabled ? (_) => setState(() => _pressed = true) : null,
+            onTapUp: enabled ? (_) => setState(() => _pressed = false) : null,
+            onTapCancel: enabled
+                ? () => setState(() => _pressed = false)
+                : null,
+            child: Padding(padding: padding, child: child),
+          ),
         ),
       ),
-      padding: padding,
-      child: child,
     );
   }
 }
@@ -463,11 +406,7 @@ class ExpressiveIconTile extends StatelessWidget {
       ),
       child: AppIcon(
         icon,
-        // The icon's own box, before [HugeIcon]'s optical inset trims it to
-        // about 0.86 of that. That lands a 42 px tile on a 25 px drawing —
-        // the 24-in-40 proportion a filled tile wants. The old 0.5 was set
-        // when the icon ignored it and filled the whole tile anyway.
-        size: size * (agentsChatCore ? 0.7 : 0.5),
+        size: size * 0.5,
         color: tone == null ? cs.onPrimaryContainer : cs.onColorFor(background),
       ),
     );
@@ -503,10 +442,7 @@ class ExpressiveSectionHeader extends StatelessWidget {
       ),
     );
     return Padding(
-      // The Agents app gives a section more air above its title.
-      padding: agentsChatCore
-          ? const EdgeInsets.fromLTRB(6, 26, 6, 10)
-          : const EdgeInsets.fromLTRB(6, 16, 6, 8),
+      padding: const EdgeInsets.fromLTRB(6, 16, 6, 8),
       child: trailing == null
           ? title
           : Row(
@@ -559,43 +495,6 @@ class ExpressiveBadge extends StatelessWidget {
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-/// The big page title Expressive puts above a settings list.
-class ExpressiveTitle extends StatelessWidget {
-  const ExpressiveTitle(this.title, {super.key, this.subtitle});
-
-  final String title;
-  final String? subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(6, 4, 6, 4),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              letterSpacing: -0.5,
-            ),
-          ),
-          if (subtitle?.isNotEmpty ?? false) ...[
-            const SizedBox(height: 6),
-            Text(
-              subtitle!,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.m3.onSurfaceVariant,
-              ),
-            ),
-          ],
         ],
       ),
     );

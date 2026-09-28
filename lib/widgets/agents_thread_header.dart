@@ -2,32 +2,21 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
-
-import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
-import 'package:chuk_chat/ui/expressive/agent_face.dart';
-import 'package:chuk_chat/ui/expressive/agent_status.dart';
-import 'package:chuk_chat/ui/expressive/feedback.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
-import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
-import 'package:chuk_chat/widgets/anchored_menu.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
-/// How the relay looks to the reader. Not the phase enum: the header only
-/// cares about the three states that read differently, so a new transport
-/// phase never forces a change here.
+/// One button in the thread's floating row.
+///
+/// The row owns the look (glyph size, hit box, spacing, tooltip); the caller
+/// owns the meaning. That is what keeps a button that moved in from somewhere
+/// else from arriving with its own sizing.
+/// How the relay looks to the reader. Not the phase enum: the row only cares
+/// about the three states that read differently, so a new transport phase
+/// never forces a change here.
 enum AgentsThreadConnection { live, connecting, down }
 
-/// One button in the header's trailing group.
-///
-/// The header owns the look (glyph size, hit box, spacing, tooltip); the
-/// caller owns the meaning. That is what keeps a button that moved in from
-/// somewhere else — the shell's floating row — from arriving with its own
-/// sizing.
 @immutable
 class AgentsThreadAction {
   const AgentsThreadAction({
@@ -37,93 +26,51 @@ class AgentsThreadAction {
     this.selected = false,
   });
 
-  /// A toggle that is on (the desktop details pane): drawn with the selected
-  /// fill in the desktop title bar.
+  /// A toggle that is on (the details pane): its glyph takes the accent.
   final bool selected;
 
   final IconData icon;
 
   /// Shown on hover, read aloud by a screen reader, and used as the label when
-  /// the button folds into the overflow menu — so it has to name the action,
-  /// not describe the glyph.
+  /// the button folds into the "…" menu — so it has to name the action, not
+  /// describe the glyph.
   final String tooltip;
 
   final VoidCallback onPressed;
 }
 
-/// The one bar above a Agents thread: who you are talking to on the left, what
-/// is running on its own in the middle, what you can do to the thread on the
-/// right.
+/// The actions of a desktop thread, as chuk_chat draws the buttons over its
+/// chat: bare icon buttons floating at the top right of the chat area
+/// (`root_wrapper_desktop.dart`, "Copy full chat"). No bar, no title and no
+/// rule under it — the roster already says whose thread this is.
 ///
-/// Before this widget the same band held three unrelated things — a labelled
-/// "Documents" button the thread view drew, a floating row of icons the shell
-/// drew over it, and the automations strip on a line of its own — with nothing
-/// to say which mattered. They are one row now, and every action goes through
-/// [AgentsThreadAction] so none of them can drift apart again.
-///
-/// Two shapes:
-///
-///  * the **bar** (desktop): title, connection, automation chip and actions,
-///    on the surface colour, with no rule under it. [leadingInset] is the
-///    room the shell's floating hamburger and mini rail need, since they are
-///    painted over this widget and the widget cannot see them.
-///  * **[dense]** (phone): no title — the floating chrome above already
-///    carries the coworker, its face and its presence — and no fill, so the
-///    row reads as chips over the chat. [topInset] pushes it clear of that
-///    chrome; the chat below then reserves nothing of its own.
-///
-/// At a narrow width the title ellipsises first and the actions that no longer
-/// fit fold into an overflow menu, so nothing is ever dropped and nothing ever
-/// overflows.
+/// From left to right: the relay's state while it is down, the running
+/// automation (when there is one), the coworker's screen, the caller's
+/// [actions], and the "…" menu for [menuActions] and for whatever does not
+/// fit. At a narrow width actions fold into that menu, so nothing is ever
+/// dropped and nothing overflows.
 class AgentsThreadHeader extends StatelessWidget {
   const AgentsThreadHeader({
     super.key,
-    this.title,
-    this.subtitle,
-    this.connection = AgentsThreadConnection.live,
     this.automationLabel,
     this.automationPaused = false,
     this.automationExpanded = false,
     this.onToggleAutomations,
     this.actions = const <AgentsThreadAction>[],
-    this.leadingInset = 0,
-    this.topInset = 0,
-    this.dense = false,
-    this.agent,
-    this.onOpenProfile,
-    this.showCallTargets = true,
-    this.onOpenScreen,
-    this.floating = false,
     this.menuActions = const <AgentsThreadAction>[],
+    this.showScreenTarget = false,
+    this.onOpenScreen,
+    this.connection = AgentsThreadConnection.live,
+    this.onReconnect,
   });
 
-  /// The desktop title bar's "…" menu: actions that are not worth a button of
-  /// their own. Anything from [actions] that does not fit joins them.
-  final List<AgentsThreadAction> menuActions;
-
-  /// The bar floats over the chat on the top veil (docs/DESIGN.md §2–3): the
-  /// messages scroll up behind it instead of stopping at a solid band. Off, the
-  /// bar is a solid strip on the surface — the shape used while an approval
-  /// bar or the automation cards sit between it and the chat.
-  final bool floating;
-
-  /// The height of the bar row with its padding, without the veil's fade.
-  /// A chat under a [floating] bar starts its first row this far down.
-  static const double barHeight = 16 + _slot + 8;
-
-  /// How far the veil fades out below the bar row.
-  static const double veilFade = 26;
-
-  /// The coworker this thread belongs to. Null before one is selected: the row
-  /// then carries the state and the actions alone rather than inventing a name.
-  /// Ignored while [dense].
-  final String? title;
-
-  /// A second, quieter line — the coworker's role, or the thread. Dropped
-  /// while the connection has something to say, which matters more.
-  final String? subtitle;
-
+  /// The relay. A live socket, and one on its way back, are not news: only a
+  /// relay that is down shows, as "Offline · Reconnect", the words the phone's
+  /// title pill uses.
   final AgentsThreadConnection connection;
+
+  /// Tap on the offline chip. Null keeps it a plain "Offline".
+  final VoidCallback? onReconnect;
 
   /// The running automation as one short line ("Wahlradar · Active", or
   /// "3 automations"). Null hides the chip entirely.
@@ -132,8 +79,8 @@ class AgentsThreadHeader extends StatelessWidget {
   /// Colours the chip's dot: a paused automation is not a live one.
   final bool automationPaused;
 
-  /// Whether the automation cards under the header are open. Drives the
-  /// chevron only; the caller owns the state.
+  /// Whether the automation cards under the row are open. Drives the chevron
+  /// only; the caller owns the state.
   final bool automationExpanded;
 
   /// Tap on the chip. Null renders the chip flat (nothing to open).
@@ -141,558 +88,150 @@ class AgentsThreadHeader extends StatelessWidget {
 
   final List<AgentsThreadAction> actions;
 
-  /// Left room for chrome painted OVER this widget by the shell.
-  final double leadingInset;
+  /// Actions that are not worth a button of their own. Anything from
+  /// [actions] that does not fit joins them behind "…".
+  final List<AgentsThreadAction> menuActions;
 
-  /// Top room for the same reason — the phone's floating bar.
-  final double topInset;
-
-  final bool dense;
-
-  /// The coworker this thread belongs to. When it is given, the subject block is
-  /// the messenger's contact pill — the blob face, the name and the live state —
-  /// and it opens the profile. Without it the header falls back to [title] and
-  /// [subtitle] as plain text, which is what a room thread and a widget test
-  /// with no roster get.
-  final AgentsAgent? agent;
-
-  /// Tap on the subject pill. Null renders it flat.
-  final void Function(AgentsAgent agent)? onOpenProfile;
-
-  /// Whether the messenger's two call targets are shown: the parked voice call
-  /// and, in the video call's slot, the coworker's screen.
-  final bool showCallTargets;
+  /// Whether the coworker's screen target is shown: only while a thread is
+  /// open.
+  final bool showScreenTarget;
 
   /// Opens the live view of the coworker's screen (its sandbox VNC). Null keeps
   /// the target in place but parked — there is no screen open.
   final VoidCallback? onOpenScreen;
 
-  /// One action's footprint: Material's minimum 48 dp hit box, the size every
-  /// other icon row in the app uses.
-  static const double _slot = MobileLayout.minTouchTarget;
+  /// One button's footprint: a 20 px glyph with 10 px of ink around it, the
+  /// size of chuk's icon button.
+  static const double slot = 40;
 
-  /// Width the title keeps for itself before actions start folding away. Below
-  /// it a header would be all buttons and no subject.
-  static const double _minTitleWidth = 96;
+  /// Width the automation chip keeps for itself before buttons fold.
+  static const double _automationReserve = 160;
 
   @override
   Widget build(BuildContext context) {
-    // The desktop window gets a desktop title bar (docs/DESIGN.md §14.2); the
-    // phone keeps the dense row exactly as it was.
-    if (!dense) return _buildDesktopBar(context);
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    final row = SizedBox(
-      height: _slot,
-      child: LayoutBuilder(
-        builder: (context, constraints) =>
-            _buildRow(context, constraints.maxWidth),
-      ),
-    );
-    final padded = Padding(
-      padding: EdgeInsets.fromLTRB(
-        leadingInset + (dense ? 8 : 12),
-        topInset + (dense ? 2 : 16),
-        dense ? 4 : 8,
-        dense ? 2 : 8,
-      ),
-      child: row,
-    );
-    if (dense) return padded;
-    if (floating) {
-      return DecoratedBox(
-        decoration: topVeilDecoration(scheme),
-        child: Padding(
-          padding: const EdgeInsets.only(bottom: veilFade),
-          child: padded,
-        ),
-      );
-    }
-    // No rule under the bar. The header sits on the same surface as the chat,
-    // and the hairline only drew a second horizon right under the window's own
-    // title bar — the reader saw two stacked bands and no content (cowork-y6q).
-    // The bar is told apart by its content, not by a line.
-    return Material(color: scheme.surface, child: padded);
-  }
-
-  /// The desktop title bar: 48 px, part of the frame. The subject on the
-  /// left — face, name, status — and on the right the call, the screen, the
-  /// thread's own actions and the "…" menu, every one the same 32 px button.
-  Widget _buildDesktopBar(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return Material(
-      color: scheme.surface,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          SizedBox(
-            height: kDeskBarHeight - 1,
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(leadingInset + 12, 0, 8, 0),
-              child: LayoutBuilder(
-                builder: (BuildContext context, BoxConstraints box) =>
-                    _buildDesktopRow(context, box.maxWidth),
-              ),
-            ),
-          ),
-          const DeskHairline(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDesktopRow(BuildContext context, double maxWidth) {
-    const double step = kDeskButton + kDeskButtonGap;
-    final bool calls = showCallTargets && agent != null;
-    final int fixed = calls ? 2 : 0;
-    // What fits next to a subject that keeps [_minTitleWidth]; the rest
-    // folds into the menu, never off the edge.
-    final int room = math.max(
-      0,
-      ((maxWidth - _minTitleWidth) / step).floor() - fixed,
-    );
-    final bool needsMenu = menuActions.isNotEmpty || actions.length > room;
-    final int inline = needsMenu
-        ? math.max(0, math.min(actions.length, room - 1))
-        : actions.length;
-    final List<AgentsThreadAction> folded = <AgentsThreadAction>[
-      ...actions.skip(inline),
-      ...menuActions,
-    ];
-    final List<Widget> buttons = <Widget>[
-      if (calls) ...<Widget>[
-        _buildDeskCall(context),
-        _buildDeskScreen(context),
-      ],
-      for (final AgentsThreadAction action in actions.take(inline))
-        DeskIconButton(
-          icon: action.icon,
-          tooltip: action.tooltip,
-          selected: action.selected,
-          onPressed: action.onPressed,
-        ),
-      if (folded.isNotEmpty) _buildDeskMenu(context, folded),
-    ];
-    return Row(
-      children: <Widget>[
-        Expanded(
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints box) {
+        final double maxWidth = box.maxWidth.isFinite ? box.maxWidth : 1e6;
+        final bool down = connection == AgentsThreadConnection.down;
+        final double reserve =
+            (automationLabel == null ? 0 : _automationReserve) +
+            (down ? _automationReserve : 0);
+        final int fixed = showScreenTarget ? 1 : 0;
+        final int room = math.max(
+          0,
+          ((maxWidth - reserve) / slot).floor() - fixed,
+        );
+        final bool needsMenu =
+            menuActions.isNotEmpty || actions.length > room;
+        final int inline = needsMenu
+            ? math.max(0, math.min(actions.length, room - 1))
+            : actions.length;
+        final List<AgentsThreadAction> folded = <AgentsThreadAction>[
+          ...actions.skip(inline),
+          ...menuActions,
+        ];
+        return Align(
+          alignment: Alignment.topRight,
+          heightFactor: 1,
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Flexible(flex: 3, child: _buildDesktopSubject(context)),
-              if (automationLabel != null)
+              if (down) ...<Widget>[
                 Flexible(
-                  flex: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.only(left: 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _AutomationChip(
-                        label: automationLabel!,
-                        paused: automationPaused,
-                        expanded: automationExpanded,
-                        onTap: onToggleAutomations,
-                      ),
-                    ),
+                  child: _OfflineChip(
+                    key: const ValueKey<String>('thread-offline'),
+                    onReconnect: onReconnect,
                   ),
                 ),
+                const SizedBox(width: 4),
+              ],
+              if (automationLabel != null) ...<Widget>[
+                Flexible(
+                  child: _AutomationChip(
+                    label: automationLabel!,
+                    paused: automationPaused,
+                    expanded: automationExpanded,
+                    onTap: onToggleAutomations,
+                  ),
+                ),
+                const SizedBox(width: 4),
+              ],
+              if (showScreenTarget) _screenButton(context),
+              for (final AgentsThreadAction action in actions.take(inline))
+                ChromeIconButton(
+                  icon: action.icon,
+                  tooltip: action.tooltip,
+                  selected: action.selected,
+                  onPressed: action.onPressed,
+                ),
+              if (folded.isNotEmpty) _menuButton(context, folded),
             ],
           ),
-        ),
-        for (int i = 0; i < buttons.length; i++) ...<Widget>[
-          if (i > 0) const SizedBox(width: kDeskButtonGap),
-          buttons[i],
-        ],
-      ],
+        );
+      },
     );
   }
 
-  /// Face (24), name (titleSmall, w600) and the status line under it. The
-  /// whole block is one target: it opens the coworker's details.
-  Widget _buildDesktopSubject(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final String state = switch (connection) {
-      AgentsThreadConnection.live => 'Connected',
-      AgentsThreadConnection.connecting => 'Connecting…',
-      AgentsThreadConnection.down => 'Offline',
-    };
-    final AgentsAgent? who = agent;
-    final TextStyle? nameStyle = theme.textTheme.titleSmall?.copyWith(
-      fontWeight: FontWeight.w600,
-      height: 1.2,
-    );
-    final TextStyle? lineStyle = theme.textTheme.labelSmall?.copyWith(
-      color: scheme.onSurfaceVariant,
-      height: 1.2,
-    );
-    final Widget text = Column(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          who?.name ?? title ?? '',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: nameStyle,
-        ),
-        if (who != null)
-          AgentStatusLine(agent: who, fontSize: 11)
-        else if (subtitle != null)
-          Text(
-            subtitle!,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: lineStyle,
-          )
-      ],
-    );
-    final Widget subject = Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        if (who != null) ...<Widget>[
-          Tooltip(
-            message: state,
-            child: AgentFace(agent: who, size: kDeskRowFace),
+  /// The coworker's screen. Parked while it has none open: a quieter glyph
+  /// that still answers a tap with the reason.
+  Widget _screenButton(BuildContext context) {
+    final bool open = onOpenScreen != null;
+    return ChromeIconButton(
+      icon: Icons.desktop_windows_rounded,
+      parked: !open,
+      tooltip: open ? "Agent's screen" : 'No screen open right now',
+      semanticsId: 'thread_header_screen',
+      onPressed:
+          onOpenScreen ??
+          () => AppNotifications.show(
+            context,
+            'The coworker has no screen open right now',
           ),
-          const SizedBox(width: 10),
-        ],
-        Flexible(child: text),
-      ],
-    );
-    // No face to carry the connection's tooltip: the subject carries it.
-    if (who == null) return Tooltip(message: state, child: subject);
-    if (onOpenProfile == null) return subject;
-    return _DeskSubjectTarget(
-      tooltip: 'Details',
-      onTap: () => onOpenProfile!(who),
-      child: subject,
     );
   }
 
-  Widget _buildDeskCall(BuildContext context) => DeskIconButton(
-    icon: Icons.call_rounded,
-    parked: true,
-    tooltip: 'Voice call is not available yet',
-    semanticsId: 'thread_header_call',
-    onPressed: () => pillToast(
-      context,
-      'Voice calls with a coworker are not available yet',
-      icon: Icons.call_end_rounded,
-    ),
-  );
-
-  Widget _buildDeskScreen(BuildContext context) => DeskIconButton(
-    icon: Icons.desktop_windows_rounded,
-    parked: onOpenScreen == null,
-    color: onOpenScreen == null ? null : Theme.of(context).colorScheme.tertiary,
-    tooltip: onOpenScreen == null
-        ? 'No screen open right now'
-        : "Agent's screen",
-    semanticsId: 'thread_header_screen',
-    onPressed:
-        onOpenScreen ??
-        () => pillToast(
-          context,
-          'The coworker has no screen open right now',
-          icon: Icons.desktop_access_disabled_rounded,
-        ),
-  );
-
-  Widget _buildDeskMenu(BuildContext context, List<AgentsThreadAction> folded) {
+  /// What no longer fits, in chuk's popup menu under the button — folded,
+  /// never dropped.
+  Widget _menuButton(BuildContext context, List<AgentsThreadAction> folded) {
     return Builder(
-      builder: (BuildContext anchorContext) => DeskIconButton(
+      builder: (BuildContext anchor) => ChromeIconButton(
         icon: Icons.more_horiz,
         tooltip: 'More actions',
         onPressed: () async {
-          final ColorScheme scheme = Theme.of(anchorContext).colorScheme;
+          final Color iconFg = Theme.of(anchor).resolvedIconColor;
+          final RenderBox? overlay =
+              Overlay.of(anchor).context.findRenderObject() as RenderBox?;
+          final RenderBox? button = anchor.findRenderObject() as RenderBox?;
+          if (overlay == null || button == null) return;
+          final Offset topLeft = button.localToGlobal(
+            Offset.zero,
+            ancestor: overlay,
+          );
           final AgentsThreadAction? picked =
-              await showAnchoredMenu<AgentsThreadAction>(
-                anchorContext,
-                alignRight: true,
-                color: scheme.surfaceContainerHigh,
+              await showMenu<AgentsThreadAction>(
+                context: anchor,
+                position: RelativeRect.fromRect(
+                  Rect.fromLTWH(
+                    topLeft.dx,
+                    topLeft.dy + button.size.height,
+                    button.size.width,
+                    1,
+                  ),
+                  Offset.zero & overlay.size,
+                ),
                 items: <PopupMenuEntry<AgentsThreadAction>>[
                   for (final AgentsThreadAction action in folded)
                     PopupMenuItem<AgentsThreadAction>(
                       value: action,
-                      height: kMenuDenseRowHeight,
-                      padding: EdgeInsets.zero,
-                      child: MenuActionRow(
-                        icon: action.icon,
-                        label: action.tooltip,
-                      ),
-                    ),
-                ],
-              );
-          picked?.onPressed();
-        },
-      ),
-    );
-  }
-
-  Widget _buildRow(BuildContext context, double maxWidth) {
-    // How many actions fit next to a title that keeps [_minTitleWidth]. One
-    // slot goes back to the overflow button as soon as anything folds.
-    final int room = math.max(0, ((maxWidth - _minTitleWidth) / _slot).floor());
-    final bool overflows = actions.length > room;
-    final int inline = overflows ? math.max(0, room - 1) : actions.length;
-    return Row(
-      children: [
-        // One Expanded around the subject: it takes every pixel the buttons
-        // leave, so the actions stay flush right whatever the title's length.
-        Expanded(
-          child: Row(
-            children: [
-              // The dense shape has no subject block at all: on a phone the
-              // floating chrome above carries the coworker and its presence.
-              if (!dense) Flexible(flex: 3, child: _buildTitle(context)),
-              if (automationLabel != null)
-                Flexible(
-                  flex: 2,
-                  child: Padding(
-                    padding: EdgeInsets.only(left: dense ? 0 : 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: _AutomationChip(
-                        label: automationLabel!,
-                        paused: automationPaused,
-                        expanded: automationExpanded,
-                        onTap: onToggleAutomations,
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-        if (showCallTargets && agent != null) ...<Widget>[
-          _buildParkedCall(context),
-          _buildScreenTarget(context),
-        ],
-        for (final action in actions.take(inline))
-          _buildAction(context, action),
-        if (overflows) _buildOverflow(context, actions.skip(inline).toList()),
-      ],
-    );
-  }
-
-  Widget _buildTitle(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
-    // The state is a colour and a tooltip, never a line of text. The socket
-    // comes back on its own and re-pairing lives in the bottom bar, so a
-    // running commentary on the connection would be chatter the reader can do
-    // nothing with — the rule the whole view already follows.
-    final String state = switch (connection) {
-      AgentsThreadConnection.live => 'Connected',
-      AgentsThreadConnection.connecting => 'Connecting…',
-      AgentsThreadConnection.down => 'Offline',
-    };
-    final Color dot = switch (connection) {
-      AgentsThreadConnection.live => scheme.primary,
-      AgentsThreadConnection.connecting => scheme.tertiary,
-      AgentsThreadConnection.down => scheme.error,
-    };
-    final AgentsAgent? who = agent;
-    if (who != null) {
-      // The messenger's contact header: face, name, live state — and the
-      // connection dot on the face's side, because that is the one thing about
-      // the transport the reader can see at a glance.
-      return Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Tooltip(
-            message: state,
-            child: AppIcon(Icons.circle, size: 8, color: dot),
-          ),
-          const SizedBox(width: 8),
-          Flexible(
-            child: LayoutBuilder(
-              builder: (context, box) {
-                // Under this the pill has room for neither a face nor a
-                // readable name, and its own padding alone would overflow the
-                // row. Nothing is better than a sliver of a pill.
-                if (box.maxWidth.isFinite && box.maxWidth < 56) {
-                  return const SizedBox.shrink();
-                }
-                return MorphTap(
-                  onTap: onOpenProfile == null
-                      ? null
-                      : () => onOpenProfile!(who),
-                  color: scheme.surfaceContainerHighest.withValues(alpha: 0.55),
-                  shape: const StadiumBorder(),
-                  pressedShape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  pressedScale: 0.98,
-                  padding: const EdgeInsets.fromLTRB(4, 3, 12, 3),
-                  // The pill is the only thing in the header that gives way, so at
-                  // a narrow window it can be handed a few pixels. The face is 30
-                  // px and cannot shrink; kept unconditionally it overflowed the
-                  // row by exactly its own width plus the gap. Below the width
-                  // where a face and a readable name both fit, the name wins
-                  // (bead cowork-jvuu).
-                  child: LayoutBuilder(
-                    builder: (context, pill) => Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (!pill.maxWidth.isFinite || pill.maxWidth >= 46) ...[
-                          AgentFace(agent: who, size: 30),
-                          const SizedBox(width: 8),
-                        ],
-                        Flexible(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                who.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                // Tight metrics: the name and the status line share
-                                // the header's 34 px of inner height.
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  fontWeight: FontWeight.w700,
-                                  fontSize: 14,
-                                  height: 1.1,
-                                ),
-                              ),
-                              AgentStatusLine(agent: who, fontSize: 10.5),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
-      );
-    }
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Tooltip(
-          message: state,
-          child: AppIcon(Icons.circle, size: 8, color: dot),
-        ),
-        const SizedBox(width: 8),
-        Flexible(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (title != null)
-                Text(
-                  title!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              if (subtitle != null)
-                Text(
-                  subtitle!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The parked voice call. It is not a [AgentsThreadAction] because it must
-  /// never look like something that works, and it must never fold into the
-  /// overflow menu as if it were an action.
-  Widget _buildParkedCall(BuildContext context) => ExpressiveIconButton(
-    icon: Icons.call_rounded,
-    size: _slot,
-    parked: true,
-    color: Colors.transparent,
-    tooltip: 'Voice call is not available yet',
-    semanticsId: 'thread_header_call',
-    onTap: () => pillToast(
-      context,
-      'Voice calls with a coworker are not available yet',
-      icon: Icons.call_end_rounded,
-    ),
-  );
-
-  /// The video call's slot, with what this app really has behind it: the live
-  /// view of the coworker's screen. Parked while it has none open.
-  Widget _buildScreenTarget(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return ExpressiveIconButton(
-      icon: Icons.desktop_windows_rounded,
-      size: _slot,
-      parked: onOpenScreen == null,
-      color: Colors.transparent,
-      onColor: onOpenScreen == null ? null : scheme.tertiary,
-      tooltip: onOpenScreen == null
-          ? 'No screen open right now'
-          : "Agent's screen",
-      semanticsId: 'thread_header_screen',
-      onTap:
-          onOpenScreen ??
-          () => pillToast(
-            context,
-            'The coworker has no screen open right now',
-            icon: Icons.desktop_access_disabled_rounded,
-          ),
-    );
-  }
-
-  /// Every action is the same button, so a button that moved in from the
-  /// shell cannot arrive with its own sizing.
-  Widget _buildAction(BuildContext context, AgentsThreadAction action) =>
-      _HeaderButton(
-        icon: action.icon,
-        tooltip: action.tooltip,
-        onTap: action.onPressed,
-      );
-
-  /// What no longer fits, in a menu — folded, never dropped. The house
-  /// [showAnchoredMenu] rather than a [PopupMenuButton]: the menu then opens
-  /// where the button is instead of growing off the bottom of a phone.
-  Widget _buildOverflow(BuildContext context, List<AgentsThreadAction> folded) {
-    final theme = Theme.of(context);
-    final Color iconFg = theme.resolvedIconColor;
-    return Builder(
-      builder: (anchorContext) => _HeaderButton(
-        icon: Icons.more_horiz,
-        tooltip: 'More actions',
-        onTap: () async {
-          final AgentsThreadAction? picked =
-              await showAnchoredMenu<AgentsThreadAction>(
-                anchorContext,
-                items: <PopupMenuEntry<AgentsThreadAction>>[
-                  for (final action in folded)
-                    PopupMenuItem<AgentsThreadAction>(
-                      value: action,
                       child: Row(
-                        children: [
-                          AppIcon(action.icon, size: 18, color: iconFg),
+                        children: <Widget>[
+                          AppIcon(action.icon, color: iconFg, size: 20),
                           const SizedBox(width: 12),
                           Text(action.tooltip),
                         ],
                       ),
                     ),
                 ],
-                color: theme.scaffoldBackgroundColor.withValues(alpha: 0.94),
-                borderColor: iconFg.withValues(alpha: 0.3),
-                // The Agents menu radius; the shared default is upstream's.
-                borderRadius: kMenuOuterRadius,
               );
           picked?.onPressed();
         },
@@ -701,42 +240,131 @@ class AgentsThreadHeader extends StatelessWidget {
   }
 }
 
-/// One header button: a 40 px round ink target with a tooltip.
+/// chuk's icon button over the chat: a 20 px glyph in the icon colour, round
+/// ink, a tooltip.
 ///
-/// Not Material's [IconButton]. The phone layout moves the whole thread view
-/// between two parents by its [GlobalKey] on every back gesture, and an
-/// IconButton in the moved subtree trips a framework assertion while the
-/// semantics tree is rebuilt (`computeChildGeometry`). A plain Material and
-/// InkWell — the shape the mobile chips already use — survives the move.
-class _HeaderButton extends StatelessWidget {
-  const _HeaderButton({
+/// Built from a Material and an InkWell rather than Material's [IconButton]:
+/// the thread view moves between parents by its [GlobalKey] when the window
+/// crosses the phone breakpoint, and an IconButton in a moved subtree trips a
+/// framework assertion while the semantics tree is rebuilt. The look is the
+/// same — chuk's floating chips are built this way too.
+class ChromeIconButton extends StatelessWidget {
+  const ChromeIconButton({
+    super.key,
     required this.icon,
     required this.tooltip,
-    required this.onTap,
+    required this.onPressed,
+    this.selected = false,
+    this.parked = false,
+    this.semanticsId,
   });
 
   final IconData icon;
   final String tooltip;
-  final VoidCallback onTap;
+  final VoidCallback? onPressed;
+
+  /// A toggle that is on: the glyph takes the accent.
+  final bool selected;
+
+  /// Not ready: the glyph is quieter, and a tap still reaches [onPressed],
+  /// which is expected to say why.
+  final bool parked;
+
+  final String? semanticsId;
 
   @override
   Widget build(BuildContext context) {
-    final Color iconFg = Theme.of(context).resolvedIconColor;
-    // The expressive target: it springs and morphs like every other button in
-    // the redesigned UI, and it keeps the header's 40 px slot.
-    return ExpressiveIconButton(
-      icon: icon,
-      size: AgentsThreadHeader._slot,
-      color: Colors.transparent,
-      onColor: iconFg,
-      tooltip: tooltip,
-      onTap: onTap,
+    final ThemeData theme = Theme.of(context);
+    final Color base = selected
+        ? theme.colorScheme.primary
+        : theme.resolvedIconColor;
+    final Color glyph = parked ? base.withValues(alpha: 0.45) : base;
+    return Semantics(
+      identifier: semanticsId,
+      button: true,
+      toggled: selected ? true : null,
+      // Parked still answers a tap with the reason; the glyph and the
+      // tooltip carry the parked state.
+      enabled: onPressed != null,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const CircleBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onPressed,
+            child: SizedBox(
+              width: AgentsThreadHeader.slot,
+              height: AgentsThreadHeader.slot,
+              child: Center(child: AppIcon(icon, size: 20, color: glyph)),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The relay is down: a quiet dot and "Offline", with the way back when there
+/// is one. chuk's chrome surface, like the automation chip beside it.
+class _OfflineChip extends StatelessWidget {
+  const _OfflineChip({super.key, this.onReconnect});
+
+  final VoidCallback? onReconnect;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color iconFg = theme.resolvedIconColor;
+    return Semantics(
+      button: onReconnect != null,
+      label: onReconnect == null ? 'Offline' : 'Offline. Reconnect',
+      child: FloatingChromeSurface(
+        radius: 18,
+        child: Material(
+          type: MaterialType.transparency,
+          borderRadius: BorderRadius.circular(18),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onReconnect,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 14, 8),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  AppIcon(
+                    Icons.circle,
+                    size: 7,
+                    color: theme.colorScheme.error,
+                  ),
+                  const SizedBox(width: 7),
+                  Flexible(
+                    child: Text(
+                      onReconnect == null ? 'Offline' : 'Offline · Reconnect',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: iconFg.withValues(alpha: 0.92),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
 /// The running automation, as small as it can be and still be read: a state
-/// dot, the name, and the chevron that opens the cards underneath.
+/// dot, the name, and the chevron that opens the cards underneath. It floats
+/// on chuk's chrome surface, like the chat's title pill.
 class _AutomationChip extends StatelessWidget {
   const _AutomationChip({
     required this.label,
@@ -752,84 +380,45 @@ class _AutomationChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme scheme = theme.colorScheme;
+    final Color iconFg = theme.resolvedIconColor;
     final Color dot = paused ? scheme.tertiary : scheme.primary;
-    return Material(
-      color: scheme.surfaceContainerHighest,
-      borderRadius: BorderRadius.circular(999),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(10, 5, 6, 5),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              AppIcon(Icons.circle, size: 7, color: dot),
-              const SizedBox(width: 7),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: scheme.onSurfaceVariant,
+    return FloatingChromeSurface(
+      radius: 18,
+      child: Material(
+        type: MaterialType.transparency,
+        borderRadius: BorderRadius.circular(18),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                AppIcon(Icons.circle, size: 7, color: dot),
+                const SizedBox(width: 7),
+                Flexible(
+                  child: Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: iconFg.withValues(alpha: 0.92),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
-              ),
-              AppIcon(
-                expanded ? Icons.expand_less : Icons.expand_more,
-                size: 16,
-                color: scheme.onSurfaceVariant,
-              ),
-            ],
+                AppIcon(
+                  expanded ? Icons.expand_less : Icons.expand_more,
+                  size: 16,
+                  color: iconFg.withValues(alpha: 0.7),
+                ),
+              ],
+            ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-/// The title bar's subject as one hover target: a quiet fill under the
-/// pointer, a click opens the details pane.
-class _DeskSubjectTarget extends StatefulWidget {
-  const _DeskSubjectTarget({
-    required this.child,
-    required this.onTap,
-    required this.tooltip,
-  });
-
-  final Widget child;
-  final VoidCallback onTap;
-  final String tooltip;
-
-  @override
-  State<_DeskSubjectTarget> createState() => _DeskSubjectTargetState();
-}
-
-class _DeskSubjectTargetState extends State<_DeskSubjectTarget> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: widget.onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.fromLTRB(4, 4, 10, 4),
-          decoration: BoxDecoration(
-            color: _hovered ? scheme.surfaceContainerHigh : Colors.transparent,
-            borderRadius: BorderRadius.circular(kDeskControlRadius),
-          ),
-          child: widget.child,
         ),
       ),
     );

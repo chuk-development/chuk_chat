@@ -131,144 +131,141 @@
   - L533 `final double Function() _initialOffset`
   - L536 `double get initialScrollOffset`
 
-## lib/platform_specific/chat/chat_ui_desktop.dart  (3006 Z.)
+## lib/platform_specific/chat/chat_ui_desktop.dart  (2636 Z.)
 - part 'desktop_send_logic.dart'
-- L89 `class ChukChatUIDesktop extends StatefulWidget`
-  - L91 `final VoidCallback onToggleSidebar`
-  - L92 `final String? selectedChatId`
-  - L93 `final Function(String?) onChatIdChanged`
-  - L94 `final bool isSidebarExpanded`
-  - L95 `final bool isCompactMode`
-  - L96 `final bool showReasoningTokens`
-  - L97 `final bool showModelInfo`
-  - L98 `final bool showTps`
-  - L99 `final String? workspaceId`
-  - L100 `final VoidCallback? onExitProject`
-  - L102 `final bool imageGenEnabled`
-  - L103 `final String imageGenDefaultSize`
-  - L104 `final int imageGenCustomWidth`
-  - L105 `final int imageGenCustomHeight`
-  - L106 `final bool imageGenUseCustomSize`
-  - L108 `final bool includeRecentImagesInHistory`
-  - L109 `final bool includeAllImagesInHistory`
-  - L110 `final bool includeReasoningInHistory`
-  - L111 `final bool includeToolResultsInHistory`
-  - L113 `final bool toolCallingEnabled`
-  - L114 `final bool toolDiscoveryMode`
-  - L115 `final bool showToolCalls`
-  - L117 `final bool autoSendVoiceTranscription`
-  - L122 `final Future<void> Function()? onOpenModelSettings`  — Opens the model section of the new settings modal. When set, the
-  - L127 `final bool agentsThread`  — The Agents thread hosts this screen (agents_thread_view). On, the
-  - L131 `final String? agentsTitle`  — The coworker's name, for the Agents desktop composer's hint ("Message
-  - L136 `final double topInset`  — Room at the top of the message list for a bar that floats over it (the
-  - L138 `const ChukChatUIDesktop({ // RENAMED CONSTRUCTOR super.key, required this.onToggleSidebar, required this.selectedChatId, required this.onChatIdChanged, required this.isSidebarExpanded, required this.isCompactMode, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, this.workspaceId, this.onExitProject, this.imageGenEnabled = false, this.imageGenDefaultSize = 'landscape_4_3', this.imageGenCustomWidth = 1024, this.imageGenCustomHeight = 768, this.imageGenUseCustomSize = false, this.includeRecentImagesInHistory = true, this.includeAllImagesInHistory = false, this.includeReasoningInHistory = false, this.includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory, this.toolCallingEnabled = true, this.toolDiscoveryMode = true, this.showToolCalls = true, this.autoSendVoiceTranscription = false, this.onOpenModelSettings, this.agentsThread = false, this.agentsTitle, this.topInset = 0, })`
-  - L171 `State<ChukChatUIDesktop> createState()`
-- L174 `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, ModelProviderResolutionMixin, ChatModelSelectionMixin, ChatMessageEditMixin, RegenVariantSeedMixin<ChukChatUIDesktop> implements ChatDebugSnapshot`
-  - L185 `final TextEditingController composerController = TextEditingController()`
-  - L186 `final List<Map<String, String>> _messages = []`
-  - L187 `String? _activeChatId`
-  - L188 `final ScrollController _composerScrollController = ScrollController()`
-  - L189 `late ChatApiService _chatApiService`
-  - L191 `late final FocusNode composerFocusNode`
-  - L192 `final FocusNode _rawKeyboardListenerFocusNode = FocusNode()`
-  - L197 `final FocusNode _messageSelectionFocusNode = FocusNode( debugLabel: 'chat-message-selection', )`  — Focus of the message-list selection region. Held here so a pointer down on
-  - L201 `late AnimationController _animCtrl`
-  - L205 `String? _flyInKey`  — UI key of the message that was just sent, so its list item plays the
-  - L207 `String? _systemPrompt`
-  - L208 `String? _selectedWorkspaceId`
-  - L209 `late final VoidCallback _modelSelectionListener`
-  - L211 `late final AudioRecordingHandler _audioHandler`
-  - L213 `late final MessageActionsHandler messageActionsHandler`
-  - L215 `late final ChatPersistenceHandler persistenceHandler`
-  - L222 `List<Map<String, String>> get messages`
-  - L225 `String? get activeChatId`
-  - L228 `set activeChatId(String? value)`
-  - L235 `Function(String?) get onChatIdChanged`
-  - L238 `List<AttachedFile> get composerAttachedFiles`
-  - L241 `void deleteComposerAttachment(String fileId)`
-  - L246 `void onComposerAttachmentRemoved()`  — Desktop hands focus back to the composer after an attachment goes.
-  - L253 `Future<void> sendMessage()`
-  - L256 `Future<void> submitEditedMessage( int index, String newText, { bool removeFollowingAssistant = true, bool clearMessagesBelow = false, List<AttachedFile>? attachedFilesOverride, bool isRegenerate = false, })`
-  - L275 `bool get _isSending`  — Per-chat send-in-flight flag, backed by the ChatRuntime for the
-  - L281 `set _isSending(bool value)`
-  - L287 `int _sendOperationCounter = 0`
-  - L288 `int? _activeSendOperationId`
-  - L289 `int? _cancelledSendOperationId`
-  - L293 `String? _pendingMessageText`  — Queued message text — when the user sends while AI is still streaming,
-  - L301 `String? _pendingWorkspaceId`  — When a new chat is started from a workspace, this holds the assistant ID
-  - L303 `bool _isLoadingChat = false`
-  - L304 `StreamSubscription<void>? _providerRefreshSubscription`
-  - L305 `final StreamingManager _streamingManager = StreamingManager()`
-  - L306 `final ToolCallHandler _toolCallHandler = ToolCallHandler()`
-  - L309 `bool get _isStreaming`
-  - L314 `bool get anchoredTranscript`
-  - L317 `List<Map<String, String>> get transcriptRows`
-  - L320 `bool get transcriptStreaming`
-  - L321 `Timer? _autoSaveTimer`
-  - L322 `Timer? _audioVisualizerTimer`
-  - L324 `late final DesktopFileHandler _fileHandler`
-  - L331 `final Set<String> restoredAttachmentIds = <String>{}`  — IDs of attachments restored into the composer when an edit started. These
-  - L332 `final Uuid _uuid = Uuid()`
-  - L333 `late final DesktopClipboardHandler _clipboardHandler`
-  - L334 `bool get _isLinuxDesktop`
-  - L337 `final MessageRenderCache _messageRenderCache = MessageRenderCache()`
-  - L339 `static const double _kMaxChatContentWidth = 760.0`
-  - L340 `static const double _kSearchBarContentHeight = 135.0`
-  - L341 `static const double _kAttachmentBarHeight = 40.0`
-  - L342 `static const double _kAttachmentBarMarginBottom = 8.0`
-  - L344 `static const double _kQueuedBannerHeight = 26.0`
-  - L346 `static const double _kHorizontalPaddingLarge = 16.0`
-  - L347 `static const double _kHorizontalPaddingSmall = 8.0`
-  - L348 `static const double _kMessageListBottomLift = 40.0`
-  - L352 `static const double _kAgentsComposerEstimate = 84.0`  — The Agents desktop composer before it has measured itself: one line of
-  - L354 `Widget _buildComposerContextMenu( BuildContext context, EditableTextState editableTextState, )`
-  - L359 `Widget _buildMessageContextMenu( BuildContext context, SelectableRegionState selectableRegionState, )`
-  - L366 `void initState()`
-  - L527 `void didUpdateWidget(covariant ChukChatUIDesktop oldWidget)`
-  - L626 `void _resetThreadTransientState()`  — Agents only: the state that belongs to the thread being left, dropped
-  - L638 `void dispose()`
-  - L669 `void _loadChatById(String? chatId)`
-  - L783 `void _applyLoadedChat(StoredChat storedChat, String chatId)`  — Apply a fully-loaded [StoredChat] to UI state synchronously. Rebuilds
-  - L881 `Future<void> _loadChatByIdAsync(String? chatId)`
-  - L1088 `Future<bool> _populateMessagesFromStoredChat( StoredChat storedChat, String chatId, )`
-  - L1112 `Map<String, String> _messageToRawMap(ChatMessage message)`
-  - L1117 `List<Map<String, String>> get debugMessages`  — Returns the current messages list for debug export.
-  - L1121 `String? get debugSystemPrompt`  — Current resolved system prompt (workspace or user default). Debug only.
-  - L1125 `String get debugModelId`  — Current model id used for outgoing requests. Debug only.
-  - L1129 `String? get debugProviderSlug`  — Current provider slug used for outgoing requests. Debug only.
-  - L1133 `String? get debugWorkspaceId`  — Current workspace id, if any. Debug only.
-  - L1136 `bool get debugReasoningEnabled`  — Whether reasoning is enabled for the active mode. Debug only.
-  - L1142 `String get debugReasoningEffort`  — Effort actually sent with each request — shown in the debug export,
-  - L1146 `String? get debugActiveChatId`  — Current active chat id. Debug only.
-  - L1148 `void newChat()`
-  - L1229 `void newChatWithWorkspace(String assistantId)`  — Start a new chat with a specific assistant.
-  - L1240 `void _openComingSoonFeature(String featureName)`
-  - L1245 `Future<void> _loadSystemPrompt()`
-  - L1267 `Workspace? _resolveWorkspaceForCurrentChat()`  — Resolve the workspace for the current chat, if any.
-  - L1278 `Future<String?> _resolveSystemPromptForSend()`
-  - L1362 `bool _isDraggingFiles = false`
-  - L1364 `void _stopAudioRecordingForNavigation()`
-  - L1371 `Future<void> _handleMicTap()`
-  - L1398 `Future<void> _handleAudioSend()`
-  - L1462 `ValueChanged<String>? _askUserCallbackForIndex( int index, MessageRenderData data, )`  — Returns a callback for the ask_user interactive buttons if [index] is
-  - L1487 `ValueChanged<String>? _connectMcpCallbackForIndex( int index, MessageRenderData data, )`  — Returns a callback for the inline MCP Connect card if [index] is the last
-  - L1513 `Future<void> _continueGenerationAt(int aiIndex)`  — Continues an interrupted assistant row without adding a synthetic user
-  - L1546 `List<MessageBubbleAction> _buildMessageActionsForIndex( int index, MessageRenderData data, )`
-  - L1575 `String? get variantActiveChatId`
-  - L1577 `List<MessageBubbleAction> _buildUserMessageActionsForIndex( int index, MessageRenderData data, )`
-  - L1600 `Widget _wrapWithSmartPasteActions(Widget child)`  — Wraps the composer text field so that any `PasteTextIntent` (Cmd+V,
-  - L1621 `Future<void> persistChat({ bool waitForCompletion = false, bool commit = true, })`  — [commit] false: a checkpoint inside a running turn, saved on this
-  - L1635 `void _persistChatWithId(String chatId, {bool commit = true})`  — Persist chat with a specific chatId (for background streaming to correct chat)
-  - L1648 `void _persistChatWithIdAndMessages( String chatId, List<Map<String, dynamic>> messages, { bool commit = true, })`  — Persist specific messages to a specific chat (for background streaming)
-  - L1667 `Widget _buildMessageList({ required double expandedInputWidth, required double horizontalPadding, required double bottomPadding, })`  — The message list. Upstream: the plain [ListView]. Agents: the
-  - L1766 `Widget build(BuildContext context)`
-  - L1780 `Widget _buildScreen( BuildContext context, double screenWidth, double screenHeight, )`
-  - L2155 `Widget _buildSearchBar({required bool isCompactMode})`
-  - L2566 `Widget _agentsDock({ required bool agents, required Color color, required Widget child, })`  — The solid strip the Agents desktop composer is docked on: the pane's
-  - L2608 `Widget _buildAgentsComposer({required double maxFieldHeight})`  — The Agents desktop composer (docs/DESIGN.md §14.5): docked at the bottom
-  - L2865 `Widget _buildModelControlPill({ required bool isCompactMode, double height = 36, bool flat = false, })`  — The model selector, merged with the reasoning toggle into a single
-  - L2922 `Future<void> presentModelScreen()`  — Prefer the redesigned settings modal (model section) so "More models"
-  - L2930 `Widget _buildIconBtn({ IconData? icon, String? svgAssetPath, double iconSize = 20, required VoidCallback onTap, required bool isActive, String? debugLabel, })`
+- L86 `class ChukChatUIDesktop extends StatefulWidget`
+  - L88 `final VoidCallback onToggleSidebar`
+  - L89 `final String? selectedChatId`
+  - L90 `final Function(String?) onChatIdChanged`
+  - L91 `final bool isSidebarExpanded`
+  - L92 `final bool isCompactMode`
+  - L93 `final bool showReasoningTokens`
+  - L94 `final bool showModelInfo`
+  - L95 `final bool showTps`
+  - L96 `final String? workspaceId`
+  - L97 `final VoidCallback? onExitProject`
+  - L99 `final bool imageGenEnabled`
+  - L100 `final String imageGenDefaultSize`
+  - L101 `final int imageGenCustomWidth`
+  - L102 `final int imageGenCustomHeight`
+  - L103 `final bool imageGenUseCustomSize`
+  - L105 `final bool includeRecentImagesInHistory`
+  - L106 `final bool includeAllImagesInHistory`
+  - L107 `final bool includeReasoningInHistory`
+  - L108 `final bool includeToolResultsInHistory`
+  - L110 `final bool toolCallingEnabled`
+  - L111 `final bool toolDiscoveryMode`
+  - L112 `final bool showToolCalls`
+  - L114 `final bool autoSendVoiceTranscription`
+  - L119 `final Future<void> Function()? onOpenModelSettings`  — Opens the model section of the new settings modal. When set, the
+  - L126 `final bool agentsThread`  — The Agents thread hosts this screen (agents_thread_view). The look is
+  - L130 `final String? agentsTitle`  — No longer read: the Agents thread uses chuk_chat's composer and its
+  - L135 `final double topInset`  — Room at the top of the message list for a bar that floats over it (the
+  - L137 `const ChukChatUIDesktop({ // RENAMED CONSTRUCTOR super.key, required this.onToggleSidebar, required this.selectedChatId, required this.onChatIdChanged, required this.isSidebarExpanded, required this.isCompactMode, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, this.workspaceId, this.onExitProject, this.imageGenEnabled = false, this.imageGenDefaultSize = 'landscape_4_3', this.imageGenCustomWidth = 1024, this.imageGenCustomHeight = 768, this.imageGenUseCustomSize = false, this.includeRecentImagesInHistory = true, this.includeAllImagesInHistory = false, this.includeReasoningInHistory = false, this.includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory, this.toolCallingEnabled = true, this.toolDiscoveryMode = true, this.showToolCalls = true, this.autoSendVoiceTranscription = false, this.onOpenModelSettings, this.agentsThread = false, this.agentsTitle, this.topInset = 0, })`
+  - L170 `State<ChukChatUIDesktop> createState()`
+- L173 `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, ModelProviderResolutionMixin, ChatModelSelectionMixin, ChatMessageEditMixin, RegenVariantSeedMixin<ChukChatUIDesktop> implements ChatDebugSnapshot`
+  - L184 `final TextEditingController composerController = TextEditingController()`
+  - L185 `final List<Map<String, String>> _messages = []`
+  - L186 `String? _activeChatId`
+  - L187 `final ScrollController _composerScrollController = ScrollController()`
+  - L188 `late ChatApiService _chatApiService`
+  - L190 `late final FocusNode composerFocusNode`
+  - L191 `final FocusNode _rawKeyboardListenerFocusNode = FocusNode()`
+  - L196 `final FocusNode _messageSelectionFocusNode = FocusNode( debugLabel: 'chat-message-selection', )`  — Focus of the message-list selection region. Held here so a pointer down on
+  - L200 `late AnimationController _animCtrl`
+  - L204 `String? _flyInKey`  — UI key of the message that was just sent, so its list item plays the
+  - L206 `String? _systemPrompt`
+  - L207 `String? _selectedWorkspaceId`
+  - L208 `late final VoidCallback _modelSelectionListener`
+  - L210 `late final AudioRecordingHandler _audioHandler`
+  - L212 `late final MessageActionsHandler messageActionsHandler`
+  - L214 `late final ChatPersistenceHandler persistenceHandler`
+  - L221 `List<Map<String, String>> get messages`
+  - L224 `String? get activeChatId`
+  - L227 `set activeChatId(String? value)`
+  - L234 `Function(String?) get onChatIdChanged`
+  - L237 `List<AttachedFile> get composerAttachedFiles`
+  - L240 `void deleteComposerAttachment(String fileId)`
+  - L245 `void onComposerAttachmentRemoved()`  — Desktop hands focus back to the composer after an attachment goes.
+  - L252 `Future<void> sendMessage()`
+  - L255 `Future<void> submitEditedMessage( int index, String newText, { bool removeFollowingAssistant = true, bool clearMessagesBelow = false, List<AttachedFile>? attachedFilesOverride, bool isRegenerate = false, })`
+  - L274 `bool get _isSending`  — Per-chat send-in-flight flag, backed by the ChatRuntime for the
+  - L280 `set _isSending(bool value)`
+  - L286 `int _sendOperationCounter = 0`
+  - L287 `int? _activeSendOperationId`
+  - L288 `int? _cancelledSendOperationId`
+  - L292 `String? _pendingMessageText`  — Queued message text — when the user sends while AI is still streaming,
+  - L300 `String? _pendingWorkspaceId`  — When a new chat is started from a workspace, this holds the assistant ID
+  - L302 `bool _isLoadingChat = false`
+  - L303 `StreamSubscription<void>? _providerRefreshSubscription`
+  - L304 `final StreamingManager _streamingManager = StreamingManager()`
+  - L305 `final ToolCallHandler _toolCallHandler = ToolCallHandler()`
+  - L308 `bool get _isStreaming`
+  - L313 `bool get anchoredTranscript`
+  - L316 `List<Map<String, String>> get transcriptRows`
+  - L319 `bool get transcriptStreaming`
+  - L320 `Timer? _autoSaveTimer`
+  - L321 `Timer? _audioVisualizerTimer`
+  - L323 `late final DesktopFileHandler _fileHandler`
+  - L330 `final Set<String> restoredAttachmentIds = <String>{}`  — IDs of attachments restored into the composer when an edit started. These
+  - L331 `final Uuid _uuid = Uuid()`
+  - L332 `late final DesktopClipboardHandler _clipboardHandler`
+  - L333 `bool get _isLinuxDesktop`
+  - L336 `final MessageRenderCache _messageRenderCache = MessageRenderCache()`
+  - L338 `static const double _kMaxChatContentWidth = 760.0`
+  - L339 `static const double _kSearchBarContentHeight = 135.0`
+  - L340 `static const double _kAttachmentBarHeight = 40.0`
+  - L341 `static const double _kAttachmentBarMarginBottom = 8.0`
+  - L343 `static const double _kQueuedBannerHeight = 26.0`
+  - L345 `static const double _kHorizontalPaddingLarge = 16.0`
+  - L346 `static const double _kHorizontalPaddingSmall = 8.0`
+  - L347 `static const double _kMessageListBottomLift = 40.0`
+  - L349 `Widget _buildComposerContextMenu( BuildContext context, EditableTextState editableTextState, )`
+  - L354 `Widget _buildMessageContextMenu( BuildContext context, SelectableRegionState selectableRegionState, )`
+  - L361 `void initState()`
+  - L522 `void didUpdateWidget(covariant ChukChatUIDesktop oldWidget)`
+  - L621 `void _resetThreadTransientState()`  — Agents only: the state that belongs to the thread being left, dropped
+  - L633 `void dispose()`
+  - L664 `void _loadChatById(String? chatId)`
+  - L778 `void _applyLoadedChat(StoredChat storedChat, String chatId)`  — Apply a fully-loaded [StoredChat] to UI state synchronously. Rebuilds
+  - L876 `Future<void> _loadChatByIdAsync(String? chatId)`
+  - L1083 `Future<bool> _populateMessagesFromStoredChat( StoredChat storedChat, String chatId, )`
+  - L1107 `Map<String, String> _messageToRawMap(ChatMessage message)`
+  - L1112 `List<Map<String, String>> get debugMessages`  — Returns the current messages list for debug export.
+  - L1116 `String? get debugSystemPrompt`  — Current resolved system prompt (workspace or user default). Debug only.
+  - L1120 `String get debugModelId`  — Current model id used for outgoing requests. Debug only.
+  - L1124 `String? get debugProviderSlug`  — Current provider slug used for outgoing requests. Debug only.
+  - L1128 `String? get debugWorkspaceId`  — Current workspace id, if any. Debug only.
+  - L1131 `bool get debugReasoningEnabled`  — Whether reasoning is enabled for the active mode. Debug only.
+  - L1137 `String get debugReasoningEffort`  — Effort actually sent with each request — shown in the debug export,
+  - L1141 `String? get debugActiveChatId`  — Current active chat id. Debug only.
+  - L1143 `void newChat()`
+  - L1224 `void newChatWithWorkspace(String assistantId)`  — Start a new chat with a specific assistant.
+  - L1235 `void _openComingSoonFeature(String featureName)`
+  - L1240 `Future<void> _loadSystemPrompt()`
+  - L1262 `Workspace? _resolveWorkspaceForCurrentChat()`  — Resolve the workspace for the current chat, if any.
+  - L1273 `Future<String?> _resolveSystemPromptForSend()`
+  - L1357 `bool _isDraggingFiles = false`
+  - L1359 `void _stopAudioRecordingForNavigation()`
+  - L1366 `Future<void> _handleMicTap()`
+  - L1393 `Future<void> _handleAudioSend()`
+  - L1457 `ValueChanged<String>? _askUserCallbackForIndex( int index, MessageRenderData data, )`  — Returns a callback for the ask_user interactive buttons if [index] is
+  - L1482 `ValueChanged<String>? _connectMcpCallbackForIndex( int index, MessageRenderData data, )`  — Returns a callback for the inline MCP Connect card if [index] is the last
+  - L1508 `Future<void> _continueGenerationAt(int aiIndex)`  — Continues an interrupted assistant row without adding a synthetic user
+  - L1541 `List<MessageBubbleAction> _buildMessageActionsForIndex( int index, MessageRenderData data, )`
+  - L1570 `String? get variantActiveChatId`
+  - L1572 `List<MessageBubbleAction> _buildUserMessageActionsForIndex( int index, MessageRenderData data, )`
+  - L1595 `Widget _wrapWithSmartPasteActions(Widget child)`  — Wraps the composer text field so that any `PasteTextIntent` (Cmd+V,
+  - L1616 `Future<void> persistChat({ bool waitForCompletion = false, bool commit = true, })`  — [commit] false: a checkpoint inside a running turn, saved on this
+  - L1630 `void _persistChatWithId(String chatId, {bool commit = true})`  — Persist chat with a specific chatId (for background streaming to correct chat)
+  - L1643 `void _persistChatWithIdAndMessages( String chatId, List<Map<String, dynamic>> messages, { bool commit = true, })`  — Persist specific messages to a specific chat (for background streaming)
+  - L1662 `Widget _buildMessageList({ required double expandedInputWidth, required double horizontalPadding, required double bottomPadding, })`  — The message list. Upstream: the plain [ListView]. Agents: the
+  - L1736 `Widget build(BuildContext context)`
+  - L1750 `Widget _buildScreen( BuildContext context, double screenWidth, double screenHeight, )`
+  - L2086 `Widget _buildSearchBar({required bool isCompactMode})`
+  - L2501 `Widget _buildModelControlPill({required bool isCompactMode})`  — The model selector, merged with the reasoning toggle into a single
+  - L2552 `Future<void> presentModelScreen()`  — Prefer the redesigned settings modal (model section) so "More models"
+  - L2560 `Widget _buildIconBtn({ IconData? icon, String? svgAssetPath, double iconSize = 20, required VoidCallback onTap, required bool isActive, String? debugLabel, })`
 
 ## lib/platform_specific/chat/chat_ui_helpers.dart  (1417 Z.)
 - L36 `class MessageRenderData`  — Data class holding pre-parsed render information for a single chat message.
@@ -376,172 +373,171 @@
 - L1401 `bool messageStartsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] opens a new run: it is the first row, the sender
 - L1415 `bool messageEndsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] closes its run: the last row, or the next row
 
-## lib/platform_specific/chat/chat_ui_mobile.dart  (4166 Z.)
-- L103 `enum _AttachChoice`  — What the plus menu can start.
-  - L103 `camera`
-  - L103 `photos`
-  - L103 `files`
-  - L103 `workspace`
-- L107 `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
-  - L108 `const _WorkspaceChoice.pick(this.workspaceId) : create = false`
-  - L109 `const _WorkspaceChoice.create() : workspaceId = null, create = true`
-  - L111 `final String? workspaceId`
-  - L112 `final bool create`
-- L119 `@visibleForTesting String queuedMessagesForComposer(String pending, List<String> followUps)`  — The text a cancelled queue puts back into the composer: the pending
-- L122 `class ChukChatUIMobile extends StatefulWidget`
-  - L123 `final VoidCallback onToggleSidebar`
-  - L124 `final String? selectedChatId`
-  - L125 `final Function(String?) onChatIdChanged`
-  - L126 `final bool isSidebarExpanded`
-  - L127 `final bool showReasoningTokens`
-  - L128 `final bool showModelInfo`
-  - L129 `final bool showTps`
-  - L130 `final bool autoSendVoiceTranscription`
-  - L136 `final double topInset`  — Extra top padding for the message list so its first row scrolls under
-  - L138 `final bool imageGenEnabled`
-  - L139 `final String imageGenDefaultSize`
-  - L140 `final int imageGenCustomWidth`
-  - L141 `final int imageGenCustomHeight`
-  - L142 `final bool imageGenUseCustomSize`
-  - L144 `final bool includeRecentImagesInHistory`
-  - L145 `final bool includeAllImagesInHistory`
-  - L146 `final bool includeReasoningInHistory`
-  - L147 `final bool includeToolResultsInHistory`
-  - L149 `final bool toolCallingEnabled`
-  - L150 `final bool toolDiscoveryMode`
-  - L151 `final bool showToolCalls`
-  - L156 `final bool messengerMode`  — Agents's messenger presentation: the host typing bubble, reactions,
-  - L161 `final bool hostRunActive`  — Host activity survives the lifetime of a local streaming subscription.
-  - L163 `const ChukChatUIMobile({ super.key, required this.onToggleSidebar, required this.selectedChatId, required this.onChatIdChanged, required this.isSidebarExpanded, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, required this.autoSendVoiceTranscription, this.topInset = 0, this.imageGenEnabled = false, this.imageGenDefaultSize = 'landscape_4_3', this.imageGenCustomWidth = 1024, this.imageGenCustomHeight = 768, this.imageGenUseCustomSize = false, this.includeRecentImagesInHistory = true, this.includeAllImagesInHistory = false, this.includeReasoningInHistory = false, this.includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory, this.toolCallingEnabled = true, this.toolDiscoveryMode = true, this.showToolCalls = true, this.messengerMode = false, this.hostRunActive = false, })`
-  - L191 `State<ChukChatUIMobile> createState()`
-- L198 `class ChukChatUIMobileState extends State<ChukChatUIMobile> with ChatScrollMixin, ModelProviderResolutionMixin, ChatModelSelectionMixin, ChatMessageEditMixin, RegenVariantSeedMixin<ChukChatUIMobile> implements ChatDebugSnapshot`  — Serialize a [ChatMessageStatus] into the wire-format string used inside
-  - L208 `final TextEditingController composerController = TextEditingController()`
-  - L209 `final List<Map<String, String>> _messages = []`
-  - L211 `final MessageRenderCache _messageRenderCache = MessageRenderCache()`
-  - L212 `String? _activeChatId`
-  - L218 `final ScrollController _composerScrollController = ScrollController()`
-  - L220 `final FocusNode composerFocusNode = FocusNode()`
-  - L221 `final FocusNode _rawKeyboardListenerFocusNode = FocusNode()`
-  - L222 `final Uuid _uuid = const Uuid()`
-  - L223 `bool _lastTextWasEmpty = true`
-  - L224 `bool _showFullscreenButton = false`
-  - L227 `late ChatApiService _chatApiService`
-  - L228 `late final AudioRecordingHandler _audioHandler`
-  - L229 `late final FileAttachmentHandler _fileHandler`
-  - L231 `late final MessageActionsHandler messageActionsHandler`
-  - L233 `late final ChatPersistenceHandler persistenceHandler`
-  - L240 `List<Map<String, String>> get messages`
-  - L243 `String? get activeChatId`
-  - L246 `set activeChatId(String? value)`
-  - L249 `Function(String?) get onChatIdChanged`
-  - L252 `List<AttachedFile> get composerAttachedFiles`
-  - L255 `void deleteComposerAttachment(String fileId)`
-  - L260 `void onEditStarted()`  — Mobile focuses the composer as soon as an edit loads into it.
-  - L263 `String get nothingToResendMessage`
-  - L265 `late final StreamingMessageHandler _streamingHandler`
-  - L272 `final Set<String> restoredAttachmentIds = <String>{}`  — IDs of attachments restored into the composer when an edit started. These
-  - L274 `String? _systemPrompt`
-  - L278 `String? _flyInKey`  — UI key of the message that was just sent, so its list item plays the
-  - L282 `String? _pinnedUiKey`  — The stable ui key of the message pinned to the top of the viewport.
-  - L293 `late final ChatMetricsObserver _viewInsetRepin = ChatMetricsObserver( pinToBottomDuringStream, )`  — Agents's, kept: keeps the newest message above the composer when the
-  - L308 `bool get _mayAutoFocusComposer`  — Agents's, kept: may this screen take the composer's focus itself when it
-  - L315 `bool get _mayFocusOnLoad`  — [_mayAutoFocusComposer] for the Agents thread only. Upstream's chat
-  - L319 `bool get _workspacesEnabled`  — Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
-  - L321 `late final VoidCallback _modelSelectionListener`
-  - L324 `StreamSubscription<void>? _providerRefreshSubscription`
-  - L327 `bool _isOffline = false`
-  - L331 `String? _pendingMessageText`  — Queued message text — when the user sends while AI is still streaming,
-  - L336 `final List<String> _queuedFollowUps = <String>[]`  — Messenger mode only: messages queued behind [_pendingMessageText],
-  - L339 `final Map<String, ChatReply> _replyDrafts = <String, ChatReply>{}`  — Messenger mode only: the message the next send quotes, per chat.
-  - L342 `bool _messengerListening = false`  — Whether the messenger listeners were attached in [initState].
-  - L343 `bool _isLoadingChat = false`
-  - L344 `bool _isAppInBackground = false`
-  - L345 `late final VoidCallback _networkStatusListener`
-  - L348 `String? _selectedWorkspaceId`
-  - L351 `bool get _isCurrentChatStreaming`
-  - L357 `bool get anchoredTranscript`
-  - L360 `List<Map<String, String>> get transcriptRows`
-  - L363 `bool get transcriptStreaming`
-  - L366 `double get transcriptPxPerChar`
-  - L375 `bool get _isSendingMessage`  — Per-chat send-in-flight flag, backed by the ChatRuntime for the
-  - L381 `set _isSendingMessage(bool value)`
-  - L387 `static const double _kMaxChatContentWidth = 760.0`
-  - L388 `static const double _kHorizontalPaddingSmall = 8.0`
-  - L391 `void initState()`
-  - L413 `void _onComposerFocusChanged()`
-  - L422 `String get _messengerChatKey`  — The chat the reply drafts and reactions are stored under.
-  - L425 `void _onMessengerStoreChanged()`
-  - L429 `void _loadReactions()`
-  - L440 `String _reactionKeyAt(int index)`  — The reaction key of message [index]. Undated legacy messages with the
-  - L454 `Future<void> _toggleReaction(String messageId, String emoji)`
-  - L468 `void _replyToMessage(int index)`  — Quote message [index] in the composer. The quote travels as ordinary
-  - L487 `String? get modelSelectionChatId`  — Agents keeps one model per chat. Upstream's composer keeps one per
-  - L490 `void _onChatModelChanged()`
-  - L495 `Future<void> _hydrateChatModel()`  — Put this chat's own model and provider into the composer, if it has one.
-  - L515 `Future<void> restoreChatMode()`  — The chat's own pair goes in first, so it never waits behind the mode
-  - L521 `void _initializeHandlers()`
-  - L616 `void _persistStreamTick( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )`  — Periodic snapshot persistence — writes the current streamed body of
-  - L650 `void _markAssistantMessageInterrupted(String chatId, int index)`  — Tag an assistant message with `interrupted` status when its stream was
-  - L681 `void _handleAppResumed()`
-  - L685 `void _handleAppPaused()`
-  - L699 `void _showPaymentRequiredDialog()`
-  - L772 `void _initializeListeners()`
-  - L833 `void _onControllerChanged()`
-  - L849 `void _loadInitialData()`
-  - L870 `void didUpdateWidget(covariant ChukChatUIMobile oldWidget)`
-  - L1014 `void dispose()`
-  - L1055 `void _loadChatById(String? chatId)`
-  - L1144 `void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded)`  — Apply a fully-loaded [StoredChat] to UI state synchronously: rebuild
-  - L1267 `Future<void> _loadChatByIdAsync( String? chatId, bool sidebarWasExpanded, )`
-  - L1378 `List<Map<String, String>> get debugMessages`  — Returns the current messages list for debug export.
-  - L1382 `String? get debugSystemPrompt`  — Current resolved system prompt (workspace or user default). Debug only.
-  - L1386 `String get debugModelId`  — Current model id used for outgoing requests. Debug only.
-  - L1390 `String? get debugProviderSlug`  — Current provider slug used for outgoing requests. Debug only.
-  - L1394 `String? get debugWorkspaceId`  — Current workspace id, if any. Debug only.
-  - L1397 `bool get debugReasoningEnabled`  — Whether reasoning is enabled for the active mode. Debug only.
-  - L1403 `String get debugReasoningEffort`  — Effort actually sent with each request — shown in the debug export,
-  - L1407 `String? get debugActiveChatId`  — Current active chat id. Debug only.
-  - L1416 `String? get variantActiveChatId`
-  - L1418 `void newChat()`
-  - L1509 `Future<void> _handleMicTap()`
-  - L1524 `Future<void> _handleAudioSend()`
-  - L1581 `Future<void> _handleAddAttachmentTap(BuildContext anchorContext)`  — The attachment menu, anchored to the plus button in the same style as
-  - L1647 `PopupMenuItem<T> _composerMenuRow<T>({ required T value, required Color iconFg, required IconData icon, required String label, bool isEnabled = true, bool isSelected = false, })`  — One row of a composer menu — same metrics as the mode menu.
-  - L1685 `Future<T?> _showAnchoredComposerMenu<T>({ required BuildContext anchorContext, required List<PopupMenuEntry<T>> items, })`  — Open a menu anchored to a composer button. It leaves the focus and
-  - L1707 `Widget _buildWorkspaceChip(Color iconFg)`  — The workspace in use, shown beside the mode pill — not floating over
-  - L1757 `Future<void> _openWorkspaceMenu(BuildContext anchorContext)`  — The workspace picker: the same anchored menu one level deeper, not a
-  - L1809 `void _openProjectManagement(String workspaceId)`
-  - L1818 `void startNewChatWithWorkspace(String workspaceId)`  — Public entry point for starting a new chat with a workspace context.
-  - L1821 `void _startNewChatWithProject(String? workspaceId)`
-  - L1842 `void _handleFileUploadUpdate( String fileId, String? markdownContent, bool isUploading, String? snackBarMessage, { List<String>? pageImages, })`  — Build the slim floating pill shown at the top of the chat while a
-  - L1864 `void _updateToolCallsForMessage( int index, List<ToolCall> toolCalls, String chatId, )`
-  - L1910 `void _handleToolImagesProcessed( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )`
-  - L1961 `void _updateContentBlocksForMessage( int index, String contentBlocksJson, String chatId, )`
-  - L1995 `void _updateRequestPayloadForMessage( int index, String requestPayloadJson, String chatId, )`
-  - L2018 `Future<void> _finalizeAiMessage( int index, String content, String reasoning, String chatId, double? tps, )`
-  - L2185 `void _resetThreadTransientState()`  — Agents only: the state that belongs to the thread being left, dropped
-  - L2194 `void _cancelPendingMessage()`  — Cancel a queued follow-up message and restore its text to the composer so
-  - L2227 `void _drainPendingMessage()`  — If a message was queued while the AI was streaming, inject it into the
-  - L2250 `Future<void> sendMessage()`
-  - L2715 `List<Map<String, dynamic>> _buildApiHistory()`
-  - L2742 `Future<String?> _resolveSystemPromptForSend()`  — Resolve system prompt with workspace context (if any)
-  - L2811 `void _updateCancelledMessage()`
-  - L2851 `Future<void> _cancelCurrentOperation()`  — Cancel any ongoing operation (streaming or sending)
-  - L2875 `Future<void> submitEditedMessage( int index, String newText, { bool removeFollowingAssistant = true, bool clearMessagesBelow = false, List<AttachedFile>? attachedFilesOverride, bool isRegenerate = false, })`
-  - L3072 `ValueChanged<String>? _askUserCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the ask_user interactive buttons if [index] is
-  - L3097 `ValueChanged<String>? _connectMcpCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the inline MCP Connect card if [index] is the last
-  - L3129 `Future<void> _continueGenerationAt(int aiIndex)`  — Continue an interrupted assistant message — appends new tokens onto the
-  - L3242 `Future<void> _openFullscreenEditor()`
-  - L3260 `Future<void> _loadSystemPrompt()`
-  - L3275 `void _openComingSoonFeature(String featureName)`
-  - L3283 `Future<StoredChat?> persistChat({ bool waitForCompletion = false, bool commit = true, })`  — [commit] false: a checkpoint inside a running turn, saved on this
-  - L3299 `Widget _buildMessageList({ required EdgeInsets padding, required double expandedInputWidth, required bool showHostTyping, })`  — The message list. Upstream: the plain [ListView]. Messenger mode: the
-  - L3445 `Widget build(BuildContext context)`
-  - L3481 `Widget _buildChatContent({ required BuildContext context, required double bottomPadding, required ThemeData theme, required Color iconFg, required double expandedInputWidth, required double effectiveHorizontalPadding, required bool isCompactModeForModelDropdown, })`
-  - L3738 `Widget _buildMessengerDisclaimer(Color iconFg)`  — The AI notice under the Agents composer, as in the original app.
-  - L3766 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
-  - L3838 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
-  - L4115 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
+## lib/platform_specific/chat/chat_ui_mobile.dart  (4088 Z.)
+- L100 `enum _AttachChoice`  — What the plus menu can start.
+  - L100 `camera`
+  - L100 `photos`
+  - L100 `files`
+  - L100 `workspace`
+- L104 `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
+  - L105 `const _WorkspaceChoice.pick(this.workspaceId) : create = false`
+  - L106 `const _WorkspaceChoice.create() : workspaceId = null, create = true`
+  - L108 `final String? workspaceId`
+  - L109 `final bool create`
+- L116 `@visibleForTesting String queuedMessagesForComposer(String pending, List<String> followUps)`  — The text a cancelled queue puts back into the composer: the pending
+- L119 `class ChukChatUIMobile extends StatefulWidget`
+  - L120 `final VoidCallback onToggleSidebar`
+  - L121 `final String? selectedChatId`
+  - L122 `final Function(String?) onChatIdChanged`
+  - L123 `final bool isSidebarExpanded`
+  - L124 `final bool showReasoningTokens`
+  - L125 `final bool showModelInfo`
+  - L126 `final bool showTps`
+  - L127 `final bool autoSendVoiceTranscription`
+  - L133 `final double topInset`  — Extra top padding for the message list so its first row scrolls under
+  - L135 `final bool imageGenEnabled`
+  - L136 `final String imageGenDefaultSize`
+  - L137 `final int imageGenCustomWidth`
+  - L138 `final int imageGenCustomHeight`
+  - L139 `final bool imageGenUseCustomSize`
+  - L141 `final bool includeRecentImagesInHistory`
+  - L142 `final bool includeAllImagesInHistory`
+  - L143 `final bool includeReasoningInHistory`
+  - L144 `final bool includeToolResultsInHistory`
+  - L146 `final bool toolCallingEnabled`
+  - L147 `final bool toolDiscoveryMode`
+  - L148 `final bool showToolCalls`
+  - L153 `final bool messengerMode`  — Agents's messenger presentation: the host typing bubble, reactions,
+  - L158 `final bool hostRunActive`  — Host activity survives the lifetime of a local streaming subscription.
+  - L160 `const ChukChatUIMobile({ super.key, required this.onToggleSidebar, required this.selectedChatId, required this.onChatIdChanged, required this.isSidebarExpanded, required this.showReasoningTokens, required this.showModelInfo, required this.showTps, required this.autoSendVoiceTranscription, this.topInset = 0, this.imageGenEnabled = false, this.imageGenDefaultSize = 'landscape_4_3', this.imageGenCustomWidth = 1024, this.imageGenCustomHeight = 768, this.imageGenUseCustomSize = false, this.includeRecentImagesInHistory = true, this.includeAllImagesInHistory = false, this.includeReasoningInHistory = false, this.includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory, this.toolCallingEnabled = true, this.toolDiscoveryMode = true, this.showToolCalls = true, this.messengerMode = false, this.hostRunActive = false, })`
+  - L188 `State<ChukChatUIMobile> createState()`
+- L195 `class ChukChatUIMobileState extends State<ChukChatUIMobile> with ChatScrollMixin, ModelProviderResolutionMixin, ChatModelSelectionMixin, ChatMessageEditMixin, RegenVariantSeedMixin<ChukChatUIMobile> implements ChatDebugSnapshot`  — Serialize a [ChatMessageStatus] into the wire-format string used inside
+  - L205 `final TextEditingController composerController = TextEditingController()`
+  - L206 `final List<Map<String, String>> _messages = []`
+  - L208 `final MessageRenderCache _messageRenderCache = MessageRenderCache()`
+  - L209 `String? _activeChatId`
+  - L215 `final ScrollController _composerScrollController = ScrollController()`
+  - L217 `final FocusNode composerFocusNode = FocusNode()`
+  - L218 `final FocusNode _rawKeyboardListenerFocusNode = FocusNode()`
+  - L219 `final Uuid _uuid = const Uuid()`
+  - L220 `bool _lastTextWasEmpty = true`
+  - L221 `bool _showFullscreenButton = false`
+  - L224 `late ChatApiService _chatApiService`
+  - L225 `late final AudioRecordingHandler _audioHandler`
+  - L226 `late final FileAttachmentHandler _fileHandler`
+  - L228 `late final MessageActionsHandler messageActionsHandler`
+  - L230 `late final ChatPersistenceHandler persistenceHandler`
+  - L237 `List<Map<String, String>> get messages`
+  - L240 `String? get activeChatId`
+  - L243 `set activeChatId(String? value)`
+  - L246 `Function(String?) get onChatIdChanged`
+  - L249 `List<AttachedFile> get composerAttachedFiles`
+  - L252 `void deleteComposerAttachment(String fileId)`
+  - L257 `void onEditStarted()`  — Mobile focuses the composer as soon as an edit loads into it.
+  - L260 `String get nothingToResendMessage`
+  - L262 `late final StreamingMessageHandler _streamingHandler`
+  - L269 `final Set<String> restoredAttachmentIds = <String>{}`  — IDs of attachments restored into the composer when an edit started. These
+  - L271 `String? _systemPrompt`
+  - L275 `String? _flyInKey`  — UI key of the message that was just sent, so its list item plays the
+  - L279 `String? _pinnedUiKey`  — The stable ui key of the message pinned to the top of the viewport.
+  - L290 `late final ChatMetricsObserver _viewInsetRepin = ChatMetricsObserver( pinToBottomDuringStream, )`  — Agents's, kept: keeps the newest message above the composer when the
+  - L305 `bool get _mayAutoFocusComposer`  — Agents's, kept: may this screen take the composer's focus itself when it
+  - L312 `bool get _mayFocusOnLoad`  — [_mayAutoFocusComposer] for the Agents thread only. Upstream's chat
+  - L316 `bool get _workspacesEnabled`  — Workspaces are hidden in upstream's chat ([kFeatureWorkspaces] is off)
+  - L318 `late final VoidCallback _modelSelectionListener`
+  - L321 `StreamSubscription<void>? _providerRefreshSubscription`
+  - L324 `bool _isOffline = false`
+  - L328 `String? _pendingMessageText`  — Queued message text — when the user sends while AI is still streaming,
+  - L333 `final List<String> _queuedFollowUps = <String>[]`  — Messenger mode only: messages queued behind [_pendingMessageText],
+  - L336 `final Map<String, ChatReply> _replyDrafts = <String, ChatReply>{}`  — Messenger mode only: the message the next send quotes, per chat.
+  - L339 `bool _messengerListening = false`  — Whether the messenger listeners were attached in [initState].
+  - L340 `bool _isLoadingChat = false`
+  - L341 `bool _isAppInBackground = false`
+  - L342 `late final VoidCallback _networkStatusListener`
+  - L345 `String? _selectedWorkspaceId`
+  - L348 `bool get _isCurrentChatStreaming`
+  - L354 `bool get anchoredTranscript`
+  - L357 `List<Map<String, String>> get transcriptRows`
+  - L360 `bool get transcriptStreaming`
+  - L363 `double get transcriptPxPerChar`
+  - L372 `bool get _isSendingMessage`  — Per-chat send-in-flight flag, backed by the ChatRuntime for the
+  - L378 `set _isSendingMessage(bool value)`
+  - L384 `static const double _kMaxChatContentWidth = 760.0`
+  - L385 `static const double _kHorizontalPaddingSmall = 8.0`
+  - L388 `void initState()`
+  - L410 `void _onComposerFocusChanged()`
+  - L419 `String get _messengerChatKey`  — The chat the reply drafts and reactions are stored under.
+  - L422 `void _onMessengerStoreChanged()`
+  - L426 `void _loadReactions()`
+  - L437 `String _reactionKeyAt(int index)`  — The reaction key of message [index]. Undated legacy messages with the
+  - L451 `Future<void> _toggleReaction(String messageId, String emoji)`
+  - L465 `void _replyToMessage(int index)`  — Quote message [index] in the composer. The quote travels as ordinary
+  - L484 `String? get modelSelectionChatId`  — Agents keeps one model per chat. Upstream's composer keeps one per
+  - L487 `void _onChatModelChanged()`
+  - L492 `Future<void> _hydrateChatModel()`  — Put this chat's own model and provider into the composer, if it has one.
+  - L512 `Future<void> restoreChatMode()`  — The chat's own pair goes in first, so it never waits behind the mode
+  - L518 `void _initializeHandlers()`
+  - L613 `void _persistStreamTick( String chatId, int index, String content, String reasoning, String? contentBlocksJson, bool forceImmediate, )`  — Periodic snapshot persistence — writes the current streamed body of
+  - L647 `void _markAssistantMessageInterrupted(String chatId, int index)`  — Tag an assistant message with `interrupted` status when its stream was
+  - L678 `void _handleAppResumed()`
+  - L682 `void _handleAppPaused()`
+  - L696 `void _showPaymentRequiredDialog()`
+  - L769 `void _initializeListeners()`
+  - L830 `void _onControllerChanged()`
+  - L846 `void _loadInitialData()`
+  - L867 `void didUpdateWidget(covariant ChukChatUIMobile oldWidget)`
+  - L1011 `void dispose()`
+  - L1052 `void _loadChatById(String? chatId)`
+  - L1141 `void _applyLoadedChat(StoredChat chat, bool sidebarWasExpanded)`  — Apply a fully-loaded [StoredChat] to UI state synchronously: rebuild
+  - L1264 `Future<void> _loadChatByIdAsync( String? chatId, bool sidebarWasExpanded, )`
+  - L1375 `List<Map<String, String>> get debugMessages`  — Returns the current messages list for debug export.
+  - L1379 `String? get debugSystemPrompt`  — Current resolved system prompt (workspace or user default). Debug only.
+  - L1383 `String get debugModelId`  — Current model id used for outgoing requests. Debug only.
+  - L1387 `String? get debugProviderSlug`  — Current provider slug used for outgoing requests. Debug only.
+  - L1391 `String? get debugWorkspaceId`  — Current workspace id, if any. Debug only.
+  - L1394 `bool get debugReasoningEnabled`  — Whether reasoning is enabled for the active mode. Debug only.
+  - L1400 `String get debugReasoningEffort`  — Effort actually sent with each request — shown in the debug export,
+  - L1404 `String? get debugActiveChatId`  — Current active chat id. Debug only.
+  - L1413 `String? get variantActiveChatId`
+  - L1415 `void newChat()`
+  - L1506 `Future<void> _handleMicTap()`
+  - L1521 `Future<void> _handleAudioSend()`
+  - L1578 `Future<void> _handleAddAttachmentTap(BuildContext anchorContext)`  — The attachment menu, anchored to the plus button in the same style as
+  - L1644 `PopupMenuItem<T> _composerMenuRow<T>({ required T value, required Color iconFg, required IconData icon, required String label, bool isEnabled = true, bool isSelected = false, })`  — One row of a composer menu — same metrics as the mode menu.
+  - L1682 `Future<T?> _showAnchoredComposerMenu<T>({ required BuildContext anchorContext, required List<PopupMenuEntry<T>> items, })`  — Open a menu anchored to a composer button. It leaves the focus and
+  - L1703 `Widget _buildWorkspaceChip(Color iconFg)`  — The workspace in use, shown beside the mode pill — not floating over
+  - L1753 `Future<void> _openWorkspaceMenu(BuildContext anchorContext)`  — The workspace picker: the same anchored menu one level deeper, not a
+  - L1805 `void _openProjectManagement(String workspaceId)`
+  - L1814 `void startNewChatWithWorkspace(String workspaceId)`  — Public entry point for starting a new chat with a workspace context.
+  - L1817 `void _startNewChatWithProject(String? workspaceId)`
+  - L1838 `void _handleFileUploadUpdate( String fileId, String? markdownContent, bool isUploading, String? snackBarMessage, { List<String>? pageImages, })`  — Build the slim floating pill shown at the top of the chat while a
+  - L1860 `void _updateToolCallsForMessage( int index, List<ToolCall> toolCalls, String chatId, )`
+  - L1906 `void _handleToolImagesProcessed( int index, List<String> imagePaths, String imageMetasJson, String? imageCostEur, String? imageGeneratedAt, String toolCallsJson, String chatId, )`
+  - L1957 `void _updateContentBlocksForMessage( int index, String contentBlocksJson, String chatId, )`
+  - L1991 `void _updateRequestPayloadForMessage( int index, String requestPayloadJson, String chatId, )`
+  - L2014 `Future<void> _finalizeAiMessage( int index, String content, String reasoning, String chatId, double? tps, )`
+  - L2181 `void _resetThreadTransientState()`  — Agents only: the state that belongs to the thread being left, dropped
+  - L2190 `void _cancelPendingMessage()`  — Cancel a queued follow-up message and restore its text to the composer so
+  - L2223 `void _drainPendingMessage()`  — If a message was queued while the AI was streaming, inject it into the
+  - L2246 `Future<void> sendMessage()`
+  - L2712 `List<Map<String, dynamic>> _buildApiHistory()`
+  - L2739 `Future<String?> _resolveSystemPromptForSend()`  — Resolve system prompt with workspace context (if any)
+  - L2808 `void _updateCancelledMessage()`
+  - L2848 `Future<void> _cancelCurrentOperation()`  — Cancel any ongoing operation (streaming or sending)
+  - L2872 `Future<void> submitEditedMessage( int index, String newText, { bool removeFollowingAssistant = true, bool clearMessagesBelow = false, List<AttachedFile>? attachedFilesOverride, bool isRegenerate = false, })`
+  - L3069 `ValueChanged<String>? _askUserCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the ask_user interactive buttons if [index] is
+  - L3094 `ValueChanged<String>? _connectMcpCallbackForMessage( int index, MessageRenderData data, )`  — Returns a callback for the inline MCP Connect card if [index] is the last
+  - L3126 `Future<void> _continueGenerationAt(int aiIndex)`  — Continue an interrupted assistant message — appends new tokens onto the
+  - L3239 `Future<void> _openFullscreenEditor()`
+  - L3257 `Future<void> _loadSystemPrompt()`
+  - L3272 `void _openComingSoonFeature(String featureName)`
+  - L3280 `Future<StoredChat?> persistChat({ bool waitForCompletion = false, bool commit = true, })`  — [commit] false: a checkpoint inside a running turn, saved on this
+  - L3296 `Widget _buildMessageList({ required EdgeInsets padding, required double expandedInputWidth, required bool showHostTyping, })`  — The message list. Upstream: the plain [ListView]. Messenger mode: the
+  - L3421 `Widget build(BuildContext context)`
+  - L3457 `Widget _buildChatContent({ required BuildContext context, required double bottomPadding, required ThemeData theme, required Color iconFg, required double expandedInputWidth, required double effectiveHorizontalPadding, required bool isCompactModeForModelDropdown, })`
+  - L3706 `Widget _buildModelControl({ required bool isCompactMode, required Color iconFg, })`  — The composer's mode control: Fast or Thinking.
+  - L3777 `Widget _buildSearchBar({ required bool isCompactMode, required ThemeData theme, required Color iconFg, })`  — The composer: one rounded box, two rows.
+  - L4037 `Widget _buildComposerNotice({ required ThemeData theme, required IconData icon, required String label, required String actionLabel, required VoidCallback onAction, })`  — A one-line notice inside the composer: editing, or a queued message.
 
 ## lib/platform_specific/chat/composer_menu.dart  (59 Z.)
 - L9 `PopupMenuItem<T> composerMenuRow<T>({ required T value, required Color iconFg, required IconData icon, required String label, bool isEnabled = true, bool isSelected = false, })`  — One row of a composer menu — same metrics as the mode menu.

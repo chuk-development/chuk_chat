@@ -60,15 +60,6 @@
   - L199 `Widget _line( BuildContext context, AgentsRunLedger source, { required bool paired, })`
   - L253 `String _defaultSessionKey()`  — A coworker has one permanent session, and its key is the thread's key.
 
-## lib/ui/expressive/agent_theme.dart  (77 Z.)
-- L22 `ThemeData agentTintedTheme( BuildContext context, String agentId, { AgentProfileStore? store, })`  — The app theme with the accent roles re-seeded from [agentId]'s colour.
-- L52 `class AgentTheme extends StatelessWidget`  — [child] under the colour of [agentId], rebuilt when the user edits that
-  - L53 `const AgentTheme({ super.key, required this.agentId, required this.child, this.store, })`
-  - L60 `final String agentId`
-  - L61 `final Widget child`
-  - L62 `final AgentProfileStore? store`
-  - L65 `Widget build(BuildContext context)`
-
 ## lib/ui/expressive/bubble_kind.dart  (68 Z.)
 - L22 `enum AgentBubbleKind`
   - L22 `answer`
@@ -122,15 +113,6 @@
   - L140 `final VoidCallback onTap`
   - L143 `Widget build(BuildContext context)`
 
-## lib/ui/expressive/day_divider.dart  (76 Z.)
-- L15 `bool sameCalendarDay(DateTime a, DateTime b)`  — True when [a] and [b] fall on the same calendar day.
-- L20 `String dayLabel(DateTime when, {DateTime? now})`  — The label for a day: "Today", "Yesterday", a weekday inside the last week,
-- L42 `class ChatDayDivider extends StatelessWidget`
-  - L43 `const ChatDayDivider({super.key, required this.when, this.now})`
-  - L45 `final DateTime when`
-  - L48 `final DateTime? now`  — Injectable clock, so a test's "Today" is deterministic.
-  - L51 `Widget build(BuildContext context)`
-
 ## lib/ui/expressive/expressive_screen.dart  (150 Z.)
 - L27 `class ExpressiveScreen extends StatelessWidget`
   - L28 `const ExpressiveScreen({ super.key, required this.builder, this.title, this.titleWidget, this.actions = const <Widget>[], this.onBack, this.showBack = true, this.bottomBar, this.backgroundColor, })`
@@ -172,21 +154,6 @@
 
 ## lib/ui/expressive/icon_map.dart  (14 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/icons/icon_map.dart'
-
-## lib/ui/expressive/message_stamp.dart  (115 Z.)
-- L22 `enum QueueMark`  — What the stamp adds next to the time.
-  - L24 `none`
-  - L27 `waiting`
-  - L30 `failed`
-- L35 `QueueMark queueMarkFor(ChatMessageStatus? status)`  — Maps the local delivery status onto the mark. `null` and `sent` are the
-- L49 `class MessageStamp extends StatelessWidget`  — The time, plus the queue mark when there is one.
-  - L50 `const MessageStamp({ super.key, required this.time, required this.fg, this.mark = QueueMark.none, this.edited = false, this.errorColor, })`
-  - L60 `final String time`  — The already formatted clock ("14:03"). Empty renders the mark alone.
-  - L63 `final Color fg`  — Time and glyph colour — the on-bubble foreground.
-  - L65 `final QueueMark mark`
-  - L66 `final bool edited`
-  - L67 `final Color? errorColor`
-  - L70 `Widget build(BuildContext context)`
 
 ## lib/ui/expressive/motion.dart  (530 Z.)
 - L28 `kExpressiveDecelerate = Cubic(0.05, 0.7, 0.1, 1.0)`  — The bouncy spatial spring used for press and selection feedback.

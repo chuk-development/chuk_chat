@@ -7,6 +7,7 @@ import 'package:chuk_chat/widgets/chat_document_view.dart';
 import 'package:chuk_chat/widgets/charts/chuk_chart.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/widgets/chuk_table.dart';
+import 'package:chuk_chat/widgets/chuk_table_classic.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 
 /// A saved document has to read like a document on the phone it is read on.
@@ -255,9 +256,10 @@ void main() {
     _phone(tester);
     await _open(tester, _markdownDocument());
 
-    // The document renderer hands its tables to the chat's table widget, and
-    // that widget draws a table: the column name once, in the header.
-    expect(find.byType(ChukTable), findsOneWidget);
+    // The document renderer hands its tables to the chat's markdown table,
+    // chuk_chat's own, and that widget draws a table: the column name once,
+    // in the header.
+    expect(find.byType(ChukTableClassic), findsOneWidget);
     expect(find.text('Anteil (%)'), findsOneWidget);
     expect(find.text('Stand'), findsOneWidget);
     // Both data rows are on screen, each on one line.

@@ -3,11 +3,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../support/icon_finder.dart';
 
-import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 
-/// The header only ever gets the width its parent has, so every test states
+/// The row only ever gets the width its parent has, so every test states
 /// one: what folds and what fits is the whole point of the widget.
 Widget _wrap(Widget child, {double width = 900}) => MaterialApp(
   home: Scaffold(
@@ -26,36 +24,39 @@ AgentsThreadAction _action(String tooltip, List<String> log) =>
     );
 
 void main() {
-  testWidgets('the coworker and its role name the thread', (tester) async {
+  testWidgets("the row is chuk's floating buttons: no bar, no title", (
+    tester,
+  ) async {
+    final log = <String>[];
     await tester.pumpWidget(
       _wrap(
-        const AgentsThreadHeader(title: 'Marta', subtitle: 'release manager'),
-      ),
-    );
-
-    expect(find.text('Marta'), findsOneWidget);
-    expect(find.text('release manager'), findsOneWidget);
-    // A live socket is not news: no state line, only the dot.
-    expect(find.text('Connecting…'), findsNothing);
-    expect(find.byTooltip('Connected'), findsOneWidget);
-  });
-
-  testWidgets('a connection that is down says so on hover', (tester) async {
-    await tester.pumpWidget(
-      _wrap(
-        const AgentsThreadHeader(
-          title: 'Marta',
-          subtitle: 'release manager',
-          connection: AgentsThreadConnection.down,
+        AgentsThreadHeader(
+          showScreenTarget: true,
+          actions: <AgentsThreadAction>[_action('Documents', log)],
         ),
       ),
     );
 
-    // Still no status line about the socket: the connection is not the
-    // user's job. The subject's tooltip says it.
-    expect(find.text('Offline'), findsNothing);
-    expect(find.text('release manager'), findsOneWidget);
-    expect(find.byTooltip('Offline'), findsOneWidget);
+    // No band behind the buttons: no fill, no gradient, no rule.
+    final Finder painted = find.descendant(
+      of: find.byType(AgentsThreadHeader),
+      matching: find.byWidgetPredicate(
+        (Widget w) =>
+            w is DecoratedBox &&
+            w.decoration is BoxDecoration &&
+            ((w.decoration as BoxDecoration).gradient != null ||
+                (w.decoration as BoxDecoration).border != null),
+      ),
+    );
+    expect(painted, findsNothing);
+    // chuk's icon button: 40 px of ink around a 20 px glyph.
+    expect(
+      tester.getSize(find.byType(ChromeIconButton).first),
+      const Size(40, 40),
+    );
+    // Floating at the right edge of the chat, not stretched across it.
+    expect(tester.getTopRight(find.byTooltip('Documents')).dx, 800);
+    expect(tester.getSize(find.byType(AgentsThreadHeader)).height, 40);
   });
 
   testWidgets('the automation chip names the run and toggles the cards', (
@@ -65,7 +66,6 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         AgentsThreadHeader(
-          title: 'Marta',
           automationLabel: 'Wahlradar · Active',
           onToggleAutomations: () => toggles++,
         ),
@@ -79,7 +79,7 @@ void main() {
   });
 
   testWidgets('no automation, no chip', (tester) async {
-    await tester.pumpWidget(_wrap(const AgentsThreadHeader(title: 'Marta')));
+    await tester.pumpWidget(_wrap(const AgentsThreadHeader()));
 
     expect(findIcon(Icons.expand_more), findsNothing);
     expect(findIcon(Icons.expand_less), findsNothing);
@@ -92,12 +92,11 @@ void main() {
     await tester.pumpWidget(
       _wrap(
         AgentsThreadHeader(
-          title: 'Marta',
           actions: <AgentsThreadAction>[
             _action('Documents', log),
-            _action('Agent controls', log),
             _action('Control Rooms', log),
-            _action('Copy Debug Chat', log),
+            _action('Details', log),
+            _action('Copy full chat', log),
           ],
         ),
       ),
@@ -105,126 +104,59 @@ void main() {
 
     for (final tooltip in <String>[
       'Documents',
-      'Agent controls',
       'Control Rooms',
-      'Copy Debug Chat',
+      'Details',
+      'Copy full chat',
     ]) {
       expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
       await tester.tap(find.byTooltip(tooltip));
     }
     expect(log, <String>[
       'Documents',
-      'Agent controls',
       'Control Rooms',
-      'Copy Debug Chat',
+      'Details',
+      'Copy full chat',
     ]);
     // Nothing was pushed off the edge on the way.
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-    'a narrow header folds actions into a menu instead of overflowing',
-    (tester) async {
-      final log = <String>[];
-      await tester.pumpWidget(
-        _wrap(
-          AgentsThreadHeader(
-            title: 'Marta',
-            actions: <AgentsThreadAction>[
-              _action('Documents', log),
-              _action('Agent controls', log),
-              _action('Control Rooms', log),
-              _action('Copy Debug Chat', log),
-            ],
-          ),
-          width: 220,
-        ),
-      );
-
-      expect(tester.takeException(), isNull);
-      expect(find.byTooltip('More actions'), findsOneWidget);
-      // Folded, not dropped: the menu still reaches the last action.
-      expect(find.byTooltip('Copy Debug Chat'), findsNothing);
-      await tester.tap(find.byTooltip('More actions'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Copy Debug Chat'));
-      await tester.pumpAndSettle();
-      expect(log, <String>['Copy Debug Chat']);
-    },
-  );
-
-  testWidgets('the dense phone header drops the title, keeps the actions', (
-    tester,
-  ) async {
+  testWidgets('a narrow row folds actions into a menu instead of '
+      'overflowing', (tester) async {
     final log = <String>[];
     await tester.pumpWidget(
       _wrap(
         AgentsThreadHeader(
-          title: 'Marta',
-          subtitle: 'release manager',
-          dense: true,
-          topInset: 60,
-          automationLabel: '2 automations',
-          onToggleAutomations: () {},
-          actions: <AgentsThreadAction>[_action('Documents', log)],
+          actions: <AgentsThreadAction>[
+            _action('Documents', log),
+            _action('Control Rooms', log),
+            _action('Details', log),
+            _action('Copy full chat', log),
+          ],
         ),
-        width: 380,
+        width: 120,
       ),
     );
 
-    // The floating chrome above already carries the coworker.
-    expect(find.text('Marta'), findsNothing);
-    expect(find.text('release manager'), findsNothing);
-    expect(find.text('2 automations'), findsOneWidget);
-    expect(find.byTooltip('Documents'), findsOneWidget);
-    // It starts below the chrome, never behind it.
-    expect(
-      tester.getTopLeft(find.byTooltip('Documents')).dy,
-      greaterThanOrEqualTo(60),
-    );
+    expect(tester.takeException(), isNull);
+    expect(find.byTooltip('More actions'), findsOneWidget);
+    // Folded, not dropped: the menu still reaches the last action.
+    expect(find.byTooltip('Copy full chat'), findsNothing);
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Copy full chat'));
+    await tester.pumpAndSettle();
+    expect(log, <String>['Copy full chat']);
   });
 
-  testWidgets('the desktop bar is 48 px, solid, with a hairline under it', (
-    tester,
-  ) async {
-    await tester.pumpWidget(
-      _wrap(const AgentsThreadHeader(title: 'Marta', floating: true)),
-    );
-
-    // Part of the frame (docs/DESIGN.md §14.1): no veil, no gradient.
-    final Finder veil = find.descendant(
-      of: find.byType(AgentsThreadHeader),
-      matching: find.byWidgetPredicate(
-        (Widget w) =>
-            w is DecoratedBox &&
-            w.decoration is BoxDecoration &&
-            (w.decoration as BoxDecoration).gradient != null,
-      ),
-    );
-    expect(veil, findsNothing);
-    expect(
-      tester.getSize(find.byType(AgentsThreadHeader)).height,
-      kDeskBarHeight,
-    );
-    expect(
-      find.descendant(
-        of: find.byType(AgentsThreadHeader),
-        matching: find.byType(DeskHairline),
-      ),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('bar buttons are 32 px and a toggle that is on is filled', (
-    tester,
-  ) async {
+  testWidgets('a toggle that is on takes the accent; menu actions wait '
+      'behind "…"', (tester) async {
     await tester.pumpWidget(
       _wrap(
         AgentsThreadHeader(
-          title: 'Marta',
           actions: <AgentsThreadAction>[
             AgentsThreadAction(
-              icon: Icons.view_sidebar_outlined,
+              icon: Icons.tune,
               tooltip: 'Details',
               selected: true,
               onPressed: () {},
@@ -232,8 +164,8 @@ void main() {
           ],
           menuActions: <AgentsThreadAction>[
             AgentsThreadAction(
-              icon: Icons.copy_all_rounded,
-              tooltip: 'Copy Debug Chat',
+              icon: Icons.person_outline,
+              tooltip: 'Profile',
               onPressed: () {},
             ),
           ],
@@ -241,17 +173,77 @@ void main() {
       ),
     );
 
-    final DeskIconButton details = tester.widget<DeskIconButton>(
+    final ChromeIconButton details = tester.widget<ChromeIconButton>(
       find.ancestor(
         of: find.byTooltip('Details'),
-        matching: find.byType(DeskIconButton),
+        matching: find.byType(ChromeIconButton),
       ),
     );
     expect(details.selected, isTrue);
-    expect(details.size, 32);
-    expect(details.glyph, 20);
+    final Finder glyph = find.descendant(
+      of: find.byTooltip('Details'),
+      matching: findIcon(Icons.tune),
+    );
+    expect(
+      iconColor(tester, glyph),
+      Theme.of(tester.element(glyph)).colorScheme.primary,
+    );
     // The menu action is not a button of its own: it waits behind "…".
-    expect(find.byTooltip('Copy Debug Chat'), findsNothing);
+    expect(find.byTooltip('Profile'), findsNothing);
     expect(find.byTooltip('More actions'), findsOneWidget);
+  });
+
+  testWidgets('the screen target is parked until there is a screen, and a '
+      'parked tap still answers', (tester) async {
+    await tester.pumpWidget(
+      _wrap(const AgentsThreadHeader(showScreenTarget: true)),
+    );
+    expect(find.byTooltip('No screen open right now'), findsOneWidget);
+    await tester.tap(find.byTooltip('No screen open right now'));
+    await tester.pump();
+    expect(
+      find.text('The coworker has no screen open right now'),
+      findsOneWidget,
+    );
+
+    var opened = 0;
+    await tester.pumpWidget(
+      _wrap(
+        AgentsThreadHeader(
+          showScreenTarget: true,
+          onOpenScreen: () => opened++,
+        ),
+      ),
+    );
+    await tester.tap(find.byTooltip("Agent's screen"));
+    expect(opened, 1);
+  });
+
+  testWidgets('a relay that is down says so and offers the way back; a live '
+      'or returning one says nothing', (tester) async {
+    for (final AgentsThreadConnection state in <AgentsThreadConnection>[
+      AgentsThreadConnection.live,
+      AgentsThreadConnection.connecting,
+    ]) {
+      await tester.pumpWidget(_wrap(AgentsThreadHeader(connection: state)));
+      expect(find.textContaining('Offline'), findsNothing, reason: '$state');
+    }
+
+    var reconnects = 0;
+    await tester.pumpWidget(
+      _wrap(
+        AgentsThreadHeader(
+          connection: AgentsThreadConnection.down,
+          onReconnect: () => reconnects++,
+        ),
+      ),
+    );
+    await tester.tap(find.text('Offline · Reconnect'));
+    expect(reconnects, 1);
+
+    await tester.pumpWidget(
+      _wrap(const AgentsThreadHeader(connection: AgentsThreadConnection.down)),
+    );
+    expect(find.text('Offline'), findsOneWidget);
   });
 }

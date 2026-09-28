@@ -541,7 +541,7 @@ extension _MessageBubbleRichBlocks on _MessageBubbleState {
     required Color textColor,
     required Color bgColor,
   }) {
-    final String trimmed = widget.messengerMode ? text : text.trim();
+    final String trimmed = text.trim();
     if (trimmed.isEmpty) {
       return const <Widget>[];
     }

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
-
 import 'package:chuk_chat/services/settings/embedding_model_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// Picks the embedding model the host uses for semantic memory.
 ///
@@ -44,22 +45,23 @@ class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveScreen(
-      title: 'Embedding model',
-      builder: (BuildContext context) => _loading
+    final theme = Theme.of(context);
+    return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: const FloatingAppBar(title: Text('Embedding model')),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                MediaQuery.paddingOf(context).top + 8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 32,
-              ),
+          : SettingsListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                const ExpressiveTitle(
-                  'Embedding model',
-                  subtitle: 'Vectorises memories for semantic recall',
+                Text(
+                  'Vectorises memories for semantic recall.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.resolvedIconColor.withValues(alpha: 0.7),
+                  ),
                 ),
+                const SizedBox(height: 20),
                 const ExpressiveSectionHeader('Model'),
                 ExpressiveGroup(
                   children: [
@@ -71,7 +73,7 @@ class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage> {
                         trailing: option.id == _selected
                             ? AppIcon(
                                 Icons.check,
-                                color: Theme.of(context).colorScheme.primary,
+                                color: theme.colorScheme.primary,
                               )
                             : null,
                         onTap: () => _pick(option.id),

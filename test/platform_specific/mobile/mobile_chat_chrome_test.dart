@@ -6,8 +6,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
-import 'package:chuk_chat/ui/expressive/top_veil.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import '../../support/fake_relay_controller.dart';
@@ -15,9 +14,7 @@ import '../../support/fake_relay_controller.dart';
 import 'mobile_support.dart';
 
 void main() {
-  testWidgets('the header floats on a veil that ends transparent', (
-    tester,
-  ) async {
+  testWidgets("the header floats on chuk's page-colour fade", (tester) async {
     await pumpPhone(
       tester,
       MobileChatChrome(
@@ -26,59 +23,41 @@ void main() {
       ),
     );
     final chrome = find.byType(MobileChatChrome);
-    final veil = find
-        .descendant(of: chrome, matching: find.byType(TopVeil))
+    final Finder fade = find
+        .descendant(
+          of: chrome,
+          matching: find.byWidgetPredicate(
+            (Widget w) =>
+                w is DecoratedBox &&
+                w.decoration is BoxDecoration &&
+                (w.decoration as BoxDecoration).gradient != null,
+          ),
+        )
         .first;
-    final decoration =
-        tester
-                .widget<DecoratedBox>(
-                  find
-                      .descendant(of: veil, matching: find.byType(DecoratedBox))
-                      .first,
-                )
-                .decoration
-            as BoxDecoration;
+    final decoration = tester.widget<DecoratedBox>(fade).decoration
+        as BoxDecoration;
     final gradient = decoration.gradient! as LinearGradient;
-    final scheme = Theme.of(tester.element(chrome)).colorScheme;
+    final Color page = Theme.of(tester.element(chrome)).scaffoldBackgroundColor;
 
-    // No band across the width any more: the veil is heaviest behind the
-    // status bar and reaches nothing below the row, so a message scrolls out
-    // under it instead of stopping at an edge.
+    // chuk's phone top bar, stop for stop: the page colour behind the status
+    // bar and the chips, nothing at all by the lower edge.
     expect(gradient.begin, Alignment.topCenter);
     expect(gradient.end, Alignment.bottomCenter);
-    expect(gradient.colors.first, scheme.surface.withValues(alpha: 0.78));
-    expect(gradient.colors.last.a, 0, reason: 'the veil ends transparent');
-    expect(gradient.stops!.first, 0);
-    expect(gradient.stops!.last, 1);
-    for (int i = 1; i < gradient.colors.length; i++) {
-      expect(
-        gradient.colors[i].a,
-        lessThan(gradient.colors[i - 1].a),
-        reason: 'the veil only ever thins out, step $i',
-      );
-      expect(
-        gradient.stops![i],
-        greaterThan(gradient.stops![i - 1]),
-        reason: 'stops rise, step $i',
-      );
-      expect(
-        gradient.colors[i].withValues(alpha: 1),
-        scheme.surface,
-        reason: 'every stop is the surface colour, step $i',
-      );
-    }
+    expect(gradient.colors, <Color>[page, page, page.withValues(alpha: 0)]);
+    expect(gradient.stops, <double>[0.0, 0.62, 1.0]);
 
-    // And it really covers what it has to: behind the status bar at the top,
-    // past the bottom of the row at the other end.
-    final Rect painted = tester.getRect(veil);
+    // And it covers what it has to: behind the status bar at the top, past
+    // the bottom of the row at the other end.
+    final Rect painted = tester.getRect(fade);
     final Rect back = tester.getRect(findId('mobile_chat_back'));
-    expect(painted.top, 0, reason: 'the veil paints behind the status bar');
+    expect(painted.top, 0, reason: 'the fade paints behind the status bar');
     expect(
       painted.bottom,
       greaterThan(back.bottom),
       reason: 'it keeps fading below the row',
     );
   });
+
   testWidgets('offline header reconnect does not open the profile', (
     tester,
   ) async {
@@ -137,9 +116,7 @@ void main() {
     },
   );
 
-  testWidgets('contact surface paints the reference outline and translucency', (
-    tester,
-  ) async {
+  testWidgets("the contact pill is chuk's title pill", (tester) async {
     final theme = ThemeData(
       colorScheme: ColorScheme.fromSeed(
         seedColor: Colors.indigo,
@@ -154,21 +131,17 @@ void main() {
       ),
       theme: theme,
     );
-    final surface = tester.widget<Container>(
+    final surface = tester.widget<FloatingChromeSurface>(
       find.byKey(const ValueKey('mobile_contact_surface')),
     );
-    final decoration = surface.decoration! as BoxDecoration;
-    // Translucent, so the messages travelling under the header stay visible
-    // through the pill instead of hitting an opaque block.
-    expect(decoration.color, theme.colorScheme.surface.withValues(alpha: 0.72));
-    expect(decoration.color!.a, lessThan(1));
-    expect(decoration.borderRadius, BorderRadius.circular(30));
-    // The outline is what separates the pill from whatever scrolls behind it,
-    // since the fill alone no longer does.
-    expect(
-      decoration.border,
-      Border.all(color: theme.colorScheme.outlineVariant, width: 1.2),
-    );
+    // chuk's pill: the chrome surface at radius 18, no outline of its own.
+    expect(surface.radius, kMobileChromePillRadius);
+    expect(surface.radius, 18);
+    expect(surface.shape, isNull);
+    // chuk's title type: 15, heavy.
+    final Text name = tester.widget<Text>(find.text('Alex'));
+    expect(name.style!.fontSize, 15);
+    expect(name.style!.fontWeight, FontWeight.w800);
   });
 
   testWidgets('presence follows the real relay, not roster registration', (
@@ -247,7 +220,7 @@ void main() {
         closeTo(11 * scale * kStatusDotSizeFactor, 0.01),
         reason: 'dot diameter at $scale',
       );
-      expect(dot.width, dot.height);
+      expect(dot.width, closeTo(dot.height, 0.001));
       expect(
         dot.bottom,
         closeTo(baseline, 0.5),
@@ -283,19 +256,16 @@ void main() {
     final Rect pill = tester.getRect(
       find.byKey(const ValueKey('mobile_contact_surface')),
     );
-    expect(face.height, 32, reason: 'the app small-face size');
+    expect(face.height, 30);
     expect(face.width, face.height, reason: 'the silhouette is never squashed');
-    // The two text lines, not the picture, are what the pill is built around:
-    // the face is smaller than the text column and floats in the capsule.
-    expect(face.height, lessThan(16 * 1.5 + 11 * 1.45));
     expect(
       face.top - pill.top,
       closeTo(pill.bottom - face.bottom, 0.01),
       reason: 'even air above and below',
     );
-    // The pill is exactly as tall as the buttons beside it — it used to stand
-    // 6 taller and overhang them.
-    expect(pill.height, closeTo(MobileLayout.controlHeight, 0.01));
+    // The pill stands as tall as chuk's chips beside it, give or take the
+    // rounding of two text lines.
+    expect(pill.height, closeTo(kMobileChromeChip, 2));
   });
 
   testWidgets('every chip is at least a 48 dp touch target', (tester) async {
@@ -332,9 +302,8 @@ void main() {
     }
   });
 
-  testWidgets('chrome sits below the status bar and is barHeight tall', (
-    tester,
-  ) async {
+  testWidgets("the bar sits where chuk's does: 8 under the status bar, a "
+      '48 px row, 6 under it', (tester) async {
     await pumpPhone(
       tester,
       Align(
@@ -346,12 +315,23 @@ void main() {
       ),
     );
     final Rect back = tester.getRect(findId('mobile_chat_back'));
-    // 47 status bar + 8 padding. Nothing to centre any more: every control in
-    // the row is [MobileLayout.controlHeight] tall, so they all start there.
+    // The press is 48 px, the row's height.
     expect(back.top, closeTo(kPhonePadding.top + 8, 0.01));
-    expect(back.height, MobileLayout.controlHeight);
-    // The whole bar (without its fade) is what the chat reserves.
-    expect(MobileLayout.barHeight, 8 + MobileLayout.controlHeight + 10);
+    expect(back.height, MobileLayout.minTouchTarget);
+    // The chip paints chuk's 42, centred in it, 10 in from the edge.
+    final Rect chip = tester.getRect(
+      find.descendant(
+        of: findId('mobile_chat_back'),
+        matching: find.byType(Ink),
+      ),
+    );
+    expect(chip.size, const Size(kMobileChromeChip, kMobileChromeChip));
+    expect(chip.left, closeTo(10, 0.01));
+    expect(chip.center.dy, closeTo(back.center.dy, 0.01));
+    expect(
+      tester.getSize(find.byType(MobileChatChrome)).height,
+      closeTo(kPhonePadding.top + 8 + 48 + 6, 0.01),
+    );
   });
 
   testWidgets('back, pill, browser and more fire their callbacks', (
@@ -387,14 +367,6 @@ void main() {
       ),
     );
     expect(findId('mobile_chat_browser'), findsOneWidget);
-    final screen = tester.widget<ExpressiveIconButton>(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is ExpressiveIconButton &&
-            widget.semanticsId == 'mobile_chat_browser',
-      ),
-    );
-    expect(screen.onTap, isNull);
     final semantics = tester.widget<Semantics>(findId('mobile_chat_browser'));
     expect(semantics.properties.enabled, isFalse);
     await tester.tap(findId('mobile_chat_browser'));
@@ -419,17 +391,17 @@ void main() {
         onOpenBrowser: () => taps++,
       ),
     );
-    final screen = tester.widget<ExpressiveIconButton>(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is ExpressiveIconButton &&
-            widget.semanticsId == 'mobile_chat_browser',
+    expect(
+      find.descendant(
+        of: findId('mobile_chat_browser'),
+        matching: find.byTooltip('No screen open yet'),
       ),
+      findsOneWidget,
     );
-    expect(screen.parked, isTrue);
-    expect(screen.tooltip, 'No screen open yet');
+    // Still enabled for screen readers: a tap explains why there is no
+    // screen, and the tooltip carries the parked state.
     final semantics = tester.widget<Semantics>(findId('mobile_chat_browser'));
-    expect(semantics.properties.enabled, isFalse);
+    expect(semantics.properties.enabled, isTrue);
     await tester.tap(findId('mobile_chat_browser'));
     await tester.pump();
     expect(taps, 1);
@@ -445,17 +417,26 @@ void main() {
         browserAvailable: true,
       ),
     );
-    final screen = tester.widget<ExpressiveIconButton>(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is ExpressiveIconButton &&
-            widget.semanticsId == 'mobile_chat_browser',
+    expect(
+      find.descendant(
+        of: findId('mobile_chat_browser'),
+        matching: find.byTooltip('Take over the screen'),
       ),
+      findsOneWidget,
     );
-    expect(screen.parked, isFalse);
-    expect(screen.tooltip, 'Take over the screen');
     final semantics = tester.widget<Semantics>(findId('mobile_chat_browser'));
     expect(semantics.properties.enabled, isTrue);
+    // Lit is chuk's accent chip: the primary fill.
+    final Ink ink = tester.widget<Ink>(
+      find.descendant(
+        of: findId('mobile_chat_browser'),
+        matching: find.byType(Ink),
+      ),
+    );
+    expect(
+      (ink.decoration! as BoxDecoration).color,
+      Theme.of(tester.element(findId('mobile_chat_browser'))).colorScheme.primary,
+    );
   });
 
   testWidgets('a long name ellipsises inside the pill, chips stay on screen', (
@@ -474,13 +455,14 @@ void main() {
       ),
     );
     final Rect more = tester.getRect(findId('mobile_chat_more'));
-    expect(more.right, lessThanOrEqualTo(kPhoneSize.width - 10));
+    // The 48 px press reaches 3 past chuk's 10 px edge.
+    expect(more.right, lessThanOrEqualTo(kPhoneSize.width - 7));
     final Rect pill = tester.getRect(findId('mobile_chat_bot_pill'));
     expect(pill.right, lessThan(more.left));
   });
 
   testWidgets(
-    'contact fills remaining width beside the persistent screen control',
+    "the pill hugs its content at the left, as chuk's title does",
     (tester) async {
       await pumpPhone(
         tester,
@@ -490,16 +472,15 @@ void main() {
           onOpenProfile: () {},
         ),
       );
-      final pill = tester.getRect(findId('mobile_chat_bot_pill'));
-      expect(
-        pill.right,
-        kPhoneSize.width - 12 - MobileLayout.controlHeight - 8,
+      final Rect pill = tester.getRect(
+        find.byKey(const ValueKey('mobile_contact_surface')),
       );
-      expect(
-        tester.getRect(findId('mobile_chat_browser')).right,
-        kPhoneSize.width - 12,
-      );
-      expect(pill.left, 12 + MobileLayout.controlHeight + 10);
+      final Rect screen = tester.getRect(findId('mobile_chat_browser'));
+      // chuk's gaps: 10 to the first chip, 8 between everything.
+      expect(pill.left, closeTo(10 + kMobileChromeChip + 8, 0.01));
+      expect(screen.right, closeTo(kPhoneSize.width - 7, 0.01));
+      // A short name leaves the rest of the row empty.
+      expect(pill.right, lessThan(screen.left - 40));
       expect(find.text('Offline'), findsOneWidget);
       expect(find.text('Active now'), findsNothing);
     },

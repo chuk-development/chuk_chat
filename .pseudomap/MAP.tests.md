@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-320 Dateien · 852 Typen/Funktionen · 764 Member · Stand 2026-09-27
+318 Dateien · 844 Typen/Funktionen · 764 Member · Stand 2026-09-28
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -102,8 +102,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (737 Z.)
-- const: _cannotMount
+### every_screen_layout_test.dart  (756 Z.)
+- const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
 - `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
@@ -236,7 +236,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/pages
-### agent_profile_edit_page_test.dart  (77 Z.)
+### agent_profile_edit_page_test.dart  (115 Z.)
+- `void main()`
+
+### agent_profile_page_test.dart  (50 Z.)
 - `void main()`
 
 ### agents_pairing_page_test.dart  (229 Z.)
@@ -248,12 +251,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAutomation _automation( String id, { String session = 'thread-1', String state = 'active', })`
 - `void main()`
 
-### mcp_connectors_page_test.dart  (106 Z.)
+### mcp_connectors_page_test.dart  (212 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - read write delete map
 - `void main()`
 
-### mobile_agents_settings_page_test.dart  (268 Z.)
+### mobile_agents_settings_page_test.dart  (267 Z.)
 - `void main()`
 
 ### model_selector_design_test.dart  (114 Z.)
@@ -269,8 +272,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _j(Map<String, String> m)`
 - `void main()`
 
-### settings_page_test.dart  (144 Z.)
-- `void main()`  — With Agents on, the settings hub is the Agents app's own hub: its entries,
+### settings_page_test.dart  (162 Z.)
+- `void main()`  — One settings page for both builds. With Agents on it is upstream
 
 ### skills_settings_page_test.dart  (357 Z.)
 - const: _userSkill
@@ -278,7 +281,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsSkill _skill(String name, {String source = 'workspace', bool enabled = true})`
 - `void main()`
 
-### theme_page_test.dart  (172 Z.)
+### theme_page_test.dart  (166 Z.)
 - `class _State`
   - themeMode accent iconFg bg contrast uiFont chatFont dynamicColor
 - `AppShellConfig _config(_State s)`
@@ -339,7 +342,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/platform_specific/chat
-### agents_thread_composer_test.dart  (196 Z.)
+### agents_thread_composer_test.dart  (197 Z.)
 - `Finder findId(String id)`  — The composer's targets carry a semantics identifier, not a label.
 - `class _NoopSaver implements AgentFileSaver`
   - save
@@ -409,13 +412,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mobile_agent_sheet_test.dart  (82 Z.)
 - `void main()`
 
-### mobile_chat_chrome_test.dart  (547 Z.)
+### mobile_chat_chrome_test.dart  (526 Z.)
 - `void main()`
 
 ### mobile_chat_screen_test.dart  (129 Z.)
 - `void main()`
 
-### mobile_preview_test.dart  (294 Z.)
+### mobile_preview_test.dart  (295 Z.)
 - const: _out
 - `void main()`
 - `class _PlaceholderChat extends StatelessWidget`  — Stands in for the verbatim chuk_chat phone screen in the preview: a
@@ -500,7 +503,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _chatJson({int rounds = 30})`
 - `void main()`
 
-### chat_payload_migration_test.dart  (547 Z.)
+### chat_payload_migration_test.dart  (591 Z.)
 - const: userId
 - `String _id(int i)`
 - `String _updatedAt(int i)`
@@ -1085,8 +1088,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### artifact_tag_parser_test.dart  (208 Z.)
 - `void main()`
 
-### build_app_theme_agents_test.dart  (46 Z.)
-- `void main()`  — The theme has two sides. With Agents off it is upstream chuk_chat's; with
+### build_app_theme_agents_test.dart  (50 Z.)
+- `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
 ### build_app_theme_contrast_test.dart  (161 Z.)
 - `void main()`
@@ -1205,7 +1208,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _host(Widget child, {Brightness brightness = Brightness.light})`
 - `void main()`
 
-### agent_roster_view_test.dart  (863 Z.)
+### agent_roster_view_test.dart  (927 Z.)
 - `void main()`
 
 ### agent_run_views_test.dart  (288 Z.)
@@ -1230,11 +1233,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void _silenceUnrelatedPlugins(WidgetTester tester)`  — The imported screen constructs an [AudioRecorder] on mount, which calls the
 - `Future<void> _settle(WidgetTester tester)`  — [WidgetTester.pumpAndSettle] never returns here: the thread view arms an
 
-### agents_desktop_controls_test.dart  (176 Z.)
-- `Widget _app(Widget child)`
-- `void main()`
-
-### agents_desktop_shell_test.dart  (513 Z.)
+### agents_desktop_shell_test.dart  (502 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FailingRefreshSource extends FakeAgentControlSource`  — A host that answers the panel's first look and then fails a refresh.
@@ -1257,8 +1256,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - ensureHostAgent
 - `void main()`
 
-### agents_thread_header_test.dart  (258 Z.)
-- `Widget _wrap(Widget child, {double width = 900})`  — The header only ever gets the width its parent has, so every test states
+### agents_thread_header_test.dart  (250 Z.)
+- `Widget _wrap(Widget child, {double width = 900})`  — The row only ever gets the width its parent has, so every test states
 - `AgentsThreadAction _action(String tooltip, List<String> log)`
 - `void main()`
 
@@ -1290,7 +1289,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Widget _app(Widget child)`
 - `void main()`  — The visible run must end when the host says the run ended, whatever else the
 
-### agents_thread_view_test.dart  (1478 Z.)
+### agents_thread_view_test.dart  (1456 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`  — In-memory secure backend so the store round-trips with no platform channel.
   - read write delete map
 - `class _NoopSaver implements AgentFileSaver`  — A saver that never touches a filesystem.
@@ -1345,7 +1344,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> specChartDocument()`  — A chart document as the tool writes one now: the spec itself, under `chart`.
 - `void main()`
 
-### chat_document_reading_test.dart  (415 Z.)
+### chat_document_reading_test.dart  (417 Z.)
 - const: _briefText
 - `Map<String, dynamic> _markdownDocument()`
 - `Map<String, dynamic> _tableDocument()`
@@ -1414,15 +1413,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - const: _sampleScene
 - `void main()`
 
-### expressive_settings_test.dart  (189 Z.)
-- `double _tileScale(WidgetTester tester)`  — The scale [MorphTap] currently applies to the tile.
-- `Widget _host({required Widget child, bool reducedMotion = false})`
+### expressive_settings_test.dart  (89 Z.)
+- `Widget _host({required Widget child})`
 - `void main()`
 
-### flag_off_parity_test.dart  (122 Z.)
+### flag_off_parity_test.dart  (119 Z.)
 - const: _sent
 - `Widget _wrap(Widget child)`
-- `Widget _turn()`
+- `Widget _turn({bool messengerMode = false})`
 - `Iterable<BoxDecoration> _decorations(WidgetTester tester)`  — Every decorated box the bubbles draw, by fill colour.
 - `void main()`
 
@@ -1436,7 +1434,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### map_block_dedupe_test.dart  (72 Z.)
 - `void main()`
 
-### markdown_message_test.dart  (581 Z.)
+### markdown_message_test.dart  (541 Z.)
 - const: kAccent kText kBubble
 - `ThemeData _theme()`
 - `Future<void> _pumpMarkdown( WidgetTester tester, String markdown, { double width = 360, double? fontSize, Color textColo …)`
@@ -1454,8 +1452,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble_dangling_lt_test.dart  (44 Z.)
 - `void main()`
 
-### message_bubble_grouping_test.dart  (284 Z.)
-- const: big small
+### message_bubble_grouping_test.dart  (265 Z.)
+- const: full tail gapInRun gapBetweenRuns decoratedBoxes
 - `Widget wrap(Widget child)`
 - `Widget threeMessageRun({required bool isUser})`  — A run of three messages from the same sender, followed by one message that
 - `Rect paintedBubble(WidgetTester tester, int index)`  — The painted rectangle of the bubble at [index] — the decorated box, not the
@@ -1483,7 +1481,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble_sources_test.dart  (88 Z.)
 - `void main()`
 
-### message_bubble_test.dart  (273 Z.)
+### message_bubble_test.dart  (213 Z.)
 - const: _wakeText
 - `Widget _wrap(Widget child)`
 - `void main()`
@@ -1491,14 +1489,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### message_bubble_variant_pager_test.dart  (89 Z.)
 - `void main()`
 
-### messenger_context_menu_test.dart  (71 Z.)
+### messenger_context_menu_test.dart  (57 Z.)
 - `void main()`
 
-### messenger_message_bubble_test.dart  (836 Z.)
+### messenger_message_bubble_test.dart  (808 Z.)
 - `Widget wrap(Widget child)`
 - `void main()`
 
-### messenger_shell_test.dart  (1981 Z.)
+### messenger_shell_test.dart  (1963 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _FakeRelayController implements AgentsRelayController`  — A controller the test drives: it can report itself paired, and it records
@@ -1522,7 +1520,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `AgentsAgent _agent(String id, String name, {String? role})`
 - `void main()`
 
-### room_faces_test.dart  (369 Z.)
+### room_faces_test.dart  (365 Z.)
 - `AgentsRoomMember _m(String id, String handle)`
 - `AgentsRoomDraft _draft(String name, int members)`
 - `AgentsAgent _agent(String id, String name)`
@@ -1556,19 +1554,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### selection_copy_area_test.dart  (284 Z.)
 - `void main()`
 
-### settings_kit_test.dart  (106 Z.)
-- `Widget _host(Widget child)`
-- `void main()`
-
-### settings_list_view_test.dart  (87 Z.)
-- `Widget _host({required List<Widget> children, bool reducedMotion = false})`
-- `List<double> _opacities(WidgetTester tester)`
-- `void main()`
-
-### stamped_text_test.dart  (255 Z.)
-- const: kFontSize kStyle kStamp kReserved
-- `Widget host(Widget child, {double width = 300})`
-- `Widget wrapApp(Widget child)`
+### settings_list_view_test.dart  (51 Z.)
+- `Widget _host({required List<Widget> children})`
 - `void main()`
 
 ### turn_status_test.dart  (238 Z.)

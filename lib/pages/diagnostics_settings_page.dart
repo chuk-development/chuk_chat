@@ -6,8 +6,11 @@ import 'package:chuk_chat/widgets/settings_list_view.dart';
 import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/api_config_service.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/diagnostics_log_service.dart';
+import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/utils/io_helper.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
@@ -130,6 +133,12 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
     }
   }
 
+  Future<void> _copyApiBase() async {
+    await Clipboard.setData(ClipboardData(text: ApiConfigService.apiBaseUrl));
+    if (!mounted) return;
+    NiceSnackBar.show(context, 'API base copied');
+  }
+
   Future<void> _shareLogFile() async {
     final path = await DiagnosticsLogService.getLogFilePath();
     if (path == null) {
@@ -224,6 +233,39 @@ class _DeveloperOptionsPageState extends State<DeveloperOptionsPage> {
                     ),
                   ],
                 ),
+                // Agents only: the endpoint this build talks to, and the
+                // full-log switch the host's thread reads.
+                if (agentsChatCore) ...[
+                  const ExpressiveSectionHeader('Agents'),
+                  ExpressiveGroup(
+                    children: [
+                      ExpressiveRow(
+                        icon: Icons.cloud_outlined,
+                        title: 'API base',
+                        subtitle: ApiConfigService.apiBaseUrl,
+                        trailing: IconButton(
+                          tooltip: 'Copy',
+                          icon: const AppIcon(Icons.copy, size: 18),
+                          onPressed: _copyApiBase,
+                        ),
+                      ),
+                      // The same switch as Customization > Full log. Both
+                      // drive [VerboseService], so they always agree.
+                      ListenableBuilder(
+                        listenable: VerboseService.instance,
+                        builder: (context, _) => ExpressiveSwitchRow(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'Verbose view',
+                          subtitle:
+                              'Show every command, tool call, and browser '
+                              'action in the thread',
+                          value: VerboseService.instance.enabled,
+                          onChanged: VerboseService.instance.setEnabled,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
                 const ExpressiveSectionHeader('Log file'),
                 ExpressiveCard(
                   child: Column(

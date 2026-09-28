@@ -117,60 +117,74 @@
   - L88 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the coworker's own actions, the parked
   - L176 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_chat_chrome.dart  (391 Z.)
-- L32 `class MobileChatChrome extends StatelessWidget`
-  - L33 `const MobileChatChrome({ super.key, required this.agent, required this.onBack, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.profiles, })`
-  - L46 `final AgentsAgent agent`
-  - L49 `final VoidCallback onBack`  — Back to the coworker list.
-  - L52 `final VoidCallback? onOpenProfile`  — Tap on the coworker pill — its profile page. Null renders the pill flat.
-  - L57 `final VoidCallback? onOpenBrowser`  — The "computer" target: the coworker's screen. Called whether or not a
-  - L61 `final bool browserAvailable`  — Is a screen open right now? False draws the target parked: visibly not
-  - L62 `final VoidCallback? onOpenFiles`
-  - L63 `final VoidCallback? onReconnect`
-  - L66 `final VoidCallback? onMore`  — The "more" target: the shell's secondary actions. Null hides it.
-  - L68 `final AgentProfileStore? profiles`
-  - L71 `Widget build(BuildContext context)`
-- L161 `_kPillFaceSize = 32`  — The coworker's face inside the header pill.
-- L164 `_kPillStatusFontSize = 11`  — The status line's font size. The presence dot is derived from it.
-- L168 `class _AgentPill extends StatelessWidget`  — The coworker pill: face, name, live state. As tall as a chip, so the whole
-  - L169 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
-  - L176 `final AgentsAgent agent`
-  - L177 `final VoidCallback? onTap`
-  - L178 `final VoidCallback? onReconnect`
-  - L179 `final AgentProfileStore? profiles`
-  - L182 `Widget build(BuildContext context)`
-  - L195 `Widget _surface(BuildContext context, {required bool paired})`
-  - L361 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
-  - L384 `String? _roleOf(AgentProfileStore store)`
+## lib/platform_specific/mobile/mobile_chat_chrome.dart  (485 Z.)
+- L38 `kMobileChromeChip = 42`  — Diameter of a round chip: chuk's floating chip.
+- L41 `kMobileChromeRow = 48`  — Height of the bar's row: chuk's top bar row.
+- L44 `kMobileChromePillRadius = 18`  — Corner radius of the title pill: chuk's title pill.
+- L48 `_kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2`  — How far a 48 px press reaches past a 42 px chip on each side. The row's
+- L52 `_kPillFaceSize = 30`  — The coworker's face inside the pill. 30 leaves the two text lines their
+- L55 `_kPillStatusFontSize = 11`  — The status line's font size. The presence dot is derived from it.
+- L57 `class MobileChatChrome extends StatelessWidget`
+  - L58 `const MobileChatChrome({ super.key, required this.agent, required this.onBack, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.profiles, })`
+  - L71 `final AgentsAgent agent`
+  - L74 `final VoidCallback onBack`  — Back to the coworker list.
+  - L77 `final VoidCallback? onOpenProfile`  — Tap on the coworker pill — its profile page. Null renders the pill flat.
+  - L82 `final VoidCallback? onOpenBrowser`  — The "computer" chip: the coworker's screen. Called whether or not a
+  - L86 `final bool browserAvailable`  — Is a screen open right now? False draws the chip parked: visibly not
+  - L87 `final VoidCallback? onOpenFiles`
+  - L88 `final VoidCallback? onReconnect`
+  - L91 `final VoidCallback? onMore`  — The "more" chip: the shell's secondary actions. Null hides it.
+  - L93 `final AgentProfileStore? profiles`
+  - L96 `Widget build(BuildContext context)`
+- L199 `class _ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
+  - L200 `const _ChromeChip({ required this.icon, required this.tooltip, required this.semanticsId, required this.onTap, this.accent = false, this.parked = false, })`
+  - L209 `final IconData icon`
+  - L210 `final String tooltip`
+  - L211 `final String semanticsId`
+  - L214 `final VoidCallback? onTap`  — Null disables the chip.
+  - L217 `final bool accent`  — chuk's accent-filled chip: the one thing on the bar that is ready.
+  - L221 `final bool parked`  — Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
+  - L224 `Widget build(BuildContext context)`
+- L274 `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
+  - L275 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
+  - L282 `final AgentsAgent agent`
+  - L283 `final VoidCallback? onTap`
+  - L284 `final VoidCallback? onReconnect`
+  - L285 `final AgentProfileStore? profiles`
+  - L288 `Widget build(BuildContext context)`
+  - L301 `Widget _surface(BuildContext context, {required bool paired})`
+  - L377 `Widget _status(BuildContext context, {required bool paired})`  — What the coworker is doing: offline with a way back, working, or here.
+  - L455 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
+  - L478 `String? _roleOf(AgentProfileStore store)`
 
-## lib/platform_specific/mobile/mobile_chat_screen.dart  (226 Z.)
-- L29 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
-- L32 `class MobileChatScreen extends StatefulWidget`
-  - L33 `const MobileChatScreen({ super.key, required this.agent, required this.onBack, required this.bodyBuilder, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.active = true, })`
-  - L47 `final AgentsAgent agent`
-  - L48 `final VoidCallback onBack`
-  - L49 `final MobileChatBodyBuilder bodyBuilder`
-  - L50 `final VoidCallback? onOpenProfile`
-  - L51 `final VoidCallback? onOpenBrowser`
-  - L54 `final bool browserAvailable`  — Is a screen open to take over? Drives the chrome's screen target.
-  - L55 `final VoidCallback? onOpenFiles`
-  - L56 `final VoidCallback? onReconnect`
-  - L57 `final VoidCallback? onMore`
-  - L64 `final bool active`  — Is this page the one in front? The shell keeps the page mounted behind
-  - L67 `State<MobileChatScreen> createState()`
-- L70 `class _MobileChatScreenState extends State<MobileChatScreen> with TickerProviderStateMixin`
-  - L72 `late final AnimationController _entrance = AnimationController( vsync: this, duration: const Duration(milliseconds: 280), )`
-  - L76 `late final Animation<double> _progress = CurvedAnimation( parent: _entrance, curve: Curves.easeOutCubic, )`
-  - L87 `late final AnimationController _swap = AnimationController( vsync: this, duration: const Duration(milliseconds: 260), value: 1, )`  — The coworker swap. There is exactly ONE thread view in the app (it holds
-  - L92 `late final Animation<double> _swapped = CurvedAnimation( parent: _swap, curve: kExpressiveDecelerate, )`
-  - L99 `late final Listenable _motion = Listenable.merge(<Listenable>[ _progress, _swapped, ])`  — Built once: a fresh [Listenable.merge] on every build would make the
-  - L105 `void didChangeDependencies()`
-  - L116 `void didUpdateWidget(MobileChatScreen oldWidget)`
-  - L130 `void dispose()`
-  - L139 `double? _dragStartX`  — Where the current horizontal drag started. Only a drag that starts at
-  - L141 `void _onDragStart(DragStartDetails details)`
-  - L145 `void _onDragEnd(DragEndDetails details)`
-  - L155 `Widget build(BuildContext context)`
+## lib/platform_specific/mobile/mobile_chat_screen.dart  (220 Z.)
+- L28 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
+- L31 `class MobileChatScreen extends StatefulWidget`
+  - L32 `const MobileChatScreen({ super.key, required this.agent, required this.onBack, required this.bodyBuilder, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.active = true, })`
+  - L46 `final AgentsAgent agent`
+  - L47 `final VoidCallback onBack`
+  - L48 `final MobileChatBodyBuilder bodyBuilder`
+  - L49 `final VoidCallback? onOpenProfile`
+  - L50 `final VoidCallback? onOpenBrowser`
+  - L53 `final bool browserAvailable`  — Is a screen open to take over? Drives the chrome's screen target.
+  - L54 `final VoidCallback? onOpenFiles`
+  - L55 `final VoidCallback? onReconnect`
+  - L56 `final VoidCallback? onMore`
+  - L63 `final bool active`  — Is this page the one in front? The shell keeps the page mounted behind
+  - L66 `State<MobileChatScreen> createState()`
+- L69 `class _MobileChatScreenState extends State<MobileChatScreen> with TickerProviderStateMixin`
+  - L71 `late final AnimationController _entrance = AnimationController( vsync: this, duration: const Duration(milliseconds: 280), )`
+  - L75 `late final Animation<double> _progress = CurvedAnimation( parent: _entrance, curve: Curves.easeOutCubic, )`
+  - L86 `late final AnimationController _swap = AnimationController( vsync: this, duration: const Duration(milliseconds: 260), value: 1, )`  — The coworker swap. There is exactly ONE thread view in the app (it holds
+  - L91 `late final Animation<double> _swapped = CurvedAnimation( parent: _swap, curve: kExpressiveDecelerate, )`
+  - L98 `late final Listenable _motion = Listenable.merge(<Listenable>[ _progress, _swapped, ])`  — Built once: a fresh [Listenable.merge] on every build would make the
+  - L104 `void didChangeDependencies()`
+  - L115 `void didUpdateWidget(MobileChatScreen oldWidget)`
+  - L129 `void dispose()`
+  - L138 `double? _dragStartX`  — Where the current horizontal drag started. Only a drag that starts at
+  - L140 `void _onDragStart(DragStartDetails details)`
+  - L144 `void _onDragEnd(DragEndDetails details)`
+  - L154 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_chips.dart  (63 Z.)
 - L18 `List<BoxShadow> mobileChipShadow(ThemeData theme)`  — The soft shadow under a chip or pill. Lighter in dark mode, where a hard
@@ -196,40 +210,36 @@
   - L78 `final ContainerTransformSource? closed`  — The row the travel starts from. Null before any row has been tapped (a
   - L81 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_home.dart  (306 Z.)
-- L31 `class MobileHome extends StatefulWidget`
-  - L32 `const MobileHome({ super.key, required this.roster, required this.chats, required this.settings, required this.controller, this.readMarks, this.profiles, })`
-  - L43 `final AgentRosterSource roster`  — The roster, for the coworker pickers of the other tabs.
-  - L47 `final Widget chats`  — The Chats tab: the roster as the shell already builds it, wired to open a
-  - L50 `final Widget settings`  — The Settings tab, built by the shell because it owns the config.
-  - L53 `final AgentsRelayController? controller`  — The live relay controller, handed to the documents panel.
-  - L55 `final AgentReadMarks? readMarks`
-  - L56 `final AgentProfileStore? profiles`
-  - L59 `State<MobileHome> createState()`
-- L62 `class _MobileHomeState extends State<MobileHome>`
-  - L63 `int _index = 0`
-  - L65 `AgentReadMarks get _marks`
-  - L67 `void _openPanel(AgentsAgent agent, String threadKey)`
-  - L83 `Widget _picker()`  — The same roster, used to pick whose files to open. It carries no
-  - L100 `Widget build(BuildContext context)`
-- L188 `class _FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
-  - L189 `const _FadeThroughTabs({required this.index, required this.children})`
-  - L191 `final int index`
-  - L192 `final List<Widget> children`
-  - L195 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
-  - L198 `State<_FadeThroughTabs> createState()`
-- L201 `class _FadeThroughTabsState extends State<_FadeThroughTabs> with SingleTickerProviderStateMixin`
-  - L203 `late final AnimationController _c = AnimationController( vsync: this, duration: _FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
-  - L210 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
-  - L213 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
-  - L215 `bool _reducedMotion = false`
-  - L217 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
-  - L221 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
-  - L226 `void _onStatus(AnimationStatus status)`
-  - L233 `void didChangeDependencies()`
-  - L244 `void didUpdateWidget(covariant _FadeThroughTabs oldWidget)`
-  - L260 `void dispose()`
-  - L266 `Widget build(BuildContext context)`
+## lib/platform_specific/mobile/mobile_home.dart  (258 Z.)
+- L26 `class MobileHome extends StatefulWidget`
+  - L27 `const MobileHome({ super.key, required this.roster, required this.chats, required this.settings, this.readMarks, })`
+  - L36 `final AgentRosterSource roster`  — The roster, for the media tab's thread keys and the unread badge.
+  - L40 `final Widget chats`  — The Chats tab: the roster as the shell already builds it, wired to open a
+  - L43 `final Widget settings`  — The Settings tab, built by the shell because it owns the config.
+  - L45 `final AgentReadMarks? readMarks`
+  - L48 `State<MobileHome> createState()`
+- L51 `class _MobileHomeState extends State<MobileHome>`
+  - L52 `int _index = 0`
+  - L54 `AgentReadMarks get _marks`
+  - L57 `Widget build(BuildContext context)`
+- L140 `class _FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
+  - L141 `const _FadeThroughTabs({required this.index, required this.children})`
+  - L143 `final int index`
+  - L144 `final List<Widget> children`
+  - L147 `static const Duration duration = Duration(milliseconds: 300)`  — Inside the 200–350 ms band the rest of the app's motion lives in.
+  - L150 `State<_FadeThroughTabs> createState()`
+- L153 `class _FadeThroughTabsState extends State<_FadeThroughTabs> with SingleTickerProviderStateMixin`
+  - L155 `late final AnimationController _c = AnimationController( vsync: this, duration: _FadeThroughTabs.duration, value: 1, )..addStatusListener(_onStatus)`
+  - L162 `late int _incoming = widget.index`  — The tab that is arriving (at rest: the tab that is simply there).
+  - L165 `int? _outgoing`  — The tab that is leaving, while it is still worth painting.
+  - L167 `bool _reducedMotion = false`
+  - L169 `late final Animation<double> _out = CurvedAnimation( parent: _c, curve: const Interval(0, 0.35, curve: Curves.easeOut), )`
+  - L173 `late final Animation<double> _in = CurvedAnimation( parent: _c, curve: const Interval(0.35, 1, curve: kExpressiveDecelerate), )`
+  - L178 `void _onStatus(AnimationStatus status)`
+  - L185 `void didChangeDependencies()`
+  - L196 `void didUpdateWidget(covariant _FadeThroughTabs oldWidget)`
+  - L212 `void dispose()`
+  - L218 `Widget build(BuildContext context)`
 
 ## lib/platform_specific/mobile/mobile_layout.dart  (96 Z.)
 - L20 `class MobileLayout`

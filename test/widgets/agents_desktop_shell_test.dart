@@ -1,6 +1,5 @@
-// The Agents desktop layout (docs/DESIGN.md §14): three docked panes, the
-// resizable roster and details pane, the context menu, the desktop menus,
-// the centred dialogs and the keyboard.
+// The Agents desktop layout: chuk's sidebar as the roster, the resizable
+// roster and details pane, the row menu, the centred dialogs and the keyboard.
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,8 +21,8 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_dialog.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 import '../support/fake_relay_controller.dart';
 import '../support/test_app.dart';
@@ -143,17 +142,19 @@ void main() {
     const ValueKey<String>('desk-right-pane'),
   );
 
-  group('panes (§14.1)', () {
-    testWidgets('roster, thread and details sit side by side, hairlines '
-        'between', (tester) async {
+  group('panes', () {
+    testWidgets('roster, thread and details sit side by side', (
+      tester,
+    ) async {
       await pumpDesktop(tester);
 
       final Rect roster = rosterRect(tester);
       final Rect thread = tester.getRect(find.byType(AgentsThreadView));
       expect(roster.left, 0);
       expect(roster.width, kDeskRosterDefault);
-      // One hairline between the panes.
-      expect(thread.left, roster.right + 1);
+      // No hairline: the panel colour changes at the border, as at chuk's
+      // sidebar.
+      expect(thread.left, roster.right);
       expect(thread.right, 1400);
       expect(rightPane, findsNothing);
 
@@ -161,11 +162,9 @@ void main() {
       final Rect pane = tester.getRect(rightPane);
       expect(pane.width, kDeskDetailsDefault);
       expect(pane.right, 1400);
-      // It pushes the thread; it does not cover it.
-      expect(
-        tester.getRect(find.byType(AgentsThreadView)).right,
-        pane.left - 1,
-      );
+      // It pushes the thread; it does not cover it. Its left border is its
+      // own, as chuk's artifact panel's is.
+      expect(tester.getRect(find.byType(AgentsThreadView)).right, pane.left);
       expect(find.byType(Drawer), findsNothing);
     });
 
@@ -177,9 +176,9 @@ void main() {
         const ValueKey<String>('desk-roster-resize'),
       );
 
-      await tester.drag(handle, const Offset(60, 0));
+      await tester.drag(handle, const Offset(-60, 0));
       await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterDefault + 60);
+      expect(rosterRect(tester).width, kDeskRosterDefault - 60);
 
       await tester.drag(handle, const Offset(400, 0));
       await tester.pumpAndSettle();
@@ -242,7 +241,7 @@ void main() {
       await pumpDesktop(tester);
       await tester.drag(
         find.byKey(const ValueKey<String>('desk-roster-resize')),
-        const Offset(40, 0),
+        const Offset(-40, 0),
       );
       await shortcut(tester, LogicalKeyboardKey.period);
       // Written once the reader stops dragging.
@@ -252,7 +251,7 @@ void main() {
       await pumpDesktop(tester);
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterDefault + 40);
+      expect(rosterRect(tester).width, kDeskRosterDefault - 40);
       expect(rightPane, findsOneWidget);
     });
   });
@@ -277,9 +276,10 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  group('roster (§14.3)', () {
-    testWidgets('a right click opens the context menu: desktop menu, 32 px '
-        'rows, radius 12', (tester) async {
+  group('roster', () {
+    testWidgets("a right click opens chuk's row menu and selects nothing", (
+      tester,
+    ) async {
       final (roster, _) = await pumpDesktop(tester);
       final String id = roster.agents[1].id;
 
@@ -292,41 +292,33 @@ void main() {
       for (final String label in <String>[
         'Profile',
         'Rename',
-        'Pin',
         'Hide',
         'Delete',
       ]) {
         expect(find.text(label), findsOneWidget, reason: label);
       }
+      // chuk's popup menu, the one its sidebar opens on a chat.
       expect(
-        tester
-            .getSize(
-              find.ancestor(
-                of: find.text('Rename'),
-                matching: find.byType(MenuActionRow),
-              ),
-            )
-            .height,
-        kMenuDenseRowHeight,
+        find.ancestor(
+          of: find.text('Rename'),
+          matching: find.byType(PopupMenuItem<VoidCallback>),
+        ),
+        findsOneWidget,
       );
-      final MenuTileGroup group = tester.widget<MenuTileGroup>(
-        find.byType(MenuTileGroup),
-      );
-      expect(group.outerRadius, kMenuDenseOuterRadius);
       // Nothing was selected by the right click.
       expect(selectedThread(tester), roster.agents.first.threads.single.key);
     });
 
-    testWidgets('the row "…" shows on hover only', (tester) async {
+    testWidgets("the row's pin shows on hover only", (tester) async {
       final (roster, _) = await pumpDesktop(tester);
       final Finder row = find.byKey(
         ValueKey<String>('agent-tile-${roster.agents[2].id}'),
       );
-      final Finder more = find.descendant(
-        of: row,
-        matching: find.byTooltip('More'),
+      final Finder pin = find.ancestor(
+        of: find.descendant(of: row, matching: find.byTooltip('Pin')),
+        matching: find.byType(AnimatedOpacity),
       );
-      expect(more, findsNothing);
+      expect(tester.widget<AnimatedOpacity>(pin).opacity, 0);
       final TestGesture mouse = await tester.createGesture(
         kind: PointerDeviceKind.mouse,
       );
@@ -334,13 +326,13 @@ void main() {
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(row));
       await tester.pumpAndSettle();
-      expect(more, findsOneWidget);
+      expect(tester.widget<AnimatedOpacity>(pin).opacity, 1);
       await mouse.moveTo(const Offset(700, 450));
       await tester.pumpAndSettle();
-      expect(more, findsNothing);
+      expect(tester.widget<AnimatedOpacity>(pin).opacity, 0);
     });
 
-    testWidgets('Delete asks in a centred dialog before it removes', (
+    testWidgets("Delete asks in chuk's delete dialog before it removes", (
       tester,
     ) async {
       final (roster, _) = await pumpDesktop(tester);
@@ -353,18 +345,15 @@ void main() {
       await tester.tap(find.text('Delete'));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AgentsDesktopDialog), findsOneWidget);
-      expect(
-        tester.getSize(dialogBox).width,
-        lessThanOrEqualTo(kDeskDialogMaxWidth + 1),
-      );
+      expect(find.byType(AlertDialog), findsOneWidget);
+      expect(find.text('Delete cobalt?'), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
       expect(roster.byId(id), isNotNull);
     });
   });
 
-  group('keyboard (§14.7)', () {
+  group('keyboard', () {
     testWidgets('Ctrl+1 … Ctrl+9 open the n-th agent in the roster', (
       tester,
     ) async {
@@ -483,11 +472,12 @@ void main() {
       expect(find.byType(AgentsThreadView), findsNothing); // off stage
       // The room's row is the selected one now.
       expect(
-        find.descendant(
-          of: find.byKey(ValueKey<String>('room-tile-${room.id}')),
-          matching: find.byKey(const ValueKey<String>('roster-selected-bar')),
-        ),
-        findsOneWidget,
+        tester
+            .widget<SbChatTile>(
+              find.byKey(ValueKey<String>('room-tile-${room.id}')),
+            )
+            .selected,
+        isTrue,
       );
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -507,6 +497,5 @@ void main() {
       find.byKey(const ValueKey<String>('desk-roster-resize')),
       findsNothing,
     );
-    expect(find.byType(MenuDensity), findsNothing);
   });
 }

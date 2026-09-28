@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-573 Dateien · 2609 Typen/Funktionen · 14082 Member · 1158/1599 öffentliche Symbole mit Zweckzeile · Stand 2026-09-27
+565 Dateien · 2547 Typen/Funktionen · 13854 Member · 1123/1559 öffentliche Symbole mit Zweckzeile · Stand 2026-09-28
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -11,11 +11,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - Neu bauen: `pseudomap build` (läuft nach jedem Edit automatisch).
 
 ## lib
-### constants.dart  (621 Z.)
-- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +16
+### constants.dart  (563 Z.)
+- const: kDefaultBgColor kDefaultAccentColor kDefaultIconFgColor kDefaultThemeMode kDefaultDynamicColorEnabled kDefaultShowReasoningTokens kDefaultShowModelInfo kDefaultShowTps kDefaultUiLocale kDefaultToolCallingEnabled kDefaultToolDiscoveryMode kDefaultShowToolCalls kDefaultIncludeToolResultsInHistory kDefaultChatFontSize kMinChatFontSize kMaxChatFontSize kDefaultUiScale kMinUiScale kMaxUiScale kChatFontFamilySystem kChatFontFamilyArimo kChatFontFamilyMerriweather kChatFontFamilyJetBrainsMono kDefaultChatFontFamily kSupportedChatFontFamilies +25
 - `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
 - `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightnes …)`
-- `TextTheme _emphasizedTextTheme(TextTheme t)`  — Material 3 Expressive emphasis: the display and headline sizes carry real
 - `Color _shiftHue(Color c, double degrees)`
 
 ### env_loader.dart  (158 Z.)
@@ -312,12 +311,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _LicenseDetailPage extends StatelessWidget`
 - `String? _inferLicenseName(String text)`
 
-### account_settings_page.dart  (765 Z.)
+### account_settings_page.dart  (739 Z.)
 - `class AccountSettingsPage extends StatefulWidget`
 - `class _AccountSettingsPageState extends State<AccountSettingsPage>`
 - `class _FieldLabel extends StatelessWidget`
 
-### agent_profile_edit_page.dart  (604 Z.)
+### agent_profile_edit_page.dart  (613 Z.)
 - `class AgentProfileEditPage extends StatefulWidget`
 - `class _AgentProfileEditPageState extends State<AgentProfileEditPage>`
 - `class _FacePreview extends StatelessWidget`  — The face as it will look, with the colour the user is trying out.
@@ -325,24 +324,24 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ColorRow extends StatelessWidget`  — The colour palette, plus a "back to the derived colour" target.
 - `class _ShapeRow extends StatelessWidget`  — The silhouettes a coworker can be given, drawn as themselves.
 
-### agent_profile_page.dart  (625 Z.)
+### agent_profile_page.dart  (632 Z.)
 - `class AgentProfilePage extends StatelessWidget`
 - `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the coworker is doing right now.
 - `class _ActionRow extends StatelessWidget`  — The row of round targets under the header.
 - `class _Action extends StatelessWidget`
 - `class _InfoCard extends StatelessWidget`  — One labelled card in the profile body.
 
-### agents_desktop_layout.dart  (634 Z.)
+### agents_desktop_layout.dart  (591 Z.)
 - part of 'messenger_shell.dart'
-- `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout (docs/DESIGN.md §14): three docked panes, no
+- `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with coworkers in it.
 
-### agents_pairing_page.dart  (309 Z.)
+### agents_pairing_page.dart  (310 Z.)
 - `typedef AgentsQrViewBuilder = Widget Function( BuildContext context, { required ValueChanged<String> onCode, required Va`  — Builds the live camera view. Injected so a widget test can drive the screen
 - `bool agentsCameraIsDefault()`  — True on the platforms where opening a camera is the right default.
 - `class AgentsPairingPage extends StatefulWidget`
 - `class _AgentsPairingPageState extends State<AgentsPairingPage>`
 
-### agents_shell_state.dart  (1028 Z.)
+### agents_shell_state.dart  (1018 Z.)
 - part of 'messenger_shell.dart'
 - `Future<AgentsRelayController> _buildRelayController( AgentsPairingStore store, AccountSessionSource sessionSource, )`  — Builds the default production relay controller: a real [AgentsRelayClient]
 - `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
@@ -356,7 +355,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _Step extends StatelessWidget`
 - `class _AllSet extends StatelessWidget`
 
-### automations_page.dart  (198 Z.)
+### automations_page.dart  (193 Z.)
 - `class AutomationsPage extends StatefulWidget`  — Every automation of the host, grouped by the coworker that owns it, with
 - `class _AutomationsPageState extends State<AutomationsPage>`
 
@@ -367,7 +366,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ConnectorDetailPage extends StatefulWidget`  — Full-screen detail page for a single tool, showing enable/disable,
 - `class _ConnectorDetailPageState extends State<ConnectorDetailPage>`
 
-### customization_page.dart  (867 Z.)
+### customization_page.dart  (799 Z.)
 - `class CustomizationPage extends StatefulWidget`
 - `class _CustomizationPageState extends State<CustomizationPage>`
 - `class _CardLabel extends StatelessWidget`  — Title and explanation at the top of a card that is not a row.
@@ -377,14 +376,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> showDesktopMediaModal(BuildContext context)`  — Opens the media library over the current page.
 - `class DesktopMediaModal extends StatelessWidget`  — The panel itself: a header row, then the library.
 
-### desktop_settings_modal.dart  (975 Z.)
+### desktop_settings_modal.dart  (881 Z.)
 - `Future<void> showDesktopSettingsModal( BuildContext context, { required AppShellConfig config, String? initialSectionId …)`  — Opens the desktop settings modal over the current chat UI.
 - `class _SettingsDest`  — A settings destination: either a page shown in the right pane, or an
 - `class _SettingsGroup`
 - `class DesktopSettingsModal extends StatefulWidget`
 - `class _DesktopSettingsModalState extends State<DesktopSettingsModal>`
 
-### diagnostics_settings_page.dart  (338 Z.)
+### diagnostics_settings_page.dart  (380 Z.)
 - `class DeveloperOptionsPage extends StatefulWidget`
 - `class _DeveloperOptionsPageState extends State<DeveloperOptionsPage>`
 
@@ -409,7 +408,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class LoginPage extends StatefulWidget`
 - `class _LoginPageState extends State<LoginPage>`
 
-### mcp_connectors_page.dart  (1005 Z.)
+### mcp_connectors_page.dart  (1085 Z.)
 - `class McpConnectorsPage extends StatefulWidget`
 - `class _McpConnectorsPageState extends State<McpConnectorsPage>`
 - `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
@@ -418,6 +417,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class McpConnectorIcon extends StatefulWidget`  — A connector logo. The bundled brand logo first (shipped in the binary for
 - `class _McpConnectorIconState extends State<McpConnectorIcon>`
 - `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
+- `class _AddByUrlDialog extends StatefulWidget`  — The "Add a connector" dialog. It owns its text controller, so the
+- `class _AddByUrlDialogState extends State<_AddByUrlDialog>`
 
 ### media_manager_page.dart  (1513 Z.)
 - const: kMediaFilterBarHeight
@@ -434,12 +435,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _MediaFilterBar extends StatelessWidget`  — Images / Artifacts, as one segmented track with the count in the label.
 - `class _ArtifactTile extends StatelessWidget`
 
-### messenger_shell.dart  (816 Z.)
+### messenger_shell.dart  (821 Z.)
 - part 'agents_shell_state.dart' · part 'agents_desktop_layout.dart'
 - `class MessengerShell extends StatefulWidget`  — The messenger: coworkers down the left, the selected thread in the middle,
 - `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProvide …)`
 
-### mobile_agents_settings_page.dart  (502 Z.)
+### mobile_agents_settings_page.dart  (398 Z.)
 - `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
 - `class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage>`
 
@@ -463,7 +464,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class RecoverChatsPage extends StatefulWidget`  — Page for recovering or deleting chats encrypted with old passwords.
 - `class _RecoverChatsPageState extends State<RecoverChatsPage>`
 
-### secrets_settings_page.dart  (285 Z.)
+### secrets_settings_page.dart  (282 Z.)
 - `class SecretsSettingsPage extends StatefulWidget`
 - `class _SecretsSettingsPageState extends State<SecretsSettingsPage>`
 - `class _SecretDialog extends StatefulWidget`  — Name + value entry. With [fixedName] only the value is asked (change).
@@ -473,7 +474,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SetNewPasswordPage extends StatefulWidget`  — Page shown after a user clicks a password reset link.
 - `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
 
-### settings_page.dart  (1317 Z.)
+### settings_page.dart  (1116 Z.)
 - `class SettingsPage extends StatefulWidget`
 - `class _SettingsPageState extends State<SettingsPage>`
 - `class _PlanInfo`
@@ -488,7 +489,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class DottedBorderBox extends StatelessWidget`  — Paints a dashed rounded-rectangle border around [child].
 - `class _DashedRectPainter extends CustomPainter`
 
-### skills_settings_page.dart  (741 Z.)
+### skills_settings_page.dart  (730 Z.)
 - `class SkillsSettingsPage extends StatefulWidget`  — Lists built-in skills and lets the user author their own.
 - `class _SkillsSettingsPageState extends State<SkillsSettingsPage>`
 - `class SkillEditorPage extends StatefulWidget`  — Edits one skill's SKILL.md source.
@@ -504,7 +505,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SystemPromptPageState extends State<SystemPromptPage>`
 - `class _MaterialTextField extends StatelessWidget`
 
-### theme_page.dart  (1242 Z.)
+### theme_page.dart  (1160 Z.)
 - `class ThemePage extends StatefulWidget`
 - `class _ThemePageState extends State<ThemePage>`
 - `class _ColorCard extends StatelessWidget`
@@ -582,29 +583,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _CreateProjectDialogState extends State<_CreateProjectDialog>`
 
 ## lib/pages/settings
-### developer_settings_page.dart  (124 Z.)
-- `class DeveloperSettingsPage extends StatefulWidget`  — Developer options: the endpoints the app talks to, and a couple of local
-- `class _DeveloperSettingsPageState extends State<DeveloperSettingsPage>`
-
-### embedding_settings_page.dart  (93 Z.)
+### embedding_settings_page.dart  (95 Z.)
 - `class EmbeddingSettingsPage extends StatefulWidget`  — Picks the embedding model the host uses for semantic memory.
 - `class _EmbeddingSettingsPageState extends State<EmbeddingSettingsPage>`
 
-### herenow_settings_page.dart  (151 Z.)
+### herenow_settings_page.dart  (153 Z.)
 - `class HereNowSettingsPage extends StatefulWidget`  — The here.now publishing connector: let a coworker put a file or a folder on
 - `class _HereNowSettingsPageState extends State<HereNowSettingsPage>`
-
-### mcp_connectors_page.dart  (960 Z.)
-- `class McpConnectorsPage extends StatefulWidget`
-- `class _McpConnectorsPageState extends State<McpConnectorsPage>`
-- `class McpConnectorDetailPage extends StatefulWidget`  — One connector: connect or disconnect it, and see what it can do.
-- `class _McpConnectorDetailPageState extends State<McpConnectorDetailPage>`
-- `Future<Map<String, String>?> showMcpCredentialDialog( BuildContext context, List<McpCredentialField> fields, String name …)`  — Collect a reader's own credentials for an [McpAuth.apiKey] server. Returns
-- `class McpConnectorIcon extends StatefulWidget`  — A connector logo. The bundled brand logo first (shipped in the binary for
-- `class _McpConnectorIconState extends State<McpConnectorIcon>`
-- `Future<T> _withProgress<T>( BuildContext context, Future<T> Function() work, { McpConnectCanceler? canceler, })`
-- `class _AddByUrlDialog extends StatefulWidget`  — The "Add a connector" dialog. It owns its text controller so the controller
-- `class _AddByUrlDialogState extends State<_AddByUrlDialog>`
 
 ## lib/platform_specific
 ### root_wrapper.dart  (5 Z.)
@@ -657,7 +642,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `mixin ChatScrollMixin<T extends StatefulWidget> on State<T>`  — Shared message-list scroll behaviour for the desktop and mobile chat UIs.
 - `class _TranscriptScrollController extends ScrollController`  — A [ScrollController] whose initial offset is read when a position is
 
-### chat_ui_desktop.dart  (3006 Z.)
+### chat_ui_desktop.dart  (2636 Z.)
 - part 'desktop_send_logic.dart'
 - `class ChukChatUIDesktop extends StatefulWidget`
 - `class ChukChatUIDesktopState extends State<ChukChatUIDesktop> with SingleTickerProviderStateMixin, ChatScrollMixin, Mode …)`
@@ -676,7 +661,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool messageStartsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] opens a new run: it is the first row, the sender
 - `bool messageEndsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] closes its run: the last row, or the next row
 
-### chat_ui_mobile.dart  (4166 Z.)
+### chat_ui_mobile.dart  (4088 Z.)
 - `enum _AttachChoice`  — What the plus menu can start.
 - `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
 - `@visibleForTesting String queuedMessagesForComposer(String pending, List<String> followUps)`  — The text a cancelled queue puts back into the composer: the pending
@@ -740,10 +725,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _StreamingSnapshot`
 
 ## lib/platform_specific/chat/widgets
-### chat_message_list_item.dart  (237 Z.)
+### chat_message_list_item.dart  (198 Z.)
 - `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
 
-### mobile_chat_widgets.dart  (209 Z.)
+### mobile_chat_widgets.dart  (213 Z.)
 - `Widget buildTinyIconButton({ IconData? icon, String? svgAssetPath, required VoidCallback? onTap, required bool isActive …)`  — Build a tiny icon button widget
 - `Widget buildTinyActionButton({ IconData? icon, String? svgAssetPath, required VoidCallback onTap, required Color color …)`  — Build a tiny action button widget (for send, etc.)
 - `Widget buildAttachmentSheetOption({ required BuildContext context, required IconData icon, required String label, requir …)`  — Build attachment sheet option (for bottom sheet)
@@ -766,12 +751,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### mobile_agent_sheet.dart  (189 Z.)
 - `class MobileAgentSheet extends StatelessWidget`
 
-### mobile_chat_chrome.dart  (391 Z.)
-- const: _kPillFaceSize _kPillStatusFontSize
+### mobile_chat_chrome.dart  (485 Z.)
+- const: kMobileChromeChip kMobileChromeRow kMobileChromePillRadius _kReach _kPillFaceSize _kPillStatusFontSize
 - `class MobileChatChrome extends StatelessWidget`
-- `class _AgentPill extends StatelessWidget`  — The coworker pill: face, name, live state. As tall as a chip, so the whole
+- `class _ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
+- `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
 
-### mobile_chat_screen.dart  (226 Z.)
+### mobile_chat_screen.dart  (220 Z.)
 - `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the
 - `class MobileChatScreen extends StatefulWidget`
 - `class _MobileChatScreenState extends State<MobileChatScreen> with TickerProviderStateMixin`
@@ -784,7 +770,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `@immutable class ContainerTransformSource`  — One tapped roster row, as the container transform needs it: where the row
 - `class MobileContainerTransform extends StatelessWidget`  — The container transform: [closed] grows into [open] over [progress].
 
-### mobile_home.dart  (306 Z.)
+### mobile_home.dart  (258 Z.)
 - `class MobileHome extends StatefulWidget`
 - `class _MobileHomeState extends State<MobileHome>`
 - `class _FadeThroughTabs extends StatefulWidget`  — An [IndexedStack] that fades through instead of cutting.
@@ -837,7 +823,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_lifecycle_service.dart  (165 Z.)
 - `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
 
-### app_theme_service.dart  (877 Z.)
+### app_theme_service.dart  (861 Z.)
 - `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
 - `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
 
@@ -913,7 +899,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-### chat_payload_migration_service.dart  (938 Z.)
+### chat_payload_migration_service.dart  (955 Z.)
 - `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
 - `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
@@ -2161,10 +2147,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _RenderBaselinedBox extends RenderProxyBox`
 - `class AgentStatusLine extends StatelessWidget`  — The line itself: the dot, and the words next to it.
 
-### agent_theme.dart  (77 Z.)
-- `ThemeData agentTintedTheme( BuildContext context, String agentId, { AgentProfileStore? store, })`  — The app theme with the accent roles re-seeded from [agentId]'s colour.
-- `class AgentTheme extends StatelessWidget`  — [child] under the colour of [agentId], rebuilt when the user edits that
-
 ### bubble_kind.dart  (68 Z.)
 - `enum AgentBubbleKind`
 - `@immutable class AgentBubbleColors`  — The fill and the foreground for a coworker's bubble.
@@ -2184,11 +2166,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### connected_group.dart  (187 Z.)
 - `class ConnectedGroup extends StatelessWidget`
 - `class _Segment extends StatelessWidget`
-
-### day_divider.dart  (76 Z.)
-- `bool sameCalendarDay(DateTime a, DateTime b)`  — True when [a] and [b] fall on the same calendar day.
-- `String dayLabel(DateTime when, {DateTime? now})`  — The label for a day: "Today", "Yesterday", a weekday inside the last week,
-- `class ChatDayDivider extends StatelessWidget`
 
 ### expressive_screen.dart  (150 Z.)
 - `class ExpressiveScreen extends StatelessWidget`
@@ -2212,11 +2189,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### icon_map.dart  (14 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/icons/icon_map.dart'
-
-### message_stamp.dart  (115 Z.)
-- `enum QueueMark`  — What the stamp adds next to the time.
-- `QueueMark queueMarkFor(ChatMessageStatus? status)`  — Maps the local delivery status onto the mark. `null` and `sent` are the
-- `class MessageStamp extends StatelessWidget`  — The time, plus the queue mark when there is one.
 
 ### motion.dart  (530 Z.)
 - const: kExpressiveDecelerate kExpressiveShort kSpatialSpring kEffectSpring
@@ -2542,27 +2514,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<AgentSegment> splitAgentSegments(String data)`  — Split an agent reply into prose and `<chart>` blocks.
 - `class AgentMarkdown extends StatelessWidget`  — Renders an agent reply as Markdown, with `<chart>` blocks drawn as charts.
 
-### agent_roster_view.dart  (1534 Z.)
+### agent_roster_view.dart  (1201 Z.)
 - reicht weiter: 'package:chuk_chat/widgets/coworker_name_dialog.dart'
-- const: kSidebarBrandWordmarkSize
+- const: kRosterTileFace
 - `class DesktopRosterPins extends ChangeNotifier`  — Which coworkers the user pinned to the top of the desktop roster. Local to
 - `List<AgentsAgent> desktopRosterOrder( List<AgentsAgent> agents, Set<String> pinned, )`  — The agents in the order the desktop roster shows them: pinned first, then
 - `class AgentRosterView extends StatefulWidget`
+- `class _NavRow`  — One row of the navigation block. The open pane draws it as a card, the
 - `class _AgentRosterViewState extends State<AgentRosterView>`
-- `class _SectionHeader extends StatefulWidget`  — A section label: small caps in the quiet colour, and a "+" that shows
-- `class _SectionHeaderState extends State<_SectionHeader>`
-- `class _HoverTile extends StatefulWidget`  — The hover fill and the rounded row shape every roster row shares.
-- `class _HoverTileState extends State<_HoverTile>`
-- `class _AgentRow extends StatefulWidget`  — One coworker: 36 px, face 24, name; on the right the unread dot, the
-- `class _AgentRowState extends State<_AgentRow>`
-- `class _RoomRow extends StatefulWidget`  — One room: 32 px, the members' faces, the name, the "…" on hover.
-- `class _RoomRowState extends State<_RoomRow>`
-- `class _HiddenRow extends StatelessWidget`  — A hidden coworker, dimmed, with Unhide.
-- `class _RailFace extends StatelessWidget`  — A face in the folded rail: a 40 px target, the selected fill and bar, an
-- `class _KeyCap extends StatelessWidget`  — A key in a hint: "Ctrl+K" in a small outlined box.
-- `String activityLabel(AgentActivity activity)`  — The word for a coworker's state, as shown in the roster.
 - `String lastActivityLabel(DateTime? when, {required DateTime now})`  — "just now" / "5m ago" / "2h ago" / "3d ago", or a plain statement that
-- `String compactAgeLabel(DateTime? when, {required DateTime now})`  — The roster row's time: "now", "5m", "2h", "3d" — or nothing when nothing
 
 ### agent_run_views.dart  (389 Z.)
 - `class AgentToolLine extends StatefulWidget`  — One tool call, as a single quiet line that opens on tap.
@@ -2577,21 +2537,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsStatusPanel extends StatelessWidget`
 - `class _Primary extends StatelessWidget`  — The one filled action. While [busy] it says what it is doing and ignores
 
-### agents_thread_header.dart  (838 Z.)
-- `enum AgentsThreadConnection`  — How the relay looks to the reader. Not the phase enum: the header only
-- `@immutable class AgentsThreadAction`  — One button in the header's trailing group.
-- `class AgentsThreadHeader extends StatelessWidget`  — The one bar above a Agents thread: who you are talking to on the left, what
-- `class _HeaderButton extends StatelessWidget`  — One header button: a 40 px round ink target with a tooltip.
+### agents_thread_header.dart  (425 Z.)
+- `enum AgentsThreadConnection`  — One button in the thread's floating row.
+- `@immutable class AgentsThreadAction`
+- `class AgentsThreadHeader extends StatelessWidget`  — The actions of a desktop thread, as chuk_chat draws the buttons over its
+- `class ChromeIconButton extends StatelessWidget`  — chuk's icon button over the chat: a 20 px glyph in the icon colour, round
+- `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
 - `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
-- `class _DeskSubjectTarget extends StatefulWidget`  — The title bar's subject as one hover target: a quiet fill under the
-- `class _DeskSubjectTargetState extends State<_DeskSubjectTarget>`
 
-### agents_thread_view.dart  (2286 Z.)
-- const: kAgentsDevHostUrl
+### agents_thread_view.dart  (2277 Z.)
+- const: kAgentsThreadHeaderInset kAgentsDevHostUrl
 - `class AgentsThreadView extends StatefulWidget`
 - `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
 
-### anchored_menu.dart  (405 Z.)
+### anchored_menu.dart  (395 Z.)
 - const: _kAnchorGap _kEdgeMargin _kMinRoomAbove _kMenuDuration
 - `Future<T?> showAnchoredMenu<T>( BuildContext anchorContext, { required List<Widget> items, required Color color, // Kept …)`  — Show [items] as a dropdown anchored to the widget of [anchorContext].
 - `class _AnchoredMenuRoute<T> extends PopupRoute<T>`
@@ -2623,7 +2582,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `SnackBar appNotificationSnackBar({ required String message, AppNotificationKind kind = AppNotificationKind.info, Duratio …)`  — The SnackBar an [AppNotification] travels in.
 - `abstract final class AppNotifications`  — How a message reaches the screen.
 
-### artifact_panel.dart  (2169 Z.)
+### artifact_panel.dart  (2158 Z.)
 - `class ArtifactPanel extends StatefulWidget`
 - `enum _ArtifactViewMode`
 - `class _ArtifactPanelState extends State<ArtifactPanel>`
@@ -2677,7 +2636,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AutomationCard extends StatefulWidget`  — One automation as a settings row: what it is, when it runs, what state it
 - `class _AutomationCardState extends State<AutomationCard>`
 
-### brand_wordmark.dart  (57 Z.)
+### brand_wordmark.dart  (36 Z.)
 - `class BrandWordmark extends StatelessWidget`  — Brand lockup rendered from the frozen brand SVG (assets/wordmark.svg,
 
 ### browser_view_page.dart  (676 Z.)
@@ -2764,7 +2723,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChatMaintenanceScreen extends StatelessWidget`
 - `class _ProgressRow extends StatelessWidget`
 
-### chat_mode_selector.dart  (622 Z.)
+### chat_mode_selector.dart  (593 Z.)
 - `class ChatModeSelector extends StatelessWidget`
 - `String prettyModelId(String id)`  — A readable name for a model id the catalogue does not know, so the menu
 - `class ChatModelChoice`  — A model the reader has picked, as shown in the second menu.
@@ -2772,10 +2731,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _DeeperChoice`  — What a row in the second menu stands for: a reasoning level, a model, or
 - `class _SubmenuOpener<T> extends PopupMenuEntry<T>`  — A menu row that opens a cascading submenu on tap WITHOUT popping the menu
 - `class _SubmenuOpenerState<T> extends State<_SubmenuOpener<T>>`
-
-### chat_reply_preview.dart  (113 Z.)
-- `class ChatEditNotice extends StatelessWidget`
-- `class ChatReplyPreview extends StatelessWidget`  — A quiet quote above the composer, not a transport/status notification.
 
 ### chat_theme.dart  (150 Z.)
 - `abstract final class ChatMetrics`  — Shared look tokens for the Agents chat surface.
@@ -2868,8 +2823,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _fmt(num v)`
 - `double _d(dynamic v)`
 
-### expressive_settings.dart  (604 Z.)
-- const: kExpressiveOuterRadius kExpressivePressedRadius kExpressiveInnerRadius kExpressiveTileGap
+### expressive_settings.dart  (503 Z.)
+- const: kExpressiveOuterRadius kExpressiveInnerRadius kExpressiveTileGap
 - `extension ExpressiveOnColor on ColorScheme`  — Picks the contrast colour of a tone from the scheme.
 - `class ExpressiveGroup extends StatelessWidget`  — A group of settings tiles. The first and last tile round outwards, the
 - `class _ExpressiveTileShape extends InheritedWidget`  — Hands the radii of its place in the group down to the tile.
@@ -2884,7 +2839,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ExpressiveIconTile extends StatelessWidget`  — The rounded tile an icon sits in.
 - `class ExpressiveSectionHeader extends StatelessWidget`  — The label above a group. Large and heavy, the way Expressive titles are
 - `class ExpressiveBadge extends StatelessWidget`  — A trailing pill: a short state word on the right of a row.
-- `class ExpressiveTitle extends StatelessWidget`  — The big page title Expressive puts above a settings list.
 
 ### floating_app_bar.dart  (254 Z.)
 - const: kFloatingAppBarHeight kFloatingAppBarChip _kTitleRadius
@@ -2947,13 +2901,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _PlaceCard extends StatelessWidget`
 - `class _RouteMapBlock extends StatelessWidget`
 
-### markdown_message.dart  (2252 Z.)
+### markdown_message.dart  (2158 Z.)
 - part 'answer_blocks.dart'
-- const: _kBulletSize _latexTag
+- const: _latexTag
 - `TextStyle _overlayStyle(TextStyle? base, TextStyle overlay)`  — Lays [overlay] on top of [base] field by field.
 - `class InlineCodeNode extends SpanNode`  — Inline `` `code` `` that keeps its monospace font, its own colour and its
 - `class AccentLinkNode extends LinkNode`  — A link that reads as a link: the accent colour plus an underline in that
-- `BoxDecoration _bulletDecoration(int depth, Color color)`  — Bullet shape per nesting level: filled disc, hollow disc, then square —
 - `class _MdSegment`  — One slice of a message: plain markdown, a GFM table block, or an answer
 - `class _MdParseCache`  — Splits raw markdown into alternating plain-markdown and table segments so
 - `List<Widget> _buildMarkdownWidgets( MarkdownGenerator generator, String data, MarkdownConfig config, { required bool kee …)`  — `MarkdownGenerator.buildWidgets` of markdown_widget 2.3, with the parse
@@ -2984,15 +2937,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class MeasureSize extends SingleChildRenderObjectWidget`  — Reports its child's laid-out size via [onChange] after every layout in which
 - `class _MeasureSizeRenderObject extends RenderProxyBox`
 
-### menu_tile_group.dart  (439 Z.)
-- const: kMenuOuterRadius kMenuInnerRadius kMenuTileGap kMenuGroupGap kMenuDenseOuterRadius kMenuDenseInnerRadius kMenuDenseTileGap kMenuDenseGroupGap kMenuDenseRowHeight
-- `class MenuDensity extends InheritedTheme`  — Marks a subtree as the Agents desktop layout, so every menu opened from it
+### menu_tile_group.dart  (349 Z.)
+- const: kMenuOuterRadius kMenuInnerRadius kMenuTileGap kMenuGroupGap
 - `class MenuTileGroup extends StatelessWidget`  — A menu drawn as a run of filled tiles instead of one boxed card.
 - `class MenuActionRow extends StatelessWidget`  — One row of a menu: an icon, a label, an optional line under it and
 - `Future<T?> showMenuSheet<T>( BuildContext context, { required List<List<Widget>> groups, Widget? header, Color? color, } …)`  — A menu as a bottom sheet: the house sheet chrome, then the same tiles a
 - `class MenuAnchorButton extends StatelessWidget`  — The control a menu hangs off: the current value, an arrow, and the tap
 
-### message_bubble.dart  (492 Z.)
+### message_bubble.dart  (471 Z.)
 - part 'message_bubble/models.dart' · part 'message_bubble/layout.dart' · part 'message_bubble/chrome.dart' · part 'message_bubble/rich_blocks.dart' · part 'message_bubble/tools.dart' · part 'message_bubble/images.dart' · part 'message_bubble/cards.dart'
 - const: _kBlockGap _kArtifactGap _kCardStackGap _kInfoBarGap _kMobileBottomBarHeight _richBlockRegex _visualBlockStartRegex _diffBlockRegex _attachmentHeaderRe _kAiResponseFontFamilyDefault _cachedShowReasoningTokens _cachedShowModelInfo
 - `class MessageBubble extends StatefulWidget`
@@ -3022,6 +2974,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ### nice_snackbar.dart  (55 Z.)
 - `class NiceSnackBar`  — The old name for [AppNotifications], kept so the call sites that already
+
+### pane_header.dart  (71 Z.)
+- `class PaneHeader extends StatelessWidget`  — A side pane's header: 56 px high, a quiet line under it, an 18 px glyph
 
 ### password_strength_meter.dart  (145 Z.)
 - `class PasswordStrengthMeter extends StatelessWidget`  — A widget that displays password strength with visual indicators.
@@ -3100,15 +3055,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SelectionCopyArea extends StatefulWidget`  — A [SelectionArea] whose Ctrl+C / Cmd+C does not depend on the focus tree.
 - `class SelectionCopyAreaState extends State<SelectionCopyArea>`
 
-### settings_kit.dart  (271 Z.)
-- `class SettingsSectionHeader extends StatelessWidget`  — Shared building blocks for the settings-style pages.
-- `class SettingsGroupedCard extends StatelessWidget`  — Rounded surface that groups rows, with hairline dividers between them.
-- `class SettingsLeadingIcon extends StatelessWidget`  — Fixed-size leading slot so rows line up whatever their icon.
-- `class SettingsRow extends StatelessWidget`  — One tappable line inside a [SettingsGroupedCard].
-- `enum SettingsInfoTone`  — Colour role of a [SettingsInfoCard].
-- `class SettingsInfoCard extends StatelessWidget`  — Short explanatory note under a settings group.
-
-### settings_list_view.dart  (122 Z.)
+### settings_list_view.dart  (108 Z.)
 - `class SettingsListView extends StatefulWidget`  — Scroll container for settings-style pages with a bounded set of rows.
 - `class _SettingsListViewState extends State<SettingsListView>`
 
@@ -3117,11 +3064,6 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SettingsSearchBar extends StatefulWidget`  — The search field of a settings page: a floating pill with the magnifier on
 - `class _SettingsSearchBarState extends State<SettingsSearchBar>`
 - `class PinnedSettingsSearchBar extends StatelessWidget implements PreferredSizeWidget`  — The same bar, sized to sit in a [FloatingAppBar]'s `bottom` slot so it
-
-### stamped_text.dart  (132 Z.)
-- const: _kMarkupMarker _kDialable
-- `class StampedText extends StatelessWidget`  — Text plus an optional bottom-end [stamp], laid out by the messenger rule.
-- `bool isPlainStampableText(String text)`  — Whether [text] renders the same as a plain [Text] does — so the stamp can
 
 ### technical_drawing_layers.dart  (28 Z.)
 - `int technicalDrawingLayerPriority(Map<String, dynamic> element)`  — Paint order for one element of a technical drawing.
@@ -3241,32 +3183,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Duration? resolveTurnElapsed({ Duration? finalDuration, DateTime? startedAt, required DateTime now, required bool isRunn …)`  — How long the turn has taken, from the most trustworthy source available.
 
 ## lib/widgets/agents_desktop
-### desktop_controls.dart  (328 Z.)
-- `class DeskIconButton extends StatefulWidget`  — One icon button in a desktop bar: a 32 px square with a 20 px glyph.
-- `class _DeskIconButtonState extends State<DeskIconButton>`
-- `class DeskContextMenuIntent extends Intent`  — Opens a context menu from the keyboard (the Menu key, Shift+F10).
-- `class DeskFocusable extends StatelessWidget`  — The keyboard half of a desktop control: a focus stop that Enter and Space
-- `class DeskHairline extends StatelessWidget`  — A 1 px hairline in `outlineVariant`, horizontal or vertical.
-- `class PaneResizeHandle extends StatefulWidget`  — The drag target on a pane border. It paints nothing of its own — the
-- `class _PaneResizeHandleState extends State<PaneResizeHandle>`
-- `class DeskPaneHeader extends StatelessWidget`  — The 48 px header row of a side pane, lined up with the thread's title bar:
+### desktop_controls.dart  (79 Z.)
+- `class PaneResizeHandle extends StatelessWidget`  — The drag target on a pane border, drawn as chuk_chat draws the divider in
 - `String deskShortcutLabel(String keys)`  — The platform's name for the primary modifier: Cmd on a Mac, Ctrl
 - `bool deskPrimaryModifierPressed()`  — Whether the platform's primary modifier is down (Cmd on a Mac).
 
-### desktop_dialog.dart  (132 Z.)
+### desktop_dialog.dart  (61 Z.)
 - `bool isAgentsDesktop(BuildContext context)`  — Whether [context] is laid out as the desktop (not the phone).
 - `Future<T?> showAgentsSheetOrDialog<T>({ required BuildContext context, required WidgetBuilder builder, })`  — A form that is a bottom sheet on the phone and a centred dialog, at most
-- `class AgentsDesktopDialog extends StatelessWidget`  — The dialog frame itself: the app's dialog surface and radius, centred,
-- `Future<bool> showAgentsConfirmDialog( BuildContext context, { required String title, required String message, String con …)`  — Asks before something is deleted. Returns true when the user confirms.
+- `class AgentsDesktopDialog extends StatelessWidget`  — The dialog frame itself: chuk_chat's dialog — the surface, corner and
 
-### desktop_metrics.dart  (62 Z.)
-- const: kDeskRosterMin kDeskRosterMax kDeskRosterDefault kDeskRailWidth kDeskDetailsMin kDeskDetailsMax kDeskDetailsDefault kDeskThreadMin kDeskBarHeight kDeskButton kDeskGlyph kDeskButtonGap kDeskAgentRow kDeskRoomRow kDeskRowFace kDeskRowPadH kDeskSelectedBar kDeskControlRadius kDeskMenuRadius kDeskMenuRow kDeskComposerRadius kDeskComposerButton kDeskReadingMeasure kDeskDialogMaxWidth kDeskDialogRadius
+### desktop_metrics.dart  (31 Z.)
+- const: kDeskRosterMin kDeskRosterMax kDeskRosterDefault kDeskRailWidth kDeskDetailsMin kDeskDetailsMax kDeskDetailsDefault kDeskThreadMin kDeskDialogMaxWidth kDeskDialogRadius
 
-### message_hover_actions.dart  (152 Z.)
-- `class MessageHoverActions extends StatefulWidget`
-- `class _MessageHoverActionsState extends State<MessageHoverActions>`
-
-### quick_switcher.dart  (329 Z.)
+### quick_switcher.dart  (335 Z.)
 - `sealed class QuickSwitcherPick`  — What the user picked.
 - `class QuickSwitcherAgent extends QuickSwitcherPick`
 - `class QuickSwitcherRoom extends QuickSwitcherPick`
@@ -3363,7 +3293,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleImages on _MessageBubbleState`
 
-### layout.dart  (1564 Z.)
+### layout.dart  (1128 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleLayout on _MessageBubbleState`
 
@@ -3379,7 +3309,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleRichBlocks on _MessageBubbleState`
 
-### tools.dart  (826 Z.)
+### tools.dart  (828 Z.)
 - part of '../message_bubble.dart'
 - `extension _MessageBubbleTools on _MessageBubbleState`
 
@@ -3397,7 +3327,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class HoverMarqueeText extends StatefulWidget`  — A single-line title that shows an ellipsis at rest and, when the pointer
 - `class _HoverMarqueeTextState extends State<HoverMarqueeText> with SingleTickerProviderStateMixin`
 
-### sidebar_chrome.dart  (1670 Z.)
+### sidebar_chrome.dart  (1795 Z.)
 - const: kSbCardGap kSbBlockInset kSbCardRadius kSbCardJointRadius kSbNavCardHeight kSbNavRowStep _kSbMenuCentre kSbNavBlockTop kSbNavIconLeft kSbNavIconTile kSbNavIconTop kSbNavIconCentre
 - `Color sbPanelBackground(BuildContext context)`  — The colour the sidebar panel is painted in — the same step off the page
 - `double sbNavRowTop(int index)`  — Top of row [index] of the navigation block — the cards when the panel is
@@ -3419,8 +3349,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SbChatTileBody extends StatelessWidget`  — Split out so it can read the card's hover state, which the card publishes
 - `class SbChatGroup<T>`  — A time group: the header label and the chats that fall into it.
 - `List<SbChatGroup<T>> sbGroupByTime<T>( List<T> items, DateTime Function(T item) dateOf, { required String Function(DateT …)`  — Buckets chats into Today / This week / This month / one group per older
-- `String sbChatDateLine(BuildContext context, DateTime? date)`  — The muted line under a chat title: the time for anything from today, the
+- `String sbChatDateLine(BuildContext context, DateTime? date, {DateTime? now})`  — The muted line under a chat title: the time for anything from today, the
 - `class SbOfflineNotice extends StatelessWidget`  — The strip that says the list is stale because the device is offline, with
+- `class SbRailSlot extends StatelessWidget`  — One target of the folded rail: the round ink the mini rail's icons take,
 - `class SbFloatingBar extends StatelessWidget`  — A card that floats over the scrolling list — the app name at the top of
 - `class SbBrand extends StatelessWidget`  — Brand row: optional logo square + text. Trailing widget on the right.
 - `class SbSearchTrigger extends StatelessWidget`  — Subtle search trigger — rounded icon button with "Search" label.
@@ -3499,13 +3430,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 
 ## Befunde
 
-**Waisen (10)** — von keiner Datei importiert. Nicht wiederbeleben, ohne vorher zu prüfen, ob sie noch gebraucht werden.
+**Waisen (11)** — von keiner Datei importiert. Nicht wiederbeleben, ohne vorher zu prüfen, ob sie noch gebraucht werden.
 - `lib/platform_specific/chat/composer_menu.dart` — 59 Zeilen, von keiner Datei benutzt
 - `lib/platform_specific/chat/composer_menu_choices.dart` — 18 Zeilen, von keiner Datei benutzt
 - `lib/platform_specific/mobile/mobile_chips.dart` — 63 Zeilen, von keiner Datei benutzt
 - `lib/services/notification_service_io.dart` — 250 Zeilen, von keiner Datei benutzt
 - `lib/services/notification_service_stub.dart` — 38 Zeilen, von keiner Datei benutzt
 - `lib/services/service_credentials_service.dart` — 212 Zeilen, von keiner Datei benutzt
+- `lib/services/settings/debug_settings.dart` — 41 Zeilen, von keiner Datei benutzt
 - `lib/services/streaming_foreground_service_io.dart` — 307 Zeilen, von keiner Datei benutzt
 - `lib/services/streaming_foreground_service_stub.dart` — 71 Zeilen, von keiner Datei benutzt
 - `lib/ui/expressive/waveform.dart` — 9 Zeilen, von keiner Datei benutzt
@@ -3518,40 +3450,40 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - 5 Dateien: lib/services/agents/agents_cloud_relay.dart → lib/services/agents/agents_relay_client.dart → lib/services/agents/agents_relay_link.dart → lib/services/mcp/mcp_service.dart → lib/services/mcp/mcp_store
 - 9 Dateien: lib/services/agents/agents_queued_marks.dart → lib/services/chat_preload_service.dart → lib/services/chat_storage_crud.dart → lib/services/chat_storage_mutations.dart → lib/services/chat_storage_servi
 
-**Größte Dateien (74 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4166 Zeilen, 165 Symbole
+**Größte Dateien (70 über der Schwelle)**
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4088 Zeilen, 164 Symbole
 - `lib/services/agents/agents_relay_client.dart` — 3267 Zeilen, 404 Symbole
-- `lib/platform_specific/chat/chat_ui_desktop.dart` — 3006 Zeilen, 136 Symbole
+- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2636 Zeilen, 133 Symbole
 - `lib/platform_specific/chat/desktop_send_logic.dart` — 2540 Zeilen, 24 Symbole
-- `lib/widgets/agents_thread_view.dart` — 2286 Zeilen, 139 Symbole
+- `lib/widgets/agents_thread_view.dart` — 2277 Zeilen, 136 Symbole
 
 ## Mehrfach vergebene Namen
 
-267 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+247 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
-- `_load` — lib/pages/diagnostics_settings_page.dart:39 · lib/pages/settings/developer_settings_page.dart:32 · lib/pages/settings/embedding_settings_page.dart:31 · lib/pages/workspace_files_page.dart:70 +7
-- `_save` — lib/pages/agent_profile_edit_page.dart:149 · lib/pages/skills_settings_page.dart:326 · lib/pages/workspace_instructions_page.dart:57 · lib/services/agents/agents_task_outbox.dart:229 +7
+- `_save` — lib/pages/agent_profile_edit_page.dart:149 · lib/pages/skills_settings_page.dart:323 · lib/pages/workspace_instructions_page.dart:57 · lib/services/agents/agents_task_outbox.dart:229 +7
+- `_load` — lib/pages/diagnostics_settings_page.dart:42 · lib/pages/settings/embedding_settings_page.dart:32 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 +6
 - `_persist` — lib/services/agents/agent_profile_store.dart:264 · lib/services/agents/agent_read_marks.dart:156 · lib/services/agents/agent_roster_source.dart:184 · lib/services/agents/agent_roster_store.dart:169 +5
-- `Function` — lib/pages/mcp_connectors_page.dart:985 · lib/pages/settings/mcp_connectors_page.dart:891 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/services/chat_payload_codec.dart:488 +4
-- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:308 · lib/pages/settings/mcp_connectors_page.dart:315 · lib/services/offline_queue_service_native.dart:37 +4
-- `_onInbound` — lib/services/agents/browser_presence.dart:177 · lib/services/automations/automations_source.dart:139 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1167 +2
-- `_row` — lib/pages/mcp_connectors_page.dart:284 · lib/pages/mobile_agents_settings_page.dart:395 · lib/pages/settings/mcp_connectors_page.dart:291 · lib/pages/skills_settings_page.dart:732 +2
+- `Function` — lib/pages/mcp_connectors_page.dart:1018 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/services/chat_payload_codec.dart:488 · lib/services/workspace_file_upload.dart:36 +3
+- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:336 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/agents_desktop/quick_switcher.dart:162 +3
+- `_onInbound` — lib/services/agents/browser_presence.dart:177 · lib/services/automations/automations_source.dart:139 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1149 +2
 - `_formatDate` — lib/pages/media_manager_page.dart:580 · lib/pages/usage_details_page.dart:920 · lib/pages/workspace_mobile_detail_page.dart:526 · lib/services/workspace_message_service.dart:260 +1
 - `_key` — lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:472 · lib/services/chat_dirty_store.dart:50 · lib/services/chat_model_selection_service.dart:52 +1
-- `_build` — lib/pages/agent_profile_page.dart:117 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
+- `_row` — lib/pages/mcp_connectors_page.dart:312 · lib/pages/mobile_agents_settings_page.dart:345 · lib/pages/skills_settings_page.dart:721 · lib/widgets/agents_desktop/quick_switcher.dart:254 +1
+- `_build` — lib/pages/agent_profile_page.dart:115 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
 - `_coerceInt` — lib/services/tool_executor.dart:1288 · lib/tool_handlers/chat_search_tools.dart:720 · lib/tool_handlers/map_tools.dart:632 · lib/tool_handlers/web_tools.dart:24
-- `_connect` — lib/pages/mcp_connectors_page.dart:689 · lib/pages/settings/mcp_connectors_page.dart:602 · lib/widgets/agents_thread_view.dart:960 · lib/widgets/mcp_connect_card.dart:54
+- `_confirmDelete` — lib/pages/agent_profile_page.dart:338 · lib/pages/skills_settings_page.dart:108 · lib/pages/workspace_mobile_detail_page.dart:111 · lib/widgets/agent_roster_view.dart:360
 - `_ensureEncryptionKey` — lib/services/agents/supabase_pairing_sync.dart:178 · lib/services/mcp/chuk_mcp_mirror.dart:182 · lib/services/mcp/mcp_connector_sync.dart:137 · lib/services/secrets/secrets_sync.dart:122
 - `_formatDuration` — lib/assistant/assistant_tools.dart:809 · lib/services/device_services.dart:518 · lib/utils/api_rate_limiter.dart:207 · lib/widgets/agent_run_views.dart:150
-- `_onChanged` — lib/pages/automations_page.dart:62 · lib/pages/skills_settings_page.dart:593 · lib/pages/workspace_instructions_page.dart:53 · lib/widgets/vnc_webview_controls.dart:310
-- `_onControllerChanged` — lib/platform_specific/chat/chat_ui_mobile.dart:833 · lib/widgets/settings_search_bar.dart:81 · lib/widgets/sidebar/sidebar_chrome.dart:676 · lib/widgets/vnc_trackpad_overlay.dart:188
-- `_pick` — lib/pages/settings/embedding_settings_page.dart:40 · lib/pages/theme_page.dart:1059 · lib/pages/theme_page.dart:1220 · lib/widgets/agent_roster_view.dart:284
-- `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:66 · lib/pages/skills_settings_page.dart:597 · lib/widgets/message_bubble/cards.dart:384
-- `_select` — lib/pages/agents_shell_state.dart:173 · lib/pages/messenger_shell.dart:355 · lib/services/storage/agents_chat_store.dart:904 · lib/widgets/chat_documents_panel.dart:254
-- `_submit` — lib/pages/secrets_settings_page.dart:225 · lib/pages/workspaces_page.dart:619 · lib/widgets/coworker_name_dialog.dart:69 · lib/widgets/room_create_sheet.dart:85
+- `_onChanged` — lib/pages/automations_page.dart:60 · lib/pages/skills_settings_page.dart:591 · lib/pages/workspace_instructions_page.dart:53 · lib/widgets/vnc_webview_controls.dart:310
+- `_onControllerChanged` — lib/platform_specific/chat/chat_ui_mobile.dart:830 · lib/widgets/settings_search_bar.dart:81 · lib/widgets/sidebar/sidebar_chrome.dart:685 · lib/widgets/vnc_trackpad_overlay.dart:188
+- `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:64 · lib/pages/skills_settings_page.dart:595 · lib/widgets/message_bubble/cards.dart:384
+- `_select` — lib/pages/agents_shell_state.dart:173 · lib/pages/messenger_shell.dart:352 · lib/services/storage/agents_chat_store.dart:904 · lib/widgets/chat_documents_panel.dart:254
+- `_submit` — lib/pages/secrets_settings_page.dart:222 · lib/pages/workspaces_page.dart:619 · lib/widgets/coworker_name_dialog.dart:69 · lib/widgets/room_create_sheet.dart:85
 - `_syncCacheToCurrentUser` — lib/services/per_model_system_prompt_service.dart:153 · lib/services/skills/user_skills_service.dart:63 · lib/services/title_generation_service.dart:104 · lib/services/user_preferences_service.dart:46
 - `_table` — lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 · lib/services/theme_settings_service.dart:129 · lib/widgets/chat_document_view.dart:364
 - `Duration` — lib/services/agents/agents_cloud_relay.dart:249 · lib/services/agents/agents_host_session.dart:74 · lib/widgets/app_notification.dart:115
 - `NotificationService` — lib/services/notification_service.dart:16 · lib/services/notification_service_io.dart:12 · lib/services/notification_service_stub.dart:7
 - `StreamingForegroundService` — lib/services/streaming_foreground_service.dart:10 · lib/services/streaming_foreground_service_io.dart:9 · lib/services/streaming_foreground_service_stub.dart:6
-- … +242 weitere
+- `_CopyButton` — lib/widgets/chuk_table.dart:1113 · lib/widgets/chuk_table_classic.dart:367 · lib/widgets/markdown_message.dart:1861
+- … +222 weitere

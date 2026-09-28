@@ -1,27 +1,30 @@
 // A run of messages from one sender is ONE group.
 //
-// Two things say so, and both are pinned here because both were wrong on the
-// phone: the corners where two blocks touch go small while the outer corners
-// stay full, and the gap inside a run is far tighter than the gap between two
-// runs. The numbers live in `ui/expressive/bubble_shape.dart` and nowhere else
-// — a screen that types its own 10 or 18 breaks the grouping without failing a
-// test, so the test reads the constants and checks the geometry they produce.
+// The messenger thread draws chuk_chat's bubbles: the user's accent bubble
+// has full 16 px corners and a 5 px tail only on the last bubble of a run,
+// the answer has no bubble at all, and the gap inside a run is far tighter
+// than the gap between two runs. These pins hold that geometry in the
+// messenger mode, so a thread cannot drift back to a look of its own.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
-import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
-import 'package:chuk_chat/ui/expressive/message_stamp.dart';
 import 'package:chuk_chat/widgets/chat_document_inline.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
-const Radius big = Radius.circular(kBubbleRadiusBig);
-const Radius small = Radius.circular(kBubbleRadiusSmall);
+const Radius full = Radius.circular(16);
+const Radius tail = Radius.circular(5);
+
+/// chuk_chat's bubble margins: 10 above the first bubble of a run, 2 above
+/// the others, 2 below every bubble.
+const double gapInRun = 2 + 2;
+const double gapBetweenRuns = 2 + 10;
 
 Widget wrap(Widget child) => MaterialApp(
   localizationsDelegates: const <LocalizationsDelegate<Object>>[
@@ -57,14 +60,14 @@ Widget threeMessageRun({required bool isUser}) => Column(
   ],
 );
 
+final Finder decoratedBoxes = find.byWidgetPredicate(
+  (Widget widget) => widget is Container && widget.decoration is BoxDecoration,
+);
+
 /// The painted rectangle of the bubble at [index] — the decorated box, not the
 /// margin box, so the distance between two of them IS the gap.
 Rect paintedBubble(WidgetTester tester, int index) {
-  final Finder boxes = find.byWidgetPredicate(
-    (Widget widget) =>
-        widget is Container && widget.decoration is BoxDecoration,
-  );
-  final Element element = tester.element(boxes.at(index));
+  final Element element = tester.element(decoratedBoxes.at(index));
   final Finder decorated = find.descendant(
     of: find.byElementPredicate((Element e) => e == element),
     matching: find.byType(DecoratedBox),
@@ -73,11 +76,9 @@ Rect paintedBubble(WidgetTester tester, int index) {
 }
 
 BorderRadius radiusOf(WidgetTester tester, int index) {
-  final Finder boxes = find.byWidgetPredicate(
-    (Widget widget) =>
-        widget is Container && widget.decoration is BoxDecoration,
+  final Container container = tester.widget<Container>(
+    decoratedBoxes.at(index),
   );
-  final Container container = tester.widget<Container>(boxes.at(index));
   return (container.decoration! as BoxDecoration).borderRadius!
       as BorderRadius;
 }
@@ -88,38 +89,28 @@ void main() {
   ContentBlock.decodesFileBlocks = true;
   setUp(() => SharedPreferences.setMockInitialValues(<String, Object>{}));
 
-  testWidgets('a coworker run: small corners inside, full corners outside', (
+  testWidgets('the user\'s run: full corners, the tail only at its end', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(wrap(threeMessageRun(isUser: false)));
+    await tester.pumpWidget(wrap(threeMessageRun(isUser: true)));
     await tester.pump();
 
-    // First of the run: open at the top, connected downwards. A coworker sits
-    // on the left, so the left edge is the one that carries the joins.
-    expect(radiusOf(tester, 0).topLeft, big);
-    expect(radiusOf(tester, 0).topRight, big);
-    expect(radiusOf(tester, 0).bottomLeft, small);
-    expect(radiusOf(tester, 0).bottomRight, big);
-
-    // Middle: joined on both ends.
-    expect(radiusOf(tester, 1).topLeft, small);
-    expect(radiusOf(tester, 1).bottomLeft, small);
-    expect(radiusOf(tester, 1).topRight, big);
-    expect(radiusOf(tester, 1).bottomRight, big);
-
-    // Last: joined upwards, open at the bottom.
-    expect(radiusOf(tester, 2).topLeft, small);
-    expect(radiusOf(tester, 2).bottomLeft, big);
-
-    // The next run starts over with every corner full.
-    expect(radiusOf(tester, 3).topLeft, big);
-    expect(radiusOf(tester, 3).bottomLeft, big);
+    for (int i = 0; i < 4; i++) {
+      final BorderRadius radius = radiusOf(tester, i);
+      expect(radius.topLeft, full);
+      expect(radius.topRight, full);
+      expect(radius.bottomLeft, full);
+    }
+    expect(radiusOf(tester, 0).bottomRight, full);
+    expect(radiusOf(tester, 1).bottomRight, full);
+    expect(radiusOf(tester, 2).bottomRight, tail);
+    expect(radiusOf(tester, 3).bottomRight, tail);
   });
 
-  testWidgets('the gap inside a run is far tighter than between two runs', (
+  testWidgets('the gap inside a run is tighter than between two runs', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(wrap(threeMessageRun(isUser: false)));
+    await tester.pumpWidget(wrap(threeMessageRun(isUser: true)));
     await tester.pump();
 
     final Rect first = paintedBubble(tester, 0);
@@ -127,39 +118,40 @@ void main() {
     final Rect last = paintedBubble(tester, 2);
     final Rect nextRun = paintedBubble(tester, 3);
 
-    expect(middle.top - first.bottom, kBubbleGapInGroup);
-    expect(last.top - middle.bottom, kBubbleGapInGroup);
-    expect(nextRun.top - last.bottom, kBubbleGapBetweenGroups);
-    // Not just different — different enough to read at a glance.
-    expect(kBubbleGapBetweenGroups, greaterThan(kBubbleGapInGroup * 4));
+    expect(middle.top - first.bottom, gapInRun);
+    expect(last.top - middle.bottom, gapInRun);
+    expect(nextRun.top - last.bottom, gapBetweenRuns);
   });
 
-  testWidgets('the user\'s own messages group the same way', (
+  testWidgets('a coworker\'s run draws no bubble at all', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(wrap(threeMessageRun(isUser: true)));
+    await tester.pumpWidget(wrap(threeMessageRun(isUser: false)));
     await tester.pump();
 
-    // The user sits on the right, so the right edge carries the joins.
-    expect(radiusOf(tester, 0).bottomRight, small);
-    expect(radiusOf(tester, 0).bottomLeft, big);
-    expect(radiusOf(tester, 1).topRight, small);
-    expect(radiusOf(tester, 1).bottomRight, small);
-    expect(radiusOf(tester, 2).topRight, small);
-    expect(radiusOf(tester, 2).bottomRight, big);
-    expect(radiusOf(tester, 3).topRight, big);
+    expect(decoratedBoxes, findsNothing);
+    // The run gap lives in the margin above the answer's column.
+    double marginTop(int index) {
+      final Container box = tester.widget<Container>(
+        find
+            .descendant(
+              of: find.byType(MessageBubble).at(index),
+              matching: find.byWidgetPredicate(
+                (Widget widget) => widget is Container && widget.margin != null,
+              ),
+            )
+            .first,
+      );
+      return (box.margin! as EdgeInsets).top;
+    }
 
-    expect(
-      paintedBubble(tester, 1).top - paintedBubble(tester, 0).bottom,
-      kBubbleGapInGroup,
-    );
-    expect(
-      paintedBubble(tester, 3).top - paintedBubble(tester, 2).bottom,
-      kBubbleGapBetweenGroups,
-    );
+    expect(marginTop(0), 10);
+    expect(marginTop(1), 2);
+    expect(marginTop(2), 2);
+    expect(marginTop(3), 10);
   });
 
-  testWidgets('a document under an answer belongs to the same run', (
+  testWidgets('a document under an answer is its own card', (
     WidgetTester tester,
   ) async {
     await tester.binding.setSurfaceSize(const Size(400, 1400));
@@ -194,38 +186,27 @@ void main() {
     );
     await tester.pump();
 
-    // Two blocks, one run: the answer keeps its top corners and gives up its
-    // bottom-left, the document picks that join up and closes the run.
-    final BorderRadius answer = radiusOf(tester, 0);
-    expect(answer.topLeft, big);
-    expect(answer.bottomLeft, small);
-
+    // The document is drawn inline, under the answer, in the card radius.
     final Container documentBox = tester.widget<Container>(
       find
           .descendant(
             of: find.byType(InlineChatDocument),
-            matching: find.byWidgetPredicate(
-              (Widget widget) =>
-                  widget is Container && widget.decoration is BoxDecoration,
-            ),
+            matching: decoratedBoxes,
           )
           .first,
     );
-    final BorderRadius document =
-        (documentBox.decoration! as BoxDecoration).borderRadius!
-            as BorderRadius;
-    expect(document.topLeft, small);
-    expect(document.bottomLeft, big);
-    expect(document.bottomRight, big);
-
-    // And it hangs on the answer, not below it.
-    final Rect bubble = paintedBubble(tester, 0);
+    expect(
+      (documentBox.decoration! as BoxDecoration).borderRadius,
+      kBorderRadiusCard,
+    );
+    final Rect text = tester.getRect(
+      find.text('Erledigt: das Dokument steht.').first,
+    );
     final Rect block = tester.getRect(find.byType(InlineChatDocument));
-    expect(block.top - bubble.bottom, kBubbleGapInGroup);
+    expect(block.top, greaterThan(text.bottom));
 
-    // The clock belongs to the last block of the run. The document carries its
-    // own version-and-time line, so the answer above it shows no stamp.
-    expect(find.byType(MessageStamp), findsNothing);
+    // No clock stamp on the answer.
+    expect(find.text('02:29'), findsNothing);
   });
 
   group('what breaks a run', () {

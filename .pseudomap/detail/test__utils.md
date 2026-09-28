@@ -13,8 +13,8 @@
 ## test/utils/artifact_tag_parser_test.dart  (208 Z.)
 - L6 `void main()`
 
-## test/utils/build_app_theme_agents_test.dart  (46 Z.)
-- L10 `void main()`  — The theme has two sides. With Agents off it is upstream chuk_chat's; with
+## test/utils/build_app_theme_agents_test.dart  (50 Z.)
+- L10 `void main()`  — The theme has one side. The Agents build uses chuk_chat's theme as is: the
 
 ## test/utils/build_app_theme_contrast_test.dart  (161 Z.)
 - L10 `void main()`

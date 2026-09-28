@@ -115,161 +115,160 @@
   - L153 `void dispose()`  — Dispose all resources
   - L159 `bool get _isDesktopPlatform`
 
-## lib/services/app_theme_service.dart  (877 Z.)
-- L18 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
-- L21 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
-  - L22 `AppThemeService._()`
-  - L24 `static final AppThemeService _instance = AppThemeService._()`
-  - L25 `static AppThemeService get instance`
-  - L30 `static bool get _lookSyncs`  — Whether contrast, UI font and dynamic colour travel with the synced look.
-  - L33 `Brightness _themeMode = kDefaultThemeMode`
-  - L34 `Color _accentColor = kDefaultAccentColor`
-  - L35 `Color _iconFgColor = kDefaultIconFgColor`
-  - L36 `Color _bgColor = kDefaultBgColor`
-  - L37 `bool _dynamicColorEnabled = kDefaultDynamicColorEnabled`
-  - L41 `double _contrast = kDefaultContrast`
-  - L45 `String _uiFontFamily = kDefaultUiFontFamily`
-  - L48 `bool _showReasoningTokens = kDefaultShowReasoningTokens`
-  - L49 `bool _showModelInfo = kDefaultShowModelInfo`
-  - L50 `bool _showTps = kDefaultShowTps`
-  - L53 `bool _autoSendVoiceTranscription = false`
-  - L56 `bool _imageGenEnabled = false`
-  - L57 `String _imageGenDefaultSize = 'landscape_4_3'`
-  - L58 `int _imageGenCustomWidth = 1024`
-  - L59 `int _imageGenCustomHeight = 768`
-  - L60 `bool _imageGenUseCustomSize = false`
-  - L63 `bool _includeRecentImagesInHistory = true`
-  - L64 `bool _includeAllImagesInHistory = false`
-  - L65 `bool _includeReasoningInHistory = false`
-  - L66 `bool _includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory`
-  - L69 `bool _toolCallingEnabled = kDefaultToolCallingEnabled`
-  - L70 `bool _toolDiscoveryMode = kDefaultToolDiscoveryMode`
-  - L71 `bool _showToolCalls = kDefaultShowToolCalls`
-  - L74 `String _uiLocale = kDefaultUiLocale`
-  - L77 `double _chatFontSize = kDefaultChatFontSize`
-  - L80 `String _chatFontFamily = kDefaultChatFontFamily`
-  - L83 `double _uiScale = kDefaultUiScale`
-  - L88 `bool _onboardingCompleted = false`
-  - L91 `static const String _kThemeModeKey = 'themeMode'`
-  - L92 `static const String _kAccentColorKey = 'accentColor'`
-  - L93 `static const String _kIconFgColorKey = 'iconFgColor'`
-  - L94 `static const String _kBgColorKey = 'bgColor'`
-  - L95 `static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled'`
-  - L96 `static const String _kContrastKey = 'contrast'`
-  - L97 `static const String _kUiFontFamilyKey = 'uiFontFamily'`
-  - L98 `static const String _kShowReasoningTokensKey = 'showReasoningTokens'`
-  - L99 `static const String _kShowModelInfoKey = 'showModelInfo'`
-  - L100 `static const String _kShowTpsKey = 'showTps'`
-  - L101 `static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription'`
-  - L103 `static const String _kImageGenEnabledKey = 'imageGenEnabled'`
-  - L104 `static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize'`
-  - L105 `static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth'`
-  - L106 `static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight'`
-  - L107 `static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize'`
-  - L108 `static const String _kIncludeRecentImagesInHistoryKey = 'includeRecentImagesInHistory'`
-  - L110 `static const String _kIncludeAllImagesInHistoryKey = 'includeAllImagesInHistory'`
-  - L112 `static const String _kIncludeReasoningInHistoryKey = 'includeReasoningInHistory'`
-  - L114 `static const String _kIncludeToolResultsInHistoryKey = 'includeToolResultsInHistory'`
-  - L116 `static const String _kToolCallingEnabledKey = 'toolCallingEnabled'`
-  - L117 `static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode'`
-  - L118 `static const String _kShowToolCallsKey = 'showToolCalls'`
-  - L119 `static const String _kUiLocaleKey = 'uiLocale'`
-  - L120 `static const String _kChatFontSizeKey = 'chatFontSize'`
-  - L121 `static const String _kChatFontFamilyKey = 'chatFontFamily'`
-  - L122 `static const String _kUiScaleKey = 'uiScale'`
-  - L125 `static const String _kOnboardingCompletedKey = 'onboardingCompleted'`
-  - L127 `static String _onboardingKeyFor(String userId)`
-  - L131 `SharedPreferences? _cachedPrefs`
-  - L132 `Timer? _themeSyncDebounce`
-  - L133 `Timer? _customizationSyncDebounce`
-  - L134 `ThemeData? _cachedThemeData`
-  - L138 `Color? _cachedThemeAccent`
-  - L139 `Color? _cachedThemeBg`
-  - L140 `Color? _cachedThemeIconFg`
-  - L141 `double? _cachedThemeContrast`
-  - L142 `String? _cachedThemeUiFont`
-  - L143 `bool _hasAppliedSupabaseTheme = false`
-  - L144 `Future<void>? _supabaseLoadInFlight`
-  - L145 `DateTime? _lastSupabaseLoadAt`
-  - L146 `static const Duration _supabaseLoadTtl = Duration(seconds: 20)`
-  - L149 `Brightness get themeMode`
-  - L150 `Color get accentColor`
-  - L151 `Color get iconFgColor`
-  - L152 `Color get bgColor`
-  - L153 `bool get dynamicColorEnabled`
-  - L154 `double get contrast`
-  - L155 `String get uiFontFamily`
-  - L156 `bool get showReasoningTokens`
-  - L157 `bool get showModelInfo`
-  - L158 `bool get showTps`
-  - L159 `bool get autoSendVoiceTranscription`
-  - L160 `bool get imageGenEnabled`
-  - L161 `String get imageGenDefaultSize`
-  - L162 `int get imageGenCustomWidth`
-  - L163 `int get imageGenCustomHeight`
-  - L164 `bool get imageGenUseCustomSize`
-  - L165 `bool get includeRecentImagesInHistory`
-  - L166 `bool get includeAllImagesInHistory`
-  - L167 `bool get includeReasoningInHistory`
-  - L168 `bool get includeToolResultsInHistory`
-  - L169 `bool get toolCallingEnabled`
-  - L170 `bool get toolDiscoveryMode`
-  - L171 `bool get showToolCalls`
-  - L172 `String get uiLocale`
-  - L173 `double get chatFontSize`
-  - L174 `String get chatFontFamily`
-  - L175 `double get uiScale`
-  - L176 `bool get onboardingCompleted`
-  - L177 `bool get hasAppliedSupabaseTheme`
-  - L179 `ThemeData? get cachedThemeData`
-  - L182 `Future<SharedPreferences> _getPrefs()`
-  - L188 `Future<void> loadFromPrefs()`  — Load theme settings from local SharedPreferences
-  - L254 `bool _readLocalOnboarding(SharedPreferences prefs)`  — Reads the locally cached onboarding state for the signed-in user,
-  - L266 `double _clampChatFontSize(double v)`
-  - L269 `double _clampUiScale(double v)`
-  - L271 `double _clampContrast(double v)`
-  - L273 `String _sanitizeChatFontFamily(String? id)`
-  - L280 `String _sanitizeUiFontFamily(String? id)`
-  - L288 `Future<void> loadFromSupabaseAsync({bool forceRefresh = false})`  — Load theme from Supabase in background
-  - L317 `Future<void> _loadFromSupabase()`
-  - L434 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
-  - L447 `Future<void> _persistToPrefs()`
-  - L498 `void _debouncedSyncTheme()`
-  - L505 `void _debouncedSyncCustomization()`
-  - L512 `Future<void> _syncThemeToSupabase()`
-  - L541 `Future<void> _syncCustomizationToSupabase()`
-  - L585 `void setThemeMode(Brightness mode)`
-  - L592 `void setAccentColor(Color color)`
-  - L599 `void setIconFgColor(Color color)`
-  - L606 `void setBgColor(Color color)`
-  - L619 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
-  - L629 `void setShowReasoningTokens(bool show)`
-  - L635 `void setShowModelInfo(bool show)`
-  - L641 `void setShowTps(bool show)`
-  - L647 `void setAutoSendVoiceTranscription(bool autoSend)`
-  - L653 `void setImageGenEnabled(bool enabled)`
-  - L659 `void setImageGenDefaultSize(String size)`
-  - L665 `void setImageGenCustomWidth(int width)`
-  - L671 `void setImageGenCustomHeight(int height)`
-  - L677 `void setImageGenUseCustomSize(bool useCustom)`
-  - L683 `void setIncludeRecentImagesInHistory(bool value)`
-  - L689 `void setIncludeAllImagesInHistory(bool value)`
-  - L695 `void setIncludeReasoningInHistory(bool value)`
-  - L701 `void setIncludeToolResultsInHistory(bool value)`
-  - L707 `void setToolCallingEnabled(bool value)`
-  - L713 `void setToolDiscoveryMode(bool value)`
-  - L719 `void setShowToolCalls(bool value)`
-  - L725 `void setUiLocale(String locale)`
-  - L731 `void setChatFontSize(double size)`
-  - L739 `void setChatFontFamily(String id)`
-  - L749 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
-  - L763 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
-  - L778 `Future<void> setUiFontFamily(String id)`  — The app-chrome font is part of a theme pack, so it syncs with the rest of
-  - L791 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
-  - L809 `void resetSupabaseThemeFlag()`
-  - L826 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
-  - L862 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
-  - L871 `void dispose()`
+## lib/services/app_theme_service.dart  (861 Z.)
+- L17 `typedef ThemeChangedCallback = void Function()`  — Callback type for theme changes
+- L20 `class AppThemeService extends ChangeNotifier`  — Service for managing application theme state, persistence, and Supabase sync
+  - L21 `AppThemeService._()`
+  - L23 `static final AppThemeService _instance = AppThemeService._()`
+  - L24 `static AppThemeService get instance`
+  - L27 `Brightness _themeMode = kDefaultThemeMode`
+  - L28 `Color _accentColor = kDefaultAccentColor`
+  - L29 `Color _iconFgColor = kDefaultIconFgColor`
+  - L30 `Color _bgColor = kDefaultBgColor`
+  - L31 `bool _dynamicColorEnabled = kDefaultDynamicColorEnabled`
+  - L35 `double _contrast = kDefaultContrast`
+  - L39 `String _uiFontFamily = kDefaultUiFontFamily`
+  - L42 `bool _showReasoningTokens = kDefaultShowReasoningTokens`
+  - L43 `bool _showModelInfo = kDefaultShowModelInfo`
+  - L44 `bool _showTps = kDefaultShowTps`
+  - L47 `bool _autoSendVoiceTranscription = false`
+  - L50 `bool _imageGenEnabled = false`
+  - L51 `String _imageGenDefaultSize = 'landscape_4_3'`
+  - L52 `int _imageGenCustomWidth = 1024`
+  - L53 `int _imageGenCustomHeight = 768`
+  - L54 `bool _imageGenUseCustomSize = false`
+  - L57 `bool _includeRecentImagesInHistory = true`
+  - L58 `bool _includeAllImagesInHistory = false`
+  - L59 `bool _includeReasoningInHistory = false`
+  - L60 `bool _includeToolResultsInHistory = kDefaultIncludeToolResultsInHistory`
+  - L63 `bool _toolCallingEnabled = kDefaultToolCallingEnabled`
+  - L64 `bool _toolDiscoveryMode = kDefaultToolDiscoveryMode`
+  - L65 `bool _showToolCalls = kDefaultShowToolCalls`
+  - L68 `String _uiLocale = kDefaultUiLocale`
+  - L71 `double _chatFontSize = kDefaultChatFontSize`
+  - L74 `String _chatFontFamily = kDefaultChatFontFamily`
+  - L77 `double _uiScale = kDefaultUiScale`
+  - L82 `bool _onboardingCompleted = false`
+  - L85 `static const String _kThemeModeKey = 'themeMode'`
+  - L86 `static const String _kAccentColorKey = 'accentColor'`
+  - L87 `static const String _kIconFgColorKey = 'iconFgColor'`
+  - L88 `static const String _kBgColorKey = 'bgColor'`
+  - L89 `static const String _kDynamicColorEnabledKey = 'dynamicColorEnabled'`
+  - L90 `static const String _kContrastKey = 'contrast'`
+  - L91 `static const String _kUiFontFamilyKey = 'uiFontFamily'`
+  - L92 `static const String _kShowReasoningTokensKey = 'showReasoningTokens'`
+  - L93 `static const String _kShowModelInfoKey = 'showModelInfo'`
+  - L94 `static const String _kShowTpsKey = 'showTps'`
+  - L95 `static const String _kAutoSendVoiceTranscriptionKey = 'autoSendVoiceTranscription'`
+  - L97 `static const String _kImageGenEnabledKey = 'imageGenEnabled'`
+  - L98 `static const String _kImageGenDefaultSizeKey = 'imageGenDefaultSize'`
+  - L99 `static const String _kImageGenCustomWidthKey = 'imageGenCustomWidth'`
+  - L100 `static const String _kImageGenCustomHeightKey = 'imageGenCustomHeight'`
+  - L101 `static const String _kImageGenUseCustomSizeKey = 'imageGenUseCustomSize'`
+  - L102 `static const String _kIncludeRecentImagesInHistoryKey = 'includeRecentImagesInHistory'`
+  - L104 `static const String _kIncludeAllImagesInHistoryKey = 'includeAllImagesInHistory'`
+  - L106 `static const String _kIncludeReasoningInHistoryKey = 'includeReasoningInHistory'`
+  - L108 `static const String _kIncludeToolResultsInHistoryKey = 'includeToolResultsInHistory'`
+  - L110 `static const String _kToolCallingEnabledKey = 'toolCallingEnabled'`
+  - L111 `static const String _kToolDiscoveryModeKey = 'toolDiscoveryMode'`
+  - L112 `static const String _kShowToolCallsKey = 'showToolCalls'`
+  - L113 `static const String _kUiLocaleKey = 'uiLocale'`
+  - L114 `static const String _kChatFontSizeKey = 'chatFontSize'`
+  - L115 `static const String _kChatFontFamilyKey = 'chatFontFamily'`
+  - L116 `static const String _kUiScaleKey = 'uiScale'`
+  - L119 `static const String _kOnboardingCompletedKey = 'onboardingCompleted'`
+  - L121 `static String _onboardingKeyFor(String userId)`
+  - L125 `SharedPreferences? _cachedPrefs`
+  - L126 `Timer? _themeSyncDebounce`
+  - L127 `Timer? _customizationSyncDebounce`
+  - L128 `ThemeData? _cachedThemeData`
+  - L132 `Color? _cachedThemeAccent`
+  - L133 `Color? _cachedThemeBg`
+  - L134 `Color? _cachedThemeIconFg`
+  - L135 `double? _cachedThemeContrast`
+  - L136 `String? _cachedThemeUiFont`
+  - L137 `bool _hasAppliedSupabaseTheme = false`
+  - L138 `Future<void>? _supabaseLoadInFlight`
+  - L139 `DateTime? _lastSupabaseLoadAt`
+  - L140 `static const Duration _supabaseLoadTtl = Duration(seconds: 20)`
+  - L143 `Brightness get themeMode`
+  - L144 `Color get accentColor`
+  - L145 `Color get iconFgColor`
+  - L146 `Color get bgColor`
+  - L147 `bool get dynamicColorEnabled`
+  - L148 `double get contrast`
+  - L149 `String get uiFontFamily`
+  - L150 `bool get showReasoningTokens`
+  - L151 `bool get showModelInfo`
+  - L152 `bool get showTps`
+  - L153 `bool get autoSendVoiceTranscription`
+  - L154 `bool get imageGenEnabled`
+  - L155 `String get imageGenDefaultSize`
+  - L156 `int get imageGenCustomWidth`
+  - L157 `int get imageGenCustomHeight`
+  - L158 `bool get imageGenUseCustomSize`
+  - L159 `bool get includeRecentImagesInHistory`
+  - L160 `bool get includeAllImagesInHistory`
+  - L161 `bool get includeReasoningInHistory`
+  - L162 `bool get includeToolResultsInHistory`
+  - L163 `bool get toolCallingEnabled`
+  - L164 `bool get toolDiscoveryMode`
+  - L165 `bool get showToolCalls`
+  - L166 `String get uiLocale`
+  - L167 `double get chatFontSize`
+  - L168 `String get chatFontFamily`
+  - L169 `double get uiScale`
+  - L170 `bool get onboardingCompleted`
+  - L171 `bool get hasAppliedSupabaseTheme`
+  - L173 `ThemeData? get cachedThemeData`
+  - L176 `Future<SharedPreferences> _getPrefs()`
+  - L182 `Future<void> loadFromPrefs()`  — Load theme settings from local SharedPreferences
+  - L248 `bool _readLocalOnboarding(SharedPreferences prefs)`  — Reads the locally cached onboarding state for the signed-in user,
+  - L260 `double _clampChatFontSize(double v)`
+  - L263 `double _clampUiScale(double v)`
+  - L265 `double _clampContrast(double v)`
+  - L267 `String _sanitizeChatFontFamily(String? id)`
+  - L274 `String _sanitizeUiFontFamily(String? id)`
+  - L282 `Future<void> loadFromSupabaseAsync({bool forceRefresh = false})`  — Load theme from Supabase in background
+  - L311 `Future<void> _loadFromSupabase()`
+  - L420 `Future<void> _reconcileOnboarding(String userId, bool serverCompleted)`  — Merges the per-user Supabase onboarding flag with the local cache.
+  - L433 `Future<void> _persistToPrefs()`
+  - L484 `void _debouncedSyncTheme()`
+  - L491 `void _debouncedSyncCustomization()`
+  - L498 `Future<void> _syncThemeToSupabase()`
+  - L525 `Future<void> _syncCustomizationToSupabase()`
+  - L569 `void setThemeMode(Brightness mode)`
+  - L576 `void setAccentColor(Color color)`
+  - L583 `void setIconFgColor(Color color)`
+  - L590 `void setBgColor(Color color)`
+  - L603 `Future<void> setDynamicColorEnabled(bool enabled)`  — Material You overrides the explicit palette, so it is part of the look and
+  - L613 `void setShowReasoningTokens(bool show)`
+  - L619 `void setShowModelInfo(bool show)`
+  - L625 `void setShowTps(bool show)`
+  - L631 `void setAutoSendVoiceTranscription(bool autoSend)`
+  - L637 `void setImageGenEnabled(bool enabled)`
+  - L643 `void setImageGenDefaultSize(String size)`
+  - L649 `void setImageGenCustomWidth(int width)`
+  - L655 `void setImageGenCustomHeight(int height)`
+  - L661 `void setImageGenUseCustomSize(bool useCustom)`
+  - L667 `void setIncludeRecentImagesInHistory(bool value)`
+  - L673 `void setIncludeAllImagesInHistory(bool value)`
+  - L679 `void setIncludeReasoningInHistory(bool value)`
+  - L685 `void setIncludeToolResultsInHistory(bool value)`
+  - L691 `void setToolCallingEnabled(bool value)`
+  - L697 `void setToolDiscoveryMode(bool value)`
+  - L703 `void setShowToolCalls(bool value)`
+  - L709 `void setUiLocale(String locale)`
+  - L715 `void setChatFontSize(double size)`
+  - L723 `void setChatFontFamily(String id)`
+  - L733 `Future<void> setUiScale(double scale)`  — UI scale is a device-local display preference and is NOT synced to
+  - L747 `Future<void> setContrast(double contrast)`  — Contrast belongs to the look, not to the device: a theme pack sets it
+  - L762 `Future<void> setUiFontFamily(String id)`  — The app-chrome font is part of a theme pack, so it syncs with the rest of
+  - L775 `Future<void> setOnboardingCompleted(bool completed)`  — Onboarding completion is per-user: cached locally under a user-scoped
+  - L793 `void resetSupabaseThemeFlag()`
+  - L810 `ThemeData buildTheme({ColorScheme? lightDynamic, ColorScheme? darkDynamic})`  — Build the ThemeData from current settings.
+  - L846 `ColorScheme? _resolveDynamicScheme({ ColorScheme? lightDynamic, ColorScheme? darkDynamic, })`  — The dynamic scheme for the active brightness, or `null` when Material You
+  - L855 `void dispose()`
 
 ## lib/services/approval_config.dart  (140 Z.)
 - L4 `enum ApprovalCategory`  — Categories of actions that may require approval
@@ -584,7 +583,7 @@
 - L518 `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - L542 `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-## lib/services/chat_payload_migration_service.dart  (938 Z.)
+## lib/services/chat_payload_migration_service.dart  (955 Z.)
 - L62 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - L89 `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
   - L91 `const ChatMaintenanceProgress({ this.migrated = 0, this.verified = 0, this.total = 0, })`
@@ -593,108 +592,110 @@
   - L99 `final int total`
   - L101 `ChatMaintenanceProgress copyWith({int? migrated, int? verified})`
 - L110 `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
-  - L112 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, })`
-  - L119 `final String userId`
-  - L122 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
-  - L125 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
-  - L128 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
-  - L130 `int get total`
-  - L131 `bool get hasWork`
-- L135 `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
-  - L137 `done`
-  - L140 `background`
-  - L144 `blocking`
-- L148 `enum ChatMaintenanceOutcome`  — How a run ended.
-  - L150 `complete`
-  - L153 `cloudPending`
-- L157 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
-  - L158 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
-  - L160 `final String stage`
-  - L161 `final Object cause`
-  - L162 `final bool restored`
-  - L165 `String toString()`
-- L169 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
-  - L171 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
-  - L174 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
-  - L181 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
-  - L190 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
-  - L193 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
-  - L196 `int get currentKeyVersion`  — The key version of the current key.
-  - L199 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
-- L203 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
-  - L204 `const SupabaseChatMigrationCloud()`
-  - L207 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L219 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L239 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L259 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L263 `Future<String> fingerprint(String encrypted)`
-  - L267 `int get currentKeyVersion`
-  - L270 `Future<bool> ensureKey()`
-- L283 `class ChatPayloadMigrationService`
-  - L284 `ChatPayloadMigrationService._()`
-  - L287 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
-  - L291 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
-  - L293 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
-  - L296 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
-  - L302 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
-  - L306 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
-  - L308 `static String _stateKey(String userId)`
-  - L312 `static Future<ChatStartupCheck> startupCheck(String userId)`  — What a normal start of [userId] waits for. Reads the done flag and the
-  - L337 `static Future<void> checkCloudInBackground(String userId)`  — The cloud half of the check, run behind the app on a normal start. It
-  - L355 `static Future<ChatMaintenancePlan> plan( String userId, { bool needsKey = true, })`  — What is left to do for [userId]; an empty plan when the account is
-  - L424 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
-  - L532 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
-  - L566 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
-  - L584 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
-  - L667 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { bool Function()? shouldStop, })`  — Run [work] over [items], at most [parallelism] at a time.
-  - L686 `static Future<_MigrationState> _loadState(String userId)`
-  - L701 `static Future<void> _saveState(String userId, _MigrationState state)`
-  - L713 `static void _logIncompleteCheck(String reason, [Object? error])`  — Why a check could not set the done flag, for the opt-in diagnostics
-  - L728 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
-  - L733 `static Future<bool> isCloudPending(String userId)`  — Whether a check found cloud chats for the next start.
-- L737 `enum _CloudResult`
-  - L737 `done`
-  - L737 `skipped`
-  - L737 `pending`
-- L743 `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
-  - L744 `_MigrationState({ this.done = false, this.cloudPending = false, Set<String>? skip, }) : skip = skip ?? <String>{}`
-  - L750 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
-  - L759 `bool done`
-  - L760 `bool cloudPending`
-  - L761 `final Set<String> skip`
-  - L763 `Map<String, dynamic> toJson()`
-- L772 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
-  - L773 `ChatMaintenanceController._()`
-  - L775 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
-  - L778 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
-  - L779 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
-  - L780 `ChatMaintenanceFailure? _failure`
-  - L781 `String? _userId`
-  - L782 `Completer<void>? _released`
-  - L783 `ChatMaintenancePlan? _plan`
-  - L786 `String? _restoredUserId`  — The user whose session was already there when the app started.
-  - L787 `bool _showsSyncHint = false`
-  - L789 `ChatMaintenancePhase get phase`
-  - L790 `ChatMaintenanceProgress get progress`
-  - L791 `ChatMaintenanceFailure? get failure`
-  - L795 `bool get showsSyncHint`  — Whether a slow check may say "Syncing your chats": only right after a
-  - L799 `void noteRestoredSession(String? userId)`  — Record the session the app started with (main(), after the Supabase
-  - L802 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
-  - L810 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
-  - L818 `Future<void> _check(String userId)`
-  - L850 `Future<void> _run()`
-  - L875 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
-  - L890 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
-  - L895 `void _release()`
-  - L901 `void _set(ChatMaintenancePhase phase)`
-  - L908 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, bool syncHint = false, })`  — Put the controller into [phase] with [progress] (widget tests).
-  - L922 `void reset()`  — Forget the run (sign-out, tests). A sign-in after this is not the
-- L937 `enum ChatMaintenancePhase`
-  - L937 `idle`
-  - L937 `checking`
-  - L937 `running`
-  - L937 `failed`
-  - L937 `done`
+  - L112 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, this.localKnown = true, })`
+  - L120 `final String userId`
+  - L123 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
+  - L126 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
+  - L129 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
+  - L132 `final bool localKnown`  — Whether the cache scan ran (false: it failed). The done flag needs it.
+  - L134 `int get total`
+  - L135 `bool get hasWork`
+- L139 `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
+  - L141 `done`
+  - L144 `background`
+  - L148 `blocking`
+- L152 `enum ChatMaintenanceOutcome`  — How a run ended.
+  - L154 `complete`
+  - L157 `cloudPending`
+- L161 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
+  - L162 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
+  - L164 `final String stage`
+  - L165 `final Object cause`
+  - L166 `final bool restored`
+  - L169 `String toString()`
+- L173 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
+  - L175 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
+  - L178 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
+  - L185 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
+  - L194 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
+  - L197 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
+  - L200 `int get currentKeyVersion`  — The key version of the current key.
+  - L203 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
+- L207 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
+  - L208 `const SupabaseChatMigrationCloud()`
+  - L211 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L223 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L243 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L263 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L267 `Future<String> fingerprint(String encrypted)`
+  - L271 `int get currentKeyVersion`
+  - L274 `Future<bool> ensureKey()`
+- L287 `class ChatPayloadMigrationService`
+  - L288 `ChatPayloadMigrationService._()`
+  - L291 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
+  - L295 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
+  - L297 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
+  - L300 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
+  - L305 `static Future<List<String>> Function(String userId) localUpgradeIds = LocalChatCacheService.idsNeedingPayloadUpgrade`  — The cache scan for rows that are not a v3 frame yet.
+  - L311 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
+  - L315 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
+  - L317 `static String _stateKey(String userId)`
+  - L321 `static Future<ChatStartupCheck> startupCheck(String userId)`  — What a normal start of [userId] waits for. Reads the done flag and the
+  - L346 `static Future<void> checkCloudInBackground(String userId)`  — The cloud half of the check, run behind the app on a normal start. It
+  - L364 `static Future<ChatMaintenancePlan> plan( String userId, { bool needsKey = true, })`  — What is left to do for [userId]; an empty plan when the account is
+  - L435 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
+  - L545 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
+  - L579 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
+  - L597 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
+  - L680 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { bool Function()? shouldStop, })`  — Run [work] over [items], at most [parallelism] at a time.
+  - L699 `static Future<_MigrationState> _loadState(String userId)`
+  - L714 `static Future<void> _saveState(String userId, _MigrationState state)`
+  - L726 `static void _logIncompleteCheck(String reason, [Object? error])`  — Why a check could not set the done flag, for the opt-in diagnostics
+  - L741 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
+  - L746 `static Future<bool> isCloudPending(String userId)`  — Whether a check found cloud chats for the next start.
+- L750 `enum _CloudResult`
+  - L750 `done`
+  - L750 `skipped`
+  - L750 `pending`
+- L756 `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
+  - L757 `_MigrationState({ this.done = false, this.cloudPending = false, Set<String>? skip, }) : skip = skip ?? <String>{}`
+  - L763 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
+  - L772 `bool done`
+  - L773 `bool cloudPending`
+  - L774 `final Set<String> skip`
+  - L776 `Map<String, dynamic> toJson()`
+- L785 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
+  - L786 `ChatMaintenanceController._()`
+  - L788 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
+  - L791 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
+  - L792 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
+  - L793 `ChatMaintenanceFailure? _failure`
+  - L794 `String? _userId`
+  - L795 `Completer<void>? _released`
+  - L796 `ChatMaintenancePlan? _plan`
+  - L799 `String? _restoredUserId`  — The user whose session was already there when the app started.
+  - L800 `bool _showsSyncHint = false`
+  - L802 `ChatMaintenancePhase get phase`
+  - L803 `ChatMaintenanceProgress get progress`
+  - L804 `ChatMaintenanceFailure? get failure`
+  - L808 `bool get showsSyncHint`  — Whether a slow check may say "Syncing your chats": only right after a
+  - L812 `void noteRestoredSession(String? userId)`  — Record the session the app started with (main(), after the Supabase
+  - L815 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
+  - L823 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
+  - L831 `Future<void> _check(String userId)`
+  - L867 `Future<void> _run()`
+  - L892 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
+  - L907 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
+  - L912 `void _release()`
+  - L918 `void _set(ChatMaintenancePhase phase)`
+  - L925 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, bool syncHint = false, })`  — Put the controller into [phase] with [progress] (widget tests).
+  - L939 `void reset()`  — Forget the run (sign-out, tests). A sign-in after this is not the
+- L954 `enum ChatMaintenancePhase`
+  - L954 `idle`
+  - L954 `checking`
+  - L954 `running`
+  - L954 `failed`
+  - L954 `done`
 
 ## lib/services/chat_preload_service.dart  (402 Z.)
 - L23 `class ChatPreloadService`  — Service for background preloading all chat messages.

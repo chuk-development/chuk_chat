@@ -626,6 +626,8 @@ class SbSearchField extends StatefulWidget {
     required this.onClear,
     this.hintText,
     this.transparent = false,
+    this.onSubmitted,
+    this.autofocus = false,
   });
 
   final TextEditingController controller;
@@ -638,6 +640,13 @@ class SbSearchField extends StatefulWidget {
   /// Draws no fill of its own, for a field that sits where a card already
   /// supplies the surface.
   final bool transparent;
+
+  /// Enter in the field. Null does nothing, as the sidebar's filter needs.
+  final ValueChanged<String>? onSubmitted;
+
+  /// Takes the focus when it first shows — for a field that is the whole
+  /// point of the surface it sits on (the Agents quick switcher).
+  final bool autofocus;
 
   @override
   State<SbSearchField> createState() => _SbSearchFieldState();
@@ -697,6 +706,8 @@ class _SbSearchFieldState extends State<SbSearchField> {
       child: TextField(
         controller: widget.controller,
         focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
+        onSubmitted: widget.onSubmitted,
         style: TextStyle(color: theme.colorScheme.onSurface, fontSize: 14),
         cursorColor: theme.colorScheme.primary,
         // Centred in the pill rather than padded down from the top — the
@@ -864,6 +875,8 @@ class SbChatTile extends StatelessWidget {
     this.onSecondaryTap,
     this.trailing,
     this.hoverTrailing,
+    this.leading,
+    this.unread = false,
   });
 
   final String title;
@@ -885,6 +898,14 @@ class SbChatTile extends StatelessWidget {
   /// would be noise on a list of forty rows (the pin toggle).
   final Widget? hoverTrailing;
 
+  /// A picture in front of the title — the Agents roster puts the coworker's
+  /// face here. Null keeps the chat row as it always was.
+  final Widget? leading;
+
+  /// Something new is waiting in this row: the title takes the weight of a
+  /// selected one. The chat list never sets it.
+  final bool unread;
+
   @override
   Widget build(BuildContext context) {
     return SbCard(
@@ -902,6 +923,8 @@ class SbChatTile extends StatelessWidget {
         streaming: streaming,
         trailing: trailing,
         hoverTrailing: hoverTrailing,
+        leading: leading,
+        unread: unread,
       ),
     );
   }
@@ -918,6 +941,8 @@ class _SbChatTileBody extends StatelessWidget {
     required this.streaming,
     required this.trailing,
     required this.hoverTrailing,
+    required this.leading,
+    required this.unread,
   });
 
   final String title;
@@ -927,6 +952,8 @@ class _SbChatTileBody extends StatelessWidget {
   final bool streaming;
   final Widget? trailing;
   final Widget? hoverTrailing;
+  final Widget? leading;
+  final bool unread;
 
   @override
   Widget build(BuildContext context) {
@@ -938,6 +965,7 @@ class _SbChatTileBody extends StatelessWidget {
 
     return Row(
       children: [
+        if (leading != null) ...[leading!, const SizedBox(width: 10)],
         if (locked)
           Padding(
             padding: const EdgeInsets.only(right: 6),
@@ -955,7 +983,9 @@ class _SbChatTileBody extends StatelessWidget {
               HoverMarqueeText(
                 title,
                 style: theme.textTheme.bodyLarge?.copyWith(
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                  fontWeight: selected || unread
+                      ? FontWeight.w700
+                      : FontWeight.w500,
                   color: titleColor,
                   fontStyle: locked ? FontStyle.italic : null,
                 ),
@@ -1071,10 +1101,13 @@ List<SbChatGroup<T>> sbGroupByTime<T>(
 /// The muted line under a chat title: the time for anything from today, the
 /// date for everything else. Formatted through [MaterialLocalizations], so it
 /// follows the user's locale and 12/24-hour setting.
-String sbChatDateLine(BuildContext context, DateTime? date) {
+///
+/// [now] is the clock "today" is read from; null reads the real one. A list
+/// with a clock seam of its own (a test) passes it.
+String sbChatDateLine(BuildContext context, DateTime? date, {DateTime? now}) {
   if (date == null) return '';
   final MaterialLocalizations localizations = MaterialLocalizations.of(context);
-  final DateTime now = DateTime.now();
+  now ??= DateTime.now();
   final bool isToday =
       date.year == now.year && date.month == now.month && date.day == now.day;
   if (isToday) {
@@ -1152,6 +1185,99 @@ class SbOfflineNotice extends StatelessWidget {
   }
 }
 
+/// One target of the folded rail: the round ink the mini rail's icons take,
+/// around anything that fits the icon tile — a glyph ([SbNavIcon]) or a
+/// picture, such as a coworker's face.
+///
+/// Placed on the column of the open panel's icons ([kSbNavIconLeft]), so the
+/// panel folds without moving anything the reader aims at. The ink sits in
+/// front of the child: a face fills its tile, and ink behind it would never
+/// show.
+///
+/// [selected] draws the accent ring [SbCard] draws for its outlined state.
+/// [badge] puts a small accent dot on the top-right corner: something new.
+class SbRailSlot extends StatelessWidget {
+  const SbRailSlot({
+    super.key,
+    required this.child,
+    required this.tooltip,
+    required this.onTap,
+    this.selected = false,
+    this.badge = false,
+    this.size = kSbNavIconTile,
+  });
+
+  final Widget child;
+  final String tooltip;
+  final VoidCallback? onTap;
+  final bool selected;
+  final bool badge;
+
+  /// Side of the tile. The icon tile by default, so a face and a glyph line
+  /// up.
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accent = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(child: Center(child: child)),
+            Positioned.fill(
+              child: Material(
+                type: MaterialType.transparency,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(customBorder: const CircleBorder(), onTap: onTap),
+              ),
+            ),
+            if (selected)
+              Positioned(
+                left: -3,
+                top: -3,
+                right: -3,
+                bottom: -3,
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: accent.withValues(alpha: 0.55),
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            if (badge)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: IgnorePointer(
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    // A flat dot. No halo: the design has no glow anywhere.
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: accent,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A card that floats over the scrolling list — the app name at the top of
 /// the phone sidebar, the account row at the bottom.
 ///
@@ -1184,13 +1310,12 @@ class SbFloatingBar extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// The rail chrome the agent roster is built from.
+// The older rail chrome.
 //
 // Upstream's own sidebar moved to the card grammar above (SbCard / SbBlock /
-// SbNavCard). The roster and the desktop shell still draw the older rail —
-// a brand row, hover pills, a section label, the pinned bento — so those
-// widgets stay here rather than being deleted with the sidebar that stopped
-// using them. Nothing above depends on them.
+// SbNavCard), and the Agents roster followed it. Only the design demos
+// (`lib/demo/variants/`) still draw the older rail — a brand row, hover
+// pills, a section label, the pinned bento. Nothing above depends on them.
 // ---------------------------------------------------------------------------
 
 /// Brand row: optional logo square + text. Trailing widget on the right.

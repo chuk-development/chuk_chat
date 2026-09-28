@@ -14,7 +14,6 @@ import 'dart:math' as math; // For min/max
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:chuk_chat/ui/expressive/day_divider.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/models/chat_model.dart';
@@ -36,8 +35,6 @@ import 'package:chuk_chat/services/artifact_tag_processor.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/tool_call_handler.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/composer_recording.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubbleAction;
 import 'package:chuk_chat/widgets/measure_size.dart';
@@ -121,13 +118,15 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// screen, so both paths land in the same redesigned settings surface.
   final Future<void> Function()? onOpenModelSettings;
 
-  /// The Agents thread hosts this screen (agents_thread_view). On, the
-  /// original Agents app's look is kept: day chips and bubble runs in the
-  /// list, its AI notice, its composer menus. Off, upstream's chat as is.
+  /// The Agents thread hosts this screen (agents_thread_view). The look is
+  /// chuk_chat's either way. On, the thread keeps its behaviour: the
+  /// transcript opens at its bottom, Up in an empty composer edits the last
+  /// own message, a thread switch drops the draft, and the screen measures
+  /// its pane instead of the window.
   final bool agentsThread;
 
-  /// The coworker's name, for the Agents desktop composer's hint ("Message
-  /// Wahlradar"). Null reads "Message the agent".
+  /// No longer read: the Agents thread uses chuk_chat's composer and its
+  /// hint. Kept so the caller (agents_thread_view) still compiles.
   final String? agentsTitle;
 
   /// Room at the top of the message list for a bar that floats over it (the
@@ -346,10 +345,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   static const double _kHorizontalPaddingLarge = 16.0;
   static const double _kHorizontalPaddingSmall = 8.0;
   static const double _kMessageListBottomLift = 40.0;
-
-  /// The Agents desktop composer before it has measured itself: one line of
-  /// text and the control row.
-  static const double _kAgentsComposerEstimate = 84.0;
 
   Widget _buildComposerContextMenu(
     BuildContext context,
@@ -1685,27 +1680,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         index: i,
         isStreaming: _isStreaming,
       );
-      // Agents's day break, kept: one
-      // date chip where the day changes,
-      // like a messenger. A row with no
-      // timestamp gets none. The rules
-      // live in chat_ui_helpers.
-      final DateTime? rowDay = messageRowTime(_messages[i]);
-      // Agents only: upstream's chat
-      // draws no day chips. The bubble
-      // RUN breaks on the same rules
-      // (ChatMessageListItem.agentsRuns).
-      final bool opensDay =
-          widget.agentsThread &&
-          messageOpensDay(i == 0 ? null : _messages[i - 1], _messages[i]);
-      final Widget row = ChatMessageListItem(
+      return ChatMessageListItem(
         messages: _messages,
         index: i,
         data: data,
         uuid: _uuid,
         maxWidth: expandedInputWidth,
-        agentsRuns: widget.agentsThread,
-        hoverActions: widget.agentsThread,
         activeChatId: _activeChatId,
         flyInKey: _flyInKey,
         showToolCalls: widget.showToolCalls,
@@ -1725,16 +1705,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                 !_isStreaming
             ? () => _continueGenerationAt(i)
             : null,
-      );
-      if (!opensDay || rowDay == null) {
-        return row;
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          ChatDayDivider(when: rowDay.toLocal()),
-          row,
-        ],
       );
     }
 
@@ -1783,7 +1753,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     double screenHeight,
   ) {
     final Color iconFg = Theme.of(context).resolvedIconColor;
-    final bool agents = widget.agentsThread;
 
     final double effectiveHorizontalPadding = widget.isCompactMode
         ? _kHorizontalPaddingSmall
@@ -1792,9 +1761,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       0.0,
       screenWidth - (effectiveHorizontalPadding * 2),
     );
-    // The Agents desktop keeps the 720 px reading measure (§14.4).
     final double constrainedChatContentWidth = math.min(
-      agents ? kDeskReadingMeasure : _kMaxChatContentWidth,
+      _kMaxChatContentWidth,
       maxPossibleChatContentWidth,
     );
 
@@ -1805,9 +1773,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final double expandedInputWidth = constrainedChatContentWidth;
 
     // Calculate the total height of the input area (search bar + attachment bar + padding)
-    double inputAreaVisualHeight = agents
-        ? _kAgentsComposerEstimate
-        : _kSearchBarContentHeight;
+    double inputAreaVisualHeight = _kSearchBarContentHeight;
     if (_fileHandler.attachedFiles.isNotEmpty) {
       inputAreaVisualHeight +=
           _kAttachmentBarHeight + _kAttachmentBarMarginBottom;
@@ -1830,9 +1796,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     // Determine if the chat is currently empty (no messages, no attached files)
     final bool isChatEmpty = _messages
         .isEmpty; // This refers to the chat history, not just text input
-    // On desktop, it centers when empty. The Agents desktop composer stays
-    // docked at the bottom of its pane (§14.5).
-    final bool showInputAreaCentered = isChatEmpty && !agents;
+    // On desktop, it centers when empty.
+    final bool showInputAreaCentered = isChatEmpty;
 
     // Determine the target width for the input area
     final double targetInputWidth = showInputAreaCentered
@@ -2070,65 +2035,31 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         // Position at the bottom if not empty, otherwise calculate center position
                         bottom: showInputAreaCentered
                             ? (screenHeight / 2 - (inputAreaVisualHeight / 2))
-                            : (agents ? 0 : effectiveHorizontalPadding), // Always keep padding from bottom edge
-                        // The Agents desktop composer is docked (§14.5): it
-                        // sits on a solid strip of the pane, so the transcript
-                        // ends above it instead of showing through around it.
-                        child: _agentsDock(
-                          agents: agents,
-                          color: bg,
-                          child: Center(
-                            // Centers horizontally
-                            child: SizedBox(
-                              width:
-                                  targetInputWidth, // Dynamically changes width
-                              child: MeasureSize(
-                                onChange: onComposerHeightChanged,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
-                                  children: agents
-                                      ? <Widget>[
-                                          _buildAgentsComposer(
-                                            maxFieldHeight: math.max(
-                                              40,
-                                              screenHeight * 0.4 - 56,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 6),
-                                          Text(
-                                            'Enter to send · Shift+Enter for a '
-                                            'new line',
-                                            key: const ValueKey<String>(
-                                              'agents-composer-hint',
-                                            ),
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: iconFg.withValues(
-                                                alpha: 0.55,
-                                              ),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ]
-                                      : [
-                                          // Search Bar (attachment bar is now inside)
-                                          _buildSearchBar(
-                                            isCompactMode: widget.isCompactMode,
-                                          ),
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            AppLocalizations.of(context)!
-                                                .aiDisclaimer,
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              color: iconFg.withValues(
-                                                alpha: 0.7,
-                                              ),
-                                              fontSize: 11,
-                                            ),
-                                          ),
-                                        ],
-                                ),
+                            : effectiveHorizontalPadding, // Always keep padding from bottom edge
+                        child: Center(
+                          // Centers horizontally
+                          child: SizedBox(
+                            width:
+                                targetInputWidth, // Dynamically changes width
+                            child: MeasureSize(
+                              onChange: onComposerHeightChanged,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
+                                children: [
+                                  // Search Bar (attachment bar is now inside)
+                                  _buildSearchBar(
+                                    isCompactMode: widget.isCompactMode,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    AppLocalizations.of(context)!.aiDisclaimer,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      color: iconFg.withValues(alpha: 0.7),
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -2559,301 +2490,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
-  /// The solid strip the Agents desktop composer is docked on: the pane's
-  /// own colour, with a short fade above it so the last line of the
-  /// transcript does not stop against a hard edge. Upstream's composer
-  /// floats as before.
-  Widget _agentsDock({
-    required bool agents,
-    required Color color,
-    required Widget child,
-  }) {
-    if (!agents) return child;
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        IgnorePointer(
-          child: Container(
-            height: 12,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: <Color>[color.withValues(alpha: 0), color],
-              ),
-            ),
-          ),
-        ),
-        ColoredBox(
-          color: color,
-          child: Padding(
-            padding: const EdgeInsets.only(top: 2, bottom: 8),
-            child: child,
-          ),
-        ),
-      ],
-    );
-  }
-
-  /// The Agents desktop composer (docs/DESIGN.md §14.5): docked at the bottom
-  /// of the centre pane at the transcript's width, corner radius 12, one line
-  /// of text when empty that grows to [maxFieldHeight] and then scrolls. The
-  /// controls sit inside the field on the bottom row as 28 px buttons — attach
-  /// and the mode on the left, the mic and the filled send on the right.
-  ///
-  /// The same controller, focus node, key handling, paste, attachments,
-  /// edit and queue state as upstream's composer; only the box is the
-  /// desktop's.
-  Widget _buildAgentsComposer({required double maxFieldHeight}) {
-    final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
-    final Color accent = scheme.primary;
-    final Color iconFg = theme.resolvedIconColor;
-    final bool hasAttachments = _fileHandler.attachedFiles.isNotEmpty;
-    final bool busy = _isStreaming || _isSending;
-    final bool recording = _audioHandler.isMicActive;
-
-    Widget quietRow({
-      required IconData icon,
-      required String text,
-      required VoidCallback onClose,
-      String closeLabel = 'Cancel',
-    }) => Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        children: <Widget>[
-          AppIcon(icon, size: 14, color: scheme.onSurfaceVariant),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.labelMedium?.copyWith(
-                color: scheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: onClose,
-            style: TextButton.styleFrom(
-              visualDensity: VisualDensity.compact,
-              minimumSize: const Size(0, 24),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            child: Text(closeLabel),
-          ),
-        ],
-      ),
-    );
-
-    final Color sendFill = busy ? scheme.error : accent;
-    final Color sendOn = theme.accentButtonForeground(sendFill);
-    final Widget send = Tooltip(
-      message: busy ? 'Stop' : 'Send (Enter)',
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          key: const ValueKey<String>('agents-composer-send'),
-          onTap: _audioHandler.isTranscribingAudio
-              ? null
-              : () {
-                  if (busy) {
-                    _cancelCurrentOperation();
-                  } else if (recording) {
-                    _handleAudioSend();
-                  } else {
-                    sendOrSubmitEdit();
-                  }
-                },
-          child: Container(
-            width: kDeskComposerButton,
-            height: kDeskComposerButton,
-            decoration: BoxDecoration(
-              color: sendFill,
-              borderRadius: BorderRadius.circular(kDeskControlRadius),
-            ),
-            alignment: Alignment.center,
-            child: _audioHandler.isTranscribingAudio
-                ? SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(sendOn),
-                    ),
-                  )
-                : AppIcon(
-                    busy ? Icons.stop_rounded : Icons.arrow_upward_rounded,
-                    size: 18,
-                    color: sendOn,
-                  ),
-          ),
-        ),
-      ),
-    );
-
-    return AnimatedBuilder(
-      animation: composerFocusNode,
-      builder: (BuildContext context, Widget? child) => Container(
-        key: const ValueKey<String>('agents-desktop-composer'),
-        width: double.infinity,
-        decoration: BoxDecoration(
-          color: scheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(kDeskComposerRadius),
-          border: Border.all(
-            color: composerFocusNode.hasFocus
-                ? scheme.outline
-                : scheme.outlineVariant,
-          ),
-        ),
-        padding: const EdgeInsets.fromLTRB(12, 8, 8, 8),
-        child: child,
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          if (hasAttachments)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: AttachmentPreviewBar(
-                files: _fileHandler.attachedFiles,
-                onRemove: removeComposerAttachment,
-              ),
-            ),
-          if (messageActionsHandler.isEditing)
-            quietRow(
-              icon: Icons.edit,
-              text: 'Editing message · Esc to cancel',
-              onClose: cancelEditMessage,
-            ),
-          if (_pendingMessageText != null)
-            quietRow(
-              icon: Icons.schedule,
-              text:
-                  '${AppLocalizations.of(context)!.queuedLabel}: '
-                  '"${_pendingMessageText!}"',
-              onClose: _cancelPendingMessage,
-              closeLabel: 'Remove',
-            ),
-          ComposerInputRow(
-            isRecording: recording,
-            audioLevels: _audioHandler.audioLevels,
-            accentColor: Colors.red,
-            timeColor: iconFg.withValues(alpha: 0.7),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: maxFieldHeight),
-              child: _wrapWithSmartPasteActions(
-                ScrollConfiguration(
-                  behavior: ScrollConfiguration.of(context)
-                      .copyWith(scrollbars: false),
-                  child: KeyedSubtree(
-                    key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
-                    child: TextField(
-                      controller: composerController,
-                      focusNode: composerFocusNode,
-                      selectionControls: ComposerSelectionControls.instance,
-                      contextMenuBuilder: _buildComposerContextMenu,
-                      autofocus: true,
-                      showCursor: true,
-                      minLines: 1,
-                      maxLines: null,
-                      keyboardType: TextInputType.multiline,
-                      textInputAction: TextInputAction.done,
-                      scrollController: _composerScrollController,
-                      textAlignVertical: TextAlignVertical.top,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        fontSize: 14,
-                        height: 1.4,
-                        color: scheme.onSurface,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: messageActionsHandler.isEditing
-                            ? AppLocalizations.of(context)!.editYourMessage
-                            : hasAttachments
-                            ? AppLocalizations.of(context)!.addMessageOrDocs
-                            : 'Message ${widget.agentsTitle ?? 'the agent'}',
-                        hintStyle: theme.textTheme.bodyMedium?.copyWith(
-                          fontSize: 14,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        errorBorder: InputBorder.none,
-                        focusedErrorBorder: InputBorder.none,
-                        disabledBorder: InputBorder.none,
-                        filled: false,
-                        fillColor: Colors.transparent,
-                        contentPadding: const EdgeInsets.symmetric(vertical: 6),
-                        isDense: true,
-                      ),
-                      cursorColor: accent,
-                      cursorWidth: 2,
-                      cursorRadius: const Radius.circular(1),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 4),
-          Row(
-            children: <Widget>[
-              Expanded(
-                child: Row(
-                  children: <Widget>[
-                    if (!recording) ...<Widget>[
-                      ValueListenableBuilder<int>(
-                        valueListenable: ModelCapabilitiesService.revision,
-                        builder: (context, _, _) => DeskIconButton(
-                          icon: Icons.add_rounded,
-                          tooltip: 'Attach files',
-                          size: kDeskComposerButton,
-                          glyph: 18,
-                          onPressed: () {
-                            _fileHandler.modelSupportsImageInput =
-                                modelSupportsImageInput;
-                            _fileHandler.uploadFiles();
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                      Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: _buildModelControlPill(
-                            isCompactMode: widget.isCompactMode,
-                            height: kDeskComposerButton,
-                            flat: true,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              DeskIconButton(
-                icon: recording ? Icons.stop_rounded : Icons.mic,
-                tooltip: recording ? 'Stop recording' : 'Dictate',
-                size: kDeskComposerButton,
-                glyph: 18,
-                selected: recording,
-                onPressed: _handleMicTap,
-              ),
-              const SizedBox(width: 4),
-              send,
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
   /// The model selector, merged with the reasoning toggle into a single
   /// rounded segmented pill — `[ 🧠 | # Model ]` — sharing one outer border.
   /// The left segment toggles reasoning; the right opens the model dropdown.
@@ -2862,11 +2498,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// The composer's mode control: Fast or Thinking, with the model list
   /// one level deeper inside its sheet. Same control as the mobile
   /// composer, so a reader moving between the two finds the same thing.
-  Widget _buildModelControlPill({
-    required bool isCompactMode,
-    double height = 36,
-    bool flat = false,
-  }) {
+  Widget _buildModelControlPill({required bool isCompactMode}) {
     // Rebuild when capability data hydrates: the reasoning levels below are
     // read synchronously, so a cold start would otherwise keep the graded
     // ladder for a binary/non-reasoning model until an unrelated rebuild.
@@ -2878,8 +2510,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           mode: chatMode,
           // Match the round composer icon buttons (mic, voice, attach) beside
           // it — the default 40 made the pill stand taller than the row.
-          height: height,
-          flat: flat,
+          height: 36,
           // Always upwards here: the composer sits at the bottom of a tall
           // window, and a menu dropping down covers the box it belongs to.
           menuAbove: true,
@@ -2909,7 +2540,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
           onModeChanged: setChatMode,
           onModelSelected: applyModelSelection,
           onOpenModelScreen: openModelScreen,
-          agentsMenus: widget.agentsThread,
         ),
       ),
     );

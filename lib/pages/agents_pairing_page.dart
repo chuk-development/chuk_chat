@@ -18,7 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 
 /// Builds the live camera view. Injected so a widget test can drive the screen
@@ -140,9 +140,10 @@ class _AgentsPairingPageState extends State<AgentsPairingPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ExpressiveScreen(
-      title: 'Add your computer',
-      builder: (BuildContext context) => SafeArea(
+    // chuk's page frame: the floating header, the page under it.
+    return Scaffold(
+      appBar: const FloatingAppBar(title: Text('Add your computer')),
+      body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[

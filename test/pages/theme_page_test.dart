@@ -11,7 +11,6 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/theme/theme_presets.dart';
-import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 class _State {
   Brightness themeMode = Brightness.dark;
@@ -128,44 +127,39 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  // The Agents build opens the anchored menu; chuk_chat keeps upstream's
-  // Material dropdown. Either way the pick lands in the config.
-  for (final bool agents in <bool>[true, false])
-  testWidgets('picking a preset from the dropdown applies it to the config'
-      '${agents ? '' : ' (FEATURE_AGENTS off)'}', (tester) async {
-    debugAgentsChatCoreOverride = agents;
-    addTearDown(() => debugAgentsChatCoreOverride = null);
-    final state = _State();
-    await tester.pumpWidget(_host(_config(state)));
-    await tester.pumpAndSettle();
+  // One page for both builds: upstream's Material dropdown, and the pick
+  // lands in the config.
+  for (final bool agents in <bool>[true, false]) {
+    testWidgets('picking a preset from the dropdown applies it to the config'
+        '${agents ? '' : ' (FEATURE_AGENTS off)'}', (tester) async {
+      debugAgentsChatCoreOverride = agents;
+      addTearDown(() => debugAgentsChatCoreOverride = null);
+      final state = _State();
+      await tester.pumpWidget(_host(_config(state)));
+      await tester.pumpAndSettle();
 
-    // Open the preset dropdown and pick GitHub. The page starts in the default
-    // dark mode, so it applies GitHub's dark variant. The menu is scrollable,
-    // so scroll the item into view before tapping it.
-    final github = kThemePresets.firstWhere((p) => p.name == 'GitHub');
-    final v = github.dark; // default brightness is dark
-    // The preset picker is the first anchored-menu button on the page (the
-    // font pickers follow it).
-    await tester.tap(
-      agents
-          ? find.byType(MenuAnchorButton).first
-          : find.byType(DropdownButton<ThemePreset>),
-    );
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('GitHub'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('GitHub').last);
-    await tester.pumpAndSettle();
+      // Open the preset dropdown and pick GitHub. The page starts in the default
+      // dark mode, so it applies GitHub's dark variant. The menu is scrollable,
+      // so scroll the item into view before tapping it.
+      final github = kThemePresets.firstWhere((p) => p.name == 'GitHub');
+      final v = github.dark; // default brightness is dark
+      await tester.tap(find.byType(DropdownButton<ThemePreset>));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.text('GitHub'),
+        100,
+        scrollable: find.byType(Scrollable).last,
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('GitHub').last);
+      await tester.pumpAndSettle();
 
-    expect(state.themeMode, Brightness.dark);
-    expect(state.accent, v.accent);
-    expect(state.iconFg, v.iconFg);
-    expect(state.bg, v.bg);
-    expect(state.contrast, v.contrast);
-    expect(state.uiFont, v.uiFont);
-  });
+      expect(state.themeMode, Brightness.dark);
+      expect(state.accent, v.accent);
+      expect(state.iconFg, v.iconFg);
+      expect(state.bg, v.bg);
+      expect(state.contrast, v.contrast);
+      expect(state.uiFont, v.uiFont);
+    });
+  }
 }

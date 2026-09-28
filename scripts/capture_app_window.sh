@@ -28,7 +28,7 @@ while read -r app_pid; do
       best_pid="$app_pid"
     fi
   done < <(xdotool search --onlyvisible --pid "$app_pid" 2>/dev/null || true)
-done < <(pgrep -x agents || true)
+done < <(pgrep -x chuk_chat || true)
 if [[ -z "$best_window" ]]; then
   echo 'No verified Agents window. Start app with GDK_BACKEND=x11 via flutter-hot.' >&2
   exit 1

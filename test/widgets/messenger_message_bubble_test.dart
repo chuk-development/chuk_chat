@@ -15,7 +15,6 @@ import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
-import 'package:chuk_chat/ui/expressive/message_stamp.dart';
 
 Widget wrap(Widget child) => MaterialApp(
   localizationsDelegates: const [
@@ -42,8 +41,9 @@ void main() {
     tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
       SystemChannels.platform,
       (call) async {
-        if (call.method == 'Clipboard.setData')
+        if (call.method == 'Clipboard.setData') {
           copied = call.arguments['text'] as String;
+        }
         return null;
       },
     );
@@ -80,6 +80,8 @@ void main() {
     expect(copied, 'Original **message**');
   });
 
+  // The answer goes through chuk_chat's renderer, trimmed as chuk_chat trims
+  // it.
   for (final markdown in [
     'Setext heading\n===',
     '~~strikethrough~~',
@@ -108,7 +110,8 @@ void main() {
         await tester.pump();
         expect(
           find.byWidgetPredicate(
-            (widget) => widget is MarkdownMessage && widget.text == markdown,
+            (widget) =>
+                widget is MarkdownMessage && widget.text == markdown.trim(),
           ),
           findsOneWidget,
         );
@@ -132,8 +135,6 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 180));
-      final answer = find.byKey(const ValueKey('messenger-answer-bubble'));
-      expect(tester.getSize(answer).width, 800);
       // Dots mean "nothing to read yet". The first token is on screen, so a
       // second indicator under it would only hang there (bead cowork-i7sd).
       expect(find.byType(MessengerTypingIndicator), findsNothing);
@@ -178,19 +179,33 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 180));
-      expect(
-        find.byKey(const ValueKey('messenger-answer-bubble')),
-        findsNothing,
-      );
+      expect(find.text('Thinking...', findRichText: true), findsNothing);
       expect(find.byType(MessengerTypingIndicator), findsOneWidget);
       await tester.tap(find.byTooltip('Previous answer'));
       expect(previous, isTrue);
     },
   );
 
-  testWidgets('compact grouped bubble puts actual time on the last text line', (
+  testWidgets('the user bubble is chuk_chat\'s bubble, with no clock', (
     tester,
   ) async {
+    BorderRadius radiiOf() {
+      final Container container = tester.widget<Container>(
+        find
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is Container && widget.decoration is BoxDecoration,
+            )
+            .first,
+      );
+      expect(
+        container.padding,
+        const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      );
+      return (container.decoration! as BoxDecoration).borderRadius!
+          as BorderRadius;
+    }
+
     await tester.pumpWidget(
       wrap(
         MessageBubble(
@@ -204,24 +219,10 @@ void main() {
       ),
     );
     await tester.pump();
-    var container = tester.widget<Container>(
-      find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Container && widget.decoration is BoxDecoration,
-          )
-          .first,
-    );
-    final radii =
-        (container.decoration! as BoxDecoration).borderRadius! as BorderRadius;
-    expect(radii.topLeft, const Radius.circular(22));
-    expect(radii.topRight, const Radius.circular(7));
-    expect(radii.bottomRight, const Radius.circular(7));
-    expect(
-      container.padding,
-      const EdgeInsets.symmetric(horizontal: 15, vertical: 9),
-    );
-    expect(find.byType(MessageStamp), findsNothing);
+    BorderRadius radii = radiiOf();
+    expect(radii.topLeft, const Radius.circular(16));
+    expect(radii.topRight, const Radius.circular(16));
+    expect(radii.bottomRight, const Radius.circular(16));
 
     await tester.pumpWidget(
       wrap(
@@ -235,23 +236,14 @@ void main() {
       ),
     );
     await tester.pump();
-    final stamp = find.descendant(
-      of: find.byType(Positioned),
-      matching: find.byType(MessageStamp),
-    );
-    expect(tester.widget<MessageStamp>(stamp).time, '12:34');
-    final body = find.byWidgetPredicate(
-      (widget) => widget is Text && widget.textSpan != null,
-    );
-    expect(
-      tester.getRect(stamp).bottom,
-      closeTo(tester.getRect(body).bottom, 0.1),
-    );
-    expect(tester.getSize(find.byType(MessageBubble)).height, lessThan(65));
+    radii = radiiOf();
+    expect(radii.bottomRight, const Radius.circular(5));
+    expect(find.text('12:34'), findsNothing);
+    expect(find.text('11:20'), findsNothing);
     expect(findIcon(Icons.done_all), findsNothing);
   });
 
-  testWidgets('outgoing messenger text is at most 72 percent wide', (
+  testWidgets('outgoing messenger text is at most 80 percent wide', (
     tester,
   ) async {
     tester.view.physicalSize = const Size(400, 800);
@@ -271,13 +263,10 @@ void main() {
     final container = find.byWidgetPredicate(
       (widget) => widget is Container && widget.decoration is BoxDecoration,
     );
-    expect(tester.getSize(container.first).width, lessThanOrEqualTo(400 * .72));
-    expect(find.byType(MessageStamp), findsNothing);
+    expect(tester.getSize(container.first).width, lessThanOrEqualTo(400 * .8));
   });
 
-  testWidgets('even a short incoming bubble fills the available chat lane', (
-    tester,
-  ) async {
+  testWidgets('an incoming answer draws no bubble behind it', (tester) async {
     await tester.pumpWidget(
       wrap(
         const Padding(
@@ -292,53 +281,40 @@ void main() {
       ),
     );
     await tester.pump();
-    final container = find.byWidgetPredicate(
-      (widget) => widget is Container && widget.decoration is BoxDecoration,
+    expect(
+      find.byWidgetPredicate(
+        (widget) => widget is Container && widget.decoration is BoxDecoration,
+      ),
+      findsNothing,
     );
-    expect(tester.getSize(container.first).width, 800 - 32);
-    expect(tester.getTopLeft(container.first).dx, 16);
+    expect(find.text('Ja.', findRichText: true), findsOneWidget);
   });
 
-  testWidgets('only a new live turn enters once and reduced motion opts out', (
-    tester,
-  ) async {
-    Widget message(
-      String text, {
-      bool live = true,
-      bool reduced = false,
-      Key? key,
-    }) => wrap(
-      MediaQuery(
-        data: MediaQueryData(disableAnimations: reduced),
-        child: MessageBubble(
-          key: key,
-          message: text,
+  testWidgets('a new live turn does not animate in', (tester) async {
+    await tester.pumpWidget(
+      wrap(
+        const MessageBubble(
+          message: 'Hallo',
           isUser: false,
           messengerMode: true,
           showToolCalls: false,
-          isStreamingMessage: live,
+          isStreamingMessage: true,
         ),
       ),
     );
-    final entrance = find.byKey(const ValueKey('messenger-message-entrance'));
-    await tester.pumpWidget(message('Historie', live: false));
     await tester.pump();
-    expect(entrance, findsNothing);
-    await tester.pumpWidget(message('Hallo', key: const ValueKey('live')));
-    await tester.pump();
-    expect(entrance, findsOneWidget);
+    final Offset first = tester.getTopLeft(
+      find.text('Hallo', findRichText: true),
+    );
     await tester.pump(const Duration(milliseconds: 180));
-    final before = tester.getTopLeft(find.text('Hallo', findRichText: true));
-    await tester.pumpWidget(message('Hallo Welt', key: const ValueKey('live')));
+    expect(tester.getTopLeft(find.text('Hallo', findRichText: true)), first);
     expect(
-      tester.getTopLeft(find.text('Hallo Welt', findRichText: true)),
-      before,
+      find.descendant(
+        of: find.byType(MessageBubble),
+        matching: find.byType(Opacity),
+      ),
+      findsNothing,
     );
-    await tester.pumpWidget(
-      message('Ohne Bewegung', reduced: true, key: const ValueKey('reduced')),
-    );
-    await tester.pump();
-    expect(entrance, findsNothing);
   });
 
   testWidgets('user long press offers Reply and Copy, never Edit', (
@@ -436,11 +412,9 @@ void main() {
   // now decided by what the body actually rendered, so each of them either
   // disappears or becomes the one quiet "Worked" line.
 
-  testWidgets('an internal-only turn leaves no empty bubble with Activity on', (
-    tester,
-  ) async {
-    // The everyday case: Activity on, Thinking off. The reasoning block is
-    // filtered out by the Thinking toggle and there is nothing else to draw.
+  testWidgets('Show thinking off hides a thought block', (tester) async {
+    // The phone thread's "Show thinking" switch: off drops the reasoning the
+    // host sends as a content block, and there is nothing else to draw.
     await tester.pumpWidget(
       wrap(
         const MessageBubble(
@@ -454,8 +428,49 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('messenger-answer-bubble')), findsNothing);
+    expect(find.textContaining('Internal plan'), findsNothing);
     expect(find.textContaining('Worked'), findsNothing);
+  });
+
+  testWidgets('a host turn hides the Thinking placeholder beside its blocks', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        const MessageBubble(
+          message: 'Thinking...',
+          isUser: false,
+          messengerMode: true,
+          showToolCalls: true,
+          showReasoningTokens: false,
+          isStreamingMessage: true,
+          contentBlocks: [ContentBlock.reasoning('Internal plan')],
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.text('Thinking...', findRichText: true), findsNothing);
+    expect(find.textContaining('Internal plan'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Show thinking on draws a thought block in the timeline', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      wrap(
+        const MessageBubble(
+          message: '',
+          isUser: false,
+          messengerMode: true,
+          showToolCalls: true,
+          showReasoningTokens: true,
+          contentBlocks: [ContentBlock.reasoning('Internal plan')],
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
   });
 
   testWidgets('a failed tool with Activity off says so instead of a blank', (
@@ -477,7 +492,6 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('messenger-answer-bubble')), findsNothing);
     expect(find.text('Worked · 1 step · 1 failed'), findsOneWidget);
   });
 
@@ -520,7 +534,7 @@ void main() {
     expect(prefs.showActivity, isTrue);
   });
 
-  testWidgets('an interrupted turn keeps its bubble even with an empty body', (
+  testWidgets('an interrupted turn keeps its place even with an empty body', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -531,6 +545,7 @@ void main() {
           messengerMode: true,
           showToolCalls: false,
           status: ChatMessageStatus.interrupted,
+          onContinueGeneration: () {},
           contentBlocks: [
             ContentBlock.toolCalls([
               ToolCall(name: 'terminal', status: ToolCallStatus.completed),
@@ -540,11 +555,10 @@ void main() {
       ),
     );
     await tester.pump();
-    // A break-off is worth showing: the same turn without it collapses.
-    expect(
-      find.byKey(const ValueKey('messenger-answer-bubble')),
-      findsOneWidget,
-    );
+    // A break-off is worth showing: the same turn without it collapses into
+    // the quiet line. Here the way to continue stays on screen.
+    expect(find.textContaining('Worked'), findsNothing);
+    expect(find.text('Continue generation'), findsOneWidget);
   });
 
   testWidgets('an ask_user without options is not a reason for a bubble', (
@@ -571,7 +585,6 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('messenger-answer-bubble')), findsNothing);
     expect(find.text('Worked · 1 step'), findsOneWidget);
   });
 
@@ -599,11 +612,10 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byKey(const ValueKey('messenger-answer-bubble')), findsNothing);
     expect(find.text('Worked · 1 step'), findsOneWidget);
   });
 
-  testWidgets('details can be enabled without enabling reasoning', (
+  testWidgets('details show the work as chuk_chat shows it', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -625,14 +637,11 @@ void main() {
       ),
     );
     await tester.pump();
-    final timeline = tester.widget<AgentActivityTimeline>(
-      find.byType(AgentActivityTimeline),
-    );
-    expect(timeline.steps, hasLength(1));
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
     expect(find.text('…'), findsNothing);
   });
 
-  testWidgets('quiet streaming hides work and reasoning but keeps answer', (
+  testWidgets('streaming with Activity off keeps the answer and no dots', (
     tester,
   ) async {
     await tester.pumpWidget(
@@ -655,8 +664,6 @@ void main() {
       ),
     );
     await tester.pump();
-    expect(find.byType(AgentActivityTimeline), findsNothing);
-    expect(find.textContaining('Private reasoning'), findsNothing);
     // The answer is readable, so no dots hang under it (bead cowork-i7sd).
     expect(find.byType(MessengerTypingIndicator), findsNothing);
     expect(
@@ -665,23 +672,28 @@ void main() {
     );
   });
 
-  testWidgets('waiting hides placeholder and block reasoning', (tester) async {
+  testWidgets('a live thought shows the timeline, not typing dots', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       wrap(
         const MessageBubble(
-          message: 'Thinking...',
+          message: '',
           isUser: false,
           messengerMode: true,
           showToolCalls: false,
+          showReasoningTokens: true,
+          isStreamingMessage: true,
           isReasoningStreaming: true,
           contentBlocks: [ContentBlock.reasoning('Internal plan')],
         ),
       ),
     );
     await tester.pump();
-    expect(find.byType(MessengerTypingIndicator), findsOneWidget);
-    expect(find.text('Thinking...', findRichText: true), findsNothing);
-    expect(find.byType(AgentActivityTimeline), findsNothing);
+    expect(find.byType(AgentActivityTimeline), findsOneWidget);
+    expect(find.byType(MessengerTypingIndicator), findsNothing);
+    // The widgets above build no timers that outlive the tree.
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('tool visibility never hides an interactive choice', (

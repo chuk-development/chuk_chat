@@ -7,17 +7,18 @@ import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
+import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 import '../support/shell_config.dart';
 import '../support/test_app.dart';
 
-/// With Agents on, the settings hub is the Agents app's own hub: its entries,
-/// its order, its large headline. These tests hold that list in place: what
-/// must be reachable, and what must stay hidden because the host owns it or
-/// Agents has no hosted account behind it. With Agents off the hub is
-/// upstream chuk_chat's, and the last test holds that.
+/// One settings page for both builds. With Agents on it is upstream
+/// chuk_chat's page: the same frame, the same account row, the same sections
+/// and the same sign-out, minus the rows that do nothing there, plus one
+/// 'Agents' section. These tests hold that list in place.
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -47,19 +48,35 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('the hub lists the areas Agents keeps', (tester) async {
+  testWidgets('the page wears chuk_chat\'s frame', (tester) async {
     await pumpSettings(tester);
 
-    // 'Account' is both a section header and a row title, so scroll on the
-    // first match and assert on all of them.
+    expect(find.byType(FloatingAppBar), findsOneWidget);
+    // One sign-out, not two.
+    await tester.scrollUntilVisible(find.text('Logout').first, 200);
+    expect(find.text('Logout'), findsOneWidget);
+    await closeSettings(tester);
+  });
+
+  testWidgets('the page lists chuk_chat\'s sections and the Agents section',
+      (tester) async {
+    await pumpSettings(tester);
+
     for (final label in <String>[
       'Account',
+      'Pricing Plans',
+      'AI & Chat',
+      'Model Selection',
+      'Skills',
+      'GitHub',
       'Agents',
-      'Appearance',
-      'System',
       'here.now',
       'Embedding',
       'API Keys',
+      'Automations',
+      'Appearance',
+      'System',
+      'About',
     ]) {
       await tester.scrollUntilVisible(find.text(label).first, 200);
       expect(find.text(label), findsWidgets, reason: '$label missing');
@@ -67,45 +84,39 @@ void main() {
     await closeSettings(tester);
   });
 
-  testWidgets('the hidden areas are really gone, not just unreachable',
+  testWidgets('the rows that do nothing in Agents are left out',
       (tester) async {
     await pumpSettings(tester);
 
-    // Hosted-only or host-owned, hidden by the section map. A row appearing
-    // here again means someone re-imported chuk's list over the map.
+    // The host owns the system prompt and runs every tool; the onboarding
+    // tour walks chuk_chat's own screens.
     for (final gone in <String>[
-      'Pricing & Plans',
-      'Pricing Plans',
-      'Sandboxes',
-      'Export chats',
       'AI Identity & Memory',
       'Tool Calling',
-      'GitHub',
-      'Free plan',
+      'Show onboarding again',
     ]) {
       expect(find.text(gone), findsNothing, reason: '$gone should be hidden');
     }
     await closeSettings(tester);
   });
 
-  testWidgets('the model entry is reachable and is the imported screen',
-      (tester) async {
+  testWidgets('Skills opens the host\'s skills in Agents', (tester) async {
     await pumpSettings(tester);
 
-    // Reachability only: mounting ModelSelectorPage runs upstream's initState,
-    // which refreshes the Supabase session and fetches /v1/models_info, and a
-    // unit test has neither. The hub is chuk's verbatim, so the entry IS
-    // chuk's screen; Agents's pass-through wrapper is gone (bead cowork-acu).
-    await tester.scrollUntilVisible(find.text('Model Selection').first, 200);
-    expect(find.text('Model Selection'), findsOneWidget);
+    final row = find.text('Skills');
+    await tester.scrollUntilVisible(row.first, 200);
+    await tester.tap(row.first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(AgentsSkillsSettingsPage), findsOneWidget);
+    expect(find.byType(SkillsSettingsPage), findsNothing);
     await closeSettings(tester);
   });
 
   testWidgets('Account, Theme, here.now, Embedding and About each open',
       (tester) async {
-    Future<void> open(String label, Type page, {String? rowText}) async {
+    Future<void> open(Finder row, Type page) async {
       await pumpSettings(tester);
-      final row = find.text(rowText ?? label);
       // A row already on screen stays put: scrolling aligns it to the top,
       // which is under the floating header.
       if (row.hitTestable().evaluate().isEmpty) {
@@ -116,28 +127,35 @@ void main() {
       // while it waits for a profile that a unit test never delivers.
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
-      expect(find.byType(page), findsOneWidget, reason: '$label did not open');
+      expect(find.byType(page), findsOneWidget, reason: '$row did not open');
       await closeSettings(tester);
     }
 
-    // The Agents hub has one plain row titled "Account" under the section
-    // of the same name, so the row is the last match.
-    await open('Account', AccountSettingsPage);
-    await open('Theme Settings', ThemePage);
-    await open('here.now', HereNowSettingsPage);
-    await open('Embedding', EmbeddingSettingsPage);
-    await open('About', AboutPage);
+    // chuk_chat's account row names the user; with no session that is
+    // "User".
+    await open(find.text('User'), AccountSettingsPage);
+    await open(find.text('Theme Settings'), ThemePage);
+    await open(find.text('here.now'), HereNowSettingsPage);
+    await open(find.text('Embedding'), EmbeddingSettingsPage);
+    await open(find.text('About'), AboutPage);
   });
 
-  testWidgets('with Agents off the hub is upstream chuk_chat, without the '
+  testWidgets('with Agents off the page is upstream chuk_chat, without the '
       'Agents section', (tester) async {
     debugAgentsChatCoreOverride = false;
     await pumpSettings(tester);
 
     expect(find.text('Agents'), findsNothing);
     expect(find.text('here.now'), findsNothing);
-    await tester.scrollUntilVisible(find.text('Pricing Plans').first, 200);
-    expect(find.text('Pricing Plans'), findsOneWidget);
+    for (final label in <String>[
+      'Pricing Plans',
+      'AI Identity & Memory',
+      'Tool Calling',
+      'Show onboarding again',
+    ]) {
+      await tester.scrollUntilVisible(find.text(label).first, 200);
+      expect(find.text(label), findsOneWidget, reason: '$label missing');
+    }
     await closeSettings(tester);
   });
 }

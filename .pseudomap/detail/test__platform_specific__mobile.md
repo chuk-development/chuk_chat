@@ -6,19 +6,19 @@
 ## test/platform_specific/mobile/mobile_agent_sheet_test.dart  (82 Z.)
 - L9 `void main()`
 
-## test/platform_specific/mobile/mobile_chat_chrome_test.dart  (547 Z.)
-- L17 `void main()`
+## test/platform_specific/mobile/mobile_chat_chrome_test.dart  (526 Z.)
+- L16 `void main()`
 
 ## test/platform_specific/mobile/mobile_chat_screen_test.dart  (129 Z.)
 - L9 `void main()`
 
-## test/platform_specific/mobile/mobile_preview_test.dart  (294 Z.)
+## test/platform_specific/mobile/mobile_preview_test.dart  (295 Z.)
 - L24 `_out = '../../../docs/screenshots/c6'`
 - L26 `void main()`
-- L209 `class _PlaceholderChat extends StatelessWidget`  — Stands in for the verbatim chuk_chat phone screen in the preview: a
-  - L210 `const _PlaceholderChat({required this.topInset})`
-  - L212 `final double topInset`
-  - L215 `Widget build(BuildContext context)`
+- L210 `class _PlaceholderChat extends StatelessWidget`  — Stands in for the verbatim chuk_chat phone screen in the preview: a
+  - L211 `const _PlaceholderChat({required this.topInset})`
+  - L213 `final double topInset`
+  - L216 `Widget build(BuildContext context)`
 
 ## test/platform_specific/mobile/mobile_support.dart  (111 Z.)
 - L14 `kPhoneSize = Size(390, 844)`  — A phone-sized window (iPhone 14: 390 × 844 logical px) with a 47 px status

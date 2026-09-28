@@ -625,17 +625,14 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// between the desktop stack and the phone screens. The phone layout only
   /// adds the floating-bar inset and forces chuk's phone screen.
   ///
-  /// [actions] are the shell's own thread actions — they render inside the
-  /// thread's header, not in a row floating over it, so the top of the screen
-  /// is one bar. [leadingInset] is the width the
-  /// hamburger and the mini rail cover on the left.
+  /// [actions] and [menuActions] are the shell's own thread actions: on a
+  /// desktop window the thread floats them at the top right of the chat, with
+  /// its own Documents button.
   AgentsThreadView _buildThread({
     double topInset = 0,
     bool phone = false,
     List<AgentsThreadAction> actions = const <AgentsThreadAction>[],
     List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[],
-    double leadingInset = 0,
-    void Function(AgentsAgent agent)? onOpenSubject,
   }) {
     final agent = _selectedAgent;
     return AgentsThreadView(
@@ -666,13 +663,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       onController: _onController,
       onOpenModelScreen: _openModelScreen,
       title: agent?.name,
-      subtitle: agent?.role,
-      headerAgent: agent,
-      onOpenAgentProfile: onOpenSubject ?? _openAgentProfile,
       onOpenAgentScreen: _openAgentScreenOrNull,
       actions: actions,
       menuActions: menuActions,
-      leadingInset: leadingInset,
       topInset: topInset,
       phoneLayout: phone,
       linkReport: _linkReport,
@@ -776,7 +769,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => Scaffold(
-          appBar: AppBar(title: Text(room.name)),
+          appBar: FloatingAppBar(title: Text(room.name)),
           body: _buildRoomBody(room),
         ),
       ),
@@ -972,7 +965,8 @@ mixin AgentsShellHost on State<MessengerShell> {
 
   /// Copies the selected thread's full debug export, like chuk_chat's
   /// top-right "Copy full chat". The service does the clipboard write and
-  /// hands back the note; a failure says so rather than staying silent.
+  /// hands back the note, shown as chuk shows its own; a failure says so
+  /// rather than staying silent.
   Future<void> _copyFullChat() async {
     final messenger = ScaffoldMessenger.of(context);
     final export = widget.chatDebugExport;
@@ -990,9 +984,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       }
     }
     if (!mounted) return;
-    messenger.showSnackBar(
-      SnackBar(content: Text(note), duration: const Duration(seconds: 2)),
-    );
+    AppNotifications.showOn(messenger, note);
   }
 
   /// The paired transport, or null (with a note to the user) when there is
@@ -1001,9 +993,7 @@ mixin AgentsShellHost on State<MessengerShell> {
   AgentsRelayController? _pairedControllerOrExplain() {
     final controller = _controller.value;
     if (controller == null || !controller.state.value.isPaired) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Connect to the agent first.')),
-      );
+      AppNotifications.show(context, 'Connect to the agent first.');
       return null;
     }
     return controller;

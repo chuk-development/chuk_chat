@@ -307,6 +307,8 @@ extension _MessageBubbleTools on _MessageBubbleState {
                   t.status == ToolCallStatus.pending,
             ));
 
+    // The phone thread's "Show thinking" switch: off keeps the tool steps and
+    // drops the reasoning, which the host sends as content blocks.
     final hideReasoning =
         widget.messengerMode && widget.showReasoningTokens != true;
     final steps = hideReasoning

@@ -1,51 +1,59 @@
 # lib · Signaturen
 
-## lib/constants.dart  (621 Z.)
-- L9 `kDefaultBgColor = Color(0xFF111318)`
-- L10 `kDefaultAccentColor = Color(0xFFA8C7FA)`
-- L11 `kDefaultIconFgColor = Color(0xFFE2E2E9)`
-- L12 `kDefaultThemeMode = Brightness.dark`
-- L20 `kDefaultDynamicColorEnabled = false`  — When enabled, the entire palette (accent, background and foreground) is
-- L23 `kDefaultShowReasoningTokens = true`
-- L26 `kDefaultShowModelInfo = false`
-- L29 `kDefaultShowTps = false`
-- L32 `kDefaultUiLocale = 'en'`
-- L35 `kDefaultToolCallingEnabled = true`
-- L36 `kDefaultToolDiscoveryMode = true`
-- L37 `kDefaultShowToolCalls = true`
-- L42 `kDefaultIncludeToolResultsInHistory = true`  — Include prior tool calls + their results in the API history so the
-- L45 `kDefaultChatFontSize = 15.0`
-- L46 `kMinChatFontSize = 11.0`
-- L47 `kMaxChatFontSize = 24.0`
-- L50 `kDefaultUiScale = 1.0`
-- L51 `kMinUiScale = 0.8`
-- L52 `kMaxUiScale = 1.5`
-- L58 `kChatFontFamilySystem = 'system'`  — Identifiers used to persist the user's font family preference.
-- L59 `kChatFontFamilyArimo = 'arimo'`
-- L60 `kChatFontFamilyMerriweather = 'merriweather'`
-- L61 `kChatFontFamilyJetBrainsMono = 'jetbrains_mono'`
-- L62 `kDefaultChatFontFamily = kChatFontFamilyArimo`
-- L64 `kSupportedChatFontFamilies = <String>[ kChatFontFamilySystem, kChatFontFamilyArimo, kChatFontFamilyMerriweather, kChatFo`
-- L76 `kDefaultUiFontFamily = kChatFontFamilySystem`
-- L78 `kSupportedUiFontFamilies = kSupportedChatFontFamilies`
-- L88 `kMinContrast = 0.0`
-- L89 `kMaxContrast = 1.0`
-- L90 `kDefaultContrast = 0.5`
-- L95 `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
-- L114 `kRadiusPill = 999.0`  — Stadium radius for every button. Buttons are pills app-wide.
-- L118 `_kButtonPadding = EdgeInsets.symmetric( horizontal: 20, vertical: 14, )`  — One padding, one minimum height and one label style for every button
-- L122 `_kButtonMinSize = Size(0, 48)`
-- L123 `_kButtonTextStyle = TextStyle( fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1, )`
-- L133 `kBorderRadiusPill = BorderRadius.circular(kRadiusPill)`
-- L136 `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightness, double contrast = kDefaultContrast, String? uiFont, })`
-- L590 `TextTheme _emphasizedTextTheme(TextTheme t)`  — Material 3 Expressive emphasis: the display and headline sizes carry real
-- L606 `Color _shiftHue(Color c, double degrees)`
-- L613 `kCompactModeBreakpoint = 600.0`
-- L614 `kTabletBreakpoint = 800.0`
-- L617 `kFixedLeftPadding = 8.0`
-- L618 `kTopInitialSpacing = 16.0`
-- L619 `kMenuButtonHeight = 48.0`
-- L620 `kButtonVisualHeight = 40.0`
+## lib/constants.dart  (563 Z.)
+- L8 `kDefaultBgColor = Color(0xFF111318)`
+- L9 `kDefaultAccentColor = Color(0xFFA8C7FA)`
+- L10 `kDefaultIconFgColor = Color(0xFFE2E2E9)`
+- L11 `kDefaultThemeMode = Brightness.dark`
+- L19 `kDefaultDynamicColorEnabled = false`  — When enabled, the entire palette (accent, background and foreground) is
+- L22 `kDefaultShowReasoningTokens = true`
+- L25 `kDefaultShowModelInfo = false`
+- L28 `kDefaultShowTps = false`
+- L31 `kDefaultUiLocale = 'en'`
+- L34 `kDefaultToolCallingEnabled = true`
+- L35 `kDefaultToolDiscoveryMode = true`
+- L36 `kDefaultShowToolCalls = true`
+- L41 `kDefaultIncludeToolResultsInHistory = true`  — Include prior tool calls + their results in the API history so the
+- L44 `kDefaultChatFontSize = 15.0`
+- L45 `kMinChatFontSize = 11.0`
+- L46 `kMaxChatFontSize = 24.0`
+- L49 `kDefaultUiScale = 1.0`
+- L50 `kMinUiScale = 0.8`
+- L51 `kMaxUiScale = 1.5`
+- L57 `kChatFontFamilySystem = 'system'`  — Identifiers used to persist the user's font family preference.
+- L58 `kChatFontFamilyArimo = 'arimo'`
+- L59 `kChatFontFamilyMerriweather = 'merriweather'`
+- L60 `kChatFontFamilyJetBrainsMono = 'jetbrains_mono'`
+- L61 `kDefaultChatFontFamily = kChatFontFamilyArimo`
+- L63 `kSupportedChatFontFamilies = <String>[ kChatFontFamilySystem, kChatFontFamilyArimo, kChatFontFamilyMerriweather, kChatFo`
+- L75 `kDefaultUiFontFamily = kChatFontFamilySystem`
+- L77 `kSupportedUiFontFamilies = kSupportedChatFontFamilies`
+- L87 `kMinContrast = 0.0`
+- L88 `kMaxContrast = 1.0`
+- L89 `kDefaultContrast = 0.5`
+- L94 `double contrastFactor(double contrast)`  — Maps the [kMinContrast]..[kMaxContrast] slider value to the multiplier
+- L104 `kRadiusCard = 20.0`
+- L105 `kRadiusField = 16.0`
+- L106 `kRadiusMenu = 16.0`
+- L107 `kRadiusRow = 14.0`
+- L108 `kRadiusDialog = 28.0`
+- L111 `kRadiusPill = 999.0`  — Stadium radius for every button. Buttons are pills app-wide.
+- L115 `_kButtonPadding = EdgeInsets.symmetric( horizontal: 20, vertical: 14, )`  — One padding, one minimum height and one label style for every button
+- L119 `_kButtonMinSize = Size(0, 48)`
+- L120 `_kButtonTextStyle = TextStyle( fontSize: 14, fontWeight: FontWeight.w600, letterSpacing: 0.1, )`
+- L126 `kBorderRadiusCard = BorderRadius.circular(kRadiusCard)`
+- L127 `kBorderRadiusField = BorderRadius.circular(kRadiusField)`
+- L128 `kBorderRadiusMenu = BorderRadius.circular(kRadiusMenu)`
+- L129 `kBorderRadiusRow = BorderRadius.circular(kRadiusRow)`
+- L130 `kBorderRadiusPill = BorderRadius.circular(kRadiusPill)`
+- L133 `ThemeData buildAppTheme({ required Color accent, required Color iconFg, required Color bg, required Brightness brightness, double contrast = kDefaultContrast, String? uiFont, })`
+- L548 `Color _shiftHue(Color c, double degrees)`
+- L555 `kCompactModeBreakpoint = 600.0`
+- L556 `kTabletBreakpoint = 800.0`
+- L559 `kFixedLeftPadding = 8.0`
+- L560 `kTopInitialSpacing = 16.0`
+- L561 `kMenuButtonHeight = 48.0`
+- L562 `kButtonVisualHeight = 40.0`
 
 ## lib/env_loader.dart  (158 Z.)
 - L13 `class EnvLoader`  — Loads environment variables from .env file at runtime.

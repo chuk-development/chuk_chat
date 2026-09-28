@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
-
 import 'package:chuk_chat/services/automations/automations_source.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// Every automation of the host, grouped by the coworker that owns it, with
@@ -76,9 +74,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
   Future<void> _control(AgentsAutomation a, String action) async {
     final sent = await _source.control(a.id, action);
     if (!mounted || sent) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Not connected to the host')));
+    AppNotifications.show(context, 'Not connected to the host');
   }
 
   @override
@@ -97,28 +93,27 @@ class _AutomationsPageState extends State<AutomationsPage> {
     for (final a in shown) {
       groups.putIfAbsent(a.sessionKey, () => <AgentsAutomation>[]).add(a);
     }
-    return ExpressiveScreen(
-      // The bar carries the name of the page. Repeating it as a heading in
-      // the body says the same thing twice.
-      title: 'Automations',
-      actions: <Widget>[
-        ExpressiveIconButton(
-          hugeIcon: HugeIcons.refresh,
-          tooltip: 'Refresh',
-          onTap: _refreshing ? null : _refresh,
-        ),
-      ],
-      builder: (BuildContext context) => RefreshIndicator(
+    return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
+        // The bar carries the name of the page. Repeating it as a heading in
+        // the body says the same thing twice.
+        title: const Text('Automations'),
+        actions: <Widget>[
+          FloatingHeaderButton(
+            icon: Icons.refresh,
+            tooltip: 'Refresh',
+            onPressed: _refreshing ? null : _refresh,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
         onRefresh: _refresh,
         // The house scroll container for a settings page: it lays every row
         // out up front, so the scrollbar does not resize while you scroll.
         child: SettingsListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            MediaQuery.paddingOf(context).top + 12,
-            16,
-            MediaQuery.paddingOf(context).bottom + 32,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
             ExpressiveInfoCard(

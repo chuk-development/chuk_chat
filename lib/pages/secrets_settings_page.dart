@@ -7,13 +7,15 @@
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/services/secrets/secrets_service.dart';
 import 'package:chuk_chat/services/secrets/secrets_store.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/anchored_menu.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 class SecretsSettingsPage extends StatefulWidget {
   const SecretsSettingsPage({super.key, SecretsService? service})
@@ -112,26 +114,25 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return ExpressiveScreen(
-      title: 'API Keys',
-      builder: (BuildContext context) => _loading
+    return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: const FloatingAppBar(title: Text('API Keys')),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ValueListenableBuilder<List<String>>(
               valueListenable: _service.names,
               builder: (context, names, _) {
-                return ListView(
-                  padding: EdgeInsets.fromLTRB(
-                    16,
-                    MediaQuery.paddingOf(context).top + 8,
-                    16,
-                    MediaQuery.paddingOf(context).bottom + 32,
-                  ),
+                return SettingsListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
                   children: [
-                    const ExpressiveTitle(
-                      'API Keys',
-                      subtitle:
-                          'Keys the agent can use in scripts but never read',
+                    Text(
+                      'Keys the agent can use in scripts but never read.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.resolvedIconColor.withValues(alpha: 0.7),
+                      ),
                     ),
+                    const SizedBox(height: 20),
                     const ExpressiveSectionHeader('Keys'),
                     ExpressiveGroup(
                       children: [
@@ -186,10 +187,6 @@ class _SecretsSettingsPageState extends State<SecretsSettingsPage> {
                           'Values shorter than ${SecretsStore.redactMinLength} '
                           'characters are not masked in outputs. Use real keys.',
                     ),
-                    if (theme.platform == TargetPlatform.linux ||
-                        theme.platform == TargetPlatform.windows ||
-                        theme.platform == TargetPlatform.macOS)
-                      const SizedBox(height: 8),
                   ],
                 );
               },

@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 
@@ -72,9 +73,11 @@ void main() {
     return picks;
   }
 
-  testWidgets('the New menu and the account row reach their surfaces', (
-    tester,
-  ) async {
+  SbChatTile tileOf(WidgetTester tester, String id) =>
+      tester.widget<SbChatTile>(find.byKey(ValueKey<String>('agent-tile-$id')));
+
+  testWidgets('the navigation cards and the account line reach their '
+      'surfaces', (tester) async {
     var rooms = 0, settings = 0, added = 0;
     final source = LocalAgentRosterSource()..addAgent(name: 'amber-otter');
     await pumpRoster(
@@ -85,31 +88,36 @@ void main() {
       onOpenSettings: () => settings++,
     );
 
-    await tester.tap(find.byTooltip('New'));
-    await tester.pumpAndSettle();
-    // A desktop menu: the shortcuts are printed next to the rows.
-    expect(find.text('Ctrl+N'), findsOneWidget);
+    // chuk's navigation block: cards joined under the head bar.
+    expect(
+      find.ancestor(of: find.text('New agent'), matching: find.byType(SbNavCard)),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('New agent'));
     await tester.tap(find.text('Control Rooms'));
     await tester.pumpAndSettle();
     expect(find.text("Agent's browser"), findsNothing);
+    expect((added, rooms), (1, 1));
+    // chuk's account line: the gear and the line itself open settings.
+    expect(find.byType(SbAccountLine), findsOneWidget);
     await tester.tap(find.byTooltip('Settings'));
-    expect((rooms, settings), (1, 1));
-    // The account row itself opens settings too.
+    expect(settings, 1);
     await tester.tap(find.text('Account'));
     expect(settings, 2);
-    expect(added, 0);
   });
 
-  testWidgets('without callbacks the New menu and the account row are absent', (
+  testWidgets('without callbacks the cards and the account line are absent', (
     tester,
   ) async {
     await pumpRoster(tester, LocalAgentRosterSource()..addAgent(name: 'jade'));
 
-    expect(find.byTooltip('New'), findsNothing);
+    expect(find.text('New agent'), findsNothing);
+    expect(find.text('Control Rooms'), findsNothing);
     expect(find.text("Agent's browser"), findsNothing);
     expect(find.byTooltip('Settings'), findsNothing);
     expect(find.text('Account'), findsNothing);
-    // The list still renders its coworker.
+    // Search is always there, and the list still renders its coworker.
+    expect(find.text('Search'), findsOneWidget);
     expect(find.text('jade'), findsOneWidget);
   });
 
@@ -122,7 +130,7 @@ void main() {
     );
 
     expect(find.text('No agents yet.'), findsOneWidget);
-    await tester.tap(find.widgetWithText(FilledButton, 'Add an agent'));
+    await tester.tap(find.text('New agent'));
     expect(opened, 1);
   });
 
@@ -153,19 +161,24 @@ void main() {
     expect(find.text('cowork-host'), findsOneWidget);
     expect(find.text('amber-otter'), findsOneWidget);
     expect(find.text('cobalt-lynx'), findsOneWidget);
-    // A working agent says so; the others show when they last did
-    // something, and nothing at all when nothing happened yet — never a time
-    // the app made up.
-    Finder inRow(String id, Finder f) => find.descendant(
-      of: find.byKey(ValueKey<String>('agent-tile-$id')),
-      matching: f,
+    // A working agent carries chuk's dot for a chat still being written; the
+    // others do not.
+    expect(tileOf(tester, busy.id).streaming, isTrue);
+    expect(tileOf(tester, scheduled.id).streaming, isFalse);
+    // The line under the name is chuk's date line: the time for today, and
+    // nothing at all when nothing happened yet — never a time the app made up.
+    final MaterialLocalizations l10n = MaterialLocalizations.of(
+      tester.element(find.byKey(ValueKey<String>('agent-tile-${busy.id}'))),
     );
-    expect(inRow(busy.id, find.text('working')), findsOneWidget);
+    expect(
+      tileOf(tester, busy.id).dateLine,
+      l10n.formatTimeOfDay(const TimeOfDay(hour: 11, minute: 55)),
+    );
+    expect(tileOf(tester, scheduled.id).dateLine, '');
     expect(find.textContaining('no activity yet'), findsNothing);
-    expect(inRow(scheduled.id, find.text('')), findsOneWidget);
     source.markRunning(busy.id, false);
     await tester.pumpAndSettle();
-    expect(inRow(busy.id, find.text('5m')), findsOneWidget);
+    expect(tileOf(tester, busy.id).streaming, isFalse);
     expect(scheduled.activity, AgentActivity.scheduled);
   });
 
@@ -277,8 +290,8 @@ void main() {
     });
   });
 
-  group('dense rows (docs/DESIGN.md §14.3)', () {
-    testWidgets('an agent row is one 36 px line with a 24 px face', (
+  group("chuk's tiles", () {
+    testWidgets("an agent row is chuk's chat tile with the face in front", (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(9));
@@ -286,22 +299,26 @@ void main() {
       await pumpRoster(tester, source);
 
       final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
-      expect(tester.getSize(row).height, 36);
-      // No second line on the desktop: the role lives in the details pane.
-      expect(find.text('researcher'), findsNothing);
+      expect(tileOf(tester, a.id).leading, isA<AgentFace>());
       expect(
         tester
             .widget<AgentFace>(
               find.descendant(of: row, matching: find.byType(AgentFace)),
             )
             .size,
-        24,
+        kRosterTileFace,
       );
+      // The row sits in chuk's card, under the group's lid.
+      expect(
+        find.ancestor(of: row, matching: find.byType(SbCardShape)),
+        findsWidgets,
+      );
+      expect(find.text('Agents'), findsOneWidget);
+      // No role line: the role lives in the details pane.
+      expect(find.text('researcher'), findsNothing);
     });
 
-    testWidgets('the selected row is filled and carries the accent bar', (
-      tester,
-    ) async {
+    testWidgets("the selected row is chuk's selected card", (tester) async {
       final source = LocalAgentRosterSource(random: Random(9));
       final a = source.addAgent(name: 'amber-otter');
       final b = source.addAgent(name: 'cobalt-lynx');
@@ -311,27 +328,22 @@ void main() {
         selectedAgentId: a.id,
         selectedThreadKey: a.threads.single.key,
       );
-      Finder bar(String id) => find.descendant(
-        of: find.byKey(ValueKey<String>('agent-tile-$id')),
-        matching: find.byKey(const ValueKey<String>('roster-selected-bar')),
-      );
-      expect(bar(a.id), findsOneWidget);
-      expect(bar(b.id), findsNothing);
-      expect(tester.getSize(bar(a.id)).width, 3);
+      expect(tileOf(tester, a.id).selected, isTrue);
+      expect(tileOf(tester, b.id).selected, isFalse);
     });
 
-    testWidgets('the "…" shows on hover only, and opens the row menu', (
+    testWidgets('the three-dot opens the row menu; the pin shows on hover', (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(9));
       final a = source.addAgent(name: 'amber-otter');
       await pumpRoster(tester, source);
       final Finder row = find.byKey(ValueKey<String>('agent-tile-${a.id}'));
-      final Finder more = find.descendant(
-        of: row,
-        matching: find.byTooltip('More'),
+      final Finder pin = find.ancestor(
+        of: find.descendant(of: row, matching: find.byTooltip('Pin')),
+        matching: find.byType(AnimatedOpacity),
       );
-      expect(more, findsNothing);
+      expect(tester.widget<AnimatedOpacity>(pin).opacity, 0);
 
       final TestGesture mouse = await tester.createGesture(
         kind: PointerDeviceKind.mouse,
@@ -340,11 +352,55 @@ void main() {
       await mouse.addPointer(location: Offset.zero);
       await mouse.moveTo(tester.getCenter(row));
       await tester.pumpAndSettle();
-      expect(more, findsOneWidget);
-      await tester.tap(more);
+      expect(tester.widget<AnimatedOpacity>(pin).opacity, 1);
+
+      await tester.tap(find.descendant(of: row, matching: find.byTooltip('More')));
       await tester.pumpAndSettle();
-      expect(find.text('Pin'), findsOneWidget);
       expect(find.text('Hide'), findsOneWidget);
+      // The hover toggle has a menu row next to it, for keys and touch.
+      expect(find.text('Pin'), findsOneWidget);
+    });
+
+    testWidgets('the row menu pins and unpins, opened from the keyboard', (
+      tester,
+    ) async {
+      final source = LocalAgentRosterSource(random: Random(9));
+      source.addAgent(name: 'amber-otter');
+      final b = source.addAgent(name: 'cobalt-lynx');
+      await pumpRoster(tester, source);
+      double y(String name) => tester.getCenter(find.text(name)).dy;
+      Finder row() => find.byKey(ValueKey<String>('agent-tile-${b.id}'));
+      void focusRow() => Focus.of(
+        tester.element(
+          find.descendant(of: row(), matching: find.text('cobalt-lynx')),
+        ),
+      ).requestFocus();
+
+      // The menu key on the focused row: no mouse, no hover.
+      focusRow();
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.contextMenu);
+      await tester.pumpAndSettle();
+      expect(find.text('Unpin'), findsNothing);
+      await tester.tap(find.text('Pin'));
+      await tester.pumpAndSettle();
+      expect(DesktopRosterPins.instance.isPinned(b.id), isTrue);
+      expect(find.text('Pinned'), findsOneWidget);
+      expect(y('cobalt-lynx'), lessThan(y('amber-otter')));
+
+      // Shift+F10 opens the same menu; the row now offers Unpin.
+      focusRow();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.f10);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+      expect(find.text('Pin'), findsNothing);
+      await tester.tap(find.text('Unpin'));
+      await tester.pumpAndSettle();
+      expect(DesktopRosterPins.instance.isPinned(b.id), isFalse);
+      expect(find.text('Pinned'), findsNothing);
+      expect(y('amber-otter'), lessThan(y('cobalt-lynx')));
     });
 
     testWidgets('unread is the bold name and a dot, no count', (tester) async {
@@ -374,13 +430,10 @@ void main() {
         ),
         findsOneWidget,
       );
-      final Text name = tester.widget<Text>(
-        find.descendant(of: row, matching: find.text('amber-otter')),
-      );
-      expect(name.style?.fontWeight, FontWeight.w700);
+      expect(tileOf(tester, a.id).unread, isTrue);
     });
 
-    testWidgets('Pin in the context menu moves the agent to the top', (
+    testWidgets('the pin moves the agent into the Pinned group on top', (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(9));
@@ -389,14 +442,19 @@ void main() {
       await pumpRoster(tester, source);
       double y(String name) => tester.getCenter(find.text(name)).dy;
       expect(y('amber-otter'), lessThan(y('cobalt-lynx')));
+      expect(find.text('Pinned'), findsNothing);
 
-      await tester.tap(
-        find.byKey(ValueKey<String>('agent-tile-${b.id}')),
-        buttons: kSecondaryButton,
+      final Finder row = find.byKey(ValueKey<String>('agent-tile-${b.id}'));
+      final TestGesture mouse = await tester.createGesture(
+        kind: PointerDeviceKind.mouse,
       );
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: Offset.zero);
+      await mouse.moveTo(tester.getCenter(row));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Pin'));
+      await tester.tap(find.descendant(of: row, matching: find.byTooltip('Pin')));
       await tester.pumpAndSettle();
+      expect(find.text('Pinned'), findsOneWidget);
       expect(y('cobalt-lynx'), lessThan(y('amber-otter')));
       expect(
         desktopRosterOrder(
@@ -407,20 +465,25 @@ void main() {
       );
     });
 
-    testWidgets('the search field filters agents by name', (tester) async {
+    testWidgets('the Search card opens the field, which filters by name', (
+      tester,
+    ) async {
       final source = LocalAgentRosterSource(random: Random(9));
       source.addAgent(name: 'amber-otter');
       source.addAgent(name: 'cobalt-lynx');
       await pumpRoster(tester, source);
+      expect(find.byType(SbSearchField), findsNothing);
+      await tester.tap(find.text('Search'));
+      await tester.pumpAndSettle();
+      expect(find.byType(SbSearchField), findsOneWidget);
       await tester.enterText(find.byType(TextField), 'cob');
       await tester.pumpAndSettle();
       expect(find.text('amber-otter'), findsNothing);
       expect(find.text('cobalt-lynx'), findsOneWidget);
     });
 
-    testWidgets('folded, the roster is a rail of faces with tooltips', (
-      tester,
-    ) async {
+    testWidgets("folded, the roster is chuk's mini rail with a face per "
+        'coworker', (tester) async {
       final source = LocalAgentRosterSource(random: Random(9));
       final a = source.addAgent(name: 'amber-otter');
       final picks = <String>[];
@@ -432,6 +495,7 @@ void main() {
               child: AgentRosterView(
                 source: source,
                 collapsed: true,
+                onAddAgent: () {},
                 onToggleCollapsed: () {},
                 onSelect: (id, _) => picks.add(id),
               ),
@@ -442,6 +506,11 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('amber-otter'), findsNothing);
       expect(find.byTooltip('amber-otter'), findsOneWidget);
+      // The New agent icon sits on the row its card has in the open pane.
+      expect(
+        tester.getTopLeft(find.byType(SbNavIcon).first).dy,
+        moreOrLessEquals(sbNavRowTop(0) + kSbNavIconTop, epsilon: 0.5),
+      );
       await tester.tap(find.byKey(ValueKey<String>('rail-agent-${a.id}')));
       expect(picks, <String>[a.id]);
     });
@@ -781,9 +850,10 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(source.hiddenIds, hasLength(1));
-      // Hidden is a folded section at the bottom: open it, then Unhide.
-      expect(find.text('Hidden · 1'), findsOneWidget);
-      await tester.tap(find.text('Hidden · 1'));
+      // Hidden is a folded group at the bottom: open its lid, then Unhide.
+      expect(find.text('Hidden'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Unhide'), findsNothing);
+      await tester.tap(find.text('Hidden'));
       await tester.pumpAndSettle();
 
       await tester.tap(find.widgetWithText(TextButton, 'Unhide'));
@@ -795,7 +865,7 @@ void main() {
   });
 
   group('working (§16.1)', () {
-    testWidgets('a row says "working" only while its agent works', (
+    testWidgets("a row carries chuk's working dot only while its agent works", (
       tester,
     ) async {
       final source = LocalAgentRosterSource(random: Random(7));
@@ -803,21 +873,15 @@ void main() {
       source.addAgent(name: 'cobalt-lynx');
       await pumpRoster(tester, source);
 
-      expect(find.text('working'), findsNothing);
+      expect(tileOf(tester, a.id).streaming, isFalse);
 
       source.markRunning(a.id, true);
       await tester.pumpAndSettle();
-      expect(
-        find.descendant(
-          of: find.byKey(ValueKey<String>('agent-tile-${a.id}')),
-          matching: find.text('working'),
-        ),
-        findsOneWidget,
-      );
+      expect(tileOf(tester, a.id).streaming, isTrue);
 
       source.markRunning(a.id, false);
       await tester.pumpAndSettle();
-      expect(find.text('working'), findsNothing);
+      expect(tileOf(tester, a.id).streaming, isFalse);
     });
   });
 

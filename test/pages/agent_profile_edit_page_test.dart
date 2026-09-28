@@ -73,4 +73,42 @@ void main() {
       expect(tester.takeException(), isNull);
     },
   );
+
+  // The page runs under chuk's floating header. The header band grows by the
+  // status bar, so the preview must clear the band at every status-bar
+  // height, not only at the zero a test gets by default.
+  for (final double statusBar in <double>[0, 24, 48]) {
+    testWidgets('the floating header does not cover the preview with a '
+        '${statusBar.toInt()} px status bar', (tester) async {
+      SharedPreferences.setMockInitialValues({});
+      tester.view.physicalSize = const Size(400, 800);
+      tester.view.devicePixelRatio = 1;
+      tester.view.padding = FakeViewPadding(top: statusBar);
+      tester.view.viewPadding = FakeViewPadding(top: statusBar);
+      addTearDown(tester.view.reset);
+      final store = AgentProfileStore();
+      final source = LocalAgentRosterSource(
+        seed: [const AgentsAgent(id: 'alex', name: 'Alex', threads: [])],
+      );
+      addTearDown(store.dispose);
+      addTearDown(source.dispose);
+
+      await tester.pumpWidget(
+        testApp(
+          AgentProfileEditPage(
+            agent: source.agents.single,
+            source: source,
+            profiles: store,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Rect header = tester.getRect(find.byType(AppBar));
+      final Rect face = tester.getRect(find.byType(AgentFace).first);
+      expect(header.bottom, 62 + statusBar);
+      expect(face.top, greaterThanOrEqualTo(header.bottom));
+      expect(tester.takeException(), isNull);
+    });
+  }
 }
