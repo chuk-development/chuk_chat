@@ -47,7 +47,6 @@ import 'package:chuk_chat/widgets/weather_widget.dart';
 import 'package:chuk_chat/utils/tool_detail_format.dart';
 import 'package:chuk_chat/widgets/markdown_message.dart';
 import 'package:chuk_chat/models/chat_reply.dart';
-import 'package:chuk_chat/utils/incomplete_markdown_links.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 import 'package:chuk_chat/widgets/messenger_context_menu.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
@@ -58,13 +57,11 @@ import 'package:chuk_chat/widgets/document_viewer.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/sandbox_artifact_block.dart';
-import 'package:chuk_chat/widgets/stamped_text.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/utils/color_extensions.dart';
 import 'package:chuk_chat/utils/tool_parser.dart';
-import 'package:chuk_chat/ui/expressive/bubble_kind.dart';
-import 'package:chuk_chat/ui/expressive/bubble_shape.dart';
-import 'package:chuk_chat/ui/expressive/message_stamp.dart';
+import 'package:chuk_chat/ui/expressive/bubble_shape.dart'
+    show kBubbleGapBetweenGroups;
 import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/mcp_connect_card.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
@@ -228,7 +225,9 @@ class MessageBubble extends StatefulWidget {
   /// and an unnamed one keep the same rhythm.
   final Widget? senderLabel;
 
-  /// Opt-in quiet mobile chrome. Data, model settings and desktop stay intact.
+  /// The messenger thread's behaviour: the long-press menu instead of the
+  /// action bars, the reply quote, the reaction chip, live tool calls and the
+  /// quiet work line. The look stays chuk_chat's.
   final bool messengerMode;
   final bool
   isUser; // true for bot, false for user in voice mode (to match image)
@@ -273,6 +272,8 @@ class MessageBubble extends StatefulWidget {
 
   /// Actual message timestamp, distinct from the generation stopwatch.
   /// Null on undated legacy rows; never synthesised from the render clock.
+  /// The bubble draws no clock, so this only travels into the long-press
+  /// preview.
   final DateTime? sentAt;
 
   /// The finished turn's length as it was written down. Once present the
@@ -349,7 +350,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
-  late final bool _animateMessengerEntrance;
 
   // User preferences for display - null until loaded
   bool? _showReasoningTokens;
@@ -365,13 +365,6 @@ class _MessageBubbleState extends State<MessageBubble> {
   @override
   void initState() {
     super.initState();
-    // Only a newly mounted live assistant turn enters. Historical rows and
-    // subsequent token updates stay still; outgoing messages already fly in
-    // once via the mobile list's MessageFlyIn wrapper.
-    _animateMessengerEntrance =
-        widget.messengerMode &&
-        !widget.isUser &&
-        (widget.isStreamingMessage || widget.isReasoningStreaming);
     _loadPreferences();
   }
 
@@ -413,6 +406,9 @@ class _MessageBubbleState extends State<MessageBubble> {
     final Widget body = isUserMessage
         ? _buildUserBubble(context)
         : _buildAiBubble(context);
+    // The messenger thread's reaction hangs under the bubble as a chip in the
+    // app's chip look: the raised fill, a hairline and the pill shape.
+    final ColorScheme scheme = Theme.of(context).colorScheme;
     final Widget result = widget.messengerMode && widget.reaction != null
         ? Column(
             mainAxisSize: MainAxisSize.min,
@@ -429,9 +425,8 @@ class _MessageBubbleState extends State<MessageBubble> {
                         ? null
                         : () => widget.onReaction!(widget.reaction!),
                     style: TextButton.styleFrom(
-                      backgroundColor: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHigh,
+                      backgroundColor: scheme.surfaceContainerHigh,
+                      side: BorderSide(color: scheme.outlineVariant),
                       minimumSize: const Size(48, 40),
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                     ),
@@ -470,22 +465,6 @@ class _MessageBubbleState extends State<MessageBubble> {
       );
     }
 
-    if (!_animateMessengerEntrance || MediaQuery.disableAnimationsOf(context)) {
-      return result;
-    }
-    return TweenAnimationBuilder<double>(
-      key: const ValueKey('messenger-message-entrance'),
-      tween: Tween<double>(begin: 0, end: 1),
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      child: result,
-      builder: (context, progress, child) => Opacity(
-        opacity: 0.6 + 0.4 * progress,
-        child: Transform.translate(
-          offset: Offset(0, 6 * (1 - progress)),
-          child: child,
-        ),
-      ),
-    );
+    return result;
   }
 }

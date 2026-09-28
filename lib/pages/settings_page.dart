@@ -1,8 +1,9 @@
-// Two hubs, one page. With Agents off this is upstream's full settings list.
-// With Agents on it is the Agents app's own hub ([_buildAgentsHub]): its large
-// headline, its one Account row, its 'Agents' section (here.now, Embedding,
-// API Keys, Automations) and its own connectors and developer pages under
-// lib/pages/settings/.
+// One settings page for both builds: upstream chuk_chat's list, frame and
+// sign-out. With Agents on, the rows that do nothing there are left out: the
+// host owns the system prompt and runs every tool, the assistant overlay
+// cannot reach its model through the host, and the tour walks chuk_chat's own
+// screens. One 'Agents' section adds what only a paired host has: here.now,
+// Embedding, API Keys and Automations. Skills opens the host's skills there.
 // lib/pages/settings_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -54,11 +55,7 @@ import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
-import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
-import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
-    as agents_settings;
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -133,7 +130,6 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (agentsChatCore) return _buildAgentsHub(context);
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
@@ -149,7 +145,15 @@ class _SettingsPageState extends State<SettingsPage> {
         title: Text(l.settings, style: titleTextStyle),
       ),
       body: SettingsListView(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        // The Agents phone home hosts this page as a tab under its floating
+        // navigation bar, and grows the bottom inset by the bar. The end of
+        // the list keeps that inset free.
+        padding: EdgeInsets.fromLTRB(
+          16,
+          0,
+          16,
+          24 + (agentsChatCore ? MediaQuery.paddingOf(context).bottom : 0),
+        ),
         children: [
           ExpressiveSectionHeader('Account'),
           ExpressiveGroup(
@@ -208,40 +212,46 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ),
-              KeyedSubtree(
-                key: TourKeyRegistry.instance
-                    .keyFor(TourSlots.settingsAiIdentityTile),
-                child: _SettingsRow(
-                  icon: Icons.fingerprint,
-                  title: l.aiIdentityMemory,
-                  subtitle: l.aiIdentityMemorySubtitle,
+              // Agents: the host owns the system prompt, and the notes behind
+              // this page feed chuk_chat's own prompt builder.
+              if (!agentsChatCore)
+                KeyedSubtree(
+                  key: TourKeyRegistry.instance
+                      .keyFor(TourSlots.settingsAiIdentityTile),
+                  child: _SettingsRow(
+                    icon: Icons.fingerprint,
+                    title: l.aiIdentityMemory,
+                    subtitle: l.aiIdentityMemorySubtitle,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          settings: const RouteSettings(
+                            name: 'tour:ai_identity',
+                          ),
+                          builder: (_) => const SystemPromptPage(),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              // Agents: the host runs every tool; the client tool switches
+              // are never read.
+              if (!agentsChatCore)
+                _SettingsRow(
+                  icon: Icons.build_circle_outlined,
+                  title: l.toolCalling,
+                  subtitle: l.toolCallingSubtitle,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        settings: const RouteSettings(
-                          name: 'tour:ai_identity',
-                        ),
-                        builder: (_) => const SystemPromptPage(),
+                        builder: (_) =>
+                            ToolCallingSettingsPage(config: widget.config),
                       ),
                     );
                   },
                 ),
-              ),
-              _SettingsRow(
-                icon: Icons.build_circle_outlined,
-                title: l.toolCalling,
-                subtitle: l.toolCallingSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) =>
-                          ToolCallingSettingsPage(config: widget.config),
-                    ),
-                  );
-                },
-              ),
               if (kFeatureMcp && !kIsWeb)
                 _SettingsRow(
                   icon: Icons.extension_outlined,
@@ -264,12 +274,19 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => const SkillsSettingsPage(),
+                      // Agents: the skills that live on the host, switched
+                      // over the relay. chuk_chat's own skills feed a prompt
+                      // the host never reads.
+                      builder: (_) => agentsChatCore
+                          ? const AgentsSkillsSettingsPage()
+                          : const SkillsSettingsPage(),
                     ),
                   );
                 },
               ),
-              if (AssistantPlatform.isSupported)
+              // Agents: the overlay sends through the host relay, which drops
+              // its device tools and its pinned model.
+              if (AssistantPlatform.isSupported && !agentsChatCore)
                 KeyedSubtree(
                   key: TourKeyRegistry.instance.keyFor(
                     TourSlots.kSettingsAssistantTile,
@@ -306,6 +323,68 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
+
+          // Agents only: about the host the coworkers run on, which a hosted
+          // chat account has no equivalent for.
+          if (agentsChatCore) ...[
+            ExpressiveSectionHeader('Agents'),
+            ExpressiveGroup(
+              children: [
+                _SettingsRow(
+                  icon: Icons.place_outlined,
+                  title: 'here.now',
+                  subtitle: 'Let a coworker publish a page on your behalf',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const HereNowSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+                _SettingsRow(
+                  icon: Icons.memory_outlined,
+                  title: 'Embedding',
+                  subtitle: 'The model that indexes what the agent reads',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const EmbeddingSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+                _SettingsRow(
+                  icon: Icons.key_outlined,
+                  title: 'API Keys',
+                  subtitle: 'Keys the agent can use but never read',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const SecretsSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+                _SettingsRow(
+                  icon: Icons.schedule_outlined,
+                  title: 'Automations',
+                  subtitle: 'Schedules and watchers your coworkers set up',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AutomationsPage(),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ],
 
           ExpressiveSectionHeader('Appearance'),
           ExpressiveGroup(
@@ -356,12 +435,15 @@ class _SettingsPageState extends State<SettingsPage> {
           ExpressiveSectionHeader('System'),
           ExpressiveGroup(
             children: [
-              _SettingsRow(
-                icon: Icons.school_outlined,
-                title: l.onboardingReplayTile,
-                subtitle: l.onboardingReplayTileSubtitle,
-                onTap: () => _replayOnboarding(context),
-              ),
+              // Agents: the tour walks chuk_chat's screens, which the Agents
+              // shell does not show.
+              if (!agentsChatCore)
+                _SettingsRow(
+                  icon: Icons.school_outlined,
+                  title: l.onboardingReplayTile,
+                  subtitle: l.onboardingReplayTileSubtitle,
+                  onTap: () => _replayOnboarding(context),
+                ),
               _SettingsRow(
                 icon: Icons.info_outline,
                 title: l.about,
@@ -558,289 +640,6 @@ class _SettingsPageState extends State<SettingsPage> {
       }
     }
     return null;
-  }
-
-  /// The Agents build's hub, exactly as the Agents app drew it: the large
-  /// left headline of [ExpressiveScreen], one Account row, the Agents section
-  /// right under "AI & Chat", and none of chuk_chat's hosted-account rows.
-  Widget _buildAgentsHub(BuildContext context) {
-    final l = AppLocalizations.of(context)!;
-    final theme = Theme.of(context);
-    final cs = theme.colorScheme;
-    final m3 = theme.m3;
-    final Color scaffoldBg = theme.scaffoldBackgroundColor;
-
-    return ExpressiveScreen(
-      title: l.settings,
-      backgroundColor: scaffoldBg,
-      // Inside the home's Settings tab there is nowhere to go back to: the
-      // navigation bar is the way out.
-      showBack: Navigator.of(context).canPop(),
-      builder: (BuildContext context) => SettingsListView(
-        // [ExpressiveScreen] already grows the top padding by its bar; the
-        // floating-header inset would count the bar a second time.
-        headerInset: false,
-        padding: EdgeInsets.fromLTRB(
-          16,
-          MediaQuery.paddingOf(context).top + 8,
-          16,
-          MediaQuery.paddingOf(context).bottom + 24,
-        ),
-        children: [
-          ExpressiveSectionHeader('Account'),
-          ExpressiveGroup(
-            children: [
-              _SettingsRow(
-                icon: Icons.person_outline,
-                title: 'Account',
-                subtitle: 'Who is signed in on this device',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const AccountSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          ExpressiveSectionHeader('AI & Chat'),
-          ExpressiveGroup(
-            children: [
-              KeyedSubtree(
-                key: TourKeyRegistry.instance.keyFor(
-                  TourSlots.settingsModelSelectionTile,
-                ),
-                child: _SettingsRow(
-                  icon: Icons.smart_toy_outlined,
-                  title: l.modelSelection,
-                  subtitle: l.modelSelectionSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        settings: const RouteSettings(
-                          name: 'tour:model_selector',
-                        ),
-                        builder: (_) => const ModelSelectorPage(),
-                      ),
-                    );
-                  },
-                ),
-              ),
-              if (kFeatureMcp && !kIsWeb)
-                _SettingsRow(
-                  icon: Icons.extension_outlined,
-                  title: l.connectors,
-                  subtitle: l.connectorsSubtitle,
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const agents_settings.McpConnectorsPage(),
-                      ),
-                    );
-                  },
-                ),
-              _SettingsRow(
-                icon: Icons.auto_awesome_outlined,
-                title: l.skills,
-                subtitle: l.skillsSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SkillsSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          // Agents's own destinations. They have no chuk counterpart because
-          // they are about the machine the agent runs on, not about a hosted
-          // chat account.
-          ExpressiveSectionHeader('Agents'),
-          ExpressiveGroup(
-            children: [
-              _SettingsRow(
-                icon: Icons.place_outlined,
-                title: 'here.now',
-                subtitle: 'Let a coworker publish a page on your behalf',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const HereNowSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.memory_outlined,
-                title: 'Embedding',
-                subtitle: 'The model that indexes what the agent reads',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EmbeddingSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.key_outlined,
-                title: 'API Keys',
-                subtitle: 'Keys the agent can use but never read',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const SecretsSettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.schedule_outlined,
-                title: 'Automations',
-                subtitle: 'Schedules and watchers your coworkers set up',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AutomationsPage()),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          ExpressiveSectionHeader('Appearance'),
-          ExpressiveGroup(
-            children: [
-              _SettingsRow(
-                icon: Icons.palette_outlined,
-                title: l.themeSettings,
-                subtitle: l.themeSettingsSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => ThemePage(config: widget.config),
-                    ),
-                  );
-                },
-              ),
-              _SettingsRow(
-                icon: Icons.tune,
-                title: l.customization,
-                subtitle: l.customizationSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => CustomizationPage(config: widget.config),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-
-          ExpressiveSectionHeader('System'),
-          ExpressiveGroup(
-            children: [
-              _SettingsRow(
-                icon: Icons.info_outline,
-                title: l.about,
-                subtitle: l.aboutSubtitle,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const AboutPage()),
-                  );
-                },
-              ),
-            ],
-          ),
-          if (_developerOptionsEnabled) ...[
-            const SizedBox(height: 12),
-            _DevTile(
-              title: l.developerOptions,
-              subtitle: l.developerOptionsSubtitle,
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const DeveloperSettingsPage(),
-                  ),
-                );
-              },
-            ),
-          ],
-
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              style: OutlinedButton.styleFrom(
-                foregroundColor: cs.error,
-                side: BorderSide(color: m3.outline),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(999),
-                ),
-              ),
-              onPressed: () async {
-                final messenger = ScaffoldMessenger.of(context);
-                final navigator = Navigator.of(context);
-                try {
-                  await const AuthService().signOut();
-                  if (!navigator.mounted) return;
-                  if (navigator.canPop()) {
-                    navigator.pop();
-                  }
-                } on AuthServiceException catch (error) {
-                  AppNotifications.showOn(
-                    messenger,
-                    error.message,
-                    kind: AppNotificationKind.error,
-                  );
-                } catch (error) {
-                  if (kDebugMode) debugPrint('Sign-out failed: $error');
-                  AppNotifications.showOn(
-                    messenger,
-                    l.logoutFailed,
-                    kind: AppNotificationKind.error,
-                  );
-                }
-              },
-              child: Text(
-                l.logout,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: Text(
-              'Chuk Chat',
-              style: TextStyle(
-                fontSize: 11,
-                color: m3.onSurfaceVariant.withValues(alpha: 0.7),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
   }
 }
 

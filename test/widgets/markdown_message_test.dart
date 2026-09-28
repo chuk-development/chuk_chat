@@ -10,7 +10,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 import '../support/icon_finder.dart';
 
@@ -96,10 +95,6 @@ TextSpan _span(WidgetTester tester, String text) {
 
 void main() {
   group('links', () {
-    // The Agents build's typography; chuk_chat renders upstream's.
-    setUp(() => debugAgentsChatCoreOverride = true);
-    tearDown(() => debugAgentsChatCoreOverride = null);
-
     testWidgets('a link is underlined and painted in the accent colour', (
       tester,
     ) async {
@@ -173,10 +168,6 @@ void main() {
   });
 
   group('inline styles', () {
-    // The Agents build's typography; chuk_chat renders upstream's.
-    setUp(() => debugAgentsChatCoreOverride = true);
-    tearDown(() => debugAgentsChatCoreOverride = null);
-
     testWidgets('bold, italic and strikethrough', (tester) async {
       await _pumpMarkdown(tester, '**bold** and *slanted* and ~~gone~~');
 
@@ -227,10 +218,6 @@ void main() {
   });
 
   group('headings', () {
-    // The Agents build's typography; chuk_chat renders upstream's.
-    setUp(() => debugAgentsChatCoreOverride = true);
-    tearDown(() => debugAgentsChatCoreOverride = null);
-
     testWidgets('h1 to h6 never grow again on the way down', (tester) async {
       await _pumpMarkdown(tester, '''
 # one
@@ -345,10 +332,6 @@ $$E = mc^2$$
   });
 
   group('lists', () {
-    // The Agents build's typography; chuk_chat renders upstream's.
-    setUp(() => debugAgentsChatCoreOverride = true);
-    tearDown(() => debugAgentsChatCoreOverride = null);
-
     testWidgets('nested ordered and unordered lists render every item', (
       tester,
     ) async {
@@ -371,29 +354,6 @@ $$E = mc^2$$
       }
       expect(find.text('1.'), findsWidgets);
       expect(find.text('2.'), findsOneWidget);
-    });
-
-    testWidgets('list markers use the bubble text colour', (tester) async {
-      const Color onDark = Color(0xFFEFEFEF);
-      await _pumpMarkdown(
-        tester,
-        '- bullet item\n\n1. numbered item',
-        textColor: onDark,
-      );
-
-      final Text number = tester.widget<Text>(find.text('1.'));
-      expect(number.style?.color, onDark);
-
-      final Iterable<Container> bullets = tester
-          .widgetList<Container>(find.byType(Container))
-          .where(
-            (Container c) =>
-                c.constraints?.maxWidth == 6 && c.constraints?.maxHeight == 6,
-          );
-      expect(bullets, isNotEmpty);
-      final BoxDecoration decoration =
-          bullets.first.decoration! as BoxDecoration;
-      expect(decoration.color ?? decoration.border?.top.color, onDark);
     });
 
     testWidgets('a list item can hold a fenced code block', (tester) async {

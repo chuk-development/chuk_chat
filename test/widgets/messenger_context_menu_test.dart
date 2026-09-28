@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/widgets/messenger_context_menu.dart';
-import 'package:chuk_chat/widgets/chat_reply_preview.dart';
 
 void main() {
   testWidgets(
@@ -54,17 +53,4 @@ void main() {
       expect(result, 'reaction:🤯');
     },
   );
-
-  testWidgets('edit cancel has a full touch target', (tester) async {
-    var cancelled = false;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(body: ChatEditNotice(onCancel: () => cancelled = true)),
-      ),
-    );
-    final button = find.widgetWithText(TextButton, 'Cancel');
-    expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
-    await tester.tap(button);
-    expect(cancelled, isTrue);
-  });
 }

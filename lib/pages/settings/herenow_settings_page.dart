@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
-
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// The here.now publishing connector: let a coworker put a file or a folder on
 /// the public web and hand back a live URL. Off by default — while it is off,
@@ -53,22 +54,23 @@ class _HereNowSettingsPageState extends State<HereNowSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    return ExpressiveScreen(
-      title: 'here.now Publishing',
-      builder: (BuildContext context) => _loading
+    final theme = Theme.of(context);
+    return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: const FloatingAppBar(title: Text('here.now Publishing')),
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                MediaQuery.paddingOf(context).top + 8,
-                16,
-                MediaQuery.paddingOf(context).bottom + 32,
-              ),
+          : SettingsListView(
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
               children: [
-                const ExpressiveTitle(
-                  'here.now Publishing',
-                  subtitle: 'Let a coworker publish files to a live public URL',
+                Text(
+                  'Let a coworker publish files to a live public URL.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.resolvedIconColor.withValues(alpha: 0.7),
+                  ),
                 ),
+                const SizedBox(height: 20),
                 const ExpressiveSectionHeader('Connector'),
                 ExpressiveGroup(
                   children: [

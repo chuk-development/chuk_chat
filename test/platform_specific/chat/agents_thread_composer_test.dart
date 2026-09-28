@@ -1,7 +1,8 @@
-// The Agents phone thread's composer, as in the original Agents app:
-// opening a thread does not take the focus (no keyboard), the AI notice sits
-// under the composer, and the plus and mode menus are filled tiles at the
-// menu radius with no frame, the plus menu offering Workspace.
+// The Agents phone thread's composer is chuk_chat's (docs/AGENTS_UI_UNIFY.md):
+// opening a thread does not take the focus (no keyboard), chuk's AI notice
+// sits under the composer and steps aside for the focus, and the plus and
+// mode menus are chuk's framed menus at radius 18, the plus menu offering
+// Workspace.
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -118,10 +119,10 @@ void main() {
       isFalse,
       reason: 'the keyboard belongs to a tap on the composer',
     );
-    // The AI notice is only there while the composer is not focused.
+    // chuk's AI notice, only there while the composer is not focused.
     expect(
       find.text(
-        "You're chatting with an AI \u2014 it can be wrong. Check key info.",
+        "You're chatting with an AI/LLM \u2014 it can be wrong. Check key info.",
       ),
       findsOneWidget,
     );
@@ -139,7 +140,7 @@ void main() {
     expect(find.textContaining("You're chatting with an AI"), findsNothing);
   });
 
-  testWidgets('the plus menu is filled tiles at the menu radius, with '
+  testWidgets('the plus menu is chuk\'s framed menu at radius 18, with '
       'Workspace', (tester) async {
     await pumpPhoneThread(tester);
 
@@ -150,7 +151,7 @@ void main() {
     final MenuTileGroup group = tester.widget<MenuTileGroup>(
       find.byType(MenuTileGroup),
     );
-    expect(group.outerRadius, kMenuOuterRadius);
+    expect(group.outerRadius, 18);
     expect(
       find.ancestor(
         of: find.byType(MenuTileGroup),
@@ -161,13 +162,13 @@ void main() {
               (w.decoration! as BoxDecoration).border != null,
         ),
       ),
-      findsNothing,
-      reason: 'no frame around the menu',
+      findsOneWidget,
+      reason: 'chuk\'s frame around the menu',
     );
     expect(composerHasFocus(tester), isFalse);
   });
 
-  testWidgets('the mode menu is filled tiles at the menu radius', (
+  testWidgets('the mode menu is chuk\'s framed menu at radius 18', (
     tester,
   ) async {
     await pumpPhoneThread(tester);
@@ -178,7 +179,7 @@ void main() {
     final MenuTileGroup group = tester.widget<MenuTileGroup>(
       find.byType(MenuTileGroup),
     );
-    expect(group.outerRadius, kMenuOuterRadius);
+    expect(group.outerRadius, 18);
     expect(
       find.ancestor(
         of: find.byType(MenuTileGroup),
@@ -189,7 +190,7 @@ void main() {
               (w.decoration! as BoxDecoration).border != null,
         ),
       ),
-      findsNothing,
+      findsOneWidget,
     );
   });
 }

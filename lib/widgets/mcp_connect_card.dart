@@ -14,7 +14,7 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart'
+import 'package:chuk_chat/pages/mcp_connectors_page.dart'
     show McpConnectorIcon, showMcpCredentialDialog;
 import 'package:chuk_chat/services/mcp/mcp_catalogue.dart';
 import 'package:chuk_chat/services/mcp/mcp_connection.dart';

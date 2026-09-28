@@ -1,19 +1,24 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/expressive_settings.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 /// The mobile contact page: everyday choices first, technical details second.
 /// Every destination is supplied by the shell, so this page never owns or
 /// reconnects a transport and always acts on the coworker whose name was tapped.
+///
+/// It wears the settings frame and rows every other settings page wears
+/// (FloatingAppBar, SettingsListView, the Expressive rows). The coworker's
+/// face, name and role head the list, where a contact page puts them.
 class MobileAgentsSettingsPage extends StatefulWidget {
   const MobileAgentsSettingsPage({
     super.key,
@@ -99,7 +104,6 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final profiles = widget.profiles ?? AgentProfileStore.instance;
     return AnimatedBuilder(
       animation: Listenable.merge([
@@ -114,206 +118,144 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
             ? null
             : ChatModelSelectionService.instance.peek(widget.chatId!);
         if (agent == null) {
-          return ExpressiveScreen(
-            backgroundColor: scheme.surface,
-            title: 'Coworker',
-            builder: (BuildContext context) => const Center(
+          return const Scaffold(
+            // The page runs underneath the floating header.
+            extendBodyBehindAppBar: true,
+            appBar: FloatingAppBar(title: Text('Coworker')),
+            body: Center(
               child: Text('This coworker is no longer in your list.'),
             ),
           );
         }
         return Scaffold(
-          backgroundColor: scheme.surface,
-          body: CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                pinned: true,
-                expandedHeight:
-                    300 +
-                    (MediaQuery.textScalerOf(context).scale(24) - 24).clamp(
-                      0,
-                      80,
-                    ),
-                backgroundColor: scheme.surface,
-                surfaceTintColor: Colors.transparent,
-                leadingWidth: 64,
-                leading: Padding(
-                  padding: const EdgeInsets.only(left: 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ExpressiveIconButton(
-                      icon: Icons.arrow_back_rounded,
-                      tooltip: 'Back',
-                      onTap: () => Navigator.of(context).maybePop(),
-                    ),
+          // The page runs underneath the floating header.
+          extendBodyBehindAppBar: true,
+          appBar: FloatingAppBar(
+            title: const Text('Coworker'),
+            actions: <Widget>[
+              FloatingHeaderButton(
+                icon: Icons.edit_rounded,
+                tooltip: 'Edit coworker',
+                onPressed: widget.onEdit,
+              ),
+            ],
+          ),
+          body: SettingsListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            children: [
+              _contact(agent, profiles),
+              const SizedBox(height: 20),
+              _actionRow(),
+              const ExpressiveSectionHeader('Coworker'),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Profile & preferences',
+                    Icons.person_outline,
+                    widget.onEdit,
+                    subtitle: 'Name, picture, colour and shape',
                   ),
-                ),
-                actions: [
-                  Padding(
-                    padding: const EdgeInsets.only(right: 12),
-                    child: ExpressiveIconButton(
-                      icon: Icons.edit_rounded,
-                      tooltip: 'Edit coworker',
-                      color: scheme.surfaceContainerHigh,
-                      onTap: widget.onEdit,
-                    ),
+                  _row(
+                    'Host & activity',
+                    Icons.computer_outlined,
+                    widget.onControls,
+                    subtitle: 'Connection details, usage and workspace',
                   ),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: SafeArea(
-                    child: Center(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(24, 56, 24, 16),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AgentFace(agent: agent, size: 96, store: profiles),
-                            const SizedBox(height: 16),
-                            Text(
-                              agent.name,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: Theme.of(context).textTheme.headlineSmall
-                                  ?.copyWith(fontWeight: FontWeight.w700),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              profiles.profileOf(agent.id).role ??
-                                  agent.role ??
-                                  'Your coworker',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.bodyMedium
-                                  ?.copyWith(color: scheme.onSurfaceVariant),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
               ),
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
-                sliver: SliverList.list(
+              if (widget.onDocuments != null) ...[
+                const ExpressiveSectionHeader('Shared files'),
+                ExpressiveGroup(
                   children: [
-                    _actionRow(),
-                    _section('Coworker', [
-                      _row(
-                        'Profile & preferences',
-                        Icons.person_outline,
-                        widget.onEdit,
-                        subtitle: 'Name, picture, colour and shape',
-                      ),
-                      _row(
-                        'Host & activity',
-                        Icons.computer_outlined,
-                        widget.onControls,
-                        subtitle: 'Connection details, usage and workspace',
-                      ),
-                    ]),
-                    if (widget.onDocuments != null)
-                      _section('Shared files', [
-                        _row(
-                          'Documents & artifacts',
-                          Icons.folder_open_rounded,
-                          widget.onDocuments!,
-                          subtitle: 'Files and results from this conversation',
-                        ),
-                      ]),
-                    _section('Conversation', [
-                      _switch(
-                        'Messenger typography',
-                        'Compact, readable chat text. Turn off to use your custom chat font.',
-                        Icons.text_fields_rounded,
-                        _preferences.messengerTypography,
-                        _preferences.setMessengerTypography,
-                        'mobile_messenger_typography',
-                      ),
-                      _switch(
-                        'Show thinking',
-                        'Live reasoning, when the selected model provides it.',
-                        Icons.more_horiz,
-                        _preferences.showThinking,
-                        _preferences.setThinking,
-                        'mobile_show_thinking',
-                      ),
-                      _switch(
-                        'Show work details',
-                        'Tool calls and technical activity. Hidden by default.',
-                        Icons.code_rounded,
-                        _preferences.showActivity,
-                        _preferences.setActivity,
-                        'mobile_show_activity',
-                      ),
-                      if (widget.onCopyChat != null)
-                        _row(
-                          'Export conversation',
-                          Icons.ios_share_rounded,
-                          widget.onCopyChat!,
-                        ),
-                    ]),
-                    _section('Agent tools', [
-                      _row(
-                        'Model',
-                        Icons.auto_awesome_outlined,
-                        widget.onModel,
-                        subtitle: selection == null
-                            ? 'Choose a model and provider for this chat'
-                            : '${selection.modelId}\n${selection.providerSlug.isEmpty ? 'Automatic provider' : selection.providerSlug}',
-                      ),
-                      _row(
-                        'Schedules & automations',
-                        Icons.schedule_outlined,
-                        widget.onAutomations,
-                        subtitle: 'Only schedules and watchers for this chat',
-                      ),
-                      _row('Skills', Icons.extension_outlined, widget.onSkills),
-                    ]),
-                    _section('Connections & access', [
-                      _row(
-                        'Connected apps',
-                        Icons.link_rounded,
-                        widget.onConnectors,
-                      ),
-                      _row('API keys', Icons.key_outlined, widget.onSecrets),
-                      _row(
-                        'Control rooms',
-                        Icons.group_outlined,
-                        widget.onRooms,
-                      ),
-                      if (widget.onBrowser != null)
-                        _row(
-                          'Open screen',
-                          Icons.desktop_windows_outlined,
-                          widget.onBrowser!,
-                        ),
-                    ]),
-                    _section('App', [
-                      _row(
-                        'Account & app settings',
-                        Icons.settings_outlined,
-                        widget.onSettings,
-                        subtitle: 'Account, appearance, privacy and more',
-                      ),
-                    ]),
-                    if (widget.onDelete != null) ...[
-                      const SizedBox(height: 24),
-                      TextButton.icon(
-                        onPressed: () => _remove(agent),
-                        style: TextButton.styleFrom(
-                          foregroundColor: scheme.error,
-                          minimumSize: const Size.fromHeight(48),
-                        ),
-                        icon: const AppIcon(Icons.person_remove_outlined),
-                        label: const Text('Remove coworker'),
-                      ),
-                    ],
+                    _row(
+                      'Documents & artifacts',
+                      Icons.folder_open_rounded,
+                      widget.onDocuments!,
+                      subtitle: 'Files and results from this conversation',
+                    ),
                   ],
                 ),
+              ],
+              const ExpressiveSectionHeader('Conversation'),
+              ExpressiveGroup(
+                children: [
+                  _switch(
+                    'Show thinking',
+                    'Live reasoning, when the selected model provides it.',
+                    Icons.more_horiz,
+                    _preferences.showThinking,
+                    _preferences.setThinking,
+                    'mobile_show_thinking',
+                  ),
+                  _switch(
+                    'Show work details',
+                    'Tool calls and technical activity. Hidden by default.',
+                    Icons.code_rounded,
+                    _preferences.showActivity,
+                    _preferences.setActivity,
+                    'mobile_show_activity',
+                  ),
+                  if (widget.onCopyChat != null)
+                    _row(
+                      'Export conversation',
+                      Icons.ios_share_rounded,
+                      widget.onCopyChat!,
+                    ),
+                ],
               ),
+              const ExpressiveSectionHeader('Agent tools'),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Model',
+                    Icons.auto_awesome_outlined,
+                    widget.onModel,
+                    subtitle: selection == null
+                        ? 'Choose a model and provider for this chat'
+                        : '${selection.modelId}\n${selection.providerSlug.isEmpty ? 'Automatic provider' : selection.providerSlug}',
+                  ),
+                  _row(
+                    'Schedules & automations',
+                    Icons.schedule_outlined,
+                    widget.onAutomations,
+                    subtitle: 'Only schedules and watchers for this chat',
+                  ),
+                  _row('Skills', Icons.extension_outlined, widget.onSkills),
+                ],
+              ),
+              const ExpressiveSectionHeader('Connections & access'),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Connected apps',
+                    Icons.link_rounded,
+                    widget.onConnectors,
+                  ),
+                  _row('API keys', Icons.key_outlined, widget.onSecrets),
+                  _row('Control rooms', Icons.group_outlined, widget.onRooms),
+                  if (widget.onBrowser != null)
+                    _row(
+                      'Open screen',
+                      Icons.desktop_windows_outlined,
+                      widget.onBrowser!,
+                    ),
+                ],
+              ),
+              const ExpressiveSectionHeader('App'),
+              ExpressiveGroup(
+                children: [
+                  _row(
+                    'Account & app settings',
+                    Icons.settings_outlined,
+                    widget.onSettings,
+                    subtitle: 'Account, appearance, privacy and more',
+                  ),
+                ],
+              ),
+              if (widget.onDelete != null) ...[
+                const SizedBox(height: 24),
+                _removeButton(agent),
+              ],
             ],
           ),
         );
@@ -321,8 +263,39 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     );
   }
 
+  /// The coworker the page is about: face, name and role, centred over the
+  /// list the way a contact page opens.
+  Widget _contact(AgentsAgent agent, AgentProfileStore profiles) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        AgentFace(agent: agent, size: 96, store: profiles),
+        const SizedBox(height: 16),
+        Text(
+          agent.name,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: theme.textTheme.headlineSmall?.copyWith(
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          profiles.profileOf(agent.id).role ?? agent.role ?? 'Your coworker',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.m3.onSurfaceVariant,
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _actionRow() => Row(
-    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _action('Chat', Icons.chat_rounded, () {
         Navigator.of(context).pop();
@@ -336,109 +309,50 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     ],
   );
 
+  /// One quick action: the settings icon tile over its label, the whole
+  /// column the target.
   Widget _action(String label, IconData icon, VoidCallback onTap) {
-    final scheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
     return Expanded(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          ExpressiveIconButton(
-            icon: icon,
-            tooltip: label,
-            color: scheme.secondaryContainer,
-            onColor: scheme.onSecondaryContainer,
-            onTap: onTap,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(
-              context,
-            ).textTheme.labelMedium?.copyWith(color: scheme.onSurfaceVariant),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _section(String title, List<Widget> children) => Padding(
-    padding: const EdgeInsets.only(top: 28),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          child: Text(
-            title.toUpperCase(),
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.2,
+      child: Tooltip(
+        message: label,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ExpressiveIconTile(icon: icon, size: 48),
+                const SizedBox(height: 8),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.m3.onSurfaceVariant,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        Material(
-          color: Theme.of(context).colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(28),
-          clipBehavior: Clip.antiAlias,
-          child: Padding(
-            padding: const EdgeInsets.all(6),
-            child: Column(children: children),
-          ),
-        ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
 
   Widget _row(
     String title,
     IconData icon,
     VoidCallback action, {
     String? subtitle,
-  }) => MorphTap(
+  }) => ExpressiveRow(
     key: ValueKey('settings_$title'),
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-    pressedShape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-    ),
-    color: Colors.transparent,
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
     onTap: action,
-    child: Row(
-      children: [
-        _icon(icon, Theme.of(context).colorScheme.tertiary),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              if (subtitle != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(width: 8),
-        AppIcon(
-          Icons.chevron_right_rounded,
-          color: Theme.of(context).colorScheme.onSurfaceVariant,
-        ),
-      ],
-    ),
   );
 
   Widget _switch(
@@ -448,54 +362,36 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     bool value,
     Future<void> Function(bool) changed,
     String id,
-  ) => MorphTap(
-    color: Colors.transparent,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
-    pressedShape: RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(16),
-    ),
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    onTap: () => unawaited(changed(!value)),
-    child: Row(
-      children: [
-        _icon(icon, Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Switch(
-          key: ValueKey(id),
-          value: value,
-          onChanged: (value) => unawaited(changed(value)),
-        ),
-      ],
-    ),
+  ) => ExpressiveSwitchRow(
+    key: ValueKey(id),
+    icon: icon,
+    title: title,
+    subtitle: subtitle,
+    value: value,
+    onChanged: (value) => unawaited(changed(value)),
   );
 
-  Widget _icon(IconData icon, Color color) => Container(
-    width: 40,
-    height: 40,
-    decoration: BoxDecoration(
-      color: color.withValues(alpha: 0.16),
-      borderRadius: BorderRadius.circular(13),
-    ),
-    child: AppIcon(icon, size: 21, color: color),
-  );
+  /// Removing a coworker is the page's one destructive action, drawn the way
+  /// the settings page draws sign-out.
+  Widget _removeButton(AgentsAgent agent) {
+    final theme = Theme.of(context);
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: theme.colorScheme.error,
+          side: BorderSide(color: theme.m3.outline),
+          padding: const EdgeInsets.symmetric(vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(999),
+          ),
+        ),
+        onPressed: () => _remove(agent),
+        child: const Text(
+          'Remove coworker',
+          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        ),
+      ),
+    );
+  }
 }

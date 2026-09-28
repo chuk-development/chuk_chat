@@ -149,11 +149,12 @@ void main() {
   });
 
   testWidgets('the message bubbles', (tester) async {
-    // The Agents bubbles: kinds, run corners and the stamp.
+    // The Agents build draws chuk_chat's bubbles: the accent user bubble with
+    // its tail, the answer straight on the page, the queued-send row.
     debugAgentsChatCoreOverride = true;
     addTearDown(() => debugAgentsChatCoreOverride = null);
-    // The bubbles on their own, so the corner geometry, the colours per kind
-    // and the stamp can be read without the rest of the chat screen.
+    // The bubbles on their own, so the geometry can be read without the rest
+    // of the chat screen.
     await pumpPhone(
       tester,
       ListView(

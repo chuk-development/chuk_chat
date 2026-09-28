@@ -15,8 +15,6 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
@@ -27,6 +25,7 @@ import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 class AgentProfilePage extends StatelessWidget {
   const AgentProfilePage({
@@ -103,10 +102,9 @@ class AgentProfilePage extends StatelessWidget {
         if (agent == null) {
           // The coworker was deleted while the page was open. Say so instead of
           // rendering an empty shell.
-          return ExpressiveScreen(
-            title: 'Coworker',
-            builder: (BuildContext context) =>
-                const Center(child: Text('This coworker is gone.')),
+          return const Scaffold(
+            appBar: FloatingAppBar(title: Text('Coworker')),
+            body: Center(child: Text('This coworker is gone.')),
           );
         }
         return _build(context, agent);
@@ -122,208 +120,217 @@ class AgentProfilePage extends StatelessWidget {
     final String? role = _roleOf(agent, profile);
     final String? brief = _briefOf(agent, profile);
 
-    return ExpressiveScreen(
-      backgroundColor: scheme.surface,
-      title: 'Profile',
-      actions: <Widget>[
-        ExpressiveIconButton(
-          hugeIcon: HugeIcons.edit02,
-          color: scheme.primaryContainer,
-          onColor: scheme.onPrimaryContainer,
-          tooltip: 'Edit profile',
-          semanticsId: 'agent_profile_edit',
-          onTap: () => AgentProfileEditPage.open(
-            context,
-            agent: agent,
-            source: source,
-            onRename: onRename,
-            profiles: _store,
-          ),
-        ),
-      ],
-      builder: (BuildContext context) => CustomScrollView(
-        slivers: <Widget>[
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: EdgeInsets.fromLTRB(
-                24,
-                MediaQuery.paddingOf(context).top + 8,
-                24,
-                4,
-              ),
-              child: Column(
-                children: <Widget>[
-                  AgentFace(agent: agent, size: 112, store: _store),
-                  const SizedBox(height: 16),
-                  Text(
-                    agent.name,
-                    textAlign: TextAlign.center,
-                    style: text.headlineSmall?.copyWith(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.5,
-                    ),
-                  ),
-                  if (role != null) ...<Widget>[
-                    const SizedBox(height: 4),
-                    Text(
-                      role,
-                      textAlign: TextAlign.center,
-                      style: text.bodyMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 10),
-                  _StatePill(agent: agent, accent: accent),
-                  const SizedBox(height: 20),
-                  _ActionRow(
-                    onMessage: onMessage,
-                    onOpenControls: onOpenControls,
-                    onOpenBrowser: onOpenBrowser,
-                  ),
-                  const SizedBox(height: 22),
-                ],
-              ),
-            ),
-          ),
-
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  if (brief != null)
-                    _InfoCard(
-                      icon: Icons.assignment_rounded,
-                      label: 'Standing brief',
-                      value: brief,
-                    ),
-                  if (agent.schedule != null)
-                    _InfoCard(
-                      icon: Icons.schedule_rounded,
-                      label: 'Schedule',
-                      value: agent.schedule!.source,
-                      note: agent.onHost
-                          ? null
-                          : 'Set in this app; the host does not run it yet.',
-                    ),
-                  _InfoCard(
-                    icon: Icons.forum_rounded,
-                    label: 'Session',
-                    value: agent.threads.isEmpty
-                        ? 'No session yet'
-                        : agent.threads.first.title,
-                    note: agent.threads.isEmpty
-                        ? null
-                        : 'One permanent session · ${agent.threads.first.key}',
-                  ),
-                  _InfoCard(
-                    icon: agent.onHost
-                        ? Icons.verified_rounded
-                        : Icons.phonelink_off_rounded,
-                    label: 'Runs on the host',
-                    value: agent.onHost
-                        ? 'Yes — this coworker runs on the paired host'
-                        : 'Not yet — it lives in this app only',
-                  ),
-                  if (agent.attachmentNames.isNotEmpty)
-                    _InfoCard(
-                      icon: Icons.attach_file_rounded,
-                      label: 'Attachments named at onboarding',
-                      value: agent.attachmentNames.join(', '),
-                      note: 'Names only — no file was pushed to the host.',
-                    ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                    child: Text(
-                      'MANAGE',
-                      style: text.labelMedium?.copyWith(
-                        color: scheme.onSurfaceVariant,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ),
-                  SheetAction(
-                    icon: Icons.person_rounded,
-                    label: 'Edit profile',
-                    subtitle: 'Picture, colour, role, brief',
-                    onTap: () => AgentProfileEditPage.open(
-                      context,
-                      agent: agent,
-                      source: source,
-                      onRename: onRename,
-                      profiles: _store,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  if (onRename != null) ...<Widget>[
-                    SheetAction(
-                      icon: Icons.badge_rounded,
-                      label: 'Rename',
-                      subtitle: 'The host keeps the new name',
-                      onTap: () => onRename!(agent),
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  if (onOpenControls != null) ...<Widget>[
-                    SheetAction(
-                      icon: Icons.tune_rounded,
-                      label: 'Agent controls',
-                      onTap: onOpenControls!,
-                    ),
-                    const SizedBox(height: 8),
-                  ],
-                  SheetAction(
-                    icon: Icons.call_rounded,
-                    label: 'Voice call',
-                    subtitle: 'Not available yet',
-                    enabled: false,
-                    onTap: () {},
-                  ),
-                  const SizedBox(height: 8),
-                  SheetAction(
-                    icon: Icons.desktop_windows_rounded,
-                    label: "Agent's screen",
-                    subtitle: onOpenBrowser == null
-                        ? 'No screen open right now'
-                        : 'Watch and control the sandbox',
-                    enabled: onOpenBrowser != null,
-                    onTap: onOpenBrowser ?? () {},
-                  ),
-                  const SizedBox(height: 8),
-                  SheetAction(
-                    icon: Icons.visibility_off_rounded,
-                    label: 'Hide from the list',
-                    subtitle: 'Keeps the coworker and its session',
-                    onTap: () {
-                      source.hideAgent(agent.id);
-                      pillToast(
-                        context,
-                        '${agent.name} is hidden',
-                        icon: Icons.visibility_off_rounded,
-                      );
-                      Navigator.of(context).maybePop();
-                    },
-                  ),
-                  if (onDelete != null) ...<Widget>[
-                    const SizedBox(height: 8),
-                    SheetAction(
-                      icon: Icons.delete_rounded,
-                      label: 'Delete coworker',
-                      color: scheme.error,
-                      onTap: () => _confirmDelete(context, agent),
-                    ),
-                  ],
-                  SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
-                ],
+    // chuk's page frame: the floating header over a page that runs on under
+    // it.
+    return Scaffold(
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
+        title: const Text('Profile'),
+        actions: <Widget>[
+          Semantics(
+            identifier: 'agent_profile_edit',
+            child: FloatingHeaderButton(
+              icon: Icons.edit_outlined,
+              tooltip: 'Edit profile',
+              onPressed: () => AgentProfileEditPage.open(
+                context,
+                agent: agent,
+                source: source,
+                onRename: onRename,
+                profiles: _store,
               ),
             ),
           ),
         ],
+      ),
+      // The header floats over the page, so the room for it is reserved
+      // inside the scroll view, the way chuk's other sub-pages do it
+      // ([floatingHeaderInset]: the header band plus the status bar).
+      body: Builder(
+        builder: (BuildContext context) => CustomScrollView(
+          slivers: <Widget>[
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  24,
+                  8,
+                  24,
+                  4,
+                ).add(floatingHeaderInset(context)),
+                child: Column(
+                  children: <Widget>[
+                    AgentFace(agent: agent, size: 112, store: _store),
+                    const SizedBox(height: 16),
+                    Text(
+                      agent.name,
+                      textAlign: TextAlign.center,
+                      style: text.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.5,
+                      ),
+                    ),
+                    if (role != null) ...<Widget>[
+                      const SizedBox(height: 4),
+                      Text(
+                        role,
+                        textAlign: TextAlign.center,
+                        style: text.bodyMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 10),
+                    _StatePill(agent: agent, accent: accent),
+                    const SizedBox(height: 20),
+                    _ActionRow(
+                      onMessage: onMessage,
+                      onOpenControls: onOpenControls,
+                      onOpenBrowser: onOpenBrowser,
+                    ),
+                    const SizedBox(height: 22),
+                  ],
+                ),
+              ),
+            ),
+
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    if (brief != null)
+                      _InfoCard(
+                        icon: Icons.assignment_rounded,
+                        label: 'Standing brief',
+                        value: brief,
+                      ),
+                    if (agent.schedule != null)
+                      _InfoCard(
+                        icon: Icons.schedule_rounded,
+                        label: 'Schedule',
+                        value: agent.schedule!.source,
+                        note: agent.onHost
+                            ? null
+                            : 'Set in this app; the host does not run it yet.',
+                      ),
+                    _InfoCard(
+                      icon: Icons.forum_rounded,
+                      label: 'Session',
+                      value: agent.threads.isEmpty
+                          ? 'No session yet'
+                          : agent.threads.first.title,
+                      note: agent.threads.isEmpty
+                          ? null
+                          : 'One permanent session · ${agent.threads.first.key}',
+                    ),
+                    _InfoCard(
+                      icon: agent.onHost
+                          ? Icons.verified_rounded
+                          : Icons.phonelink_off_rounded,
+                      label: 'Runs on the host',
+                      value: agent.onHost
+                          ? 'Yes — this coworker runs on the paired host'
+                          : 'Not yet — it lives in this app only',
+                    ),
+                    if (agent.attachmentNames.isNotEmpty)
+                      _InfoCard(
+                        icon: Icons.attach_file_rounded,
+                        label: 'Attachments named at onboarding',
+                        value: agent.attachmentNames.join(', '),
+                        note: 'Names only — no file was pushed to the host.',
+                      ),
+                    const SizedBox(height: 8),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+                      child: Text(
+                        'MANAGE',
+                        style: text.labelMedium?.copyWith(
+                          color: scheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    SheetAction(
+                      icon: Icons.person_rounded,
+                      label: 'Edit profile',
+                      subtitle: 'Picture, colour, role, brief',
+                      onTap: () => AgentProfileEditPage.open(
+                        context,
+                        agent: agent,
+                        source: source,
+                        onRename: onRename,
+                        profiles: _store,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (onRename != null) ...<Widget>[
+                      SheetAction(
+                        icon: Icons.badge_rounded,
+                        label: 'Rename',
+                        subtitle: 'The host keeps the new name',
+                        onTap: () => onRename!(agent),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (onOpenControls != null) ...<Widget>[
+                      SheetAction(
+                        icon: Icons.tune_rounded,
+                        label: 'Agent controls',
+                        onTap: onOpenControls!,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    SheetAction(
+                      icon: Icons.call_rounded,
+                      label: 'Voice call',
+                      subtitle: 'Not available yet',
+                      enabled: false,
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 8),
+                    SheetAction(
+                      icon: Icons.desktop_windows_rounded,
+                      label: "Agent's screen",
+                      subtitle: onOpenBrowser == null
+                          ? 'No screen open right now'
+                          : 'Watch and control the sandbox',
+                      enabled: onOpenBrowser != null,
+                      onTap: onOpenBrowser ?? () {},
+                    ),
+                    const SizedBox(height: 8),
+                    SheetAction(
+                      icon: Icons.visibility_off_rounded,
+                      label: 'Hide from the list',
+                      subtitle: 'Keeps the coworker and its session',
+                      onTap: () {
+                        source.hideAgent(agent.id);
+                        pillToast(
+                          context,
+                          '${agent.name} is hidden',
+                          icon: Icons.visibility_off_rounded,
+                        );
+                        Navigator.of(context).maybePop();
+                      },
+                    ),
+                    if (onDelete != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      SheetAction(
+                        icon: Icons.delete_rounded,
+                        label: 'Delete coworker',
+                        color: scheme.error,
+                        onTap: () => _confirmDelete(context, agent),
+                      ),
+                    ],
+                    SizedBox(height: 24 + MediaQuery.paddingOf(context).bottom),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

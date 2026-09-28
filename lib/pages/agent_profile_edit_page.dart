@@ -12,7 +12,7 @@ library;
 
 import 'package:flutter/material.dart';
 
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:image_picker/image_picker.dart';
 
@@ -187,210 +187,219 @@ class _AgentProfileEditPageState extends State<AgentProfileEditPage> {
             widget.source.byId(widget.agent.id) ?? widget.agent;
         final int? storedColor = _store.profileOf(agent.id).colorValue;
         final int? shownColor = _clearColor ? null : (_color ?? storedColor);
-        return ExpressiveScreen(
-          backgroundColor: scheme.surface,
-          title: 'Edit profile',
-          actions: <Widget>[
-            TextButton(
-              onPressed: _busy ? null : _save,
-              child: const Text('Save'),
-            ),
-          ],
-          builder: (BuildContext context) => ListView(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              MediaQuery.paddingOf(context).top + 12,
-              20,
-              24 + MediaQuery.paddingOf(context).bottom,
-            ),
-            children: <Widget>[
-              Center(
-                child: Column(
-                  children: <Widget>[
-                    // The face reads the store, so a new picture or colour shows
-                    // the moment it is written.
-                    _FacePreview(
-                      agent: agent,
-                      store: _store,
-                      overrideColor: shownColor,
-                      shape: _shape ?? _store.profileOf(agent.id).shape,
-                    ),
-                    const SizedBox(height: 14),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: <Widget>[
-                        ExpressiveButton(
-                          icon: Icons.photo_camera_rounded,
-                          label: 'Picture',
-                          tonal: true,
-                          onTap: _pickPhoto,
-                        ),
-                        if (_store.profileOf(agent.id).photoPath != null) ...[
-                          const SizedBox(width: 10),
-                          ExpressiveIconButton(
-                            icon: Icons.delete_outline_rounded,
-                            size: 46,
-                            tooltip: 'Remove the picture',
-                            onTap: _removePhoto,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
-                ),
+        // chuk's page frame: the floating header over a page that runs on
+        // under it.
+        return Scaffold(
+          extendBodyBehindAppBar: true,
+          appBar: FloatingAppBar(
+            title: const Text('Edit profile'),
+            actions: <Widget>[
+              TextButton(
+                onPressed: _busy ? null : _save,
+                child: const Text('Save'),
               ),
-              const SizedBox(height: 26),
-              _SectionLabel('Figure'),
-              const SizedBox(height: 8),
-              // Colour and silhouette are one decision — what this coworker
-              // looks like everywhere — so they sit in one card with one reset,
-              // instead of two labelled sections the user has to connect.
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 14,
+            ],
+          ),
+          // The header floats over the page, so the room for it is reserved
+          // inside the list, the way chuk's other sub-pages do it
+          // ([floatingHeaderInset]: the header band plus the status bar).
+          body: Builder(
+            builder: (BuildContext context) => ListView(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                24 + MediaQuery.paddingOf(context).bottom,
+              ).add(floatingHeaderInset(context)),
+              children: <Widget>[
+                Center(
+                  child: Column(
+                    children: <Widget>[
+                      // The face reads the store, so a new picture or colour shows
+                      // the moment it is written.
+                      _FacePreview(
+                        agent: agent,
+                        store: _store,
+                        overrideColor: shownColor,
+                        shape: _shape ?? _store.profileOf(agent.id).shape,
+                      ),
+                      const SizedBox(height: 14),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: <Widget>[
+                          ExpressiveButton(
+                            icon: Icons.photo_camera_rounded,
+                            label: 'Picture',
+                            tonal: true,
+                            onTap: _pickPhoto,
+                          ),
+                          if (_store.profileOf(agent.id).photoPath != null) ...[
+                            const SizedBox(width: 10),
+                            ExpressiveIconButton(
+                              icon: Icons.delete_outline_rounded,
+                              size: 46,
+                              tooltip: 'Remove the picture',
+                              onTap: _removePhoto,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh.withValues(alpha: 0.5),
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    _ColorRow(
-                      selected: shownColor,
-                      onPick: (int value) => setState(() {
-                        _color = value;
-                        _clearColor = false;
-                      }),
-                      onReset: () => setState(() {
-                        _color = null;
-                        _clearColor = true;
-                      }),
-                    ),
-                    const SizedBox(height: 14),
-                    Divider(
-                      height: 1,
-                      color: scheme.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                    const SizedBox(height: 14),
-                    _ShapeRow(
-                      agentId: agent.id,
-                      colour: shownColor == null
-                          ? agentAccent(context, agent.id, store: _store)
-                          : Color(shownColor),
-                      selected: _shape ?? _store.profileOf(agent.id).shape,
-                      onPick: (AgentAvatarShape? shape) =>
-                          setState(() => _shape = shape),
-                    ),
-                    const SizedBox(height: 6),
-                    Divider(
-                      height: 1,
-                      color: scheme.outlineVariant.withValues(alpha: 0.5),
-                    ),
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        key: const ValueKey('avatar_reset_default'),
-                        onPressed: () => setState(() {
+                const SizedBox(height: 26),
+                _SectionLabel('Figure'),
+                const SizedBox(height: 8),
+                // Colour and silhouette are one decision — what this coworker
+                // looks like everywhere — so they sit in one card with one reset,
+                // instead of two labelled sections the user has to connect.
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 14,
+                  ),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: <Widget>[
+                      _ColorRow(
+                        selected: shownColor,
+                        onPick: (int value) => setState(() {
+                          _color = value;
+                          _clearColor = false;
+                        }),
+                        onReset: () => setState(() {
                           _color = null;
                           _clearColor = true;
-                          _shape = AgentAvatarShape.expressive;
                         }),
-                        child: const Text('Reset to default'),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 14),
+                      Divider(
+                        height: 1,
+                        color: scheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 14),
+                      _ShapeRow(
+                        agentId: agent.id,
+                        colour: shownColor == null
+                            ? agentAccent(context, agent.id, store: _store)
+                            : Color(shownColor),
+                        selected: _shape ?? _store.profileOf(agent.id).shape,
+                        onPick: (AgentAvatarShape? shape) =>
+                            setState(() => _shape = shape),
+                      ),
+                      const SizedBox(height: 6),
+                      Divider(
+                        height: 1,
+                        color: scheme.outlineVariant.withValues(alpha: 0.5),
+                      ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          key: const ValueKey('avatar_reset_default'),
+                          onPressed: () => setState(() {
+                            _color = null;
+                            _clearColor = true;
+                            _shape = AgentAvatarShape.expressive;
+                          }),
+                          child: const Text('Reset to default'),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                "How this coworker's mark looks everywhere",
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 24),
-              if (widget.onRename != null) ...<Widget>[
-                _SectionLabel('Name'),
+                const SizedBox(height: 6),
+                Text(
+                  "How this coworker's mark looks everywhere",
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                ),
+                const SizedBox(height: 24),
+                if (widget.onRename != null) ...<Widget>[
+                  _SectionLabel('Name'),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: _name,
+                    decoration: const InputDecoration(
+                      filled: true,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.all(Radius.circular(18)),
+                        borderSide: BorderSide.none,
+                      ),
+                      hintText: 'Coworker name',
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'The host keeps the name, so it survives a fresh install.',
+                    style: text.bodySmall?.copyWith(
+                      color: scheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+                _SectionLabel('Role'),
                 const SizedBox(height: 8),
                 TextField(
-                  controller: _name,
+                  controller: _role,
                   decoration: const InputDecoration(
                     filled: true,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.all(Radius.circular(18)),
                       borderSide: BorderSide.none,
                     ),
-                    hintText: 'Coworker name',
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'The host keeps the name, so it survives a fresh install.',
-                  style: text.bodySmall?.copyWith(
-                    color: scheme.onSurfaceVariant,
+                    hintText: 'researcher, release manager, …',
                   ),
                 ),
                 const SizedBox(height: 24),
-              ],
-              _SectionLabel('Role'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _role,
-                decoration: const InputDecoration(
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(18)),
-                    borderSide: BorderSide.none,
-                  ),
-                  hintText: 'researcher, release manager, …',
-                ),
-              ),
-              const SizedBox(height: 24),
-              _SectionLabel('Standing brief'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _brief,
-                minLines: 3,
-                maxLines: 8,
-                decoration: const InputDecoration(
-                  filled: true,
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.all(Radius.circular(18)),
-                    borderSide: BorderSide.none,
-                  ),
-                  hintText: 'What this coworker takes care of',
-                ),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: scheme.surfaceContainerHigh,
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                child: Row(
-                  children: <Widget>[
-                    AppIcon(
-                      Icons.info_outline_rounded,
-                      size: 18,
-                      color: scheme.onSurfaceVariant,
+                _SectionLabel('Standing brief'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _brief,
+                  minLines: 3,
+                  maxLines: 8,
+                  decoration: const InputDecoration(
+                    filled: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.all(Radius.circular(18)),
+                      borderSide: BorderSide.none,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'Picture, shape, colour, role and brief are kept on this '
-                        'device. The relay carries names only.',
-                        style: text.bodySmall?.copyWith(
-                          color: scheme.onSurfaceVariant,
+                    hintText: 'What this coworker takes care of',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: scheme.surfaceContainerHigh,
+                    borderRadius: BorderRadius.circular(18),
+                  ),
+                  child: Row(
+                    children: <Widget>[
+                      AppIcon(
+                        Icons.info_outline_rounded,
+                        size: 18,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Picture, shape, colour, role and brief are kept on this '
+                          'device. The relay carries names only.',
+                          style: text.bodySmall?.copyWith(
+                            color: scheme.onSurfaceVariant,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },

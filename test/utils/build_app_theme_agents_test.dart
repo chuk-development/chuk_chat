@@ -4,9 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
-/// The theme has two sides. With Agents off it is upstream chuk_chat's; with
-/// Agents on it is the Agents app's (its on-accent colour, the default
-/// SnackBar, the expressive type layer and the rounder shape scale).
+/// The theme has one side. The Agents build uses chuk_chat's theme as is: the
+/// on-accent colour, the pill SnackBar, the FAB, the type and the shape scale
+/// do not change with the flag.
 void main() {
   ThemeData build(Brightness b) => buildAppTheme(
     accent: kDefaultAccentColor,
@@ -17,29 +17,33 @@ void main() {
 
   tearDown(() => debugAgentsChatCoreOverride = null);
 
-  test('Agents off: upstream on-accent colour, pill SnackBar, flat type', () {
-    debugAgentsChatCoreOverride = false;
-    final ThemeData t = build(Brightness.dark);
-    expect(t.colorScheme.onPrimary, kDefaultIconFgColor);
-    expect(t.snackBarTheme.behavior, SnackBarBehavior.floating);
-    expect(t.floatingActionButtonTheme.elevation, isNull);
+  for (final bool agents in <bool>[false, true]) {
+    test('Agents $agents: chuk_chat on-accent colour, pill SnackBar, flat '
+        'type', () {
+      debugAgentsChatCoreOverride = agents;
+      final ThemeData dark = build(Brightness.dark);
+      final ThemeData light = build(Brightness.light);
+      expect(dark.colorScheme.onPrimary, kDefaultIconFgColor);
+      expect(light.colorScheme.onPrimary, kDefaultIconFgColor);
+      expect(dark.snackBarTheme.behavior, SnackBarBehavior.floating);
+      expect(dark.floatingActionButtonTheme.elevation, isNull);
+      expect(
+        dark.floatingActionButtonTheme.backgroundColor,
+        kDefaultAccentColor,
+      );
+      expect(
+        dark.textTheme.headlineLarge?.fontWeight,
+        ThemeData(brightness: Brightness.dark).textTheme.headlineLarge
+            ?.fontWeight,
+      );
+    });
+  }
+
+  test('the shape scale is chuk_chat\'s', () {
     expect(kRadiusCard, 20);
+    expect(kRadiusField, 16);
+    expect(kRadiusMenu, 16);
     expect(kRadiusRow, 14);
-  });
-
-  test('Agents on: the Agents app navy / white on accent fills', () {
-    debugAgentsChatCoreOverride = true;
-    expect(build(Brightness.dark).colorScheme.onPrimary, const Color(0xFF062E6F));
-    expect(build(Brightness.light).colorScheme.onPrimary, const Color(0xFFFFFFFF));
-  });
-
-  test('Agents on: default SnackBar, expressive layer, rounder shapes', () {
-    debugAgentsChatCoreOverride = true;
-    final ThemeData t = build(Brightness.dark);
-    expect(t.snackBarTheme.behavior, isNull);
-    expect(t.textTheme.headlineLarge?.fontWeight, FontWeight.w800);
-    expect(t.floatingActionButtonTheme.elevation, 3);
-    expect(kRadiusCard, 28);
-    expect(kRadiusRow, 20);
+    expect(kRadiusDialog, 28);
   });
 }

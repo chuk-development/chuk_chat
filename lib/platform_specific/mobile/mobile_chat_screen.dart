@@ -19,7 +19,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart' show DragStartBehavior;
 
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/ui/expressive/agent_theme.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
@@ -154,70 +153,65 @@ class _MobileChatScreenState extends State<MobileChatScreen>
   @override
   Widget build(BuildContext context) {
     final double topInset = MobileLayout.chromeInset(context);
-    // The open thread wears the colour of the coworker it belongs to, so two
-    // conversations are told apart before a single name is read.
-    return AgentTheme(
-      agentId: widget.agent.id,
-      child: PopScope(
-        // The page is not a route: the shell swaps it in and out. So the pop
-        // is always intercepted and turned into [onBack]; the shell decides.
-        canPop: false,
-        onPopInvokedWithResult: (bool didPop, Object? _) {
-          if (didPop) return;
-          widget.onBack();
-        },
-        child: AnimatedBuilder(
-          animation: _motion,
-          builder: (context, child) => Opacity(
-            // The entrance does NOT fade. The shell pushes this page in over
-            // the inbox, and a page that is 65 % opaque while it travels lets
-            // the inbox read straight through it: what arrives on screen is a
-            // dissolve, not a push, and the two motions cancel each other out.
-            // Only the coworker swap dissolves, and by then the inbox is gone.
-            opacity: _swapped.value.clamp(0.0, 1.0),
-            child: Transform.scale(
-              scale: 0.98 + 0.02 * _swapped.value,
-              child: Transform.translate(
-                offset: Offset(12 * (1 - _progress.value), 0),
-                child: child,
-              ),
+    return PopScope(
+      // The page is not a route: the shell swaps it in and out. So the pop
+      // is always intercepted and turned into [onBack]; the shell decides.
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? _) {
+        if (didPop) return;
+        widget.onBack();
+      },
+      child: AnimatedBuilder(
+        animation: _motion,
+        builder: (context, child) => Opacity(
+          // The entrance does NOT fade. The shell pushes this page in over
+          // the inbox, and a page that is 65 % opaque while it travels lets
+          // the inbox read straight through it: what arrives on screen is a
+          // dissolve, not a push, and the two motions cancel each other out.
+          // Only the coworker swap dissolves, and by then the inbox is gone.
+          opacity: _swapped.value.clamp(0.0, 1.0),
+          child: Transform.scale(
+            scale: 0.98 + 0.02 * _swapped.value,
+            child: Transform.translate(
+              offset: Offset(12 * (1 - _progress.value), 0),
+              child: child,
             ),
           ),
-          child: Stack(
-            children: [
-              Positioned.fill(child: widget.bodyBuilder(context, topInset)),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: MobileChatChrome(
-                  agent: widget.agent,
-                  onBack: widget.onBack,
-                  onOpenProfile: widget.onOpenProfile,
-                  onOpenBrowser: widget.onOpenBrowser,
-                  browserAvailable: widget.browserAvailable,
-                  onOpenFiles: widget.onOpenFiles,
-                  onReconnect: widget.onReconnect,
-                  onMore: widget.onMore,
-                ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(child: widget.bodyBuilder(context, topInset)),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: MobileChatChrome(
+                agent: widget.agent,
+                onBack: widget.onBack,
+                onOpenProfile: widget.onOpenProfile,
+                onOpenBrowser: widget.onOpenBrowser,
+                browserAvailable: widget.browserAvailable,
+                onOpenFiles: widget.onOpenFiles,
+                onReconnect: widget.onReconnect,
+                onMore: widget.onMore,
               ),
-              // Only this narrow edge participates in the gesture arena. A
-              // horizontal table/code scroll elsewhere belongs to the body.
-              Positioned(
-                left: 0,
-                top: topInset,
-                bottom: 0,
-                width: MobileLayout.edgeSwipeWidth,
-                child: GestureDetector(
-                  behavior: HitTestBehavior.translucent,
-                  dragStartBehavior: DragStartBehavior.down,
-                  onHorizontalDragStart: _onDragStart,
-                  onHorizontalDragEnd: _onDragEnd,
-                  onHorizontalDragCancel: () => _dragStartX = null,
-                ),
+            ),
+            // Only this narrow edge participates in the gesture arena. A
+            // horizontal table/code scroll elsewhere belongs to the body.
+            Positioned(
+              left: 0,
+              top: topInset,
+              bottom: 0,
+              width: MobileLayout.edgeSwipeWidth,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                dragStartBehavior: DragStartBehavior.down,
+                onHorizontalDragStart: _onDragStart,
+                onHorizontalDragEnd: _onDragEnd,
+                onHorizontalDragCancel: () => _dragStartX = null,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

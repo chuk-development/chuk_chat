@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -31,6 +30,7 @@ import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart' show MessageBubble;
+import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
@@ -833,6 +833,16 @@ void main() {
       // The thinking block is not part of verbose: it follows the user's own
       // "show reasoning" setting, on by default like chuk (bead cowork-0ia).
       expect(screen.showReasoningTokens, isTrue);
+      // The first message starts below the floating header row, so its
+      // buttons never cover it.
+      expect(screen.topInset, kAgentsThreadHeaderInset);
+      expect(
+        kAgentsThreadHeaderInset,
+        greaterThanOrEqualTo(
+          tester.getRect(find.byType(AgentsThreadHeader)).bottom -
+              tester.getRect(find.byType(ChukChatUIDesktop)).top,
+        ),
+      );
       // And the link now points at this thread, for a caller with no chat id.
       expect(AgentsRelayLink.instance.sessionKey.value, 'thread-1');
       expect(AgentsRelayLink.instance.controller.value, isNotNull);
@@ -1135,63 +1145,36 @@ void main() {
       await _flushIdleTimers(tester);
     });
 
-    // --- the desktop transcript and composer (docs/DESIGN.md §14.4-14.5) ---
+    // --- the desktop transcript and composer: chuk_chat's (AGENTS_UI_UNIFY) ---
 
-    testWidgets(
-      'message actions show in a toolbar on hover, not under every message',
-      (tester) async {
-        final controller = await pumpPaired(tester);
-        controller.emit(
-          const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
-        );
-        controller.emit(const AgentsRelayUser('do the thing', mid: 1));
-        controller.emit(
-          const AgentsRelayDelta('all set', replay: true, mid: 2),
-        );
-        controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
-        await tester.pumpAndSettle();
+    testWidgets('message actions are chuk\'s action bars, no hover toolbar', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester);
+      controller.emit(
+        const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
+      );
+      controller.emit(const AgentsRelayUser('do the thing', mid: 1));
+      controller.emit(const AgentsRelayDelta('all set', replay: true, mid: 2));
+      controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+      await tester.pumpAndSettle();
 
-        const Key toolbar = ValueKey<String>('message-hover-toolbar');
-        // No permanent pill: nothing until the pointer is on a message.
-        expect(find.byKey(toolbar), findsNothing);
-        final List<MessageBubble> bubbles = tester
-            .widgetList<MessageBubble>(find.byType(MessageBubble))
-            .toList();
-        expect(bubbles, isNotEmpty);
-        for (final MessageBubble bubble in bubbles) {
-          expect(bubble.actions, isEmpty);
-          expect(bubble.userMessageActions, isEmpty);
-        }
-
-        final TestGesture mouse = await tester.createGesture(
-          kind: PointerDeviceKind.mouse,
-        );
-        addTearDown(mouse.removePointer);
-        await mouse.addPointer(location: Offset.zero);
-        await mouse.moveTo(
-          tester.getCenter(find.textContaining('all set').first),
-        );
-        await tester.pumpAndSettle();
-        expect(find.byKey(toolbar), findsOneWidget);
-        // Top right of the message.
-        final Rect bar = tester.getRect(find.byKey(toolbar));
-        final Rect answer = tester.getRect(
-          find
-              .ancestor(
-                of: find.textContaining('all set').first,
-                matching: find.byType(MessageBubble),
-              )
-              .first,
-        );
-        expect(bar.right, moreOrLessEquals(answer.right, epsilon: 1));
-        expect(bar.top, lessThan(answer.top + 30));
-
-        await mouse.moveTo(const Offset(5, 5));
-        await tester.pumpAndSettle();
-        expect(find.byKey(toolbar), findsNothing);
-        await _flushIdleTimers(tester);
-      },
-    );
+      expect(
+        find.byKey(const ValueKey<String>('message-hover-toolbar')),
+        findsNothing,
+      );
+      final MessageBubble answer = tester.widget<MessageBubble>(
+        find
+            .ancestor(
+              of: find.textContaining('all set').first,
+              matching: find.byType(MessageBubble),
+            )
+            .first,
+      );
+      // The bubble draws its own action bar, as in chuk_chat.
+      expect(answer.actions, isNotEmpty);
+      await _flushIdleTimers(tester);
+    });
 
     testWidgets('Up in an empty composer edits the last own message', (
       tester,
@@ -1206,7 +1189,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final Finder field = find.descendant(
-        of: find.byKey(const ValueKey<String>('agents-desktop-composer')),
+        of: find.byKey(const ValueKey<String>('desktop-chat-input-area')),
         matching: find.byType(TextField),
       );
       await tester.tap(field);
@@ -1223,45 +1206,40 @@ void main() {
       await _flushIdleTimers(tester);
     });
 
-    testWidgets('the desktop composer is docked: radius 12, 28 px controls, '
-        'and the Enter hint under it', (tester) async {
+    testWidgets('the desktop thread uses chuk\'s composer: centred on an '
+        'empty chat, chuk\'s hint and AI notice', (tester) async {
       await pumpPaired(tester);
 
-      final Finder box = find.byKey(
-        const ValueKey<String>('agents-desktop-composer'),
-      );
-      expect(box, findsOneWidget);
-      final BoxDecoration decoration =
-          tester.widget<Container>(box).decoration! as BoxDecoration;
-      expect(decoration.borderRadius, BorderRadius.circular(12));
-      expect(decoration.gradient, isNull);
-      expect(decoration.boxShadow, isNull);
       expect(
-        tester.getSize(
-          find.byKey(const ValueKey<String>('agents-composer-send')),
-        ),
-        const Size(28, 28),
+        find.byKey(const ValueKey<String>('agents-desktop-composer')),
+        findsNothing,
       );
-      for (final String tooltip in <String>['Attach files', 'Dictate']) {
-        expect(
-          tester.getSize(
-            find.descendant(
-              of: find.byTooltip(tooltip),
-              matching: find.byType(AnimatedContainer),
-            ),
-          ),
-          const Size(28, 28),
-          reason: tooltip,
-        );
-      }
       expect(
         find.text('Enter to send · Shift+Enter for a new line'),
+        findsNothing,
+      );
+      final Finder input = find.byKey(
+        const ValueKey<String>('desktop-chat-input-area'),
+      );
+      expect(input, findsOneWidget);
+      expect(
+        find.descendant(of: input, matching: find.text('Ask me anything !')),
         findsOneWidget,
       );
-      // Docked at the bottom even with no messages, at most 720 px wide.
-      final Rect rect = tester.getRect(box);
-      expect(rect.width, lessThanOrEqualTo(720));
-      expect(rect.bottom, greaterThan(900 - 60));
+      expect(
+        find.descendant(
+          of: input,
+          matching: find.textContaining("You're chatting with an AI/LLM"),
+        ),
+        findsOneWidget,
+      );
+      // An empty chat centres the composer in the pane, as in chuk_chat.
+      final Rect pane = tester.getRect(find.byType(ChukChatUIDesktop));
+      final Rect rect = tester.getRect(
+        find.descendant(of: input, matching: find.byType(TextField)),
+      );
+      expect(rect.width, lessThanOrEqualTo(760));
+      expect(rect.bottom, lessThan(pane.bottom - 100));
       await _flushIdleTimers(tester);
     });
 

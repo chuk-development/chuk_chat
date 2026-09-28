@@ -13,7 +13,6 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/widgets/menu_tile_group.dart';
 
 /// Gap between the anchor and the menu.
@@ -44,9 +43,7 @@ Future<T?> showAnchoredMenu<T>(
   // Caps how wide a long row may push the menu; without it a very long
   // model name makes the menu as wide as the screen.
   double? maxWidth,
-  // Null takes the build's default: the Agents app opened every menu at
-  // kMenuOuterRadius (26), upstream's own menus are tuned to 18. Most call
-  // sites take the default, so the Agents home and roster menus follow it.
+  // Null takes the default, 18: the radius the app's menus are tuned to.
   double? borderRadius,
   bool preferAbove = false,
   // null → pick the side from the anchor's screen position (a control on the
@@ -109,16 +106,9 @@ Future<T?> showAnchoredMenu<T>(
       items: items,
       color: color,
       borderColor: borderColor,
-      minWidth: MenuDensity.isDense(anchorContext)
-          ? math.min(minWidth, 180)
-          : minWidth,
+      minWidth: minWidth,
       maxWidth: maxWidth,
-      // The Agents desktop layout opens its menus under a mouse pointer: the
-      // dense shape, whatever radius the caller asked for (docs/DESIGN.md
-      // §14.6). Nothing else is ever inside a [MenuDensity].
-      borderRadius: MenuDensity.isDense(anchorContext)
-          ? kMenuDenseOuterRadius
-          : borderRadius ?? (agentsChatCore ? kMenuOuterRadius : 18),
+      borderRadius: borderRadius ?? 18,
       preferAbove: preferAbove,
       alignRight: alignRight,
       besideAnchor: besideAnchor,

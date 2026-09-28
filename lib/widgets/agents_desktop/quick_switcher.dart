@@ -1,5 +1,9 @@
-/// The quick switcher (Ctrl+K, docs/DESIGN.md §14.7): one field, the agents
-/// and rooms under it, type to filter, arrows to move, Enter to open.
+/// The quick switcher (Ctrl+K): one field, the agents and rooms under it,
+/// type to filter, arrows to move, Enter to open.
+///
+/// chuk_chat has no switcher, so it is put together from chuk's pieces: the
+/// app's dialog surface, the sidebar's search field, and rows that light up
+/// in the fill a selected sidebar card takes.
 library;
 
 import 'package:flutter/material.dart';
@@ -9,11 +13,12 @@ import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
-import 'package:chuk_chat/ui/expressive/icon_map.dart';
-import 'package:chuk_chat/widgets/agents_desktop/desktop_controls.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/room_faces.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 /// What the user picked.
 sealed class QuickSwitcherPick {
@@ -69,10 +74,14 @@ class QuickSwitcher extends StatefulWidget {
 
 class _QuickSwitcherState extends State<QuickSwitcher> {
   final TextEditingController _query = TextEditingController();
+  final FocusNode _queryFocus = FocusNode(debugLabel: 'quick-switcher-field');
   final ScrollController _scroll = ScrollController();
   int _index = 0;
 
-  static const double _rowHeight = 36;
+  static const double _rowHeight = 40;
+
+  /// The face in a row.
+  static const double _faceSize = 26;
 
   @override
   void initState() {
@@ -83,6 +92,7 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
   @override
   void dispose() {
     _query.dispose();
+    _queryFocus.dispose();
     _scroll.dispose();
     super.dispose();
   }
@@ -154,94 +164,83 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
   @override
   Widget build(BuildContext context) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
+    final DialogThemeData dialog = DialogTheme.of(context);
+    final Color muted = theme.m3.onSurfaceVariant;
     final List<QuickSwitcherPick> matches = _matches;
     final int index = matches.isEmpty ? 0 : _index.clamp(0, matches.length - 1);
     return Align(
       alignment: const Alignment(0, -0.55),
       child: Padding(
         padding: const EdgeInsets.all(24),
+        // The app's dialog surface: the same fill, corner and lift an
+        // AlertDialog takes.
         child: Material(
-          color: scheme.surfaceContainerHigh,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(kDeskMenuRadius),
-            side: BorderSide(color: scheme.outlineVariant),
-          ),
+          color: dialog.backgroundColor ?? theme.m3.surfaceContainerHigh,
+          elevation: dialog.elevation ?? 3,
+          shape:
+              dialog.shape ??
+              RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kRadiusDialog),
+              ),
           clipBehavior: Clip.antiAlias,
           child: ConstrainedBox(
             constraints: const BoxConstraints(
               maxWidth: kDeskDialogMaxWidth,
-              maxHeight: 420,
+              maxHeight: 440,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
-                Focus(
-                  canRequestFocus: false,
-                  skipTraversal: true,
-                  onKeyEvent: (FocusNode node, KeyEvent event) =>
-                      _onKey(node, event, matches.length),
-                  child: TextField(
-                    key: const ValueKey<String>('quick-switcher-field'),
-                    controller: _query,
-                    autofocus: true,
-                    style: theme.textTheme.bodyLarge,
-                    onSubmitted: (_) {
-                      if (matches.isNotEmpty) _open(matches[index]);
-                    },
-                    decoration: InputDecoration(
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                  child: Focus(
+                    canRequestFocus: false,
+                    skipTraversal: true,
+                    onKeyEvent: (FocusNode node, KeyEvent event) =>
+                        _onKey(node, event, matches.length),
+                    // The sidebar's search field.
+                    child: SbSearchField(
+                      key: const ValueKey<String>('quick-switcher-field'),
+                      controller: _query,
+                      focusNode: _queryFocus,
+                      autofocus: true,
                       hintText: 'Jump to an agent or a room',
-                      prefixIcon: Padding(
-                        padding: const EdgeInsets.only(left: 14, right: 8),
-                        child: AppIcon(
-                          Icons.search,
-                          size: 18,
-                          color: scheme.onSurfaceVariant,
-                        ),
-                      ),
-                      prefixIconConstraints: const BoxConstraints(minWidth: 40),
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      filled: false,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      onClear: _query.clear,
+                      onSubmitted: (_) {
+                        if (matches.isNotEmpty) _open(matches[index]);
+                      },
                     ),
                   ),
                 ),
-                const DeskHairline(),
                 Flexible(
                   child: matches.isEmpty
                       ? Padding(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                           child: Text(
                             'Nothing matches.',
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: scheme.onSurfaceVariant,
-                            ),
+                            style: TextStyle(color: muted, fontSize: 14),
                           ),
                         )
                       : ListView.builder(
                           controller: _scroll,
                           shrinkWrap: true,
-                          padding: const EdgeInsets.all(6),
+                          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                           itemCount: matches.length,
                           itemExtent: _rowHeight,
                           itemBuilder: (BuildContext context, int i) =>
                               _row(context, matches[i], i == index, i),
                         ),
                 ),
-                const DeskHairline(),
+                const SbHairline(),
                 Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
+                    horizontal: 16,
                     vertical: 8,
                   ),
                   child: Text(
                     '↑↓ to move · Enter to open · Esc to close',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: scheme.onSurfaceVariant,
-                    ),
+                    style: theme.textTheme.bodySmall?.copyWith(color: muted),
                   ),
                 ),
               ],
@@ -260,9 +259,17 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
   ) {
     final ThemeData theme = Theme.of(context);
     final ColorScheme scheme = theme.colorScheme;
+    // The fill a selected sidebar card takes ([SbCard]).
+    final Color lit = Color.alphaBlend(
+      scheme.primary.withValues(alpha: 0.20),
+      theme.m3.surfaceContainer,
+    );
+    final Color rest =
+        DialogTheme.of(context).backgroundColor ??
+        theme.m3.surfaceContainerHigh;
     final (Widget face, String name, String kind, bool unread) = switch (pick) {
       QuickSwitcherAgent(:final AgentsAgent agent) => (
-        AgentFace(agent: agent, size: kDeskRowFace, store: widget.profiles),
+        AgentFace(agent: agent, size: _faceSize, store: widget.profiles),
         agent.name,
         'Agent',
         (widget.readMarks ?? AgentReadMarks.instance).isUnread(agent),
@@ -270,11 +277,9 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
       QuickSwitcherRoom(:final AgentsRoom room) => (
         RoomFaces(
           members: room.members,
-          size: kDeskRowFace,
+          size: _faceSize,
           store: widget.profiles,
-          ringColor: highlighted
-              ? scheme.secondaryContainer
-              : scheme.surfaceContainerHigh,
+          ringColor: highlighted ? lit : rest,
         ),
         room.name,
         'Room',
@@ -291,32 +296,33 @@ class _QuickSwitcherState extends State<QuickSwitcher> {
         onTap: () => _open(pick),
         child: Container(
           key: ValueKey<String>('quick-switcher-row-$i'),
-          padding: const EdgeInsets.symmetric(horizontal: kDeskRowPadH),
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: highlighted ? scheme.secondaryContainer : null,
-            borderRadius: BorderRadius.circular(kDeskControlRadius),
+            color: highlighted ? lit : null,
+            borderRadius: BorderRadius.circular(kSbCardJointRadius * 2),
           ),
           child: Row(
             children: <Widget>[
-              SizedBox(width: kDeskRowFace, height: kDeskRowFace, child: face),
+              SizedBox(width: _faceSize, height: _faceSize, child: face),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    fontWeight: unread ? FontWeight.w700 : FontWeight.w500,
-                    color: highlighted
-                        ? scheme.onSecondaryContainer
-                        : scheme.onSurface,
+                  // The sidebar tile's title: primary while it is the one.
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    fontWeight: unread || highlighted
+                        ? FontWeight.w700
+                        : FontWeight.w500,
+                    color: highlighted ? scheme.primary : scheme.onSurface,
                   ),
                 ),
               ),
               Text(
                 kind,
-                style: theme.textTheme.labelSmall?.copyWith(
-                  color: scheme.onSurfaceVariant,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.m3.onSurfaceVariant,
                 ),
               ),
             ],

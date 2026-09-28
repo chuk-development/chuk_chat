@@ -7,7 +7,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 // here. Both are byte copies of the widgets/ files below, so importing both
 // would make AppIcon and LiveWaveform ambiguous.
 import 'package:chuk_chat/utils/shift_key_tracker.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
@@ -77,39 +76,44 @@ Widget buildTinyActionButton({
   // under a Theme, and threading one through would touch all of them.
   final result = Builder(
     builder: (BuildContext context) {
-      // Agents keeps the original app's one glyph rule for this button
-      // (luminance over 0.5 is black); upstream's goes through the theme.
-      final Color foregroundColor = agentsChatCore
-          ? (color.computeLuminance() > 0.5 ? Colors.black : Colors.white)
-          : Theme.of(context).accentButtonForeground(color);
-            return Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: isLoading ? null : onTap,
-            borderRadius: BorderRadius.circular(buttonSize / 2),
-            child: Container(
-              width: buttonSize,
-              height: buttonSize,
-              // Flat fill, no sheen and no coloured shadow. The button is the one
-              // accent-coloured thing down here; a glow around it only smears that
-              // colour into the composer behind it.
-              decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-              child: isLoading
-                  ? Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(foregroundColor),
+      // The glyph colour comes from the theme, the same decision the desktop
+      // send button makes, so the two cannot end up different colours.
+      final Color foregroundColor = Theme.of(
+        context,
+      ).accentButtonForeground(color);
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: isLoading ? null : onTap,
+          borderRadius: BorderRadius.circular(buttonSize / 2),
+          child: Container(
+            width: buttonSize,
+            height: buttonSize,
+            // Flat fill, no sheen and no coloured shadow. The button is the one
+            // accent-coloured thing down here; a glow around it only smears that
+            // colour into the composer behind it.
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: isLoading
+                ? Padding(
+                    padding: const EdgeInsets.all(8.0),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        foregroundColor,
                       ),
-                    )
-                  : svgAssetPath != null
-                  ? SvgPicture.asset(
-                      svgAssetPath,
-                      width: iconSize,
-                      height: iconSize,
-                      colorFilter: ColorFilter.mode(foregroundColor, BlendMode.srcIn),
-                    )
-            : AppIcon(icon!, size: iconSize, color: foregroundColor),
+                    ),
+                  )
+                : svgAssetPath != null
+                ? SvgPicture.asset(
+                    svgAssetPath,
+                    width: iconSize,
+                    height: iconSize,
+                    colorFilter: ColorFilter.mode(
+                      foregroundColor,
+                      BlendMode.srcIn,
+                    ),
+                  )
+                : AppIcon(icon!, size: iconSize, color: foregroundColor),
           ),
         ),
       );

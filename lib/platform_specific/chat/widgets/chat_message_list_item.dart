@@ -6,7 +6,6 @@ import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
-import 'package:chuk_chat/widgets/agents_desktop/message_hover_actions.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -37,18 +36,11 @@ class ChatMessageListItem extends StatelessWidget {
     this.onConnectMcpServer,
     this.onContinueGeneration,
     this.messengerMode = false,
-    this.agentsRuns = false,
     this.reaction,
     this.onReaction,
     this.onReply,
     this.onEditRequested,
-    this.hoverActions = false,
   });
-
-  /// The Agents desktop transcript (docs/DESIGN.md §14.4): the message's
-  /// actions show in a small toolbar at its top right while the pointer is on
-  /// it, instead of as a permanent pill under it. Off everywhere else.
-  final bool hoverActions;
 
   final List<Map<String, String>> messages;
   final int index;
@@ -69,15 +61,10 @@ class ChatMessageListItem extends StatelessWidget {
   final ValueChanged<String>? onConnectMcpServer;
   final VoidCallback? onContinueGeneration;
 
-  /// Agents's messenger presentation. Off everywhere upstream's chat builds
-  /// this row, so the fields below stay null there and the bubble is the
-  /// same as before.
+  /// Agents's messenger behaviour: reactions, reply and the long-press menu.
+  /// Off everywhere upstream's chat builds this row, so the fields below stay
+  /// null there. The look is upstream's either way.
   final bool messengerMode;
-
-  /// Agents's bubble runs: a day change or a pause longer than
-  /// kBubbleGroupPause also starts a new run, not only a change of sender.
-  /// Both Agents layouts set it; upstream's chat does not.
-  final bool agentsRuns;
 
   /// The reader's own reaction on this message, if any.
   final String? reaction;
@@ -99,14 +86,9 @@ class ChatMessageListItem extends StatelessWidget {
     final bool nextIsUser = index == messages.length - 1
         ? data.isUser
         : (messages[index + 1]['sender'] ?? 'ai') == 'user';
-    // The Agents thread breaks a bubble run on a day change and on a long
-    // pause too, as the original app did (chat_ui_helpers).
-    final bool startsNewGroup = agentsRuns
-        ? messageStartsRun(messages, index)
-        : index == 0 || previousIsUser != data.isUser;
-    final bool endsGroup = agentsRuns
-        ? messageEndsRun(messages, index)
-        : index == messages.length - 1 || nextIsUser != data.isUser;
+    final bool startsNewGroup = index == 0 || previousIsUser != data.isUser;
+    final bool endsGroup =
+        index == messages.length - 1 || nextIsUser != data.isUser;
     final String uiKey = ChatUiHelpers.stableUiKey(messages[index], uuid);
 
     // True from the moment Send is pressed, not only once the server stream
@@ -126,11 +108,7 @@ class ChatMessageListItem extends StatelessWidget {
       isUser: data.isUser,
       startsNewGroup: startsNewGroup,
       endsGroup: endsGroup,
-      // Agents's user bubble is narrower (0.72, the original app's
-      // messenger width); upstream keeps 0.8.
-      maxWidth: data.isUser
-          ? maxWidth * (messengerMode ? 0.72 : 0.8)
-          : maxWidth,
+      maxWidth: data.isUser ? maxWidth * 0.8 : maxWidth,
       isReasoningStreaming: data.isReasoningStreaming || forceLive,
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,
@@ -147,10 +125,8 @@ class ChatMessageListItem extends StatelessWidget {
       imageCostEur: data.imageCostEur,
       imageGeneratedAt: data.imageGeneratedAt,
       attachments: data.attachments,
-      actions: hoverActions ? const <MessageBubbleAction>[] : actions,
-      userMessageActions: hoverActions
-          ? const <MessageBubbleAction>[]
-          : userMessageActions,
+      actions: actions,
+      userMessageActions: userMessageActions,
       isEditing: isEditing,
       showReasoningTokens: showReasoningTokens,
       showModelInfo: showModelInfo,
@@ -180,9 +156,6 @@ class ChatMessageListItem extends StatelessWidget {
       onReaction: onReaction,
       onReply: onReply,
       onEditRequested: onEditRequested,
-      sentAt: messengerMode
-          ? DateTime.tryParse(messages[index]['sentAt'] ?? '')
-          : null,
     );
 
     final ChatRuntime? runtime = liveRuntime;
@@ -191,24 +164,22 @@ class ChatMessageListItem extends StatelessWidget {
         isLastAiMessage &&
         (data.isStreamingMessage || runtime.isSending.value);
     if (wrapForStream) {
-      return _withHoverActions(
-        RepaintBoundary(
-          child: ValueListenableBuilder<StreamingLive?>(
-            valueListenable: runtime.streamingLive,
-            builder: (context, live, _) {
-              final bool matches = live != null && live.index == index;
-              final String text = matches
-                  ? live.text.trimRight()
-                  : data.displayText;
-              final String rawReasoning = matches
-                  ? live.reasoning
-                  : data.reasoning;
-              final String? reasoning = rawReasoning.trim().isEmpty
-                  ? null
-                  : rawReasoning;
-              return buildBubble(text, reasoning);
-            },
-          ),
+      return RepaintBoundary(
+        child: ValueListenableBuilder<StreamingLive?>(
+          valueListenable: runtime.streamingLive,
+          builder: (context, live, _) {
+            final bool matches = live != null && live.index == index;
+            final String text = matches
+                ? live.text.trimRight()
+                : data.displayText;
+            final String rawReasoning = matches
+                ? live.reasoning
+                : data.reasoning;
+            final String? reasoning = rawReasoning.trim().isEmpty
+                ? null
+                : rawReasoning;
+            return buildBubble(text, reasoning);
+          },
         ),
       );
     }
@@ -217,20 +188,10 @@ class ChatMessageListItem extends StatelessWidget {
         ? null
         : data.reasoning;
     final Widget bubble = buildBubble(data.displayText, reasoning);
-    return _withHoverActions(
-      RepaintBoundary(
-        child: data.isUser && uiKey == flyInKey
-            ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
-            : bubble,
-      ),
-    );
-  }
-
-  Widget _withHoverActions(Widget row) {
-    if (!hoverActions) return row;
-    return MessageHoverActions(
-      actions: data.isUser ? userMessageActions : actions,
-      child: row,
+    return RepaintBoundary(
+      child: data.isUser && uiKey == flyInKey
+          ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)
+          : bubble,
     );
   }
 }

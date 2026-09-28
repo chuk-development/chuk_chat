@@ -9,7 +9,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
-import 'package:chuk_chat/ui/expressive/message_stamp.dart';
 import 'package:chuk_chat/utils/automation_message.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 
@@ -116,65 +115,48 @@ void main() {
     });
   });
 
-  group('message clock', () {
-    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+  group('no clock stamp', () {
+    // The Agents build draws chuk_chat's bubble, which carries no time.
     setUp(() => debugAgentsChatCoreOverride = true);
     tearDown(() => debugAgentsChatCoreOverride = null);
 
-    testWidgets('a user message with a timestamp shows HH:mm', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          MessageBubble(
-            message: 'when did I send this',
-            isUser: true,
-            maxWidth: 400,
-            turnStartedAt: DateTime(2026, 3, 4, 18, 9),
+    for (final bool messengerMode in <bool>[false, true]) {
+      testWidgets('messenger $messengerMode: neither bubble shows HH:mm', (
+        tester,
+      ) async {
+        final DateTime when = DateTime(2026, 3, 4, 18, 9);
+        await tester.pumpWidget(
+          _wrap(
+            Column(
+              children: <Widget>[
+                MessageBubble(
+                  message: 'when did I send this',
+                  isUser: true,
+                  maxWidth: 400,
+                  messengerMode: messengerMode,
+                  sentAt: when,
+                  turnStartedAt: when,
+                ),
+                MessageBubble(
+                  message: 'here you go',
+                  isUser: false,
+                  maxWidth: 400,
+                  messengerMode: messengerMode,
+                  sentAt: when,
+                  turnStartedAt: when,
+                ),
+              ],
+            ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(find.text('18:09'), findsOneWidget);
-    });
-
-    testWidgets('an AI message with a timestamp shows HH:mm', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          MessageBubble(
-            message: 'here you go',
-            isUser: false,
-            maxWidth: 400,
-            turnStartedAt: DateTime(2026, 3, 4, 0, 30),
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('00:30'), findsOneWidget);
-    });
-
-    testWidgets('a message without a timestamp shows no time at all', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _wrap(
-          const MessageBubble(
-            message: 'replayed from the host',
-            isUser: true,
-            maxWidth: 400,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      expect(find.text('replayed from the host'), findsOneWidget);
-      expect(
-        find.byWidgetPredicate(
-          (w) => w is Text && RegExp(r'^\d{2}:\d{2}$').hasMatch(w.data ?? ''),
-        ),
-        findsNothing,
-      );
-    });
+        expect(find.text('when did I send this'), findsOneWidget);
+        expect(find.text('18:09'), findsNothing);
+        expect(findIcon(Icons.done_all_rounded), findsNothing);
+        expect(findIcon(Icons.check_rounded), findsNothing);
+      });
+    }
   });
 
   group('parseAutomationWake', () {
@@ -198,75 +180,33 @@ void main() {
     });
   });
 
-  group('stamp', () {
-    // Agents only: with FEATURE_AGENTS off the bubble is upstream's.
+  group('send status', () {
     setUp(() => debugAgentsChatCoreOverride = true);
     tearDown(() => debugAgentsChatCoreOverride = null);
 
-    // The queue mark is the only thing next to the time: whether the message
-    // is still waiting on this device. There are no delivery ticks.
-    test('queueMarkFor marks only what is still on this device', () {
-      expect(queueMarkFor(ChatMessageStatus.pending), QueueMark.waiting);
-      expect(queueMarkFor(ChatMessageStatus.failed), QueueMark.failed);
-      expect(queueMarkFor(ChatMessageStatus.sent), QueueMark.none);
-      expect(queueMarkFor(ChatMessageStatus.interrupted), QueueMark.none);
-      expect(queueMarkFor(null), QueueMark.none);
-    });
-
-    testWidgets('both bubbles show the time and neither shows a tick', (
-      tester,
-    ) async {
-      final DateTime when = DateTime(2026, 9, 9, 14, 3);
-      await tester.pumpWidget(
-        _wrap(
-          Column(
-            children: <Widget>[
-              MessageBubble(
-                message: 'ship it',
-                isUser: true,
-                maxWidth: 400,
-                turnStartedAt: when,
-              ),
-              MessageBubble(
-                message: 'shipped',
-                isUser: false,
-                maxWidth: 400,
-                turnStartedAt: when,
-              ),
-            ],
+    // chuk_chat's row under the bubble says a send is still queued; the
+    // messenger thread has no stamp of its own to say it instead.
+    for (final bool messengerMode in <bool>[false, true]) {
+      testWidgets('messenger $messengerMode: a queued send shows the row', (
+        tester,
+      ) async {
+        await tester.pumpWidget(
+          _wrap(
+            MessageBubble(
+              message: 'later',
+              isUser: true,
+              maxWidth: 400,
+              messengerMode: messengerMode,
+              turnStartedAt: DateTime(2026, 9, 9, 14, 3),
+              status: ChatMessageStatus.pending,
+            ),
           ),
-        ),
-      );
-      await tester.pump();
+        );
+        await tester.pump();
 
-      expect(find.text('14:03'), findsNWidgets(2));
-      expect(find.byType(MessageStamp), findsNWidgets(2));
-      for (final MessageStamp stamp
-          in tester.widgetList<MessageStamp>(find.byType(MessageStamp))) {
-        expect(stamp.mark, QueueMark.none);
-      }
-      expect(findIcon(Icons.done_all_rounded), findsNothing);
-      expect(findIcon(Icons.check_rounded), findsNothing);
-    });
-
-    testWidgets('a queued user message shows the clock mark', (tester) async {
-      await tester.pumpWidget(
-        _wrap(
-          MessageBubble(
-            message: 'later',
-            isUser: true,
-            maxWidth: 400,
-            turnStartedAt: DateTime(2026, 9, 9, 14, 3),
-            status: ChatMessageStatus.pending,
-          ),
-        ),
-      );
-      await tester.pump();
-
-      final MessageStamp stamp = tester.widget<MessageStamp>(
-        find.byType(MessageStamp),
-      );
-      expect(stamp.mark, QueueMark.waiting);
-    });
+        expect(find.text('Will send when online'), findsOneWidget);
+        expect(findIcon(Icons.schedule), findsOneWidget);
+      });
+    }
   });
 }

@@ -1,19 +1,22 @@
-/// The floating top bar of a phone chat, in the expressive design language.
+/// The floating top bar of a phone chat: chuk_chat's phone top bar
+/// (`root_wrapper_mobile.dart`, `_buildFloatingTopBar`) with a coworker in it.
 ///
-/// Nothing sits in an app bar. Over the messages, on a soft fade, float
+/// No app bar. Over the messages, on a fade from the page colour, float
 ///
-///  * a back target that springs and morphs on press;
-///  * an outlined pill with the coworker's blob face, its name and its status
-///    line — a quiet role label when idle, three dots while working.
-///    Tapping the pill opens the
-///    coworker's settings;
-///  * a stable screen target. It is lit when the coworker has a screen to take
-///    over, parked when it has none — and a parked tap says why, so the target
-///    is never a dead button.
+///  * a round back chip where chuk has its menu chip;
+///  * chuk's title pill, carrying the coworker's face, its name and its
+///    status line — "Active now", three dots while it works, or "Offline ·
+///    Reconnect". Tapping the pill opens the coworker's profile;
+///  * round chips for the shared files and the coworker's screen. The screen
+///    chip is lit (chuk's accent fill) when there is a screen to take over,
+///    parked when there is none — and a parked tap says why, so the chip is
+///    never a dead button;
+///  * an optional "more" chip.
 ///
-/// The bar reads only `paddingOf`, so it never rebuilds on a keyboard frame. The
-/// body under it reserves [MobileLayout.chromeInset]; [MobileChatScreen] does
-/// that.
+/// The chips are drawn at chuk's 42 px, and each one takes a 48 px press, so
+/// nothing is hard to hit. The bar reads only `paddingOf`, so it never
+/// rebuilds on a keyboard frame. The body under it reserves
+/// [MobileLayout.chromeInset]; [MobileChatScreen] does that.
 library;
 
 import 'package:flutter/material.dart';
@@ -26,8 +29,30 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
-import 'package:chuk_chat/ui/expressive/top_veil.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
+import 'package:chuk_chat/widgets/icons/icon_map.dart';
+
+/// Diameter of a round chip: chuk's floating chip.
+const double kMobileChromeChip = 42;
+
+/// Height of the bar's row: chuk's top bar row.
+const double kMobileChromeRow = 48;
+
+/// Corner radius of the title pill: chuk's title pill.
+const double kMobileChromePillRadius = 18;
+
+/// How far a 48 px press reaches past a 42 px chip on each side. The row's
+/// padding and gaps take it back, so the chips land where chuk's land.
+const double _kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2;
+
+/// The coworker's face inside the pill. 30 leaves the two text lines their
+/// room and keeps air above and below the face inside the 42 px pill.
+const double _kPillFaceSize = 30;
+
+/// The status line's font size. The presence dot is derived from it.
+const double _kPillStatusFontSize = 11;
 
 class MobileChatChrome extends StatelessWidget {
   const MobileChatChrome({
@@ -51,97 +76,114 @@ class MobileChatChrome extends StatelessWidget {
   /// Tap on the coworker pill — its profile page. Null renders the pill flat.
   final VoidCallback? onOpenProfile;
 
-  /// The "computer" target: the coworker's screen. Called whether or not a
+  /// The "computer" chip: the coworker's screen. Called whether or not a
   /// screen is open — when none is, it is expected to say so, which is why the
-  /// target is never silently dead (bead cowork-egrg).
+  /// chip is never silently dead (bead cowork-egrg).
   final VoidCallback? onOpenBrowser;
 
-  /// Is a screen open right now? False draws the target parked: visibly not
+  /// Is a screen open right now? False draws the chip parked: visibly not
   /// ready, still answering a tap with the reason.
   final bool browserAvailable;
   final VoidCallback? onOpenFiles;
   final VoidCallback? onReconnect;
 
-  /// The "more" target: the shell's secondary actions. Null hides it.
+  /// The "more" chip: the shell's secondary actions. Null hides it.
   final VoidCallback? onMore;
 
   final AgentProfileStore? profiles;
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
+    final Color pageColor = Theme.of(context).scaffoldBackgroundColor;
     return TickerMode(
       enabled: !MediaQuery.disableAnimationsOf(context),
-      // The shared veil: heaviest behind the status bar, gone below the row.
-      child: TopVeil(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              minHeight: MobileLayout.headerContentHeight(context),
+      child: DecoratedBox(
+        // The chat runs on underneath this bar, so the bar holds the page
+        // down behind it: page colour at the status bar, nothing at all by
+        // its lower edge. chuk's phone top bar, stop for stop.
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: <Color>[
+              pageColor,
+              pageColor,
+              pageColor.withValues(alpha: 0),
+            ],
+            stops: const <double>[0.0, 0.62, 1.0],
+          ),
+        ),
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            // chuk's 10 / 8 / 10 / 6, less the reach of the 48 px presses.
+            padding: const EdgeInsets.fromLTRB(
+              10 - _kReach,
+              8,
+              10 - _kReach,
+              6,
             ),
-            child: Row(
-              children: <Widget>[
-                ExpressiveIconButton(
-                  icon: Icons.arrow_back_rounded,
-                  onTap: onBack,
-                  size: MobileLayout.controlHeight,
-                  color: scheme.surfaceContainerHighest,
-                  tooltip: 'Agents',
-                  semanticsId: 'mobile_chat_back',
-                ),
-                const SizedBox(width: 10),
-                // Expanded + left alignment: a long name ellipsises inside the
-                // pill instead of pushing the targets off the right edge.
-                Expanded(
-                  child: _AgentPill(
-                    agent: agent,
-                    onTap: onOpenProfile,
-                    onReconnect: onReconnect,
-                    profiles: profiles,
+            child: ConstrainedBox(
+              // chuk's 48 px row. Larger text grows the pill, and the row
+              // with it, instead of clipping the name.
+              constraints: const BoxConstraints(minHeight: kMobileChromeRow),
+              child: Row(
+                children: <Widget>[
+                  _ChromeChip(
+                    icon: Icons.arrow_back_rounded,
+                    onTap: onBack,
+                    tooltip: 'Agents',
+                    semanticsId: 'mobile_chat_back',
                   ),
-                ),
-                if (onOpenFiles != null) ...<Widget>[
-                  const SizedBox(width: 8),
-                  ExpressiveIconButton(
-                    icon: Icons.folder_open_rounded,
-                    size: MobileLayout.controlHeight,
-                    color: scheme.surfaceContainerHighest,
-                    onColor: scheme.onSurface,
-                    tooltip: 'Shared files',
-                    semanticsId: 'mobile_chat_files',
-                    onTap: onOpenFiles,
+                  const SizedBox(width: 8 - _kReach),
+                  // Expanded + left alignment, as chuk's title: a long name
+                  // ellipsises inside the pill instead of pushing the chips
+                  // off the right edge.
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      heightFactor: 1,
+                      child: _AgentPill(
+                        agent: agent,
+                        onTap: onOpenProfile,
+                        onReconnect: onReconnect,
+                        profiles: profiles,
+                      ),
+                    ),
                   ),
+                  if (onOpenFiles != null) ...<Widget>[
+                    const SizedBox(width: 8 - _kReach),
+                    _ChromeChip(
+                      icon: Icons.folder_open_rounded,
+                      tooltip: 'Shared files',
+                      semanticsId: 'mobile_chat_files',
+                      onTap: onOpenFiles,
+                    ),
+                  ],
+                  SizedBox(
+                    width: onOpenFiles != null ? 8 - 2 * _kReach : 8 - _kReach,
+                  ),
+                  _ChromeChip(
+                    icon: Icons.desktop_windows_rounded,
+                    accent: browserAvailable,
+                    parked: !browserAvailable,
+                    tooltip: browserAvailable
+                        ? 'Take over the screen'
+                        : 'No screen open yet',
+                    semanticsId: 'mobile_chat_browser',
+                    onTap: onOpenBrowser,
+                  ),
+                  if (onMore != null) ...<Widget>[
+                    const SizedBox(width: 8 - 2 * _kReach),
+                    _ChromeChip(
+                      icon: Icons.more_horiz_rounded,
+                      onTap: onMore,
+                      tooltip: 'More',
+                      semanticsId: 'mobile_chat_more',
+                    ),
+                  ],
                 ],
-                const SizedBox(width: 8),
-                ExpressiveIconButton(
-                  icon: Icons.desktop_windows_rounded,
-                  size: MobileLayout.controlHeight,
-                  color: browserAvailable
-                      ? scheme.primaryContainer
-                      : scheme.surfaceContainerHighest,
-                  onColor: browserAvailable
-                      ? scheme.onPrimaryContainer
-                      : scheme.onSurface,
-                  tooltip: browserAvailable
-                      ? 'Take over the screen'
-                      : 'No screen open yet',
-                  semanticsId: 'mobile_chat_browser',
-                  parked: !browserAvailable,
-                  onTap: onOpenBrowser,
-                ),
-                if (onMore != null) ...<Widget>[
-                  const SizedBox(width: 8),
-                  ExpressiveIconButton(
-                    icon: Icons.more_horiz_rounded,
-                    onTap: onMore,
-                    size: MobileLayout.controlHeight,
-                    color: scheme.surface,
-                    tooltip: 'More',
-                    semanticsId: 'mobile_chat_more',
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
@@ -150,21 +192,86 @@ class MobileChatChrome extends StatelessWidget {
   }
 }
 
-/// The coworker's face inside the header pill.
-///
-/// The pill's height is set by its two lines of text — the name at 16 × 1.5 and
-/// the status at 11 × 1.45, so 40 px of inner height. 32 is the app's small
-/// face (the default of `ExpressiveFace`, and the nearest step below the 34 of
-/// the desktop roster): it leaves 4 px of air above and below inside that
-/// column, so the silhouette sits IN the capsule instead of filling it. At 38
-/// the face had a single pixel of air and read as an oversized square.
-const double _kPillFaceSize = 32;
+/// One round chip of the bar: chuk's floating chip — the chrome surface, a
+/// 22 px glyph in the icon colour — or, with [accent], chuk's accent-filled
+/// one. The chip paints 42 px and takes a 48 px press; the ink stays on the
+/// chip.
+class _ChromeChip extends StatelessWidget {
+  const _ChromeChip({
+    required this.icon,
+    required this.tooltip,
+    required this.semanticsId,
+    required this.onTap,
+    this.accent = false,
+    this.parked = false,
+  });
 
-/// The status line's font size. The presence dot is derived from it.
-const double _kPillStatusFontSize = 11;
+  final IconData icon;
+  final String tooltip;
+  final String semanticsId;
 
-/// The coworker pill: face, name, live state. As tall as a chip, so the whole
-/// row is one line of touch targets.
+  /// Null disables the chip.
+  final VoidCallback? onTap;
+
+  /// chuk's accent-filled chip: the one thing on the bar that is ready.
+  final bool accent;
+
+  /// Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
+  /// is expected to say why.
+  final bool parked;
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final Color fill = accent
+        ? theme.colorScheme.primary
+        : FloatingChromeSurface.fillOf(context);
+    final Color glyph = accent
+        ? theme.accentButtonForeground(fill)
+        : theme.resolvedIconColor;
+    // A parked chip still answers a tap with the reason, so it stays enabled.
+    final bool enabled = onTap != null;
+    return Semantics(
+      identifier: semanticsId,
+      button: true,
+      enabled: enabled,
+      child: Tooltip(
+        message: tooltip,
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkResponse(
+            onTap: onTap,
+            // Not contained: the press covers 48 px, the ink only the chip.
+            containedInkWell: false,
+            highlightShape: BoxShape.circle,
+            radius: kMobileChromeChip / 2,
+            child: SizedBox.square(
+              dimension: MobileLayout.minTouchTarget,
+              child: Center(
+                // Painted on the Material, so the ink lands on top of it.
+                child: Ink(
+                  width: kMobileChromeChip,
+                  height: kMobileChromeChip,
+                  decoration: BoxDecoration(color: fill, shape: BoxShape.circle),
+                  child: Center(
+                    child: AppIcon(
+                      icon,
+                      size: 22,
+                      color: parked ? glyph.withValues(alpha: 0.45) : glyph,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The coworker pill: chuk's title pill with the face, the name and the live
+/// state in it. It paints at the chips' height and takes a 48 px press.
 class _AgentPill extends StatelessWidget {
   const _AgentPill({
     required this.agent,
@@ -194,9 +301,47 @@ class _AgentPill extends StatelessWidget {
 
   Widget _surface(BuildContext context, {required bool paired}) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
+    final Color iconFg = theme.resolvedIconColor;
     final AgentProfileStore store = profiles ?? AgentProfileStore.instance;
     final String? role = _roleOf(store);
+    final Widget pill = FloatingChromeSurface(
+      key: const ValueKey('mobile_contact_surface'),
+      radius: kMobileChromePillRadius,
+      padding: const EdgeInsets.fromLTRB(6, 5, 16, 5),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          AgentFace(
+            agent: agent,
+            size: _kPillFaceSize,
+            store: store,
+            showPresence: false,
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                // chuk's title: 15, heavy, the icon colour.
+                Text(
+                  agent.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: iconFg.withValues(alpha: 0.92),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+                _status(context, paired: paired),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
     return Semantics(
       identifier: 'mobile_chat_bot_pill',
       button: onTap != null,
@@ -207,147 +352,97 @@ class _AgentPill extends StatelessWidget {
           onTap: onTap,
           color: Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30),
-            side: BorderSide(color: scheme.outlineVariant, width: 1.2),
+            borderRadius: BorderRadius.circular(kMobileChromePillRadius),
           ),
           pressedShape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-            side: BorderSide(color: scheme.outlineVariant, width: 1.2),
+            borderRadius: BorderRadius.circular(kMobileChromePillRadius),
           ),
           pressedScale: 0.97,
-          // A ShapeBorder on MorphTap clips but does not paint an outline.
-          // Paint the reference's translucent surface AND border explicitly.
-          child: Container(
-            key: const ValueKey('mobile_contact_surface'),
-            // The pill takes the row's height rather than growing one out of
-            // its own padding: it stood 6 taller than the buttons beside it,
-            // and a capsule that overhangs its neighbours is the first thing
-            // the eye picks out of a header. Its two lines are centred in
-            // whatever height the row has. 9 on the left: the capsule's end is
-            // a half circle, so a face set at 6 read as pressed against the
-            // curve.
-            height: MobileLayout.headerContentHeight(context),
-            padding: const EdgeInsets.fromLTRB(9, 0, 14, 0),
-            decoration: BoxDecoration(
-              color: scheme.surface.withValues(alpha: 0.72),
-              borderRadius: BorderRadius.circular(30),
-              border: Border.all(color: scheme.outlineVariant, width: 1.2),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(
+              minHeight: MobileLayout.minTouchTarget,
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              children: <Widget>[
-                // The face is sized to the pill, not the other way round: the
-                // two text lines are 40 px of inner height, so a 32 px face
-                // (the app's small-face size, as in ExpressiveFace) keeps even
-                // air above and below and never drives the pill's height. The
-                // presence dot is NOT parked on its corner any more — it
-                // belongs to the status line, and sits on that line.
-                AgentFace(
-                  agent: agent,
-                  size: _kPillFaceSize,
-                  store: store,
-                  showPresence: false,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              widthFactor: 1,
+              heightFactor: 1,
+              child: pill,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// What the coworker is doing: offline with a way back, working, or here.
+  Widget _status(BuildContext context, {required bool paired}) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    if (!paired && onReconnect != null) {
+      return GestureDetector(
+        onTap: onReconnect,
+        behavior: HitTestBehavior.opaque,
+        child: Semantics(
+          button: true,
+          label: 'Offline. Reconnect',
+          child: _statusLine(
+            context,
+            paired: paired,
+            child: Flexible(
+              child: Text(
+                'Offline · Reconnect',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: scheme.primary,
+                  fontSize: _kPillStatusFontSize,
+                  height: 1.3,
+                  fontWeight: FontWeight.w700,
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: <Widget>[
-                      Text(
-                        agent.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        // Tight line height: the name and the state line share
-                        // the pill's 36 px of inner height.
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                          height: 1.5,
-                        ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+    if (agent.running && paired) {
+      return Semantics(
+        label: 'Working',
+        child: SizedBox(
+          height:
+              MediaQuery.textScalerOf(context).scale(_kPillStatusFontSize) *
+              1.3,
+          child: ExcludeSemantics(
+            child: _statusLine(
+              context,
+              paired: paired,
+              child: MediaQuery.disableAnimationsOf(context)
+                  ? Text(
+                      '…',
+                      style: TextStyle(
+                        color: scheme.primary,
+                        fontSize: _kPillStatusFontSize,
+                        height: 1.3,
                       ),
-                      if (!paired && onReconnect != null)
-                        GestureDetector(
-                          onTap: onReconnect,
-                          behavior: HitTestBehavior.opaque,
-                          child: Semantics(
-                            button: true,
-                            label: 'Offline. Reconnect',
-                            child: _statusLine(
-                              context,
-                              paired: paired,
-                              child: Flexible(
-                                child: Text(
-                                  'Offline · Reconnect',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: scheme.primary,
-                                    fontSize: _kPillStatusFontSize,
-                                    height: 1.45,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        )
-                      else if (agent.running && paired)
-                        Semantics(
-                          label: 'Working',
-                          child: SizedBox(
-                            height:
-                                MediaQuery.textScalerOf(
-                                  context,
-                                ).scale(_kPillStatusFontSize) *
-                                1.45,
-                            child: ExcludeSemantics(
-                              child: _statusLine(
-                                context,
-                                paired: paired,
-                                child: MediaQuery.disableAnimationsOf(context)
-                                    ? Text(
-                                        '…',
-                                        style: TextStyle(
-                                          color: scheme.primary,
-                                          fontSize: _kPillStatusFontSize,
-                                          height: 1.45,
-                                        ),
-                                      )
-                                    : WorkingDots(
-                                        color: scheme.primary,
-                                        label: '',
-                                      ),
-                              ),
-                            ),
-                          ),
-                        )
-                      else
-                        _statusLine(
-                          context,
-                          paired: paired,
-                          child: Flexible(
-                            child: Text(
-                              paired ? 'Active now' : 'Offline',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: paired
-                                    ? scheme.primary
-                                    : scheme.onSurfaceVariant,
-                                fontSize: _kPillStatusFontSize,
-                                height: 1.45,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ],
+                    )
+                  : WorkingDots(color: scheme.primary, label: ''),
             ),
+          ),
+        ),
+      );
+    }
+    return _statusLine(
+      context,
+      paired: paired,
+      child: Flexible(
+        child: Text(
+          paired ? 'Active now' : 'Offline',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: paired ? scheme.primary : scheme.onSurfaceVariant,
+            fontSize: _kPillStatusFontSize,
+            height: 1.3,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ),

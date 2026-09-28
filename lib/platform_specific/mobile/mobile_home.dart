@@ -1,12 +1,11 @@
-/// The home of the phone app: four places, one floating bar.
+/// The home of the phone app: three places, one floating bar.
 ///
 /// Chats is the roster. Media is every picture and file the coworkers have sent,
-/// across all of them. Files asks one coworker what is in its workspace, so it
-/// starts by naming the coworker. Settings is the settings page itself, not a
-/// link to it: a tab that pushes a route and comes back empty is a worse tab
-/// than no tab.
+/// across all of them. Settings is the settings page itself, not a link to it:
+/// a tab that pushes a route and comes back empty is a worse tab than no tab.
+/// A coworker's workspace files open from inside its chat.
 ///
-/// The four tabs are peers, so moving between them is Material's fade-through:
+/// The three tabs are peers, so moving between them is Material's fade-through:
 /// the tab you leave fades (and eases down a hair), the tab you arrive at fades
 /// up from slightly small. Every tab stays mounted the whole time — the roster
 /// keeps its search, its filter and its scroll — so the swap is a paint, never
@@ -16,17 +15,13 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
-import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_media_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
-import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
-import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/ui/expressive/huge_icon.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/top_veil.dart';
-import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 
 class MobileHome extends StatefulWidget {
   const MobileHome({
@@ -34,12 +29,10 @@ class MobileHome extends StatefulWidget {
     required this.roster,
     required this.chats,
     required this.settings,
-    required this.controller,
     this.readMarks,
-    this.profiles,
   });
 
-  /// The roster, for the coworker pickers of the other tabs.
+  /// The roster, for the media tab's thread keys and the unread badge.
   final AgentRosterSource roster;
 
   /// The Chats tab: the roster as the shell already builds it, wired to open a
@@ -49,11 +42,7 @@ class MobileHome extends StatefulWidget {
   /// The Settings tab, built by the shell because it owns the config.
   final Widget settings;
 
-  /// The live relay controller, handed to the documents panel.
-  final AgentsRelayController? controller;
-
   final AgentReadMarks? readMarks;
-  final AgentProfileStore? profiles;
 
   @override
   State<MobileHome> createState() => _MobileHomeState();
@@ -63,38 +52,6 @@ class _MobileHomeState extends State<MobileHome> {
   int _index = 0;
 
   AgentReadMarks get _marks => widget.readMarks ?? AgentReadMarks.instance;
-
-  void _openPanel(AgentsAgent agent, String threadKey) {
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => ChatDocumentsPanel(
-          sessionKey: threadKey,
-          coworkerName: agent.name,
-          controller: widget.controller,
-          fullPage: true,
-        ),
-      ),
-    );
-  }
-
-  /// The same roster, used to pick whose files to open. It carries no
-  /// headline of its own: the navigation bar under it already names the tab,
-  /// and the roster header is one row now.
-  Widget _picker() {
-    return MobileAgentList(
-      source: widget.roster,
-      readMarks: widget.readMarks,
-      profiles: widget.profiles,
-      accountLabel: null,
-      onSelect: (String agentId, String threadKey) {
-        final AgentsAgent? agent = widget.roster.visibleAgents
-            .where((AgentsAgent candidate) => candidate.id == agentId)
-            .firstOrNull;
-        if (agent == null) return;
-        _openPanel(agent, threadKey);
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +91,6 @@ class _MobileHomeState extends State<MobileHome> {
                             thread.key,
                       ],
                     ),
-                    _picker(),
                     widget.settings,
                   ],
                 ),
@@ -157,10 +113,6 @@ class _MobileHomeState extends State<MobileHome> {
                     const MobileNavDestination(
                       icon: HugeIcons.album02,
                       label: 'Media',
-                    ),
-                    const MobileNavDestination(
-                      icon: HugeIcons.folder03,
-                      label: 'Files',
                     ),
                     const MobileNavDestination(
                       icon: HugeIcons.settings01,

@@ -19,9 +19,6 @@ import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/services/skills/agents_skill.dart';
 import 'package:chuk_chat/services/skills/skills_source.dart';
-import 'package:chuk_chat/ui/expressive/expressive_screen.dart';
-import 'package:chuk_chat/ui/expressive/huge_icon.dart';
-import 'package:chuk_chat/ui/expressive/motion.dart';
 
 /// Lists built-in skills and lets the user author their own.
 ///
@@ -543,7 +540,8 @@ class _SkillRow extends StatelessWidget {
 // Agents's (below) lists the skills that live on the coworker host and toggles
 // them over the relay. Neither replaces the other, so the Agents one keeps its
 // own name and every existing `SkillsSettingsPage` call site is untouched.
-// Route to `AgentsSkillsSettingsPage` where FEATURE_AGENTS is on.
+// SettingsPage and the desktop settings modal open `AgentsSkillsSettingsPage`
+// when FEATURE_AGENTS is on.
 
 /// The host's skills, one switch each (docs/WIRE_CONTRACT.md, "Skills").
 ///
@@ -607,9 +605,7 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
   Future<void> _toggle(AgentsSkill skill, bool enabled) async {
     final sent = await _source.setEnabled(skill.name, enabled);
     if (!mounted || sent) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Not connected to the host')));
+    AppNotifications.show(context, 'Not connected to the host');
   }
 
   @override
@@ -621,35 +617,28 @@ class _AgentsSkillsSettingsPageState extends State<AgentsSkillsSettingsPage> {
     final workspace = _source.workspace;
     final errors = _source.errors;
 
-    return ExpressiveScreen(
-      title: title,
-      actions: <Widget>[
-        ExpressiveIconButton(
-          hugeIcon: HugeIcons.refresh,
-          tooltip: 'Refresh',
-          onTap: _refreshing ? null : _refresh,
-        ),
-      ],
-      builder: (BuildContext context) => RefreshIndicator(
+    return Scaffold(
+      // The page runs underneath the floating header.
+      extendBodyBehindAppBar: true,
+      appBar: FloatingAppBar(
+        title: Text(title),
+        actions: <Widget>[
+          FloatingHeaderButton(
+            icon: Icons.refresh,
+            tooltip: 'Refresh',
+            onPressed: _refreshing ? null : _refresh,
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
         onRefresh: _refresh,
         // The house scroll container for a settings page: it lays every row
         // out up front, so the scrollbar does not resize while you scroll —
         // and the second section exists even before you reach it.
         child: SettingsListView(
-          padding: EdgeInsets.fromLTRB(
-            16,
-            MediaQuery.paddingOf(context).top + 8,
-            16,
-            MediaQuery.paddingOf(context).bottom + 32,
-          ),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
-            ExpressiveTitle(
-              title,
-              subtitle:
-                  l?.skillsSubtitle ??
-                  'Procedures the coworker loads on demand',
-            ),
             ExpressiveInfoCard(
               text:
                   l?.skillsExplainer ??

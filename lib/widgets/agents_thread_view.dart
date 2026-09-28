@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
-import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/platform_config.dart';
@@ -42,6 +41,12 @@ import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
+
+/// Room a desktop thread keeps above its first message for the header that
+/// floats over it: the row's offset from the top of the pane plus one button
+/// of the row. The list still scrolls up behind the buttons.
+const double kAgentsThreadHeaderInset =
+    kTopInitialSpacing + AgentsThreadHeader.slot;
 
 /// The Agents chat surface: the imported chuk_chat chat screen, wired to the
 /// agent running on the user's own host.
@@ -86,13 +91,9 @@ class AgentsThreadView extends StatefulWidget {
     this.onOpenModelScreen,
     this.shellConfig,
     this.title,
-    this.subtitle,
-    this.headerAgent,
-    this.onOpenAgentProfile,
     this.onOpenAgentScreen,
     this.actions = const <AgentsThreadAction>[],
     this.menuActions = const <AgentsThreadAction>[],
-    this.leadingInset = 0,
     this.topInset = 0,
     this.phoneLayout = false,
     this.linkReport,
@@ -157,43 +158,24 @@ class AgentsThreadView extends StatefulWidget {
   /// test) falls back to the verbose toggle.
   final AppShellConfig? shellConfig;
 
-  /// The coworker this thread belongs to, for the header's title. Null before
-  /// one is selected: the header then shows the state and the actions alone
-  /// rather than inventing a name.
+  /// The coworker this thread belongs to, handed to the desktop chat screen.
+  /// Null before one is selected.
   final String? title;
-
-  /// The quieter second line under [title] — the coworker's role.
-  final String? subtitle;
-
-  /// The coworker whose thread this is. With it the header shows the messenger's
-  /// contact pill (face, name, live state) instead of a plain title; a room
-  /// thread and a widget test without a roster pass null and keep the text.
-  final AgentsAgent? headerAgent;
-
-  /// Tap on the header pill — the coworker's profile page.
-  final void Function(AgentsAgent agent)? onOpenAgentProfile;
 
   /// Opens the live view of the coworker's screen. Null parks the target.
   final VoidCallback? onOpenAgentScreen;
 
-  /// Actions the SHELL owns but this thread's header shows: agent controls,
-  /// Control Rooms, the agent's browser, Copy Debug Chat. They used to float
-  /// over this view in a row of their own, which is why the top of the screen
-  /// read as leftovers; the header groups them with the view's own Documents
-  /// button and gives them one size and one spacing.
+  /// Actions the SHELL owns but this thread's floating row shows on a desktop
+  /// window: the details pane, Control Rooms, Copy full chat. The row groups
+  /// them with the view's own Documents button and gives them one size and
+  /// one spacing.
   final List<AgentsThreadAction> actions;
 
-  /// The desktop title bar's "…" menu (docs/DESIGN.md §14.2).
+  /// The floating row's "…" menu on a desktop window.
   final List<AgentsThreadAction> menuActions;
 
-  /// Left room the header keeps clear for chrome the shell paints OVER this
-  /// view: the hamburger, and the mini rail under it while the sidebar is
-  /// folded. The view cannot see them, so the shell states the width.
-  final double leadingInset;
-
-  /// The same for the top, on a phone: the height of the floating chrome. The
-  /// header takes it as padding and starts below the chrome — so the chat
-  /// under the header reserves nothing of its own any more.
+  /// On a phone: the height of the floating chrome over the chat. The chat
+  /// reserves it inside its scroll view, so the messages pass under the chips.
   final double topInset;
 
   /// Force chuk's phone screen. The mobile shell sets it below the phone
@@ -1580,16 +1562,35 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             showAutomations &&
             !_automationsCollapsed &&
             (desktop || MobileChatPreferences.instance.showActivity);
-        // The desktop title bar is part of the frame (docs/DESIGN.md §14.1):
-        // a solid 48 px bar with a hairline above the chat, never a veil the
-        // messages scroll behind.
-        final Widget body = _buildChat(context);
+        // The desktop actions float over the top right of the chat, where
+        // chuk_chat floats its "Copy full chat" button: no bar, no band, the
+        // messages scroll up behind them. Only the first row starts below
+        // the floating row, so the buttons never cover it.
+        final Widget chat = _buildChat(
+          context,
+          desktopTopInset: desktop ? kAgentsThreadHeaderInset : 0,
+        );
+        final Widget body = desktop
+            ? Stack(
+                children: [
+                  Positioned.fill(child: chat),
+                  Positioned(
+                    top: kTopInitialSpacing,
+                    left: 12,
+                    right: 12,
+                    child: _buildHeader(
+                      context,
+                      state,
+                      showAutomations ? automations : null,
+                    ),
+                  ),
+                ],
+              )
+            : chat;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (desktop)
-              _buildHeader(context, state, showAutomations ? automations : null)
-            else if (!desktop && (approval != null || secretRequest != null))
+            if (!desktop && (approval != null || secretRequest != null))
               SizedBox(height: widget.topInset),
             if (connected && approval != null)
               _buildApprovalBar(context, approval),
@@ -1613,32 +1614,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
 
   // --- the header ------------------------------------------------------------
 
-  /// The one bar above the thread. It carries what used to be scattered over
-  /// the same band with nothing to group it: the coworker and the connection,
-  /// the running automation, and every action on the thread — this view's own
-  /// Documents plus whatever the shell hands down ([AgentsThreadView.actions]),
-  /// all through one widget so they share a glyph size, a hit box and a
-  /// tooltip.
+  /// The floating row over a desktop thread: the relay while it is down, the
+  /// running automation, the coworker's screen, this view's own Documents plus
+  /// whatever the shell hands down ([AgentsThreadView.actions]), all through
+  /// one widget so they share a glyph size, a hit box and a tooltip.
   ///
   /// [automations] is null when there is nothing running, which is what hides
   /// the chip.
   Widget _buildHeader(
     BuildContext context,
     AgentsRelayState state,
-    List<AgentsAutomation>? automations, {
-    bool floating = false,
-  }) {
-    // The phone gets the dense shape: the floating chrome above already shows
-    // the coworker, its face and its presence, and two titles read as two bars.
-    final bool dense = !_useDesktopChat(context);
+    List<AgentsAutomation>? automations,
+  ) {
+    final bool threadOpen = widget.threadKey.isNotEmpty;
     return AgentsThreadHeader(
-      title: widget.title,
-      subtitle: widget.subtitle,
-      // The phone has its own floating chrome with the coworker on it, so the
-      // dense header keeps no subject block and no parked call.
-      agent: dense ? null : widget.headerAgent,
-      onOpenProfile: widget.onOpenAgentProfile,
-      showCallTargets: !dense,
+      showScreenTarget: threadOpen,
       onOpenScreen: widget.onOpenAgentScreen,
       connection: switch (state.phase) {
         AgentsRelayPhase.paired => AgentsThreadConnection.live,
@@ -1648,6 +1638,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         AgentsRelayPhase.error ||
         AgentsRelayPhase.closed => AgentsThreadConnection.down,
       },
+      // A device with no pairing reconnects nowhere: the status panel and the
+      // connect bar carry its way in.
+      onReconnect: _storedPairing == null
+          ? null
+          : () => unawaited(reconnect(force: true)),
       automationLabel: automations == null
           ? null
           : _automationLabel(automations),
@@ -1662,7 +1657,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                 setState(() => _automationsCollapsed = !_automationsCollapsed),
       actions: <AgentsThreadAction>[
         // A thread's documents: none before a thread is open.
-        if (widget.threadKey.isNotEmpty)
+        if (threadOpen)
           AgentsThreadAction(
             icon: Icons.folder_open_outlined,
             tooltip: 'Documents',
@@ -1670,11 +1665,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           ),
         ...widget.actions,
       ],
-      menuActions: dense ? const <AgentsThreadAction>[] : widget.menuActions,
-      leadingInset: dense ? 0 : widget.leadingInset,
-      topInset: dense ? widget.topInset : 0,
-      dense: dense,
-      floating: floating,
+      menuActions: widget.menuActions,
     );
   }
 

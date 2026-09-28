@@ -6,6 +6,8 @@ import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
+import 'package:chuk_chat/widgets/floating_app_bar.dart';
+import 'package:chuk_chat/widgets/settings_list_view.dart';
 
 import '../support/test_app.dart';
 
@@ -72,18 +74,34 @@ void main() {
   }
 
   Future<void> revealControl(WidgetTester tester, Finder finder) async {
-    // Sliver sections can already be mounted below the viewport; existence
-    // alone is not visibility, especially while the contact hero collapses.
+    // The settings list builds every row up front, so a row below the
+    // viewport already exists; existence alone is not visibility.
     for (
       var attempts = 0;
       finder.hitTestable().evaluate().isEmpty && attempts < 40;
       attempts++
     ) {
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -160));
+      await tester.drag(find.byType(SettingsListView), const Offset(0, -160));
       await tester.pumpAndSettle();
     }
     expect(finder.hitTestable(), findsOneWidget);
   }
+
+  /// The switch inside a keyed switch row.
+  Finder switchOf(Finder row) =>
+      find.descendant(of: row, matching: find.byType(Switch));
+
+  /// The page pushed over a starting route, so it has somewhere to go back to.
+  Widget pushed({bool optional = false}) => Builder(
+    builder: (context) => Scaffold(
+      body: TextButton(
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => page(optional: optional)),
+        ),
+        child: const Text('Open settings'),
+      ),
+    ),
+  );
 
   testWidgets('quiet defaults and persisted switches fit a small phone', (
     tester,
@@ -92,13 +110,16 @@ void main() {
     preferences.dispose();
     preferences = MobileChatPreferences();
     await smallPhone(tester, page());
+    // The messenger-typography switch is gone: the chat draws chuk_chat's
+    // type, so the switch had nothing left to change.
+    expect(find.text('Messenger typography'), findsNothing);
     for (final id in ['mobile_show_thinking', 'mobile_show_activity']) {
       final finder = find.byKey(ValueKey(id));
       await revealControl(tester, finder);
-      expect(tester.widget<Switch>(finder).value, isFalse);
+      expect(tester.widget<Switch>(switchOf(finder)).value, isFalse);
       await tester.tap(finder);
       await tester.pumpAndSettle();
-      expect(tester.widget<Switch>(finder).value, isTrue);
+      expect(tester.widget<Switch>(switchOf(finder)).value, isTrue);
     }
     final stored = await SharedPreferences.getInstance();
     expect(stored.getBool(MobileChatPreferences.reasoningKey), isTrue);
@@ -137,19 +158,7 @@ void main() {
   testWidgets(
     'removal requires confirmation and returns before calling deletion',
     (tester) async {
-      await smallPhone(
-        tester,
-        Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => page(optional: true)),
-              ),
-              child: const Text('Open settings'),
-            ),
-          ),
-        ),
-      );
+      await smallPhone(tester, pushed(optional: true));
       await tester.tap(find.text('Open settings'));
       await tester.pumpAndSettle();
       await reveal(tester, 'Remove coworker');
@@ -190,19 +199,7 @@ void main() {
   testWidgets(
     'reference quick actions call real destinations and Chat returns',
     (tester) async {
-      await smallPhone(
-        tester,
-        Builder(
-          builder: (context) => Scaffold(
-            body: TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(builder: (_) => page(optional: true)),
-              ),
-              child: const Text('Open settings'),
-            ),
-          ),
-        ),
-      );
+      await smallPhone(tester, pushed(optional: true));
       await tester.tap(find.text('Open settings'));
       await tester.pumpAndSettle();
       for (final entry in {
@@ -225,18 +222,20 @@ void main() {
     },
   );
 
-  testWidgets('contact hero collapses while back and edit stay reachable', (
-    tester,
-  ) async {
-    await smallPhone(tester, page());
-    final expanded = tester.getSize(find.byType(FlexibleSpaceBar)).height;
-    expect(expanded, 300);
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -420));
+  testWidgets('the settings header keeps back and edit reachable while the '
+      'contact scrolls under it', (tester) async {
+    await smallPhone(tester, pushed());
+    await tester.tap(find.text('Open settings'));
     await tester.pumpAndSettle();
-    final collapsed = tester.getSize(find.byType(FlexibleSpaceBar)).height;
-    expect(collapsed, lessThan(expanded));
+    expect(find.byType(FloatingAppBar), findsOneWidget);
+    expect(find.text('Alex'), findsOneWidget);
+    await tester.drag(find.byType(SettingsListView), const Offset(0, -420));
+    await tester.pumpAndSettle();
     expect(find.byTooltip('Back').hitTestable(), findsOneWidget);
     expect(find.byTooltip('Edit coworker').hitTestable(), findsOneWidget);
+    await tester.tap(find.byTooltip('Edit coworker'));
+    await tester.pumpAndSettle();
+    expect(taps['profile'], 1);
   });
 
   testWidgets('320px large text keeps hero, actions and all sections usable', (

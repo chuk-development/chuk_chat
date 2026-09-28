@@ -1,23 +1,23 @@
 part of 'messenger_shell.dart';
 
-/// The Agents desktop layout (docs/DESIGN.md §14): three docked panes, no
-/// floating chrome.
+/// The Agents desktop layout: chuk_chat's desktop with coworkers in it.
 ///
-///  * **Left** — the roster, resizable between [kDeskRosterMin] and
-///    [kDeskRosterMax], folded to a rail of faces with Ctrl+B. A window too
-///    narrow for roster and thread folds it on its own, without changing what
-///    the user chose.
-///  * **Centre** — the thread (or an open room), under its 48 px title bar.
-///    The one thread view stays mounted behind a room: it owns the socket.
-///  * **Right** — the details pane (the agent panel) or Control Rooms,
-///    resizable between [kDeskDetailsMin] and [kDeskDetailsMax]. It pushes the
-///    thread; it never covers it.
+///  * **Left** — the roster, which is chuk's sidebar ([AgentRosterView]).
+///    Resizable between [kDeskRosterMin] and [kDeskRosterMax], folded to
+///    chuk's mini rail with Ctrl+B. A window too narrow for roster and thread
+///    folds it on its own, without changing what the user chose.
+///  * **Centre** — the thread (or an open room) on the page colour, its
+///    actions floating at the top right as chuk floats "Copy full chat". The
+///    one thread view stays mounted behind a room: it owns the socket.
+///  * **Right** — the details pane (the agent panel) or Control Rooms, in
+///    chuk's artifact panel slot: its header, its left border and its
+///    divider. Resizable between [kDeskDetailsMin] and [kDeskDetailsMax]. It
+///    pushes the thread; it never covers it.
 ///
-/// Panes are divided by 1 px hairlines. The keyboard reaches everything
-/// (§14.7): the shell's focus node sits above the whole body, so a shortcut
-/// works from the composer as well as from anywhere else, and the composer
-/// still gets first say over the keys it uses itself (Esc while editing,
-/// Enter, the arrows).
+/// The keyboard reaches everything: the shell's focus node sits above the
+/// whole body, so a shortcut works from the composer as well as from anywhere
+/// else, and the composer still gets first say over the keys it uses itself
+/// (Esc while editing, Enter, the arrows).
 ///
 /// Nothing here runs below the desktop breakpoint: the phone layout is built
 /// by `_buildPhoneBody` and never reads this state.
@@ -183,7 +183,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     }
   }
 
-  /// The shell's keyboard (§14.7). Returns handled only for its own combos, so
+  /// The shell's keyboard. Returns handled only for its own combos, so
   /// every other key goes on to whatever sits above.
   KeyEventResult _deskOnKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -244,17 +244,29 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   // --- build -------------------------------------------------------------------
 
-  /// The thread's title-bar actions on the desktop: the details toggle as a
-  /// button, everything else in the "…" menu.
+  /// The thread's floating buttons on the desktop: Control Rooms, the
+  /// details pane and, where chuk keeps it, Copy full chat. The coworker's
+  /// profile and rename wait behind "…".
   List<AgentsThreadAction> _deskBarActions(AgentsAgent? agent) =>
       <AgentsThreadAction>[
+        AgentsThreadAction(
+          icon: Icons.groups_outlined,
+          tooltip: 'Control Rooms',
+          onPressed: () => _deskToggleRightPane('rooms'),
+          selected: _deskRightPane == 'rooms',
+        ),
         if (agent != null)
           AgentsThreadAction(
-            icon: Icons.view_sidebar_outlined,
+            icon: Icons.tune,
             tooltip: 'Details (${deskShortcutLabel('Ctrl+.')})',
             onPressed: () => _deskToggleRightPane('details'),
             selected: _deskRightPane == 'details',
           ),
+        AgentsThreadAction(
+          icon: Icons.copy_all_rounded,
+          tooltip: 'Copy full chat',
+          onPressed: () => unawaited(_copyFullChat()),
+        ),
       ];
 
   List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent) =>
@@ -271,16 +283,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             tooltip: 'Rename',
             onPressed: () => unawaited(_openAgentRename(agent)),
           ),
-        AgentsThreadAction(
-          icon: Icons.groups_outlined,
-          tooltip: 'Control Rooms',
-          onPressed: () => _deskToggleRightPane('rooms'),
-        ),
-        AgentsThreadAction(
-          icon: Icons.copy_all_rounded,
-          tooltip: 'Copy Debug Chat',
-          onPressed: () => unawaited(_copyFullChat()),
-        ),
       ];
 
   Widget _buildDesktopBody(
@@ -289,7 +291,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     AgentsAgent? agent,
   ) {
     final ThemeData theme = Theme.of(context);
-    final ColorScheme scheme = theme.colorScheme;
+    final Color iconFg = theme.resolvedIconColor;
 
     // The right pane first: it is what the user opened last.
     final AgentsAgent? detailsAgent = agent;
@@ -311,7 +313,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     final double rosterW = rail ? kDeskRailWidth : rosterFull;
     // A window that is still too narrow gives the right pane what is left
     // over a minimal thread, and drops it when not even that fits.
-    final double roomForRight = width - rosterW - 2 - 320;
+    final double roomForRight = width - rosterW - 320;
     if (wantsRight && rightW > roomForRight) {
       rightW = roomForRight >= 240 ? roomForRight : 0;
     }
@@ -362,7 +364,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
             child: _buildThread(
               actions: _deskBarActions(agent),
               menuActions: _deskMenuActions(agent),
-              onOpenSubject: (_) => _deskToggleRightPane('details'),
             ),
           ),
         ),
@@ -389,24 +390,30 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             SizedBox(width: rosterW, child: roster),
-            const DeskHairline(vertical: true),
             Expanded(child: centre),
-            if (right != null) ...<Widget>[
-              const DeskHairline(vertical: true),
-              SizedBox(
+            if (right != null)
+              // chuk's artifact panel slot: the page colour, a left border.
+              Container(
                 key: const ValueKey<String>('desk-right-pane'),
                 width: rightW,
+                decoration: BoxDecoration(
+                  color: theme.scaffoldBackgroundColor,
+                  border: Border(
+                    left: BorderSide(color: iconFg.withValues(alpha: 0.2)),
+                  ),
+                ),
                 child: right,
               ),
-            ],
           ],
         ),
         if (!rail)
           Positioned(
             key: const ValueKey<String>('desk-roster-resize'),
-            left: rosterW - 4 + 0.5,
+            left: rosterW - 3,
             top: 0,
             bottom: 0,
+            // No line: the panel colour already changes at this border, as
+            // it does at chuk's sidebar.
             child: PaneResizeHandle(
               semanticLabel: 'Resize the agent list',
               onDrag: (double dx) => setState(
@@ -427,11 +434,12 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
         if (right != null)
           Positioned(
             key: const ValueKey<String>('desk-details-resize'),
-            right: rightW - 4 + 0.5,
+            right: rightW - 3,
             top: 0,
             bottom: 0,
             child: PaneResizeHandle(
               semanticLabel: 'Resize the details pane',
+              lineColor: iconFg.withValues(alpha: 0.15),
               onDrag: (double dx) => setState(
                 () => _deskDetailsWidth =
                     (_deskDetailsWidth.clamp(kDeskDetailsMin, kDeskDetailsMax) -
@@ -448,50 +456,35 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       ],
     );
 
-    // Compact density and 14 px body text for everything the desktop draws
-    // itself (§14.8). The message text keeps the user's chat font size: the
-    // chat screen reads it from its own settings, not from the text theme.
-    final ThemeData desk = theme.copyWith(
-      visualDensity: VisualDensity.compact,
-      textTheme: theme.textTheme.copyWith(
-        bodyMedium: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-      ),
-    );
-
-    return MenuDensity(
-      child: Theme(
-        data: desk,
-        child: Focus(
-          focusNode: _deskFocus,
-          autofocus: true,
-          onKeyEvent: _deskOnKey,
-          child: ColoredBox(color: scheme.surface, child: body),
-        ),
-      ),
+    return Focus(
+      focusNode: _deskFocus,
+      autofocus: true,
+      onKeyEvent: _deskOnKey,
+      child: ColoredBox(color: theme.scaffoldBackgroundColor, child: body),
     );
   }
 
-  /// The details pane: the agent panel under the pane header.
+  /// The details pane: the agent panel under chuk's panel header.
   Widget _buildDeskDetailsPane(BuildContext context, AgentsAgent agent) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     final String sessionKey = agent.threads.isEmpty
         ? agent.id
         : agent.threads.first.key;
     return Material(
-      color: scheme.surfaceContainerLow,
+      type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          DeskPaneHeader(
-            title: 'Details',
+          PaneHeader.text(
+            icon: Icons.tune,
+            text: 'Details',
             actions: <Widget>[
-              DeskIconButton(
-                icon: Icons.refresh,
+              IconButton(
+                icon: const AppIcon(Icons.refresh, size: 18),
                 tooltip: 'Refresh',
                 onPressed: () => unawaited(_deskRefreshDetails(sessionKey)),
               ),
-              DeskIconButton(
-                icon: Icons.close,
+              IconButton(
+                icon: const AppIcon(Icons.close, size: 18),
                 tooltip: 'Close (Esc)',
                 onPressed: _deskCloseRightPane,
               ),
@@ -532,24 +525,24 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     }
   }
 
-  /// Control Rooms in the right pane: the room list under the pane header.
+  /// Control Rooms in the right pane: the room list under chuk's panel header.
   Widget _buildDeskRoomsPane(BuildContext context) {
-    final ColorScheme scheme = Theme.of(context).colorScheme;
     return Material(
-      color: scheme.surfaceContainerLow,
+      type: MaterialType.transparency,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          DeskPaneHeader(
-            title: 'Control Rooms',
+          PaneHeader.text(
+            icon: Icons.groups_outlined,
+            text: 'Control Rooms',
             actions: <Widget>[
-              DeskIconButton(
-                icon: Icons.group_add_outlined,
+              IconButton(
+                icon: const AppIcon(Icons.group_add_outlined, size: 18),
                 tooltip: 'New room (${deskShortcutLabel('Ctrl+Shift+N')})',
                 onPressed: () => unawaited(_openRoomCreate()),
               ),
-              DeskIconButton(
-                icon: Icons.close,
+              IconButton(
+                icon: const AppIcon(Icons.close, size: 18),
                 tooltip: 'Close',
                 onPressed: _deskCloseRightPane,
               ),
@@ -561,70 +554,34 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
     );
   }
 
-  /// A room in the centre pane: the same 48 px bar the thread has, then the
-  /// room itself.
+  /// A room in the centre pane. Its name and faces are the room's own intro
+  /// line; its two actions float at the top right, where the thread's do.
   Widget _buildDeskRoom(BuildContext context, AgentsRoom room) {
-    final ThemeData theme = Theme.of(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+    return Stack(
       children: <Widget>[
-        SizedBox(
-          height: kDeskBarHeight - 1,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 8, 0),
-            child: Row(
-              children: <Widget>[
-                RoomFaces(
-                  members: room.members,
-                  size: 28,
-                  store: _agentProfiles,
-                  ringColor: theme.scaffoldBackgroundColor,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        room.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.titleSmall?.copyWith(
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Text(
-                        roomMembersLabel(room),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                DeskIconButton(
-                  icon: Icons.group_outlined,
-                  tooltip: 'Members',
-                  onPressed: () => unawaited(_manageRoomMembers(room.id)),
-                ),
-                const SizedBox(width: kDeskButtonGap),
-                DeskIconButton(
-                  icon: Icons.close,
-                  tooltip: 'Close room (Esc)',
-                  onPressed: _deskCloseRoom,
-                ),
-              ],
-            ),
-          ),
-        ),
-        const DeskHairline(),
-        Expanded(
+        Positioned.fill(
           child: KeyedSubtree(
             key: ValueKey<String>('desk-room-${room.id}'),
             child: _buildRoomBody(room),
+          ),
+        ),
+        Positioned(
+          top: kTopInitialSpacing,
+          right: 12,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              ChromeIconButton(
+                icon: Icons.group_outlined,
+                tooltip: 'Members',
+                onPressed: () => unawaited(_manageRoomMembers(room.id)),
+              ),
+              ChromeIconButton(
+                icon: Icons.close,
+                tooltip: 'Close room (Esc)',
+                onPressed: _deskCloseRoom,
+              ),
+            ],
           ),
         ),
       ],

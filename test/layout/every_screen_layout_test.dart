@@ -29,13 +29,13 @@ import 'package:chuk_chat/pages/coming_soon_page.dart';
 import 'package:chuk_chat/pages/agents_pairing_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
+import 'package:chuk_chat/pages/diagnostics_settings_page.dart';
 import 'package:chuk_chat/pages/login_page.dart';
+import 'package:chuk_chat/pages/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
-import 'package:chuk_chat/pages/settings/developer_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
-import 'package:chuk_chat/pages/settings/mcp_connectors_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
@@ -96,6 +96,21 @@ const Map<String, String> _cannotMount = <String, String>{
       'WorkspaceStorageService in initState, which has no seam to seed one; '
       'a missing workspace shows a notification and pops the route from '
       'inside initState.',
+};
+
+/// Screens that draw upstream chuk_chat's settings frame and rows in BOTH
+/// builds (docs/AGENTS_UI_UNIFY.md, section 5), so the Agents pass does not
+/// hold them to 48 dp either: chuk's sizes win. Overflow, bleed, throws and
+/// tiny text are still checked. Never add a screen here to hide a new small
+/// control; add it only when the size is chuk_chat's own.
+const Map<String, String> _chukSizes = <String, String>{
+  'theme_page': 'upstream\'s 32 dp colour swatches',
+  'desktop_settings_modal': 'upstream\'s 40 dp navigation rows',
+  'automations_page': 'the 42 dp refresh chip of the floating header',
+  'agents_skills_settings_page': 'the 42 dp refresh chip of the floating '
+      'header',
+  'mobile_agents_settings_page': 'the 42 dp edit chip of the floating header',
+  'agent_profile_page': 'the 42 dp edit chip of the floating header',
 };
 
 /// Anything a screen made that has to be thrown away afterwards.
@@ -221,6 +236,8 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('about_page', (_) => const AboutPage()),
   _Screen('secrets_settings_page', (_) => const SecretsSettingsPage()),
   _Screen('skills_settings_page', (_) => const SkillsSettingsPage()),
+  _Screen('agents_skills_settings_page',
+      (_) => const AgentsSkillsSettingsPage()),
   _Screen('automations_page', (_) => const AutomationsPage()),
   _Screen('login_page', (_) => const LoginPage()),
   _Screen('agents_pairing_page',
@@ -232,12 +249,11 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('usage_details_page', (_) => const UsageDetailsPage()),
   _Screen('desktop_settings_modal',
       (_) => Scaffold(body: DesktopSettingsModal(config: testShellConfig()))),
-  _Screen('settings/developer_settings_page',
-      (_) => const DeveloperSettingsPage()),
+  _Screen('diagnostics_settings_page', (_) => const DeveloperOptionsPage()),
   _Screen('settings/embedding_settings_page',
       (_) => const EmbeddingSettingsPage()),
   _Screen('settings/herenow_settings_page', (_) => const HereNowSettingsPage()),
-  _Screen('settings/mcp_connectors_page', (_) => const McpConnectorsPage()),
+  _Screen('mcp_connectors_page', (_) => const McpConnectorsPage()),
   _Screen('agent_profile_page', (_Bag bag) {
     final LocalAgentRosterSource source = LocalAgentRosterSource(
       seed: _roster(),
@@ -666,11 +682,12 @@ void main() {
     expect(planted, isNotEmpty, reason: 'the overflow was not seen');
   });
 
-  // Both builds. The Agents build holds every control to 48 dp; with
-  // FEATURE_AGENTS off the screens are upstream chuk_chat's exactly (pinned by
-  // test/widgets/flag_off_parity_test.dart), including upstream's 40 dp
-  // settings rows and 32 dp colour swatches, so that pass checks overflow,
-  // bleed, throws and tiny text but not the target size.
+  // Both builds. The Agents build holds every control to 48 dp, except on the
+  // screens in [_chukSizes], which draw upstream's settings in both builds;
+  // with FEATURE_AGENTS off the screens are upstream chuk_chat's exactly
+  // (pinned by test/widgets/flag_off_parity_test.dart), including upstream's
+  // 40 dp settings rows and 32 dp colour swatches, so that pass checks
+  // overflow, bleed, throws and tiny text but not the target size.
   for (final bool agents in <bool>[true, false]) {
     final String build = agents ? '' : ' (FEATURE_AGENTS off)';
     for (final _Screen screen in _screens()) {
@@ -718,7 +735,9 @@ void main() {
             reason: '$where paints past the edge:\n  ${bleed.join('\n  ')}',
           );
           expect(
-            agents ? small : const <SmallTarget>[],
+            agents && !_chukSizes.containsKey(screen.name)
+                ? small
+                : const <SmallTarget>[],
             isEmpty,
             reason: '$where has controls under 48 dp:\n  ${small.join('\n  ')}',
           );
