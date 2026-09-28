@@ -302,7 +302,6 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool _isLoadingChat = false; // Loading indicator for chat switching
   StreamSubscription<void>? _providerRefreshSubscription;
   final StreamingManager _streamingManager = StreamingManager();
-  final ToolCallHandler _toolCallHandler = ToolCallHandler();
 
   // Computed property - checks if CURRENT chat is streaming
   bool get _isStreaming =>
@@ -311,6 +310,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   // Agents: the thread opens at its bottom (see ChatScrollMixin).
   @override
   bool get anchoredTranscript => widget.agentsThread;
+
+  // Agents: the thread saves its model only when it changed (see
+  // ChatModelSelectionMixin).
+  @override
+  bool get skipRepeatedModelSave => widget.agentsThread;
 
   @override
   List<Map<String, String>> get transcriptRows => _messages;
@@ -333,7 +337,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   bool get _isLinuxDesktop =>
       !kIsWeb && defaultTargetPlatform == TargetPlatform.linux;
 
-  final MessageRenderCache _messageRenderCache = MessageRenderCache();
+  /// The Agents thread shares one decode cache across mounts; chuk_chat's
+  /// screen keeps its own (see [MessageRenderCache]).
+  late final MessageRenderCache _messageRenderCache = MessageRenderCache(
+    shared: widget.agentsThread,
+  );
 
   static const double _kMaxChatContentWidth = 760.0;
   static const double _kSearchBarContentHeight = 135.0;
@@ -361,6 +369,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void initState() {
     super.initState();
     initShiftKeyTracker();
+    // chuk_chat's screen builds its tool loop on mount, as before, so the
+    // tools are ready by the first send. The Agents thread does not: the host
+    // runs every tool. Each send still picks its loop by chat id.
+    if (!widget.agentsThread) ToolCallHandler.warmUp();
     // Mode + its config (model, provider, reasoning) restore once, via
     // loadSavedModelPreference in the post-frame pass below — the single
     // entry point, so startup writes and picked-model refreshes run once.
@@ -1240,7 +1252,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   Future<void> _loadSystemPrompt() async {
     try {
       final systemPrompt =
-          await UserPreferencesService.loadSystemPromptForMount();
+          await UserPreferencesService.loadSystemPromptForMount(
+            reuseCached: widget.agentsThread,
+          );
       if (!mounted) return;
       setState(() {
         _systemPrompt = systemPrompt;
@@ -2223,7 +2237,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                         behavior: ScrollConfiguration.of(context)
                             .copyWith(scrollbars: false),
                         child: KeyedSubtree(
-                          key: TourKeyRegistry.instance.keyFor(
+                          key: TourKeyRegistry.instance.anchorFor(
                             TourSlots.chatInput,
                           ),
                           child: TextField(
@@ -2505,7 +2519,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return ValueListenableBuilder<int>(
       valueListenable: ModelCapabilitiesService.revision,
       builder: (context, _, _) => KeyedSubtree(
-        key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+        key: TourKeyRegistry.instance.anchorFor(TourSlots.modelDropdown),
         child: ChatModeSelector(
           mode: chatMode,
           // Match the round composer icon buttons (mic, voice, attach) beside

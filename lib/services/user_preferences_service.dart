@@ -8,7 +8,6 @@ import 'package:chuk_chat/services/model_cache_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/services/current_user.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 
 class UserPreferencesService {
   const UserPreferencesService._();
@@ -59,14 +58,18 @@ class UserPreferencesService {
 
   /// Save the user's selected model to Supabase
   ///
-  /// In the Agents build the chat screen mounts again on every agent switch,
-  /// and each mount restores the chat mode, which saves its model. The same id
-  /// went to Supabase on every switch, and each upsert came back as a realtime
-  /// event that reloaded the provider. So in that build a save of the id this
-  /// process already wrote is skipped: only a real change goes out.
-  static Future<bool> saveSelectedModel(String modelId) async {
+  /// [skipIfUnchanged] is for the Agents thread screen. It mounts again on
+  /// every agent switch, and each mount restores the chat mode, which saves
+  /// its model. The same id went to Supabase on every switch, and each upsert
+  /// came back as a realtime event that reloaded the provider. With it set, a
+  /// save of the id this process already wrote is skipped: only a real change
+  /// goes out. chuk_chat's screen saves every time, in the Agents build too.
+  static Future<bool> saveSelectedModel(
+    String modelId, {
+    bool skipIfUnchanged = false,
+  }) async {
     _syncCacheToCurrentUser(CurrentUser.id);
-    if (agentsChatCore && modelId == _lastSavedModelId) return true;
+    if (skipIfUnchanged && modelId == _lastSavedModelId) return true;
     try {
       final session = SupabaseService.auth.currentSession;
       if (session == null) {
@@ -789,12 +792,14 @@ class UserPreferencesService {
   ///
   /// chuk_chat mounts its chat screen once and keeps it, so the fresh read of
   /// [loadSystemPrompt] (a Supabase select and a decrypt) happened once per
-  /// session. The Agents build mounts the screen again on every agent switch;
-  /// there the prompt this process already decrypted is reused, and only the
-  /// first mount goes to the network. [saveSystemPrompt], [clearSystemPrompt]
-  /// and a change of user all replace or drop that copy.
-  static Future<String?> loadSystemPromptForMount() async {
-    if (agentsChatCore) {
+  /// session. The Agents thread screen mounts again on every agent switch and
+  /// passes [reuseCached]: the prompt this process already decrypted is
+  /// reused, and only the first mount goes to the network. [saveSystemPrompt],
+  /// [clearSystemPrompt] and a change of user all replace or drop that copy.
+  static Future<String?> loadSystemPromptForMount({
+    bool reuseCached = false,
+  }) async {
+    if (reuseCached) {
       _syncCacheToCurrentUser(CurrentUser.id);
       final cached = _systemPromptMemCache;
       if (cached != null) return cached.isEmpty ? null : cached;

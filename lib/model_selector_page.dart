@@ -1063,7 +1063,7 @@ class _ModelSelectionRowState extends State<ModelSelectionRow> {
         );
         final Widget keyedPill = widget.isFirstRow
             ? KeyedSubtree(
-                key: TourKeyRegistry.instance.keyFor(
+                key: TourKeyRegistry.instance.anchorFor(
                   TourSlots.modelProviderPill,
                 ),
                 child: pill,

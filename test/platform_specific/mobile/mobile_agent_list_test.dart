@@ -154,6 +154,61 @@ void main() {
     expect(find.textContaining('Unread'), findsOneWidget);
   });
 
+  testWidgets('with a header slot the row is chuk\'s bar: the slot takes the '
+      'middle, search still opens and closes, All / Unread sits under it',
+      (tester) async {
+    await pumpPhone(
+      tester,
+      MobileAgentList(
+        source: rosterWith(sample()),
+        onSelect: (_, _) {},
+        onAddAgent: () {},
+        now: () => now,
+        headerCenter: const SizedBox(
+          key: ValueKey<String>('slot'),
+          width: 120,
+          height: 48,
+        ),
+      ),
+    );
+    final Rect slot = tester.getRect(find.byKey(const ValueKey<String>('slot')));
+    final Rect search = tester.getRect(findId('mobile_home_search'));
+    final Rect add = tester.getRect(findId('mobile_home_add'));
+    // chuk's bar: 48 px presses around 42 px chips, the slot left-aligned
+    // 8 px right of the first chip, all on one line under the status bar.
+    expect(search.size, const Size(48, 48));
+    expect(add.size, const Size(48, 48));
+    expect(slot.left, 10 + 42 + 8);
+    expect(slot.top, kPhonePadding.top + 8);
+    expect(add.right, kPhoneSize.width - 7);
+    // All / Unread moved under the bar and kept its unread count segment.
+    final Rect all = tester.getRect(findId('connected-group-all'));
+    expect(all.top, greaterThanOrEqualTo(slot.bottom));
+    expect(find.textContaining('Unread'), findsOneWidget);
+    // The first row clears the filter row.
+    final Rect first = tester.getRect(findId('mobile-agent-row-chief'));
+    expect(first.top, greaterThanOrEqualTo(all.bottom));
+
+    await tester.tap(findId('mobile_home_search'));
+    await tester.pumpAndSettle();
+    expect(find.byType(TextField), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('slot')), findsNothing);
+    await tester.enterText(find.byType(TextField), 'ops');
+    await tester.pumpAndSettle();
+    expect(find.text('Design'), findsNothing);
+    await tester.tap(findId('mobile_home_search_close'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey<String>('slot')), findsOneWidget);
+    expect(find.text('Design'), findsOneWidget);
+
+    // The filter still filters: a coworker that never did anything has
+    // nothing unread.
+    expect(find.text('Inbox Triage'), findsOneWidget);
+    await tester.tap(find.textContaining('Unread'));
+    await tester.pumpAndSettle();
+    expect(find.text('Inbox Triage'), findsNothing);
+  });
+
   testWidgets('tap opens the first thread; a coworker without threads is inert',
       (tester) async {
     final List<(String, String)> selected = <(String, String)>[];

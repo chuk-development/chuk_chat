@@ -180,3 +180,59 @@ Follow-ups: `chuk_chat-vm03` (DESIGN.md), `chuk_chat-yufx` (phone chat
 inset), `chuk_chat-2cp2` (leftover Agents kit), `chuk_chat-ejx`,
 `chuk_chat-kub3`, `chuk_chat-m1vl`, `chuk_chat-p2t3`, `chuk_chat-ac7z`,
 then `chuk_chat-18v` (Chat | Agents switch).
+
+## Per-chat routing (2026-09-28, `chuk_chat-w9n5`)
+
+`agentsChatCore` means "this is the Agents build", nothing more. Inside that
+build each chat takes its side by its id (`ChatOrigin.isAgentsThread`: a
+host session key, or a key the Agents code claimed; a UUID is chuk_chat's):
+
+| | chuk_chat chat | Agents thread |
+|---|---|---|
+| send | `_sendHosted` (multiplex `/v2/ws`) | `AgentsChatTransport` (relay) |
+| tool loop | `ToolCallHandler` (client) | `AgentsToolCallHandler` (fold) |
+| silence | 60 s idle timeout | log-only watch |
+| cloud / queue | `encrypted_chats` / `OfflineQueueService` | `cowork_chats` / `AgentsTaskOutbox` |
+| lists | chuk sidebar, chat search | Agents roster (host) |
+
+Entry points: `WebSocketChatService.usesAgentsTransport(chatId)`,
+`ToolCallHandler.forChat(chatId)` (resolved per send),
+`StreamingManager.idleTimeoutEnabledFor(chatId)`. A send with no chat id
+(titles, offline executor, assistant overlay) is hosted. An Agents thread
+gets no auto-title.
+
+The chat screen follows its surface, not the build: `messengerMode` (phone
+thread) and `agentsThread` (desktop thread) turn on the shared render cache,
+the cached system prompt, the "save the model only when it changed" rule and
+skip the tool-loop warm-up. chuk's `RootWrapper` passes neither.
+
+Storage start: `SessionManagerService` / `AppInitializationService` run in
+both builds and own chuk_chat's sidebar load, sync and preload.
+`AgentsChatStorageBootstrap` repeats the sidebar load and sync start (both
+idempotent) and owns only the Agents part (outbox flush and pull, repairs).
+Token refresh stays build-level: in the Agents build every rotation goes
+through `SessionRefreshScheduler`, and the hosted socket gets each new token
+through `MultiplexSession`'s auth bridge.
+
+## Settings for both halves (2026-09-29, `chuk_chat-osd1`)
+
+The "Chat" half of the Agents build is chuk_chat, so its settings are back.
+This replaces the "Left out in Agents" line under Result, C.
+
+* Phone `SettingsPage` and desktop modal, Agents build, in chuk's order:
+  Model Selection, AI Identity & Memory, Tool Calling, Connectors, Skills
+  (chuk's `SkillsSettingsPage`), Assistant (Android only), GitHub. Then the
+  Agents section: here.now, Embedding, API Keys, Automations, Host skills
+  (`AgentsSkillsSettingsPage`, page title "Host skills").
+* The onboarding replay stays hidden in the Agents build: that build wires
+  no tour (`TourKeyRegistry.anchorFor` is null there). The phone page takes
+  its tour keys through `anchorFor` too, so two mounted settings pages never
+  share a `GlobalKey`.
+* Customization "Full log" and Developer options "Verbose view": only an
+  Agents thread reads `VerboseService`, so both stay Agents-build rows; the
+  subtitles now say "in an Agents thread". "API base" stays build-level.
+* Connectors show both views in the Agents build: the badge is the host's
+  (`McpService.probe`, for an Agents thread), the line under the name and the
+  detail page's device check are this device's (`verifyReachable`, for a
+  chuk_chat chat, which calls the server through `McpService.call`). The
+  detail page offers Reconnect when either side fails.

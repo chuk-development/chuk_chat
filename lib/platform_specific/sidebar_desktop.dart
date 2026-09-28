@@ -268,7 +268,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
               children: [
                 const UpdateBanner(),
                 KeyedSubtree(
-                  key: TourKeyRegistry.instance.keyFor(TourSlots.settingsEntry),
+                  key: TourKeyRegistry.instance.anchorFor(TourSlots.settingsEntry),
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(
                       kSbBlockInset,

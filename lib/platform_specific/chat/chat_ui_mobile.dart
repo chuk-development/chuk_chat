@@ -50,6 +50,7 @@ import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/message_composition_service.dart';
 import 'package:chuk_chat/services/multiplex_session.dart';
 import 'package:chuk_chat/services/title_generation_service.dart';
+import 'package:chuk_chat/services/tool_call_handler.dart';
 import 'package:chuk_chat/services/app_lifecycle_service.dart';
 import 'package:chuk_chat/core/model_selection_events.dart';
 import 'package:chuk_chat/widgets/composer_recording.dart';
@@ -205,7 +206,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   final TextEditingController composerController = TextEditingController();
   final List<Map<String, String>> _messages = [];
 
-  final MessageRenderCache _messageRenderCache = MessageRenderCache();
+  /// The Agents thread shares one decode cache across mounts; chuk_chat's
+  /// screen keeps its own (see [MessageRenderCache]).
+  late final MessageRenderCache _messageRenderCache = MessageRenderCache(
+    shared: widget.messengerMode,
+  );
   String? _activeChatId;
 
   // Answer-version pager plumbing (seed stash/restore/fold) lives in
@@ -353,6 +358,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   bool get anchoredTranscript => widget.messengerMode;
 
+  // Agents: the thread saves its model only when it changed (see
+  // ChatModelSelectionMixin).
+  @override
+  bool get skipRepeatedModelSave => widget.messengerMode;
+
   @override
   List<Map<String, String>> get transcriptRows => _messages;
 
@@ -387,6 +397,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void initState() {
     super.initState();
+    // chuk_chat's screen builds its tool loop on mount, as before, so the
+    // tools are ready by the first send. The Agents thread does not: the host
+    // runs every tool. Each send still picks its loop by chat id.
+    if (!widget.messengerMode) ToolCallHandler.warmUp();
     _initializeHandlers();
     _initializeListeners();
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
@@ -3257,7 +3271,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   Future<void> _loadSystemPrompt() async {
     try {
       final systemPrompt =
-          await UserPreferencesService.loadSystemPromptForMount();
+          await UserPreferencesService.loadSystemPromptForMount(
+            reuseCached: widget.messengerMode,
+          );
       if (!mounted) return;
       setState(() {
         _systemPrompt = systemPrompt;
@@ -3713,7 +3729,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     return ValueListenableBuilder<int>(
       valueListenable: ModelCapabilitiesService.revision,
       builder: (context, _, _) => KeyedSubtree(
-        key: TourKeyRegistry.instance.keyFor(TourSlots.modelDropdown),
+        key: TourKeyRegistry.instance.anchorFor(TourSlots.modelDropdown),
         child: ChatModeSelector(
           mode: chatMode,
           showLabel: false,
@@ -3873,7 +3889,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               controller: composerController,
               onSend: sendOrSubmitEdit,
               child: KeyedSubtree(
-                key: TourKeyRegistry.instance.keyFor(TourSlots.chatInput),
+                key: TourKeyRegistry.instance.anchorFor(TourSlots.chatInput),
                 // Hidden composer scrollbar (reads as clutter); the field grows
                 // to ~8 lines before it scrolls.
                 child: ScrollConfiguration(

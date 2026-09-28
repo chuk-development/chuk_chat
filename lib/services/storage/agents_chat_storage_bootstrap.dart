@@ -6,6 +6,16 @@
 /// two things chuk_chat does — read the sidebar titles from the local cache
 /// (instant, no network) and start the 30 s cloud poll — and undoes them on
 /// sign-out. `main.dart` calls [AgentsChatStorageBootstrap.start] once.
+///
+/// Since the merge, `SessionManagerService` and `AppInitializationService`
+/// run in the Agents build as well, after the first frame. They load the same
+/// sidebar titles and start the same poll, which now also syncs chuk_chat's
+/// chats for the "Chat" side. That is no double work: the sidebar load
+/// returns at once when the cache is loaded (or joins the load in flight),
+/// `ChatSyncService.start` and `ChatMaintenanceController.ensureReady` are
+/// idempotent, and the cache migration runs once per user. What only this
+/// class does is the Agents part: the `cowork_chats` outbox flush and pull,
+/// the cache repairs and the remembered read key.
 library;
 
 import 'dart:async';

@@ -3,9 +3,10 @@
 // Upstream chuk_chat runs a full client-side tool loop (discovery, execution,
 // fact-check, retry, continuation passes) against its own ToolExecutor. In
 // Agents the HOST runs every tool; the client must never dispatch one.
-// `ToolCallHandler()` returns this handler when `kFeatureAgents` is on and
-// upstream's real loop when it is off. The chat UI talks to both through the
-// same `ToolCallHandler` interface, so no call site branches on the flag.
+// `ToolCallHandler.forChat(chatId)` returns this handler for an Agents thread
+// and upstream's real loop for every other chat, a chuk_chat chat in the
+// Agents build included. The chat UI talks to both through the same
+// `ToolCallHandler` interface, so no call site branches on the flag.
 //
 // `processAssistantResponse` ALWAYS returns a final answer with
 // `shouldContinue == false`, so `startStreamPass` runs exactly once per turn
@@ -27,7 +28,8 @@ import 'package:chuk_chat/services/tool_executor.dart';
 ///
 /// Implements (does not extend) [ToolCallHandler]: upstream's constructor
 /// registers the built-in tools and MCP listeners, and none of that may run
-/// in an Agents build.
+/// for an Agents thread. It runs in the Agents build only once a chuk_chat
+/// chat needs it.
 class AgentsToolCallHandler implements ToolCallHandler {
   AgentsToolCallHandler._internal();
 
@@ -36,9 +38,9 @@ class AgentsToolCallHandler implements ToolCallHandler {
 
   final ToolExecutor _toolExecutor = ToolExecutor();
 
-  /// The stub drops the client tool LOOP, not the executor's registry:
-  /// `pages/tool_calling_settings_page.dart` reads this to list the tools and
-  /// their on/off state, and nothing here dispatches a tool.
+  /// The stub drops the client tool LOOP, not the executor's registry.
+  /// Nothing here dispatches a tool. (The tool settings page reads upstream's
+  /// executor: its switches drive chuk_chat's own chats.)
   @override
   ToolExecutor get toolExecutor => _toolExecutor;
 

@@ -8,11 +8,11 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/skill.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/platform_config.dart';
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
 import 'package:chuk_chat/services/per_model_system_prompt_service.dart';
 import 'package:chuk_chat/services/skills/skill_registry.dart';
 import 'package:chuk_chat/services/skills/skills_catalog_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/tool_enforcer.dart';
 import 'package:chuk_chat/services/tool_executor.dart';
@@ -424,11 +424,28 @@ class ToolCallHandler {
 
   static final ToolCallHandler _instance = ToolCallHandler._internal();
 
-  /// The build picks the loop. With `FEATURE_AGENTS` off this is upstream's
-  /// client-side tool loop below; with it on, the host runs every tool and
-  /// [AgentsToolCallHandler] only folds the host's run into the reply.
-  factory ToolCallHandler() =>
-      agentsChatCore ? AgentsToolCallHandler.instance : _instance;
+  /// Upstream's client-side tool loop below. The first call builds it, which
+  /// starts the tool registry, the MCP watchers and the skill catalog.
+  ///
+  /// A turn does not take its loop from here: it asks [forChat], because in
+  /// the Agents build the chat decides which loop runs.
+  factory ToolCallHandler() => _instance;
+
+  /// The loop for [chatId]'s turn. An Agents thread
+  /// ([ChatOrigin.isAgentsThread]) gets [AgentsToolCallHandler]: the host runs
+  /// every tool and the fold only puts the host's run into the reply. Every
+  /// other chat gets upstream's loop, a chuk_chat chat in the Agents build
+  /// included. Resolve it when the turn starts, not once per screen.
+  static ToolCallHandler forChat(String? chatId) =>
+      ChatOrigin.isAgentsThread(chatId)
+      ? AgentsToolCallHandler.instance
+      : _instance;
+
+  /// Builds upstream's loop now instead of at the first send, so the tool
+  /// catalog, the MCP connectors and the skills are in place by then.
+  /// chuk_chat's chat screen calls this when it mounts; the Agents thread
+  /// does not, because the host runs every tool there.
+  static void warmUp() => ToolCallHandler();
 
   final ToolExecutor _toolExecutor = ToolExecutor();
   static const int _maxEmptyFinalRecoveryAttempts = 3;

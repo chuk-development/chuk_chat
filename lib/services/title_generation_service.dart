@@ -1,7 +1,8 @@
 // lib/services/title_generation_service.dart
 // MERGE NOTE: the Agents build stubbed this file to a no-op (its sidebar listed
 // coworkers, not chats, so there was no title to generate). Upstream's real
-// generator is kept; an Agents thread now gets an auto-title like any chat.
+// generator is kept for chuk_chat chats, in both builds. An Agents thread is
+// not titled here (see [TitleGenerationService.generateAndApplyTitle]).
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -15,6 +16,7 @@ import 'package:chuk_chat/services/websocket_chat_service.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/utils/json_helpers.dart';
 import 'package:chuk_chat/services/current_user.dart';
 
@@ -638,6 +640,11 @@ Rules:
     String chatId,
     String firstMessage,
   ) async {
+    // Not for an Agents thread. The title request carries no chat id, so it
+    // is a hosted send, and an Agents thread's text goes to the paired host
+    // only. The relay would not do either: it drops the system prompt, so the
+    // host would get the first message a second time as a new task.
+    if (ChatOrigin.isAgentsThread(chatId)) return;
     // Privacy: Only log non-sensitive metadata
     if (kDebugMode) {
       debugPrint(

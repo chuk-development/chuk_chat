@@ -63,9 +63,12 @@ class _Rig {
 }
 
 void main() {
-  // This is the Agents behaviour. Tests run with FEATURE_AGENTS off, where the
-  // upstream 60-second idle timeout applies (streaming_idle_timeout_test.dart),
-  // so the silence watch is switched on through the manager's test seam.
+  // This is the Agents thread behaviour. Tests run with FEATURE_AGENTS off,
+  // where the upstream 60-second idle timeout applies
+  // (streaming_idle_timeout_test.dart), so the Agents build is switched on
+  // through the test seam. Every rig's chat id is a session key, not a UUID,
+  // so it is an Agents thread; a chuk_chat chat in the same build keeps the
+  // idle timeout.
   setUp(() => debugAgentsChatCoreOverride = true);
   tearDown(() => debugAgentsChatCoreOverride = null);
 

@@ -1,8 +1,8 @@
 // One destination list for both builds: upstream's, as the phone's
-// SettingsPage has it. With Agents on, the rows that do nothing there are left
-// out (identity, tool calling, the onboarding replay), Skills opens the host's
-// skills, and one 'Agents' group adds here.now, Embedding, API Keys and
-// Automations.
+// SettingsPage has it. The Agents build keeps every chuk row, because its
+// "Chat" half is chuk_chat and reads them; only the onboarding replay is left
+// out there (that build wires no tour). One 'Agents' group adds here.now,
+// Embedding, API Keys, Automations and the host's own skills.
 // lib/pages/desktop_settings_modal.dart
 //
 // Desktop settings as a modal popup over the chat UI — a proper desktop
@@ -213,26 +213,22 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
               'default modell auswahl',
           builder: (_) => const ModelSelectorPage(),
         ),
-        // Agents: the host owns the system prompt and runs every tool, so
-        // neither page is read there.
-        if (!agentsChatCore)
-          _SettingsDest(
-            id: 'identity',
-            icon: Icons.fingerprint,
-            label: l.aiIdentityMemory,
-            keywords: 'identity memory system prompt name persona custom '
-                'instructions identität gedächtnis erinnerung anweisungen',
-            builder: (_) => const SystemPromptPage(),
-          ),
-        if (!agentsChatCore)
-          _SettingsDest(
-            id: 'tools',
-            icon: Icons.build_circle_outlined,
-            label: l.toolCalling,
-            keywords: 'tools tool calling function functions artifacts code '
-                'sandbox web search discovery activity werkzeuge funktionen',
-            builder: (_) => ToolCallingSettingsPage(config: widget.config),
-          ),
+        _SettingsDest(
+          id: 'identity',
+          icon: Icons.fingerprint,
+          label: l.aiIdentityMemory,
+          keywords: 'identity memory system prompt name persona custom '
+              'instructions identität gedächtnis erinnerung anweisungen',
+          builder: (_) => const SystemPromptPage(),
+        ),
+        _SettingsDest(
+          id: 'tools',
+          icon: Icons.build_circle_outlined,
+          label: l.toolCalling,
+          keywords: 'tools tool calling function functions artifacts code '
+              'sandbox web search discovery activity werkzeuge funktionen',
+          builder: (_) => ToolCallingSettingsPage(config: widget.config),
+        ),
         if (kFeatureMcp && !kIsWeb)
           _SettingsDest(
             id: 'connectors',
@@ -247,10 +243,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           icon: Icons.auto_awesome_outlined,
           label: l.skills,
           keywords: 'skills agent skills procedures abilities fähigkeiten',
-          // Agents: the skills that live on the host.
-          builder: (_) => agentsChatCore
-              ? const AgentsSkillsSettingsPage()
-              : const SkillsSettingsPage(),
+          builder: (_) => const SkillsSettingsPage(),
         ),
         if (kFeatureMcp)
           _SettingsDest(
@@ -298,6 +291,17 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
                 'automatisierung',
             builder: (_) => const AutomationsPage(),
           ),
+          // The skills that live on the host, switched over the relay. They
+          // are not chuk_chat's Skills above, which feed the prompt of a chat
+          // on this device.
+          _SettingsDest(
+            id: 'hostskills',
+            icon: Icons.computer,
+            label: 'Host skills',
+            keywords: 'host skills coworker agent computer procedures '
+                'abilities fähigkeiten rechner',
+            builder: (_) => const AgentsSkillsSettingsPage(),
+          ),
         ]),
       _SettingsGroup('Appearance', [
         _SettingsDest(
@@ -330,8 +334,9 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             keywords: 'export chats backup download exportieren sicherung',
             onAction: _exportChats,
           ),
-        // Agents: the tour walks chuk_chat's screens, which the Agents shell
-        // does not show.
+        // Agents: that build wires no tour. Its screens carry no tour anchors
+        // (TourKeyRegistry.anchorFor is null there), so a replay would have
+        // nothing to point at.
         if (!agentsChatCore)
           _SettingsDest(
             id: 'onboarding',
@@ -723,7 +728,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
 
     if (tourSlot == null) return row;
     return KeyedSubtree(
-      key: TourKeyRegistry.instance.keyFor(tourSlot),
+      key: TourKeyRegistry.instance.anchorFor(tourSlot),
       child: row,
     );
   }

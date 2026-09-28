@@ -22,7 +22,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
-import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/utils/favicon.dart';
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/models/content_block.dart';
@@ -31,6 +30,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart';
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_timeline.dart';
 import 'package:chuk_chat/models/artifact.dart';
+import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/services/app_theme_service.dart';
 import 'package:chuk_chat/utils/automation_message.dart';
 import 'package:chuk_chat/utils/chat_font_resolver.dart';

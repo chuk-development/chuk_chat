@@ -22,6 +22,7 @@ import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/pages/agent_profile_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
@@ -37,12 +38,15 @@ import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/pages/skills_settings_page.dart';
+import 'package:chuk_chat/pages/system_prompt_page.dart';
 import 'package:chuk_chat/pages/theme_page.dart';
+import 'package:chuk_chat/pages/tool_calling_settings_page.dart';
 import 'package:chuk_chat/pages/usage_details_page.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_sheet.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
+import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
@@ -52,6 +56,7 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
@@ -111,6 +116,8 @@ const Map<String, String> _chukSizes = <String, String>{
       'header',
   'mobile_agents_settings_page': 'the 42 dp edit chip of the floating header',
   'agent_profile_page': 'the 42 dp edit chip of the floating header',
+  'system_prompt_page': 'upstream\'s 32 dp "Edit full screen" button inside '
+      'the prompt field, the composer\'s glyph in the composer\'s place',
 };
 
 /// Anything a screen made that has to be thrown away afterwards.
@@ -238,6 +245,11 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('skills_settings_page', (_) => const SkillsSettingsPage()),
   _Screen('agents_skills_settings_page',
       (_) => const AgentsSkillsSettingsPage()),
+  // chuk rows the Agents build shows again: its "Chat" half reads them.
+  _Screen('system_prompt_page', (_) => const SystemPromptPage()),
+  _Screen('tool_calling_settings_page',
+      (_) => ToolCallingSettingsPage(config: testShellConfig())),
+  _Screen('assistant_settings_page', (_) => const AssistantSettingsPage()),
   _Screen('automations_page', (_) => const AutomationsPage()),
   _Screen('login_page', (_) => const LoginPage()),
   _Screen('agents_pairing_page',
@@ -357,6 +369,28 @@ List<_Screen> _screens() => <_Screen>[
         onRenameAgent: (_) {},
         onDeleteAgent: (_) {},
         now: () => DateTime(2026, 1, 5, 15),
+      ),
+    );
+  }),
+  // The inbox as the Agents build shows it: the Chat | Agents switch in the
+  // header row (chuk's floating-bar geometry), All / Unread compact under it.
+  _Screen('mobile/mobile_agent_list (app switch)', (_Bag bag) {
+    final LocalAgentRosterSource source = LocalAgentRosterSource(
+      seed: _roster(),
+    );
+    bag.keep(source, source.dispose);
+    return _hosted(
+      MobileAgentList(
+        source: source,
+        onSelect: (_, _) {},
+        selectedAgentId: 'amber',
+        onAddAgent: () {},
+        onCreateRoom: () {},
+        onOpenProfile: (_) {},
+        onRenameAgent: (_) {},
+        onDeleteAgent: (_) {},
+        now: () => DateTime(2026, 1, 5, 15),
+        headerCenter: AppModeSwitch(mode: AppMode.agents, onChanged: (_) {}),
       ),
     );
   }),

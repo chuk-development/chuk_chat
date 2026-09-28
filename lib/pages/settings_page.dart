@@ -1,9 +1,10 @@
 // One settings page for both builds: upstream chuk_chat's list, frame and
-// sign-out. With Agents on, the rows that do nothing there are left out: the
-// host owns the system prompt and runs every tool, the assistant overlay
-// cannot reach its model through the host, and the tour walks chuk_chat's own
-// screens. One 'Agents' section adds what only a paired host has: here.now,
-// Embedding, API Keys and Automations. Skills opens the host's skills there.
+// sign-out. The Agents build holds chuk_chat's own chats too (the "Chat"
+// half), and they read every chuk row: identity and memory, tool calling,
+// skills and the assistant. Only the onboarding replay is left out there,
+// because that build wires no tour. One 'Agents' section adds what only a
+// paired host has: here.now, Embedding, API Keys, Automations and the host's
+// own skills.
 // lib/pages/settings_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -170,7 +171,7 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               KeyedSubtree(
                 key: TourKeyRegistry.instance
-                    .keyFor(TourSlots.settingsPricingTile),
+                    .anchorFor(TourSlots.settingsPricingTile),
                 child: _SettingsRow(
                   icon: Icons.credit_card,
                   title: l.pricingPlans,
@@ -194,7 +195,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               KeyedSubtree(
                 key: TourKeyRegistry.instance
-                    .keyFor(TourSlots.settingsModelSelectionTile),
+                    .anchorFor(TourSlots.settingsModelSelectionTile),
                 child: _SettingsRow(
                   icon: Icons.smart_toy_outlined,
                   title: l.modelSelection,
@@ -212,46 +213,40 @@ class _SettingsPageState extends State<SettingsPage> {
                   },
                 ),
               ),
-              // Agents: the host owns the system prompt, and the notes behind
-              // this page feed chuk_chat's own prompt builder.
-              if (!agentsChatCore)
-                KeyedSubtree(
-                  key: TourKeyRegistry.instance
-                      .keyFor(TourSlots.settingsAiIdentityTile),
-                  child: _SettingsRow(
-                    icon: Icons.fingerprint,
-                    title: l.aiIdentityMemory,
-                    subtitle: l.aiIdentityMemorySubtitle,
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          settings: const RouteSettings(
-                            name: 'tour:ai_identity',
-                          ),
-                          builder: (_) => const SystemPromptPage(),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              // Agents: the host runs every tool; the client tool switches
-              // are never read.
-              if (!agentsChatCore)
-                _SettingsRow(
-                  icon: Icons.build_circle_outlined,
-                  title: l.toolCalling,
-                  subtitle: l.toolCallingSubtitle,
+              KeyedSubtree(
+                key: TourKeyRegistry.instance
+                    .anchorFor(TourSlots.settingsAiIdentityTile),
+                child: _SettingsRow(
+                  icon: Icons.fingerprint,
+                  title: l.aiIdentityMemory,
+                  subtitle: l.aiIdentityMemorySubtitle,
                   onTap: () {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) =>
-                            ToolCallingSettingsPage(config: widget.config),
+                        settings: const RouteSettings(
+                          name: 'tour:ai_identity',
+                        ),
+                        builder: (_) => const SystemPromptPage(),
                       ),
                     );
                   },
                 ),
+              ),
+              _SettingsRow(
+                icon: Icons.build_circle_outlined,
+                title: l.toolCalling,
+                subtitle: l.toolCallingSubtitle,
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          ToolCallingSettingsPage(config: widget.config),
+                    ),
+                  );
+                },
+              ),
               if (kFeatureMcp && !kIsWeb)
                 _SettingsRow(
                   icon: Icons.extension_outlined,
@@ -274,21 +269,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      // Agents: the skills that live on the host, switched
-                      // over the relay. chuk_chat's own skills feed a prompt
-                      // the host never reads.
-                      builder: (_) => agentsChatCore
-                          ? const AgentsSkillsSettingsPage()
-                          : const SkillsSettingsPage(),
+                      builder: (_) => const SkillsSettingsPage(),
                     ),
                   );
                 },
               ),
-              // Agents: the overlay sends through the host relay, which drops
-              // its device tools and its pinned model.
-              if (AssistantPlatform.isSupported && !agentsChatCore)
+              if (AssistantPlatform.isSupported)
                 KeyedSubtree(
-                  key: TourKeyRegistry.instance.keyFor(
+                  key: TourKeyRegistry.instance.anchorFor(
                     TourSlots.kSettingsAssistantTile,
                   ),
                   child: _SettingsRow(
@@ -382,6 +370,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     );
                   },
                 ),
+                // The skills that live on the host, switched over the relay.
+                // They are not chuk_chat's Skills above, which feed the
+                // prompt of a chat on this device.
+                _SettingsRow(
+                  icon: Icons.computer,
+                  title: 'Host skills',
+                  subtitle: 'Skills on the computer your coworkers run on',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AgentsSkillsSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
               ],
             ),
           ],
@@ -435,8 +439,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ExpressiveSectionHeader('System'),
           ExpressiveGroup(
             children: [
-              // Agents: the tour walks chuk_chat's screens, which the Agents
-              // shell does not show.
+              // Agents: that build wires no tour. Its screens carry no tour
+              // anchors (TourKeyRegistry.anchorFor is null there), so a
+              // replay would have nothing to point at.
               if (!agentsChatCore)
                 _SettingsRow(
                   icon: Icons.school_outlined,

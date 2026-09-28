@@ -76,7 +76,7 @@ class _MobileHomeState extends State<MobileHome> {
                         MobileNavBar.height,
                   ),
                 ),
-                child: _FadeThroughTabs(
+                child: FadeThroughTabs(
                   index: _index,
                   children: <Widget>[
                     widget.chats,
@@ -137,8 +137,17 @@ class _MobileHomeState extends State<MobileHome> {
 /// in over the rest while it grows the last few percent back to size. Material
 /// calls this fade-through, and it is the transition for peers: nothing slides,
 /// because neither tab is "further in" than the other.
-class _FadeThroughTabs extends StatefulWidget {
-  const _FadeThroughTabs({required this.index, required this.children});
+///
+/// A child that is not in front can take no focus and runs no tickers: a
+/// hidden composer must not open the keyboard, and a hidden list has nothing
+/// to animate. The messenger shell uses the same widget for the Chat | Agents
+/// switch, whose two halves are peers in exactly this sense.
+class FadeThroughTabs extends StatefulWidget {
+  const FadeThroughTabs({
+    super.key,
+    required this.index,
+    required this.children,
+  });
 
   final int index;
   final List<Widget> children;
@@ -147,14 +156,14 @@ class _FadeThroughTabs extends StatefulWidget {
   static const Duration duration = Duration(milliseconds: 300);
 
   @override
-  State<_FadeThroughTabs> createState() => _FadeThroughTabsState();
+  State<FadeThroughTabs> createState() => _FadeThroughTabsState();
 }
 
-class _FadeThroughTabsState extends State<_FadeThroughTabs>
+class _FadeThroughTabsState extends State<FadeThroughTabs>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
     vsync: this,
-    duration: _FadeThroughTabs.duration,
+    duration: FadeThroughTabs.duration,
     value: 1,
   )..addStatusListener(_onStatus);
 
@@ -193,7 +202,7 @@ class _FadeThroughTabsState extends State<_FadeThroughTabs>
   }
 
   @override
-  void didUpdateWidget(covariant _FadeThroughTabs oldWidget) {
+  void didUpdateWidget(covariant FadeThroughTabs oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.index == _incoming) return;
     final int leaving = _incoming;
@@ -228,23 +237,29 @@ class _FadeThroughTabsState extends State<_FadeThroughTabs>
             // change the shape of a slot (Offstage here, Opacity there) and
             // Flutter throws the subtree away and builds a new one, which is
             // exactly the rebuilt roster this is meant to avoid. So the chain
-            // is always the same three widgets, and only their values move.
+            // is always the same widgets, and only their values move.
             for (int i = 0; i < widget.children.length; i++)
               Offstage(
                 // Laid out either way (see [RenderOffstage]), so a tab that is
                 // waiting keeps its scroll position and its controllers.
                 offstage: i != _incoming && i != _outgoing,
-                child: IgnorePointer(
-                  ignoring: i != _incoming,
-                  child: Opacity(
-                    opacity: i == _incoming
-                        ? arriving
-                        : (i == _outgoing ? 1 - leaving : 0),
-                    child: Transform.scale(
-                      scale: i == _incoming
-                          ? 0.94 + 0.06 * arriving
-                          : (i == _outgoing ? 1 - 0.03 * leaving : 1),
-                      child: widget.children[i],
+                child: TickerMode(
+                  enabled: i == _incoming || i == _outgoing,
+                  child: ExcludeFocus(
+                    excluding: i != _incoming,
+                    child: IgnorePointer(
+                      ignoring: i != _incoming,
+                      child: Opacity(
+                        opacity: i == _incoming
+                            ? arriving
+                            : (i == _outgoing ? 1 - leaving : 0),
+                        child: Transform.scale(
+                          scale: i == _incoming
+                              ? 0.94 + 0.06 * arriving
+                              : (i == _outgoing ? 1 - 0.03 * leaving : 1),
+                          child: widget.children[i],
+                        ),
+                      ),
                     ),
                   ),
                 ),
