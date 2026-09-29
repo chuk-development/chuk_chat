@@ -1,0 +1,9 @@
+.venv
+__pycache__
+.env.local*
+.memory
+.pytest_cache
+.gitignore
+tests
+run.sh
+README.md

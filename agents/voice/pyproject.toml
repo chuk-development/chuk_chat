@@ -1,0 +1,21 @@
+[project]
+name = "chuk-voice"
+version = "0.1.0"
+description = "LiveKit voice worker for chuk_chat voice calls (agent name: chuk-voice)"
+requires-python = ">=3.13"
+dependencies = [
+    "httpx>=0.28.1",
+    "livekit-agents[cartesia,groq,openai,silero,turn-detector]~=1.6",
+    "livekit-api>=1.2.0",
+    "livekit-plugins-noise-cancellation>=0.3.0",
+    "python-dotenv>=1.2.1",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
