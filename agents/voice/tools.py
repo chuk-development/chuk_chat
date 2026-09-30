@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import ast
 import asyncio
-import json
 import logging
 import math
 import operator
@@ -33,9 +32,11 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from livekit.agents import RunContext, StopResponse, function_tool, utils
+from livekit.agents.beta.tools.end_call import EndCallTool
 
 import delegation
 from background import BackgroundRunner
+from call_config import END_CALL_EXTRA_DESCRIPTION, END_CALL_GOODBYE_INSTRUCTIONS
 from delegation import TaskBook
 from memory import ConversationMemory
 from ui_bridge import UiBridge
@@ -44,6 +45,9 @@ logger = logging.getLogger("voice-agent.tools")
 
 _HTTP_TIMEOUT = 12.0
 _UA = "Mozilla/5.0 (compatible; VoiceAssistant/1.0)"
+#: Wikimedia answers 403 to generic user agents (robot policy): the UA must
+#: name the client and give a contact URL. Nominatim asks for the same.
+_BOT_UA = "chuk-voice/0.1 (https://github.com/chuk-development/chuk_chat)"
 
 
 @dataclass
@@ -63,13 +67,15 @@ def _ui(ctx: RunContext) -> UiBridge:
     return ctx.userdata.ui  # type: ignore[no-any-return]
 
 
-async def _get_json(url: str, params: dict[str, Any] | None = None) -> Any:
+async def _get_json(
+    url: str, params: dict[str, Any] | None = None, *, user_agent: str = _UA
+) -> Any:
     session = utils.http_context.http_session()
     async with session.get(
         url,
         params=params,
         timeout=_HTTP_TIMEOUT,
-        headers={"User-Agent": _UA},
+        headers={"User-Agent": user_agent},
     ) as resp:
         resp.raise_for_status()
         return await resp.json(content_type=None)
@@ -390,6 +396,7 @@ async def _wikipedia_summary(query: str, lang: str = "de") -> dict[str, Any] | N
                 "srlimit": 1,
                 "format": "json",
             },
+            user_agent=_BOT_UA,
         )
         hits = (search.get("query") or {}).get("search") or []
         if not hits:
@@ -398,7 +405,8 @@ async def _wikipedia_summary(query: str, lang: str = "de") -> dict[str, Any] | N
         from urllib.parse import quote
 
         return await _get_json(
-            f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title, safe='')}"
+            f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{quote(title, safe='')}",
+            user_agent=_BOT_UA,
         )
     except Exception as e:  # noqa: BLE001
         logger.debug("wikipedia lookup failed: %s", e)
@@ -838,6 +846,48 @@ async def show_place(ctx: RunContext, query: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Lists and links
+# ---------------------------------------------------------------------------
+
+#: A card holds at most this many list items.
+_MAX_LIST_ITEMS = 20
+
+
+@function_tool()
+async def show_list(ctx: RunContext, title: str, items: list[str], urls: list[str] | None = None) -> str:
+    """Show a list on the user's screen: steps, options, a shopping list, links.
+
+    Use it whenever a list is easier to read than to hear. Say only the
+    headline aloud; the card carries the items.
+
+    Args:
+        title: Short heading for the card, e.g. "Einkaufsliste".
+        items: The entries, one short line each, in order.
+        urls: Optional. One link per entry, in the same order as items. Use an
+            empty string for an entry without a link.
+    """
+    entries = [i.strip() for i in items if i and i.strip()][:_MAX_LIST_ITEMS]
+    if not entries:
+        return "The list was empty. Nothing to show."
+    links = list(urls or [])
+    data_items: list[dict[str, str]] = []
+    for idx, text in enumerate(entries):
+        item = {"title": text}
+        url = links[idx].strip() if idx < len(links) and links[idx] else ""
+        if url.startswith(("http://", "https://")):
+            item["url"] = url
+        data_items.append(item)
+
+    await _ui(ctx).card(
+        "list",
+        title=title,
+        subtitle=f"{len(data_items)} Einträge",
+        data={"items": data_items},
+    )
+    return f"Die Liste '{title}' mit {len(data_items)} Einträgen ist auf dem Bildschirm."
+
+
+# ---------------------------------------------------------------------------
 # Session memory
 # ---------------------------------------------------------------------------
 
@@ -1039,6 +1089,54 @@ async def open_link(ctx: RunContext, url: str, label: str = "") -> str:
     return f"Ich habe {label or url} auf deinem Gerät geöffnet."
 
 
+#: What the model reads when the phone gives no position (permission denied,
+#: location off, no app, timeout). It says it plainly and asks for a place.
+_NO_LOCATION = (
+    "Location not available right now (no permission, or location is off). "
+    "Tell the user in one short sentence that you can't see their location "
+    "right now, and ask which place they mean. Do not retry."
+)
+
+
+#: Longest place name taken from the app; a longer one is not trusted.
+_MAX_PLACE_CHARS = 100
+
+
+def _clean_place(value: Any) -> str | None:
+    """The app's optional ``place``: a trimmed, non-empty string of at most
+    ``_MAX_PLACE_CHARS`` characters, else None (then the worker looks it up)."""
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.split())
+    if not text or len(text) > _MAX_PLACE_CHARS:
+        return None
+    return text
+
+
+async def _reverse_geocode(lat: float, lon: float) -> str | None:
+    """Place name (town or city) for a position, via Nominatim. None on failure."""
+    try:
+        data = await _get_json(
+            "https://nominatim.openstreetmap.org/reverse",
+            {"lat": lat, "lon": lon, "format": "jsonv2", "zoom": 10, "accept-language": "de"},
+            user_agent=_BOT_UA,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.debug("reverse geocoding failed: %s", e)
+        return None
+    if not isinstance(data, dict):
+        return None
+    address = data.get("address")
+    if not isinstance(address, dict):
+        address = {}
+    for key in ("city", "town", "village", "municipality", "county", "state"):
+        value = address.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    name = data.get("name")
+    return name.strip() if isinstance(name, str) and name.strip() else None
+
+
 @function_tool()
 async def get_device_location(ctx: RunContext) -> str:
     """Get the user's current location from their phone.
@@ -1048,39 +1146,29 @@ async def get_device_location(ctx: RunContext) -> str:
     """
     try:
         result = await _ui(ctx).call_client("get_location")
-    except Exception as e:  # noqa: BLE001
-        return f"Den Standort konnte ich nicht abrufen: {e}"
+    except Exception as e:  # noqa: BLE001 — RPC error, no app, timeout
+        logger.info("get_location failed: %s", e)
+        return _NO_LOCATION
 
     if not isinstance(result, dict) or result.get("error"):
-        return "Der Standort ist auf dem Gerät nicht verfügbar."
-
-    place = result.get("place") or f"{result.get('latitude')}, {result.get('longitude')}"
-    return f"Der aktuelle Standort ist {place}."
-
-
-@function_tool()
-async def get_device_status(ctx: RunContext) -> str:
-    """Get the phone's status: battery level, charging state, connectivity."""
+        return _NO_LOCATION
     try:
-        result = await _ui(ctx).call_client("get_device_status")
-    except Exception as e:  # noqa: BLE001
-        return f"Den Gerätestatus konnte ich nicht abrufen: {e}"
+        lat = float(result["latitude"])
+        lon = float(result["longitude"])
+    except (KeyError, TypeError, ValueError):
+        return _NO_LOCATION
 
-    if not isinstance(result, dict) or result.get("error"):
-        return "Der Gerätestatus ist nicht verfügbar."
-
-    await _ui(ctx).card(
-        "device",
-        title=f"{result.get('battery', '?')}%",
-        subtitle="Akku",
-        data=result,
-    )
-    parts = [f"Akku bei {result.get('battery')} Prozent"]
-    if result.get("charging"):
-        parts.append("wird geladen")
-    if result.get("network"):
-        parts.append(f"Netzwerk {result['network']}")
-    return ", ".join(parts) + "."
+    place = _clean_place(result.get("place")) or await _reverse_geocode(lat, lon)
+    accuracy = result.get("accuracy")
+    where = f"{lat:.4f}, {lon:.4f}"
+    if isinstance(accuracy, (int, float)):
+        where += f" (accuracy about {round(accuracy)} m)"
+    if place:
+        return (
+            f"The user is in or near {place} ({where}). Use \"{place}\" as the "
+            "location for the next tool."
+        )
+    return f"The user is at {where}. No place name was found."
 
 
 # ---------------------------------------------------------------------------
@@ -1149,6 +1237,7 @@ ALL_TOOLS = [
     convert_currency,
     get_stock,
     show_place,
+    show_list,
     remember,
     recall,
     forget,
@@ -1158,21 +1247,38 @@ ALL_TOOLS = [
     stay_silent,
     open_link,
     get_device_location,
-    get_device_status,
 ]
 
 
 def build_tools(*, mode: str, delegate_available: bool) -> list[Any]:
     """The toolset for one call.
 
-    ``delegate_task`` exists only when the app can take tasks. In agents mode
+    ``delegate_task`` exists only when the app can take tasks. Then
+    ``set_reminder`` (an in-call timer) is left out. In agents mode
     with delegation, deep research goes to the agent, so the local research
     tool is left out: two tools for one job make the model pick the wrong one.
+
+    ``end_call`` lets the agent hang up when the user says goodbye. It deletes
+    the room, so the app sees the disconnect and saves the transcript. It is
+    hidden while the agent greets (``ignore_on_enter``). A new instance per
+    call: the toolset keeps per-session state.
     """
-    selected = list(ALL_TOOLS)
+    selected: list[Any] = list(ALL_TOOLS)
     if delegate_available:
+        # An in-call timer dies at hang-up and blocks the away flow. With a
+        # delegate, reminders go to the host agent, which schedules them and
+        # can call back with call_user.
+        selected.remove(set_reminder)
         if mode == "agents":
             selected.remove(research_in_background)
         selected.append(delegate_task)
     selected.append(check_tasks)
+    selected.append(
+        EndCallTool(
+            delete_room=True,
+            ignore_on_enter=True,
+            extra_description=END_CALL_EXTRA_DESCRIPTION,
+            end_instructions=END_CALL_GOODBYE_INSTRUCTIONS,
+        )
+    )
     return selected

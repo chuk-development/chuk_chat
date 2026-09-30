@@ -133,10 +133,44 @@ def test_agents_mode_without_delegation_says_so() -> None:
     assert "delegate_task" not in prompt
 
 
-def test_language_default() -> None:
-    assert "speak German by default" in build_instructions(CallConfig(stt_language="de"))
-    assert "speak English by default" in build_instructions(CallConfig(stt_language="en"))
-    assert "by default" not in build_instructions(CallConfig())
+def test_language_follows_the_device_locale() -> None:
+    assert "Speak German by default" in build_instructions(CallConfig(stt_language="de"))
+    assert "Speak English by default" in build_instructions(CallConfig(stt_language="en"))
+    assert "Speak French by default" in build_instructions(parse_metadata(_meta(stt_language="fr-FR")))
+    # No language from the app: German.
+    assert "Speak German by default" in build_instructions(parse_metadata(_meta()))
+
+
+def test_stt_language_is_normalized_and_defaults_to_german() -> None:
+    assert parse_metadata(_meta(stt_language="en_US")).stt_language == "en"
+    assert parse_metadata(_meta(stt_language="de-DE")).stt_language == "de"
+    assert parse_metadata(_meta(stt_language="FR")).stt_language == "fr"
+    assert parse_metadata(_meta(stt_language=None)).stt_language == "de"
+    assert parse_metadata(_meta(stt_language="")).stt_language == "de"
+    assert parse_metadata(_meta(stt_language=42)).stt_language == "de"
+    assert parse_metadata(None).stt_language == "de"
+    assert call_config.language_name("xx") == "the language with the code 'xx'"
+
+
+def test_prompt_has_no_device_status_and_handles_missing_location() -> None:
+    prompt = build_instructions(CallConfig())
+    assert "own device" not in prompt
+    assert "get_device_status" not in prompt
+    assert "get_device_location" in prompt
+    assert "ask the user for the place" in prompt
+
+
+def test_reminders_go_to_delegate_task_only_with_a_delegate() -> None:
+    with_delegate = build_instructions(CallConfig(delegate_available=True))
+    assert "Reminders and timers" in with_delegate
+    assert "can call the user back later" in with_delegate
+    assert "Reminders and timers" not in build_instructions(CallConfig())
+
+
+def test_call_limit_goodbye() -> None:
+    text = call_config.call_limit_goodbye_instructions(CallConfig())
+    assert "maximum length" in text
+    assert "Do not call any tool" in text
 
 
 def test_memory_preamble_is_appended() -> None:
@@ -164,3 +198,89 @@ def test_greeting_without_reason_asks_what_user_needs() -> None:
     text = greeting_instructions(cfg)
     assert "Speak first" in text
     assert "ask what they need" in text
+
+
+# ---------------------------------------------------------------------------
+# User away
+# ---------------------------------------------------------------------------
+
+
+def test_still_there_prompt_follows_language() -> None:
+    assert "Bist du noch da?" in call_config.still_there_instructions(CallConfig(stt_language="de"))
+    assert "Bist du noch da?" in call_config.still_there_instructions(CallConfig())
+    assert "Are you still there?" in call_config.still_there_instructions(CallConfig(stt_language="en"))
+    assert "in French" in call_config.still_there_instructions(CallConfig(stt_language="fr"))
+
+
+def test_away_goodbye_prompt() -> None:
+    text = call_config.away_goodbye_instructions(CallConfig())
+    assert "goodbye" in text
+    assert "Do not call any tool" in text
+
+
+def test_prompt_mentions_end_call() -> None:
+    assert "call the end_call tool" in build_instructions(CallConfig())
+
+
+# ---------------------------------------------------------------------------
+# end_call: intent, not keywords
+# ---------------------------------------------------------------------------
+
+
+def test_end_call_prompt_is_intent_based() -> None:
+    prompt = build_instructions(CallConfig())
+    assert "Judge the intent, not the exact words" in prompt
+    for phrase in ("tschüssi", "ciao", "leg auf", "du kannst gehen", "das war's", "danke, reicht"):
+        assert phrase in prompt
+    assert "Do not say goodbye before the tool call" in prompt
+
+
+def test_end_call_tool_texts() -> None:
+    desc = call_config.END_CALL_EXTRA_DESCRIPTION
+    assert desc.startswith("Decide by intent")
+    for phrase in ("tschüss", "ciao", "bye", "du kannst gehen", "das war's"):
+        assert phrase in desc
+    goodbye = call_config.END_CALL_GOODBYE_INSTRUCTIONS
+    assert "one short goodbye" in goodbye
+    assert "Alles klar, bis später!" in goodbye
+
+
+def test_prompt_asks_for_cards_when_visual_helps() -> None:
+    prompt = build_instructions(CallConfig())
+    assert "ich zeig's dir" in prompt
+    for tool in ("show_place", "get_weather", "search_web", "show_list"):
+        assert tool in prompt
+
+
+# ---------------------------------------------------------------------------
+# Agents mode: delegate at once, do not ask for details
+# ---------------------------------------------------------------------------
+
+
+def test_agents_mode_delegates_at_once_without_asking_for_details() -> None:
+    prompt = build_instructions(CallConfig(mode="agents", agent_name="Mira", delegate_available=True))
+    assert "Call delegate_task AT ONCE, in the same turn" in prompt
+    assert "finds missing details itself" in prompt
+    assert "never ask the user for a file" in prompt
+    assert "Ask back only when the request itself is unclear" in prompt
+    assert '"send it"' in prompt
+    # The short "on it" line, then the conversation goes on.
+    assert "Say only a few words in the user's language that you are on it" in prompt
+    assert "keep talking or listening as normal" in prompt
+
+
+def test_ask_when_unsure_is_scoped_to_ending_the_call() -> None:
+    prompt = build_instructions(CallConfig(mode="agents", agent_name="Mira", delegate_available=True))
+    assert "When you are not sure, ask." not in prompt
+    assert "When you are not sure whether the user wants to end the call, ask." in prompt
+    assert "(This rule is only about ending the call.)" in prompt
+
+
+def test_chat_mode_has_no_agents_delegate_at_once_rule() -> None:
+    assert "AT ONCE" not in build_instructions(CallConfig(mode="chat", delegate_available=True))
+
+
+def test_delegation_rules_keep_result_announcements_short() -> None:
+    prompt = build_instructions(CallConfig(mode="agents", agent_name="Mira", delegate_available=True))
+    assert "in at most two short sentences: the outcome and the key numbers" in prompt
+    assert 'never "let me know if you need anything else"' in prompt

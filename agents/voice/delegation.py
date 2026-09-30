@@ -280,14 +280,15 @@ def announcement_for(task: DelegatedTask) -> str:
         reason = task.result or "no reason given"
         return (
             f"{what} failed. Reason:\n\n{reason}\n\n"
-            "Tell the user briefly that it did not work out and offer to try "
-            "again. One or two spoken sentences."
+            "Tell the user in one short sentence that it did not work out, "
+            "and ask if you should try again. No filler."
         )
 
     result = task.result or "(the task returned no text)"
     return (
         f"{what} is done. Here is the result:\n\n{result}\n\n"
-        "Bring it up now, unprompted. Open by referring back to what the user "
-        "asked for, then give the answer in two or three spoken sentences. Do "
-        "not read it out verbatim, and do not read out lists, links or code."
+        "Bring it up now, unprompted, in at most two short spoken sentences: "
+        "the outcome and the key numbers or names. No filler, no greeting, no "
+        "offer of more help, never \"let me know if…\". Do not read it out "
+        "verbatim, and do not read out lists, links or code."
     )

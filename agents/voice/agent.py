@@ -30,17 +30,21 @@ from livekit import agents, rtc
 from livekit.agents import (
     Agent,
     AgentSession,
+    AudioConfig,
+    BackgroundAudioPlayer,
+    BuiltinAudioClip,
     EndpointingOptions,
     InterruptionOptions,
     PreemptiveGenerationOptions,
-    RoomInputOptions,
     ToolExecutionUpdatedEvent,
     TurnHandlingOptions,
+    UserStateChangedEvent,
+    get_job_context,
+    inference,
+    room_io,
 )
-from livekit.agents import inference
 from livekit.agents.llm import ChatContext, ChatMessage, ImageContent
 from livekit.plugins import cartesia, groq, noise_cancellation, openai, silero
-from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 import call_config
 import delegation
@@ -83,6 +87,33 @@ _DEFAULT_VOICE_ID = "a57ad970-c054-4229-90e1-5e9620838b07"
 #: Agent-started call: seconds to wait for the app before the greeting.
 _GREETING_WAIT = 15.0
 
+#: STT backend. All but "groq" stream and deliver word-aligned transcripts,
+#: which is what adaptive interruption and turn detection need:
+#:   cartesia — Cartesia ink-whisper, reuses CARTESIA_API_KEY (default)
+#:   deepgram — Deepgram nova-3 through LiveKit Inference (LiveKit credentials)
+#:   groq     — the old batch Groq Whisper path; fallback only. Batch STT makes
+#:              the SDK fall back to plain VAD interruption.
+_STT_BACKEND = os.environ.get("VOICE_STT", "cartesia").lower()
+
+#: Silence (s) after which the user counts as away. Then the agent asks once
+#: whether they are still there, and hangs up after _AWAY_HANGUP_AFTER more.
+_USER_AWAY_TIMEOUT = float(os.environ.get("VOICE_AWAY_TIMEOUT", "30"))
+_AWAY_HANGUP_AFTER = float(os.environ.get("VOICE_AWAY_HANGUP", "20"))
+
+#: While a task or reminder is pending, the away check waits and looks again
+#: this often, instead of giving up (LiveKit sets "away" again only after the
+#: user speaks, so a check that gives up never comes back).
+_AWAY_POLL = 10.0
+
+#: Hard cap on one call. Near the end the agent says goodbye and hangs up.
+_MAX_CALL_SECONDS = float(os.environ.get("VOICE_MAX_CALL_SECONDS", "3600"))
+
+#: The longest the goodbye may take before the room is deleted anyway.
+_GOODBYE_TIMEOUT = 15.0
+
+#: Keyboard sound while the agent thinks or runs tools. "0" switches it off.
+_THINKING_SOUND = os.environ.get("VOICE_THINKING_SOUND", "1") not in ("0", "false", "no")
+
 
 # ---------------------------------------------------------------------------
 # LLM provider
@@ -123,6 +154,29 @@ def _build_llm(model: str) -> Any:
     return groq.LLM(model=model)
 
 
+def _build_stt(stt_language: str | None) -> Any:
+    """Construct the STT for the configured backend (``VOICE_STT``)."""
+    if _STT_BACKEND == "deepgram":
+        return inference.STT("deepgram/nova-3", language=stt_language or "de")
+    if _STT_BACKEND == "groq":
+        # The old batch path. No streaming, no aligned transcript: adaptive
+        # interruption falls back to VAD. Keep it only as a fallback.
+        if _PROVIDER == "together":
+            return openai.STT(
+                model="openai/whisper-large-v3",
+                base_url="https://api.together.xyz/v1",
+                api_key=_TOGETHER_API_KEY,
+                detect_language=not stt_language,
+                language=stt_language or "en",
+            )
+        if stt_language:
+            return groq.STT(model="whisper-large-v3-turbo", language=stt_language)
+        return groq.STT(model="whisper-large-v3-turbo", detect_language=True)
+    if _STT_BACKEND != "cartesia":
+        logger.warning("unknown VOICE_STT=%r — using cartesia", _STT_BACKEND)
+    return cartesia.STT(model="ink-whisper", language=stt_language or "de")
+
+
 # The system prompt is built per call from the dispatch metadata, see
 # call_config.build_instructions (mode, chat context, delegation, language).
 
@@ -147,19 +201,14 @@ def _setup_process(proc: agents.JobProcess) -> None:
     """
     proc.userdata["vad"] = silero.VAD.load()
 
-    # Two turn detectors, and the difference is latency, not just quality:
+    # Two turn detector variants:
     #
-    #   inference — LiveKit's hosted Turn Detector v1.0. Reads the *audio*, so
-    #     it decides the turn is over without waiting for a transcript. With a
-    #     batch STT like Groq Whisper that matters: the text arrives late.
-    #   local — the multilingual ONNX model, text-based, so it can only judge a
-    #     turn once STT has produced words. Runs entirely on this host, costs
-    #     nothing, and works without a LiveKit Cloud connection.
-    #
-    # The local plugin is deprecated upstream but still the zero-cost option, so
-    # it stays available behind TURN_DETECTOR=local.
+    #   inference (default) — LiveKit's Turn Detector; the SDK picks the model
+    #     version (v1 on LiveKit Cloud and in dev mode).
+    #   local — pinned to the small "v1-mini" model. It replaces the old
+    #     turn-detector plugin (MultilingualModel), which 2.0 removes.
     if os.environ.get("TURN_DETECTOR", "inference").lower() == "local":
-        proc.userdata["turn_detector"] = MultilingualModel()
+        proc.userdata["turn_detector"] = inference.TurnDetector(version="v1-mini")
     else:
         proc.userdata["turn_detector"] = inference.TurnDetector()
 
@@ -175,17 +224,28 @@ class VisionAgent(Agent):
     Two complementary paths, because they answer different questions:
 
     * **Look** — the latest frame is attached to each user message, so "what is
-      this?" gets full-resolution detail exactly when asked. ``RoomInputOptions
-      (video_enabled=True)`` subscribes the track, but a text-LLM pipeline does
+      this?" gets full-resolution detail exactly when asked. ``room_io.RoomOptions
+      (video_input=True)`` subscribes the track, but a text-LLM pipeline does
       not auto-inject frames, so we do it here.
     * **Watch** — a :class:`VideoNarrator` samples the same track continuously
       and keeps a rolling description in the context. That is what lets the
       agent notice things it was never asked about, at a fixed context cost.
     """
 
-    def __init__(self, room: rtc.Room, vision_llm: Any, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        room: rtc.Room,
+        vision_llm: Any,
+        *,
+        greeting: str | None = None,
+        app_identity: str | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(**kwargs)
         self._room = room
+        #: Set for agent-started calls: the first reply, spoken in on_enter.
+        self._greeting = greeting
+        self._app_identity = app_identity
         self._latest_frame: rtc.VideoFrame | None = None
         self._video_tasks: dict[str, asyncio.Task[None]] = {}
         self._narrator = VideoNarrator(vision_llm=vision_llm, chat_ctx=self.chat_ctx)
@@ -242,6 +302,25 @@ class VisionAgent(Agent):
         if _NARRATION_ENABLED:
             self._narrator.attach(track)
 
+    async def on_enter(self) -> None:
+        """Agent-started call: speak first, once the app is in the room.
+
+        Waits up to ``_GREETING_WAIT`` s for the app participant, else the
+        greeting plays to nobody. After the timeout it greets anyway. The
+        end_call tool is hidden here (``ignore_on_enter``), and tool_choice
+        "none" keeps the greeting free of tool calls.
+        """
+        if self._greeting is None:
+            return
+        try:
+            await asyncio.wait_for(
+                get_job_context().wait_for_participant(identity=self._app_identity),
+                timeout=_GREETING_WAIT,
+            )
+        except TimeoutError:
+            logger.warning("app did not join within %.0fs — greeting anyway", _GREETING_WAIT)
+        self.session.generate_reply(instructions=self._greeting, tool_choice="none")
+
     async def on_user_turn_completed(
         self, turn_ctx: ChatContext, new_message: ChatMessage
     ) -> None:
@@ -294,18 +373,7 @@ async def chuk_voice(ctx: agents.JobContext):
     memory = conversation_memory.load_for(user_id)
 
     # ---- STT ----------------------------------------------------------------
-    if _PROVIDER == "together":
-        stt = openai.STT(
-            model="openai/whisper-large-v3",
-            base_url="https://api.together.xyz/v1",
-            api_key=_TOGETHER_API_KEY,
-            detect_language=not stt_language,
-            language=stt_language or "en",
-        )
-    elif stt_language:
-        stt = groq.STT(model="whisper-large-v3-turbo", language=stt_language)
-    else:
-        stt = groq.STT(model="whisper-large-v3-turbo", detect_language=True)
+    stt = _build_stt(stt_language)
 
     # ---- TTS ----------------------------------------------------------------
     tts = cartesia.TTS(model="sonic-3", voice=voice_id)
@@ -327,6 +395,8 @@ async def chuk_voice(ctx: agents.JobContext):
             mode=cfg.mode, delegate_available=cfg.delegate_available
         ),
         vision_llm=vision_llm,
+        greeting=call_config.greeting_instructions(cfg) if cfg.agent_started else None,
+        app_identity=cfg.app_identity if cfg.user_id != "default" else None,
     )
 
     session = AgentSession(
@@ -342,6 +412,8 @@ async def chuk_voice(ctx: agents.JobContext):
         # A tool round-trip is cheap now that tools are server-side, so allow a
         # deeper chain (search → read page → answer) before forcing a reply.
         max_tool_steps=8,
+        # LiveKit's default is 15 s; the away flow below is tuned for this.
+        user_away_timeout=_USER_AWAY_TIMEOUT,
         turn_handling=TurnHandlingOptions(
             turn_detection=ctx.proc.userdata["turn_detector"],
             # "dynamic" adapts the endpointing delay to the user's actual pause
@@ -350,7 +422,15 @@ async def chuk_voice(ctx: agents.JobContext):
             endpointing=EndpointingOptions(mode="dynamic", min_delay=0.3, max_delay=2.5),
             # Adaptive interruption tells a real interruption apart from an
             # "mhm" backchannel, so the agent isn't derailed by acknowledgements.
-            interruption=InterruptionOptions(mode="adaptive", min_duration=0.4),
+            # Needs a streaming STT with aligned transcripts (see _build_stt);
+            # with batch STT the SDK silently falls back to plain VAD.
+            # resume_false_interruption: a cough or a short noise pauses the
+            # agent, and the agent resumes where it stopped.
+            interruption=InterruptionOptions(
+                mode="adaptive",
+                min_duration=0.4,
+                resume_false_interruption=True,
+            ),
             # Start the LLM on the partial transcript, and TTS with it. Costs
             # some wasted tokens on cancelled turns, buys a big latency drop —
             # exactly the trade we want here.
@@ -365,6 +445,9 @@ async def chuk_voice(ctx: agents.JobContext):
     # runner can only be built once the session exists.
     runner = BackgroundRunner(session)
     tasks = delegation.TaskBook()
+    logger.info(
+        "STT backend=%s language=%s, adaptive interruption requested", _STT_BACKEND, stt_language
+    )
     session.userdata = SessionData(ui=ui, memory=memory, runner=runner, tasks=tasks)
 
     # No transcript persistence and no post-call compaction: the chat in the
@@ -451,15 +534,112 @@ async def chuk_voice(ctx: agents.JobContext):
     await session.start(
         room=ctx.room,
         agent=agent,
-        room_input_options=RoomInputOptions(
-            video_enabled=True,
-            # Runs ahead of VAD, STT and turn detection, so one filter improves
-            # every downstream signal at once. BVC also strips competing voices,
-            # which is what stops a TV in the background from taking a turn.
-            # Included on LiveKit Cloud; requires a Cloud connection.
-            noise_cancellation=noise_cancellation.BVC(),
+        room_options=room_io.RoomOptions(
+            video_input=True,
+            audio_input=room_io.AudioInputOptions(
+                # Runs ahead of VAD, STT and turn detection, so one filter
+                # improves every downstream signal at once. BVC also strips
+                # competing voices, which is what stops a TV in the background
+                # from taking a turn. Included on LiveKit Cloud; requires a
+                # Cloud connection.
+                noise_cancellation=noise_cancellation.BVC(),
+            ),
         ),
     )
+
+    # ---- Thinking sound -------------------------------------------------------
+    # Soft keyboard typing while the agent thinks or a tool runs, so a slow
+    # tool never sounds like a dropped call. Language-neutral, unlike a spoken
+    # filler. Published as its own audio track.
+    if _THINKING_SOUND:
+        background_audio = BackgroundAudioPlayer(
+            thinking_sound=[AudioConfig(BuiltinAudioClip.KEYBOARD_TYPING, volume=0.6)],
+        )
+        await background_audio.start(room=ctx.room, agent_session=session)
+
+        async def _close_background_audio() -> None:
+            await background_audio.aclose()
+
+        ctx.add_shutdown_callback(_close_background_audio)
+
+    # ---- Hang up (away, call-length cap) ---------------------------------------
+    # Say a goodbye, wait for it (bounded), then delete the room. Deleting the
+    # room disconnects the app, which then saves the transcript.
+    hanging_up = False
+
+    async def _delete_room() -> None:
+        await ctx.delete_room()
+
+    async def _hang_up(reason: str, goodbye: str) -> None:
+        nonlocal hanging_up
+        if hanging_up:
+            return
+        hanging_up = True
+        logger.info("ending the call: %s", reason)
+        try:
+            handle = session.generate_reply(
+                instructions=goodbye, tool_choice="none", allow_interruptions=False
+            )
+            await asyncio.wait_for(handle.wait_for_playout(), timeout=_GOODBYE_TIMEOUT)
+        except Exception as e:  # noqa: BLE001 — hang up even if the goodbye fails
+            logger.debug("goodbye not played: %s", e)
+        ctx.add_shutdown_callback(_delete_room)
+        ctx.shutdown(reason=reason)
+
+    # ---- User away: ask once, then hang up --------------------------------------
+    # The session marks the user "away" after _USER_AWAY_TIMEOUT s of silence
+    # on both sides. Then ask once whether they are still there; after
+    # _AWAY_HANGUP_AFTER more seconds of silence say goodbye and end the call.
+    # While a task or reminder is pending, wait and look again every
+    # _AWAY_POLL s: the user may just wait for its result. Each result
+    # announcement calls session.reset_away_timer() (background.py), which
+    # moves the user back to "listening" and cancels this check; a new silence
+    # starts a fresh one.
+    away_task: asyncio.Task[None] | None = None
+
+    async def _away_check() -> None:
+        try:
+            while tasks.pending or runner.pending:
+                await asyncio.sleep(_AWAY_POLL)
+            await session.generate_reply(
+                instructions=call_config.still_there_instructions(cfg), tool_choice="none"
+            )
+            await asyncio.sleep(_AWAY_HANGUP_AFTER)
+            if session.user_state != "away":
+                return
+            if tasks.pending or runner.pending:
+                # A task started in the meantime: begin again.
+                away_task_restart()
+                return
+            await _hang_up("user away", call_config.away_goodbye_instructions(cfg))
+        except asyncio.CancelledError:
+            raise
+        except Exception as e:  # noqa: BLE001 — the session may close under us
+            logger.debug("away check stopped: %s", e)
+
+    def away_task_restart() -> None:
+        nonlocal away_task
+        away_task = asyncio.create_task(_away_check(), name="away-check")
+
+    @session.on("user_state_changed")
+    def _on_user_state(ev: UserStateChangedEvent) -> None:
+        if ev.new_state == "away":
+            if away_task is None or away_task.done():
+                away_task_restart()
+        elif away_task is not None and not away_task.done():
+            away_task.cancel()
+
+    # ---- Call-length cap -------------------------------------------------------
+    async def _call_limit() -> None:
+        await asyncio.sleep(max(0.0, _MAX_CALL_SECONDS))
+        await _hang_up("call length limit", call_config.call_limit_goodbye_instructions(cfg))
+
+    call_limit_task = asyncio.create_task(_call_limit(), name="call-limit")
+
+    async def _cancel_call_limit() -> None:
+        call_limit_task.cancel()
+
+    ctx.add_shutdown_callback(_cancel_call_limit)
 
     # ---- RPC: result of a delegated task -------------------------------------
     # The app calls this when a task from delegate_task is done. Answer at
@@ -502,26 +682,6 @@ async def chuk_voice(ctx: agents.JobContext):
         new_llm.prewarm()
         agent.update_options(llm=new_llm)
         return json.dumps({"status": "ok", "model": new_model})
-
-    # ---- Agent-started call: speak first ------------------------------------
-    # Last, so every RPC handler is in place before we wait. Wait until the
-    # app is in the room, else the greeting plays to nobody. After the timeout
-    # greet anyway: a late greeting is better than silence.
-    if cfg.agent_started:
-        logger.info("agent-started call (call_id=%s) — greeting first", cfg.call_id)
-        try:
-            await asyncio.wait_for(
-                ctx.wait_for_participant(
-                    identity=cfg.app_identity if cfg.user_id != "default" else None
-                ),
-                timeout=_GREETING_WAIT,
-            )
-        except TimeoutError:
-            logger.warning("app did not join within %.0fs — greeting anyway", _GREETING_WAIT)
-        session.generate_reply(
-            instructions=call_config.greeting_instructions(cfg),
-            tool_choice="none",
-        )
 
 
 if __name__ == "__main__":
