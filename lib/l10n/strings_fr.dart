@@ -616,6 +616,4 @@ const Map<String, String> stringsFr = {
   'maintenanceFailedTitle': "La mise à jour n'a pas abouti",
   'maintenanceFailedBody': "Vos chats sont inchangés et en sécurité. Vous pouvez réessayer, ou continuer et utiliser l'app comme avant.",
   'maintenanceContinue': 'Continuer',
-  'maintenanceSyncing': 'Synchronisation de vos chats...',
-  'maintenanceSyncingHint': 'Cela peut prendre un moment.',
 };

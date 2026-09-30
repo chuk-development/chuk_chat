@@ -66,8 +66,6 @@ import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:cryptography/cryptography.dart'
     show SecretBoxAuthenticationError;
 import 'package:flutter/foundation.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'
-    show AuthChangeEvent, AuthState;
 
 /// `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 /// `DateTime` holds only milliseconds.
@@ -155,9 +153,9 @@ enum ChatStartupCheck {
   /// Only the cloud is unchecked: the app opens, the check runs behind it.
   background,
 
-  /// Cache rows to rewrite, or the one wait for the cloud is still owed
-  /// (cloud chats found behind the app, or a sign-in on this device): the
-  /// maintenance screen runs before the app opens.
+  /// Cache rows to rewrite (a device that upgrades from a client before
+  /// v3): the maintenance screen runs before the app opens. The cloud never
+  /// holds a start; a new install has no cache rows, so it never blocks.
   blocking,
 }
 
@@ -343,18 +341,13 @@ class ChatPayloadMigrationService {
   /// What a start of [userId] waits for. Reads the state in `kv_cache` and
   /// the cache only: no key, no network, so it returns in milliseconds.
   ///
-  /// [signIn] is true when the session was not there at app start. Such a
-  /// start waits for the whole check only while this device never waited
-  /// for the cloud of this account; after that it is a normal start.
-  static Future<ChatStartupCheck> startupCheck(
-    String userId, {
-    bool signIn = false,
-  }) async {
+  /// Only cache rows that still need the rewrite block the start. The cloud
+  /// never does, a sign-in on a new install included: its chats are checked
+  /// and rewritten behind the app ([checkCloudInBackground]), and the app
+  /// shows cached and arriving chats meanwhile (the reader reads v1 and v2).
+  static Future<ChatStartupCheck> startupCheck(String userId) async {
     final state = await _loadState(userId);
     if (state.done) return ChatStartupCheck.done;
-    if (!state.cloudWaited && (state.cloudPending || signIn)) {
-      return ChatStartupCheck.blocking;
-    }
     if (hasLocalDatabase) {
       try {
         final ids = await localUpgradeIds(userId);
@@ -375,12 +368,11 @@ class ChatPayloadMigrationService {
   /// The runs of [checkCloudInBackground] in flight, per user.
   static final Map<String, Future<void>> _background = {};
 
-  /// The cloud half of the check, run behind the app on a normal start. The
-  /// list needs no key: it only names the chats that still have a v1
-  /// envelope. None left: the account is done. Some left while the app never
-  /// waited for the cloud: the next start rewrites them behind the screen,
-  /// once. Some left after that wait: they are rewritten here, behind the
-  /// app, with the same guards as behind the screen. Never throws.
+  /// The cloud half of the check, run behind the app on every start that is
+  /// not done. The list needs no key: it only names the chats that still have
+  /// a v1 envelope. None left: the account is done. Some left: they are
+  /// rewritten here, behind the app, with the same guards as behind the
+  /// screen (2 at a time, 1 on the web). Never throws.
   static Future<void> checkCloudInBackground(String userId) {
     final running = _background[userId];
     if (running != null) return running;
@@ -398,11 +390,6 @@ class ChatPayloadMigrationService {
       final found = await plan(userId, behindApp: true);
       if (found.cloud.isEmpty) return;
       final state = await _loadState(userId);
-      if (!state.cloudWaited) {
-        state.cloudPending = true;
-        await _saveState(userId, state);
-        return;
-      }
       if (!await cloud.ensureKey()) {
         _logIncompleteCheck('no_key_behind_app');
         return;
@@ -815,41 +802,47 @@ class ChatPayloadMigrationService {
     var pending = false;
     ChatMaintenanceFailure? failure;
     var stop = false;
-    await _pool(ids, (id) async {
-      if (stop) return;
-      try {
-        final result = await _migrateCloudChat(userId, id, state);
-        if (result == _CloudResult.pending) {
-          // Another save won the guard: it most likely wrote v3 already.
+    await _pool(
+      ids,
+      (id) async {
+        if (stop) return;
+        try {
+          final result = await _migrateCloudChat(userId, id, state);
+          if (result == _CloudResult.pending) {
+            // Another save won the guard: it most likely wrote v3 already.
+            pending = true;
+            _countFailure(state, id, 'cloud_changed');
+          } else {
+            state.tries.remove(id);
+          }
+        } on ChatMaintenanceFailure catch (e) {
+          failure ??= e;
+          stop = true;
+        } catch (e) {
           pending = true;
-          _countFailure(state, id, 'cloud_changed');
-        } else {
-          state.tries.remove(id);
+          if (e is TimeoutException) {
+            // A slow network, or a row too large for the timeout: counted, so
+            // a row that never fits is left as it is after a few tries.
+            _countFailure(state, id, 'cloud_timeout', e);
+            stop = true;
+          } else if (e is StateError ||
+              NetworkStatusService.isNetworkError(e)) {
+            // Not this chat's fault (offline, no key or no user any more):
+            // nothing is counted, the rest waits for the next try.
+            stop = true;
+          } else {
+            // A server error about this row: counted.
+            _countFailure(state, id, 'cloud_failed', e);
+          }
+          if (kDebugMode) {
+            debugPrint('⚠️ [PayloadV3] cloud chat failed: ${e.runtimeType}');
+          }
         }
-      } on ChatMaintenanceFailure catch (e) {
-        failure ??= e;
-        stop = true;
-      } catch (e) {
-        pending = true;
-        if (e is TimeoutException) {
-          // A slow network, or a row too large for the timeout: counted, so
-          // a row that never fits is left as it is after a few tries.
-          _countFailure(state, id, 'cloud_timeout', e);
-          stop = true;
-        } else if (e is StateError || NetworkStatusService.isNetworkError(e)) {
-          // Not this chat's fault (offline, no key or no user any more):
-          // nothing is counted, the rest waits for the next try.
-          stop = true;
-        } else {
-          // A server error about this row: counted.
-          _countFailure(state, id, 'cloud_failed', e);
-        }
-        if (kDebugMode) {
-          debugPrint('⚠️ [PayloadV3] cloud chat failed: ${e.runtimeType}');
-        }
-      }
-      onChat?.call();
-    }, width: width, shouldStop: () => stop);
+        onChat?.call();
+      },
+      width: width,
+      shouldStop: () => stop,
+    );
     if (stop) pending = true;
     return (pending: pending, failure: failure);
   }
@@ -1059,47 +1052,9 @@ class ChatMaintenanceController extends ChangeNotifier {
   Completer<void>? _released;
   ChatMaintenancePlan? _plan;
 
-  /// The user whose session was already there when the app started. Kept
-  /// until a real sign-out (see [watchSignOuts]), not dropped by [reset]:
-  /// the session manager also resets for an auth event without a session
-  /// that is no sign-out (gotrue replays `initialSession` with no session
-  /// when the Agents build set an expired session aside at startup), and a
-  /// normal start must stay a normal start then.
-  String? _restoredUserId;
-  StreamSubscription<AuthState>? _signOuts;
-  bool _showsSyncHint = false;
-
   ChatMaintenancePhase get phase => _phase;
   ChatMaintenanceProgress get progress => _progress;
   ChatMaintenanceFailure? get failure => _failure;
-
-  /// Whether a slow check may say "Syncing your chats": only right after a
-  /// sign-in, never on a normal start.
-  bool get showsSyncHint => _showsSyncHint;
-
-  /// Record the session the app started with (main(), after the Supabase
-  /// init). Its check never holds the app for the cloud.
-  void noteRestoredSession(String? userId) => _restoredUserId = userId;
-
-  /// Forget the session the app started with: after a real sign-out, the
-  /// next sign-in is a sign-in.
-  void forgetRestoredSession() => _restoredUserId = null;
-
-  /// Follow [events] (the Supabase auth stream, from main()) and forget the
-  /// restored session at a real sign-out. Errors on the stream are ignored.
-  void watchSignOuts(Stream<AuthState> events) {
-    unawaited(_signOuts?.cancel());
-    _signOuts = events.listen((AuthState state) {
-      if (state.event == AuthChangeEvent.signedOut) forgetRestoredSession();
-    }, onError: (Object _) {});
-  }
-
-  @override
-  void dispose() {
-    unawaited(_signOuts?.cancel());
-    _signOuts = null;
-    super.dispose();
-  }
 
   /// Whether the chat UI must wait (the gate shows the screen or nothing).
   bool get holdsApp =>
@@ -1119,18 +1074,12 @@ class ChatMaintenanceController extends ChangeNotifier {
   }
 
   Future<void> _check(String userId) async {
-    final restored = userId == _restoredUserId;
-    _showsSyncHint = false;
     _set(ChatMaintenancePhase.checking);
-    // Local state first (milliseconds). The app opens at once unless the
-    // cache has rows to rewrite or the one wait for the cloud is still owed:
-    // cloud chats found behind the app at an earlier start, or a sign-in on
-    // a device that never waited for this account. Everything else about
-    // the cloud is read behind the app.
-    final start = await ChatPayloadMigrationService.startupCheck(
-      userId,
-      signIn: !restored,
-    );
+    // Local state only (milliseconds). The app opens at once unless the
+    // cache has rows to rewrite; the cloud is checked, and rewritten, behind
+    // the app. There is no sync screen: a new install opens straight on its
+    // chats as they arrive.
+    final start = await ChatPayloadMigrationService.startupCheck(userId);
     if (_userId != userId) return;
     switch (start) {
       case ChatStartupCheck.done:
@@ -1141,10 +1090,11 @@ class ChatMaintenanceController extends ChangeNotifier {
         unawaited(ChatPayloadMigrationService.checkCloudInBackground(userId));
         return;
       case ChatStartupCheck.blocking:
-        // Real work before the app opens (once): the check that plans it
-        // may say what it waits for.
-        _showsSyncHint = true;
-        notifyListeners();
+        // Real work before the app opens (cache rows from an older client):
+        // the maintenance screen shows at once, its bars open-ended until
+        // the plan has counted the chats.
+        _progress = const ChatMaintenanceProgress();
+        _set(ChatMaintenancePhase.running);
         break;
     }
     final plan = await ChatPayloadMigrationService.plan(userId);
@@ -1219,22 +1169,18 @@ class ChatMaintenanceController extends ChangeNotifier {
     ChatMaintenancePhase phase, {
     ChatMaintenanceProgress progress = const ChatMaintenanceProgress(),
     ChatMaintenanceFailure? failure,
-    bool syncHint = false,
   }) {
     _progress = progress;
     _failure = failure;
-    _showsSyncHint = syncHint;
     _set(phase);
   }
 
-  /// Forget the run (sign-out, tests). The session the app started with is
-  /// kept; a real sign-out forgets it ([forgetRestoredSession]).
+  /// Forget the run (sign-out, tests).
   void reset() {
     final released = _released;
     if (released != null && !released.isCompleted) released.complete();
     _released = null;
     _userId = null;
-    _showsSyncHint = false;
     _plan = null;
     _failure = null;
     _progress = const ChatMaintenanceProgress();
