@@ -14,13 +14,9 @@ RUN uv sync --frozen --no-dev --no-install-project
 RUN uv run --no-dev python -m livekit.agents download-files
 
 # Copy application code
-COPY agent.py tools.py ui_bridge.py memory.py vision.py background.py \
-     call_config.py delegation.py ./
+COPY agent.py tools.py ui_bridge.py vision.py background.py \
+     call_config.py chuk_proxy.py delegation.py ./
 
-# Facts from the remember tool live on disk, keyed by user id. Mount a volume
-# here to keep them across redeploys.
-ENV MEMORY_DIR=/data/memory
-VOLUME ["/data"]
 
 # Run the agent
 CMD ["uv", "run", "--no-dev", "agent.py", "start"]
