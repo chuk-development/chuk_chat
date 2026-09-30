@@ -893,6 +893,16 @@ NOT_CONFIG: dict[str, str] = {
         "account store and the encrypted vault, never to a file a person "
         "edits. A setting that needs it uses a ``*_key_ref`` name instead."
     ),
+    "AGENTS_INSTALL_TOKEN": (
+        "A secret, and a one-time one: the install token the Chuk app mints "
+        "for one pairing. ``agents-host connect`` reads it once and removes "
+        "it from the environment. It expires after 30 minutes."
+    ),
+    "AGENTS_BOOTSTRAP_REEXEC": (
+        "A per-process marker, not a setting. ``scripts/agents-bootstrap.sh`` "
+        "sets it when it starts itself again without the token on its command "
+        "line; there is no machine-wide value to configure."
+    ),
     "AGENTS_VNC_PASSWD": (
         "A secret, and a per-view one: the executor generates a fresh value "
         "for every live view and passes it to the container on that one call. "
