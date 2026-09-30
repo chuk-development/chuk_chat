@@ -3,6 +3,4 @@
 .venv/
 __pycache__/
 *.pyc
-# Per-user facts written by the remember tool.
-.memory/
 .pytest_cache/

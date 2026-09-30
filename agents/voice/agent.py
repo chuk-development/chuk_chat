@@ -1,13 +1,16 @@
 """chuk-voice — the voice worker for chuk_chat voice calls.
 
-Forked from new-voicemode/server. The pipeline is unchanged; this copy adds the
-chuk_chat contract: dispatch metadata (mode, chat context, delegation), the
-``delegate_task`` / ``chuk.task_result`` RPC pair, and agent-started calls.
-See README.md for the contract.
+Forked from new-voicemode/server. This copy adds the chuk_chat contract:
+dispatch metadata (mode, chat context, delegation), the ``delegate_task`` /
+``chuk.task_result`` RPC pair, and agent-started calls. See README.md.
 
-The full pipeline runs server-side.
+The worker holds NO provider keys. LLM, STT and TTS run through the chuk API
+proxy (``CHUK_API_BASE``, api.chuk.chat), which bills the user's credits. Each
+request carries a short-lived worker JWT and the call's voice grant
+(``chuk_proxy``). A job without a voice grant does not start the pipeline.
 
-    mic → VAD (Silero) → STT (Groq Whisper) → LLM (+ tools) → TTS (Cartesia)
+    mic → VAD (Silero) → STT (Whisper via proxy) → LLM (via proxy, + tools)
+        → TTS (Inworld via proxy)
 
 The LLM owns a toolset (``tools.ALL_TOOLS``) that reaches the live web, the
 user's phone, and everything in between.  Each tool speaks a short answer *and*
@@ -22,6 +25,9 @@ import asyncio
 import json
 import logging
 import os
+import re
+import uuid
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -44,20 +50,21 @@ from livekit.agents import (
     room_io,
 )
 from livekit.agents.llm import ChatContext, ChatMessage, ImageContent
-from livekit.plugins import cartesia, groq, noise_cancellation, openai, silero
+from livekit.plugins import noise_cancellation, openai, silero
 
 import call_config
+import chuk_proxy
 import delegation
-import memory as conversation_memory
 import tools as agent_tools
 from background import BackgroundRunner
 from tools import SessionData
 from ui_bridge import UiBridge
 from vision import VideoNarrator
 
-# run.sh points VOICE_ENV_FILE at agents/voice/.env.local, or at the
-# new-voicemode one as a fallback. Values already in the environment win.
-load_dotenv(os.environ.get("VOICE_ENV_FILE", ".env.local"))
+# agents/voice/.env.local holds only LIVEKIT_URL, LIVEKIT_API_KEY,
+# LIVEKIT_API_SECRET (and optionally CHUK_API_BASE). Values already in the
+# environment win.
+load_dotenv(Path(__file__).resolve().parent / ".env.local")
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -81,19 +88,37 @@ AGENT_NAME = "chuk-voice"
 #: not collide.
 HEALTH_PORT = int(os.environ.get("VOICE_HEALTH_PORT", "8093"))
 
-#: Cartesia voice used when the app sends no voice_id.
-_DEFAULT_VOICE_ID = "a57ad970-c054-4229-90e1-5e9620838b07"
+# ---------------------------------------------------------------------------
+# Models behind the chuk API proxy (placeholders until api_server recommends)
+# ---------------------------------------------------------------------------
+
+#: The conversation LLM, sent with the extra body ``provider``. Default from
+#: the 2026-10-01 RunAnywhere benchmark on the production route: deepseek
+#: v4.1 flash with reasoning off had the lowest time to first token (0.72 s
+#: plain, 0.76 s tool call) and 12/12 correct tool calls.
+_LLM_MODEL = os.environ.get("VOICE_LLM_MODEL", "deepseek/deepseek-v4.1-flash")
+_LLM_PROVIDER = os.environ.get("VOICE_LLM_PROVIDER", "runanywhere").strip()
+#: "none" keeps the first token fast; empty sends no reasoning_effort.
+_LLM_REASONING = os.environ.get("VOICE_LLM_REASONING", "none").strip()
+
+#: Groq Whisper through ``POST {base}/audio/transcriptions``. Batch STT: the
+#: SDK wraps it with VAD.
+_STT_MODEL = os.environ.get("VOICE_STT_MODEL", "whisper-large-v3-turbo")
+
+#: Inworld through ``POST {base}/audio/speech`` (streamed 24 kHz pcm).
+_TTS_MODEL = os.environ.get("VOICE_TTS_MODEL", "inworld-tts-2-flash")
+#: German voice that also speaks English (the proxy's default).
+_TTS_VOICE = os.environ.get("VOICE_TTS_VOICE", "Bastian")
+
+#: A voice id from the app is used only when it looks like an Inworld voice
+#: name ("Ashley", "Dennis"). An old Cartesia UUID would break every reply.
+_VOICE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z _-]{0,39}$")
+
+#: Seconds to wait for the app before the no-grant line is sent.
+_NO_GRANT_WAIT = 10.0
 
 #: Agent-started call: seconds to wait for the app before the greeting.
 _GREETING_WAIT = 15.0
-
-#: STT backend. All but "groq" stream and deliver word-aligned transcripts,
-#: which is what adaptive interruption and turn detection need:
-#:   cartesia — Cartesia ink-whisper, reuses CARTESIA_API_KEY (default)
-#:   deepgram — Deepgram nova-3 through LiveKit Inference (LiveKit credentials)
-#:   groq     — the old batch Groq Whisper path; fallback only. Batch STT makes
-#:              the SDK fall back to plain VAD interruption.
-_STT_BACKEND = os.environ.get("VOICE_STT", "cartesia").lower()
 
 #: Silence (s) after which the user counts as away. Then the agent asks once
 #: whether they are still there, and hangs up after _AWAY_HANGUP_AFTER more.
@@ -115,66 +140,86 @@ _GOODBYE_TIMEOUT = 15.0
 _THINKING_SOUND = os.environ.get("VOICE_THINKING_SOUND", "1") not in ("0", "false", "no")
 
 
-# ---------------------------------------------------------------------------
-# LLM provider
-# ---------------------------------------------------------------------------
-# VOICE_PROVIDER picks where LLM inference runs. Time-to-first-token is what the
-# user actually feels in a voice call, and measured on gpt-oss-120b Groq answers
-# in ~0.2s against Together's ~1.0s — so Groq is the default. Cerebras is faster
-# still on paper, but the key configured here has no quota (HTTP 402
-# payment_required), so it stays opt-in. TTS is always native Cartesia.
-_PROVIDER = os.environ.get("VOICE_PROVIDER", "groq").lower()
-
-_TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY", "")
-_CEREBRAS_API_KEY = os.environ.get("CEREBRAS_API_KEY", "")
-
-#: Default model per provider. All three are tool-capable.
-_DEFAULT_MODELS = {
-    "cerebras": "gpt-oss-120b",
-    "groq": "openai/gpt-oss-120b",
-    "together": "openai/gpt-oss-120b",
-}
-
-#: The conversation LLM is picked for speed and is text-only, so vision runs on
-#: a dedicated multimodal model (Groq, always — it is the cheapest fast option
-#: and we already hold the key for STT).
-_VISION_MODEL = os.environ.get("VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+#: The conversation LLM is text-only. Continuous video narration runs on a
+#: separate multimodal model behind the proxy. Unset: no narration.
+_VISION_MODEL = os.environ.get("VOICE_VISION_MODEL", "").strip()
 
 #: Continuous video narration costs one vision call every few seconds while the
-#: camera is on. Off switches back to look-on-demand only.
-_NARRATION_ENABLED = os.environ.get("VISION_NARRATION", "1") not in ("0", "false", "no")
+#: camera is on (billed to the user). Off switches it off.
+_NARRATION_ENABLED = bool(_VISION_MODEL) and os.environ.get("VISION_NARRATION", "1") not in (
+    "0",
+    "false",
+    "no",
+)
+
+#: Attach the latest camera frame to each user turn. Only for a main LLM that
+#: takes images; the default model is text-only, so it is off.
+_LLM_IMAGES = os.environ.get("VOICE_LLM_IMAGES", "0") in ("1", "true", "yes")
 
 
-def _build_llm(model: str) -> Any:
-    """Construct the LLM client for the configured provider."""
-    if _PROVIDER == "cerebras":
-        return openai.LLM.with_cerebras(model=model, api_key=_CEREBRAS_API_KEY)
-    if _PROVIDER == "together":
-        return openai.LLM.with_together(model=model, api_key=_TOGETHER_API_KEY)
-    return groq.LLM(model=model)
+def _build_llm(client: Any, model: str) -> Any:
+    """The conversation LLM through the chuk proxy."""
+    kwargs: dict[str, Any] = {"client": client, "model": model}
+    extra: dict[str, Any] = {}
+    if _LLM_PROVIDER:
+        extra["provider"] = _LLM_PROVIDER
+    if _LLM_REASONING:
+        extra["reasoning_effort"] = _LLM_REASONING
+    if extra:
+        kwargs["extra_body"] = extra
+    return openai.LLM(**kwargs)
 
 
-def _build_stt(stt_language: str | None) -> Any:
-    """Construct the STT for the configured backend (``VOICE_STT``)."""
-    if _STT_BACKEND == "deepgram":
-        return inference.STT("deepgram/nova-3", language=stt_language or "de")
-    if _STT_BACKEND == "groq":
-        # The old batch path. No streaming, no aligned transcript: adaptive
-        # interruption falls back to VAD. Keep it only as a fallback.
-        if _PROVIDER == "together":
-            return openai.STT(
-                model="openai/whisper-large-v3",
-                base_url="https://api.together.xyz/v1",
-                api_key=_TOGETHER_API_KEY,
-                detect_language=not stt_language,
-                language=stt_language or "en",
+def _build_stt(client: Any, language: str) -> Any:
+    """Whisper through the chuk proxy (batch, OpenAI-compatible)."""
+    return openai.STT(client=client, model=_STT_MODEL, language=language, use_realtime=False)
+
+
+def _pick_voice(app_voice: str | None) -> str:
+    """The app's voice id when it is an Inworld voice name, else the default."""
+    if app_voice and _VOICE_NAME_RE.match(app_voice):
+        return app_voice
+    if app_voice:
+        logger.info("ignoring voice_id from the app (not an Inworld voice name)")
+    return _TTS_VOICE
+
+
+def _build_tts(client: Any, voice: str) -> Any:
+    """Inworld TTS through the chuk proxy (streamed pcm)."""
+    return openai.TTS(client=client, model=_TTS_MODEL, voice=voice, response_format="pcm")
+
+
+async def _refuse_without_grant(ctx: agents.JobContext, cfg: call_config.CallConfig) -> None:
+    """No voice grant: send one text line and leave. No pipeline starts.
+
+    The line goes out as a final agent transcription (text, not speech):
+    every TTS call needs the grant, so the worker cannot speak here.
+    """
+    logger.warning("job without voice_grant — not starting the pipeline")
+    try:
+        await ctx.connect()
+        try:
+            await asyncio.wait_for(
+                ctx.wait_for_participant(
+                    identity=cfg.app_identity if cfg.user_id != "default" else None
+                ),
+                timeout=_NO_GRANT_WAIT,
             )
-        if stt_language:
-            return groq.STT(model="whisper-large-v3-turbo", language=stt_language)
-        return groq.STT(model="whisper-large-v3-turbo", detect_language=True)
-    if _STT_BACKEND != "cartesia":
-        logger.warning("unknown VOICE_STT=%r — using cartesia", _STT_BACKEND)
-    return cartesia.STT(model="ink-whisper", language=stt_language or "de")
+        except TimeoutError:
+            pass
+        await ctx.room.local_participant.send_text(
+            call_config.no_grant_text(cfg),
+            topic="lk.transcription",
+            attributes={
+                "lk.segment_id": f"SG_{uuid.uuid4().hex[:12]}",
+                "lk.transcription_final": "true",
+            },
+        )
+        # Give the text stream a moment to reach the app before we leave.
+        await asyncio.sleep(1.0)
+    except Exception as e:  # noqa: BLE001 — leave in any case
+        logger.debug("no-grant notice not sent: %s", e)
+    ctx.shutdown(reason="no voice grant")
 
 
 # The system prompt is built per call from the dispatch metadata, see
@@ -257,7 +302,11 @@ class VisionAgent(Agent):
         self._app_identity = app_identity
         self._latest_frame: rtc.VideoFrame | None = None
         self._video_tasks: dict[str, asyncio.Task[None]] = {}
-        self._narrator = VideoNarrator(vision_llm=vision_llm, chat_ctx=self.chat_ctx)
+        self._narrator = (
+            VideoNarrator(vision_llm=vision_llm, chat_ctx=self.chat_ctx)
+            if vision_llm is not None
+            else None
+        )
 
         for participant in room.remote_participants.values():
             for pub in participant.track_publications.values():
@@ -289,7 +338,8 @@ class VisionAgent(Agent):
         self._latest_frame = None
         # Camera off means the narration is stale; drop it so the agent stops
         # answering about a scene it can no longer see.
-        self._narrator.detach()
+        if self._narrator is not None:
+            self._narrator.detach()
 
     def _maybe_watch(self, pub: rtc.TrackPublication) -> None:
         if pub.kind == rtc.TrackKind.KIND_VIDEO and pub.track is not None:
@@ -308,7 +358,7 @@ class VisionAgent(Agent):
                 await stream.aclose()
 
         self._video_tasks[sid] = asyncio.create_task(_read(), name=f"video-{sid}")
-        if _NARRATION_ENABLED:
+        if _NARRATION_ENABLED and self._narrator is not None:
             self._narrator.attach(track)
 
     async def on_enter(self) -> None:
@@ -334,7 +384,7 @@ class VisionAgent(Agent):
         self, turn_ctx: ChatContext, new_message: ChatMessage
     ) -> None:
         frame = self._latest_frame
-        if frame is None:
+        if frame is None or not _LLM_IMAGES:
             return
         # Core auto-encodes the VideoFrame to a base64 JPEG image_url for the
         # Groq/OpenAI format; inference_width/height downscale before sending.
@@ -350,7 +400,8 @@ class VisionAgent(Agent):
         for task in self._video_tasks.values():
             task.cancel()
         self._video_tasks.clear()
-        await self._narrator.aclose()
+        if self._narrator is not None:
+            await self._narrator.aclose()
 
 
 @server.rtc_session(agent_name=AGENT_NAME)
@@ -359,47 +410,44 @@ async def chuk_voice(ctx: agents.JobContext):
     # Unknown keys are ignored, missing or malformed keys get defaults.
     cfg = call_config.parse_metadata(ctx.job.metadata)
     stt_language = cfg.stt_language
-    voice_id = cfg.voice_id or _DEFAULT_VOICE_ID
-    llm_model = cfg.llm_model or _DEFAULT_MODELS.get(_PROVIDER, _DEFAULT_MODELS["groq"])
-    user_id = cfg.user_id
+    # The model is the worker's choice (VOICE_LLM_MODEL): the proxy routes and
+    # bills it with the given provider. An llm_model from the app is ignored.
+    llm_model = _LLM_MODEL
 
     logger.info(
-        "New session — room=%s provider=%s mode=%s delegate=%s initiated_by=%s",
+        "New session — room=%s mode=%s delegate=%s initiated_by=%s grant=%s",
         ctx.room.name,
-        _PROVIDER,
         cfg.mode,
         cfg.delegate_available,
         cfg.initiated_by,
+        "yes" if cfg.voice_grant else "no",
     )
+
+    # ---- No grant, no pipeline ------------------------------------------------
+    if not cfg.voice_grant:
+        await _refuse_without_grant(ctx, cfg)
+        return
+
+    # ---- The chuk API proxy -----------------------------------------------------
+    # One client per call: worker JWT (re-minted before expiry) + this call's
+    # voice grant on every request. No provider key exists on this machine.
+    proxy = chuk_proxy.make_client(chuk_proxy.WorkerToken.from_env(), cfg.voice_grant)
 
     ui = UiBridge(ctx.room, preferred_identity=cfg.app_identity)
 
-    # ---- Remembered facts ------------------------------------------------------
-    # Only the facts from the remember tool carry over. The old transcript is
-    # NOT resumed: in chuk_chat every call belongs to one chat (or agent), and
-    # the app sends that chat's recent messages as `context`. Resuming the
-    # transcript of an unrelated earlier call would mix two conversations.
-    memory = conversation_memory.load_for(user_id)
-
-    # ---- STT ----------------------------------------------------------------
-    stt = _build_stt(stt_language)
-
-    # ---- TTS ----------------------------------------------------------------
-    tts = cartesia.TTS(model="sonic-3", voice=voice_id)
-
-    # ---- LLM ----------------------------------------------------------------
-    llm = _build_llm(llm_model)
-    # Open the HTTP/2 connection now so the first token isn't paying for a TLS
-    # handshake on top of inference (agents 1.6.7+).
+    stt = _build_stt(proxy, stt_language)
+    tts = _build_tts(proxy, _pick_voice(cfg.voice_id))
+    llm = _build_llm(proxy, llm_model)
+    # Open the connection now so the first token isn't paying for a TLS
+    # handshake on top of inference.
     llm.prewarm()
 
-    # A separate multimodal model for the live video narrator: the main LLM is
-    # picked for speed and is text-only, and narration runs on its own cadence.
-    vision_llm = groq.LLM(model=_VISION_MODEL)
+    # A separate multimodal model for the live video narrator (optional).
+    vision_llm = _build_llm(proxy, _VISION_MODEL) if _NARRATION_ENABLED else None
 
     agent = VisionAgent(
         room=ctx.room,
-        instructions=call_config.build_instructions(cfg, memory.preamble()),
+        instructions=call_config.build_instructions(cfg),
         tools=agent_tools.build_tools(
             mode=cfg.mode, delegate_available=cfg.delegate_available
         ),
@@ -414,10 +462,10 @@ async def chuk_voice(ctx: agents.JobContext):
         tts=tts,
         vad=ctx.proc.userdata["vad"],
         tts_text_transforms=["filter_markdown", "filter_emoji"],
-        # Cartesia emits word-level timestamps, so the transcript can be aligned
-        # to actual audio playout. That is what makes an interrupted message get
-        # trimmed at the word the user cut in on, instead of somewhere near it.
-        use_tts_aligned_transcript=True,
+        # The proxy TTS (OpenAI-compatible) returns no word timings. Aligned
+        # transcripts stay off, so LiveKit paces the transcript itself and
+        # does not warn on every reply.
+        use_tts_aligned_transcript=False,
         # A tool round-trip is cheap now that tools are server-side, so allow a
         # deeper chain (search → read page → answer) before forcing a reply.
         max_tool_steps=8,
@@ -431,8 +479,8 @@ async def chuk_voice(ctx: agents.JobContext):
             endpointing=EndpointingOptions(mode="dynamic", min_delay=0.3, max_delay=2.5),
             # Adaptive interruption tells a real interruption apart from an
             # "mhm" backchannel, so the agent isn't derailed by acknowledgements.
-            # Needs a streaming STT with aligned transcripts (see _build_stt);
-            # with batch STT the SDK silently falls back to plain VAD.
+            # The STT is batch Whisper (wrapped with VAD); the detector reads
+            # the audio, and where it cannot help the SDK uses plain VAD.
             # resume_false_interruption: a cough or a short noise pauses the
             # agent, and the agent resumes where it stopped.
             interruption=InterruptionOptions(
@@ -455,16 +503,21 @@ async def chuk_voice(ctx: agents.JobContext):
     runner = BackgroundRunner(session)
     tasks = delegation.TaskBook()
     logger.info(
-        "STT backend=%s language=%s, adaptive interruption requested", _STT_BACKEND, stt_language
+        "proxy models: llm=%s stt=%s tts=%s language=%s",
+        llm_model,
+        _STT_MODEL,
+        _TTS_MODEL,
+        stt_language,
     )
-    session.userdata = SessionData(ui=ui, memory=memory, runner=runner, tasks=tasks)
+    session.userdata = SessionData(ui=ui, runner=runner, tasks=tasks, proxy=proxy)
 
-    # No transcript persistence and no post-call compaction: the chat in the
-    # app is the record of the call (it is built from the transcription
-    # streams). Facts are saved by the remember tool itself.
+    # No transcript persistence and no memory: the chat in the app is the
+    # record of the call (it is built from the transcription streams), and
+    # the host agent holds the user's memory.
     async def _shutdown() -> None:
         await runner.aclose()
         await agent.aclose()
+        await proxy.close()
 
     ctx.add_shutdown_callback(_shutdown)
 
@@ -676,10 +729,10 @@ async def chuk_voice(ctx: agents.JobContext):
         new_voice_id = payload.get("voice_id")
         if not new_voice_id:
             return json.dumps({"status": "error", "message": "No voice_id provided"})
-        # update_options swaps the live pipeline properly (agents 1.6.6+);
-        # assigning session._tts used to leave the running stream on the old voice.
-        agent.update_options(tts=cartesia.TTS(model="sonic-3", voice=new_voice_id))
-        return json.dumps({"status": "ok", "voice_id": new_voice_id})
+        voice = _pick_voice(str(new_voice_id))
+        # update_options swaps the live pipeline properly (agents 1.6.6+).
+        agent.update_options(tts=_build_tts(proxy, voice))
+        return json.dumps({"status": "ok", "voice_id": voice})
 
     @ctx.room.local_participant.register_rpc_method("change_model")
     async def handle_change_model(data: rtc.RpcInvocationData) -> str:
@@ -687,7 +740,7 @@ async def chuk_voice(ctx: agents.JobContext):
         new_model = payload.get("model")
         if not new_model:
             return json.dumps({"status": "error", "message": "No model provided"})
-        new_llm = _build_llm(new_model)
+        new_llm = _build_llm(proxy, str(new_model))
         new_llm.prewarm()
         agent.update_options(llm=new_llm)
         return json.dumps({"status": "ok", "model": new_model})

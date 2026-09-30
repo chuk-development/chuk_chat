@@ -30,9 +30,13 @@ def test_set_reminder_only_without_a_delegate() -> None:
         assert "delegate_task" in names
 
 
-def test_research_is_left_out_only_in_agents_mode_with_a_delegate() -> None:
-    assert "research_in_background" in _names(tools.build_tools(mode="chat", delegate_available=True))
-    assert "research_in_background" not in _names(tools.build_tools(mode="agents", delegate_available=True))
+def test_no_tool_needs_a_provider_key() -> None:
+    # Memory facts and Groq deep research are gone; search goes through the proxy.
+    for delegate in (False, True):
+        names = _names(tools.build_tools(mode="chat", delegate_available=delegate))
+        for gone in ("remember", "recall", "forget", "research_in_background", "get_device_status"):
+            assert gone not in names
+        assert "search_web" in names
 
 
 class _FakeUi:

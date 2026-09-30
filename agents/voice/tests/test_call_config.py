@@ -173,11 +173,6 @@ def test_call_limit_goodbye() -> None:
     assert "Do not call any tool" in text
 
 
-def test_memory_preamble_is_appended() -> None:
-    prompt = build_instructions(CallConfig(), "\n\nFACTS")
-    assert prompt.endswith("\n\nFACTS")
-
-
 # ---------------------------------------------------------------------------
 # Agent-started call greeting
 # ---------------------------------------------------------------------------

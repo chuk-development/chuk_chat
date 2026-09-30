@@ -3,13 +3,16 @@
 chuk-voice is the voice worker for voice calls in chuk_chat. It is a LiveKit
 agent. It listens to the user, thinks, and speaks. The pipeline is:
 
-    mic → noise cancellation (BVC) → VAD (Silero) → STT (Cartesia ink-whisper,
-    streaming) → LLM (Groq, native tool calls) → TTS (Cartesia sonic-3)
+    mic → noise cancellation (BVC) → VAD (Silero) → STT (Groq Whisper)
+    → LLM (native tool calls) → TTS (Inworld)
 
-This package is a fork of `new-voicemode/server`. The tools and the latency
-settings are the same. This fork adds the chuk_chat contract: dispatch
-metadata, task delegation to the app, calls that the agent starts, hang-up by
-intent, and a streaming STT.
+STT, LLM and TTS all run through the chuk API proxy (`CHUK_API_BASE`,
+api.chuk.chat). The proxy bills the user's credits. **The worker holds no
+provider keys.**
+
+This package is a fork of `new-voicemode/server`. This fork adds the
+chuk_chat contract: dispatch metadata, task delegation to the app, calls that
+the agent starts, hang-up by intent, and the proxy.
 
 Versions: `livekit-agents` 1.8.3, `livekit-plugins-noise-cancellation` 0.3.2,
 `livekit-api` 1.2.1 (see `uv.lock`).
@@ -39,62 +42,74 @@ default log level is `warn`.
 The worker health server listens on port 8093. The new-voicemode worker uses
 port 8083, so both can run on one machine.
 
-### Env file
+### Environment
 
-The worker reads its settings from an env file. `run.sh` selects the file:
+The worker reads `agents/voice/.env.local` or the process environment (for
+example a systemd unit). Never commit an env file: this repository is public.
+`.gitignore` ignores `.env.local*`.
 
-1. `VOICE_ENV_FILE`, when you set it.
-2. `agents/voice/.env.local`, when it exists.
-3. `new-voicemode/server/.env.local` as the fallback.
-
-`run.sh` reads the fallback file in place. It does not copy it. Values that
-are already in the environment win over the file.
-
-Never commit an env file. This repository is public. `.gitignore` ignores
-`.env.local*`.
-
-### Environment variables
-
-Names only. Get the values from the owner.
-
-Required:
+Required (names only; get the values from the owner):
 
 - `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`: the LiveKit project.
-  LiveKit Inference (turn detector, adaptive interruption, Deepgram STT) also
-  uses these.
-- `GROQ_API_KEY`: the default LLM, vision, web search.
-- `CARTESIA_API_KEY`: STT (default) and TTS.
+  The secret also signs the worker JWT for the proxy.
 
 Optional:
 
-- `VOICE_PROVIDER`: `groq` (default), `together` or `cerebras`.
-- `TOGETHER_API_KEY`, `CEREBRAS_API_KEY`: only for those providers.
-- `VISION_MODEL`, `VISION_NARRATION`, `VISION_INTERVAL`: camera and screen
-  vision.
-- `TURN_DETECTOR`: `inference` (default, hosted) or `local`.
-- `GROQ_SEARCH_MODEL`, `GROQ_RESEARCH_MODEL`: web search models.
-- `MEMORY_DIR`, `MEMORY_MAX_ITEMS`: storage for facts from the `remember` tool.
+- `CHUK_API_BASE`: the proxy (default `https://api.chuk.chat/v1`).
+- `VOICE_LLM_MODEL` (default `deepseek/deepseek-v4.1-flash`: lowest time to
+  first token on RunAnywhere, 0.72 s, with correct tool calls),
+  `VOICE_LLM_PROVIDER` (default `runanywhere`, sent as the extra body
+  `provider`), `VOICE_LLM_REASONING` (default `none`, sent as
+  `reasoning_effort`; empty sends nothing).
+- `VOICE_STT_MODEL` (default `whisper-large-v3-turbo`).
+- `VOICE_TTS_MODEL` (default `inworld-tts-2-flash`), `VOICE_TTS_VOICE`
+  (default `Bastian`, German, also speaks English).
+- `VOICE_SEARCH_MODEL`: a search-capable model behind the proxy for
+  `search_web`. Unset: `search_web` uses Wikipedia only.
+- `VOICE_VISION_MODEL`: a multimodal model behind the proxy for camera
+  narration. Unset: no narration. `VISION_NARRATION`, `VISION_INTERVAL` tune
+  it.
+- `VOICE_LLM_IMAGES`: `1` attaches the camera frame to each user turn. Only
+  for a main model that takes images (default off).
+- `TURN_DETECTOR`: `inference` (default) or `local` (`v1-mini`).
 - `LIVEKIT_LOG_LEVEL`: log level (default `warn`).
-- `VOICE_ENV_FILE`: the env file (see above).
 - `VOICE_HEALTH_PORT`: the health port (default 8093).
-- `VOICE_STT`: `cartesia` (default, ink-whisper), `deepgram` (nova-3 through
-  LiveKit Inference) or `groq` (old batch Whisper, fallback only).
-- `VOICE_AWAY_TIMEOUT`: seconds of silence until the user counts as away
-  (default 30).
-- `VOICE_AWAY_HANGUP`: seconds after the "still there?" question until the
-  worker hangs up (default 20).
-- `VOICE_THINKING_SOUND`: `0` switches off the thinking sound (default on).
-- `VOICE_MAX_CALL_SECONDS`: the longest call (default 3600). Then the agent
-  says goodbye and deletes the room.
+- `VOICE_LOAD_THRESHOLD`: raise LiveKit's CPU load limit on a busy machine
+  (`inf` turns the check off).
+- `VOICE_AWAY_TIMEOUT` (default 30), `VOICE_AWAY_HANGUP` (default 20): the
+  away flow, in seconds.
+- `VOICE_MAX_CALL_SECONDS`: the longest call (default 3600).
+- `VOICE_THINKING_SOUND`: `0` switches off the thinking sound.
+
+### The proxy
+
+Every worker → api request sends two headers:
+
+- `Authorization: Bearer <worker_jwt>`. HS256, signed with
+  `LIVEKIT_API_SECRET`. Claims: `iss` = `LIVEKIT_API_KEY`, `sub` =
+  `chuk-voice-worker`, `iat`, `exp` = now + 5 min. The worker mints a new one
+  when less than 60 s are left.
+- `X-Chuk-Voice-Grant: <voice_grant>` from the dispatch metadata.
+
+Routes (OpenAI-compatible, below `CHUK_API_BASE`):
+
+- `POST /chat/completions`: the LLM, streamed, with native `tools`, and the
+  extra body `provider`.
+- `POST /audio/transcriptions`: Whisper (batch).
+- `POST /audio/speech`: Inworld, `response_format: "pcm"` (24 kHz, 16-bit,
+  mono). The response should carry an `x-request-id` header; without it
+  LiveKit logs a warning for each reply.
+
+A job without `voice_grant` does not start the pipeline. The worker sends one
+text line on `lk.transcription` ("Voice is not set up for this account.", in
+German for `de`) and leaves. It cannot speak the line: TTS needs the grant.
 
 ## Voice behaviour
 
-- STT: the default STT streams and gives word-aligned transcripts. Adaptive
-  interruption needs that: it tells a real interruption from an "mhm". With
-  `VOICE_STT=groq` (batch), the SDK falls back to plain VAD interruption. At
-  session start the log shows `adaptive interruption detector initialized`.
-  The log must not show `interruption_detection is provided, but it's not
-  compatible`.
+- STT: batch Whisper through the proxy, wrapped with VAD. The adaptive
+  interruption setting stays on; where it cannot help, the SDK uses plain VAD
+  interruption. The TTS gives no word timings, so aligned transcripts are off
+  and LiveKit paces the transcript itself.
 - False interruption: a cough or a short noise pauses the agent. After 2 s of
   silence the agent continues where it stopped.
 - Hang-up: the model calls the `end_call` tool when the user wants to end the
@@ -120,10 +135,12 @@ Optional:
   the location and asks for the place.
 - Thinking sound: soft keyboard typing plays while the agent thinks or a tool
   runs. It comes on a second audio track from the agent participant.
-- Tools: every tool is a LiveKit `@function_tool`. The Groq LLM
-  (`livekit.plugins.groq.LLM`, an OpenAI-compatible client) gets them as
-  native OpenAI `tools`. It returns structured `tool_calls`. The worker never
-  parses tool calls from text.
+- Tools: every tool is a LiveKit `@function_tool`. The LLM
+  (`livekit.plugins.openai.LLM` on the proxy) gets them as native OpenAI
+  `tools`. It returns structured `tool_calls`. The worker never parses tool
+  calls from text.
+- No memory in the worker: the host agent holds the user's memory. Deep
+  research goes through `delegate_task`.
 
 ## Contract with the app
 
@@ -141,10 +158,11 @@ The app dispatches the worker with a JSON string in `ctx.job.metadata`:
   "stt_language": "de | en | ... (device locale) | null",
   "delegate_available": true,
   "voice_id": "str | null",
-  "llm_model": "str | null",
+  "llm_model": "str | null (ignored: VOICE_LLM_MODEL picks the model)",
   "initiated_by": "user | agent",
   "call_id": "str | null",
-  "call_reason": "str | null (max 1000 chars)"
+  "call_reason": "str | null (max 1000 chars)",
+  "voice_grant": "str (opaque, from /v1/voice/token; required)"
 }
 ```
 
@@ -161,7 +179,7 @@ and the new-voicemode defaults for voice, model and language.
 - `context`: the recent chat messages. The worker puts them at the start of
   the system prompt. Thus the voice agent knows the topic of the chat.
 - `stt_language`: the device language. The worker takes the first part of a
-  locale (`de-DE` gives `de`). STT (Cartesia, Deepgram, Groq) and the default
+  locale (`de-DE` gives `de`). The STT (Whisper) and the default
   reply language use it. When the key is missing, the worker uses `de`.
 - `initiated_by = "agent"`: the agent started the call. The assistant speaks
   first. It greets the user and tells the reason from `call_reason` in one or
@@ -219,7 +237,7 @@ Envelope:
 {
   "v": 1,
   "id": "uuid4 string",
-  "kind": "weather | search | news | article | map | list | calc | time | currency | stock | memory | task | reminder",
+  "kind": "weather | search | news | article | map | list | calc | time | currency | stock | reminder",
   "title": "str",
   "subtitle": "str | null",
   "source": "str | null (attribution, e.g. \"Open-Meteo\")",
@@ -250,9 +268,6 @@ Envelope:
   `date`.
 - `stock` (`get_stock`): `symbol`, `name`, `price`, `change`, `change_pct`,
   `currency`, `series` (max 60 numbers).
-- `memory` (`remember`): `facts` (list of str).
-- `task` (`research_in_background`): `job_id`, `label`, `status`
-  (`running`).
 - `reminder` (`set_reminder`): `job_id`, `about`, `due_iso`.
 
 Tool status goes on the data topic `ui.tool`:
@@ -273,11 +288,11 @@ call carries `name`; later events have `name: ""`.
 
 ### Differences from new-voicemode
 
-- The worker does not resume the transcript of earlier calls, and it does not
-  summarise a call after it ends. The app sends the chat context instead. The
-  worker keeps only the facts from the `remember` tool.
-- In agents mode with delegation, the tool `research_in_background` is not
-  available. `delegate_task` does that work.
+- The worker holds no provider keys; everything goes through the chuk
+  proxy.
+- The worker keeps no memory: no transcript resume, no summaries, no
+  `remember` / `recall` / `forget`. The app sends the chat context.
+- `research_in_background` is gone; `delegate_task` does that work.
 - New tools: `end_call`, `show_list`.
 - Wikipedia requests send a user agent with a contact URL. Wikimedia blocks
   the old generic user agent with HTTP 403.
@@ -292,5 +307,5 @@ call carries `name`; later events have `name: ""`.
 - `background.py`: background jobs and speech at quiet moments.
 - `ui_bridge.py`: `ui.card`, `ui.tool` and RPCs to the app.
 - `vision.py`: camera and screen narration.
-- `memory.py`: facts from the `remember` tool.
-- `tests/`: pytest tests for `call_config.py` and `delegation.py`.
+- `chuk_proxy.py`: worker JWT and the proxy client. No LiveKit.
+- `tests/`: pytest tests (`live_e2e.py` is a manual live run, not pytest).

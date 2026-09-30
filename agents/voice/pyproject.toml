@@ -5,10 +5,11 @@ description = "LiveKit voice worker for chuk_chat voice calls (agent name: chuk-
 requires-python = ">=3.13"
 dependencies = [
     "httpx>=0.28.1",
-    "livekit-agents[cartesia,groq,openai,silero]~=1.8",
+    "livekit-agents[openai,silero]~=1.8",
     "livekit-api>=1.2.1",
     "livekit-plugins-noise-cancellation~=0.3",
     "python-dotenv>=1.2.1",
+    "pyjwt>=2.8",
 ]
 
 [dependency-groups]
