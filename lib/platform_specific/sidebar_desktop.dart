@@ -40,6 +40,9 @@ class SidebarDesktop extends StatefulWidget {
   final bool isCompactMode;
   final bool showWorkspacesButton;
 
+  /// The Agents build's "Add your computer" entry. Null draws no row.
+  final VoidCallback? onAddComputerTapped;
+
   const SidebarDesktop({
     super.key,
     required this.onChatSelected,
@@ -51,6 +54,7 @@ class SidebarDesktop extends StatefulWidget {
     required this.selectedChatId,
     required this.isCompactMode,
     required this.showWorkspacesButton,
+    this.onAddComputerTapped,
   });
 
   @override
@@ -373,6 +377,7 @@ class _SidebarDesktopState extends State<SidebarDesktop>
       onMediaTapped: widget.onMediaTapped,
       onNewChatTapped: widget.onNewChatTapped,
       searchEntry: searchEntry,
+      onAddComputerTapped: widget.onAddComputerTapped,
     );
   }
 

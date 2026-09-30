@@ -319,6 +319,10 @@ class AgentsPairing {
   bool _sentDeviceKey = false;
   bool _approvedPeer = false;
 
+  /// The key [onPeerDeviceKey] replaced for the peer's device id, for
+  /// [rollbackPeerApproval].
+  SimplePublicKey? _replacedPeerKey;
+
   // --- constructors ----------------------------------------------------------
 
   /// Start a pairing session as the Python client (initiator). Generates the
@@ -816,10 +820,28 @@ class AgentsPairing {
       throw AgentsPairingException(AgentsPairingRejection.badDeviceProof);
     }
 
-    _approved.approve(peerDeviceId, peerEd);
+    // A fresh ceremony that got this far authenticated the peer through the
+    // pairing code, so it replaces an older key for the same device id (a
+    // reinstalled computer). The key it replaced is kept for a rollback.
+    _replacedPeerKey = _approved.replaceAfterPairing(peerDeviceId, peerEd);
     _peerDeviceId = peerDeviceId;
     _approvedPeer = true;
     _maybeComplete();
+  }
+
+  /// Undoes the approval this ceremony made: the peer's new key goes, and a
+  /// key it replaced comes back. The caller runs this when the pairing fails
+  /// after the ceremony approved the peer but before the trust was kept, so a
+  /// failed attempt leaves the store as it was. Safe to call more than once,
+  /// and a no-op before the peer was approved.
+  void rollbackPeerApproval() {
+    final String? peer = _peerDeviceId;
+    if (!_approvedPeer || peer == null) return;
+    _approvedPeer = false;
+    _approved.revoke(peer);
+    final SimplePublicKey? previous = _replacedPeerKey;
+    if (previous != null) _approved.approve(peer, previous);
+    _replacedPeerKey = null;
   }
 
   void _maybeComplete() {

@@ -18,6 +18,16 @@ class FakeRelayController implements AgentsRelayController {
       StreamController<AgentsRelayInbound>.broadcast(sync: true);
 
   int connectCalls = 0;
+
+  /// Every `connect` call, as `(hostUrl, pairingCode)`, in order.
+  final List<(Uri, String)> connects = <(Uri, String)>[];
+
+  /// The trust [establishedTrust] reports once [connect] has run. Null (the
+  /// default) keeps the old behaviour: no trust to persist.
+  AgentsStoredPairing? trustOnConnect;
+
+  /// When set, [connect] throws it — a ceremony that failed.
+  Object? connectError;
   final List<(String, int, int)> replayPages = <(String, int, int)>[];
   int reconnectCalls = 0;
   bool provisioned = false;
@@ -75,6 +85,9 @@ class FakeRelayController implements AgentsRelayController {
     required String pairingCode,
   }) async {
     connectCalls++;
+    connects.add((hostUrl, pairingCode));
+    final Object? error = connectError;
+    if (error != null) throw error;
     _state.value = const AgentsRelayState(
       phase: AgentsRelayPhase.paired,
       peerDeviceId: 'host-laptop-1',
@@ -103,12 +116,19 @@ class FakeRelayController implements AgentsRelayController {
   }
 
   @override
-  AgentsStoredPairing? get establishedTrust => null;
+  AgentsStoredPairing? get establishedTrust =>
+      connectCalls > 0 ? trustOnConnect : null;
 
   @override
   Future<void> provisionAccount(AccountSession session) async {
+    final Object? error = provisionError;
+    if (error != null) throw error;
     provisioned = true;
   }
+
+  /// When set, [provisionAccount] throws it — a host that went away right
+  /// after the ceremony.
+  Object? provisionError;
 
   @override
   Future<void> createRoom(

@@ -1762,6 +1762,12 @@ class AgentsRelayClient
     return pairingCode.substring(0, dash);
   }
 
+  /// [url] without its query. A relay address carries the pairing channel
+  /// (key material) or the host's device id in the query, and neither belongs
+  /// in a log line.
+  static String _logSafe(Uri url) =>
+      '${url.scheme}://${url.authority}${url.path}';
+
   @override
   Future<void> connect({
     required Uri hostUrl,
@@ -1794,7 +1800,7 @@ class AgentsRelayClient
     _autoReplayed.clear();
     _provisionGate = Completer<void>();
     if (kDebugMode) {
-      debugPrint('[agents-relay] socket connected to $hostUrl');
+      debugPrint('[agents-relay] socket connected to ${_logSafe(hostUrl)}');
     }
 
     // 1. Build the joiner BEFORE listening, so the first inbound envelope
@@ -1835,6 +1841,8 @@ class AgentsRelayClient
     try {
       await done.future.timeout(_pairingTimeout);
     } catch (e) {
+      // A ceremony that approved the peer and then failed leaves nothing.
+      _pairing?.rollbackPeerApproval();
       _fail(_pairingErrorText(e));
       await _closeSocket();
       rethrow;
@@ -1883,6 +1891,12 @@ class AgentsRelayClient
       try {
         await resumed.future.timeout(_pairingTimeout);
       } catch (error) {
+        // The ceremony approved the host, but the host never finished the
+        // controller session (it went away). Nothing of this attempt is
+        // kept: no approval, no trust to persist.
+        pairing.rollbackPeerApproval();
+        _establishedTrust = null;
+        _controllerSession = null;
         _fail(_pairingErrorText(error));
         await _closeSocket();
         rethrow;
@@ -1933,7 +1947,9 @@ class AgentsRelayClient
     _autoReplayed.clear();
     _provisionGate = Completer<void>();
     if (kDebugMode) {
-      debugPrint('[agents-relay] reconnecting to $hostUrl (no code)');
+      debugPrint(
+        '[agents-relay] reconnecting to ${_logSafe(hostUrl)} (no code)',
+      );
     }
 
     // Build the reconnect joiner BEFORE listening so the host's reconnect-hello

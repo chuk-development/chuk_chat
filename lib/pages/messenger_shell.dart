@@ -101,6 +101,7 @@ import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/auth_service.dart';
 import 'package:chuk_chat/pages/agent_profile_page.dart';
+import 'package:chuk_chat/pages/agents_install_page.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
@@ -110,6 +111,10 @@ import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/browser_presence.dart';
 import 'package:chuk_chat/services/agents/chat_debug_export.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
+import 'package:chuk_chat/services/agents/agents_install_flow.dart';
+import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
+import 'package:chuk_chat/services/agents/agents_invite_pairing.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -169,6 +174,7 @@ class MessengerShell extends StatefulWidget {
     this.pairingRestoreBuilder,
     this.appMode,
     this.chatModeBuilder,
+    this.installClaimWaiter,
   });
 
   /// Builds the relay transport controller. Injectable so widget tests supply
@@ -246,14 +252,22 @@ class MessengerShell extends StatefulWidget {
   /// Builds the Chat half. Null builds chuk_chat's own root wrapper from
   /// [shellConfig]. A widget test hands in a light stand-in, because chuk's
   /// wrapper starts the whole chat stack. [modeSwitch] is the switch, for the
-  /// stand-in's top bar; [phone] is the shell's phone rule.
+  /// stand-in's top bar, and null while the device has no computer;
+  /// [onAddComputer] opens the install page, and is null unless the device
+  /// has no computer. [phone] is the shell's phone rule.
   @visibleForTesting
   final Widget Function(
     BuildContext context, {
     required bool phone,
-    required Widget modeSwitch,
+    required Widget? modeSwitch,
+    required VoidCallback? onAddComputer,
   })?
   chatModeBuilder;
+
+  /// Replaces the install page's wait for the computer (the relay claim). A
+  /// widget test injects one, so the page opens with no socket.
+  @visibleForTesting
+  final AgentsInstallClaimWaiter? installClaimWaiter;
 
   @override
   State<MessengerShell> createState() => _MessengerShellState();
@@ -346,9 +360,10 @@ class _MessengerShellState extends State<MessengerShell>
     _controller.addListener(_onControllerForBrowser);
     _chatListening = _chatModeAvailable;
     if (_chatListening) {
-      _shownMode = _appMode.value;
+      _shownMode = _wantedMode;
       _chatModeBuilt = _shownMode == AppMode.chat;
       _appMode.addListener(_onModeChanged);
+      _hasComputer.addListener(_onHasComputerChanged);
       ChatStorageService.selectedChatIdNotifier.addListener(
         _onSharedChatPointer,
       );
@@ -370,15 +385,49 @@ class _MessengerShellState extends State<MessengerShell>
   Future<bool> _hasPairing() async =>
       (await _pairingStore.loadPairing()) != null;
 
+  /// The half the shell should show: what [_appMode] says, except that a
+  /// device with no computer stays on Chat. The stored choice is left alone,
+  /// so a computer that comes back (a restore, a new install) finds it.
+  AppMode get _wantedMode =>
+      _hasComputer.value == false ? AppMode.chat : _appMode.value;
+
+  /// The switch shows only when there is a computer to switch to. While that
+  /// is not known yet it stays away, and so does the install entry.
+  bool get _showModeSwitch => _hasComputer.value == true;
+
+  /// The install entry's action: only on a device that has no computer.
+  VoidCallback? get _addComputerAction =>
+      _chatModeAvailable && _hasComputer.value == false
+      ? () => unawaited(_addComputer())
+      : null;
+
   /// The switch, wired to [_appMode]. One widget for every place it sits.
-  Widget _buildModeSwitch() => AppModeSwitch(
-    mode: _shownMode,
-    onChanged: (AppMode mode) => unawaited(_appMode.select(mode)),
-  );
+  /// Null while the device has no computer to switch to.
+  Widget? _buildModeSwitch() => _showModeSwitch
+      ? AppModeSwitch(
+          mode: _shownMode,
+          onChanged: (AppMode mode) => unawaited(_appMode.select(mode)),
+        )
+      : null;
+
+  /// "Add your computer": the install page, and the Agents half once the
+  /// computer is linked.
+  Future<void> _addComputer() async {
+    final bool linked = await _openInstallPage();
+    if (!linked || !mounted) return;
+    unawaited(_appMode.select(AppMode.agents));
+  }
+
+  void _onHasComputerChanged() {
+    if (!mounted) return;
+    // The switch and the entry follow the answer; the half may too.
+    setState(() {});
+    _onModeChanged();
+  }
 
   void _onModeChanged() {
     if (!mounted) return;
-    final AppMode next = _appMode.value;
+    final AppMode next = _wantedMode;
     if (next == _shownMode) return;
     setState(() {
       _shownMode = next;
@@ -446,11 +495,20 @@ class _MessengerShellState extends State<MessengerShell>
   /// picks the desktop one. The web keeps the desktop wrapper at every width,
   /// as chuk_chat's web does: the phone wrapper asks the platform for
   /// permissions, and a browser has no such platform.
+  ///
+  /// A device with no computer gets no switch; chuk's sidebar carries the
+  /// "Add your computer" entry instead ([_addComputerAction]).
   Widget _buildChatMode(BuildContext context, bool phone) {
-    final Widget modeSwitch = _buildModeSwitch();
+    final Widget? modeSwitch = _buildModeSwitch();
+    final VoidCallback? addComputer = _addComputerAction;
     final builder = widget.chatModeBuilder;
     if (builder != null) {
-      return builder(context, phone: phone, modeSwitch: modeSwitch);
+      return builder(
+        context,
+        phone: phone,
+        modeSwitch: modeSwitch,
+        onAddComputer: addComputer,
+      );
     }
     final AppShellConfig config = widget.shellConfig!;
     if (phone && !kIsWeb) {
@@ -458,17 +516,19 @@ class _MessengerShellState extends State<MessengerShell>
         config: config,
         headerCenter: modeSwitch,
         selectedChatIdReader: _readChatModeChatId,
+        onAddComputer: addComputer,
       );
     }
     return RootWrapperDesktop(
       config: config,
       headerCenter: modeSwitch,
       selectedChatIdReader: _readChatModeChatId,
+      onAddComputer: addComputer,
     );
   }
 
   /// The switch for the Agents half's own layouts, or null without a Chat
-  /// half.
+  /// half or without a computer.
   @override
   Widget? _agentsModeSwitch() =>
       _chatModeAvailable ? _buildModeSwitch() : null;
@@ -489,6 +549,7 @@ class _MessengerShellState extends State<MessengerShell>
   void dispose() {
     if (_chatListening) {
       _appMode.removeListener(_onModeChanged);
+      _hasComputer.removeListener(_onHasComputerChanged);
       ChatStorageService.selectedChatIdNotifier.removeListener(
         _onSharedChatPointer,
       );

@@ -121,7 +121,12 @@ class _HostSide {
     required this.digits,
     required this.signingKeyPair,
     required this.deviceId,
+    this.answerResume = true,
   });
+
+  /// False plays a host that goes away right after the ceremony: it never
+  /// answers the controller session.
+  final bool answerResume;
 
   final _FakeRelayServer server;
   final String channelId;
@@ -167,6 +172,7 @@ class _HostSide {
   Future<void> _onEnvelope(Map<String, dynamic> env) async {
     switch (env['type']) {
       case 'controller_resume':
+        if (!answerResume) return;
         final nonce = base64Encode(List<int>.filled(32, 42));
         connection = 'test-connection';
         sessionTranscript = utf8.encode(
@@ -609,6 +615,139 @@ void main() {
       final event = await inbound.timeout(const Duration(seconds: 5));
       expect(event, isA<AgentsRelayDelta>());
       expect((event as AgentsRelayDelta).text, 'on it');
+    });
+  });
+
+  group('a reinstalled computer: same device id, new key', () {
+    Future<(AgentsApprovedDevices, SimplePublicKey)> staleApproval() async {
+      final SimplePublicKey oldKey = await (await AgentsDeviceKeys.generate())
+          .extractPublicKey();
+      final AgentsApprovedDevices store = AgentsApprovedDevices.empty()
+        ..approve(_FakeRelayServer.hostDeviceId, oldKey);
+      return (store, oldKey);
+    }
+
+    test('a fresh ceremony replaces the old key', () async {
+      final (AgentsApprovedDevices store, SimplePublicKey oldKey) =
+          await staleApproval();
+      final SimpleKeyPair newHostKey = await AgentsDeviceKeys.generate();
+      final server = _FakeRelayServer();
+      final host = _HostSide(
+        server: server,
+        channelId: channel,
+        digits: digits,
+        deviceId: _FakeRelayServer.hostDeviceId,
+        signingKeyPair: newHostKey,
+      );
+      await host.start();
+      final client = AgentsRelayClient(
+        deviceId: appDeviceId,
+        signingKeyPair: await AgentsDeviceKeys.generate(),
+        approvedDevices: store,
+        connector: agentsCloudRelayConnector(
+          deviceId: appDeviceId,
+          sessionSource: signedIn,
+          inner: (_) async => server,
+        ),
+      );
+      addTearDown(client.dispose);
+
+      await client.connect(
+        hostUrl: AgentsCloudRelayAddress.forInvite(invite()).toUri(),
+        pairingCode: invite().pairingCode,
+      );
+
+      expect(client.state.value.phase, AgentsRelayPhase.paired);
+      final SimplePublicKey approved = store.lookup(
+        _FakeRelayServer.hostDeviceId,
+      )!;
+      expect(approved.bytes, (await newHostKey.extractPublicKey()).bytes);
+      expect(approved.bytes, isNot(oldKey.bytes));
+      expect(
+        client.establishedTrust?.peerPublicKey.bytes,
+        (await newHostKey.extractPublicKey()).bytes,
+      );
+    });
+
+    test(
+      'a pairing that fails after the ceremony rolls the approval back',
+      () async {
+        final (AgentsApprovedDevices store, SimplePublicKey oldKey) =
+            await staleApproval();
+        final server = _FakeRelayServer();
+        final host = _HostSide(
+          server: server,
+          channelId: channel,
+          digits: digits,
+          deviceId: _FakeRelayServer.hostDeviceId,
+          signingKeyPair: await AgentsDeviceKeys.generate(),
+          answerResume: false,
+        );
+        await host.start();
+        final client = AgentsRelayClient(
+          deviceId: appDeviceId,
+          signingKeyPair: await AgentsDeviceKeys.generate(),
+          approvedDevices: store,
+          pairingTimeout: const Duration(milliseconds: 300),
+          connector: agentsCloudRelayConnector(
+            deviceId: appDeviceId,
+            sessionSource: signedIn,
+            inner: (_) async => server,
+          ),
+        );
+        addTearDown(client.dispose);
+
+        await expectLater(
+          client.connect(
+            hostUrl: AgentsCloudRelayAddress.forInvite(invite()).toUri(),
+            pairingCode: invite().pairingCode,
+          ),
+          throwsA(anything),
+        );
+        await host.paired.future;
+
+        // The ceremony got as far as approving the new key; the failure put the
+        // old one back and kept no trust.
+        expect(
+          store.lookup(_FakeRelayServer.hostDeviceId)!.bytes,
+          oldKey.bytes,
+        );
+        expect(client.establishedTrust, isNull);
+      },
+    );
+
+    test('a first pairing that fails leaves no approval behind', () async {
+      final AgentsApprovedDevices store = AgentsApprovedDevices.empty();
+      final server = _FakeRelayServer();
+      final host = _HostSide(
+        server: server,
+        channelId: channel,
+        digits: digits,
+        deviceId: _FakeRelayServer.hostDeviceId,
+        signingKeyPair: await AgentsDeviceKeys.generate(),
+        answerResume: false,
+      );
+      await host.start();
+      final client = AgentsRelayClient(
+        deviceId: appDeviceId,
+        signingKeyPair: await AgentsDeviceKeys.generate(),
+        approvedDevices: store,
+        pairingTimeout: const Duration(milliseconds: 300),
+        connector: agentsCloudRelayConnector(
+          deviceId: appDeviceId,
+          sessionSource: signedIn,
+          inner: (_) async => server,
+        ),
+      );
+      addTearDown(client.dispose);
+      await expectLater(
+        client.connect(
+          hostUrl: AgentsCloudRelayAddress.forInvite(invite()).toUri(),
+          pairingCode: invite().pairingCode,
+        ),
+        throwsA(anything),
+      );
+      expect(store.isEmpty, isTrue);
     });
   });
 }

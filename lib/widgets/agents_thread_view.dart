@@ -22,6 +22,7 @@ import 'package:chuk_chat/services/agents/agent_file_saver.dart';
 import 'package:chuk_chat/services/agents/chat_debug_export.dart';
 import 'package:chuk_chat/pages/agents_pairing_page.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
+import 'package:chuk_chat/services/agents/agents_invite_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -974,25 +975,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     AgentsRelayController controller, {
     Uri? hostUrl,
   }) async {
-    final store = widget.pairingStore;
-    final established = controller.establishedTrust;
-    if (store == null || established == null) return;
-    // The address that gets remembered is the RECONNECT form: the relay plus
-    // the host's device id. The pairing form carries the single-use pairing
-    // channel, which must never be dialled twice and is worthless after the
-    // ceremony — a trust record holding it would ask the relay to claim a
-    // channel that no longer exists, on every launch, forever.
-    final trust = hostUrl == null
-        ? established
-        : AgentsStoredPairing(
-            hostUrl: hostUrl,
-            channelId: established.channelId,
-            channelKey: established.channelKey,
-            peerDeviceId: established.peerDeviceId,
-            peerPublicKey: established.peerPublicKey,
-          );
-    await store.savePairing(trust);
-    if (mounted) setState(() => _storedPairing = trust);
+    final trust = await persistAgentsTrust(
+      controller: controller,
+      store: widget.pairingStore,
+      hostUrl: hostUrl,
+    );
+    if (trust != null && mounted) setState(() => _storedPairing = trust);
   }
 
   /// The QR path, and the whole of what a phone ever does to get linked: open
@@ -1005,41 +993,72 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _localError = null;
       _busy = true;
     });
+    // A pending auto-reconnect would rebuild the controller under the
+    // ceremony and dispose the one that runs it, as in [reconnect].
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
     try {
-      final address = AgentsCloudRelayAddress.forInvite(invite);
-      await controller.connect(
-        hostUrl: address.toUri(),
-        pairingCode: invite.pairingCode,
-      );
-      // Paired: hand the executor the account token (ExecutorProvisioning).
-      final session = widget.sessionSource.current();
-      if (session != null) {
-        await controller.provisionAccount(session);
-      }
-      // The relay's own answer to the claim is the ONLY place the host's relay
-      // device id comes from, so that is what the trust record remembers — not
-      // the id the ceremony carried, which is the host's, not the relay's view
-      // of it. Falls back to the ceremony's when the dial was local.
-      final targetDeviceId =
-          AgentsCloudRelaySocket.learnedTarget(
-            base: invite.relayBase,
-            pairingChannel: invite.pairingChannel,
-          ) ??
-          controller.establishedTrust?.peerDeviceId;
-      await _persistTrust(
-        controller,
-        hostUrl: targetDeviceId == null
-            ? null
-            : AgentsCloudRelayAddress.forHost(
-                base: invite.relayBase,
-                targetDeviceId: targetDeviceId,
-              ).toUri(),
-      );
+      await _runInvitePairing(controller, invite);
     } catch (error) {
       if (mounted) setState(() => _localError = _pairingFailureText(error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// The install page's way in: the same pairing as [_pairFromInvite], on this
+  /// view's own transport, so the view picks up the new trust exactly as it
+  /// does after a scan. Unlike the scan path it THROWS on failure, because the
+  /// install page shows the failure itself. Builds the transport first when
+  /// there is none yet.
+  Future<void> pairWithInvite(AgentsPairingInvite invite) async {
+    if (_busy) {
+      throw const AgentsCloudRelayException(
+        'Agents is busy. Try again in a moment.',
+        code: 'busy',
+      );
+    }
+    if (_controller == null && !await _tryBuildController()) {
+      throw const AgentsCloudRelayException(
+        'Agents could not start the connection. Try again.',
+        code: 'no_transport',
+      );
+    }
+    final controller = _controller;
+    if (!mounted || controller == null) {
+      throw const AgentsCloudRelayException(
+        'Agents could not start the connection. Try again.',
+        code: 'no_transport',
+      );
+    }
+    setState(() {
+      _localError = null;
+      _busy = true;
+    });
+    // A pending auto-reconnect would rebuild the controller under the
+    // ceremony and dispose the one that runs it, as in [reconnect].
+    _autoReconnectTimer?.cancel();
+    _autoReconnectTimer = null;
+    try {
+      await _runInvitePairing(controller, invite);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// The shared sequence ([pairAgentsFromInvite]) plus this view's own record
+  /// of the trust it saved.
+  Future<void> _runInvitePairing(
+    AgentsRelayController controller,
+    AgentsPairingInvite invite,
+  ) async {
+    final trust = await pairAgentsFromInvite(
+      controller: controller,
+      invite: invite,
+      sessionSource: widget.sessionSource,
+      store: widget.pairingStore,
+    );
+    if (trust != null && mounted) setState(() => _storedPairing = trust);
   }
 
   /// One plain sentence for whatever went wrong. The user is not shown a code,

@@ -48,11 +48,16 @@ class RootWrapperMobile extends StatefulWidget {
   /// always answers with this chat.
   final ValueGetter<String?>? selectedChatIdReader;
 
+  /// The Agents build's "Add your computer" entry, drawn as a row in the
+  /// sidebar. Null, as in chuk_chat, draws nothing.
+  final VoidCallback? onAddComputer;
+
   const RootWrapperMobile({
     super.key,
     required this.config,
     this.headerCenter,
     this.selectedChatIdReader,
+    this.onAddComputer,
   });
 
   @override
@@ -766,6 +771,13 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
         onChatDeleted: _handleChatDeleted,
         // The drawer had no visible close control, only the swipe.
         onCollapseTapped: _toggleSidebar,
+        // The page opens over the chat, so the drawer closes first.
+        onAddComputerTapped: widget.onAddComputer == null
+            ? null
+            : () {
+                if (_isSidebarExpanded) _toggleSidebar();
+                widget.onAddComputer!();
+              },
         selectedChatId: _selectedChatId,
         isCompactMode: true,
       ),

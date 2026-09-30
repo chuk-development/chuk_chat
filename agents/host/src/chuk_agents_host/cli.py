@@ -9,6 +9,10 @@ one shell script + ``connect``"):
     is stopped for the handover and started again afterwards, so the user never
     has to think about the service.
 
+    ``connect --token <P>-<D>`` is the install-command path: the logged-in app
+    minted the token and waits for this host. No code and no QR is shown. See
+    :mod:`chuk_agents_host.install_token`.
+
 ``run``
     What the systemd unit executes: bring the host up and stay up. Already
     paired hosts reconnect with no code. This is also the default when no
@@ -37,9 +41,11 @@ from typing import Any
 from chuk_agents_config import locate_state_home, resolve_state_home
 from chuk_agents_runtime import DEFAULT_MODEL_ID, MockModelClient
 
+from .account_store import AccountStore
 from .cloud_relay import DEFAULT_RELAY_BASE_URL
 from .host import DEFAULT_WORKSPACE, TRANSPORT_CLOUD, TRANSPORT_LOCAL, LocalHost
 from .identity import HOST_DEVICE_ID
+from .install_token import InstallToken, InvalidInstallToken, parse_install_token
 from .pairing_store import HostPairingStore
 from .pairing_uri import qr_lines
 from .service import UNIT_NAME, SystemdUserService, user_unit_path
@@ -56,6 +62,23 @@ _STATE_OWNERS = ("run", "connect")
 
 #: How long ``connect`` waits for the app before giving up, in seconds.
 DEFAULT_CONNECT_TIMEOUT = 600.0
+
+#: How long ``connect --token`` waits. The app keeps its claim open for 30
+#: minutes after it mints the token, so the host waits the same time.
+DEFAULT_TOKEN_CONNECT_TIMEOUT = 1800.0
+
+#: How long ``connect`` keeps the host up after the ceremony, so the app can
+#: send the account token (§15 step 7) before the host stops. The app sends it
+#: at once; the bound only stops a lost frame from holding ``connect`` forever.
+PROVISION_GRACE_SECONDS = 60.0
+
+#: The environment variable ``connect`` reads the install token from. A
+#: command line (``/proc/<pid>/cmdline``) is readable by every local user; the
+#: environment is readable only by the same user. The bootstrap uses this.
+INSTALL_TOKEN_ENV = "AGENTS_INSTALL_TOKEN"
+
+#: Exit code for a usage error (the same code argparse uses).
+EXIT_USAGE = 2
 
 SUBCOMMANDS = ("run", "connect", "status", "doctor", "trace")
 
@@ -228,8 +251,18 @@ def _build_parser() -> argparse.ArgumentParser:
     connect_parser.add_argument(
         "--timeout",
         type=float,
-        default=DEFAULT_CONNECT_TIMEOUT,
-        help=f"seconds to wait for the app (default {DEFAULT_CONNECT_TIMEOUT:g})",
+        default=None,
+        help=f"seconds to wait for the app (default {DEFAULT_CONNECT_TIMEOUT:g}, "
+        f"or {DEFAULT_TOKEN_CONNECT_TIMEOUT:g} with --token)",
+    )
+    connect_parser.add_argument(
+        "--token",
+        default=None,
+        metavar="TOKEN",
+        help="the install token from the Chuk app. It pairs this computer with "
+        "the account of that app. An existing pairing is replaced. No code or "
+        "QR is shown. Other local users can read a command line, so prefer "
+        f"${INSTALL_TOKEN_ENV}, which only you can read. --token wins over it",
     )
     connect_parser.add_argument(
         "--no-service",
@@ -338,6 +371,81 @@ def is_paired(workspace: str) -> bool:
     return store.load() is not None
 
 
+#: The files a token re-pair replaces. They are kept aside until the new
+#: pairing is stored, so a wrong or expired token does not cost the old pairing.
+_TRUST_FILES = ("paired.json", "account.json")
+
+#: Suffix of the kept-aside copies.
+_BACKUP_SUFFIX = ".before-token"
+
+
+def _backup_path(workspace: str, name: str) -> Path:
+    return Path(workspace).expanduser() / f"{name}{_BACKUP_SUFFIX}"
+
+
+def _write_private(path: Path, data: bytes) -> None:
+    """Write ``data`` owner-only (0600) from the first byte, then swap it in."""
+    tmp = path.with_name(path.name + ".tmp")
+    fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        os.write(fd, data)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(tmp, path)
+
+
+def backup_trust(workspace: str) -> bool:
+    """Copy the stored pairing and account file aside before a token re-pair.
+
+    The host then clears the originals as for ``--pair``, so the old trust is
+    not offered while the new ceremony runs. Returns True when a pairing was
+    kept aside.
+    """
+    kept = False
+    for name in _TRUST_FILES:
+        source = Path(workspace).expanduser() / name
+        if source.is_file():
+            _write_private(_backup_path(workspace, name), source.read_bytes())
+            kept = kept or name == "paired.json"
+    return kept
+
+
+def restore_trust(workspace: str) -> bool:
+    """Put the kept-aside files back (the token re-pair did not complete).
+
+    Returns True when a pairing was restored."""
+    restored = False
+    for name in _TRUST_FILES:
+        backup = _backup_path(workspace, name)
+        if backup.is_file():
+            os.replace(backup, Path(workspace).expanduser() / name)
+            restored = restored or name == "paired.json"
+    return restored
+
+
+def drop_trust_backup(workspace: str) -> None:
+    """Delete the kept-aside files (the new pairing is stored)."""
+    for name in _TRUST_FILES:
+        _backup_path(workspace, name).unlink(missing_ok=True)
+
+
+def recover_trust_backup(workspace: str) -> None:
+    """Finish a token re-pair that a crash or a kill cut off.
+
+    A new pairing on disk means it completed: the backup is old. No pairing
+    on disk means it did not: the old pairing comes back.
+    """
+    if not _backup_path(workspace, "paired.json").is_file() and not _backup_path(
+        workspace, "account.json"
+    ).is_file():
+        return
+    if is_paired(workspace):
+        drop_trust_backup(workspace)
+    elif restore_trust(workspace):
+        _log("restored the pairing that an interrupted install command kept aside")
+
+
 def resolve_sandbox_kind(choice: str) -> str:
     """``auto`` -> the best backend this machine actually has.
 
@@ -399,6 +507,7 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         supabase_url=args.supabase_url,
         anon_key=args.anon_key,
         force_repair=args.pair,
+        install_token=getattr(args, "install_token", None),
         # The cloud relay is the default: a phone on mobile data can reach a host
         # no other way, and the host may itself sit behind carrier NAT. The
         # loopback relay is the explicit same-machine developer opt-in.
@@ -545,6 +654,102 @@ def cmd_run(
 # --------------------------------------------------------------------------
 
 
+def stored_account_token(workspace: str) -> dict | None:
+    """The account token in ``account.json``, or None. Read-only."""
+    return AccountStore(Path(workspace).expanduser() / "account.json").token()
+
+
+def _wait_for_provisioning(
+    workspace: str,
+    before: dict | None,
+    *,
+    sleep: Callable[[float], None],
+    monotonic: Callable[[], float],
+) -> bool:
+    """Keep the host up after the ceremony until the app has sent the account
+    token, for at most :data:`PROVISION_GRACE_SECONDS`.
+
+    Right after pairing the app sends the sealed ``account_authentication``
+    frame (§15 step 7). A host that stops at once drops the app's socket before
+    it arrives, and the app reports that the link failed. The token counts as
+    received when ``account.json`` holds one that was not there before the
+    pairing started. Returns True when it is stored.
+    """
+
+    def provisioned() -> bool:
+        current = stored_account_token(workspace)
+        return current is not None and current != before
+
+    if provisioned():
+        return True
+    _log("paired; waiting for the app to send the account token")
+    deadline = monotonic() + PROVISION_GRACE_SECONDS
+    while monotonic() < deadline:
+        sleep(0.5)
+        if provisioned():
+            _log("account token received")
+            return True
+    _log(
+        "paired, but the app did not send the account token in "
+        f"{PROVISION_GRACE_SECONDS:g}s. The host waits on its heal channel; the "
+        "app provisions it when it connects again"
+    )
+    return False
+
+
+def _pair_and_wait(
+    args: argparse.Namespace,
+    host_factory: Callable[[argparse.Namespace], LocalHost],
+    *,
+    token: InstallToken | None,
+    already_paired: bool,
+    sleep: Callable[[float], None],
+    monotonic: Callable[[], float],
+    result: dict,
+) -> None:
+    """Build the host, show how to pair, and wait until the app has paired or
+    the time is up. Writes ``paired`` / ``cancelled`` into ``result``, so the
+    caller sees them even when this raises."""
+    _start_tracing(args)
+    host = host_factory(args)
+    if token is not None:
+        if already_paired:
+            _log("this computer was paired before; the install token replaces that pairing")
+    elif args.pair:
+        _log("--pair: the stored pairing was dropped; a fresh single-use code follows.")
+    # What account.json holds now (after the host cleared it for a re-pair),
+    # so a new token from the app can be told apart from an old one.
+    before = stored_account_token(args.workspace)
+    try:
+        host.start()
+        if token is not None:
+            # No code and no QR: the app that minted the token is waiting.
+            print("", flush=True)
+            print("  Waiting for the Chuk app to confirm this computer...", flush=True)
+        else:
+            _print_banner(
+                host,
+                qr=not getattr(args, "no_qr", False),
+                qr_invert=not getattr(args, "qr_light", False),
+            )
+        deadline = monotonic() + max(args.timeout, 0.0)
+        while monotonic() < deadline:
+            if host.has_stored_pairing:
+                result["paired"] = True
+                break
+            sleep(0.5)
+        if result["paired"]:
+            _wait_for_provisioning(
+                args.workspace, before, sleep=sleep, monotonic=monotonic
+            )
+    except KeyboardInterrupt:
+        print("", flush=True)
+        _log("pairing cancelled")
+        result["cancelled"] = True
+    finally:
+        host.stop()
+
+
 def cmd_connect(
     args: argparse.Namespace,
     *,
@@ -558,9 +763,42 @@ def cmd_connect(
     Idempotent on purpose: on an already-paired host it changes nothing and
     succeeds, so re-running ``connect`` (or an installer that calls it) is safe.
     Re-pairing a different device is the explicit ``--pair``.
+
+    ``--token`` is different: the user just ran a fresh install command from
+    the app, so the intent is clear. The stored pairing (and the account
+    token) is replaced, the same as ``--pair``.
     """
+    token: InstallToken | None = None
+    # Read the variable once and remove it at once, so no child process (the
+    # sandbox, the agent's commands) inherits the secret.
+    env_token = os.environ.pop(INSTALL_TOKEN_ENV, None) or None
+    raw_token = getattr(args, "token", None)
+    if raw_token is None:
+        raw_token = env_token
+    if raw_token is not None:
+        try:
+            token = parse_install_token(raw_token)
+        except InvalidInstallToken as exc:
+            # The message never holds the token itself.
+            print(f"  error: {exc}.", file=sys.stderr, flush=True)
+            return EXIT_USAGE
+        if getattr(args, "local_relay", False):
+            print(
+                "  error: --token needs the cloud relay. Remove --local-relay.",
+                file=sys.stderr,
+                flush=True,
+            )
+            return EXIT_USAGE
+    args.install_token = token
+    timeout = getattr(args, "timeout", None)
+    if timeout is None:
+        timeout = DEFAULT_TOKEN_CONNECT_TIMEOUT if token else DEFAULT_CONNECT_TIMEOUT
+    args.timeout = timeout
+
     workspace = args.workspace
-    if is_paired(workspace) and not args.pair:
+    recover_trust_backup(workspace)
+    already_paired = is_paired(workspace)
+    if already_paired and not args.pair and token is None:
         print("  This host is already paired — nothing to do.", flush=True)
         print(
             "  The app reconnects on its own, with no code. To pair a DIFFERENT "
@@ -581,33 +819,48 @@ def cmd_connect(
         else:
             resume_service = True
 
-    _start_tracing(args)
-    host = host_factory(args)
-    if args.pair:
-        _log("--pair: the stored pairing was dropped; a fresh single-use code follows.")
-    paired = False
+    # A token re-pair keeps the old pairing aside (after the service stopped,
+    # so nothing writes the files any more) until the new one is stored.
+    kept_aside = token is not None and backup_trust(workspace)
+    result = {"paired": False, "cancelled": False}
     try:
-        host.start()
-        _print_banner(
-            host,
-            qr=not getattr(args, "no_qr", False),
-            qr_invert=not getattr(args, "qr_light", False),
+        _pair_and_wait(
+            args,
+            host_factory,
+            token=token,
+            already_paired=already_paired,
+            sleep=sleep,
+            monotonic=monotonic,
+            result=result,
         )
-        deadline = monotonic() + max(args.timeout, 0.0)
-        while monotonic() < deadline:
-            if host.has_stored_pairing:
-                paired = True
-                break
-            sleep(0.5)
-    except KeyboardInterrupt:
-        print("", flush=True)
-        _log("pairing cancelled")
     finally:
-        host.stop()
+        if token is not None:
+            # The disk decides, not the loop: a pairing that completed while
+            # the host stopped still counts. Anything else (timeout, Ctrl-C,
+            # an error) puts the old pairing back before the service restarts.
+            if result["paired"] or is_paired(workspace):
+                result["paired"] = True
+                drop_trust_backup(workspace)
+            elif restore_trust(workspace) and kept_aside:
+                _log("not paired: the previous pairing is back in place")
+    paired = result["paired"]
+    cancelled = result["cancelled"]
 
-    if paired:
+    if paired and token is not None:
+        print("", flush=True)
+        print("  Paired with your Chuk account.", flush=True)
+    elif paired:
         print("", flush=True)
         print("  Paired. The code is dead and will never be accepted again.", flush=True)
+    elif token is not None:
+        print("", flush=True)
+        if cancelled:
+            print("  Not paired. Run the install command again.", flush=True)
+        else:
+            print(
+                "  The install command expired. Create a new one in the Chuk app.",
+                flush=True,
+            )
     else:
         print("", flush=True)
         print(

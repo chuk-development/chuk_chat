@@ -29,6 +29,13 @@ library;
 /// The relay every client dials unless an invite names another one.
 const String kDefaultAgentsRelayBase = 'wss://api.chuk.chat';
 
+/// The Linux installer for the Agents host. It is served by the same API
+/// server as [kDefaultAgentsRelayBase] (the same host, over https), so the
+/// install command and the relay always name one backend. A test keeps the
+/// two hosts equal.
+const String kAgentsInstallScriptUrl =
+    'https://api.chuk.chat/agents/install.sh';
+
 /// The scheme and host of the pairing URI. `cowork://pair?…`.
 const String kAgentsPairingUriScheme = 'cowork';
 const String kAgentsPairingUriHost = 'pair';

@@ -18,6 +18,8 @@ import 'package:chuk_chat/pages/workspace_detail_page.dart';
 import 'package:chuk_chat/pages/workspaces_page.dart';
 import 'package:chuk_chat/pages/desktop_media_modal.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
+    show kSidebarAddComputerLabel;
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
 import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/tour_key_registry.dart';
@@ -47,11 +49,16 @@ class RootWrapperDesktop extends StatefulWidget {
   /// always answers with this chat.
   final ValueGetter<String?>? selectedChatIdReader;
 
+  /// The Agents build's "Add your computer" entry, drawn as a sidebar row
+  /// (and its icon in the folded rail). Null, as in chuk_chat, draws nothing.
+  final VoidCallback? onAddComputer;
+
   const RootWrapperDesktop({
     super.key,
     required this.config,
     this.headerCenter,
     this.selectedChatIdReader,
+    this.onAddComputer,
   });
 
   @override
@@ -424,6 +431,16 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
         ),
       );
     }
+    final VoidCallback? addComputer = widget.onAddComputer;
+    if (addComputer != null) {
+      items.add(
+        railIcon(
+          icon: Icons.computer,
+          tooltip: kSidebarAddComputerLabel,
+          onPressed: addComputer,
+        ),
+      );
+    }
     return items;
   }
 
@@ -684,6 +701,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     selectedChatId: _selectedChatId,
                     isCompactMode: isCompactMode,
                     showWorkspacesButton: !isCompactMode || _isSidebarExpanded,
+                    onAddComputerTapped: widget.onAddComputer,
                   ),
                 ),
               ),

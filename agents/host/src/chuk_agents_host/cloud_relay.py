@@ -256,6 +256,7 @@ class CloudRelayTransport:
         heal_channel_provider: Callable[[], str | None] | None = None,
         on_controller_event: ControllerEvent | None = None,
         on_pairing_expired: Callable[[], None] | None = None,
+        fixed_pairing_channel: bool = False,
         logger: Callable[[str], None] | None = None,
         open_timeout: float = 15.0,
         connect: Callable[..., Any] = ws_connect,
@@ -268,6 +269,9 @@ class CloudRelayTransport:
         self._heal_channel_provider = heal_channel_provider or (lambda: None)
         self._on_controller_event = on_controller_event
         self._on_pairing_expired = on_pairing_expired
+        # True for an install token from the app: the pairing channel does not
+        # change when the relay drops it, and no code is shown to scan.
+        self._fixed_pairing_channel = fixed_pairing_channel
         self._log = logger or (lambda _msg: None)
         self._open_timeout = open_timeout
         self._connect = connect
@@ -346,7 +350,13 @@ class CloudRelayTransport:
         elif parked:
             self._log(
                 "cloud relay parked this host on its pairing channel"
-                + (f"; the code dies in {expires_in:g}s" if expires_in else "")
+                + (
+                    ""
+                    if not expires_in
+                    else f"; the relay holds it for {expires_in:g}s"
+                    if self._fixed_pairing_channel
+                    else f"; the code dies in {expires_in:g}s"
+                )
             )
         else:
             self._log("cloud relay accepted this host as an executor")
@@ -365,6 +375,7 @@ class CloudRelayTransport:
             claimed=not parked,
             expires_in=expires_in if parked else None,
             heal=heal,
+            fixed_pairing_channel=self._fixed_pairing_channel,
         )
         # The same hello the loopback relay gets, as the first payload: it tells a
         # controller already on the channel that the executor is here.
@@ -391,6 +402,7 @@ class CloudRelayLink:
         claimed: bool = True,
         expires_in: float | None = None,
         heal: bool = False,
+        fixed_pairing_channel: bool = False,
     ) -> None:
         # ``join_message`` here is the built hello dict, not the protocol helper
         # of the same name — the transport builds it and hands it over.
@@ -410,13 +422,22 @@ class CloudRelayLink:
         # Parked on the heal channel, not on a first-pairing code: nobody has a
         # code to scan, and an expiry means "park again", not "print a new code".
         self._heal = heal
+        # An install token: the app waits on this same channel, so there is no
+        # code on screen to warn about and no fresh one to mint.
+        self._fixed_pairing_channel = fixed_pairing_channel
         self._warning: threading.Timer | None = None
         # Every frame off this socket reports what became of it. The pipe is the
         # first place a lost message can disappear, and until this existed a
         # frame that arrived and was ignored looked exactly like a frame that
         # never arrived (see :mod:`chuk_agents_host.relay_ledger`).
         self._frames = InboundFrameLog(self._log)
-        if not claimed and not heal and expires_in and expires_in > EXPIRY_WARNING_LEAD_SECONDS:
+        if (
+            not claimed
+            and not heal
+            and not fixed_pairing_channel
+            and expires_in
+            and expires_in > EXPIRY_WARNING_LEAD_SECONDS
+        ):
             self._warning = threading.Timer(
                 expires_in - EXPIRY_WARNING_LEAD_SECONDS, self._warn_expiring
             )
@@ -503,7 +524,10 @@ class CloudRelayLink:
             # parks on it again when the relay closes this socket.
             self._log("no paired app came to renew the session in time; parking again")
             return
-        self._log("the pairing code expired unused; minting a fresh one")
+        if self._fixed_pairing_channel:
+            self._log("the pairing channel expired unclaimed; parking on it again")
+        else:
+            self._log("the pairing code expired unused; minting a fresh one")
         if self._on_pairing_expired is None:
             return
         try:

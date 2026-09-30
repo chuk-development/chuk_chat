@@ -71,6 +71,7 @@ from .cloud_relay import (
     relay_ws_url,
 )
 from .identity import HOST_DEVICE_ID, derive_channel_id, load_or_create_identity
+from .install_token import TOKEN_DIGITS, InstallToken
 from .pairing_store import HostPairingStore, HostTrust
 from .pairing_uri import pairing_uri
 from .party import HostParty
@@ -171,6 +172,10 @@ class LocalHost:
         # Deliberate re-pair: drop any stored trust at startup and mint a fresh,
         # single-use code (``cowork-host --pair``).
         force_repair: bool = False,
+        # The install token from the Chuk app (``connect --token``). It sets the
+        # pairing channel, the §15 channel id and the digits, and it implies a
+        # re-pair. See :mod:`chuk_agents_host.install_token`.
+        install_token: InstallToken | None = None,
         # Which pipe the party runs on. See TRANSPORT_* above for why this class
         # defaults to the loopback relay while the CLI defaults to the cloud.
         transport: str = TRANSPORT_LOCAL,
@@ -183,6 +188,15 @@ class LocalHost:
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self._log = logger or (lambda _msg: None)
+        # With an install token the app already knows the channel and the code.
+        # The host must use exactly those values, and it must keep them when the
+        # relay drops the parked channel: the app claims the same channel again.
+        self._install_token = install_token
+        if install_token is not None:
+            force_repair = True
+            channel_id = install_token.channel
+            digits = install_token.digits
+            sas_digits = TOKEN_DIGITS
         self._transport_kind = (
             TRANSPORT_CLOUD if transport == TRANSPORT_CLOUD else TRANSPORT_LOCAL
         )
@@ -384,9 +398,15 @@ class LocalHost:
         # socket is parked on, 256 CSPRNG bits, minted per host process while this
         # host still has a code to offer. It is a bearer capability — it rides in
         # the QR and is NEVER logged.
-        self._pairing_channel: str | None = (
-            new_pairing_channel() if self._pairing_code is not None else None
-        )
+        self._pairing_channel: str | None = None
+        if self._pairing_code is not None:
+            # With an install token the app claims the token's channel, so the
+            # host parks there. Without one, a fresh random channel is minted.
+            self._pairing_channel = (
+                install_token.channel
+                if install_token is not None
+                else new_pairing_channel()
+            )
 
         self._relay = LocalRelay(
             host_addr, port, logger=self._log, on_peer_event=self._on_peer_event
@@ -664,6 +684,10 @@ class LocalHost:
                 heal_channel_provider=self._current_heal_channel,
                 on_controller_event=self._on_cloud_controller_event,
                 on_pairing_expired=self._on_pairing_channel_expired,
+                # With an install token the channel is fixed: nothing is
+                # scanned, and an expiry means "park on it again", not "print a
+                # fresh code".
+                fixed_pairing_channel=self._install_token is not None,
                 logger=self._log,
             )
             # The cloud relay reports no peer list to an executor, so there is no
@@ -691,6 +715,20 @@ class LocalHost:
         nothing: there is no code to replace.
         """
         if self._trust is not None:
+            return
+        token = self._install_token
+        if token is not None:
+            # The app knows only the token's channel and code, and it keeps its
+            # claim open for the full install window. So the host parks on the
+            # SAME channel again and keeps the same code. The connect deadline,
+            # not the relay, decides when to stop.
+            with self._code_lock:
+                if self._pairing_code is None:
+                    return  # used in the meantime: nothing to re-park
+                self._pairing_code = token.pairing_code
+                self._digits = token.digits
+                self._pairing_channel = token.channel
+            self._log("the Chuk app has not confirmed this computer yet; waiting again")
             return
         probe = Pairing.initiator(
             device_id=self._device_id,
@@ -807,6 +845,11 @@ class LocalHost:
     @property
     def channel_id(self) -> str:
         return self._channel_id
+
+    @property
+    def uses_install_token(self) -> bool:
+        """True when this host pairs with an install token from the app."""
+        return self._install_token is not None
 
     @property
     def pairing_channel(self) -> str | None:

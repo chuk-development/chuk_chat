@@ -61,8 +61,12 @@ class Process {
   }
 }
 
+/// Stub IOException for web: the common type of every I/O failure, as in
+/// dart:io, so a `catch` can name "the network failed" on every platform.
+abstract class IOException implements Exception {}
+
 /// Stub SocketException for web
-class SocketException implements Exception {
+class SocketException implements IOException {
   final String message;
   const SocketException(this.message);
   @override
@@ -70,7 +74,7 @@ class SocketException implements Exception {
 }
 
 /// Stub HttpException for web
-class HttpException implements Exception {
+class HttpException implements IOException {
   final String message;
   const HttpException(this.message);
   @override
