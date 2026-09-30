@@ -370,6 +370,7 @@ END_CALL_EXTRA_DESCRIPTION = (
 
 #: Tool output of end_call. The model speaks this reply, then the call ends.
 END_CALL_GOODBYE_INSTRUCTIONS = (
-    "The call ends now. Say one short goodbye in the user's language, for "
-    "example \"Alles klar, bis später!\". One sentence, nothing else."
+    "The call ends now. Say one short goodbye in the language the user speaks "
+    "right now (German: \"Alles klar, bis später!\", English: \"Alright, talk "
+    "soon!\"). One sentence, nothing else."
 )

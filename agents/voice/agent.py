@@ -215,7 +215,16 @@ def _setup_process(proc: agents.JobProcess) -> None:
 
 # Use a non-default worker health port to avoid conflicts with other
 # local agent workers (LiveKit default 8081, new-voicemode 8083).
-server = agents.AgentServer(port=HEALTH_PORT, setup_fnc=_setup_process)
+#
+# In `start` mode LiveKit marks the worker as full when CPU load is above its
+# load threshold (0.7 by default) and dispatches no jobs to it. A personal
+# worker on a busy desktop is always above that, so VOICE_LOAD_THRESHOLD can
+# raise it ("inf" turns the check off). Unset keeps the SDK default.
+_server_kwargs: dict[str, Any] = {"port": HEALTH_PORT, "setup_fnc": _setup_process}
+_load_threshold = os.environ.get("VOICE_LOAD_THRESHOLD", "").strip()
+if _load_threshold:
+    _server_kwargs["load_threshold"] = float(_load_threshold)
+server = agents.AgentServer(**_server_kwargs)
 
 
 class VisionAgent(Agent):
