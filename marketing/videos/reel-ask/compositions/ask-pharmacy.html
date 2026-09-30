@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Ask Chuk Chat - pharmacy</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+
+@font-face { font-family: "Chuk Mono"; src: url("assets/fonts/ChukMono-subset.woff2") format("woff2"); font-weight: 100 800; font-style: normal; font-display: block; }
+@font-face { font-family: "Arimo"; src: url("assets/fonts/Arimo-subset.woff2") format("woff2"); font-weight: 400 700; font-style: normal; font-display: block; }
+@font-face { font-family: "Inter"; src: url("assets/fonts/Inter-subset.woff2") format("woff2"); font-weight: 100 900; font-style: normal; font-display: block; }
+@font-face { font-family: "Merriweather"; src: url("assets/fonts/Merriweather-subset.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: "Merriweather"; src: url("assets/fonts/Merriweather-Bold-subset.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: block; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 1080px; height: 1920px; overflow: hidden; background: #26251F; }
+#root { position: relative; width: 100%; height: 100%; overflow: hidden; background: #26251F; }
+.fill { position: absolute; inset: 0; overflow: hidden; }
+.ground { background: radial-gradient(ellipse 90% 62% at 50% 46%, #2D2C26 0%, #26251F 58%, #1C1B17 100%); }
+
+/* ---------- Title card ---------- */
+.tc { position: absolute; left: 60px; right: 60px; top: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.tc-in { display: flex; flex-direction: column; align-items: center; }
+.tc-logo { display: block; width: 92px; height: 92px; margin-bottom: 54px; }
+.tt { margin: 0; font-family: "Inter", sans-serif; font-weight: 760; font-size: 110px; line-height: 1.05; letter-spacing: -0.03em; color: #F4F0E6; }
+.tt .ln { display: block; white-space: nowrap; }
+.tt .lw { display: inline-block; }
+.tt .wd { display: inline-block; }
+.tt .hl { color: #E07B5A; }
+
+/* ---------- Phone ---------- */
+.phone { position: absolute; left: 128px; top: 122px; width: 824px; height: 1624px; padding: 12px; border-radius: 80px; background: #0B0B0A;
+  box-shadow: inset 0 0 0 2.5px #4A4843, inset 0 0 0 4px #141412, 0 0 0 1px rgba(255, 255, 255, 0.07), 0 48px 96px -24px rgba(0, 0, 0, 0.8); }
+
+/* ---------- End tag ---------- */
+.tag { position: absolute; left: 0; right: 0; top: 1756px; height: 42px; display: flex; align-items: center; justify-content: center; gap: 14px;
+  font-family: "Chuk Mono", monospace; font-size: 36px; font-weight: 500; letter-spacing: 0.01em; color: #E8E4D8; }
+.tag svg { display: block; width: 38px; height: 38px; }
+.mb-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- Screen (dp) ---------- */
+.scr { position: relative; width: 411px; height: 822px; zoom: 1.94647; overflow: hidden; border-radius: 34px; background: #262624; color: #E8E4D8;
+  font-family: "Arimo", sans-serif; font-size: 17.5px; line-height: 1.35; text-align: left;
+  --fg: #E8E4D8; --fg85: rgba(232, 228, 216, 0.86); --fg70: rgba(232, 228, 216, 0.72); --muted: #908E87; --ph: #88867F;
+  --line: rgba(232, 228, 216, 0.15); --lift: #31312E; --card: #2E2E2B; --acc: #D97757; --acc2: #F0A585; --ok: #86C795;
+  --mono: "Chuk Mono", monospace; }
+.scr *, .scr *::before, .scr *::after { box-sizing: border-box; }
+.scr p { margin: 0; }
+.scr svg { display: block; flex: none; }
+.scr img { display: block; }
+.layer { position: absolute; inset: 0; }
+
+/* Status bar (above every layer) */
+.sb { position: absolute; z-index: 60; left: 0; right: 0; top: 0; height: 38px; display: flex; align-items: center; justify-content: space-between;
+  padding: 3px 22px 0 26px; font-size: 17.5px; font-weight: 500; letter-spacing: 0.2px; color: #F4F2EC; }
+.sb-cam { position: absolute; left: 50%; top: 10px; width: 17px; height: 17px; margin-left: -8.5px; border-radius: 50%; background: #050506; box-shadow: inset 0 0 0 3px #121214; }
+.sb-sys { display: flex; align-items: center; gap: 5px; }
+.sb-sys svg { width: 17px; height: 17px; }
+.hbar { position: absolute; z-index: 61; left: 50%; bottom: 7px; width: 110px; height: 4.5px; margin-left: -55px; border-radius: 3px; background: rgba(240, 238, 232, 0.92); }
+
+/* Top bar */
+.tb { position: absolute; z-index: 20; left: 12px; right: 12px; top: 44px; height: 48px; display: flex; align-items: center; gap: 8px; }
+.veil { position: absolute; z-index: 19; left: 0; right: 0; top: 0; height: 132px;
+  background: linear-gradient(180deg, rgba(38, 38, 36, 0.98) 0%, rgba(38, 38, 36, 0.95) 62%, rgba(38, 38, 36, 0.55) 84%, rgba(38, 38, 36, 0) 100%); }
+.tb-b { flex: none; width: 48px; height: 48px; border-radius: 50%; background: var(--lift); display: flex; align-items: center; justify-content: center; color: var(--fg); }
+.tb-b svg { width: 23px; height: 23px; }
+.tb-new { background: var(--acc); color: #FFFFFF; }
+.tb-t { position: relative; flex: 0 1 auto; min-width: 0; height: 48px; padding: 0 18px; border-radius: 24px; background: var(--lift); display: flex; align-items: center;
+  font-size: 17.5px; font-weight: 700; color: #DAD6CB; white-space: nowrap; overflow: hidden; }
+.tb-t span { overflow: hidden; text-overflow: ellipsis; }
+.tb-sp { flex: 1; }
+.tb-chip { flex: none; height: 34px; padding: 0 12px; border-radius: 17px; display: flex; align-items: center; font-size: 17.5px; font-weight: 700; }
+
+/* Chat viewport, bottom-anchored column */
+.cv { position: absolute; left: 0; right: 0; top: 0; bottom: 146px; overflow: hidden; }
+.col { position: absolute; left: 16px; right: 16px; bottom: 6px; }
+.r { height: 0; overflow: hidden; }
+
+/* User bubble (store screenshot: #B6674D, 1.3 dp edge #C48B77, mono text #E8E4D8) */
+.ub { display: flex; justify-content: flex-end; padding-top: 16px; }
+.ub-b { max-width: 318px; padding: 11px 15px 12px; border: 1.3px solid #C48B77; border-radius: 15px; background: #B6674D; color: #E8E4D8;
+  font-family: var(--mono); font-size: 18px; line-height: 1.42; }
+/* File message row (DESIGN.md: radius 18) */
+.fm { display: flex; justify-content: flex-end; padding-top: 16px; }
+.fm-b { display: flex; align-items: center; gap: 12px; width: 300px; padding: 11px 16px 11px 11px; border: 1px solid var(--line); border-radius: 18px; background: var(--lift); }
+.fm-ic { flex: none; width: 46px; height: 54px; border-radius: 10px; background: rgba(217, 119, 87, 0.18); color: var(--acc2); display: flex; align-items: center; justify-content: center; }
+.fm-ic svg { width: 26px; height: 26px; }
+.fm-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.fm-t b { font-size: 18px; font-weight: 700; color: var(--fg); }
+.fm-t small { font-size: 17.5px; color: var(--fg70); }
+
+/* Meta row: dots -> running -> worked for */
+.meta { position: relative; height: 50px; padding-top: 12px; }
+.meta > * { position: absolute; left: 0; top: 12px; }
+.dots { display: flex; align-items: center; gap: 7px; height: 36px; padding: 0 15px; border-radius: 18px; background: #34342F; }
+.dots i { display: block; width: 8.5px; height: 8.5px; border-radius: 50%; background: #B9B6AC; }
+.m-run, .m-done { display: flex; align-items: center; gap: 8px; height: 36px; font-size: 17.5px; color: var(--muted); white-space: nowrap; }
+.m-done svg { width: 17px; height: 17px; }
+.spin { display: block; flex: none; width: 17px; height: 17px; border: 2.4px solid rgba(232, 228, 216, 0.16); border-top-color: var(--acc); border-radius: 50%; }
+
+/* Tool steps */
+.st { display: flex; align-items: center; gap: 12px; padding-top: 8px; font-size: 17.5px; color: var(--muted); white-space: nowrap; }
+.st b { font-weight: 400; color: var(--fg85); }
+.st-badge { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: #262624; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.st-badge svg { width: 17px; height: 17px; }
+.st-badge.lgb { background: #FFFFFF; border-color: #FFFFFF; overflow: hidden; }
+.st-badge.lgb img { width: 22px; height: 22px; object-fit: contain; }
+
+/* Answer (mono, like the app) */
+.ans { padding-top: 8px; font-family: var(--mono); font-size: 18px; line-height: 1.45; color: var(--fg); }
+.ans .wb, .ans b { font-weight: 700; }
+.w { display: inline; }
+.cardw { padding-top: 14px; padding-bottom: 2px; }
+
+/* Composer (store screenshot: 2 dp #565551 edge, placeholder #88867F, coral caret) */
+.cmp { position: absolute; z-index: 21; left: 10px; right: 10px; bottom: 24px; height: 114px; border: 2px solid #565551; border-radius: 30px; background: #262624; }
+.cmp-f { position: absolute; left: 20px; top: 15px; display: flex; align-items: center; gap: 1px; font-size: 18px; color: var(--ph); white-space: nowrap; }
+.caret { display: block; width: 2px; height: 24px; background: var(--acc); }
+.cmp-row { position: absolute; left: 12px; right: 10px; bottom: 10px; height: 46px; display: flex; align-items: center; gap: 12px; color: #BDBAB1; }
+.cmp-row .g { flex: 1; }
+.cmp-plus svg { width: 26px; height: 26px; }
+.cmp-pill { display: flex; align-items: center; gap: 6px; height: 42px; padding: 0 14px; border: 2px solid #565551; border-radius: 21px; }
+.cmp-pill svg { width: 20px; height: 20px; }
+.cmp-pill .dn { width: 15px; height: 15px; }
+.cmp-mic svg { width: 24px; height: 24px; }
+.cmp-send { width: 46px; height: 46px; border-radius: 50%; background: var(--acc); color: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.cmp-send svg { width: 23px; height: 23px; }
+
+/* Touch indicator (Android "show taps") */
+.tap { position: absolute; z-index: 58; left: 0; top: 0; width: 50px; height: 50px; margin: -25px 0 0 -25px; border-radius: 50%;
+  background: rgba(255, 255, 255, 0.34); border: 2px solid rgba(255, 255, 255, 0.6); opacity: 0; }
+
+/* Full-screen result (slides in from the right) */
+.fs { position: absolute; inset: 0; z-index: 30; overflow: hidden; background: #1E1E1C; }
+.dim { position: absolute; inset: 0; z-index: 29; background: #000000; opacity: 0; }
+.fs-tb { position: absolute; z-index: 5; left: 12px; right: 12px; top: 44px; height: 48px; display: flex; align-items: center; gap: 8px; }
+.fs-veil { position: absolute; z-index: 4; left: 0; right: 0; top: 0; height: 112px; background: linear-gradient(180deg, rgba(30, 30, 28, 0.97) 0%, rgba(30, 30, 28, 0.9) 50%, rgba(30, 30, 28, 0) 100%); }
+
+/* Document viewer (shared by PDF-like results) */
+.dv { position: absolute; left: 0; right: 0; top: 104px; bottom: 96px; display: flex; justify-content: center; }
+.pg { width: 387px; padding: 26px 24px; border-radius: 6px; background: #FFFFFF; color: #29251F; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); transform-origin: 50% 40%; }
+.sb, .hbar { transition: none; }
+
+/* Artifact card (in chat) */
+.ac { border: 1.5px solid rgba(232, 228, 216, 0.17); border-radius: 18px; background: var(--card); padding: 12px; }
+.ac-top { display: flex; align-items: center; gap: 14px; }
+.ac-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ac-txt b { font-size: 18px; font-weight: 700; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ac-txt small { font-size: 17.5px; color: var(--fg70); white-space: nowrap; }
+.ac-btns { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
+.ac-btn { height: 44px; padding: 0 18px; border-radius: 22px; display: flex; align-items: center; gap: 7px; font-size: 17.5px; font-weight: 700; color: var(--acc2); border: 1.5px solid rgba(217, 119, 87, 0.45); }
+.ac-btn.pri { background: var(--acc); border-color: var(--acc); color: #FFFFFF; }
+.ac-btn svg { width: 19px; height: 19px; }
+
+.surface { z-index: 1; }
+.as-surface { --as-on: #E8E4D8; --as-onv: rgba(232, 228, 216, 0.88); --as-surf: rgba(38, 38, 36, 0.975); --as-line: rgba(232, 228, 216, 0.16); --as-high: rgba(76, 76, 72, 0.94); }
+.home { position: absolute; inset: 0; overflow: hidden;
+  background: radial-gradient(circle at 70% 26%, rgba(255, 196, 150, 0.95) 0, rgba(246, 160, 122, 0.9) 58px, rgba(236, 140, 118, 0) 64px),
+    radial-gradient(circle at 70% 26%, rgba(255, 170, 130, 0.35) 0, rgba(255, 170, 130, 0) 190px),
+    radial-gradient(90% 40% at 0% 62%, rgba(118, 98, 186, 0.5), transparent 70%),
+    linear-gradient(176deg, #171A36 0%, #2B2B58 26%, #5A447A 50%, #A25F7E 72%, #D98172 100%); }
+.home::before, .home::after { content: ""; position: absolute; border-radius: 50%; }
+.home::before { left: -40%; top: 47%; width: 150%; height: 40%; background: linear-gradient(180deg, #6B4379 0%, #8E5378 45%, #B56A78 100%); transform: rotate(-8deg); }
+.home::after { left: 20%; top: 58%; width: 130%; height: 50%; background: linear-gradient(180deg, #7E4A76 0%, #A65E77 50%, #CF7C74 100%); transform: rotate(10deg); }
+.ph-glance { position: absolute; z-index: 1; left: 28px; top: 62px; display: flex; align-items: center; gap: 10px; font-size: 21px; color: #FFFFFF; white-space: nowrap; }
+.ph-glance i { display: block; width: 1px; height: 20px; background: rgba(255, 255, 255, 0.55); }
+.ph-glance svg { width: 21px; height: 21px; color: #E8EAF2; }
+.ph-grid, .ph-dock { position: absolute; z-index: 1; left: 10px; right: 10px; display: grid; grid-template-columns: repeat(4, 1fr); justify-items: center; }
+.ph-grid { top: 540px; row-gap: 28px; }
+.ph-dock { top: 716px; }
+.ph-ic { width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: #33262F; color: #FFB8A1; }
+.ph-ic svg { width: 27px; height: 27px; }
+.as-scrim { position: absolute; inset: 0; z-index: 2; background: rgba(0, 0, 0, 0.22); opacity: 0; }
+.as { position: absolute; z-index: 3; left: 16px; right: 16px; bottom: 26px; font-family: "Arimo", sans-serif; letter-spacing: 0.2px; color: var(--as-on); }
+.asw { padding-bottom: 10px; }
+.as-panel { padding: 16px 18px; border: 1px solid var(--as-line); border-radius: 22px; background: var(--as-surf); }
+.as-brand { font-size: 17.5px; line-height: 1.3; letter-spacing: 2px; color: var(--as-onv); }
+.as-status { position: relative; height: 32px; margin-top: 6px !important; }
+.as-status span { position: absolute; left: 0; top: 0; font-size: 26px; line-height: 1.2; font-weight: 700; white-space: nowrap; }
+.as-heard { padding-top: 8px; font-size: 18px; line-height: 1.38; color: #F09A7C; }
+.as-answer { padding-top: 10px; font-size: 18px; line-height: 1.42; color: var(--as-onv); }
+.as-answer .wb { font-weight: 700; color: var(--as-on); }
+.as-tools { padding: 10px 18px; }
+.as-tool { display: flex; align-items: center; gap: 12px; padding: 5px 0; font-size: 18px; line-height: 1.3; color: var(--as-onv); white-space: nowrap; }
+.as-tic { position: relative; flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--ok); }
+.as-tic svg { width: 22px; height: 22px; }
+.as-tic .as-spin { position: absolute; left: 1px; top: 1px; width: 22px; height: 22px; border: 3px solid transparent; border-top-color: var(--acc); border-right-color: var(--acc); border-radius: 50%; }
+.as-wave { display: flex; align-items: center; justify-content: center; gap: 5.4px; height: 60px; padding: 8px 20px; }
+.as-wave i { flex: none; width: 4.8px; height: 8px; border-radius: 4px; background: var(--acc); }
+.as-btns { display: flex; align-items: center; gap: 10px; height: 52px; margin-top: 10px; }
+.as-round { flex: none; width: 52px; height: 52px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: var(--as-high); color: var(--as-on); }
+.as-round svg { width: 24px; height: 24px; }
+.as-pill { position: relative; flex: 1; height: 52px; border-radius: 26px; background: var(--acc); color: #FFFFFF; font-size: 18px; font-weight: 700; }
+.as-pill > span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; }
+.as-pill svg { width: 22px; height: 22px; }
+.as-action { display: flex; align-items: center; gap: 14px; }
+.as-action-ic { flex: none; width: 46px; height: 46px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: rgba(217, 119, 87, 0.18); color: var(--acc); }
+.as-action-ic svg { width: 24px; height: 24px; }
+.as-action-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.as-action-t b { font-size: 19px; font-weight: 700; }
+.as-action-t small { font-size: 17.5px; color: var(--as-onv); white-space: nowrap; }
+
+.pc-h { display: flex; align-items: center; gap: 9px; padding-bottom: 10px; }
+.pc-h svg { width: 21px; height: 21px; color: var(--acc); }
+.pc-h b { flex: 1; font-size: 19px; font-weight: 700; }
+.pc-h span { font-size: 17.5px; color: var(--as-onv); }
+.pc-map { position: relative; width: 357px; height: 124px; margin: 0 -8px 6px; border-radius: 14px; overflow: hidden; }
+.pc-svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.pin { position: absolute; width: 32px; height: 32px; margin: -31px 0 0 -16px; color: #E53935; }
+.pin svg { width: 32px; height: 32px; }
+.pin.big { width: 44px; height: 44px; margin: -43px 0 0 -22px; }
+.pin.big svg { width: 44px; height: 44px; }
+.me { position: absolute; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: #3B82F6; border: 3.5px solid #FFFFFF; }
+.pc-r { position: relative; display: flex; align-items: center; gap: 10px; padding: 5px 8px; margin: 0 -8px; border-radius: 12px; white-space: nowrap; }
+.pc-hi { position: absolute; inset: 0; border-radius: 12px; background: rgba(217, 119, 87, 0.18); opacity: 0; }
+.pc-t { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pc-t b { font-size: 18.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; }
+.pc-t small { font-size: 17.5px; color: var(--as-onv); overflow: hidden; text-overflow: ellipsis; }
+.pc-n { position: relative; flex: none; color: var(--acc); }
+.pc-n svg { width: 22px; height: 22px; }
+.fs-nav { background: #ECEAE4; }
+.fs-nav::before { content: ""; position: absolute; z-index: 4; left: 0; right: 0; top: 0; height: 44px; background: linear-gradient(180deg, rgba(236, 234, 228, 0.95), rgba(236, 234, 228, 0)); }
+.nv-svg { position: absolute; left: 0; top: 0; width: 411px; height: 822px; }
+.nv-ban { position: absolute; z-index: 5; left: 12px; right: 12px; top: 46px; display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 24px;
+  background: #262624; color: var(--fg); box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28); }
+.nv-ic { flex: none; width: 52px; height: 52px; border-radius: 50%; background: var(--acc); color: #FFFFFF; display: flex; align-items: center; justify-content: center; }
+.nv-ic svg { width: 28px; height: 28px; }
+.nv-bt { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.nv-bt b { font-size: 23px; font-weight: 700; }
+.nv-bt small { font-size: 17.5px; color: var(--fg85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nv-sheet { position: absolute; z-index: 5; left: 0; right: 0; bottom: 0; padding: 20px 22px 42px; border-radius: 28px 28px 0 0; background: #262624; color: var(--fg);
+  box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.2); }
+.nv-eta { display: flex; align-items: baseline; gap: 12px; }
+.nv-eta b { font-size: 34px; font-weight: 700; color: var(--acc2); }
+.nv-eta span { font-size: 19px; color: var(--fg85); }
+.nv-name { margin-top: 8px !important; font-size: 20px; font-weight: 700; }
+.nv-addr { margin-top: 3px !important; font-size: 17.5px; color: var(--fg70); }
+
+    </style>
+  </head>
+  <body>
+    <!-- Generated by tools/build.py from reels/*.json. Do not edit by hand. -->
+    <div id="root" data-composition-id="main" data-start="0" data-duration="12.0" data-fps="30" data-width="1080" data-height="1920">
+      <div id="reel" class="clip fill" data-start="0" data-duration="12.0" data-track-index="0">
+        <div class="fill ground"></div><svg class="mb-defs" width="0" height="0" aria-hidden="true"><defs><filter id="mb" x="-8%" y="0%" width="116%" height="100%" color-interpolation-filters="sRGB"><feGaussianBlur id="mb-blur" stdDeviation="0 0"/></filter></defs></svg>
+        <div class="tc"><div class="tc-in"><svg class="tc-logo" viewBox="0 0 500 500" aria-hidden="true"><g transform="translate(0,500) scale(0.1,-0.1)" fill="#E8E4D8"><path d="M2365 4644 c-123 -17 -233 -41 -310 -66 -641 -213 -1147 -829 -1251 -1521 -20 -136 -20 -368 1 -493 79 -468 376 -837 785 -977 135 -46 265 -67 418 -67 208 0 366 34 609 131 88 35 103 44 107 67 6 27 106 651 106 659 0 2 -30 -20 -67 -50 -141 -112 -280 -186 -428 -229 -117 -33 -319 -33 -425 0 -123 39 -187 78 -285 177 -76 75 -99 106 -138 185 -60 120 -86 224 -94 370 -11 213 35 416 141 636 66 135 146 243 257 350 139 132 288 219 444 260 100 26 316 26 405 0 148 -44 273 -123 361 -228 29 -35 51 -54 54 -46 11 35 105 663 100 675 -11 31 -223 116 -370 149 -67 15 -353 27 -420 18z"/><path d="M2758 3464 c-89 -16 -231 -60 -375 -115 -89 -35 -102 -43 -107 -67 -6 -28 -106 -651 -106 -659 0 -3 21 14 47 37 115 101 302 201 453 242 69 19 109 23 215 22 220 -1 342 -52 495 -204 70 -70 94 -102 133 -180 72 -144 90 -224 91 -410 0 -92 -5 -185 -13 -229 -30 -167 -114 -372 -211 -517 -73 -108 -235 -269 -340 -336 -170 -109 -284 -142 -485 -142 -133 0 -145 1 -238 33 -120 41 -239 121 -315 210 -30 36 -54 56 -57 49 -11 -34 -105 -663 -101 -674 11 -29 183 -102 331 -140 82 -21 131 -27 265 -31 261 -8 455 32 690 144 213 100 438 271 600 454 241 273 414 639 465 986 21 141 21 375 -1 501 -91 539 -471 940 -973 1026 -116 20 -354 20 -463 0z"/></g></svg><h1 class="tt"><span class="ln"><span class="lw"><span class="wd">Ask</span> <span class="wd">Chuk</span> <span class="wd">Chat</span> <span class="wd">to</span></span></span><span class="ln"><span class="lw"><span class="wd hl">find</span> <span class="wd hl">a</span> <span class="wd hl">pharmacy</span></span></span><span class="ln"><span class="lw"><span class="wd hl">open</span> <span class="wd hl">now</span></span></span></h1></div></div>
+        <div class="phone"><div class="scr">
+          <div class="layer surface as-surface" data-layout-allow-overlap data-layout-allow-occlusion>
+      <div class="home">
+        <div class="ph-glance"><span>Fri, Sep 25</span><i></i><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/></svg><span>14°C</span></div>
+        <div class="ph-grid"><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16 2V6M8 2V6" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M13 4H11C7.22876 4 5.34315 4 4.17157 5.17157C3 6.34315 3 8.22876 3 12V14C3 17.7712 3 19.6569 4.17157 20.8284C5.34315 22 7.22876 22 11 22H13C16.7712 22 18.6569 22 19.8284 20.8284C21 19.6569 21 17.7712 21 14V12C21 8.22876 21 6.34315 19.8284 5.17157C18.6569 4 16.7712 4 13 4Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M3 10H21" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M10 18.5002L9.99999 13.8474C9.99999 13.6557 9.86325 13.5002 9.69458 13.5002H9M14 18.4983L15.4855 13.8923C15.4951 13.8626 15.5 13.8315 15.5 13.8002C15.5 13.6346 15.3657 13.5002 15.2 13.5002L13 13.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" /> <path d="M12 8V12L14 14" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="7.5" cy="7.5" r="1.5" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M2.5 12C2.5 7.52166 2.5 5.28249 3.89124 3.89124C5.28249 2.5 7.52166 2.5 12 2.5C16.4783 2.5 18.7175 2.5 20.1088 3.89124C21.5 5.28249 21.5 7.52166 21.5 12C21.5 16.4783 21.5 18.7175 20.1088 20.1088C18.7175 21.5 16.4783 21.5 12 21.5C7.52166 21.5 5.28249 21.5 3.89124 20.1088C2.5 18.7175 2.5 16.4783 2.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M5 21C9.37246 15.775 14.2741 8.88406 21.4975 13.5424" stroke="currentColor" stroke-width="1.5" /></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="5" stroke="currentColor" stroke-width="1.5"/><path d="M12 2.5V4M12 20v1.5M21.5 12H20M4 12H2.5M18.7 5.3l-1 1M6.3 17.7l-1 1M18.7 18.7l-1-1M6.3 6.3l-1-1" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M16.5 2V5M7.5 2V5M12 2V5" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/><path d="M13 3.5H11C7.7 3.5 6.05 3.5 5.03 4.53C4 5.55 4 7.2 4 10.5V15C4 18.3 4 19.95 5.03 20.97C6.05 22 7.7 22 11 22H13C16.3 22 17.95 22 18.97 20.97C20 19.95 20 18.3 20 15V10.5C20 7.2 20 5.55 18.97 4.53C17.95 3.5 16.3 3.5 13 3.5Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/><path d="M8 15H12M8 11H16" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8 7H16.75C18.86 7 19.91 7 20.67 7.51C20.99 7.72 21.28 8.01 21.49 8.33C22 9.09 22 10.14 22 12.25C22 15.76 22 17.52 21.16 18.78C20.79 19.32 20.32 19.79 19.78 20.16C18.52 21 16.76 21 13.25 21H12C7.29 21 4.93 21 3.46 19.54C2 18.07 2 15.71 2 11V7.94C2 6.13 2 5.22 2.38 4.54C2.65 4.05 3.05 3.65 3.54 3.38C4.22 3 5.13 3 6.94 3C8.11 3 8.69 3 9.2 3.19C10.36 3.63 10.84 4.68 11.37 5.73L12 7" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15.5 12C15.5 13.933 13.933 15.5 12 15.5C10.067 15.5 8.5 13.933 8.5 12C8.5 10.067 10.067 8.5 12 8.5C13.933 8.5 15.5 10.067 15.5 12Z" stroke="currentColor" stroke-width="1.5" /> <path d="M21.011 14.0965C21.5329 13.9558 21.7939 13.8854 21.8969 13.7508C22 13.6163 22 13.3998 22 12.9669V11.0332C22 10.6003 22 10.3838 21.8969 10.2493C21.7938 10.1147 21.5329 10.0443 21.011 9.90358C19.0606 9.37759 17.8399 7.33851 18.3433 5.40087C18.4817 4.86799 18.5509 4.60156 18.4848 4.44529C18.4187 4.28902 18.2291 4.18134 17.8497 3.96596L16.125 2.98673C15.7528 2.77539 15.5667 2.66972 15.3997 2.69222C15.2326 2.71472 15.0442 2.90273 14.6672 3.27873C13.208 4.73448 10.7936 4.73442 9.33434 3.27864C8.95743 2.90263 8.76898 2.71463 8.60193 2.69212C8.43489 2.66962 8.24877 2.77529 7.87653 2.98663L6.15184 3.96587C5.77253 4.18123 5.58287 4.28891 5.51678 4.44515C5.45068 4.6014 5.51987 4.86787 5.65825 5.4008C6.16137 7.3385 4.93972 9.37763 2.98902 9.9036C2.46712 10.0443 2.20617 10.1147 2.10308 10.2492C2 10.3838 2 10.6003 2 11.0332V12.9669C2 13.3998 2 13.6163 2.10308 13.7508C2.20615 13.8854 2.46711 13.9558 2.98902 14.0965C4.9394 14.6225 6.16008 16.6616 5.65672 18.5992C5.51829 19.1321 5.44907 19.3985 5.51516 19.5548C5.58126 19.7111 5.77092 19.8188 6.15025 20.0341L7.87495 21.0134C8.24721 21.2247 8.43334 21.3304 8.6004 21.3079C8.76746 21.2854 8.95588 21.0973 9.33271 20.7213C10.7927 19.2644 13.2088 19.2643 14.6689 20.7212C15.0457 21.0973 15.2341 21.2853 15.4012 21.3078C15.5682 21.3303 15.7544 21.2246 16.1266 21.0133L17.8513 20.034C18.2307 19.8187 18.4204 19.711 18.4864 19.5547C18.5525 19.3984 18.4833 19.132 18.3448 18.5991C17.8412 16.6616 19.0609 14.6226 21.011 14.0965Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5" /></svg></span><span class="ph-ic"><svg viewBox="0 0 500 500" aria-hidden="true"><g transform="translate(0 500) scale(.1 -.1)" fill="currentColor"><path d="M2365 4644c-123-17-233-41-310-66-641-213-1147-829-1251-1521-20-136-20-368 1-493 79-468 376-837 785-977 135-46 265-67 418-67 208 0 366 34 609 131 88 35 103 44 107 67 6 27 106 651 106 659 0 2-30-20-67-50-141-112-280-186-428-229-117-33-319-33-425 0-123 39-187 78-285 177-76 75-99 106-138 185-60 120-86 224-94 370-11 213 35 416 141 636 66 135 146 243 257 350 139 132 288 219 444 260 100 26 316 26 405 0 148-44 273-123 361-228 29-35 51-54 54-46 11 35 105 663 100 675-11 31-223 116-370 149-67 15-353 27-420 18z"/><path d="M2758 3464c-89-16-231-60-375-115-89-35-102-43-107-67-6-28-106-651-106-659 0-3 21 14 47 37 115 101 302 201 453 242 69 19 109 23 215 22 220-1 342-52 495-204 70-70 94-102 133-180 72-144 90-224 91-410 0-92-5-185-13-229-30-167-114-372-211-517-73-108-235-269-340-336-170-109-284-142-485-142-133 0-145 1-238 33-120 41-239 121-315 210-30 36-54 56-57 49-11-34-105-663-101-674 11-29 183-102 331-140 82-21 131-27 265-31 261-8 455 32 690 144 213 100 438 271 600 454 241 273 414 639 465 986 21 141 21 375-1 501-91 539-471 940-973 1026-116 20-354 20-463 0z"/></g></svg></span></div>
+        <div class="ph-dock"><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M9.16 5.71L8.76 4.81C8.49 4.21 8.36 3.92 8.16 3.69C7.92 3.41 7.6 3.2 7.24 3.09C6.95 3 6.62 3 5.98 3C5.03 3 4.55 3 4.16 3.18C3.69 3.4 3.26 3.86 3.09 4.35C2.95 4.76 2.99 5.19 3.07 6.04C3.95 15.09 8.91 20.05 17.96 20.93C18.81 21.01 19.24 21.05 19.65 20.91C20.14 20.74 20.6 20.31 20.82 19.84C21 19.45 21 18.97 21 18.02C21 17.38 21 17.05 20.91 16.76C20.8 16.4 20.59 16.08 20.31 15.84C20.08 15.64 19.79 15.51 19.19 15.24L18.29 14.84C17.65 14.56 17.33 14.41 17 14.38C16.69 14.35 16.37 14.4 16.08 14.51C15.78 14.63 15.51 14.85 14.97 15.3C14.43 15.75 14.16 15.97 13.83 16.09C13.54 16.2 13.16 16.24 12.85 16.2C12.51 16.14 12.24 16 11.71 15.72C10.07 14.84 9.16 13.93 8.28 12.29C8 11.76 7.86 11.49 7.81 11.15C7.76 10.84 7.8 10.46 7.91 10.17C8.03 9.84 8.25 9.57 8.7 9.03C9.15 8.49 9.37 8.22 9.49 7.92C9.6 7.63 9.65 7.31 9.62 7C9.59 6.67 9.44 6.35 9.16 5.71Z" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M8.5 14.5H15.5M8.5 9.5H12" stroke="currentColor" stroke-linecap="round" stroke-width="1.5"/><path d="M14.17 20.89C18.35 20.61 21.69 17.23 21.96 12.99C22.01 12.16 22.01 11.3 21.96 10.47C21.69 6.23 18.35 2.85 14.17 2.57C12.74 2.48 11.25 2.48 9.83 2.57C5.65 2.85 2.31 6.23 2.04 10.47C1.99 11.3 1.99 12.16 2.04 12.99C2.14 14.54 2.82 15.97 3.63 17.17C4.1 18.02 3.79 19.08 3.3 20C2.95 20.66 2.77 21 2.91 21.24C3.06 21.48 3.37 21.48 4 21.5C5.24 21.53 6.08 21.18 6.75 20.68C7.13 20.41 7.32 20.27 7.45 20.25C7.58 20.23 7.83 20.34 8.34 20.55C8.8 20.74 9.34 20.86 9.83 20.89C11.25 20.99 12.74 20.99 14.17 20.89Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5" /> <path d="M8 12C8 18 12 22 12 22C12 22 16 18 16 12C16 6 12 2 12 2C12 2 8 6 8 12Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5" /> <path d="M21 15H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M21 9H3" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span><span class="ph-ic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 6.5L8.2 4.7C8.6 4.2 9.1 4 9.7 4H14.3C14.9 4 15.4 4.2 15.8 4.7L17 6.5H18.5C19.88 6.5 21 7.62 21 9V17.5C21 18.88 19.88 20 18.5 20H5.5C4.12 20 3 18.88 3 17.5V9C3 7.62 4.12 6.5 5.5 6.5H7Z" stroke="currentColor" stroke-linejoin="round" stroke-width="1.5"/><circle cx="12" cy="13" r="3.5" stroke="currentColor" stroke-width="1.5"/></svg></span></div>
+      </div>
+      <div class="as-scrim"></div>
+      <div class="as">
+        <div data-layout-allow-overflow class="r r-places r-fold"><div class="asw"><div class="as-panel pc"><div class="pc-h"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M13.6177 21.367C13.1841 21.773 12.6044 22 12.0011 22C11.3978 22 10.8182 21.773 10.3845 21.367C6.41302 17.626 1.09076 13.4469 3.68627 7.37966C5.08963 4.09916 8.45834 2 12.0011 2C15.5439 2 18.9126 4.09916 20.316 7.37966C22.9082 13.4393 17.599 17.6389 13.6177 21.367Z" stroke="currentColor" stroke-width="1.5" /> <path d="M15.5 11C15.5 12.933 13.933 14.5 12 14.5C10.067 14.5 8.5 12.933 8.5 11C8.5 9.067 10.067 7.5 12 7.5C13.933 7.5 15.5 9.067 15.5 11Z" stroke="currentColor" stroke-width="1.5" /></svg><b>Pharmacy</b><span>3 open</span></div><div class="pc-map"><svg class="pc-svg" viewBox="78 340 314 110" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect x="0" y="0" width="411" height="822" fill="#ECEAE4"/><path d="M30 560 L112 552 L118 650 L36 660 Z" fill="#D6E2CC"/><path d="M92 342 L182 340 L184 396 L94 398 Z" fill="#E3DCCD"/><g stroke="#D7D3CA" stroke-width="9" fill="none" stroke-linecap="round"><path d="M40 0 L44 822"/><path d="M110 0 L114 822"/><path d="M292 0 L296 822"/><path d="M0 120 L360 116"/><path d="M0 230 L360 226"/><path d="M0 320 L352 316"/><path d="M0 520 L346 516"/><path d="M0 610 L340 606"/><path d="M0 720 L336 716"/><path d="M0 770 L215 640"/></g><g stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"><path d="M40 0 L44 822"/><path d="M110 0 L114 822"/><path d="M292 0 L296 822"/><path d="M0 120 L360 116"/><path d="M0 230 L360 226"/><path d="M0 320 L352 316"/><path d="M0 520 L346 516"/><path d="M0 610 L340 606"/><path d="M0 720 L336 716"/><path d="M0 770 L215 640"/></g><g stroke="#D2CDC2" stroke-width="15" fill="none" stroke-linecap="round"><path d="M215 0 L215 822"/><path d="M0 410 L352 406"/></g><g stroke="#FFFFFF" stroke-width="11" fill="none" stroke-linecap="round"><path d="M215 0 L215 822"/><path d="M0 410 L352 406"/></g><path d="M372 0 C360 120 380 220 352 330 C336 400 360 470 344 560 C330 640 350 740 330 822 L411 822 L411 0 Z" fill="#C6D4DD"/></svg><span class="pin pin0" style="left:70.5px;top:58.6px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="pin pin1" style="left:245.6px;top:35.9px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="pin pin2" style="left:297.9px;top:120.0px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="me" style="left:155.8px;top:138.2px"></span></div><div class="pc-r pc-r0"><i class="pc-hi"></i><span class="pc-t"><b>Pharmacy at the market</b><small>Open until 20:00 · 400 m</small></span><span class="pc-n"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7.27l4.28 10.43-3.47-1.53-.81-.36-.81.36-3.47 1.53L12 7.27M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg></span></div><div class="pc-r pc-r1"><i class="pc-hi"></i><span class="pc-t"><b>Linden Pharmacy</b><small>Open until 19:00 · 650 m</small></span><span class="pc-n"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7.27l4.28 10.43-3.47-1.53-.81-.36-.81.36-3.47 1.53L12 7.27M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg></span></div><div class="pc-r pc-r2"><i class="pc-hi"></i><span class="pc-t"><b>Harbour Pharmacy</b><small>Open until 18:30 · 800 m</small></span><span class="pc-n"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 7.27l4.28 10.43-3.47-1.53-.81-.36-.81.36-3.47 1.53L12 7.27M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71L12 2z"/></svg></span></div></div></div></div>
+        <div data-layout-allow-overflow class="r r-act"><div class="asw"><div class="as-panel"><div class="as-action"><span class="as-action-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.93 4.26l6.15 14.99c.34.83-.51 1.66-1.33 1.29l-5.34-2.36c-.26-.11-.55-.11-.81 0l-5.34 2.36c-.82.36-1.67-.46-1.33-1.29l6.15-14.99c.33-.83 1.51-.83 1.85 0z"/></svg></span>
+          <span class="as-action-t"><b>Navigation started</b><small>Pharmacy at the market</small></span></div></div></div></div>
+        <div data-layout-allow-overflow class="r r-stat"><div class="asw"><div class="as-panel">
+          <p class="as-brand">CHUK CHAT</p>
+          <p class="as-status"><span class="s-listen">Listening</span><span class="s-work">Working …</span><span class="s-done">Listening</span></p>
+          <div data-layout-allow-overflow class="r r-heard"><p class="as-heard"><span class="w">“Find </span><span class="w">a </span><span class="w">pharmacy </span><span class="w">that </span><span class="w">is </span><span class="w">open </span><span class="w">now </span><span class="w">and </span><span class="w">take </span><span class="w">me </span><span class="w">there.”</span></p></div>
+          <div data-layout-allow-overflow class="r r-aans"><div class="as-answer"><span class="w">Three </span><span class="w">pharmacies </span><span class="w">are </span><span class="w">open. </span><span class="w">The </span><span class="w">closest </span><span class="w">is </span><span class="w wb">Pharmacy </span><span class="w wb">at </span><span class="w wb">the </span><span class="w wb">market</span><span class="w">, </span><span class="w">400 </span><span class="w">m </span><span class="w">away. </span><span class="w">Navigation </span><span class="w">is </span><span class="w">running.</span></div></div>
+        </div></div></div>
+        <div data-layout-allow-overflow class="r r-tools"><div class="asw"><div class="as-panel as-tools"><div data-layout-allow-overflow class="r r-tool"><p class="as-tool"><span class="as-tic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 12.5L10.5 15L16 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span>Location</p></div><div data-layout-allow-overflow class="r r-tool"><p class="as-tool"><span class="as-tic"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 12.5L10.5 15L16 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span>Places: Pharmacy</p></div><div data-layout-allow-overflow class="r r-tool"><p class="as-tool"><span class="as-tic"><i class="as-spin"></i><span class="t3-ok"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 12.5L10.5 15L16 9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/></svg></span></span>Navigation: Pharmacy at the market</p></div></div></div></div>
+        <div data-layout-allow-overflow class="r r-dock"><div class="asw" style="padding-bottom:0"><div class="as-panel as-wave"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+          <div class="as-btns"><span class="as-round"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 4V20M20 12H4" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span>
+            <span class="as-pill"><span class="p-pause"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18V22M12 18H11.5208C8.11765 18 5.28262 15.3914 5 12M12 18H12.4792C15.8824 18 18.7174 15.3914 19 12M12 22H15M12 22H9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M8 6C8 3.79086 9.79086 2 12 2C14.2091 2 16 3.79086 16 6V11C16 13.2091 14.2091 15 12 15C9.79086 15 8 13.2091 8 11V6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg>Pause</span><span class="p-work"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18V22M12 18H11.5208C8.11765 18 5.28262 15.3914 5 12M12 18H12.4792C15.8824 18 18.7174 15.3914 19 12M12 22H15M12 22H9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M8 6C8 3.79086 9.79086 2 12 2C14.2091 2 16 3.79086 16 6V11C16 13.2091 14.2091 15 12 15C9.79086 15 8 13.2091 8 11V6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg>Working …</span><span class="p-pause2"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 18V22M12 18H11.5208C8.11765 18 5.28262 15.3914 5 12M12 18H12.4792C15.8824 18 18.7174 15.3914 19 12M12 22H15M12 22H9" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /> <path d="M8 6C8 3.79086 9.79086 2 12 2C14.2091 2 16 3.79086 16 6V11C16 13.2091 14.2091 15 12 15C9.79086 15 8 13.2091 8 11V6Z" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg>Pause</span></span>
+            <span class="as-round"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M18 6L6.00081 17.9992M17.9992 18L6 6.00085" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" /></svg></span></div></div></div>
+      </div>
+    </div>
+          <div class="dim"></div>
+          <div class="fs fs-nav fs-light-top" data-layout-allow-overlap data-layout-allow-occlusion><svg class="nv-svg" viewBox="88 196 260 520" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><rect x="0" y="0" width="411" height="822" fill="#ECEAE4"/><path d="M30 560 L112 552 L118 650 L36 660 Z" fill="#D6E2CC"/><path d="M92 342 L182 340 L184 396 L94 398 Z" fill="#E3DCCD"/><g stroke="#D7D3CA" stroke-width="9" fill="none" stroke-linecap="round"><path d="M40 0 L44 822"/><path d="M110 0 L114 822"/><path d="M292 0 L296 822"/><path d="M0 120 L360 116"/><path d="M0 230 L360 226"/><path d="M0 320 L352 316"/><path d="M0 520 L346 516"/><path d="M0 610 L340 606"/><path d="M0 720 L336 716"/><path d="M0 770 L215 640"/></g><g stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round"><path d="M40 0 L44 822"/><path d="M110 0 L114 822"/><path d="M292 0 L296 822"/><path d="M0 120 L360 116"/><path d="M0 230 L360 226"/><path d="M0 320 L352 316"/><path d="M0 520 L346 516"/><path d="M0 610 L340 606"/><path d="M0 720 L336 716"/><path d="M0 770 L215 640"/></g><g stroke="#D2CDC2" stroke-width="15" fill="none" stroke-linecap="round"><path d="M215 0 L215 822"/><path d="M0 410 L352 406"/></g><g stroke="#FFFFFF" stroke-width="11" fill="none" stroke-linecap="round"><path d="M215 0 L215 822"/><path d="M0 410 L352 406"/></g><path d="M372 0 C360 120 380 220 352 330 C336 400 360 470 344 560 C330 640 350 740 330 822 L411 822 L411 0 Z" fill="#C6D4DD"/><g font-family="Arimo, sans-serif" fill="#5F5D57" font-size="11.3"><text x="100" y="357">Marktplatz</text><text transform="translate(226 530) rotate(90)" text-anchor="middle">Holstenstraße</text><text x="236" y="510">Kaistraße</text></g><path class="nv-route-c" d="M215 462 L215 408 L140 408 L140 392" fill="none" stroke="#1D5FB0" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><path class="nv-route" d="M215 462 L215 408 L140 408 L140 392" fill="none" stroke="#4C9BF5" stroke-width="6.5" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="pin big fpin0" style="left:82.2px;top:309.8px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="pin fpin1" style="left:325.6px;top:278.2px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="pin fpin2" style="left:398.4px;top:395.2px"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.8a7.6 7.6 0 0 0-7.6 7.6c0 5.5 7.6 12.8 7.6 12.8s7.6-7.3 7.6-12.8A7.6 7.6 0 0 0 12 1.8Z" fill="currentColor" stroke="#FFFFFF" stroke-width="1.4"/><circle cx="12" cy="9.4" r="2.9" fill="#FFFFFF"/></svg></span><span class="me fme" style="left:200.8px;top:420.5px"></span><div class="nv-ban"><span class="nv-ic"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.93 4.26l6.15 14.99c.34.83-.51 1.66-1.33 1.29l-5.34-2.36c-.26-.11-.55-.11-.81 0l-5.34 2.36c-.82.36-1.67-.46-1.33-1.29l6.15-14.99c.33-.83 1.51-.83 1.85 0z"/></svg></span><span class="nv-bt"><b>Navigation started</b><small>to Pharmacy at the market</small></span></div><div class="nv-sheet"><p class="nv-eta"><b>5 min</b><span>400 m on foot</span></p><p class="nv-name">Pharmacy at the market</p><p class="nv-addr">Marktplatz 4 · open until 20:00</p></div></div>
+          <div class="sb"><span>18:42</span><span class="sb-cam"></span><span class="sb-sys"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12.01 21.49L23.64 7c-.45-.34-4.93-4-11.64-4C5.28 3 .81 6.66.36 7l11.63 14.49.01.01.01-.01z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M2 22h20V2z"/></svg><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.67 4H14V2h-4v2H8.33C7.6 4 7 4.6 7 5.33v15.33C7 21.4 7.6 22 8.33 22h7.33c.74 0 1.34-.6 1.34-1.33V5.33C17 4.6 16.4 4 15.67 4z"/></svg></span></div>
+          <span class="hbar"></span>
+          <span class="tap"></span>
+        </div></div>
+        <div class="tag"><svg class="tag-logo" viewBox="0 0 500 500" aria-hidden="true"><g transform="translate(0,500) scale(0.1,-0.1)" fill="#E8E4D8"><path d="M2365 4644 c-123 -17 -233 -41 -310 -66 -641 -213 -1147 -829 -1251 -1521 -20 -136 -20 -368 1 -493 79 -468 376 -837 785 -977 135 -46 265 -67 418 -67 208 0 366 34 609 131 88 35 103 44 107 67 6 27 106 651 106 659 0 2 -30 -20 -67 -50 -141 -112 -280 -186 -428 -229 -117 -33 -319 -33 -425 0 -123 39 -187 78 -285 177 -76 75 -99 106 -138 185 -60 120 -86 224 -94 370 -11 213 35 416 141 636 66 135 146 243 257 350 139 132 288 219 444 260 100 26 316 26 405 0 148 -44 273 -123 361 -228 29 -35 51 -54 54 -46 11 35 105 663 100 675 -11 31 -223 116 -370 149 -67 15 -353 27 -420 18z"/><path d="M2758 3464 c-89 -16 -231 -60 -375 -115 -89 -35 -102 -43 -107 -67 -6 -28 -106 -651 -106 -659 0 -3 21 14 47 37 115 101 302 201 453 242 69 19 109 23 215 22 220 -1 342 -52 495 -204 70 -70 94 -102 133 -180 72 -144 90 -224 91 -410 0 -92 -5 -185 -13 -229 -30 -167 -114 -372 -211 -517 -73 -108 -235 -269 -340 -336 -170 -109 -284 -142 -485 -142 -133 0 -145 1 -238 33 -120 41 -239 121 -315 210 -30 36 -54 56 -57 49 -11 -34 -105 -663 -101 -674 11 -29 183 -102 331 -140 82 -21 131 -27 265 -31 261 -8 455 32 690 144 213 100 438 271 600 454 241 273 414 639 465 986 21 141 21 375 -1 501 -91 539 -471 940 -973 1026 -116 20 -354 20 -463 0z"/></g></svg><span>chuk.chat</span></div>
+      </div>
+    </div>
+    <script>
+(function () {
+  var DUR = 12.0;
+  var T = {"duration": 12.0, "title_out": 2.0, "phone_in": 2.05, "phone_land": 2.445, "bubble": 2.745, "meta": 3.1, "steps": 3.4, "step_gap": 0.42, "answer": 4.845, "wps": 16.0, "card_min": 6.045, "swipe": 9.045, "swipe_d": 0.45, "tag": 11.2, "as_open": 2.745, "as_heard": 2.9, "heard_wps": 11.0, "as_work": 4.05, "as_tool_gap": 0.35, "as_places": 4.845, "as_nav": 6.3, "as_nav_ok": 6.85, "as_act": 7.245, "fold_steps": true, "card": 4.845, "full": 9.495, "tap": 8.725};
+  function build() {
+
+  var R = document.querySelector('[data-composition-id="main"]');
+  var $ = function (s) { return R.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(R.querySelectorAll(s)); };
+  var tl = gsap.timeline({ paused: true });
+  var ups = [];
+  var SCR = $('.scr');
+  var K = SCR.getBoundingClientRect().width / 411;           // canvas px per dp
+  function c01(x) { return x < 0 ? 0 : x > 1 ? 1 : x; }
+  function sm(x) { x = c01(x); return x * x * (3 - 2 * x); }
+  function el(s) { return typeof s === 'string' ? $(s) : s; }
+  function kNow() { return SCR.getBoundingClientRect().width / 411; }
+  function hOf(r) { return r.firstElementChild.getBoundingClientRect().height / kNow(); }
+  function rectIn(e, ref) {            // dp rect of e relative to ref
+    var k = kNow(), a = e.getBoundingClientRect(), b = ref.getBoundingClientRect();
+    return { x: (a.left - b.left) / k, y: (a.top - b.top) / k, w: a.width / k, h: a.height / k };
+  }
+  function setText(e, s) { if (e.__v !== s) { e.textContent = s; e.__v = s; } }
+  function rise(s, t, o) {
+    o = o || {};
+    tl.fromTo(el(s), { opacity: 0, y: o.y == null ? 12 : o.y, scale: o.s == null ? 1 : o.s },
+      { opacity: 1, y: 0, scale: 1, duration: o.d || 0.35, ease: o.ease || 'power3.out' }, t);
+  }
+  function pop(s, t, o) {
+    o = o || {};
+    tl.fromTo(el(s), { opacity: 0, scale: o.s || 0.6 }, { opacity: 1, scale: 1, duration: o.d || 0.32, ease: o.ease || 'back.out(2.2)' }, t);
+  }
+  function fadeIn(s, t, d) { tl.fromTo(el(s), { opacity: 0 }, { opacity: 1, duration: d || 0.3, ease: 'power1.out' }, t); }
+  function fadeOut(s, t, d) { tl.fromTo(el(s), { opacity: 1 }, { opacity: 0, duration: d || 0.25, ease: 'power1.in', immediateRender: false }, t); }
+  function showBetween(e, t0, t1) {
+    e = el(e);
+    ups.push(function (t) { var d = (t >= t0 && t < t1) ? '' : 'none'; if (e.__d !== d) { e.style.display = d; e.__d = d; } });
+  }
+  // A row (.r) grows from 0 to its natural height: the column is bottom-anchored, so it pushes up.
+  function grow(s, t, d, ease) {
+    var r = el(s), h = hOf(r);
+    d = d || 0.4;
+    tl.fromTo(r, { height: 0 }, { height: h, duration: d, ease: ease || 'power2.out', immediateRender: false }, t);
+    tl.set(r, { height: 'auto' }, t + d + 0.001);   // nested rows may grow later
+    return h;
+  }
+  // Layout as it is at the end (every row open, folded rows closed): used to aim the tap.
+  function atFinal(fn) {
+    var rows = $$('.r'), saved = rows.map(function (r) { return r.style.height; });
+    rows.forEach(function (r) { r.style.height = r.classList.contains('r-fold') ? '0px' : 'auto'; });
+    var res = fn();
+    rows.forEach(function (r, i) { r.style.height = saved[i]; });
+    return res;
+  }
+  function fold(s, t, d) {
+    var r = el(s), h = hOf(r);
+    tl.fromTo(r, { height: h }, { height: 0, duration: d || 0.35, ease: 'power2.inOut', immediateRender: false }, t);
+  }
+  // Streams the words of block `blk` (inside row `r`) and grows the row line by line.
+  function streamGrow(r, blk, t0, wps, fade) {
+    r = el(r); blk = el(blk);
+    var ws = Array.prototype.slice.call(blk.querySelectorAll('.w'));
+    var top = blk.getBoundingClientRect().top, K = kNow();
+    var padTop = parseFloat(getComputedStyle(blk).paddingTop) || 0;
+    var lines = [], lineStart = [];
+    ws.forEach(function (w, i) {
+      var b = (w.getBoundingClientRect().bottom - top) / K;
+      var last = lines.length ? lines[lines.length - 1] : -1;
+      if (b > last + 2) { lines.push(b); lineStart.push(t0 + i / wps); }
+      else { lines[lines.length - 1] = Math.max(last, b); }
+    });
+    var full = hOf(r);
+    fade = fade || 0.12;
+    ups.push(function (t) {
+      for (var i = 0; i < ws.length; i++) {
+        var o = c01((t - t0 - i / wps) / fade);
+        if (ws[i].__o !== o) { ws[i].style.opacity = o; ws[i].__o = o; }
+      }
+      var h = 0;
+      if (t >= t0) {
+        h = padTop * sm((t - t0) / 0.12) + (lines[0] - padTop) * sm((t - t0) / 0.14);
+        for (var j = 1; j < lines.length; j++) h += (lines[j] - lines[j - 1]) * sm((t - lineStart[j]) / 0.16);
+        if (t >= lineStart[lines.length - 1] + 0.16) h = full;
+      }
+      var hs = h.toFixed(2) + 'px';
+      if (r.__h !== hs) { r.style.height = hs; r.__h = hs; }
+    });
+    return t0 + ws.length / wps;
+  }
+  function stream(blk, t0, wps, fade) {
+    var ws = Array.prototype.slice.call(el(blk).querySelectorAll('.w'));
+    fade = fade || 0.12;
+    ups.push(function (t) {
+      for (var i = 0; i < ws.length; i++) {
+        var o = c01((t - t0 - i / wps) / fade);
+        if (ws[i].__o !== o) { ws[i].style.opacity = o; ws[i].__o = o; }
+      }
+    });
+    return t0 + ws.length / wps;
+  }
+  function spin(e) { e = el(e); ups.push(function (t) { e.style.transform = 'rotate(' + ((t * 420) % 360).toFixed(1) + 'deg)'; }); }
+  function count(e, a, b, t0, t1, fmt) {
+    e = el(e);
+    ups.push(function (t) { var k = c01((t - t0) / (t1 - t0)); k = 1 - Math.pow(1 - k, 3); setText(e, fmt(a + (b - a) * k)); });
+  }
+  function draw(s, t, d, ease) {
+    var e = el(s), L = Math.ceil(e.getTotalLength()) + 2;
+    e.style.strokeDasharray = L + ' ' + L;
+    tl.fromTo(e, { strokeDashoffset: L }, { strokeDashoffset: 0, duration: d, ease: ease || 'power1.inOut' }, t);
+  }
+  function dots(s, t0, t1) {
+    var ds = $$(s + ' i');
+    ups.push(function (t) {
+      for (var i = 0; i < ds.length; i++) {
+        var ph = (t - t0) * 2.6 - i * 0.22;
+        var k = (t >= t0 && t < t1) ? Math.max(0, Math.sin(ph * Math.PI * 2)) : 0;
+        ds[i].style.transform = 'translateY(' + (-4.5 * k).toFixed(2) + 'px)';
+        ds[i].style.opacity = (0.45 + 0.55 * k).toFixed(3);
+      }
+    });
+  }
+  function tapAt(target, t, rc) {
+    var tp = $('.tap');
+    rc = rc || rectIn(el(target), SCR);
+    tp.style.left = (rc.x + rc.w / 2).toFixed(1) + 'px';
+    tp.style.top = (rc.y + rc.h / 2).toFixed(1) + 'px';
+    tl.fromTo(tp, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.14, ease: 'power2.out', immediateRender: false }, t);
+    tl.fromTo(tp, { opacity: 1, scale: 1 }, { opacity: 0, scale: 1.25, duration: 0.3, ease: 'power1.in', immediateRender: false }, t + 0.2);
+    tl.fromTo(el(target), { scale: 1 }, { scale: 0.94, duration: 0.1, ease: 'power2.in', immediateRender: false }, t);
+    tl.fromTo(el(target), { scale: 0.94 }, { scale: 1, duration: 0.3, ease: 'back.out(3)', immediateRender: false }, t + 0.12);
+  }
+
+
+  // ---- assistant overlay ----
+  var TAP = null, TAPR = null;
+  tl.fromTo('.as-scrim', { opacity: 0 }, { opacity: 1, duration: 0.3 }, T.as_open);
+  tl.fromTo(['.ph-grid', '.ph-dock'], { opacity: 1 }, { opacity: 0.12, duration: 0.3 }, T.as_open);
+  tl.fromTo('.ph-glance', { opacity: 1 }, { opacity: 0, duration: 0.3 }, T.as_places);
+  tl.fromTo('.ph-glance', { opacity: 0 }, { opacity: 1, duration: 0.3, immediateRender: false }, T.as_act + 0.2);
+  grow('.r-dock', T.as_open, 0.4, 'power3.out');
+  rise('.r-dock .asw', T.as_open, { y: 40, d: 0.4 });
+  grow('.r-stat', T.as_heard, 0.35, 'power3.out');
+  rise('.r-stat .as-panel', T.as_heard, { y: 20, d: 0.35 });
+  // The request shows while listening, hides while the turn runs, and returns quoted with the answer.
+  grow('.r-heard', T.as_heard, 0.35, 'power3.out');
+  stream('.as-heard', T.as_heard + 0.15, T.heard_wps);
+  fold('.r-heard', T.as_work, 0.3);
+  (function () {
+    var e = $('.as-heard');
+    ups.push(function (t) { var d = (t < T.as_work + 0.32 || t >= T.as_act) ? '' : 'none'; if (e.__d !== d) { e.style.display = d; e.__d = d; } });
+  })();
+  grow('.r-heard', T.as_act, 0.35);
+  showBetween('.s-listen', -1, T.as_work); showBetween('.s-work', T.as_work, T.as_act); showBetween('.s-done', T.as_act, 999);
+  showBetween('.p-pause', -1, T.as_work); showBetween('.p-work', T.as_work, T.as_act); showBetween('.p-pause2', T.as_act, 999);
+  grow('.r-tools', T.as_work, 0.3);
+  $$('.r-tool').forEach(function (r, i) {
+    var t = i < 2 ? T.as_work + 0.1 + i * T.as_tool_gap : T.as_nav;
+    grow(r, t, 0.3); rise(r.firstElementChild, t, { y: 8, d: 0.3 });
+  });
+  spin('.as-spin');
+  showBetween('.as-spin', -1, T.as_nav_ok); showBetween('.t3-ok', T.as_nav_ok, 999);
+  pop('.t3-ok', T.as_nav_ok, { s: 0.3 });
+  grow('.r-places', T.as_places, 0.5, 'power2.out');
+  rise('.r-places .as-panel', T.as_places, { y: 26, d: 0.45 });
+  fold('.r-places', T.as_act, 0.4);
+  grow('.r-act', T.as_act, 0.4, 'back.out(1.4)');
+  pop('.r-act .as-panel', T.as_act, { s: 0.9, ease: 'back.out(2)' });
+  streamGrow('.r-aans', '.as-answer', T.as_act + 0.1, T.wps);
+  // Waveform (uc-assistant.css / _WavePainter): listening level vs busy line.
+  var env = [0.142, 0.282, 0.415, 0.541, 0.655, 0.756, 0.841, 0.91, 0.959, 0.99, 1, 0.99, 0.959, 0.91, 0.841, 0.756, 0.655, 0.541, 0.415, 0.282, 0.142];
+  var bars = $$('.as-wave i');
+  ups.push(function (t) {
+    var busy = t >= T.as_work && t < T.as_act;
+    var talking = t >= T.as_heard && t < T.as_heard + 1.0;
+    var level = talking ? 0.55 + 0.45 * Math.abs(Math.sin(t * 7.3)) : 0.1;
+    for (var i = 0; i < bars.length; i++) {
+      var wave = 0.5 + 0.5 * Math.sin((t / 1.8) * Math.PI * 2 + i * 0.8);
+      var h = busy ? 4 + 8 * wave : Math.min(40, 4 + (3 + 33 * level) * env[i] * (0.45 + 0.55 * wave));
+      bars[i].style.height = h.toFixed(2) + 'px';
+      var c = busy ? 'rgba(232,228,216,0.52)' : '#D97757';
+      if (bars[i].__c !== c) { bars[i].style.background = c; bars[i].__c = c; }
+    }
+  });
+
+  // places: pins drop onto the map, rows follow; the chosen row lights up; full screen draws the route
+  $$('.pc .pin').forEach(function (p, i) { tl.fromTo(p, { opacity: 0, y: -46 }, { opacity: 1, y: 0, duration: 0.42, ease: 'bounce.out' }, T.as_places + 0.2 + i * 0.13); });
+  pop('.pc .me', T.as_places + 0.15, { s: 0.3 });
+  $$('.pc-r').forEach(function (r, i) { rise(r, T.as_places + 0.3 + i * 0.12, { y: 8, d: 0.3 }); });
+  tl.fromTo('.pc-r0 .pc-hi', { opacity: 0 }, { opacity: 1, duration: 0.3 }, T.as_nav);
+  draw('.nv-route-c', T.full - 0.05, 0.8); draw('.nv-route', T.full - 0.05, 0.8);
+  tl.fromTo('.fpin0', { y: -60, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'bounce.out' }, T.full + 0.6);
+  rise('.nv-ban', T.swipe + 0.25, { y: -30, d: 0.45 });
+  rise('.nv-sheet', T.swipe + 0.3, { y: 80, d: 0.5 });
+
+
+  // Title: fit the longest line into 960 px, words rise in from frame 0.
+  (function () {
+    var tt = $('.tt'), base = parseFloat(getComputedStyle(tt).fontSize), mw = 0;
+    $$('.tt .lw').forEach(function (l) { mw = Math.max(mw, l.getBoundingClientRect().width); });
+    if (mw > 960) tt.style.fontSize = (base * 960 / mw).toFixed(1) + 'px';
+  })();
+  tl.fromTo('.tc-logo', { opacity: 0.35, scale: 0.9 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'power3.out' }, 0);
+  $$('.tt .wd').forEach(function (w, i) {
+    tl.fromTo(w, { opacity: 0.18, y: 34 }, { opacity: 1, y: 0, duration: 0.42, ease: 'power3.out' }, i * 0.05);
+  });
+  tl.fromTo('.tc-in', { opacity: 1, scale: 1, y: 0 }, { opacity: 0, scale: 0.94, y: -50, duration: 0.3, ease: 'power2.in', immediateRender: false }, T.title_out);
+  // Phone: slides up and settles (reference: 0.4 s, lands on the drop).
+  tl.fromTo('.phone', { opacity: 0, y: 260, scale: 0.9 }, { opacity: 1, y: 0, scale: 1, duration: T.phone_land - T.phone_in, ease: 'power3.out' }, T.phone_in);
+  // Swipe into the full-screen result.
+  var SW = T.swipe, SD = T.swipe_d;
+  tl.fromTo('.fs', { x: 411 }, { x: 0, duration: SD, ease: 'power3.inOut' }, SW);
+  tl.fromTo('.surface', { x: 0 }, { x: -130, duration: SD, ease: 'power3.inOut' }, SW);
+  tl.fromTo('.dim', { opacity: 0 }, { opacity: 0.55, duration: SD, ease: 'power2.in' }, SW);
+  showBetween($('.fs'), SW - 0.001, 999);
+  showBetween($('.surface'), -1, SW + SD + 0.02);   // fully covered once the result has landed
+  // Horizontal motion blur during the swipe (SVG filter, off outside the move).
+  var blur = $('#mb-blur'), fsEl = $('.fs'), sfEl = $('.surface');
+  ups.push(function (t) {
+    var k = (t > SW && t < SW + SD) ? Math.sin(Math.PI * (t - SW) / SD) : 0;
+    var on = k > 0.02;
+    var f = on ? 'url(#mb)' : 'none';
+    if (fsEl.__f !== f) { fsEl.style.filter = f; sfEl.style.filter = f; fsEl.__f = f; }
+    if (on) blur.setAttribute('stdDeviation', (7 * k).toFixed(2) + ' 0');
+  });
+  if ($('.fs-light-top')) tl.fromTo('.sb', { color: '#F4F2EC' }, { color: '#1E1E1C', duration: 0.2, ease: 'none' }, SW + SD * 0.55);
+  if ($('.fs-light-bottom')) tl.fromTo('.hbar', { backgroundColor: 'rgba(240,238,232,0.92)' }, { backgroundColor: 'rgba(30,30,28,0.85)', duration: 0.2, ease: 'none' }, SW + SD * 0.55);
+  // End tag, last 0.8 s.
+  tl.fromTo('.tag', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: 0.4, ease: 'power3.out' }, T.tag);
+
+
+  var drv = { t: 0 };
+  tl.to(drv, { t: DUR, duration: DUR, ease: 'none', onUpdate: function () {
+    for (var i = 0; i < ups.length; i++) ups[i](drv.t);
+  } }, 0);
+  for (var i = 0; i < ups.length; i++) ups[i](0);
+  window.__timelines["main"] = tl;
+
+  }
+  var fams = ['18px "Chuk Mono"', '700 18px "Chuk Mono"', '18px Arimo', '700 18px Arimo', '760 100px Inter', '18px Merriweather', '700 18px Merriweather'];
+  Promise.all(fams.map(function (f) { return document.fonts.load(f); }))
+    .then(function () { return document.fonts.ready; })
+    .then(build, build);
+})();
+    </script>
+  </body>
+</html>

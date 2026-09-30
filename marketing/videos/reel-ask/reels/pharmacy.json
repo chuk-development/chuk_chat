@@ -1,0 +1,34 @@
+{
+  "slug": "pharmacy",
+  "title": "Ask Chuk Chat to|[find a pharmacy]|[open now]",
+  "surface": "assistant",
+  "clock": "18:42",
+  "prompt": "Find a pharmacy that is open now and take me there.",
+  "answer": "Three pharmacies are open. The closest is **Pharmacy at the market**, 400 m away. Navigation is running.",
+  "assistant": {
+    "date": "Fri, Sep 25",
+    "temp": "14°C",
+    "tools": ["Location", "Places: Pharmacy", "Navigation: Pharmacy at the market"],
+    "action": "Navigation started",
+    "action_detail": "Pharmacy at the market"
+  },
+  "card": {
+    "type": "places",
+    "title": "Pharmacy",
+    "count": "3 open",
+    "me": [215, 462],
+    "places": [
+      {"name": "Pharmacy at the market", "meta": "Open until 20:00 · 400 m", "xy": [140, 392]},
+      {"name": "Linden Pharmacy", "meta": "Open until 19:00 · 650 m", "xy": [294, 372]},
+      {"name": "Harbour Pharmacy", "meta": "Open until 18:30 · 800 m", "xy": [340, 446]}
+    ],
+    "nav": {
+      "banner": "Navigation started",
+      "banner_sub": "to Pharmacy at the market",
+      "eta": "5 min",
+      "distance": "400 m on foot",
+      "name": "Pharmacy at the market",
+      "address": "Marktplatz 4 · open until 20:00"
+    }
+  }
+}
