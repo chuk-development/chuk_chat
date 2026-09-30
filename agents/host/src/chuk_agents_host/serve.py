@@ -89,6 +89,8 @@ class TaskServer:
         job_frame_sender: Callable[[dict], Any] | None = None,
         on_agent_frame: Callable[[dict], list | None] | None = None,
         skills_seed_root: str | None = None,
+        calls=None,
+        on_call_frame: Callable[[dict], Any] | None = None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -153,6 +155,12 @@ class TaskServer:
                 # the host's store answers agent_create / agent_rename /
                 # agent_list with the current list.
                 on_agent_frame=on_agent_frame,
+                # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent
+                # calls the user"): the host's call service for the
+                # session-scoped ``call_user`` / ``call_status``, and the hook
+                # for the app's ``voice_call_state``.
+                calls=calls,
+                on_call_frame=on_call_frame,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

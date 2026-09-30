@@ -203,6 +203,20 @@ class CommitInfo:
         }
 
 
+_REPO_LOCKS: dict[str, threading.RLock] = {}
+_REPO_LOCKS_GUARD = threading.Lock()
+
+
+def _repo_lock(root: Path) -> threading.RLock:
+    """One lock per repository directory, process-wide."""
+    try:
+        key = str(Path(root).resolve())
+    except OSError:
+        key = str(root)
+    with _REPO_LOCKS_GUARD:
+        return _REPO_LOCKS.setdefault(key, threading.RLock())
+
+
 class GitWorkspace:
     """A git repo around the agent's workspace, plus the action journal.
 
@@ -229,10 +243,12 @@ class GitWorkspace:
         self._enabled = False
         self._git_dir: Path | None = None
         self._common_dir: Path | None = None
-        # Coarse, reentrant: the parent's own journaling and a subagent thread
-        # merging its branch back both write this repo's index, and git's index
-        # lock is not a queue — it is an error.
-        self._lock = threading.RLock()
+        # Coarse, reentrant, and shared by every instance on this repo in the
+        # process: the parent's own journaling, a subagent thread merging its
+        # branch back, and a tool thread a Stop abandoned in the previous task
+        # (it still commits when it returns) all write this repo's index, and
+        # git's index lock is not a queue — it is an error.
+        self._lock = _repo_lock(self.root)
         self._seq = 0
         self._batch: list[str] | None = None
         self._batch_summary: str | None = None

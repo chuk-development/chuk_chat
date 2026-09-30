@@ -1,0 +1,35 @@
+[project]
+name = "chuk-agents-memory"
+version = "0.1.0"
+description = "Hindsight memory sidecar for the Agents host: embedded Postgres (pg0) plus the Hindsight API, bound to loopback."
+readme = "README.md"
+authors = [
+    { name = "chukfinley", email = "chuk@chuk.dev" }
+]
+requires-python = ">=3.12"
+# Pinned exactly. Hindsight ships two to three releases a month; an upgrade is a
+# deliberate change with its own live probe, never a side effect of a re-lock.
+#
+# Deliberately NOT `hindsight-all`: that bundle pulls `hindsight-api-slim[all]`
+# (torch, sentence-transformers, mlx, local rerankers). The Agents memory uses
+# the proxy embeddings and the `rrf` reranker, so no local model is ever loaded.
+dependencies = [
+    "hindsight-api-slim[embedded-db]==0.10.2",
+    "hindsight-client==0.10.2",
+]
+
+[project.scripts]
+chuk-agents-memory = "chuk_agents_memory.launcher:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.28,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

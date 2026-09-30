@@ -5,8 +5,16 @@ the mock's replies belong to the loop, not to a fact extractor."""
 
 from __future__ import annotations
 
+import pytest
+
 from chuk_agents_runtime import LocalEnvironment, MockModelClient, build_runtime
 from chuk_agents_runtime.memory import MemoryStore
+
+
+@pytest.fixture(autouse=True)
+def _mem0_backend(monkeypatch):
+    """These cases are about the Mem0 store; pin it whatever the default is."""
+    monkeypatch.setenv("AGENTS_MEM_BACKEND", "mem0")
 
 
 def test_a_mock_writer_gets_no_automatic_memory(tmp_path, monkeypatch):

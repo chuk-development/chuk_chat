@@ -344,7 +344,7 @@ def test_the_trace_carries_both_the_decision_and_the_drop(party):
     a healthy session. A frame it dropped is on the ordinary log as well, so a
     host nobody started with ``--trace`` still says what it swallowed.
     """
-    from chuk_agents_runtime.trace import set_tracer
+    from chuk_agents_runtime.telemetry import set_tracer
 
     class Recorder:
         enabled = True

@@ -8,14 +8,16 @@ yet, and a server the user already runs.
 
 What this module is:
 
-- The **official ``mcp`` Python SDK** as the client, with **all three
-  transports** — ``stdio`` (a local subprocess), ``sse`` (legacy HTTP+SSE) and
-  ``streamable_http`` (the current HTTP transport).
-- One **persistent transport thread per server**: the thread owns an asyncio
-  loop, the loop owns the transport and the ``ClientSession``, and the session
-  therefore lives across tool calls. Handshake and tool listing happen once, not
-  once per call. Calls arrive from the agent's synchronous loop through
-  :func:`asyncio.run_coroutine_threadsafe`.
+- **Pydantic AI's ``MCPToolset``** (the FastMCP client) as the client, with
+  **all three transports** — ``stdio`` (a local subprocess), ``sse`` (legacy
+  HTTP+SSE) and ``streamable_http`` (the current HTTP transport). The bearer is
+  resolved per request (:class:`_BearerAuth`), so a token that lapses in the
+  middle of a session is renewed in place, without a reconnect.
+- One **persistent thread per server**: the thread owns an asyncio loop, the
+  loop keeps the toolset entered, and the session therefore lives across tool
+  calls and across the tasks of one session. Handshake and tool listing happen
+  once, not once per call. Calls arrive from the agent's synchronous tools
+  through :func:`asyncio.run_coroutine_threadsafe`.
 - Configuration from a **file in the workspace** (``mcp.json`` or
   ``.agents/mcp.json``), in the same shape editors already use::
 
@@ -52,7 +54,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import inspect
 import json
 import os
 import re
@@ -64,6 +65,8 @@ from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+import httpx2
 
 from .registry import ToolRegistry
 
@@ -103,22 +106,6 @@ TokenProvider = Callable[[str], "str | None"]
 #: that only issues a new access token has told us nothing the app cannot work
 #: out for itself.
 RotationListener = Callable[[str, "MCPServerConfig"], None]
-
-
-def _read_timeout(seconds: float) -> Any:
-    """``ClientSession(read_timeout_seconds=...)`` takes a ``timedelta`` in the
-    ``mcp`` 1.x line and a float in 2.x. browser-use 0.13.7 pins ``mcp==1.26.0``,
-    so the runtime has to satisfy both instead of picking a winner: read the
-    annotation of the installed SDK and hand over what it asks for."""
-    from mcp import ClientSession  # imported late: the SDK is an optional dep
-
-    parameter = inspect.signature(ClientSession.__init__).parameters.get(
-        "read_timeout_seconds"
-    )
-    hint = "" if parameter is None else str(parameter.annotation)
-    if "timedelta" in hint:
-        return timedelta(seconds=seconds)
-    return seconds
 
 
 def _clip(value: Any, cap: int) -> str:
@@ -475,20 +462,6 @@ def refresh_access_token(
     return token, updated
 
 
-#: A refused credential, as it shows up in a transport error string. ``401`` is
-#: matched only as a standalone word: a plain substring test also fired on a URL
-#: path like ``/mcp/401k-planner`` and on port ``4010``, and a needless refresh
-#: spends the refresh token, which a rotating server then invalidates.
-_UNAUTHORIZED = re.compile(
-    r"(?<!\w)401(?!\w)|unauthorized|invalid_token|invalid_grant", re.IGNORECASE
-)
-
-
-def _looks_unauthorized(error: str | None) -> bool:
-    """Whether an error reads as "the server refused this credential"."""
-    return bool(error) and bool(_UNAUTHORIZED.search(error))
-
-
 #: Query parameters are where an API-key connector keeps the user's key: the
 #: app forwards it on the URL rather than as a bearer. Transport errors quote
 #: the URL, and an error string is what ``MCPManager.status`` calls "what the
@@ -523,6 +496,72 @@ def load_mcp_config(
 # -- one connection --------------------------------------------------------
 
 
+class _BearerAuth(httpx2.Auth):
+    """Sets the bearer on every MCP HTTP request.
+
+    The token is the connection's current one (:meth:`MCPConnection._http_headers`:
+    the stash, the forwarded bearer while it lives, a refreshed one). When the
+    server refuses it — a ``401``, or a ``403`` / body that names an invalid or
+    expired token — it renews once from the forwarded refresh material and
+    sends the request again: the handshake of a lapsed forwarded token and a
+    token that lapses in the middle of a long session both recover in place.
+    The rejected bearer is handed to the refresh, so two requests refused at
+    the same moment rotate the token once, not twice.
+    """
+
+    def __init__(self, connection: "MCPConnection") -> None:
+        self._connection = connection
+
+    async def async_auth_flow(self, request: Any) -> Any:
+        import anyio
+
+        connection = self._connection
+        headers = await anyio.to_thread.run_sync(connection._http_headers)
+        bearer = headers.get("Authorization")
+        if bearer:
+            request.headers["Authorization"] = bearer
+        response = yield request
+        if not await _refused(response):
+            return
+        seen = bearer[len("Bearer "):] if bearer and bearer.startswith("Bearer ") else None
+        fresh = await anyio.to_thread.run_sync(
+            lambda: connection.refresh_token(force=True, seen_token=seen)
+        )
+        if fresh and f"Bearer {fresh}" != bearer:
+            request.headers["Authorization"] = f"Bearer {fresh}"
+            yield request
+
+
+async def _refused(response: Any) -> bool:
+    """Whether the server refused the credential (not the request)."""
+    if response.status_code == 401:
+        return True
+    challenge = response.headers.get("www-authenticate", "")
+    if _looks_unauthorized(challenge) and response.status_code in (400, 403):
+        return True
+    if response.status_code != 403:
+        return False
+    try:
+        body = (await response.aread()).decode("utf-8", "replace")[:2000]
+    except Exception:  # noqa: BLE001 — an unreadable body is not a refusal
+        return False
+    return bool(_TOKEN_REFUSED.search(body))
+
+
+#: A refused credential, as it shows up in a transport error, a tool error or
+#: a response body. ``401`` is matched as a whole number only.
+_UNAUTHORIZED = re.compile(
+    r"(?<!\w)401(?!\w)|unauthorized|invalid_token|invalid_grant|token (?:has )?expired",
+    re.IGNORECASE,
+)
+_TOKEN_REFUSED = re.compile(r"invalid_token|token (?:has )?expired|expired token", re.IGNORECASE)
+
+
+def _looks_unauthorized(error: str | None) -> bool:
+    """Whether an error reads as "the server refused this credential"."""
+    return bool(error) and bool(_UNAUTHORIZED.search(error))
+
+
 @dataclass
 class MCPToolInfo:
     name: str
@@ -531,14 +570,14 @@ class MCPToolInfo:
 
 
 class MCPConnection:
-    """One server, one thread, one long-lived ``ClientSession``.
+    """One server, one thread, one long-lived, entered ``MCPToolset``.
 
-    The thread is the whole point. The MCP SDK is asyncio and its transports are
-    async context managers that must be entered and exited **in the same task**;
-    a per-call ``asyncio.run`` would therefore re-spawn the subprocess, redo the
-    handshake and re-list the tools on every single call. Here one task inside
-    one loop opens the transport, initializes, lists the tools, and then parks on
-    a stop event, so every later call is one round trip on an established
+    The thread is the whole point. The toolset is asyncio and its transports
+    are async context managers that must be entered and exited **in the same
+    task**; a per-call ``asyncio.run`` would therefore re-spawn the subprocess,
+    redo the handshake and re-list the tools on every single call. Here one task
+    inside one loop enters the toolset, lists the tools, and then parks on a
+    stop event, so every later call is one round trip on an established
     session.
     """
 
@@ -652,29 +691,23 @@ class MCPConnection:
             self._ready.set()
 
     async def _session_task(self) -> None:
-        from mcp import ClientSession
+        from pydantic_ai.mcp import MCPToolset
 
         self._loop = asyncio.get_running_loop()
         self._stop = asyncio.Event()
+        toolset = MCPToolset(
+            self._transport(),
+            init_timeout=self.config.connect_timeout,
+            read_timeout=self.config.call_timeout,
+            tool_error_behavior="error",
+        )
         async with AsyncExitStack() as stack:
             try:
-                streams = await asyncio.wait_for(
-                    stack.enter_async_context(self._transport()),
-                    timeout=self.config.connect_timeout,
-                )
-                # Two streams, or two plus transport extras depending on the
-                # transport. Only the first two are the session's.
-                read, write = streams[0], streams[1]
-                session = await stack.enter_async_context(
-                    ClientSession(
-                        read, write, read_timeout_seconds=_read_timeout(self.config.call_timeout)
-                    )
-                )
                 await asyncio.wait_for(
-                    session.initialize(), timeout=self.config.connect_timeout
+                    stack.enter_async_context(toolset), timeout=self.config.connect_timeout
                 )
                 listed = await asyncio.wait_for(
-                    session.list_tools(), timeout=self.config.connect_timeout
+                    toolset.list_tools(), timeout=self.config.connect_timeout
                 )
             except asyncio.TimeoutError:
                 self._error = "connect timed out"
@@ -683,58 +716,41 @@ class MCPConnection:
                 self._error = _redact(f"{type(exc).__name__}: {_clip(exc, 300)}")
                 return
             self._tools = _tool_infos(listed)
-            self._session = session
+            self._session = toolset
             self._error = None
             self._connected_once = True
             self._ready.set()
-            # Park. The session stays open until close() sets the stop event, so
-            # every tool call reuses this handshake.
+            # Park. The toolset stays entered until close() sets the stop
+            # event, so every tool call reuses this handshake.
             await self._stop.wait()
 
-    def _transport(self):
-        """The one place the three transports differ."""
+    def _transport(self) -> Any:
+        """The one place the three transports differ (FastMCP transports)."""
+        from fastmcp.client.transports import (
+            SSETransport,
+            StdioTransport,
+            StreamableHttpTransport,
+        )
+
         config = self.config
         if config.transport == STDIO:
-            from mcp import StdioServerParameters
-            from mcp.client.stdio import get_default_environment, stdio_client
+            from mcp.client.stdio import get_default_environment
 
-            # Merged, not replaced: handing the SDK a bare ``{"API_KEY": ...}``
-            # would launch the server without PATH or HOME, which breaks most of
-            # them in a way that looks like "the server is broken".
-            environment = {**get_default_environment(), **config.env}
-            return stdio_client(
-                StdioServerParameters(
-                    command=config.command or "",
-                    args=list(config.args),
-                    env=environment,
-                    cwd=config.cwd,
-                )
+            # Merged, not replaced: a bare ``{"API_KEY": ...}`` would launch the
+            # server without PATH or HOME, which breaks most of them in a way
+            # that looks like "the server is broken". ``keep_alive=False``: the
+            # subprocess ends with the session, never outlives close().
+            return StdioTransport(
+                command=config.command or "",
+                args=list(config.args),
+                env={**get_default_environment(), **config.env},
+                cwd=config.cwd,
+                keep_alive=False,
             )
-        headers = self._http_headers()
+        headers = dict(config.headers) or None
         if config.transport == SSE:
-            from mcp.client.sse import sse_client
-
-            return sse_client(
-                config.url or "",
-                headers=headers or None,
-                timeout=config.connect_timeout,
-            )
-        from mcp.client.streamable_http import streamable_http_client
-
-        return streamable_http_client(
-            config.url or "", http_client=self._http_client(headers)
-        )
-
-    def _http_client(self, headers: dict[str, str]):
-        """The streamable-HTTP transport takes a client, not headers, so auth
-        rides on a client built here."""
-        import httpx
-
-        return httpx.AsyncClient(
-            headers=headers or None,
-            timeout=self.config.call_timeout,
-            follow_redirects=True,
-        )
+            return SSETransport(config.url or "", headers=headers, auth=_BearerAuth(self))
+        return StreamableHttpTransport(config.url or "", headers=headers, auth=_BearerAuth(self))
 
     def _http_headers(self) -> dict[str, str]:
         """The request headers, with the bearer resolved.
@@ -762,7 +778,7 @@ class MCPConnection:
             headers["Authorization"] = f"Bearer {token}"
         return headers
 
-    def refresh_token(self, *, force: bool = False) -> str | None:
+    def refresh_token(self, *, force: bool = False, seen_token: str | None = None) -> str | None:
         """Mint a new access token from the forwarded ``oauth`` block.
 
         Returns the token, or ``None`` when there is no refresh material or the
@@ -772,12 +788,17 @@ class MCPConnection:
 
         ``force`` skips the "is it expired" question, which is what a 401 means:
         the server has already told us the token is no good, whatever its stated
-        expiry said.
+        expiry said. ``seen_token`` is the bearer the server refused: when the
+        stored token is already a different one, another caller renewed it
+        meanwhile and that token is returned without a second refresh.
         """
         with self._refresh_lock:
             oauth = self.config.oauth
             if not oauth.get("refresh_token"):
                 return None
+            current = self.config.auth_token
+            if seen_token is not None and current and current != seen_token:
+                return current
             # Another caller may have refreshed while this one waited on the
             # lock; a token that is live again needs no second round trip.
             if not force and self.config.auth_token:
@@ -818,7 +839,10 @@ class MCPConnection:
         future = None
         try:
             future = asyncio.run_coroutine_threadsafe(
-                session.call_tool(tool, dict(arguments or {})), loop
+                session.client.call_tool(
+                    tool, dict(arguments or {}), timeout=timeout, raise_on_error=False
+                ),
+                loop,
             )
             result = future.result(timeout=timeout + 5.0)
         except TimeoutError:
@@ -838,9 +862,11 @@ class MCPConnection:
             # parked on _stop. Do not keep advertising that session as alive.
             # The next call/task can reconnect; never replay an arbitrary tool
             # whose side effects may already have happened before disconnection.
+            closed = str(exc).lower()
             if isinstance(exc, (BrokenPipeError, ConnectionError)) or (
-                type(exc).__name__ in ("McpError", "MCPError")
-                and "connection closed" in str(exc).lower()
+                type(exc).__name__ in ("McpError", "MCPError", "ClosedResourceError")
+                or "connection closed" in closed
+                or "not connected" in closed
             ):
                 self._error = error
             return {
@@ -853,7 +879,7 @@ class MCPConnection:
 
 
 def _tool_infos(listed: Any) -> list[MCPToolInfo]:
-    tools = getattr(listed, "tools", None) or []
+    tools = listed if isinstance(listed, list) else (getattr(listed, "tools", None) or [])
     infos: list[MCPToolInfo] = []
     for tool in tools[:MAX_TOOLS_PER_SERVER]:
         name = getattr(tool, "name", "") or ""
@@ -990,8 +1016,6 @@ class MCPManager:
             except Exception as exc:  # noqa: BLE001
                 ok = False
                 connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
-            if not ok and self._retry_with_fresh_token(config.name):
-                ok = True
             status[config.name] = ok
             if not ok:
                 connection = self.connections[config.name]
@@ -1003,43 +1027,20 @@ class MCPManager:
     def _revive(self, server: str) -> bool:
         """Whether [server] is usable, redialing it once if it is not.
 
-        Called on an already-known connection. A refused credential is renewed
-        and redialed; a session that dropped after a good handshake is redialed
-        as it is; a server that never answered at all is left alone, because
-        redialing it costs a full connect timeout on every task and it has
-        already had its chance.
+        A session that dropped after a good handshake is redialed; a server
+        that never answered at all is left alone, because redialing it costs a
+        full connect timeout on every task and it has already had its chance.
+        A refused credential needs no redial: the transport's auth renews it
+        per request (:class:`_BearerAuth`).
         """
         connection = self.connections.get(server)
         if connection is None:
             return False
         if connection.alive():
             return True
-        if self._retry_with_fresh_token(server):
-            return True
         if connection.connected_once:
             return self.reconnect(server)
         return False
-
-    def _retry_with_fresh_token(self, server: str, *, refused: bool = False) -> bool:
-        """After a refused handshake, mint a new token and dial again, once.
-
-        This is the case the whole forwarded ``oauth`` block exists for: the app
-        is closed, the bearer it handed over has died, and the server answers
-        the handshake with a 401. Nobody can open a browser, so the executor
-        renews the token itself and reconnects. A server that refuses for any
-        other reason is left alone — retrying a 404 achieves nothing.
-        """
-        connection = self.connections.get(server)
-        if connection is None:
-            return False
-        # ``refused`` is the caller saying "the server just answered a call with
-        # a 401", which the connection itself cannot know: a tool-call failure
-        # leaves the session up and ``error`` unset.
-        if not refused and not _looks_unauthorized(connection.error):
-            return False
-        if connection.refresh_token(force=True) is None:
-            return False
-        return self.reconnect(server)
 
     def register(self, registry: ToolRegistry) -> list[str]:
         """Register the tools of every connected server.
@@ -1097,20 +1098,20 @@ class MCPManager:
                 "tool": tool,
                 "error": f"mcp server not configured: {server}",
             }
-        # A long task can outlive the token the session was opened with. If the
-        # session went down on a refused handshake, renew and redial before
-        # telling the model the tool is gone.
+        # A session that dropped is redialed once before the model is told the
+        # tool is gone.
         if not connection.alive() and self._revive(server):
             connection = self.connections.get(server, connection)
+        # A token refused at the HTTP level is renewed per request by the
+        # transport's auth (_BearerAuth). A server that reports the refusal as
+        # a tool error instead gets one renew and one retry: the call was
+        # refused, so it did not run.
+        seen = getattr(getattr(connection, "config", None), "auth_token", None)
         result = connection.call(tool, arguments)
-        # The headers are fixed when the transport is built, so a token that
-        # lapses mid-session cannot be renewed in place — the server answers the
-        # call with a 401 while the session stays up and healthy-looking. That is
-        # the normal case for a run that outlives its token, so it is worth one
-        # renew-and-redial before the model is told the tool failed.
         if result.get("ok") is False and _looks_unauthorized(result.get("error")):
-            if self._retry_with_fresh_token(server, refused=True):
-                return self.connections.get(server, connection).call(tool, arguments)
+            refresh = getattr(connection, "refresh_token", None)
+            if callable(refresh) and refresh(force=True, seen_token=seen):
+                return connection.call(tool, arguments)
         return result
 
     def reconnect(self, server: str) -> bool:

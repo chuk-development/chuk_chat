@@ -3,7 +3,7 @@
 Why this exists. On 2026-09-13 a message left the phone, the app showed a sent
 bubble and a typing indicator, and on the host **nothing happened at all**: no
 run row in ``executor-state.db``, no trace line, not one word in ``host.log``.
-The run tracer (:mod:`chuk_agents_runtime.trace`) starts at ``task_received``,
+The run tracer (:mod:`chuk_agents_runtime.telemetry`) starts at ``task_received``,
 which is inside the agent loop, so it could only say "no run started" — it could
 not say whether the frame had arrived and been thrown away, or had never
 arrived. Those two are the same picture from the host's side, and telling them
@@ -33,7 +33,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 try:  # pragma: no cover - the runtime is always present in a real host
-    from chuk_agents_runtime.trace import get_tracer
+    from chuk_agents_runtime.telemetry import get_tracer
 except Exception:  # noqa: BLE001 - a missing tracer must never break the pipe
 
     def get_tracer() -> Any:  # type: ignore[misc]
@@ -42,7 +42,7 @@ except Exception:  # noqa: BLE001 - a missing tracer must never break the pipe
 
 class _NoTracer:
     """Stand-in for a runtime that is not importable (tests of this module
-    alone). Same shape as :class:`chuk_agents_runtime.trace.NullTracer`."""
+    alone). Same shape as :class:`chuk_agents_runtime.telemetry.NullTracer`."""
 
     enabled = False
 

@@ -187,6 +187,17 @@ class SandboxConfig:
         env="AGENTS_GID",
         doc="The host group id, with the same rule as ``uid``.",
     )
+    sudo: bool = setting(
+        True,
+        env="AGENTS_SUDO",
+        doc=(
+            "Whether the container's account keeps passwordless sudo. The "
+            "sandbox sets it per agent from the agent's ``sudo`` permission "
+            "(docs/WIRE_CONTRACT.md, \"Agent permissions\"); ``false`` makes "
+            "the entrypoint delete the sudoers entry, next to the "
+            "``no-new-privileges`` flag the container starts with."
+        ),
+    )
     test_image: str = setting(
         "debian:stable-slim",
         env="AGENTS_TEST_IMAGE",
@@ -194,6 +205,15 @@ class SandboxConfig:
             "The image the container tests pull. Small on purpose; it is not "
             "the image a task runs in, and nothing outside the test suite "
             "reads it."
+        ),
+    )
+    test_agent_image: str = setting(
+        "agents-base:latest",
+        env="AGENTS_TEST_AGENT_IMAGE",
+        doc=(
+            "The agent image the permission tests use for the checks that "
+            "need sudo and curl in the box. A test that needs it is skipped "
+            "when it is not built on this machine."
         ),
     )
 
@@ -468,6 +488,17 @@ class ModelConfig:
 class MemoryConfig:
     """The agent's long-term memory: an embedder, a writer model and a store."""
 
+    backend: str = setting(
+        "hindsight",
+        env="AGENTS_MEM_BACKEND",
+        choices=("mem0", "hindsight"),
+        doc=(
+            "Which semantic memory the agents use. ``mem0`` is the embedded "
+            "Qdrant store inside each workspace. ``hindsight`` is one Hindsight "
+            "sidecar per host (embedded Postgres under the state directory), "
+            "one memory bank per agent, embeddings through the hosted route."
+        ),
+    )
     collection: str = setting(
         "cowork_memory",
         env="AGENTS_MEM_COLLECTION",
@@ -512,7 +543,11 @@ class MemoryConfig:
     embed_base_url: str = setting(
         "https://api.chuk.chat/v1",
         env="AGENTS_MEM_EMBED_BASE_URL",
-        doc="The base URL of the hosted embedding route.",
+        doc=(
+            "The base URL of the hosted embedding route. With the Hindsight "
+            "backend the memory model's ``/chat/completions`` is called under "
+            "the same base."
+        ),
     )
     embed_model: str = setting(
         "qwen3-embedding-8b",
@@ -548,6 +583,103 @@ class MemoryConfig:
         doc=(
             "The output dimension of the local model. Set ``embed_dims`` to "
             "the same number when the local embedder is the active one."
+        ),
+    )
+    embed_query_prefix: str = setting(
+        "Instruct: Given a question, retrieve memories that answer it\nQuery: ",
+        env="AGENTS_MEM_EMBED_QUERY_PREFIX",
+        doc=(
+            "Hindsight only: the instruction put in front of every recall "
+            "query before it is embedded (Qwen3 embeddings are "
+            "instruction-aware; stored memories get none). Part of the "
+            "embedding stamp, so changing it later means a re-embed."
+        ),
+    )
+    hindsight_dirname: str = setting(
+        "hindsight",
+        env="AGENTS_MEM_HINDSIGHT_DIRNAME",
+        doc=(
+            "Hindsight only: the directory under the state directory that "
+            "holds the embedded Postgres, the embedding stamp and the sidecar "
+            "log. Never inside an agent workspace, so no sandbox mounts it."
+        ),
+    )
+    hindsight_llm_model: str = setting(
+        "deepseek/deepseek-v4-flash",
+        env="AGENTS_MEM_HINDSIGHT_LLM_MODEL",
+        doc=(
+            "Hindsight only: the model that extracts facts and consolidates "
+            "them. It runs through the account's own backend with reasoning "
+            "off, via the host's loopback memory gateway."
+        ),
+    )
+    hindsight_llm_max_tokens: int = setting(
+        8192,
+        env="AGENTS_MEM_HINDSIGHT_LLM_MAX_TOKENS",
+        doc="Hindsight only: the output cap of one memory model call.",
+    )
+    rate_per_minute: int = setting(
+        20,
+        env="AGENTS_MEM_RATE_PER_MINUTE",
+        doc=(
+            "Hindsight only: the most model and embedding requests memory may "
+            "send in any minute. The account allows 60 of each per minute, and "
+            "the agent's own turns come first."
+        ),
+    )
+    rerank_provider: str = setting(
+        "rrf",
+        env="AGENTS_MEM_RERANK_PROVIDER",
+        doc=(
+            "Hindsight only: the recall reranker. ``rrf`` fuses the four "
+            "retrieval strategies with no neural model, so nothing is loaded "
+            "locally and nothing extra is sent anywhere."
+        ),
+    )
+    recall_timeout_ms: int = setting(
+        1500,
+        env="AGENTS_MEM_RECALL_TIMEOUT_MS",
+        doc=(
+            "Hindsight only: how long the automatic recall at task start may "
+            "take before the task goes on without it. A recall costs one "
+            "embedding round trip to the hosted route (measured 0.7 to 0.9 s "
+            "warm)."
+        ),
+    )
+    recall_budget: str = setting(
+        "low",
+        env="AGENTS_MEM_RECALL_BUDGET",
+        choices=("low", "mid", "high"),
+        doc="Hindsight only: the search depth of the automatic recall.",
+    )
+    recall_max_tokens: int = setting(
+        800,
+        env="AGENTS_MEM_RECALL_MAX_TOKENS",
+        doc="Hindsight only: how many tokens of memories the automatic recall may inject.",
+    )
+    sidecar_project: str = setting(
+        "",
+        env="AGENTS_MEM_SIDECAR_PROJECT",
+        doc=(
+            "Hindsight only: the ``agents/memory`` project the sidecar runs "
+            "from. Empty means the one next to the installed runtime."
+        ),
+    )
+    sidecar_start_timeout: int = setting(
+        180,
+        env="AGENTS_MEM_SIDECAR_START_TIMEOUT",
+        doc=(
+            "Hindsight only: how many seconds the sidecar may take to answer "
+            "after it was started before it counts as failed and is restarted."
+        ),
+    )
+    import_mem0: bool = setting(
+        True,
+        env="AGENTS_MEM_IMPORT_MEM0",
+        doc=(
+            "Hindsight only: import an agent's old Mem0 facts once, in the "
+            "background, then rename its ``qdrant`` folder to "
+            "``qdrant.migrated-<date>`` as a backup."
         ),
     )
 

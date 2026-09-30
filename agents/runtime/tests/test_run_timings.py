@@ -180,7 +180,7 @@ def test_the_loop_reports_where_the_wall_clock_went(tmp_path):
     store = StateStore(str(tmp_path / "loop.db"))
     registry = ToolRegistry()
     registry.register(
-        "echo", "echo back", {"type": "object", "properties": {}}, lambda: "done"
+        "echo", {"type": "object", "properties": {}}, lambda: "done"
     )
     model = MockModelClient(
         [tool_call_response(("echo", {})), "finished"]

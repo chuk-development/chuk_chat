@@ -1,8 +1,10 @@
 """Tool Search / progressive disclosure tests (§7.2).
 
 The load-bearing claims: under the threshold nothing changes, above it exactly
-the deferrable tools stop being declared, core tools never do, and the three
-bridge tools can find, describe and run what was hidden.
+the deferrable tools stop being declared, core tools never do, and the loop's
+toolset hands the hidden ones to Pydantic AI's ToolSearch as ``defer_loading``
+tools (the search itself is Pydantic AI's; ``test_pai_gates.py`` gate 5 runs
+it end to end).
 
 "Declared" means the native OpenAI ``tools`` array — that is what the request
 carries and what the model is billed for every round, so it is what the
@@ -84,7 +86,7 @@ def test_below_the_threshold_every_tool_stays_declared():
     assert "tool_search" not in docs
 
 
-def test_above_the_threshold_only_the_bridge_and_the_core_tools_remain():
+def test_above_the_threshold_only_the_core_tools_remain_declared():
     registry = build_registry(servers=8, tools_per_server=20)
     decision = apply_tool_search(registry, context_window=128_000, reserved_output=8_000)
     assert decision.active is True
@@ -92,8 +94,6 @@ def test_above_the_threshold_only_the_bridge_and_the_core_tools_remain():
     docs = render_tool_docs(registry)
     for name in CORE_SAMPLE:
         assert f"## {name}" in docs, f"core tool {name} vanished"
-    for name in ("tool_search", "tool_describe", "tool_call"):
-        assert f"## {name}" in docs
     assert "mcp__server0__tool0" not in docs
     assert "mcp__server7__tool19" not in docs
 
@@ -200,7 +200,7 @@ def test_unavailable_tools_are_not_counted_and_not_deferred():
     assert "mcp__dead__thing" not in decision.deferred
 
 
-# -- the three bridge tools -----------------------------------------------
+# -- what the loop's toolset makes of it ---------------------------------
 
 
 def deferred_registry() -> ToolRegistry:
@@ -223,75 +223,19 @@ def deferred_registry() -> ToolRegistry:
     return registry
 
 
-def test_tool_search_finds_a_deferred_tool():
+def test_deferred_tools_reach_pydantic_ai_as_defer_loading_tools():
+    import asyncio
+
+    from chuk_agents_runtime.pai.tools import RegistryToolset
+
     registry = deferred_registry()
-    result = registry.dispatch("tool_search", {"query": "create issue github"})
-    assert result["ok"] is True
-    assert result["matches"][0]["name"] == "mcp__github__create_issue"
-    assert result["total_available"] == 161
-
-
-def test_tool_search_reports_no_match_without_inventing_one():
-    registry = deferred_registry()
-    result = registry.dispatch("tool_search", {"query": "zzzzq unrelated"})
-    assert result["matches"] == []
-    assert "No match" in result["hint"]
-
-
-def test_tool_describe_returns_everything_the_declaration_would_have_carried():
-    registry = deferred_registry()
-    result = registry.dispatch("tool_describe", {"name": "mcp__github__create_issue"})
-    assert result["ok"] is True
-    assert "Create an issue" in result["documentation"]
-    assert "`repo` (string, required)" in result["documentation"]
-    assert result["schema"]["required"] == ["repo", "title"]
-    # Character-for-character the block a non-deferred tool renders to.
-    from chuk_agents_runtime.prompt import render_tool_block
-
-    assert result["documentation"] == render_tool_block(
-        "mcp__github__create_issue", result["schema"]
-    )
-
-
-def test_tool_describe_rejects_an_unknown_name():
-    registry = deferred_registry()
-    assert registry.dispatch("tool_describe", {"name": "nope"})["ok"] is False
-
-
-def test_tool_call_runs_a_deferred_tool():
-    registry = deferred_registry()
-    result = registry.dispatch(
-        "tool_call",
-        {
-            "name": "mcp__github__create_issue",
-            "arguments": {"repo": "a/b", "title": "it broke"},
-        },
-    )
-    assert result == {"ok": True, "repo": "a/b", "title": "it broke"}
-
-
-def test_tool_call_accepts_arguments_sent_as_a_json_string():
-    registry = deferred_registry()
-    result = registry.dispatch(
-        "tool_call",
-        {
-            "name": "mcp__github__create_issue",
-            "arguments": '{"repo": "a/b", "title": "stringy"}',
-        },
-    )
-    assert result["title"] == "stringy"
-
-
-def test_tool_call_refuses_a_visible_tool_and_says_why():
-    registry = deferred_registry()
-    result = registry.dispatch("tool_call", {"name": "run_command", "arguments": {"x": "1"}})
-    assert result["ok"] is False
-    assert "call it directly" in result["error"]
-
-
-def test_tool_call_of_an_unknown_tool_is_a_bounded_error():
-    registry = deferred_registry()
-    assert registry.dispatch("tool_call", {"name": "ghost"})["ok"] is False
+    tools = asyncio.run(RegistryToolset(registry, deferred_mode="pai").get_tools(None))
+    assert tools["mcp__github__create_issue"].tool_def.defer_loading is True
+    assert tools["mcp__github__create_issue"].tool_def.description.startswith("[MCP: github]")
+    for name in CORE_SAMPLE:
+        assert tools[name].tool_def.defer_loading is False
+    # No bridge tools any more: the search tool is Pydantic AI's.
+    assert not {"tool_search", "tool_describe", "tool_call"} & set(tools)
 
 
 def test_a_deferred_tool_is_still_dispatchable_directly():

@@ -9,7 +9,14 @@ dependencies = [
     "mcp>=2.0.0",
     "mem0ai>=0.1.0",
     "fastembed>=0.3",
-    "websockets>=13",
+    "pydantic-ai-slim[mcp,openai]==2.51.0",
+    "opentelemetry-sdk==1.45.0",
+    "httpx2==2.13.1",
+    "anyio==4.12.1",
+    "fastmcp-slim==4.0.10",
+    "pydantic-core==2.41.5",
+    "opentelemetry-api==1.45.0",
+    "openai==3.22.0",
 ]
 
 [project.optional-dependencies]

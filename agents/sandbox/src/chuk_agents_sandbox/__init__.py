@@ -8,7 +8,7 @@ See ``docs/AGENTS_AGENT_PLATFORM_PLAN.md`` section 6.
 
 from __future__ import annotations
 
-from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
+from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment, PolicyProvider
 from .docker import (
     BASE_IMAGE,
     CONTAINER_WORKSPACE,
@@ -44,6 +44,16 @@ from .lifecycle import (
     remove_container,
 )
 from .local import LocalEnvironment
+from .policy import (
+    DEFAULT_POLICY,
+    LABEL_POLICY,
+    PERMISSION_KEYS,
+    WORKSPACE_RO,
+    WORKSPACE_RW,
+    PolicyError,
+    SandboxPolicy,
+    enforced_permissions,
+)
 from .result import Environment, ProcessResult
 
 __all__ = [
@@ -85,4 +95,13 @@ __all__ = [
     "remove_container",
     "ProcessResult",
     "Environment",
+    "DEFAULT_POLICY",
+    "LABEL_POLICY",
+    "PERMISSION_KEYS",
+    "PolicyError",
+    "PolicyProvider",
+    "SandboxPolicy",
+    "WORKSPACE_RO",
+    "WORKSPACE_RW",
+    "enforced_permissions",
 ]

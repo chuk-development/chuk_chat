@@ -1,8 +1,12 @@
 """Read a run trace back and say which segment of the turn was slow.
 
-:mod:`chuk_agents_runtime.trace` writes the JSONL; this module is the other
-half — the pure reader that turns those lines into an answer. It knows three
-things the writer deliberately does not:
+:mod:`chuk_agents_runtime.telemetry` records the run as OpenTelemetry spans and
+its local exporter writes them as JSON lines; this module is the other half —
+the pure reader that turns those spans back into phase lines and an answer.
+Each phase span becomes one line (its name is the phase, its attributes the
+fields, its end time the wall clock); the run span and other spans (Pydantic
+AI's ``chat`` / ``execute_tool``) carry no phase and are skipped. It knows
+three things the writer deliberately does not:
 
 - **A run can straddle a rotation.** The writer caps the live file and shifts
   the older ones down to ``agent-trace.jsonl.1`` ... ``.3``. A reader that only
@@ -29,7 +33,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from .trace import TRACE_FILENAME
+from .telemetry import JSON_KEYS_ATTR, TRACE_FILENAME
 
 #: The report must stay readable in a plain 100-column terminal, so every
 #: line is built to fit and then clamped.
@@ -133,12 +137,35 @@ def read_lines(source: str | os.PathLike, *, run_id: str | None = None) -> list[
                 continue
             if not isinstance(obj, dict):
                 continue
+            obj = _phase_line(obj)
+            if obj is None:
+                continue
             if run_id:
                 candidate_id = str(obj.get("run_id", ""))
                 if not (candidate_id == run_id or candidate_id.startswith(run_id)):
                     continue
             lines.append(obj)
     return lines
+
+
+def _phase_line(span: dict) -> dict | None:
+    """One exported span as the phase line it records, or ``None`` for a
+    span that is not a phase (the run span, Pydantic AI's own spans). A line
+    in the old flat format (written before the OTel move) passes as it is."""
+    if "phase" in span:
+        return span
+    attributes = span.get("attributes")
+    if not isinstance(attributes, dict) or "dt_ms" not in attributes:
+        return None
+    line = {key: value for key, value in attributes.items() if key != JSON_KEYS_ATTR}
+    for key in attributes.get(JSON_KEYS_ATTR) or ():
+        try:
+            line[key] = json.loads(line[key])
+        except (KeyError, TypeError, ValueError):
+            pass
+    line["phase"] = span.get("name")
+    line["wall"] = span.get("end")
+    return line
 
 
 def list_runs(source: str | os.PathLike) -> list[dict]:

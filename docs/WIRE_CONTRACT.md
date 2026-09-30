@@ -950,8 +950,10 @@ starts once the app connects.
 ### Tools (model side, session-scoped)
 
 - `schedule_task(spec, prompt, name?)` — `spec` is one string: a 5-field cron
-  (`0 9 * * 1-5`), `every <n>[s|m|h|d]` / `every: 300`, or `at <iso 8601>` /
-  `at: 2026-09-06T09:00`. Returns `{id, kind, name, next_fire_at, state}`.
+  (`0 9 * * 1-5`), `every <n>[s|m|h|d]` / `every: 300`, `at <iso 8601>` /
+  `at: 2026-09-06T09:00`, or `in <n>[s|m|h|d]` (once, that long from now; it is
+  stored as the `at` form, so the `spec` on the wire never says `in`).
+  Returns `{id, kind, name, next_fire_at, state}`.
 - `start_watcher(script_path, name?, restart=true)` — the script is a Python
   file in the workspace. It runs supervised as a child process with the
   sandbox's boundaries (local: a process in the workspace; docker: `docker
@@ -1542,3 +1544,361 @@ and there is one renderer, not two. A document written with `chart` carries
 Unchanged. `expected_version` must match the version last read, and an update
 that names neither `chart` nor `rows` keeps the chart the document already had,
 so a caption-only rewrite does not have to resend every point.
+
+## The agent calls the user (bead chuk_chat-lgq2.8)
+
+Python side IMPLEMENTED 2026-09-29 (`chuk_agents_host.calls`,
+`chuk_agents_runtime.calls`, the executor's `voice_call_state` route). App
+side: build it from this section. Additive: nothing above changes. Product
+spec: `docs/PERSONAL_AGENT_SPEC.md` §6.3.
+
+### The idea
+
+- The model calls `call_user(reason, urgency)`. The host records a call and
+  rings every attached controller with ONE sealed `voice_call_incoming` frame.
+  The tool returns at once with `ringing (call_id …)`. It does not wait for
+  the answer.
+- The app shows an incoming-call screen. The user accepts or declines. The app
+  reports that with `voice_call_state`. After an accept, the app starts the
+  voice session (a LiveKit token with the `call_id` in its metadata, spec
+  §6.3). That part is not in this section.
+- A ring that nobody answers in 120 s becomes `missed`. A declined or missed
+  call adds NOTHING to the thread: the default is silence (spec §4, rule 5).
+  The model reads the outcome with `call_status(call_id)` when it wants to.
+- The ring reaches only an app that is attached to the relay, or that
+  attaches before the call expires. There is no push to a killed app in this
+  version. With no controller attached, `call_user` still returns `ringing`,
+  with a hint to the model (see "Tools"). The host also shows its desktop
+  toast `<agent name> is calling` when it has a display.
+
+### Host-side record (informative)
+
+In memory only (`CallRegistry`). A host restart ends every ring, so nothing is
+written to disk.
+
+| field | meaning |
+|---|---|
+| `call_id` | 16 lowercase hex characters, random |
+| `thread_id` | the `session_key` of the thread whose run called |
+| `agent_id`, `agent_name` | who calls (see the frame below) |
+| `reason` | 1 to 1000 characters |
+| `urgency` | `normal` \| `high` |
+| `created_at`, `expires_at` | unix seconds, HOST clock; `expires_at = created_at + 120` |
+| `state` | `ringing` \| `accepted` \| `declined` \| `missed` \| `ended` |
+
+A call that is no longer ringing stays readable for `call_status` for 6 hours
+(at most 200 records; the oldest go first). An `accepted` call that gets no
+`ended` frame (the app died or lost the relay mid-call) becomes `ended` after
+`accepted_max_seconds` (default 7200 s, `ACCEPTED_MAX_SECONDS`); the host then
+sends the `ended` echo like for any other change.
+
+### States
+
+```
+ringing ──► accepted ──► ended   (the app, or the host after accepted_max_seconds)
+   │
+   ├──► declined
+   ├──► ended
+   └──► missed      (the host only: no answer before expires_at)
+```
+
+`declined`, `missed` and `ended` are final. A state change that this graph
+does not allow changes nothing. An answer that arrives after `expires_at` is
+too late: the call becomes `missed`, and the host tells the app so.
+
+### Frames
+
+Host → app, `voice_call_incoming` — a call rings:
+
+```json
+{"type": "voice_call_incoming",
+ "call_id": "3f2a9c1d0b7e4a55",
+ "thread_id": "<session_key of the thread>",
+ "agent_id": "local:crypto-desk:1:74112",
+ "agent_name": "Crypto Desk",
+ "reason": "Your pizza is ready to come out of the oven.",
+ "urgency": "normal",
+ "created_at": 1790000000.5,
+ "expires_at": 1790000120.5,
+ "ring_seconds": 120}
+```
+
+- Exactly these ten keys. A receiver ignores keys it does not know.
+- `thread_id` is the thread's `session_key`: the agent's thread key in the
+  app. Open that thread when the user accepts.
+- `agent_id` is the coworker id the app already knows: the `local:…` id of a
+  coworker the user made (`agent_create`), or `host:<host device id>` for the
+  host's own coworker (see "Coworker names").
+- `agent_name` is the name the user gave that coworker in the app
+  (`coworker_names`). With no name it is `Your coworker`. It is never the
+  roster codename.
+- `reason` is trimmed and cut at 1000 characters (the cut ends with `…`). Show
+  a short line of it on the incoming-call screen.
+- `urgency` is `normal` or `high`.
+- `ring_seconds` (integer) is how many seconds the call still rings, computed
+  on the host clock at the moment of THIS send. A re-sent copy (see below)
+  carries the time that is left then, not the first value. **The app times
+  the ring with `ring_seconds`**: on receipt it rings for `ring_seconds`
+  seconds by its own monotonic clock, or until a `voice_call_state` for this
+  `call_id` arrives, whichever comes first. `0` means the ring is already
+  over: do not ring.
+- `created_at` and `expires_at` are unix seconds on the HOST clock. They are
+  information only (logs, a "called at" label). The phone clock can differ
+  from the host clock; an app that compared `expires_at` with its own clock
+  would drop calls when its clock runs ahead. Never time the ring with them.
+
+When the host sends it:
+
+1. Once, at once, when the model calls `call_user`. It goes to every attached
+   controller; each one gets its own sealed copy.
+2. Again for every call that still rings, each time the host receives an
+   `account_authentication`. Every connection sends one, so this is every
+   controller (re)attach: an app that reconnects after a network drop still
+   gets the ring. A token refresh also sends one, so a copy can arrive twice.
+   **A `voice_call_incoming` with a `call_id` the app already knows is a
+   no-op**: do not ring again and do not restart the timer.
+
+It is not a run event: no `session_key`, no request stream, not persisted, not
+replayed. The app routes it by `type`.
+
+Privacy: the `reason` is content. It travels only inside this sealed frame
+(end-to-end; the relay sees an opaque blob). It is never in a push payload, a
+log line, a notification or a Supabase row. Host logs carry the `call_id`, the
+thread, the urgency and the state, never the reason. The desktop toast says
+only `<agent name> is calling` / `Open the Chuk app to answer.`
+
+App → host, `voice_call_state` — the user answered, declined or hung up:
+
+```json
+{"type": "voice_call_state", "call_id": "3f2a9c1d0b7e4a55", "state": "accepted" | "declined" | "ended"}
+```
+
+- `accepted`: the user took the call. `declined`: the user refused it.
+  `ended`: the call is over (either side hung up after an accept, or the app
+  stopped a ring for another reason).
+- Send it once per change. Sending it again is harmless.
+- A control frame like `approval_decision`: no request-scoped terminal comes
+  back. An unknown `call_id`, a state other than the three above (`missed` and
+  `ringing` are not the app's to report), or a change the graph does not allow
+  changes nothing; the host logs the id. A host without the call service (an
+  older host) answers `error` `calls not enabled`.
+
+Host → app, `voice_call_state` — the host's echo, same shape:
+
+```json
+{"type": "voice_call_state", "call_id": "3f2a9c1d0b7e4a55", "state": "accepted" | "declined" | "missed" | "ended"}
+```
+
+- Sent to every attached controller after every change the host accepts, and
+  when a ring expires (`missed`). So when the user accepts on the phone, the
+  desktop stops ringing.
+- Also sent when the host does not apply a state an app reported for a known
+  call (a repeat, a call that is already over, an answer after the expiry).
+  It then carries the current state (for example `missed`), so a late device
+  stops too.
+- The app takes it as the truth for that `call_id`: any state other than
+  `ringing` stops the ring on this device. `accepted` that this device did not
+  send means "answered on another device".
+
+### Tools (model side, session-scoped)
+
+- `call_user(reason, urgency="normal")` — for a call the user asked for (for
+  example a reminder by call) or for something urgent; never for a routine
+  update. Returns text at once:
+  `ringing (call_id <id>). Check call_status(call_id) later to see if the user answered.`
+  With no controller attached:
+  `ringing (call_id <id>); no app is connected right now, the user may miss it. Also write the reason in your answer so the user sees it later.`
+  An empty reason or an unknown urgency returns `{"ok": false, "error": "…"}`
+  and starts no call.
+- `call_status(call_id)` — `{ok, call_id, state, urgency, reason, created_at,
+  expires_at, answered_at?, ended_at?}`. An id of another thread answers
+  `{"ok": false, "error": "not found"}`.
+- The executor binds both tools to the task's `session_key`, as it does the
+  automation tools. A fired automation run has them too. That is the reminder
+  by call: `schedule_task(spec="in 10m", prompt="… call_user(reason=…) …")`,
+  and the fired run calls `call_user`.
+
+### Not in this version
+
+A push to a killed app (FCM, UnifiedPush, PushKit), the route rule of spec §7.3
+(PC, headphones, busy calendar) and the "declined or no answer → normal
+notification" fallback of spec §6.3.
+
+### Implemented
+
+Host: `chuk_agents_host/calls.py` (`CallRegistry`, `CallService`,
+`SessionCalls`), wired in `host.py` (`start`, the re-send in
+`_build_task_server` and `_on_reprovision`, `_on_call_frame`, `_call_agent`).
+Executor: `calls=` / `on_call_frame=` on `Executor` and `TaskServer`, the
+`voice_call_state` route, `build_runtime(calls=…)`. Runtime:
+`chuk_agents_runtime/calls.py` (schemas, argument checks, registration) and the
+`in <n>` spec in `automations.py`. Tests: `agents/host/tests/test_calls.py`,
+`agents/host/tests/test_calls_e2e.py`, `agents/executor/tests/test_calls.py`,
+`agents/runtime/tests/test_calls.py`.
+
+## Agent permissions (bead chuk_chat-voq3)
+
+Implemented 2026-09-30. Python side: `chuk_agents_sandbox.policy`
+(`SandboxPolicy`, enforcement, run leases), `chuk_agents_host.agent_permissions`
+(store, frames), the executor's routing and run lease, the runtime's tool
+gating. App side: `AgentsPermissionsService`, the "Permissions" section of the
+agent profile.
+
+### The idea
+
+Every coworker has its own sandbox (§ "One sandbox per agent"). The owner's
+rule for that sandbox: **everything is allowed by default**. The agent has
+passwordless sudo, the internet, the user's secrets as environment variables
+and a writable workspace. The user can switch each of those off for one agent
+in the app, like a policy file, but through switches. The one permission that
+starts off is the user's own browser (the browser add-on target).
+
+NVIDIA OpenShell is not used: it forbids root in every driver, and agents need
+`sudo apt install`. The enforcement is our own Docker sandbox.
+
+The host is the truth. The app shows what the host answers and never guesses a
+value. A change applies **from the next task**, never in the middle of a run.
+
+### Permissions
+
+| key | type | default | enforcement (docker backend) |
+|---|---|---|---|
+| `sudo` | bool | `true` | `false`: the container starts with `--security-opt no-new-privileges`, so the kernel refuses the setuid step and `sudo` fails for the agent user. `AGENTS_SUDO=0` also makes the entrypoint delete `/etc/sudoers.d/agents`. The host's own `docker exec -u root` (the watchable browser) is not affected. |
+| `network` | bool | `true` | `false`: `--network none`, only `lo` exists. The host fetches nothing for the agent either: `build_runtime` withholds `web_fetch`, `web_search`, `herenow_publish`, `browser_task` and `mcp_oauth_connect`; the executor drops the app's forwarded MCP connectors and never picks the user's browser; the workspace `mcp.json` is not read. The one MCP server that stays is the sandbox's own browser (it runs inside the no-network box). **Decision:** host-side stdio MCP servers are dropped too — they run on the host with the host's network, and the agent can write `mcp.json` itself. The model calls themselves (our backend) are not the agent's egress and stay. The UI calls it "Internet: Sandbox and web tools". |
+| `secrets_env` | bool | `true` | `false`: no secret reaches the sandbox as an environment variable (every per-command variable is dropped in `BaseEnvironment.run` while the run's snapshot says off, for every backend), `list_secrets` lists nothing, and `request_secrets` returns an error that says the permission is off; no `secret_request` is sent. It is part of the container key, so the box is rebuilt: a tmux server, a background job or a file in `/tmp` of the old box cannot keep a value. With the local backend the agent's own tmux sessions (`cw-task-*`, never the user's) and running jobs are ended at the run start instead. The host agent's automation watchers are restarted without secrets at once. Masking stays on: the result scrubber is built from the vault's values whatever the permission. |
+| `workspace_mount` | `"rw"` \| `"ro"` | `"rw"` | `"ro"`: the workspace is bound read-only (`-v <ws>:/workspace:ro`). The browser profile moves to `/tmp` (`AGENTS_BROWSER_PROFILE`). This limits the agent's commands; the host's own writes (the git journal, the memory files) still land in the directory. |
+| `user_browser` | bool | `false` | `true` (and `network` on): this agent drives the browser add-on on the user's computer (`agents-extension-mcp`) instead of the sandbox browser. Per agent. The old host-wide `AGENTS_BROWSER_TARGET=user_browser` / `browser.target` only sets the default for agents the user never switched. |
+
+The local backend (`--sandbox local`) runs on the host itself and can enforce
+`secrets_env` and `user_browser` only. The reply says so in `enforced`, and the
+app greys those switches out with "Not enforced on this host".
+
+### Capability
+
+The host names what it answers in the sealed `host_route` frame it sends on
+every `agent_create` / `agent_rename` / `agent_list` (so right after each
+pairing):
+
+```json
+{"type": "host_route", "url": "…", "capabilities": ["agent_permissions"]}
+```
+
+The app sends the permission frames only to a host that named
+`agent_permissions`. An older host never does, and the section says "This host
+does not manage permissions yet". A receiver ignores capabilities it does not
+know.
+
+### Frames
+
+App → host, `agent_permissions_get`:
+
+```json
+{"type": "agent_permissions_get", "agent_id": "<agent id>"}
+```
+
+App → host, `agent_permissions_set` (a partial map: only the keys that change):
+
+```json
+{"type": "agent_permissions_set", "agent_id": "<agent id>",
+ "permissions": {"network": false}}
+```
+
+Host → app, `agent_permissions` (the answer to both, one terminal frame):
+
+```json
+{"type": "agent_permissions", "agent_id": "<agent id>",
+ "permissions": {"sudo": true, "network": false, "secrets_env": true,
+                 "workspace_mount": "rw", "user_browser": false}?,
+ "enforced": {"sudo": true, "network": true, "secrets_env": true,
+              "workspace_mount": true, "user_browser": true},
+ "applies_from": "next_task",
+ "error": "<why the request was refused>"?}
+```
+
+- `agent_id` is the app's id, which is also the thread's `session_key`. The
+  host maps `host:<device id>`, the roster id and `default` to its own agent,
+  and a coworker an `agent_create` registered to itself. **Any other id is
+  refused** (`error: "unknown agent '…'"`, no `permissions`): a stale or
+  deleted coworker never changes the host agent. The reply echoes the id the
+  app sent.
+- `permissions` is always the WHOLE, current set when present. The app
+  replaces what it shows with it.
+- `enforced` says per key whether this host really enforces it.
+- Validation is strict. An unknown key, a number where a boolean belongs (`1`
+  is not `true`) or a `workspace_mount` other than `rw` / `ro` refuses the
+  whole `set`: nothing changes, and the reply carries the unchanged set plus
+  `error`.
+- **The answer is always `agent_permissions`, never a bare `error`** — also for
+  a frame without a usable `agent_id`, a host with no permission store, or a
+  hook that raised. The app reads a bare `error` as the end of a run.
+- A `set` that changed something is also sent, sealed, to **every attached
+  device** (like the call echo), so a second phone shows the new switches.
+- `applies_from` is always `next_task` in this version. The app says so under
+  the switches.
+- The executor hands both frames to the host through the same hook as the
+  coworker frames (`on_agent_frame`).
+
+### Run errors name their thread (app rule)
+
+An `error` that ends a run carries `session_key` (and `run_id` when there is
+one): the executor adds them to every run-ending error (`loop failed`, `task
+failed`, a stopped executor, a task payload with a bad prompt). The app ends
+the stream of that thread only; **an `error` that names another thread is
+logged and ignored**. An `error` that names no thread comes from a host that
+predates the field and ends the open stream as before, so a real failure there
+never spins forever. The permission frames cannot cause one: they go only to a
+host that names the capability, and such a host answers them with
+`agent_permissions`. Opening a coworker's profile therefore never ends a live
+turn.
+
+### When a change applies (host side, informative)
+
+- Every per-agent environment carries a policy provider over the host's store.
+  The executor takes a **run lease** (`begin_run` / `end_run`) around every
+  run. The first run to hold the environment applies what is new; a run that
+  starts while another holds the same environment (a room member's turn and a
+  direct task share one box) runs under the policy already in force. So a box
+  is never rebuilt under a running task, and every command of a run sees one
+  policy snapshot.
+- The container-level part (`sudo`, `network`, `workspace_mount`,
+  `secrets_env`) is written on the container as the label `cowork.policy`
+  (`sudo=1;network=0;workspace=rw;secrets=1`). A container whose label does not
+  match its environment's policy is removed and created again on its next
+  command — the same reuse guard as a wrong image or workspace. So a change
+  rebuilds the box at the first command of the next free run: packages
+  installed outside `/workspace` are lost, the workspace stays. A container
+  from before the label counts as the default policy and is kept.
+- `user_browser` acts per task; changing only it keeps the box.
+- A subagent's box (task-scoped) and its tools run under the policy its
+  parent's run started with: it never has more rights than its parent.
+
+### Host-side record (informative)
+
+`<state dir>/agent_permissions.json`, mode 0600, rewritten atomically:
+`{"version": 1, "agents": {"<agent key>": {"network": false}}}`. Only the keys
+the user set are stored, so a default that changes later still reaches every
+agent that never touched that switch. An unreadable file or a bad entry falls
+back to the defaults (logged).
+
+### Implemented
+
+Sandbox: `chuk_agents_sandbox/policy.py` (`container_key`,
+`enforced_permissions`), `base.py` (`policy`, `begin_run` / `end_run`, the
+`secrets_env` drop), `docker.py` (`_create`, `_matches`, the label),
+`docker/entrypoint.sh` (`AGENTS_SUDO`). Host:
+`chuk_agents_host/agent_permissions.py`, wired in `host.py` (the store, the
+supervisor's `env_factory`, the local provider, `_permission_key`,
+`_on_permissions_frame`, the `host_route` capability, `_watcher_env`).
+Executor: the frame route, `_lease_sandbox` / `_release_sandbox` in `_work`,
+`_revoke_sandbox_secrets`, the `secrets_env` bridge, `_uses_user_browser`, the
+MCP cut, the subagent `env_factory` and `runtime_kwargs`, `_run_error`.
+Runtime: `build_runtime(policy=…)`, `HOST_NETWORK_TOOLS`. App:
+`lib/services/agents/agents_permissions_service.dart`,
+`lib/widgets/agents_permissions/agent_permissions_section.dart`,
+`agents_relay_client.dart` (`sendControlFrame`, `agentPermissionsSink`,
+`hostCapabilities`, `AgentsRelayRunError.sessionKey`),
+`agents_chat_transport.dart` (the error rule). Tests:
+`agents/sandbox/tests/test_policy.py`, `agents/sandbox/tests/test_policy_docker.py`
+(real daemon), `agents/host/tests/test_agent_permissions.py`,
+`agents/executor/tests/test_agent_permissions.py`,
+`agents/runtime/tests/test_network_permission.py`, `test/agents_permissions/`.

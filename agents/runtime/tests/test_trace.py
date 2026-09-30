@@ -9,10 +9,9 @@ import json
 import logging
 
 import pytest
-from websockets.exceptions import ConnectionClosed
 
-from chuk_agents_runtime import trace as trace_mod
-from chuk_agents_runtime.trace import (
+from chuk_agents_runtime import telemetry as trace_mod
+from chuk_agents_runtime.telemetry import (
     DEFAULT_MAX_BYTES,
     NULL_TRACER,
     JsonlTracer,
@@ -27,8 +26,20 @@ from chuk_agents_runtime.trace import (
     trace_dir_for,
 )
 
-from test_backend_timing import AUTH_OK, DONE, FakeClock, FakeSocket, _client
 
+
+
+class FakeClock:
+    """A monotonic clock the test moves by hand."""
+
+    def __init__(self, start: float = 1000.0) -> None:
+        self.now = start
+
+    def __call__(self) -> float:
+        return self.now
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
 
 @pytest.fixture(autouse=True)
 def _restore_tracer():
@@ -38,7 +49,10 @@ def _restore_tracer():
 
 
 def _lines(path) -> list[dict]:
-    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    """The phase lines of the trace (each an OTel span in the file)."""
+    from chuk_agents_runtime.telemetry_report import read_lines
+
+    return read_lines(path)
 
 
 # -- the switch -------------------------------------------------------------
@@ -205,73 +219,66 @@ def test_an_unwritable_trace_never_takes_a_run_down(tmp_path):
         tracer.emit("round_start")  # must not raise
 
 
-# -- the phases the model client contributes --------------------------------
+# -- the phases the model contributes ----------------------------------------
 
 
-def test_a_model_call_emits_the_transport_phases(tmp_path):
-    clock = FakeClock()
-    tracer = JsonlTracer(tmp_path / "t.jsonl", clock=clock)
-    set_tracer(tracer)
-    socket = FakeSocket(
-        clock,
-        [
-            AUTH_OK,
-            (2.0, {"kind": "reasoning", "data": "hm"}),
-            (1.0, {"kind": "content", "data": "ok"}),
-            (5.0, {"kind": "content", "data": "!"}),
-            (0.1, {"kind": "usage", "data": {"prompt_tokens": 9, "total_tokens": 11}}),
-            DONE,
-        ],
+def test_a_streamed_model_request_emits_its_first_token_and_model_call(tmp_path):
+    """The loop's streamed request writes the lines ``trace_report`` splits a
+    turn with: first byte (provider wait), the tokens, the call, the usage."""
+    from chuk_agents_runtime.loop import AgentLoop
+    from chuk_agents_runtime.pai.model import ChukModelSpec, chuk_chat_model
+    from chuk_agents_runtime.registry import ToolRegistry
+    from chuk_agents_runtime.state import StateStore
+    import httpx2
+
+    from pai_fakes import FakeChatEndpoint, FakeSession, text_turn
+
+    set_tracer(JsonlTracer(tmp_path / "t.jsonl"))
+    endpoint = FakeChatEndpoint([text_turn(["o", "k"], reasoning_parts=["hm"])])
+    model, settings = chuk_chat_model(
+        FakeSession(), ChukModelSpec(model_id="m"), base_url="https://api.test",
+        transport=httpx2.MockTransport(endpoint.handler),
     )
-    client = _client(clock, [socket], token_gap_ms=3000.0)
-
+    loop = AgentLoop(model, ToolRegistry(), StateStore(str(tmp_path / "s.db")), model_settings=settings)
     with run_scope("run-1", "sess"):
-        client.complete([{"role": "user", "content": "q"}])
-
-    phases = [line["phase"] for line in _lines(tmp_path / "t.jsonl")]
-    for expected in (
-        "connect_start", "connect_open", "auth_ok", "request_sent",
-        "first_frame", "first_reasoning", "first_content", "token_gap",
-        "usage", "stream_closed", "model_call",
-    ):
-        assert expected in phases, expected
+        loop.run("sess", "q")
 
     by_phase = {line["phase"]: line for line in _lines(tmp_path / "t.jsonl")}
-    assert by_phase["first_frame"]["ms"] == pytest.approx(2000.0)
-    assert by_phase["first_content"]["ms"] == pytest.approx(3000.0)
-    assert by_phase["token_gap"]["ms"] == pytest.approx(5000.0)
-    assert by_phase["usage"]["prompt_tokens"] == 9
-    assert by_phase["model_call"]["first_token_ms"] == pytest.approx(2000.0)
-    assert by_phase["model_call"]["attempts"] == 1
+    for expected in ("first_reasoning", "first_content", "model_call", "usage"):
+        assert expected in by_phase, expected
+    call = by_phase["model_call"]
+    assert call["attempts"] == 1
+    assert call["first_frame_ms"] is not None and call["first_token_ms"] is not None
+    assert call["prompt_tokens"] == 10
+    assert by_phase["usage"]["total_tokens"] == 15
 
 
-def test_a_thrown_away_attempt_gets_its_own_retry_line(tmp_path):
-    clock = FakeClock()
-    tracer = JsonlTracer(tmp_path / "t.jsonl", clock=clock)
-    set_tracer(tracer)
-    dropped = FakeSocket(clock, [AUTH_OK, (9.0, ConnectionClosed(None, None))])
-    healthy = FakeSocket(clock, [AUTH_OK, (1.0, {"kind": "content", "data": "ok"}), DONE])
-    client = _client(clock, [dropped, healthy])
+def test_a_housekeeping_retry_gets_its_own_retry_line(tmp_path):
+    from test_backend import MockRoute, _client, _gotrue_transport, _session, completion
 
-    with run_scope("run-2", "sess"):
-        client.complete([{"role": "user", "content": "q"}])
-
-    retries = [line for line in _lines(tmp_path / "t.jsonl") if line["phase"] == "retry"]
+    set_tracer(JsonlTracer(tmp_path / "t.jsonl"))
+    route = MockRoute(lambda body: completion("ok"), valid_tokens={"fresh-token"})
+    http, _ = _gotrue_transport(new_token="fresh-token")
+    try:
+        with run_scope("run-2", "sess"):
+            _client(route, _session(token="expired", http_client=http)).complete(
+                [{"role": "user", "content": "q"}]
+            )
+    finally:
+        http.close()
+    lines = _lines(tmp_path / "t.jsonl")
+    retries = [line for line in lines if line["phase"] == "retry"]
     assert len(retries) == 1
-    assert retries[0]["reason"] == "connection_closed"
-    assert retries[0]["dead_ms"] == pytest.approx(9000.0)
+    assert retries[0]["reason"] == "auth_rejected"
     assert retries[0]["attempt"] == 2
-    # The prompt is sent — and paid for — a second time; the estimate is the
-    # only figure we have for what that cost.
-    assert retries[0]["prompt_tokens_est"] > 0
+    assert len([line for line in lines if line["phase"] == "model_call"]) == 1
 
 
 def test_tracing_off_writes_nothing_and_costs_no_field(tmp_path, caplog):
-    clock = FakeClock()
-    set_tracer(None)
-    socket = FakeSocket(clock, [AUTH_OK, (1.0, {"kind": "content", "data": "ok"}), DONE])
-    client = _client(clock, [socket])
+    from test_backend import MockRoute, _client, _session, completion
 
+    set_tracer(None)
+    client = _client(MockRoute(lambda body: completion("ok")), _session())
     with caplog.at_level(logging.INFO, logger="chuk_agents_runtime.backend"):
         response = client.complete([{"role": "user", "content": "q"}])
 
@@ -295,7 +302,7 @@ def test_the_loop_emits_the_phases_that_tile_a_whole_turn(tmp_path):
     store = StateStore(str(tmp_path / "loop.db"))
     registry = ToolRegistry()
     registry.register(
-        "echo", "echo", {"type": "object", "properties": {}}, lambda: "done"
+        "echo", {"type": "object", "properties": {}}, lambda: "done"
     )
     loop = AgentLoop(
         MockModelClient([tool_call_response(("echo", {})), "finished"]),
@@ -357,14 +364,14 @@ def test_the_reader_renders_a_real_trace(tmp_path):
     from chuk_agents_runtime.model import MockModelClient, tool_call_response
     from chuk_agents_runtime.registry import ToolRegistry
     from chuk_agents_runtime.state import StateStore
-    from chuk_agents_runtime.trace_report import attribution, read_lines, waterfall
+    from chuk_agents_runtime.telemetry_report import attribution, read_lines, waterfall
 
     path = tmp_path / "agent-trace.jsonl"
     set_tracer(JsonlTracer(path))
     store = StateStore(str(tmp_path / "loop.db"))
     registry = ToolRegistry()
     registry.register(
-        "echo", "echo", {"type": "object", "properties": {}}, lambda: "done"
+        "echo", {"type": "object", "properties": {}}, lambda: "done"
     )
     loop = AgentLoop(
         MockModelClient([tool_call_response(("echo", {})), "finished"]),
@@ -391,3 +398,39 @@ def test_the_module_global_is_the_one_switch():
     previous = set_tracer(NULL_TRACER)
     assert get_tracer() is NULL_TRACER
     set_tracer(previous)
+
+
+def test_a_run_is_one_otel_trace_with_the_agents_spans_nested(tmp_path):
+    """The file holds OpenTelemetry spans: one ``agent_run`` per run, every
+    phase a child of it, and Pydantic AI's own spans in the same trace."""
+    from chuk_agents_runtime.loop import AgentLoop
+    from chuk_agents_runtime.model import MockModelClient, tool_call_response
+    from chuk_agents_runtime.pai.wiring import instrumentation_capabilities
+    from chuk_agents_runtime.registry import ToolRegistry
+    from chuk_agents_runtime.state import StateStore
+
+    path = tmp_path / "agent-trace.jsonl"
+    set_tracer(JsonlTracer(path))
+    registry = ToolRegistry()
+    registry.register("echo", {"type": "object", "properties": {}}, lambda: "done")
+    loop = AgentLoop(
+        MockModelClient([tool_call_response(("echo", {})), "finished"]),
+        registry,
+        StateStore(str(tmp_path / "s.db")),
+        capabilities=instrumentation_capabilities(),
+    )
+    with run_scope("run-otel", "sess"):
+        loop.run("sess", "go")
+
+    spans = [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+    runs = [s for s in spans if s["name"] == "agent_run"]
+    assert len(runs) == 1 and runs[0]["attributes"]["run_id"] == "run-otel"
+    run_span = runs[0]
+    assert {s["trace_id"] for s in spans} == {run_span["trace_id"]}
+    phases = [s for s in spans if "dt_ms" in s["attributes"]]
+    assert {"task_received", "round_start", "tool_end", "run_finished"} <= {s["name"] for s in phases}
+    assert all(s["parent_id"] == run_span["span_id"] for s in phases)
+    names = {s["name"] for s in spans}
+    assert any(n.startswith("invoke_agent") or n == "agent run" for n in names), names
+    assert any(n.startswith("chat") for n in names), names
+    assert any(n.startswith("execute_tool") or n == "running tool" for n in names), names

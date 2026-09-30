@@ -176,7 +176,9 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_USER` | `sandbox.user` | string | `agents` | The unprivileged account inside the image that commands run as. |
 | `AGENTS_UID` | `sandbox.uid` | integer | `0` | The host user id the container's account is remapped to, so a file the agent writes in the workspace belongs to the person who started Agents and not to root. |
 | `AGENTS_GID` | `sandbox.gid` | integer | `0` | The host group id, with the same rule as `uid`. |
+| `AGENTS_SUDO` | `sandbox.sudo` | boolean | `true` | Whether the container's account keeps passwordless sudo. |
 | `AGENTS_TEST_IMAGE` | `sandbox.test_image` | string | `debian:stable-slim` | The image the container tests pull. |
+| `AGENTS_TEST_AGENT_IMAGE` | `sandbox.test_agent_image` | string | `agents-base:latest` | The agent image the permission tests use for the checks that need sudo and curl in the box. |
 | `AGENTS_BROWSER_TARGET` | `browser.target` | `sandbox`, `user_browser` | `sandbox` | Which browser a task drives: the Chromium inside the sandbox, or the browser the user already has open, through the add-on. |
 | `AGENTS_BROWSER_HEADLESS` | `browser.headless` | boolean | `false` | Run the browser with no display. |
 | `AGENTS_BROWSER_AUTO_OPEN` | `browser.auto_open` | boolean | `true` | Open the browser window as soon as a browser server is connected, instead of waiting for the agent's first navigation. |
@@ -205,17 +207,30 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_MODEL_PROVIDER` | `model.provider` | string | *(empty)* | The provider slug new autonomous sessions route through. |
 | `AGENTS_MODEL_REASONING_EFFORT` | `model.reasoning_effort` | string | *(empty)* | The default reasoning effort for new autonomous sessions. |
 | `AGENTS_MODEL_API_KEY_REF` | `model.api_key_ref` | string | *(empty)* | The **name** of the vault entry holding the model API key, never a key. |
+| `AGENTS_MEM_BACKEND` | `memory.backend` | `mem0`, `hindsight` | `hindsight` | Which semantic memory the agents use: the per-workspace Mem0 store, or one Hindsight sidecar per host with one bank per agent. |
 | `AGENTS_MEM_COLLECTION` | `memory.collection` | string | `cowork_memory` | The vector collection memories are written to and read from. |
 | `AGENTS_MEM_USER_ID` | `memory.user_id` | string | `default` | The owner a memory is filed under. |
 | `AGENTS_MEM_QDRANT_DIRNAME` | `memory.qdrant_dirname` | string | `qdrant` | The directory inside the workspace that holds the embedded vector store. |
 | `AGENTS_MEM_LLM_MODEL` | `memory.llm_model` | string | `agents-memory-writer` | The model that decides what is worth remembering. |
 | `AGENTS_MEM_EMBED_PROVIDER` | `memory.embed_provider` | `proxy`, `fastembed` | `proxy` | Where embeddings come from: `proxy` is the hosted embedding route, `fastembed` is a local model with no network at all. |
-| `AGENTS_MEM_EMBED_BASE_URL` | `memory.embed_base_url` | string | `https://api.chuk.chat/v1` | The base URL of the hosted embedding route. |
+| `AGENTS_MEM_EMBED_BASE_URL` | `memory.embed_base_url` | string | `https://api.chuk.chat/v1` | The base URL of the hosted embedding route (Hindsight: also its `/chat/completions`). |
 | `AGENTS_MEM_EMBED_MODEL` | `memory.embed_model` | string | `qwen3-embedding-8b` | The hosted embedding model. |
 | `AGENTS_MEM_EMBED_DIMS` | `memory.embed_dims` | integer | `1024` | The output dimension of the embedding model. |
 | `AGENTS_MEM_EMBED_API_KEY_REF` | `memory.embed_api_key_ref` | string | *(empty)* | The **name** of the vault entry holding the embedding API key, never a key. |
 | `AGENTS_MEM_FASTEMBED_MODEL` | `memory.fastembed_model` | string | `nomic-ai/nomic-embed-text-v1.5` | The local embedding model used when `embed_provider` is `fastembed`. |
 | `AGENTS_MEM_FASTEMBED_DIMS` | `memory.fastembed_dims` | integer | `768` | The output dimension of the local model. |
+| `AGENTS_MEM_EMBED_QUERY_PREFIX` | `memory.embed_query_prefix` | string | `Instruct: Given a question, retrieve memories that answer it\nQuery: ` | Hindsight only: the instruction put in front of every recall query before it is embedded. Part of the embedding stamp. |
+| `AGENTS_MEM_HINDSIGHT_DIRNAME` | `memory.hindsight_dirname` | string | `hindsight` | Hindsight only: the directory under the state directory with the embedded Postgres, the embedding stamp and the sidecar log. |
+| `AGENTS_MEM_HINDSIGHT_LLM_MODEL` | `memory.hindsight_llm_model` | string | `deepseek/deepseek-v4-flash` | Hindsight only: the model that extracts and consolidates facts, through the account's backend with reasoning off. |
+| `AGENTS_MEM_HINDSIGHT_LLM_MAX_TOKENS` | `memory.hindsight_llm_max_tokens` | integer | `8192` | Hindsight only: the output cap of one memory model call. |
+| `AGENTS_MEM_RATE_PER_MINUTE` | `memory.rate_per_minute` | integer | `20` | Hindsight only: the most model and embedding requests memory may send in any minute. |
+| `AGENTS_MEM_RERANK_PROVIDER` | `memory.rerank_provider` | string | `rrf` | Hindsight only: the recall reranker; `rrf` loads no model. |
+| `AGENTS_MEM_RECALL_TIMEOUT_MS` | `memory.recall_timeout_ms` | integer | `1500` | Hindsight only: how long the automatic recall at task start may take. |
+| `AGENTS_MEM_RECALL_BUDGET` | `memory.recall_budget` | `low`, `mid`, `high` | `low` | Hindsight only: the search depth of the automatic recall. |
+| `AGENTS_MEM_RECALL_MAX_TOKENS` | `memory.recall_max_tokens` | integer | `800` | Hindsight only: how many tokens of memories the automatic recall may inject. |
+| `AGENTS_MEM_SIDECAR_PROJECT` | `memory.sidecar_project` | string | *(empty)* | Hindsight only: the `agents/memory` project the sidecar runs from. |
+| `AGENTS_MEM_SIDECAR_START_TIMEOUT` | `memory.sidecar_start_timeout` | integer | `180` | Hindsight only: seconds the sidecar may take to answer after a start. |
+| `AGENTS_MEM_IMPORT_MEM0` | `memory.import_mem0` | boolean | `true` | Hindsight only: import an agent's old Mem0 facts once, then rename its `qdrant` folder to `qdrant.migrated-<date>`. |
 | `AGENTS_DESKTOP_NOTIFY` | `notify.desktop` | boolean | `true` | Show a desktop notification on the machine Agents runs on. |
 | `AGENTS_NOTIFY_ICON` | `notify.icon` | string | *(empty)* | The icon name or path the desktop notification shows. |
 | `AGENTS_NTFY_TOPIC` | `notify.ntfy_topic` | string | *(empty)* | An ntfy.sh topic to publish completions to. |

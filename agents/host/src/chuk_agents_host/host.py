@@ -27,6 +27,10 @@ from pathlib import Path
 from typing import Callable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession
+from chuk_agents_runtime.hindsight_service import (
+    configure_memory_service,
+    shutdown_memory_service,
+)
 from chuk_agents_crypto import (
     ApprovedDevices,
     AgentsFrameOpener,
@@ -42,7 +46,7 @@ from chuk_agents_manager import (
     RoomTranscriptStore,
     RosterStore,
 )
-from chuk_agents_sandbox import BaseEnvironment, make_environment
+from chuk_agents_sandbox import BaseEnvironment, enforced_permissions, make_environment
 from chuk_agents_sandbox.docker import default_image, image_has_browser
 
 from chuk_agents_executor import (
@@ -53,8 +57,19 @@ from chuk_agents_executor import (
     frame_to_b64,
     resolve_backend_model_wiring,
 )
+from chuk_agents_executor.protocol import USER_BROWSER, browser_target
 
 from .account_store import AccountStore
+from .agent_permissions import (
+    CAPABILITY as AGENT_PERMISSIONS_CAPABILITY,
+    FILE_NAME as AGENT_PERMISSIONS_FILE,
+    FRAMES as AGENT_PERMISSION_FRAMES,
+    AgentPermissionsStore,
+    handle_permissions_frame,
+    host_defaults,
+    permissions_env_factory,
+    restart_watchers,
+)
 from .host_credential import (
     KIND_ACCESS_ONLY,
     KIND_HOST,
@@ -88,6 +103,8 @@ from .secrets_key import secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
+from .calls import CallService
+from .notification_text import DEFAULT_COWORKER, coworker_name
 from .notify import SupabaseNotifier
 from .serve import TaskServer
 
@@ -268,6 +285,17 @@ class LocalHost:
         self._model_factory: ModelFactory | None = None
         self._model_select: ModelSelect | None = None
 
+        # Per-agent permissions (docs/WIRE_CONTRACT.md, "Agent permissions"):
+        # the host keeps them, every per-agent sandbox reads them through a
+        # provider at a task's start. Everything is allowed by default; the
+        # user's own browser follows the old host-wide switch until the user
+        # sets it per agent.
+        self._permissions = AgentPermissionsStore(
+            self._workspace / AGENT_PERMISSIONS_FILE,
+            defaults=host_defaults(user_browser=browser_target() == USER_BROWSER),
+            log=self._log,
+        )
+
         # The container lifecycle (§6) is only built for the docker backend: one
         # labelled container per agent, its workspace bind-mounted, reused across
         # turns. The local backend has no lifecycle to supervise.
@@ -287,6 +315,9 @@ class LocalHost:
                 image=self._sandbox_image,
                 owner=str(self._workspace.resolve()),
                 legacy_workspace_roots=_legacy_workspace_roots(self._workspace),
+                # Each box gets its agent's permissions (sudo, network, the
+                # workspace mode) at creation, and is rebuilt when they change.
+                env_factory=permissions_env_factory(self._permissions),
             )
         # The environments handed out per agent, so one agent keeps ONE box
         # across its turns. The host agent's own environment is built when the
@@ -603,6 +634,14 @@ class LocalHost:
         """Start the relay and the host party. Non-blocking."""
         self._reap_orphan_containers()
         self._sweep_orphan_runs()
+        # Long-term memory (§12): with `memory.backend = hindsight` one
+        # Hindsight sidecar serves every executor of this host. Configured here,
+        # started lazily by the first memory use, stopped in `stop()`.
+        configure_memory_service(
+            state_home=self._workspace,
+            session_provider=lambda: self._session,
+            logger=self._log,
+        )
         # The desktop channel for "your answer is ready" when no app is attached
         # (docs/WIRE_CONTRACT.md). Needs no cloud; a no-op without a display.
         self._desktop_notifier = DesktopNotifier()
@@ -627,7 +666,9 @@ class LocalHost:
             fire=self._fire_automation,
             busy=self._automation_busy,
             send=self._send_host_payload,
-            env_provider=getattr(vault, "env", None),
+            # Watchers run in this host agent's box: its ``secrets_env``
+            # permission decides whether they get the secret set.
+            env_provider=self._watcher_env if vault is not None else None,
             # Only a container sandbox needs the environment (for the
             # ``docker exec`` prefix); a local watcher is a local process.
             environment_provider=(
@@ -644,6 +685,16 @@ class LocalHost:
             self._automations.start()
         except Exception as exc:  # noqa: BLE001 — automations must not block startup
             self._log(f"could not start automations: {type(exc).__name__}: {exc}")
+        # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
+        # user"): the call registry and the sealed ``voice_call_incoming`` ring
+        # to every attached controller. With no app attached, the desktop toast
+        # is the only nudge (a no-op without a display).
+        self._calls = CallService(
+            send=self._send_host_payload,
+            agent_resolver=self._call_agent,
+            desktop=self._desktop_notifier.notify,
+            logger=self._log,
+        )
         transport, controller_token, reconnect_pipe = self._build_transport()
         party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
         extra = {"trust_provider": lambda: self._trust} if party_class is CloudHostParty else {}
@@ -762,6 +813,9 @@ class LocalHost:
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
+        calls = getattr(self, "_calls", None)
+        if calls is not None:
+            calls.stop()
         # Room members first: each is an executor thread of its own, and stopping
         # them unregisters their senders, so nothing is left registered as
         # reachable once this host is down.
@@ -778,6 +832,8 @@ class LocalHost:
             self._containers.shutdown()
         self._roster.close()
         self._coworker_names.close()
+        # After every executor: their queued memory writes drain first.
+        shutdown_memory_service()
 
     def _sweep_orphan_runs(self) -> None:
         """A run still ``running`` in the store was cut off by a crash or a
@@ -989,7 +1045,11 @@ class LocalHost:
         if self._containers is not None:
             environment = self._containers.environment(key)
         else:
-            environment = make_environment("local", workdir=workdir)
+            # The local backend enforces ``secrets_env`` only (it runs on the
+            # host itself); the docker one enforces every permission.
+            environment = make_environment(
+                "local", workdir=workdir, policy_provider=self._permissions.provider_for(key)
+            )
         self._environments[key] = environment
         return environment
 
@@ -1064,6 +1124,9 @@ class LocalHost:
         # A fresh controller connection: hand over any pair the host rotated
         # while nobody was attached (unless this provision already carried it).
         self._flush_pending_session_rotation()
+        # ...and every call that still rings (docs/WIRE_CONTRACT.md, "The agent
+        # calls the user"): the app may have reconnected after a network drop.
+        self._resend_ringing_calls()
         environment = self._make_environment()
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
@@ -1140,6 +1203,11 @@ class LocalHost:
             job_frame_sender=self._send_host_payload,
             # Coworker names (docs/WIRE_CONTRACT.md, "Coworker names").
             on_agent_frame=self._on_agent_frame,
+            # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls
+            # the user"): ``call_user`` / ``call_status`` and the app's
+            # ``voice_call_state``.
+            calls=getattr(self, "_calls", None),
+            on_call_frame=self._on_call_frame,
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -1150,6 +1218,10 @@ class LocalHost:
         later model call carries the new token with no rebuild. This is also
         the fix for a host token going stale when the app rotates its refresh
         token mid-session."""
+        # Every connection provisions, so this is also a controller that
+        # (re)attached: hand it the calls that still ring. Before the session
+        # check, because a host on an injected model has no session.
+        self._resend_ringing_calls()
         session = self._session
         if session is None or not isinstance(token, dict):
             return
@@ -1714,16 +1786,96 @@ class LocalHost:
                 self._log(f"automation {action} {automation_id}: {result.get('error')}")
         return None
 
-    def _on_agent_frame(self, payload: dict) -> list[dict]:
+    def _on_agent_frame(self, payload: dict) -> list[dict] | dict:
         """The app's ``agent_create`` / ``agent_rename`` / ``agent_list``: keep
-        the name, answer with the current list."""
+        the name, answer with the current list. The ``agent_permissions_*``
+        frames ride the same hook and are answered with one dict."""
+        if isinstance(payload, dict) and payload.get("type") in AGENT_PERMISSION_FRAMES:
+            return self._on_permissions_frame(payload)
         # Announce the actual API routing UUID through the authenticated
         # channel. It is NOT the crypto identity (usually "cowork-host").
         self._send_host_payload({
             "type": "host_route",
             "url": f"{relay_ws_url(self._relay_base_url)}?cw_device={self._relay_device_id}",
+            # What this host can do beyond the base contract. The app sends a
+            # frame of a named feature only to a host that names it.
+            "capabilities": [AGENT_PERMISSIONS_CAPABILITY],
         })
         return handle_agent_frame(self._coworker_names, payload, log=self._log)
+
+    def _watcher_env(self) -> dict[str, str]:
+        """The secret set for an automation watcher, or nothing when the host
+        agent's ``secrets_env`` permission is off (docs/WIRE_CONTRACT.md,
+        "Agent permissions")."""
+        if not self._permissions.get(self._agent.id).secrets_env:
+            return {}
+        return self._secrets_vault.env()
+
+    def _permission_key(self, agent_id: str) -> str | None:
+        """The sandbox an app agent id's permissions belong to, or ``None``.
+
+        ``host:<device id>``, the roster id and ``default`` are this host's own
+        agent; a registered coworker is itself. Any other id is unknown here —
+        a stale or deleted coworker — and must not change the host agent."""
+        if agent_id in self._primary_agent_ids():
+            return self._agent.id
+        return agent_id if self._is_own_coworker(agent_id) else None
+
+    def _on_permissions_frame(self, payload: dict) -> dict:
+        """``agent_permissions_get`` / ``_set`` (docs/WIRE_CONTRACT.md, "Agent
+        permissions"). A change applies from the next task. The reply to a
+        change also goes to every attached device, so a second phone shows
+        the new switches. Switching the host agent's secrets off restarts its
+        automation watchers, which got the secret set when they started."""
+        reply, before, after = handle_permissions_frame(
+            self._permissions,
+            payload,
+            key_for=self._permission_key,
+            enforced=enforced_permissions("docker" if self._containers is not None else "local"),
+            log=self._log,
+        )
+        if after is not None:
+            self._send_host_payload(reply)
+            key = self._permission_key(str(payload.get("agent_id") or ""))
+            if (
+                key == self._agent.id
+                and before is not None
+                and before.secrets_env
+                and not after.secrets_env
+            ):
+                automations = getattr(self, "_automations", None)
+                if automations is not None:
+                    restart_watchers(automations, log=self._log)
+        return reply
+
+    # -- the agent calls the user (docs/WIRE_CONTRACT.md) -----------------
+
+    def _call_agent(self, session_key: str) -> tuple[str, str]:
+        """The app's agent id and the name the user gave it, for a ringing
+        call. A registered coworker is its own session key; any other key is
+        this host's own coworker (``host:<device id>``). Never the roster
+        codename: the fallback is the generic label."""
+        agent_id = (
+            session_key if self._is_own_coworker(session_key) else host_agent_id(self._device_id)
+        )
+        name = coworker_name(self._roster_path, session_key=agent_id, device_id=self._device_id)
+        return agent_id, name or DEFAULT_COWORKER
+
+    def _resend_ringing_calls(self) -> None:
+        """A controller (re)attached: send it every call that still rings."""
+        calls = getattr(self, "_calls", None)
+        if calls is None:
+            return
+        try:
+            calls.resend_ringing()
+        except Exception as exc:  # noqa: BLE001 — a ring must never break a provision
+            self._log(f"could not re-send ringing calls: {type(exc).__name__}")
+
+    def _on_call_frame(self, payload: dict) -> None:
+        """The app's ``voice_call_state``: accepted, declined or ended."""
+        calls = getattr(self, "_calls", None)
+        if calls is not None:
+            calls.handle_frame(payload)
 
     def _on_secret_request_pending(self, info: dict) -> None:
         """A run is blocked on ``request_secrets`` and no app is attached to

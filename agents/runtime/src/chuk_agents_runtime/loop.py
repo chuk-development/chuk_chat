@@ -1,39 +1,49 @@
-"""The agent loop (§7.1).
+"""The agent loop (§7.1), on Pydantic AI (docs/PYDANTIC_AI_LOOP.md).
 
-- Continue-vs-finish is **structural**: a model turn with tool calls executes
-  the tools and continues; a bare-text turn is the final answer and stops. No
-  text-pattern heuristics.
+The shared types come first — the kill switch, the budget, the stop reasons,
+the result — then :class:`AgentLoop`, a Pydantic AI ``Agent.iter()`` driven
+node by node:
+
+- **Continue-vs-finish is structural**: a model turn with tool calls executes
+  the tools and continues; a bare-text turn is the final answer and stops; a
+  ``finish`` call ends the run with its summary. No text-pattern heuristics.
 - **Dual-counter termination**: a hard ``max_iterations`` ceiling plus a
   refundable :class:`IterationBudget`. Housekeeping rounds ``.refund()`` so they
   don't burn the model's real thinking budget while termination stays
-  guaranteed.
+  guaranteed. A token budget caps a subagent's spend.
 - **Two-tier kill switch**: a file-sentinel ESTOP that pauses new work (a stat
-  error counts as engaged) plus a thread-flag interrupt. The interrupt is polled
-  at the loop top, again after the model turn returns, and again before each
-  tool call of a multi-call turn — and it also *notifies* registered cancellers
-  (:meth:`KillSwitch.on_interrupt`), which is how the work already in flight (a
-  running command, a whole subagent tree) is aborted instead of waited out.
+  error counts as engaged) plus a thread-flag interrupt. The interrupt fires
+  the run's Pydantic AI ``CancellationToken``, so a model stream closes and a
+  running tool is abandoned at once; its registered cancellers
+  (:meth:`KillSwitch.on_interrupt`) kill the command in flight and a whole
+  subagent tree.
+- **The store is the source of truth.** Every row is written through one path
+  (``persist_filter``, the secret scrubber, first) in the OpenAI-style shape
+  the replay, the search and the export read. Before every model request the
+  history is rebuilt from the store (a ``ProcessHistory`` capability): stored
+  rows -> ``system_prompt_upgrade`` -> the context ladder (§7.3) -> Pydantic AI
+  messages. A steer row, a job wake row or a skill body reaches a running turn
+  this way.
 - **The system prompt freezes once per session** (§12). It may be passed as a
-  callable, which is resolved when a session is seeded and never again — so a
-  mid-session memory write reaches disk but not the prompt, and the prefix cache
-  holds for the whole run (§7.9). The next session resolves it afresh.
+  callable, which is resolved when a session is seeded and never again.
 - **Context providers** append messages after a tool round — the seam a skill
   body uses to enter the conversation without touching the system prompt (§11).
-- **Context ladder** (§7.3): the stored history is the source of truth, but what
-  goes on the wire passes through :class:`~chuk_agents_runtime.context.ContextLadder`
-  first — stale reasoning stripped, then dedup/truncate and (under real pressure,
-  with an aux model configured) a summary of the middle.
+- **Tools run one at a time, in order**, through the registry (argument
+  coercion, error envelope, scrubber, workspace journal). Approvals are
+  Pydantic AI deferred tools resolved in the same run (``pai.approvals``).
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import threading
 import time
-from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Callable, Coroutine, Sequence
+from dataclasses import dataclass, field, replace
 from enum import Enum
+from typing import Any
 
 from .context import (
     ContextLadder,
@@ -41,12 +51,11 @@ from .context import (
     estimate_tokens,
     total_tokens_from_usage,
 )
-from .model import ModelClient, ModelResponse, ToolCall
 from .registry import ToolRegistry
 from .state import StateStore
 from .tool_events import tool_event_fields
 from .tools import FINISH_TOOL
-from .trace import get_tracer, set_round
+from .telemetry import get_tracer, set_round
 
 
 #: Stands in for a tool result the run was stopped before reaching. The row has
@@ -263,6 +272,9 @@ class LoopResult:
     #: Where the wall clock went (§ run record). Always present; all zeros for a
     #: run that made no model call.
     timings: RunTimings = field(default_factory=RunTimings)
+    #: Why a finished run has no answer, when the provider said so:
+    #: ``length`` (output limit) or ``content_filter``. ``None`` otherwise.
+    note: str | None = None
 
 
 def _tool_schema_tokens(tools: object) -> int:
@@ -277,15 +289,160 @@ def _tool_schema_tokens(tools: object) -> int:
         return 0
 
 
-def _to_model_messages(store: StateStore, session_id: int) -> list[dict]:
-    """Rebuild the OpenAI-style message list from stored rows."""
-    return [m.content for m in store.get_conversation(session_id)]
+# -- the loop ------------------------------------------------------------------
+# Imported here, after the shared types, because the ``pai`` parts import the
+# kill switch and INTERRUPTED_TOOL_RESULT from this module.
+
+from pydantic_ai import Agent, CancellationToken  # noqa: E402
+from pydantic_ai.capabilities import HandleDeferredToolCalls, ProcessHistory  # noqa: E402
+from pydantic_ai.exceptions import (  # noqa: E402
+    ContentFilterError,
+    RunCancelled,
+    UnexpectedModelBehavior,
+)
+from pydantic_ai.messages import (  # noqa: E402
+    ModelMessage,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ThinkingPart,
+    ToolCallPart,
+    ToolReturnPart,
+)
+from pydantic_ai.models import Model  # noqa: E402
+from pydantic_ai.settings import ModelSettings  # noqa: E402
+from pydantic_ai.tool_manager import ToolManager  # noqa: E402
+from pydantic_ai.tools import DeferredToolRequests  # noqa: E402
+from pydantic_ai.usage import UsageLimits  # noqa: E402
+
+from .pai import disable_banner  # noqa: E402
+from .pai.approvals import ApprovalPolicy  # noqa: E402
+from .pai.convert import response_to_row, rows_to_messages, tool_call_args  # noqa: E402
+from .pai.events import StreamMapper  # noqa: E402
+from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
+from .pai.tools import TOOL_RETRIES, UNSET, RegistryToolset  # noqa: E402
+
+disable_banner()
+
+Sink = Callable[[str], None]
+
+#: A streamed request that produced nothing at all in this time is aborted.
+#: The route answers a status within 30 s and then sends keep-alives while an
+#: upstream stalls, so only the first real event proves the model started.
+FIRST_EVENT_TIMEOUT_S = 90.0
+
+
+class ModelServiceError(RuntimeError):
+    """A model call failed in a way the user can act on. ``user_message`` is
+    what the app shows (the executor puts it in the error terminal)."""
+
+    def __init__(self, user_message: str, *, status: int | None = None) -> None:
+        super().__init__(user_message)
+        self.user_message = user_message
+        self.status = status
+
+
+class FirstEventTimeout(ModelServiceError):
+    def __init__(self, seconds: float) -> None:
+        super().__init__(
+            f"the model sent nothing for {seconds:.0f} s; try again", status=None
+        )
+
+
+#: HTTP statuses of the route with a message the user can act on.
+_STATUS_MESSAGES = {
+    402: "no credits left",
+    429: "rate limited, try again shortly",
+}
+
+
+def model_service_error(exc: BaseException) -> ModelServiceError | None:
+    """The user-facing error for a model failure, or ``None`` to re-raise it
+    as it is."""
+    if isinstance(exc, ModelServiceError):
+        return exc
+    status = getattr(exc, "status_code", None)
+    message = _STATUS_MESSAGES.get(status) if isinstance(status, int) else None
+    return ModelServiceError(message, status=status) if message else None
+
+
+#: What the model is told, once per run, after a reply with no text and no
+#: tool call (a thinking-only turn): without it the run ends with no answer.
+EMPTY_REPLY_NUDGE = (
+    "Your last reply was empty. Answer the user now, or call a tool if you "
+    "still need one."
+)
+
+#: How long a Stop waits for a call that had started to finish on its thread,
+#: so its row holds the real result. The executor kills the sandbox process on
+#: the same Stop, so a command returns at once; a web call, a publish or an MCP
+#: call may still complete, and its side effect must be recorded, not denied.
+STOP_SETTLE_S = 10.0
+
+#: The row of a call that started and did not finish inside the settle time.
+#: It may have had its effect: the model must check, not repeat it blindly.
+STOPPED_TOOL_RESULT = (
+    "stopped while running; the outcome is unknown. Verify it before you retry."
+)
+
+
+@dataclass
+class _DriveState:
+    iterations: int = 0
+    reason: StopReason = StopReason.FINISHED
+    final_answer: str | None = None
+    last_response: ModelResponse | None = None
+    in_request: bool = False
+    request_mark: int | None = None
+    nudged: bool = False
+    #: Why a turn ended with no answer (``length`` / ``content_filter``).
+    stop_note: str | None = None
+    #: The model this run talks to (built per run for the HTTP route).
+    model: Any = None
+
+
+@dataclass
+class _ActiveRun:
+    """Per-run state the history processor and the drivers share."""
+
+    session_key: str
+    session_id: int
+    round: int = 0
+    outbound: list[dict] = field(default_factory=list)
+    prepare_ms: float = 0.0
+    written_calls: set[str] = field(default_factory=set)
+
+
+def _run_blocking(coro: Coroutine[Any, Any, Any]) -> Any:
+    """Run a coroutine to completion from sync code. The executor calls
+    ``run()`` on a worker thread with no event loop; a caller that already
+    has a running loop in this thread gets a private thread for the run."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    box: dict[str, Any] = {}
+
+    def target() -> None:
+        try:
+            box["value"] = asyncio.run(coro)
+        except BaseException as exc:  # noqa: BLE001 — re-raised on the caller
+            box["error"] = exc
+
+    thread = threading.Thread(target=target, name="pai-loop", daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in box:
+        raise box["error"]
+    return box.get("value")
 
 
 class AgentLoop:
+    """The agent loop: one task per :meth:`run`, driven on Pydantic AI."""
+
     def __init__(
         self,
-        model: ModelClient,
+        model: Any,
         registry: ToolRegistry,
         store: StateStore,
         *,
@@ -302,14 +459,30 @@ class AgentLoop:
         persist_filter: Callable[[dict], dict] | None = None,
         recall_provider: Callable[[str], list[dict]] | None = None,
         turn_observer: Callable[[TurnRecord], None] | None = None,
+        # -- Pydantic AI only -------------------------------------------
+        model_settings: ModelSettings | None = None,
+        on_delta: Sink | None = None,
+        on_reasoning: Sink | None = None,
+        approval_policy: ApprovalPolicy | None = None,
+        capabilities: Sequence[Any] = (),
+        usage_limits: UsageLimits | None = None,
+        deferred_mode: str = "hide",
+        expose_tools: bool = True,
+        model_factory: Callable[[], Model] | None = None,
     ) -> None:
+        if token_budget is not None and token_budget < 0:
+            raise ValueError("token_budget must be >= 0")
         self._model = model
+        #: Builds the model for each run (the HTTP model: its client belongs to
+        #: one event loop, and each run has its own). ``None``: ``model`` is used.
+        self._model_factory = model_factory
+        self._pai_model: Model = (
+            model if isinstance(model, Model) else LegacyClientModel(model)
+        )
         self._registry = registry
         self._store = store
         self._max_iterations = max_iterations
         self._budget = budget or IterationBudget(max_iterations)
-        if token_budget is not None and token_budget < 0:
-            raise ValueError("token_budget must be >= 0")
         self._token_budget = token_budget
         self._tokens_spent = 0
         self._kill = kill_switch or KillSwitch()
@@ -317,33 +490,30 @@ class AgentLoop:
         self._system_prompt_upgrade = system_prompt_upgrade
         self._context_providers = list(context_providers or [])
         self._ladder = context_ladder
-        # Optional debug tap (a UI "copy raw context" feature). Fired once per
-        # model round with the EXACT outbound message list and the ladder's stats,
-        # so the app can show what really went on the wire. ``None`` -> not built,
-        # not called: zero overhead on a normal run.
         self._debug_observer = debug_observer
-        # The ONE source of live ``tool`` events (docs/WIRE_CONTRACT.md, "Tool
-        # events and timestamps"): fired once per native tool call, after its
-        # result is known, with the fields of :func:`tool_event_fields`. The
-        # environment's shell hook is NOT a tool event any more — a
-        # ``write_file`` is one card, not the printf/base64 helper commands it
-        # runs. ``None`` -> not called. A raising observer is swallowed.
         self._tool_event_observer = tool_event_observer
-        # The store-write chokepoint (docs/WIRE_CONTRACT.md, "Secrets"): every
-        # row this loop writes — system, user, assistant, tool, context —
-        # passes through it first, so a value that reached the model's TEXT
-        # (a user who pasted a key, a model that echoes one) is masked before
-        # it is persisted and before the next round re-reads it. ``None`` ->
-        # rows are written as they are.
         self._persist_filter = persist_filter
-        # Memory (§12), both directions. ``recall_provider(prompt)`` runs once
-        # per task, right after the user's row: whatever it returns (context
-        # messages, ``role_tag`` = row role) is appended so the model sees what
-        # it learned before. ``turn_observer(record)`` runs once per task, after
-        # the loop decided the outcome, so the turn's facts can be extracted
-        # without the model having to remember to call a tool. Both best-effort.
         self._recall_provider = recall_provider
         self._turn_observer = turn_observer
+        self._model_settings = model_settings
+        self._on_delta = on_delta
+        self._on_reasoning = on_reasoning
+        self._usage_limits = usage_limits
+        self._policy = approval_policy or ApprovalPolicy()
+        self._policy.kill = self._kill
+        self._toolset = RegistryToolset(
+            registry,
+            kill=self._kill,
+            requires_approval=self._policy.requires_approval,
+            deferred_mode=deferred_mode,
+            enabled=expose_tools,
+        )
+        self._policy.toolset = self._toolset
+        self._extra_capabilities = list(capabilities)
+        self._active: _ActiveRun | None = None
+        self._agent = self._build_agent()
+
+    # -- the facade build_runtime, the executor and the subagents use ------
 
     @property
     def budget(self) -> IterationBudget:
@@ -373,26 +543,56 @@ class AgentLoop:
     def context_ladder(self) -> ContextLadder | None:
         return self._ladder
 
+    @property
+    def agent(self) -> Agent:
+        """The Pydantic AI agent (for tests and instrumentation)."""
+        return self._agent
+
+    @property
+    def pai_model(self) -> Model:
+        return self._pai_model
+
+    # -- construction ----------------------------------------------------
+
+    def _build_agent(self) -> Agent:
+        capabilities: list[Any] = [ProcessHistory(self._process_history)]
+        capabilities.append(HandleDeferredToolCalls(handler=self._policy.handler))
+        capabilities.extend(self._extra_capabilities)
+        return Agent(
+            self._pai_model,
+            output_type=[str, DeferredToolRequests],
+            toolsets=[self._toolset],
+            capabilities=capabilities,
+            retries={"tools": TOOL_RETRIES, "output": 1},
+            model_settings=self._model_settings,
+        )
+
+    # -- the one write path ----------------------------------------------
+
     def _append(self, session_id: int, role: str, content: dict) -> int:
-        """The one write path for message rows: ``persist_filter`` first."""
+        """Every row goes through ``persist_filter`` (the secret scrubber)
+        first. A filter that raises keeps the shape and drops the text."""
         if self._persist_filter is not None:
             try:
                 content = self._persist_filter(content)
-            except Exception:  # noqa: BLE001 — a broken filter must not lose the row...
-                # ...but must not let an unfiltered row through either. Keep the
-                # shape (role, ids) and drop the text.
+            except Exception:  # noqa: BLE001
                 content = {
                     k: (v if k in ("role", "tool_call_id", "name") else None)
                     for k, v in content.items()
                 }
         return self._store.append_message(session_id, role, content)
 
+    # -- what the model sees ---------------------------------------------
+
+    def _stored_rows(self, session_id: int) -> list[dict]:
+        return [m.content for m in self._store.get_conversation(session_id)]
+
     def _outbound_messages(self, session_id: int) -> list[dict]:
-        """The payload for one model call: the full stored history, run through
-        the context ladder. Without a ladder this is the history verbatim."""
+        """Stored history -> system prompt upgrade -> context ladder. The same
+        pipeline as the native loop, so the model sees the same payload."""
         tracer = get_tracer()
         read_started = time.monotonic()
-        messages = _to_model_messages(self._store, session_id)
+        messages = self._stored_rows(session_id)
         if tracer.enabled:
             tracer.emit(
                 "history_loaded",
@@ -411,17 +611,34 @@ class AgentLoop:
             return messages
         return self._ladder.prepare(messages)
 
+    def _process_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
+        """The ``ProcessHistory`` hook: ignore Pydantic AI's in-run list and
+        send what the store holds. Runs on a worker thread (it is sync)."""
+        active = self._active
+        if active is None:  # pragma: no cover — only called inside a run
+            return messages
+        started = time.monotonic()
+        outbound = self._outbound_messages(active.session_id)
+        elapsed = time.monotonic() - started
+        active.outbound = outbound
+        active.prepare_ms = elapsed * 1000
+        tracer = get_tracer()
+        if tracer.enabled:
+            self._trace_prepare(tracer, outbound, elapsed)
+        converted = rows_to_messages(outbound)
+        if not converted or not hasattr(converted[-1], "parts") or converted[-1].kind != "request":
+            # Pydantic AI needs the history to end in a request. The store
+            # always ends in the user row or tool results by the time a model
+            # request is made; this only guards a malformed old session.
+            return messages
+        return converted
+
+    # -- running ---------------------------------------------------------
+
     def run(
         self, session_key: str, user_message: str, *, regenerate: bool = False
     ) -> LoopResult:
-        """Run one task to completion.
-
-        ``regenerate`` means "replace the last answer", not "ask again": the
-        app's Retry button sends the same prompt a second time. Without it the
-        conversation keeps every attempt, so the model is handed a history in
-        which the user asked the same question four times, and the client shows
-        the question four times on replay (docs/WIRE_CONTRACT.md, ``task``).
-        """
+        """Run one task to completion. See the module docstring for the rules."""
         store = self._store
         tracer = get_tracer()
         run_started = time.monotonic()
@@ -434,16 +651,11 @@ class AgentLoop:
                 regenerate=bool(regenerate),
                 max_iterations=self._max_iterations,
                 text=tracer.text(user_message),
+                loop="pydantic_ai",
             )
         session_id = store.route(session_key)
         if regenerate:
-            # Drop the turn being retried — the old user row and the answer it
-            # produced — so the prompt appended below takes its place.
             store.drop_last_user_turn(session_id)
-
-        # Seed the system prompt once per fresh session. A callable is resolved
-        # HERE and only here: that single read is what freezes the memory
-        # snapshot for the session (§12).
         conversation = store.get_conversation(session_id)
         if self._system_prompt and not any(
             m.content.get("role") == "system" for m in conversation
@@ -451,200 +663,19 @@ class AgentLoop:
             prompt = self._system_prompt
             resolved = prompt() if callable(prompt) else prompt
             if resolved:
-                self._append(
-                    session_id, "system", {"role": "system", "content": resolved}
-                )
-
+                self._append(session_id, "system", {"role": "system", "content": resolved})
         self._append(session_id, "user", {"role": "user", "content": user_message})
         timings.recall_ms = self._inject_recall(session_id, user_message)
 
-        iterations = 0
+        active = _ActiveRun(session_key=session_key, session_id=session_id)
+        self._active = active
         tools_used: list[str] = []
-        final_answer: str | None = None
-        reason = StopReason.FINISHED
-
-        while True:
-            # -- top-of-loop kill poll --------------------------------
-            if self._kill.interrupted():
-                reason = StopReason.INTERRUPTED
-                break
-            if self._kill.estop_engaged():
-                reason = StopReason.ESTOP
-                break
-            # -- dual-counter termination -----------------------------
-            if iterations >= self._max_iterations:
-                reason = StopReason.MAX_ITERATIONS
-                break
-            if self._budget.exhausted():
-                reason = StopReason.BUDGET_EXHAUSTED
-                break
-            # A spend cap stops the run *before* the next model call, so the
-            # overshoot is at most the one round that crossed the line — never a
-            # further expensive turn. Checked here, accumulated after each
-            # response below.
-            if (
-                self._token_budget is not None
-                and self._tokens_spent >= self._token_budget
-            ):
-                reason = StopReason.TOKEN_BUDGET_EXHAUSTED
-                break
-
-            iterations += 1
-            self._budget.consume()
-            if tracer.enabled:
-                set_round(iterations)
-                tracer.emit("round_start", iteration=iterations)
-
-            # Built once here so the debug tap can report the EXACT list sent, and
-            # so the ladder's ``last_stats`` (set inside ``prepare``) matches it.
-            prepare_started = time.monotonic()
-            outbound = self._outbound_messages(session_id)
-            model_started = time.monotonic()
-            timings.prepare_ms += (model_started - prepare_started) * 1000
-            if tracer.enabled:
-                self._trace_prepare(tracer, outbound, model_started - prepare_started)
-            try:
-                response: ModelResponse = self._model.complete(outbound)
-            except Exception:
-                timings.model_calls += 1
-                timings.model_wait_ms += (time.monotonic() - model_started) * 1000
-                # A model call that dies *while we are interrupting* died because
-                # of the interrupt: a cancelled socket, a closed stream. Report
-                # the stop, not a crash. Any other failure is a real error and
-                # still propagates.
-                if self._kill.interrupted():
-                    reason = StopReason.INTERRUPTED
-                    break
-                raise
-            timings.model_calls += 1
-            timings.model_wait_ms += (time.monotonic() - model_started) * 1000
-            model_timing = response.raw.get("timing")
-            if isinstance(model_timing, dict):
-                attempts = int(model_timing.get("attempts") or 1)
-                if attempts > 1:
-                    timings.retries += attempts - 1
-                    timings.retry_ms += float(model_timing.get("wasted_ms") or 0.0)
-
-            # Debug tap (§ "copy raw context"): the outbound payload and the
-            # ladder's stats for this round. Guarded so a broken sink cannot abort
-            # a real run.
-            if self._debug_observer is not None:
-                self._emit_debug(session_key, iterations, outbound, {
-                    "context_prepare_ms": (model_started - prepare_started) * 1000,
-                    "model_complete_ms": (time.monotonic() - model_started) * 1000,
-                    "model": response.raw.get("timing"),
-                    "usage": response.raw.get("usage"),
-                    "tps": response.raw.get("tps"),
-                })
-
-            # Real prompt_tokens calibrate the ladder's estimator (§7.3). Only
-            # prompt tokens are read — reasoning tokens must not move pressure.
-            usage = response.raw.get("usage")
-            if self._ladder is not None:
-                self._ladder.record_usage(usage)
-            # Spend accounting (§7.6): prompt + completion, for the token budget.
-            # A housekeeping round still cost tokens, so it counts here even
-            # though it is refunded against the iteration budget above.
-            self._tokens_spent += total_tokens_from_usage(usage)
-
-            # A housekeeping/preflight round is refunded so it does not eat the
-            # model's real thinking budget (§7.1).
-            if response.housekeeping:
-                self._budget.refund()
-
-            self._persist_assistant(session_id, response)
-
-            # The interrupt may have landed while the model was working. It wins
-            # here rather than one round later: a run the user stopped must not
-            # report "finished" just because the turn in flight happened to be
-            # the last one. The turn itself is kept — it is real history.
-            if self._kill.interrupted():
-                reason = StopReason.INTERRUPTED
-                break
-
-            # -- structural continue-vs-finish ------------------------
-            if response.has_tool_calls:
-                finish_summary: str | None = None
-                for call in response.tool_calls:
-                    # One turn can carry several tool calls, and each one can be
-                    # a long command. Stop between them too, or a Stop would wait
-                    # out the whole batch. Every call still gets a result row, so
-                    # a resumed session has no assistant turn with a dangling
-                    # tool call in it.
-                    started_at = time.time()
-                    tool_started = time.monotonic()
-                    if tracer.enabled:
-                        tracer.emit(
-                            "tool_start",
-                            tool=call.name,
-                            call_id=call.id,
-                            args_chars=len(str(call.arguments)),
-                            text=tracer.text(
-                                str(call.arguments) if call.arguments else None
-                            ),
-                        )
-                    if self._kill.interrupted():
-                        result: object = INTERRUPTED_TOOL_RESULT
-                        raised = True
-                    else:
-                        raised = False
-                        result = self._registry.dispatch(call.name, call.arguments)
-                        # Explicit terminal action: a `finish` call ends the run
-                        # with its summary as the final answer. Its tool result
-                        # is still recorded below (audit trail); the loop just
-                        # stops after this batch. Structural bare-text stays as
-                        # the fallback terminator.
-                        if call.name == FINISH_TOOL and finish_summary is None:
-                            args = (
-                                call.arguments
-                                if isinstance(call.arguments, dict)
-                                else {}
-                            )
-                            finish_summary = str(args.get("summary", "")) or (
-                                response.text or ""
-                            )
-                    self._append(
-                        session_id,
-                        "tool",
-                        {
-                            "role": "tool",
-                            "tool_call_id": call.id,
-                            "name": call.name,
-                            "content": result,
-                        },
-                    )
-                    tool_ms = (time.monotonic() - tool_started) * 1000
-                    timings.tool_ms += tool_ms
-                    if tracer.enabled:
-                        tracer.emit(
-                            "tool_end",
-                            tool=call.name,
-                            call_id=call.id,
-                            ms=round(tool_ms, 3),
-                            ok=not raised,
-                            result_chars=len(str(result)),
-                            text=tracer.text(str(result) if result is not None else None),
-                        )
-                    self._emit_tool(
-                        call, result, started_at=started_at, raised=raised
-                    )
-                    tools_used.append(call.name)
-                # The interrupt wins over a `finish` in the same batch: a run the
-                # user stopped reports INTERRUPTED, not FINISHED.
-                if self._kill.interrupted():
-                    reason = StopReason.INTERRUPTED
-                    break
-                if finish_summary is not None:
-                    final_answer = finish_summary
-                    reason = StopReason.FINISHED
-                    break
-                self._drain_context(session_id)
-                continue  # tool calls -> feed results back, loop again
-
-            # bare text -> final answer, stop
-            final_answer = response.text
-            reason = StopReason.FINISHED
-            break
+        try:
+            reason, final_answer, iterations, note = _run_blocking(
+                self._drive(active, timings, tools_used)
+            )
+        finally:
+            self._active = None
 
         outcome = LoopResult(
             reason=reason,
@@ -653,61 +684,513 @@ class AgentLoop:
             session_id=session_id,
             tokens_spent=self._tokens_spent,
             timings=timings,
+            note=note,
         )
         if tracer.enabled:
             tracer.emit(
                 "run_finished",
+                note=note,
                 reason=reason.value,
                 iterations=iterations,
                 tokens_spent=self._tokens_spent,
                 total_ms=round((time.monotonic() - run_started) * 1000, 3),
                 tools=len(tools_used),
-                **{k: v for k, v in timings.as_row().items()},
+                **timings.as_row(),
             )
         self._observe_turn(session_key, user_message, outcome, tools_used)
         return outcome
 
-    def _trace_prepare(self, tracer, outbound: list[dict], elapsed: float) -> None:
-        """The two phases that hide inside "preparing the payload": the ladder's
-        pass over the history, and the payload that came out of it.
+    def _pre_round_stop(self, iterations: int) -> StopReason | None:
+        if self._kill.interrupted():
+            return StopReason.INTERRUPTED
+        if self._kill.estop_engaged():
+            return StopReason.ESTOP
+        if iterations >= self._max_iterations:
+            return StopReason.MAX_ITERATIONS
+        if self._budget.exhausted():
+            return StopReason.BUDGET_EXHAUSTED
+        if self._token_budget is not None and self._tokens_spent >= self._token_budget:
+            return StopReason.TOKEN_BUDGET_EXHAUSTED
+        return None
 
-        The ladder is the other thing that can burn minutes in a turn — a
-        tier-2/3 pass calls the aux model — so its tier, pressure and
-        before/after token counts are on their own line, not folded into one
-        opaque ``prepare_ms``.
-        """
-        ladder = self._ladder
-        if ladder is not None:
-            stats = ladder.last_stats
-            tracer.emit(
-                "ladder_pass",
-                ms=round(elapsed * 1000, 3),
-                tier=stats.tier,
-                pressure=round(float(stats.pressure), 4),
-                tokens_before=stats.tokens_before,
-                tokens_after=stats.tokens_after,
-                dropped=max(0, int(stats.tokens_before) - int(stats.tokens_after)),
+    async def _drive(
+        self, active: _ActiveRun, timings: RunTimings, tools_used: list[str]
+    ) -> tuple[StopReason, str | None, int, str | None]:
+        """Drive ``Agent.iter()`` one node at a time and apply the loop's
+        rules between the nodes."""
+        # A stop before the first round: no model call at all.
+        early = self._pre_round_stop(0)
+        if early is not None:
+            return early, None, 0, None
+
+        token = CancellationToken()
+        self._kill.on_interrupt(token.cancel)
+        history = rows_to_messages(self._stored_rows(active.session_id))
+        state = _DriveState()
+        tracer = get_tracer()
+        # A model built for this run (the HTTP model: its client is bound to
+        # this run's event loop) is closed when the run ends.
+        run_model = self._model_factory() if self._model_factory is not None else self._pai_model
+        state.model = run_model
+        streaming = not is_legacy(run_model)
+        request_log = getattr(run_model, "request_log", None)
+
+        try:
+            with ToolManager.parallel_execution_mode("sequential"):
+                async with self._agent.iter(
+                    None,
+                    model=run_model,
+                    message_history=history,
+                    cancellation_token=token,
+                    usage_limits=self._usage_limits or UsageLimits(request_limit=None),
+                ) as run:
+                    node: Any = run.next_node
+                    while not Agent.is_end_node(node):
+                        if Agent.is_model_request_node(node):
+                            stop = self._pre_round_stop(state.iterations)
+                            if stop is not None:
+                                state.reason = stop
+                                break
+                            state.iterations += 1
+                            active.round = state.iterations
+                            self._budget.consume()
+                            if tracer.enabled:
+                                set_round(state.iterations)
+                                tracer.emit("round_start", iteration=state.iterations)
+                            model_started = time.monotonic()
+                            mapper = StreamMapper(self._on_delta, self._on_reasoning)
+                            state.request_mark = self._legacy_mark(run_model)
+                            state.in_request = True
+                            if request_log is not None:
+                                request_log.reset()
+                            try:
+                                if streaming:
+                                    await self._stream_request(node, run, mapper)
+                                node = await run.next(node)
+                            except (RunCancelled, asyncio.CancelledError):
+                                raise
+                            except Exception as exc:
+                                state.in_request = False
+                                timings.model_calls += 1
+                                timings.model_wait_ms += (time.monotonic() - model_started) * 1000
+                                _count_retries(request_log, timings)
+                                if self._kill.interrupted():
+                                    state.reason = StopReason.INTERRUPTED
+                                    break
+                                mapped = model_service_error(exc)
+                                if mapped is not None:
+                                    raise mapped from exc
+                                raise
+                            state.in_request = False
+                            _count_retries(request_log, timings)
+                            elapsed_ms = (time.monotonic() - model_started) * 1000
+                            timings.model_calls += 1
+                            # ``prepare_ms`` (the history rebuild) happened
+                            # inside the request node; keep the buckets apart.
+                            timings.prepare_ms += active.prepare_ms
+                            timings.model_wait_ms += max(0.0, elapsed_ms - active.prepare_ms)
+                            response = _last_response(run)
+                            self._take_turn(active, state, response)
+                            self._account(response, timings, active, elapsed_ms, mapper)
+                            if self._kill.interrupted():
+                                state.reason = StopReason.INTERRUPTED
+                                break
+                            continue
+
+                        if Agent.is_call_tools_node(node):
+                            response = node.model_response
+                            calls = _calls(response)
+                            if not calls:
+                                if _no_output(response):
+                                    if response.finish_reason in ("length", "content_filter"):
+                                        # The provider cut the turn off (output
+                                        # limit, or its filter). No retry: the
+                                        # same request would end the same way.
+                                        _log_cut_off(response.finish_reason)
+                                        state.stop_note = response.finish_reason
+                                        state.reason = StopReason.FINISHED
+                                        break
+                                    if not state.nudged and not self._kill.interrupted():
+                                        # A turn with neither text nor a call (a
+                                        # thinking-only reply) would end the run
+                                        # with no answer. Ask once more. The nudge
+                                        # row is written only when the retry
+                                        # really follows; it is a context row,
+                                        # never replayed.
+                                        state.nudged = True
+                                        after = await run.next(node)
+                                        if Agent.is_model_request_node(after):
+                                            self._append(
+                                                active.session_id,
+                                                "context",
+                                                {"role": "user", "content": EMPTY_REPLY_NUDGE},
+                                            )
+                                            node = after
+                                            continue
+                                    state.reason = StopReason.FINISHED
+                                    break
+                                state.final_answer = _response_text(response)
+                                state.reason = StopReason.FINISHED
+                                break
+                            finish_summary = _finish_summary(calls, response)
+                            tool_started = time.monotonic()
+                            try:
+                                async with node.stream(run.ctx) as stream:
+                                    async for event in stream:
+                                        self._on_tool_event_part(active, calls, event, tools_used)
+                            finally:
+                                timings.tool_ms += (time.monotonic() - tool_started) * 1000
+                            self._close_calls(active, calls, tools_used)
+                            if self._kill.interrupted():
+                                state.reason = StopReason.INTERRUPTED
+                                break
+                            if finish_summary is not None:
+                                state.final_answer = finish_summary
+                                state.reason = StopReason.FINISHED
+                                break
+                            self._drain_context(active.session_id)
+                            node = await run.next(node)
+                            continue
+
+                        # UserPromptNode (and any node we do not inspect).
+                        node = await run.next(node)
+        except RunCancelled as exc:
+            state.reason = StopReason.INTERRUPTED
+            self._keep_stopped_turn(active, state, exc.all_messages())
+        except asyncio.CancelledError:
+            if not self._kill.interrupted():
+                raise
+            state.reason = StopReason.INTERRUPTED
+            self._keep_stopped_turn(active, state, ())
+        except (UnexpectedModelBehavior, ContentFilterError) as exc:
+            # Pydantic AI gave up on a turn it could not use (an output limit
+            # hit inside the thinking, a filtered reply). The old loop ended
+            # such a run as finished with no answer; so does this one.
+            _log_cut_off(type(exc).__name__)
+            state.stop_note = type(exc).__name__
+            state.reason = StopReason.FINISHED
+            state.final_answer = None
+        finally:
+            if state.last_response is not None:
+                await self._settle_inflight()
+                self._close_calls(active, _calls(state.last_response), tools_used)
+            if self._model_factory is not None:
+                await _close_model(run_model)
+        return state.reason, state.final_answer, state.iterations, state.stop_note
+
+    async def _stream_request(self, node: Any, run: Any, mapper: StreamMapper) -> None:
+        """Stream one model request into the sinks. Nothing at all within
+        :data:`FIRST_EVENT_TIMEOUT_S` (the route sends keep-alives while an
+        upstream stalls, so the socket alone never times out) aborts it."""
+        deadline = asyncio.timeout(FIRST_EVENT_TIMEOUT_S)
+        try:
+            async with deadline:
+                async with node.stream(run.ctx) as stream:
+                    async for event in stream:
+                        if mapper.first_event_ms is None:
+                            deadline.reschedule(None)
+                        mapper.feed(event)
+        except TimeoutError as exc:
+            raise FirstEventTimeout(FIRST_EVENT_TIMEOUT_S) from exc
+
+    @staticmethod
+    def _legacy_mark(model: Any) -> int | None:
+        return model.requests if isinstance(model, LegacyClientModel) else None
+
+    def _take_turn(self, active: _ActiveRun, state: _DriveState, response: ModelResponse) -> None:
+        """A finished model turn: persist it and reset the per-turn call state
+        (call ids are only unique within one turn)."""
+        state.last_response = response
+        active.written_calls.clear()
+        self._toolset.calls.clear()
+        self._persist_assistant(active.session_id, response)
+
+    def _keep_stopped_turn(
+        self, active: _ActiveRun, state: _DriveState, messages: Sequence[ModelMessage]
+    ) -> None:
+        """A Stop that landed while the model was answering. The native loop
+        kept a turn the model had finished; a streamed turn keeps what was
+        streamed (the user saw it). A turn with nothing in it is not stored."""
+        if not state.in_request:
+            return
+        state.in_request = False
+        response: ModelResponse | None = None
+        model = state.model
+        if isinstance(model, LegacyClientModel) and model.last_reply is not None:
+            number, reply = model.last_reply
+            if state.request_mark is not None and number > state.request_mark:
+                response = reply
+        if response is None and messages:
+            last = messages[-1]
+            if isinstance(last, ModelResponse) and last is not state.last_response:
+                response = last
+        if response is None or not response.parts:
+            return
+        # A call the Stop cut off mid-stream has half its JSON: stored, it
+        # would break the session with a strict provider. It never ran.
+        response = _drop_broken_calls(response)
+        self._tokens_spent += _response_tokens(response)
+        if not _calls(response) and not _response_text(response):
+            return
+        self._take_turn(active, state, response)
+
+    async def _settle_inflight(self, grace: float = STOP_SETTLE_S) -> None:
+        """Wait, up to ``grace`` in total, for the calls a Stop abandoned while
+        they ran, so their rows hold the real results. A call that had not
+        started is closed at once: it will never run."""
+        deadline = time.monotonic() + grace
+        for record in list(self._toolset.calls.values()):
+            if record.result is not UNSET or record.done.is_set():
+                continue
+            if record.close_unstarted():
+                continue
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            await asyncio.to_thread(record.done.wait, remaining)
+
+    # -- per round -------------------------------------------------------
+
+    def _account(
+        self,
+        response: ModelResponse,
+        timings: RunTimings,
+        active: _ActiveRun,
+        elapsed_ms: float,
+        mapper: StreamMapper,
+    ) -> None:
+        """Usage, budget refund, retry timings and the debug tap for one
+        finished model request."""
+        details = (response.provider_details or {}).get(LEGACY_DETAILS_KEY) or {}
+        raw_usage = details.get("usage") if details else None
+        if raw_usage is None and details == {}:
+            usage = response.usage
+            raw_usage = (
+                {
+                    "prompt_tokens": usage.input_tokens,
+                    "completion_tokens": usage.output_tokens,
+                    "total_tokens": usage.input_tokens + usage.output_tokens,
+                }
+                if (usage.input_tokens or usage.output_tokens)
+                else None
             )
-        else:
-            tracer.emit("ladder_pass", ms=round(elapsed * 1000, 3), tier=0)
-        estimated = sum(estimate_message_tokens(m) for m in outbound)
-        tools = getattr(self._model, "traced_tools", None)
+        timing = details.get("timing") if details else None
+        if isinstance(timing, dict):
+            attempts = int(timing.get("attempts") or 1)
+            if attempts > 1:
+                timings.retries += attempts - 1
+                timings.retry_ms += float(timing.get("wasted_ms") or 0.0)
+        if self._ladder is not None:
+            self._ladder.record_usage(raw_usage)
+        self._tokens_spent += total_tokens_from_usage(raw_usage)
+        if not details:
+            self._trace_model_call(response, elapsed_ms - active.prepare_ms, mapper, raw_usage)
+        if details.get("housekeeping"):
+            self._budget.refund()
+        if self._debug_observer is not None:
+            model_timing = timing if isinstance(timing, dict) else mapper.timing()
+            self._emit_debug(
+                active,
+                {
+                    "context_prepare_ms": active.prepare_ms,
+                    "model_complete_ms": max(0.0, elapsed_ms - active.prepare_ms),
+                    "model": model_timing,
+                    "usage": raw_usage,
+                    "tps": details.get("tps") if details else None,
+                },
+            )
+
+    def _trace_model_call(
+        self,
+        response: ModelResponse,
+        total_ms: float,
+        mapper: StreamMapper,
+        usage: dict | None,
+    ) -> None:
+        """The ``model_call`` and ``usage`` trace lines for a streamed request,
+        in the fields ``trace_report`` attributes the turn with (first byte =
+        provider wait, the rest = generation)."""
+        tracer = get_tracer()
+        if not tracer.enabled:
+            return
+        first = mapper.first_event_ms
+        tokens = [v for v in (mapper.first_content_ms, mapper.first_reasoning_ms) if v is not None]
+        usage = usage or {}
         tracer.emit(
-            "payload_prepared",
-            messages=len(outbound),
-            prompt_tokens_est=estimated,
-            tool_schema_tokens=_tool_schema_tokens(tools),
-            tools=len(tools or ()),
+            "model_call",
+            model=response.model_name,
+            ok=True,
+            first_frame_ms=None if first is None else round(first, 3),
+            first_reasoning_ms=None if mapper.first_reasoning_ms is None else round(mapper.first_reasoning_ms, 3),
+            first_content_ms=None if mapper.first_content_ms is None else round(mapper.first_content_ms, 3),
+            first_token_ms=round(min(tokens), 3) if tokens else None,
+            stream_ms=None if first is None else round(max(0.0, total_ms - first), 3),
+            total_ms=round(max(0.0, total_ms), 3),
+            attempts=1,
+            prompt_tokens=usage.get("prompt_tokens"),
+            completion_tokens=usage.get("completion_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            finish_reason=response.finish_reason,
         )
+        if usage:
+            tracer.emit(
+                "usage",
+                prompt_tokens=usage.get("prompt_tokens"),
+                completion_tokens=usage.get("completion_tokens"),
+                total_tokens=usage.get("total_tokens"),
+            )
+
+    def _persist_assistant(self, session_id: int, response: ModelResponse) -> None:
+        self._append(session_id, "assistant", response_to_row(response))
+
+    # -- tools -----------------------------------------------------------
+
+    def _on_tool_event_part(
+        self,
+        active: _ActiveRun,
+        calls: list[ToolCallPart],
+        event: Any,
+        tools_used: list[str],
+    ) -> None:
+        part = getattr(event, "part", None)
+        if not isinstance(part, (ToolReturnPart, RetryPromptPart)):
+            if isinstance(part, ToolCallPart):
+                self._trace_tool_start(part)
+            return
+        if getattr(event, "event_kind", "") not in ("function_tool_result",):
+            return
+        call = next((c for c in calls if c.tool_call_id == part.tool_call_id), None)
+        if call is None:
+            return
+        self._write_tool_row(active, call, part, tools_used)
+
+    def _write_tool_row(
+        self,
+        active: _ActiveRun,
+        call: ToolCallPart,
+        part: ToolReturnPart | RetryPromptPart | None,
+        tools_used: list[str],
+    ) -> None:
+        """One ``tool`` row and one ``tool`` event per call, exactly once."""
+        call_id = call.tool_call_id
+        if call_id in active.written_calls:
+            return
+        active.written_calls.add(call_id)
+        record = self._toolset.calls.get(call_id)
+        raised = False
+        started_at = record.started_at if record and record.started_at else time.time()
+        if record is not None and record.result is not UNSET:
+            result = record.result
+            raised = record.raised
+        elif isinstance(part, RetryPromptPart):
+            if self._registry.has(call.tool_name):
+                # A real tool Pydantic AI refused this turn (a deferred tool
+                # the model has not searched for yet): its reason, as an error.
+                result = {"error": part.model_response(), "tool": call.tool_name}
+            else:
+                # A name no tool answers to: the registry's own envelope (with
+                # the browser hint), the same row the native loop stored.
+                args = tool_call_args(call)
+                result = self._registry.dispatch(
+                    call.tool_name, args if isinstance(args, dict) else {}
+                )
+        elif isinstance(part, ToolReturnPart):
+            result = part.content
+        else:
+            result = INTERRUPTED_TOOL_RESULT
+            raised = True
+        self._append(
+            active.session_id,
+            "tool",
+            {
+                "role": "tool",
+                "tool_call_id": call_id,
+                "name": call.tool_name,
+                "content": result,
+            },
+        )
+        completed_at = record.completed_at if record and record.completed_at else time.time()
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(
+                "tool_end",
+                tool=call.tool_name,
+                call_id=call_id,
+                ms=round(max(0.0, completed_at - started_at) * 1000, 3),
+                ok=not raised,
+                result_chars=len(str(result)),
+                text=tracer.text(str(result) if result is not None else None),
+            )
+        self._emit_tool(call, result, started_at=started_at, completed_at=completed_at, raised=raised)
+        tools_used.append(call.tool_name)
+
+    def _close_calls(
+        self, active: _ActiveRun, calls: list[ToolCallPart], tools_used: list[str]
+    ) -> None:
+        """Every call of a turn gets a row: the stored conversation must never
+        hold an assistant call without its result."""
+        for call in calls:
+            if call.tool_call_id not in active.written_calls:
+                record = self._toolset.calls.get(call.tool_call_id)
+                if record is not None and record.result is UNSET:
+                    record.raised = True
+                    record.result = (
+                        INTERRUPTED_TOOL_RESULT
+                        if record.close_unstarted()
+                        else STOPPED_TOOL_RESULT
+                    )
+                self._write_tool_row(active, call, None, tools_used)
+
+    def _trace_tool_start(self, call: ToolCallPart) -> None:
+        tracer = get_tracer()
+        if tracer.enabled:
+            args = tool_call_args(call)
+            tracer.emit(
+                "tool_start",
+                tool=call.tool_name,
+                call_id=call.tool_call_id,
+                args_chars=len(str(args)),
+                text=tracer.text(str(args) if args else None),
+            )
+
+    def _emit_tool(
+        self,
+        call: ToolCallPart,
+        result: Any,
+        *,
+        started_at: float,
+        completed_at: float,
+        raised: bool,
+    ) -> None:
+        if self._tool_event_observer is None:
+            return
+        try:
+            self._tool_event_observer(
+                tool_event_fields(
+                    name=call.tool_name,
+                    arguments=tool_call_args(call),
+                    result=result,
+                    call_id=call.tool_call_id,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                    raised=raised,
+                )
+            )
+        except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
+            pass
+
+    def _drain_context(self, session_id: int) -> None:
+        for provider in self._context_providers:
+            for message in provider():
+                self._append(
+                    session_id,
+                    message.get("role_tag", "context"),
+                    {k: v for k, v in message.items() if k != "role_tag"},
+                )
+
+    # -- memory ----------------------------------------------------------
 
     def _inject_recall(self, session_id: int, user_message: str) -> float:
-        """Append the memory recall for this task (a context row, never a
-        system message). A failing provider costs the recall, not the run.
-
-        Returns the milliseconds it took. The recall is a whole retrieval stack
-        behind one call — in the run that started this work it cost 74.6 s on
-        its own and nobody knew — so it is timed and traced like a model call.
-        """
         if self._recall_provider is None:
             return 0.0
         tracer = get_tracer()
@@ -763,43 +1246,16 @@ class AgentLoop:
                     tool_names=tuple(tools_used),
                 )
             )
-        except Exception:  # noqa: BLE001 — a memory sink must never take the run down
+        except Exception:  # noqa: BLE001
             pass
 
-    def _emit_tool(
-        self, call: ToolCall, result: object, *, started_at: float, raised: bool
-    ) -> None:
-        """Hand the tool observer one finished tool call in the wire shape
-        (``tool_event_fields``). Guarded: a UI sink must never take the run
-        down."""
-        if self._tool_event_observer is None:
-            return
-        try:
-            self._tool_event_observer(
-                tool_event_fields(
-                    name=call.name,
-                    arguments=call.arguments,
-                    result=result,
-                    call_id=call.id,
-                    started_at=started_at,
-                    completed_at=time.time(),
-                    raised=raised,
-                )
-            )
-        except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
-            pass
+    # -- debug and trace -------------------------------------------------
 
-    def _emit_debug(
-        self, session_key: str, round_no: int, outbound: list[dict], timing: dict
-    ) -> None:
-        """Hand the debug observer one round's raw context, in the fixed contract
-        shape. Stats come from the ladder's ``last_stats``; with no ladder they
-        are zeros at tier 0. A raising observer is swallowed — a debug sink must
-        never take the run down."""
+    def _emit_debug(self, active: _ActiveRun, timing: dict) -> None:
         ladder = self._ladder
         if ladder is not None:
             ls = ladder.last_stats
-            stats = {
+            stats: dict[str, Any] = {
                 "tier": ls.tier,
                 "pressure": ls.pressure,
                 "tokens_before": ls.tokens_before,
@@ -812,45 +1268,138 @@ class AgentLoop:
             self._debug_observer(  # type: ignore[misc]
                 {
                     "type": "debug_context",
-                    "session_key": session_key,
-                    "round": round_no,
-                    "messages": outbound,
+                    "session_key": active.session_key,
+                    "round": active.round,
+                    "messages": active.outbound,
                     "stats": stats,
                 }
             )
-        except Exception:  # noqa: BLE001 — a debug sink error must not abort a run
+        except Exception:  # noqa: BLE001
             pass
 
-    def _drain_context(self, session_id: int) -> None:
-        """Append whatever a tool asked to add to the conversation — today, a
-        skill body (§11). The row role records where it came from; the wire role
-        inside the content stays a normal turn, because a mid-conversation
-        system message would overwrite the frozen system prompt."""
-        for provider in self._context_providers:
-            for message in provider():
-                self._append(
-                    session_id, message.get("role_tag", "context"),
-                    {k: v for k, v in message.items() if k != "role_tag"},
-                )
+    def _trace_prepare(self, tracer: Any, outbound: list[dict], elapsed: float) -> None:
+        ladder = self._ladder
+        if ladder is not None:
+            stats = ladder.last_stats
+            tracer.emit(
+                "ladder_pass",
+                ms=round(elapsed * 1000, 3),
+                tier=stats.tier,
+                pressure=round(float(stats.pressure), 4),
+                tokens_before=stats.tokens_before,
+                tokens_after=stats.tokens_after,
+                dropped=max(0, int(stats.tokens_before) - int(stats.tokens_after)),
+            )
+        else:
+            tracer.emit("ladder_pass", ms=round(elapsed * 1000, 3), tier=0)
+        estimated = sum(estimate_message_tokens(m) for m in outbound)
+        tools = self._registry.openai_tools()
+        tracer.emit(
+            "payload_prepared",
+            messages=len(outbound),
+            prompt_tokens_est=estimated,
+            tool_schema_tokens=_tool_schema_tokens(tools),
+            tools=len(tools),
+        )
 
-    def _persist_assistant(self, session_id: int, response: ModelResponse) -> None:
-        content: dict = {"role": "assistant"}
-        if response.text is not None:
-            content["content"] = response.text
-        # The model's thinking for this turn, kept so a replay can show the
-        # thinking block again (``StateStore.replay_events``). It is a stored
-        # field only: ``_assistant_turn`` never sends it back to the model, and
-        # the context ladder ignores unknown keys.
-        reasoning = response.raw.get("reasoning") if response.raw else None
-        if isinstance(reasoning, str) and reasoning.strip():
-            content["reasoning"] = reasoning
-        if response.has_tool_calls:
-            content["tool_calls"] = [
-                {
-                    "id": c.id,
-                    "type": "function",
-                    "function": {"name": c.name, "arguments": c.arguments},
-                }
-                for c in response.tool_calls
-            ]
-        self._append(session_id, "assistant", content)
+
+# -- helpers -------------------------------------------------------------------
+
+
+def _calls(response: ModelResponse) -> list[ToolCallPart]:
+    return [p for p in response.parts if isinstance(p, ToolCallPart)]
+
+
+def _last_response(run: Any) -> ModelResponse:
+    for message in reversed(run.ctx.state.message_history):
+        if isinstance(message, ModelResponse):
+            return message
+    return ModelResponse(parts=[])  # pragma: no cover — a request node always adds one
+
+
+def _response_text(response: ModelResponse) -> str | None:
+    """The turn's answer, stripped (the old client's rule): ``None`` for no
+    text at all."""
+    text = "".join(p.content for p in response.parts if isinstance(p, TextPart)).strip()
+    return text or None
+
+
+def _count_retries(request_log: Any, timings: RunTimings) -> None:
+    """Requests beyond the first (SDK retries, a resend after a 401) are paid
+    for at the provider: they go on the run row."""
+    if request_log is None:
+        return
+    extra, wasted = request_log.retries()
+    if extra:
+        timings.retries += extra
+        timings.retry_ms += wasted
+
+
+async def _close_model(model: Any) -> None:
+    client = getattr(model, "client", None)
+    close = getattr(client, "close", None)
+    if callable(close):
+        try:
+            await close()
+        except Exception:  # noqa: BLE001 — closing must not fail a run
+            pass
+
+
+def _drop_broken_calls(response: ModelResponse) -> ModelResponse:
+    """The response without tool calls whose arguments are not valid JSON."""
+    parts = [p for p in response.parts if not (isinstance(p, ToolCallPart) and not _args_ok(p))]
+    if len(parts) == len(response.parts):
+        return response
+    return replace(response, parts=parts)
+
+
+def _args_ok(part: ToolCallPart) -> bool:
+    args = part.args
+    if args is None or isinstance(args, dict):
+        return True
+    try:
+        return isinstance(json.loads(args), dict) if args.strip() else True
+    except (ValueError, AttributeError):
+        return False
+
+
+def _response_tokens(response: ModelResponse) -> int:
+    details = (response.provider_details or {}).get(LEGACY_DETAILS_KEY) or {}
+    if details:
+        return total_tokens_from_usage(details.get("usage"))
+    usage = response.usage
+    return int(usage.input_tokens or 0) + int(usage.output_tokens or 0)
+
+
+def _no_output(response: ModelResponse) -> bool:
+    """Pydantic AI's own test for a reply with nothing to act on: no parts,
+    only empty text parts, or only thinking (plus empty text). Whitespace is
+    text to Pydantic AI, so it is text here too (and strips to no answer)."""
+    parts = response.parts
+    if not parts:
+        return True
+    return all(
+        isinstance(p, ThinkingPart) or (isinstance(p, TextPart) and not p.content)
+        for p in parts
+    )
+
+
+def _log_cut_off(reason: str | None) -> None:
+    import logging
+
+    logging.getLogger(__name__).warning(
+        "model turn ended with no answer: finish_reason=%s "
+        "(output limit or provider filter); the run finishes without a reply",
+        reason,
+    )
+
+
+def _finish_summary(calls: list[ToolCallPart], response: ModelResponse) -> str | None:
+    """The first ``finish`` call's summary, or the turn's text when the
+    summary is empty — the native rule."""
+    for call in calls:
+        if call.tool_name == FINISH_TOOL:
+            args = tool_call_args(call)
+            summary = str(args.get("summary", "")) if isinstance(args, dict) else ""
+            return summary or (_response_text(response) or "")
+    return None

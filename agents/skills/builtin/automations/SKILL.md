@@ -33,6 +33,8 @@ You only ever see your own automations. Another coworker's ids answer
 - `every 5m`, `every 2h`, `every 1d` — an interval. The minimum is 60 s;
   for anything faster write a watcher (below).
 - `at 2026-09-06T09:00` — once, local time.
+- `in 10m`, `in 2h`, `in 90` — once, that long from now. Use it for "in 10
+  minutes"; you do not need to know the clock.
 
 Write the `prompt` to your future self: it is the whole task. Say what to
 do, what to check, what to answer. The fired task starts with your normal
@@ -48,6 +50,24 @@ The fired task's first message reads:
 [automation ab12cd34 fired: morning mail]
 Read today's new e-mails and give the user a three-line summary.
 ```
+
+## Pattern: remind me by calling me
+
+"Remind me in 10 minutes about the pizza, call me" is a one-shot schedule
+whose fired task calls the user. Do not wait in the conversation and do not
+write a timer script:
+
+```text
+schedule_task(spec="in 10m", prompt="Reminder by call: use call_user(reason=\"Your pizza is ready to come out of the oven.\"). Then answer in one line.", name="pizza reminder")
+```
+
+When it fires, call `call_user(reason=...)` once. It rings the user's app
+like a phone call and returns at once with `ringing (call_id ...)`; it does
+not wait for the answer. If it says no app is connected, write the reminder
+in your answer too. Use `call_user` only when the user asked to be called
+or for something truly urgent, never for a routine update. A plain "remind
+me" (no call) is a normal schedule: the answer of the fired task is the
+reminder, and the user gets a notification for it.
 
 ## Watchers
 
