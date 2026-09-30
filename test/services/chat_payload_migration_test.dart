@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
+import 'dart:typed_data';
 
 import 'package:chuk_chat/models/chat_message.dart';
 import 'package:chuk_chat/services/chat_dirty_store.dart';
@@ -20,6 +21,8 @@ import 'package:cryptography/cryptography.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthChangeEvent, AuthState;
 
 import '../support/kv_cache_test_env.dart';
 
@@ -28,6 +31,11 @@ const String userId = 'user-1';
 String _id(int i) => '3f2b8c1e-4a5d-4e6f-9a7b-00000000000$i';
 
 String _updatedAt(int i) => '2026-09-0${i + 1}T10:00:00.12345$i+00:00';
+
+/// JSON that parses but is no chat payload this app can read: a message
+/// that is not an object (decoding it throws a TypeError, not a
+/// FormatException).
+const String _unreadableJson = '{"v":2,"messages":[42]}';
 
 String _v2Json(int i) {
   final calls = [
@@ -83,6 +91,9 @@ class _FakeCloud implements ChatMigrationCloud {
   /// Simulates another device saving a chat between read and write.
   String? changeBeforeWrite;
 
+  /// Chats whose read fails with the given error (a server error, say).
+  final Map<String, Object> failRead = {};
+
   @override
   Future<List<String>> listPlainEnvelopeChats(String userId) async {
     await listGate?.future;
@@ -97,7 +108,11 @@ class _FakeCloud implements ChatMigrationCloud {
   Future<({String encrypted, String updatedAt})?> readRow(
     String userId,
     String chatId,
-  ) async => rows[chatId];
+  ) async {
+    final error = failRead[chatId];
+    if (error != null) throw error;
+    return rows[chatId];
+  }
 
   @override
   Future<String?> writeRow(
@@ -158,12 +173,14 @@ void main() {
     ChatPayloadMigrationService.localUpgradeIds =
         LocalChatCacheService.idsNeedingPayloadUpgrade;
     ChatMaintenanceController.instance.reset();
+    ChatMaintenanceController.instance.forgetRestoredSession();
   });
 
   tearDown(() async {
     ChatPayloadMigrationService.cloud = const SupabaseChatMigrationCloud();
     ChatPayloadMigrationService.debugBeforeLocalVerify = null;
     ChatMaintenanceController.instance.reset();
+    ChatMaintenanceController.instance.forgetRestoredSession();
     await ChatStorageState.reset();
     await disposeTempKvCache(tempDir);
   });
@@ -191,12 +208,23 @@ void main() {
     ]);
   }
 
-  Future<void> seedCloud(int i) async {
+  Future<void> seedCloud(int i, {String? json}) async {
     cloud.rows[_id(i)] = (
-      encrypted: await _sealV1(_v2Json(i), cloud.key),
+      encrypted: await _sealV1(json ?? _v2Json(i), cloud.key),
       updatedAt: _updatedAt(i),
     );
   }
+
+  /// A cache row stored as [stored] (a blob or text), bypassing the codec.
+  Future<void> seedLocalStored(int i, Object stored) async {
+    await seedLocal(i);
+    final db = await rawDb();
+    await db.rawUpdate('UPDATE chat_cache SET payload = ? WHERE id = ?', [
+      stored,
+      _id(i),
+    ]);
+  }
+
 
   group('updated_at + 1 µs', () {
     test('adds one microsecond, in UTC, with six digits', () {
@@ -321,7 +349,8 @@ void main() {
     expect(cloud.writes, isEmpty);
   });
 
-  test('a chat changed during the run waits for the next start', () async {
+  test('a chat changed during the run is not overwritten, and is tried '
+      'again', () async {
     await seedCloud(0);
     await seedCloud(1);
     cloud.changeBeforeWrite = _id(1);
@@ -486,7 +515,8 @@ void main() {
       );
     });
 
-    test('a run that leaves known cloud chats blocks the next start', () async {
+    test('a run that leaves cloud chats never holds the next start; they are '
+        'retried behind the app', () async {
       await seedCloud(0);
       cloud.changeBeforeWrite = _id(0);
       final outcome = await ChatPayloadMigrationService.execute(
@@ -494,9 +524,191 @@ void main() {
       );
 
       expect(outcome, ChatMaintenanceOutcome.cloudPending);
+      expect(await ChatPayloadMigrationService.hasWaitedForCloud(userId), isTrue);
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        ChatStartupCheck.background,
+      );
+
+      cloud.changeBeforeWrite = null;
+      await ChatPayloadMigrationService.checkCloudInBackground(userId);
+      expect(
+        envelopeVersionOf(cloud.rows[_id(0)]!.encrypted),
+        kCompressedEnvelopeVersion,
+      );
+      expect(await ChatPayloadMigrationService.isDone(userId), isTrue);
+    });
+
+    test('a chat that always fails holds at most one start and is left as it '
+        'is after three tries', () async {
+      await seedCloud(0);
+      await seedCloud(1);
+      cloud.failRead[_id(1)] = Exception('500 Internal Server Error');
+
+      // Found behind the app: the next start waits for it, once.
+      await ChatPayloadMigrationService.checkCloudInBackground(userId);
       expect(
         await ChatPayloadMigrationService.startupCheck(userId),
         ChatStartupCheck.blocking,
+      );
+      final outcome = await ChatPayloadMigrationService.execute(
+        await ChatPayloadMigrationService.plan(userId),
+      );
+      expect(outcome, ChatMaintenanceOutcome.cloudPending);
+      expect(cloud.writes, [_id(0)]);
+
+      // Every later start opens at once; the chat is retried behind the app.
+      for (var start = 0; start < 2; start++) {
+        expect(
+          await ChatPayloadMigrationService.startupCheck(userId),
+          ChatStartupCheck.background,
+        );
+        await ChatPayloadMigrationService.checkCloudInBackground(userId);
+      }
+      expect(await ChatPayloadMigrationService.isLeftAsIs(userId, _id(1)), isTrue);
+
+      // Nothing left to try: the account is done.
+      await ChatPayloadMigrationService.checkCloudInBackground(userId);
+      expect(await ChatPayloadMigrationService.isDone(userId), isTrue);
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        ChatStartupCheck.done,
+      );
+    });
+
+    test('a chat that is no readable payload is left as it is at once', () async {
+      await seedCloud(0);
+      await seedCloud(1, json: _unreadableJson);
+
+      final outcome = await ChatPayloadMigrationService.execute(
+        await ChatPayloadMigrationService.plan(userId),
+      );
+
+      expect(outcome, ChatMaintenanceOutcome.complete);
+      expect(cloud.writes, [_id(0)]);
+      expect(await ChatPayloadMigrationService.isLeftAsIs(userId, _id(1)), isTrue);
+      expect(envelopeVersionOf(cloud.rows[_id(1)]!.encrypted), '1');
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        ChatStartupCheck.done,
+      );
+    });
+
+    test('the one wait is spent when the key is missing at that start',
+        () async {
+      await seedCloud(0);
+      await ChatPayloadMigrationService.checkCloudInBackground(userId);
+      expect(await ChatPayloadMigrationService.isCloudPending(userId), isTrue);
+
+      // The start that waits cannot load the key: it opens the app...
+      cloud.keyAvailable = false;
+      final controller = ChatMaintenanceController.instance;
+      controller.noteRestoredSession(userId);
+      await controller.ensureReady(userId);
+      expect(controller.phase, ChatMaintenancePhase.done);
+      expect(cloud.writes, isEmpty);
+
+      // ...and no later start waits again.
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        ChatStartupCheck.background,
+      );
+
+      // Behind the app, once the key is there, the chat is rewritten.
+      cloud.keyAvailable = true;
+      await ChatPayloadMigrationService.checkCloudInBackground(userId);
+      expect(cloud.writes, [_id(0)]);
+      expect(await ChatPayloadMigrationService.isDone(userId), isTrue);
+    });
+
+    test('a cache row that cannot be read or converted is left as it is',
+        () async {
+      await seedLocal(0);
+      await seedLocalStored(
+        1,
+        GZipCodec(level: 4).encode(utf8.encode(_unreadableJson)),
+      );
+      // A broken gzip blob: the stored payload does not decode at all.
+      await seedLocalStored(
+        2,
+        Uint8List.fromList(<int>[0x1f, 0x8b, 1, 2, 3, 4, 5, 6]),
+      );
+
+      final outcome = await ChatPayloadMigrationService.execute(
+        await ChatPayloadMigrationService.plan(userId),
+      );
+
+      expect(outcome, ChatMaintenanceOutcome.complete);
+      expect(
+        (await LocalChatCacheService.loadRawById(userId, _id(0)))!.framed,
+        isTrue,
+      );
+      expect(await ChatPayloadMigrationService.isLeftAsIs(userId, _id(1)), isTrue);
+      expect(await ChatPayloadMigrationService.isLeftAsIs(userId, _id(2)), isTrue);
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        ChatStartupCheck.done,
+      );
+    });
+
+    test('a row that does not verify is left as it is; the rest follows at '
+        'the next run', () async {
+      await seedLocal(0);
+      await seedLocal(1);
+      ChatPayloadMigrationService.debugBeforeLocalVerify = () async {
+        final db = await rawDb();
+        await db.rawUpdate('UPDATE chat_cache SET payload = ? WHERE id = ?', [
+          compressPayloadFast(toChatPayloadV3(_v2Json(7))),
+          _id(0),
+        ]);
+      };
+      await expectLater(
+        ChatPayloadMigrationService.execute(
+          await ChatPayloadMigrationService.plan(userId),
+        ),
+        throwsA(isA<ChatMaintenanceFailure>()),
+      );
+      expect(await ChatPayloadMigrationService.isLeftAsIs(userId, _id(0)), isTrue);
+
+      ChatPayloadMigrationService.debugBeforeLocalVerify = null;
+      final next = await ChatPayloadMigrationService.plan(userId);
+      expect(next.localIds, [_id(1)]);
+      expect(
+        await ChatPayloadMigrationService.execute(next),
+        ChatMaintenanceOutcome.complete,
+      );
+    });
+
+    test('after two failed local runs the cache rows no longer hold a start',
+        () async {
+      await seedLocal(0);
+      ChatPayloadMigrationService.debugBeforeLocalVerify = () async =>
+          throw StateError('disk I/O error');
+
+      for (var run = 0; run < ChatPayloadMigrationService.maxLocalFailures;
+          run++) {
+        expect(
+          await ChatPayloadMigrationService.startupCheck(userId),
+          ChatStartupCheck.blocking,
+        );
+        await expectLater(
+          ChatPayloadMigrationService.execute(
+            await ChatPayloadMigrationService.plan(userId),
+          ),
+          throwsA(
+            isA<ChatMaintenanceFailure>()
+                .having((f) => f.restored, 'restored', isTrue),
+          ),
+        );
+      }
+
+      // The row is back as it was, readable, and left as it is.
+      final raw = await LocalChatCacheService.loadRawById(userId, _id(0));
+      expect(raw!.framed, isFalse);
+      expect(raw.row['payload'], _v2Json(0));
+      expect(
+        await ChatPayloadMigrationService.startupCheck(userId),
+        isNot(ChatStartupCheck.blocking),
       );
     });
 
@@ -546,6 +758,73 @@ void main() {
     expect(hintWhileChecking, isTrue);
     expect(cloud.writes, [_id(0)]);
     expect(await ChatPayloadMigrationService.isDone(userId), isTrue);
+  });
+
+  test('a reset without a sign-out keeps a normal start normal', () async {
+    await seedCloud(0);
+    final controller = ChatMaintenanceController.instance;
+    final events = StreamController<AuthState>();
+    controller.watchSignOuts(events.stream);
+    controller.noteRestoredSession(userId);
+    // The Agents build set an expired session aside: gotrue replays
+    // `initialSession` without a session, and the session manager answers
+    // it with a reset. The recovered session is the same user.
+    events.add(const AuthState(AuthChangeEvent.initialSession, null));
+    await pumpEventQueue();
+    controller.reset();
+    var hint = false;
+    final phases = <ChatMaintenancePhase>[];
+    void listener() {
+      phases.add(controller.phase);
+      if (controller.showsSyncHint) hint = true;
+    }
+
+    controller.addListener(listener);
+    await controller.ensureReady(userId);
+    await ChatPayloadMigrationService.checkCloudInBackground(userId);
+
+    expect(hint, isFalse);
+    expect(phases, isNot(contains(ChatMaintenancePhase.running)));
+    expect(cloud.writes, isEmpty); // found behind the app, for the next start
+
+    // A real sign-out forgets it: the next sign-in is a sign-in.
+    events.add(const AuthState(AuthChangeEvent.signedOut, null));
+    await pumpEventQueue();
+    controller.reset();
+    phases.clear();
+    await controller.ensureReady(userId);
+
+    expect(hint, isTrue);
+    expect(phases, contains(ChatMaintenancePhase.running));
+    expect(cloud.writes, [_id(0)]);
+    controller.removeListener(listener);
+    await events.close();
+  });
+
+  test('a sign-in on a device that already waited once is a normal start',
+      () async {
+    await seedCloud(0);
+    // An earlier check that held the app here (offline at the time).
+    cloud.offline = true;
+    await ChatPayloadMigrationService.plan(userId);
+    cloud.offline = false;
+    final controller = ChatMaintenanceController.instance;
+    controller.noteRestoredSession(null);
+    var hint = false;
+    void listener() {
+      if (controller.showsSyncHint) hint = true;
+    }
+
+    controller.addListener(listener);
+    await controller.ensureReady(userId);
+
+    expect(hint, isFalse);
+    expect(controller.phase, ChatMaintenancePhase.done);
+    // The chat is rewritten behind the app instead.
+    await ChatPayloadMigrationService.checkCloudInBackground(userId);
+    expect(cloud.writes, [_id(0)]);
+    expect(await ChatPayloadMigrationService.isDone(userId), isTrue);
+    controller.removeListener(listener);
   });
 
   test('the controller holds the app until the run is over', () async {
