@@ -9,7 +9,7 @@
 ## test/services/agents/agent_roster_store_test.dart  (249 Z.)
 - L14 `void main()`
 
-## test/services/agents/agents_cloud_relay_test.dart  (615 Z.)
+## test/services/agents/agents_cloud_relay_test.dart  (754 Z.)
 - L25 `class _FakeRelayServer implements RelaySocket`  — A stand-in for `api.chuk.chat/v2/relay/ws`.
   - L26 `_FakeRelayServer({this.authOk = true, this.claimReply})`
   - L28 `final bool authOk`
@@ -26,33 +26,34 @@
   - L102 `void _deliver(Map<String, dynamic> frame)`
   - L107 `Future<void> close()`
 - L117 `class _HostSide`  — The §15 initiator, exactly as the host runs it, speaking the LOCAL relay
-  - L118 `_HostSide({ required this.server, required this.channelId, required this.digits, required this.signingKeyPair, required this.deviceId, })`
-  - L126 `final _FakeRelayServer server`
-  - L127 `final String channelId`
-  - L128 `final String digits`
-  - L129 `final SimpleKeyPair signingKeyPair`
-  - L130 `final String deviceId`
-  - L132 `late final AgentsPairing _initiator`
-  - L133 `AgentsFrameSealer? _sealer`
-  - L134 `AgentsFrameOpener? _opener`
-  - L135 `String? connection`
-  - L136 `List<int>? sessionTranscript`
-  - L137 `Uint8List? sessionKey`
-  - L138 `SimplePublicKey? controllerKey`
-  - L140 `Future<Uint8List> mac(List<int> key, String label)`
-  - L149 `final List<Map<String, dynamic>> opened = <Map<String, dynamic>>[]`  — Payloads the host opened out of the app's sealed frames.
-  - L150 `final Completer<void> paired = Completer<void>()`
-  - L152 `Future<void> start()`
-  - L163 `void _send(String step, Map<String, dynamic> data)`
-  - L167 `Future<void> _onEnvelope(Map<String, dynamic> env)`
-  - L257 `void _establishCodec()`
-  - L271 `Future<void> emit(Map<String, dynamic> payload)`
-- L281 `class _Session implements AccountSessionSource`
-  - L282 `_Session(this._session)`
-  - L283 `final AccountSession? _session`
-  - L286 `AccountSession? current()`
-  - L289 `Future<AccountSession?> refresh()`
-- L292 `void main()`
+  - L118 `_HostSide({ required this.server, required this.channelId, required this.digits, required this.signingKeyPair, required this.deviceId, this.answerResume = true, })`
+  - L129 `final bool answerResume`  — False plays a host that goes away right after the ceremony: it never
+  - L131 `final _FakeRelayServer server`
+  - L132 `final String channelId`
+  - L133 `final String digits`
+  - L134 `final SimpleKeyPair signingKeyPair`
+  - L135 `final String deviceId`
+  - L137 `late final AgentsPairing _initiator`
+  - L138 `AgentsFrameSealer? _sealer`
+  - L139 `AgentsFrameOpener? _opener`
+  - L140 `String? connection`
+  - L141 `List<int>? sessionTranscript`
+  - L142 `Uint8List? sessionKey`
+  - L143 `SimplePublicKey? controllerKey`
+  - L145 `Future<Uint8List> mac(List<int> key, String label)`
+  - L154 `final List<Map<String, dynamic>> opened = <Map<String, dynamic>>[]`  — Payloads the host opened out of the app's sealed frames.
+  - L155 `final Completer<void> paired = Completer<void>()`
+  - L157 `Future<void> start()`
+  - L168 `void _send(String step, Map<String, dynamic> data)`
+  - L172 `Future<void> _onEnvelope(Map<String, dynamic> env)`
+  - L263 `void _establishCodec()`
+  - L277 `Future<void> emit(Map<String, dynamic> payload)`
+- L287 `class _Session implements AccountSessionSource`
+  - L288 `_Session(this._session)`
+  - L289 `final AccountSession? _session`
+  - L292 `AccountSession? current()`
+  - L295 `Future<AccountSession?> refresh()`
+- L298 `void main()`
 
 ## test/services/agents/agents_crypto_vectors_test.dart  (185 Z.)
 - L23 `void main()`  — Cross-language byte-compatibility proof for the Agents frame crypto.
@@ -90,6 +91,78 @@
 - L119 `void main()`
 - L388 `Future<SimpleKeyPair> _keyPair()`
 - L390 `Future<AgentsStoredPairing> _pairing(Uint8List key, Uri hostUrl)`
+
+## test/services/agents/agents_install_claim_wait_test.dart  (552 Z.)
+- L24 `class _ClaimSocket implements RelaySocket`  — One relay socket. It signs the app in, then answers each claim with the
+  - L25 `_ClaimSocket(this.script, {this.authOk = true, this.commitOnBind = false})`
+  - L27 `final List<String> script`
+  - L28 `final bool authOk`
+  - L32 `final bool commitOnBind`  — Sends the host's commit right behind the claim answer, as the real host
+  - L34 `static const Map<String, dynamic> commit = <String, dynamic>{ 'type': 'pairing', 'step': 'commit', }`
+  - L40 `List<Map<String, dynamic>> get relayed`  — The local-relay envelopes the app sent to the host, unwrapped.
+  - L45 `int claims = 0`
+  - L46 `final List<Map<String, dynamic>> sent = <Map<String, dynamic>>[]`
+  - L47 `bool closed = false`
+  - L49 `static const String hostDeviceId = 'host-device-9'`
+  - L51 `final StreamController<dynamic> _toApp = StreamController<dynamic>.broadcast()`
+  - L55 `Stream<dynamic> get incoming`
+  - L58 `void send(String data)`
+  - L110 `void _deliver(Map<String, dynamic> frame)`
+  - L118 `Future<void> close()`
+- L124 `class _Session implements AccountSessionSource`
+  - L125 `const _Session([this._session = _signedIn])`
+  - L127 `static const AccountSession _signedIn = AccountSession( accessToken: 'jwt', refreshToken: 'r', userId: 'user-1', )`
+  - L133 `final AccountSession? _session`
+  - L136 `AccountSession? current()`
+  - L139 `Future<AccountSession?> refresh()`
+- L142 `void main()`
+
+## test/services/agents/agents_install_flow_test.dart  (252 Z.)
+- L14 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L15 `final Map<String, String> map = <String, String>{}`
+  - L18 `Future<String?> read(String key)`
+  - L21 `Future<void> write(String key, String value)`
+  - L24 `Future<void> delete(String key)`
+- L27 `class _Session implements AccountSessionSource`
+  - L28 `const _Session([this.userId = 'user-1'])`
+  - L30 `final String? userId`
+  - L33 `AccountSession? current()`
+  - L38 `Future<AccountSession?> refresh()`
+- L42 `class _Wait`  — One pending wait: the test decides when and how it ends.
+  - L43 `_Wait(this.invite, this.deadline, this.cancel)`
+  - L45 `final AgentsPairingInvite invite`
+  - L46 `final DateTime deadline`
+  - L47 `final AgentsClaimCancel cancel`
+  - L48 `final Completer<String?> result = Completer<String?>()`
+- L51 `void main()`
+
+## test/services/agents/agents_install_ticket_test.dart  (225 Z.)
+- L13 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L14 `final Map<String, String> map = <String, String>{}`
+  - L17 `Future<String?> read(String key)`
+  - L20 `Future<void> write(String key, String value)`
+  - L23 `Future<void> delete(String key)`
+- L26 `void main()`
+
+## test/services/agents/agents_invite_pairing_test.dart  (236 Z.)
+- L19 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L20 `final Map<String, String> map = <String, String>{}`
+  - L23 `Future<String?> read(String key)`
+  - L26 `Future<void> write(String key, String value)`
+  - L29 `Future<void> delete(String key)`
+- L33 `class _RecordingMirror extends SupabasePairingSync`  — The encrypted mirror, recording what it was asked to store.
+  - L34 `final List<AgentsStoredPairing> saved = <AgentsStoredPairing>[]`
+  - L37 `Future<void> saveEncryptedPairing(AgentsStoredPairing pairing)`
+  - L42 `Future<void> clearEncryptedPairing()`
+- L45 `class _Session implements AccountSessionSource`
+  - L46 `const _Session([this._session])`
+  - L48 `final AccountSession? _session`
+  - L51 `AccountSession? current()`
+  - L54 `Future<AccountSession?> refresh()`
+- L57 `void main()`
+
+## test/services/agents/agents_pairing_key_replace_test.dart  (173 Z.)
+- L16 `void main()`
 
 ## test/services/agents/agents_pairing_restore_test.dart  (425 Z.)
 - L12 `class _MemoryStore implements AgentsSecureKeyValueStore`

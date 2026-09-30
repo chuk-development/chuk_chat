@@ -121,7 +121,7 @@
   - L88 `final Future<void> Function(double) setUiScale`
   - L90 `const AppShellConfig({ required this.currentThemeMode, required this.currentAccentColor, required this.currentIconFgColor, required this.currentBgColor, required this.setThemeMode, required this.setAccentColor, required this.setIconFgColor, required this.setBgColor, required this.dynamicColorEnabled, required this.setDynamicColorEnabled, required this.contrast, required this.setContrast, required this.uiFontFamily, required this.setUiFontFamily, required this.showReasoningTokens, required this.setShowReasoningTokens, required this.showModelInfo, required this.setShowModelInfo, required this.showTps, required this.setShowTps, required this.autoSendVoiceTranscription, required this.setAutoSendVoiceTranscription, required this.imageGenEnabled, required this.setImageGenEnabled, required this.imageGenDefaultSize, required this.setImageGenDefaultSize, required this.imageGenCustomWidth, required this.setImageGenCustomWidth, required this.imageGenCustomHeight, required this.setImageGenCustomHeight, required this.imageGenUseCustomSize, required this.setImageGenUseCustomSize, required this.includeRecentImagesInHistory, required this.setIncludeRecentImagesInHistory, required this.includeAllImagesInHistory, required this.setIncludeAllImagesInHistory, required this.includeReasoningInHistory, required this.setIncludeReasoningInHistory, required this.includeToolResultsInHistory, required this.setIncludeToolResultsInHistory, required this.toolCallingEnabled, required this.setToolCallingEnabled, required this.toolDiscoveryMode, required this.setToolDiscoveryMode, required this.showToolCalls, required this.setShowToolCalls, required this.uiLocale, required this.setUiLocale, required this.chatFontSize, required this.setChatFontSize, required this.chatFontFamily, required this.setChatFontFamily, required this.uiScale, required this.setUiScale, })`
 
-## lib/models/artifact.dart  (219 Z.)
+## lib/models/artifact.dart  (202 Z.)
 - L3 `enum ArtifactType`
   - L4 `code`
   - L5 `markdown`
@@ -137,35 +137,35 @@
   - L41 `String get displayLabel`
   - L52 `String get defaultExtension`
 - L64 `class ArtifactDocument`
-  - L65 `const ArtifactDocument({ required this.id, required this.chatId, required this.userId, required this.title, required this.type, required this.content, required this.version, required this.createdAt, required this.updatedAt, this.messageId, this.language, this.attachmentPath, })`
-  - L80 `final String id`
-  - L81 `final String chatId`
-  - L82 `final String userId`
-  - L83 `final String? messageId`
-  - L84 `final String title`
-  - L85 `final ArtifactType type`
-  - L86 `final String? language`
-  - L87 `final String content`
-  - L88 `final int version`
-  - L89 `final DateTime createdAt`
-  - L90 `final DateTime updatedAt`
-  - L95 `final String? attachmentPath`  — Supabase Storage path of an encrypted binary attachment (e.g. the
-  - L97 `ArtifactDocument copyWith({ String? id, String? chatId, String? userId, String? messageId, String? title, ArtifactType? type, String? language, String? content, int? version, DateTime? createdAt, DateTime? updatedAt, String? attachmentPath, })`
-  - L127 `Map<String, dynamic> toMap({String? encryptedContent})`
-  - L144 `static ArtifactDocument fromMap( Map<String, dynamic> map, { required String decryptedContent, })`
-- L172 `class ArtifactVersionSnapshot`
-  - L173 `const ArtifactVersionSnapshot({ required this.artifactId, required this.version, required this.content, required this.createdAt, this.attachmentPath, })`
-  - L181 `final String artifactId`
-  - L182 `final int version`
-  - L183 `final String content`
-  - L184 `final DateTime createdAt`
-  - L185 `final String? attachmentPath`
-  - L187 `static ArtifactVersionSnapshot fromMap( Map<String, dynamic> map, { required String decryptedContent, })`
-- L206 `class ArtifactEdit`
-  - L207 `const ArtifactEdit({required this.oldStr, required this.newStr})`
-  - L209 `final String oldStr`
-  - L210 `final String newStr`
-  - L212 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
+  - L65 `const ArtifactDocument({ required this.id, required this.chatId, required this.userId, required this.title, required this.type, required this.content, required this.version, required this.createdAt, required this.updatedAt, this.messageId, this.language, this.attachmentPath, this.updatedAtStamp, String? rowId, }) : rowId = rowId ?? id`
+  - L85 `final String id`  — The handle: the slug the AI chose (`todo-app`). Everything outside
+  - L92 `final String rowId`  — Primary key of the `artifacts` row. A random UUID for a sealed row;
+  - L93 `final String chatId`
+  - L94 `final String userId`
+  - L95 `final String? messageId`
+  - L96 `final String title`
+  - L97 `final ArtifactType type`
+  - L98 `final String? language`
+  - L99 `final String content`
+  - L100 `final int version`
+  - L101 `final DateTime createdAt`
+  - L102 `final DateTime updatedAt`
+  - L107 `final String? attachmentPath`  — Supabase Storage path of an encrypted binary attachment (e.g. the
+  - L113 `final String? updatedAtStamp`  — The row's `updated_at` exactly as the server returned it with the data
+  - L115 `ArtifactDocument copyWith({ String? id, String? rowId, String? chatId, String? userId, String? messageId, String? title, ArtifactType? type, String? language, String? content, int? version, DateTime? createdAt, DateTime? updatedAt, String? attachmentPath, String? updatedAtStamp, })`
+- L150 `class ArtifactVersionSnapshot`
+  - L151 `const ArtifactVersionSnapshot({ required this.artifactId, required this.version, required this.content, required this.createdAt, this.attachmentPath, })`
+  - L161 `final String artifactId`  — The handle of the artifact (see [ArtifactDocument.id]), not the row id
+  - L162 `final int version`
+  - L163 `final String content`
+  - L164 `final DateTime createdAt`
+  - L165 `final String? attachmentPath`
+  - L169 `static ArtifactVersionSnapshot fromMap( Map<String, dynamic> map, { required String decryptedContent, String? artifactId, })`  — [artifactId] is the handle the caller resolved for the row; without it
+- L189 `class ArtifactEdit`
+  - L190 `const ArtifactEdit({required this.oldStr, required this.newStr})`
+  - L192 `final String oldStr`
+  - L193 `final String newStr`
+  - L195 `static ArtifactEdit fromMap(Map<String, dynamic> map)`
 
 ## lib/models/chat_message.dart  (277 Z.)
 - L12 `enum ChatMessageStatus`  — Delivery status of a chat message in the local queue/UI.

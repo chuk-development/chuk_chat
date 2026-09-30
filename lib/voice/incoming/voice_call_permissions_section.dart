@@ -1,8 +1,8 @@
 // lib/voice/incoming/voice_call_permissions_section.dart
 //
-// The "Voice calls" section of the settings page: what a call needs from
-// Android, whether it is in place, and a tap that asks for it. Built only
-// when [voiceIncomingEnabled]; the settings page adds it with one line.
+// The body of the "Voice calls" settings page (voice_call_settings_page.dart):
+// what a call needs from Android, whether it is in place, and a tap that asks
+// for it. Built only when [voiceIncomingEnabled].
 
 import 'dart:async';
 
@@ -36,23 +36,23 @@ class _GrantCopy {
 
 const Map<VoiceCallGrant, _GrantCopy> _copy = <VoiceCallGrant, _GrantCopy>{
   VoiceCallGrant.microphone: _GrantCopy(
-    Icons.mic_none_rounded,
+    Icons.mic_rounded,
     'Microphone',
     'Needed before the first call, or the agent cannot hear you once the '
         'app is in the background.',
   ),
   VoiceCallGrant.notifications: _GrantCopy(
-    Icons.notifications_active_outlined,
+    Icons.notifications_outlined,
     'Notifications',
     'The ring and the call controls in the notification shade.',
   ),
   VoiceCallGrant.fullScreenIntent: _GrantCopy(
-    Icons.phone_in_talk_outlined,
+    Icons.call_rounded,
     'Ring over the lock screen',
     'A call from your agent fills the screen, like a phone call.',
   ),
   VoiceCallGrant.background: _GrantCopy(
-    Icons.battery_saver_outlined,
+    Icons.bolt_outlined,
     'Run in the background',
     'Keeps the link to your computer open while the phone sleeps, so a '
         'call gets through.',
@@ -106,7 +106,7 @@ class _VoiceCallPermissionsSectionState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const ExpressiveSectionHeader('Voice calls'),
+        const ExpressiveSectionHeader('What a call needs'),
         ExpressiveGroup(
           children: <Widget>[
             for (final VoiceCallGrant grant in VoiceCallGrant.values)
@@ -127,16 +127,12 @@ class _VoiceCallPermissionsSectionState
       key: ValueKey<String>('voice-call-grant-${grant.name}'),
       icon: copy.icon,
       title: copy.title,
-      subtitle: granted ? 'Allowed. ${copy.buys}' : copy.buys,
+      subtitle: granted ? 'Allowed. ${copy.buys}' : 'Not allowed. ${copy.buys}',
+      // The row style of every settings entry that leads somewhere: a
+      // chevron while there is something to allow, a check once it is done.
       trailing: granted
           ? AppIcon(Icons.check_circle_rounded, color: scheme.primary)
-          : Text(
-              'Allow',
-              style: TextStyle(
-                color: scheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          : AppIcon(Icons.chevron_right, color: scheme.onSurfaceVariant),
       onTap: granted ? null : () => unawaited(_ask(grant)),
     );
   }

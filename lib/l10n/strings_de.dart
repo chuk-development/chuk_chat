@@ -778,8 +778,6 @@ const Map<String, String> stringsDe = {
   'maintenanceFailedTitle': 'Die Aktualisierung wurde nicht abgeschlossen',
   'maintenanceFailedBody': 'Deine Chats sind unverändert und sicher. Du kannst es erneut versuchen oder fortfahren und die App wie bisher nutzen.',
   'maintenanceContinue': 'Fortfahren',
-  'maintenanceSyncing': 'Chats werden synchronisiert...',
-  'maintenanceSyncingHint': 'Das kann einen Moment dauern.',
   // ── Agent mail (docs/AGENT_MAIL.md §6) ─────────────────────
   'agentMail': 'Postfach',
   'agentMailSubtitle': 'Die eigene E-Mail-Adresse des Agenten',

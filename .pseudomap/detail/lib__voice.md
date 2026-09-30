@@ -1,0 +1,303 @@
+# lib/voice · Signaturen
+
+## lib/voice/voice_call.dart  (25 Z.)
+- reicht weiter: 'voice_call_controller.dart' show VoiceCallController · 'voice_call_models.dart' · 'voice_call_service.dart' show VoiceCallService, VoiceCallException · 'voice_call_store.dart' show VoiceCallStore · 'widgets/voice_call_button.dart' show VoiceCallButton · 'widgets/voice_call_panel.dart' show VoiceCallPanel, VoiceTurnLine, formatVoiceCallClock · 'widgets/voice_agent_card.dart' show VoiceAgentCard · 'widgets/voice_call_record_card.dart' show VoiceCallRecordCard, describeVoiceCall, voiceCallTimeline
+
+## lib/voice/voice_call_controller.dart  (944 Z.)
+- L29 `class VoiceCallController extends ChangeNotifier`
+  - L30 `VoiceCallController._({ VoiceLocationResolver? location, Future<bool> Function(VoiceTaskResult result)? sendResult, List<Duration>? resultBackoff, }) : _location = location ?? VoiceLocationResolver(), _sendResultOverride = sendResult, _resultBackoff = resultBackoff ?? kVoiceResultBackoff`
+  - L41 `factory VoiceCallController.forTesting({ VoiceLocationResolver? location, Future<bool> Function(VoiceTaskResult result)? sendResult, List<Duration>? resultBackoff, })`  — A controller outside the app-wide one, for tests. [sendResult] stands
+  - L51 `static final VoiceCallController _instance = VoiceCallController._()`
+  - L54 `static VoiceCallController get instance`  — One call at a time, app-wide.
+  - L58 `static const Duration _agentJoinTimeout = Duration(seconds: 25)`  — How long the worker may take to join (and the preconnect buffer may
+  - L62 `static const Duration _agentLeftGrace = Duration(seconds: 3)`  — A worker that leaves is given this long to come back before the call
+  - L66 `static const Duration maxCallDuration = Duration(minutes: 60)`  — The longest call the app holds. At the limit it hangs up (a call left
+  - L70 `static const String _agentStateAttribute = 'lk.agent.state'`  — livekit-agents publishes its state here (`listening`, `thinking`,
+  - L72 `VoiceCallPhase _phase = VoiceCallPhase.idle`
+  - L73 `bool _micMuted = false`
+  - L74 `bool _agentSpeaking = false`
+  - L75 `bool _agentThinking = false`
+  - L76 `bool _agentPresent = false`
+  - L77 `bool? _speakerOn`
+  - L78 `String? _chatId`
+  - L79 `String? _callId`
+  - L80 `VoiceCallMode? _mode`
+  - L81 `String? _agentName`
+  - L82 `String? _error`
+  - L83 `DateTime? _startedAt`
+  - L84 `final VoiceTranscript _transcript = VoiceTranscript()`
+  - L85 `List<VoiceTurn> _turns = const <VoiceTurn>[]`
+  - L86 `final List<VoiceCard> _cardList = <VoiceCard>[]`
+  - L87 `List<VoiceCard> _cards = const <VoiceCard>[]`
+  - L88 `final Map<String, VoiceToolActivity> _tools = <String, VoiceToolActivity>{}`
+  - L89 `List<VoiceToolActivity> _runningTools = const <VoiceToolActivity>[]`
+  - L92 `static const int _maxCards = 60`  — Cards held per call; the oldest fall off (the prototype's cap).
+  - L94 `lk.Room? _room`
+  - L95 `lk.EventsListener<lk.RoomEvent>? _roomListener`
+  - L96 `String? _agentIdentity`
+  - L97 `final VoiceTaskLedger _tasks = VoiceTaskLedger()`
+  - L98 `final VoiceLocationResolver _location`
+  - L99 `final Future<bool> Function(VoiceTaskResult result)? _sendResultOverride`
+  - L100 `final List<Duration> _resultBackoff`
+  - L101 `StreamSubscription<VoiceTaskResult>? _resultSub`
+  - L102 `Timer? _agentJoinTimer`
+  - L103 `Timer? _agentLeftTimer`
+  - L104 `Timer? _callLimitTimer`
+  - L105 `Future<VoiceCallRecord?>? _finishing`
+  - L109 `int _generation = 0`  — Bumped whenever a call starts or ends. Every async continuation and
+  - L111 `final StreamController<VoiceCallRecord> _ended = StreamController<VoiceCallRecord>.broadcast()`
+  - L113 `final StreamController<VoiceCallPhase> _phases = StreamController<VoiceCallPhase>.broadcast()`
+  - L115 `VoiceCallPhase _lastEmittedPhase = VoiceCallPhase.idle`
+  - L119 `VoiceCallPhase get phase`
+  - L120 `bool get micMuted`
+  - L121 `bool get agentSpeaking`
+  - L122 `String? get chatId`
+  - L123 `VoiceCallMode? get mode`
+  - L127 `List<VoiceTurn> get turns`  — Live transcript of the current (or last) call; partials are replaced
+  - L131 `List<VoiceCard> get cards`  — What the agent showed on screen in this call (`ui.card`), oldest first.
+  - L135 `List<VoiceToolActivity> get runningTools`  — Worker tools running right now (`ui.tool`), oldest first. The panel
+  - L139 `String? get error`  — Why the last call failed, safe to show. Null unless [phase] is
+  - L142 `bool get isActive`  — True while a call holds the room: connecting, live or hanging up.
+  - L148 `bool get agentPresent`  — True once the voice worker is in the room.
+  - L151 `bool get agentThinking`  — The worker is working out its answer (`lk.agent.state` = thinking).
+  - L154 `String? get callId`  — The id of an agent-started call (spec §6.3), as passed to [start].
+  - L158 `bool get canSwitchSpeaker`  — Whether the output can be switched between speaker and earpiece
+  - L162 `bool get speakerOn`  — True when the speaker is the preferred output (LiveKit's default).
+  - L168 `Stream<VoiceCallPhase> get phaseChanges`  — Every phase change, in order. For a layer that mirrors the call
+  - L171 `String? get agentName`  — The name passed to [start], for the panel's transcript labels.
+  - L173 `DateTime? get startedAt`
+  - L179 `Stream<VoiceCallRecord> get onCallEnded`  — Fires once for every call that ends with a final turn or a card —
+  - L189 `Future<void> start({ required String chatId, required VoiceCallMode mode, String? chatTitle, String? agentName, String context = '', VoiceTaskDelegate? delegate, String? sttLanguage, String? callId, String? callReason, bool initiatedByAgent = false, })`  — Starts a call for [chatId]. A call that is still running (in any chat)
+  - L314 `Future<void> _connect( lk.Room room, VoiceCredentials credentials, int gen, )`  — Joins with the preconnect buffer when the platform supports it: the
+  - L347 `Future<void> _ensureMicPermission()`
+  - L359 `void _attach(lk.Room room, int gen)`
+  - L393 `void _onData(int gen, lk.DataReceivedEvent event)`  — `ui.card` and `ui.tool` from the worker (its UI channel).
+  - L423 `void _onTranscriptionStream( lk.Room room, int gen, lk.TextStreamReader reader, String identity, )`
+  - L484 `void _publishTurns()`
+  - L489 `void _refreshAgent(int gen)`
+  - L517 `void _onParticipantLeft(int gen)`
+  - L532 `void _armAgentJoinTimer(int gen)`
+  - L543 `void _onDisconnected(int gen, lk.DisconnectReason? reason)`
+  - L557 `static String? _failureFor(lk.DisconnectReason? reason)`
+  - L574 `Future<String> _onOpenLink(lk.RpcInvocationData data)`
+  - L592 `Future<String> _handleDelegateRpc(String payload)`  — `chuk.delegate`: start the task through the current delegate and track
+  - L603 `void _listenForResults(VoiceTaskDelegate? delegate, int gen)`
+  - L618 `void detachDelegate(VoiceTaskDelegate delegate)`  — The chat that owns [delegate] is going away (its screen was disposed).
+  - L643 `Future<bool> _deliverResult(VoiceTaskResult result, int gen)`  — Sends a `chuk.task_result`, retrying after 1 s, 3 s and 6 s while the
+  - L655 `Future<bool> _sendResultOnce(VoiceTaskResult result)`
+  - L689 `void _armCallLimit(int gen, Duration limit)`
+  - L702 `Future<void> setMicMuted(bool muted)`  — Mutes or unmutes the microphone. Before the room is up the choice is
+  - L729 `Future<void> setSpeakerOn(bool on)`  — Prefers the speaker ([on] true) or the earpiece. A headset always wins.
+  - L745 `Future<VoiceCallRecord?> end()`  — Hangs up. Returns the call's record, or null when nothing was said
+  - L754 `void dismiss()`  — Clears a finished or failed call back to [VoiceCallPhase.idle] (the
+  - L760 `void _setPhase(VoiceCallPhase next)`
+  - L771 `Future<VoiceCallRecord?> _finish(VoiceCallPhase target, {String? error})`
+  - L790 `Future<VoiceCallRecord?> _teardown( VoiceCallPhase target, String? error, )`
+  - L872 `static Future<void> _quietly(Future<void> Function() op)`
+  - L880 `static String _describe(Object e)`
+  - L893 `void debugSetState({ required VoiceCallPhase phase, String? chatId, VoiceCallMode? mode, List<VoiceTurn> turns = const <VoiceTurn>[], List<VoiceCard> cards = const <VoiceCard>[], List<VoiceToolActivity> runningTools = const <VoiceToolActivity>[], bool micMuted = false, bool agentSpeaking = false, bool agentThinking = false, bool agentPresent = true, String? agentName, String? error, DateTime? startedAt, VoiceTaskDelegate? delegate, })`  — Puts the controller into a given state without a room, so widget tests
+  - L929 `Future<String> debugHandleDelegateRpc(String payload)`  — Runs the `chuk.delegate` handler the room registers.
+  - L934 `Future<String> debugHandleLocationRpc()`  — Runs the `get_location` handler the room registers.
+  - L938 `void debugArmCallLimit(Duration limit)`  — Arms the call limit with [limit] instead of [maxCallDuration].
+  - L942 `Set<String> get debugPendingTasks`  — The task ids started through the current delegate with no result yet.
+
+## lib/voice/voice_call_models.dart  (313 Z.)
+- L14 `enum VoiceCallMode`  — Which kind of chat the call belongs to. The worker reads it from the
+  - L14 `chat`
+  - L14 `agents`
+- L17 `enum VoiceCallPhase`  — Where the one app-wide call is in its life.
+  - L17 `idle`
+  - L17 `connecting`
+  - L17 `live`
+  - L17 `ending`
+  - L17 `ended`
+  - L17 `failed`
+- L24 `class VoiceTurn`  — One spoken turn of the live transcript.
+  - L25 `const VoiceTurn({ required this.role, required this.text, required this.at, required this.isFinal, })`
+  - L32 `factory VoiceTurn.fromJson(Map<String, dynamic> json)`
+  - L39 `static const String roleUser = 'user'`
+  - L40 `static const String roleAssistant = 'assistant'`
+  - L43 `final String role`  — `'user'` or `'assistant'`.
+  - L44 `final String text`
+  - L47 `final DateTime at`  — When the segment started.
+  - L48 `final bool isFinal`
+  - L50 `bool get isUser`
+  - L52 `VoiceTurn copyWith({String? text, bool? isFinal})`
+  - L59 `Map<String, dynamic> toJson()`
+  - L67 `bool operator ==(Object other)`
+  - L75 `int get hashCode`
+- L81 `class VoiceCallRecord`  — What a finished call leaves behind in its chat: when it ran and what was
+  - L82 `VoiceCallRecord({ required this.chatId, required this.mode, required this.startedAt, required this.endedAt, required List<VoiceTurn> turns, List<VoiceCard> cards = const <VoiceCard>[], }) : turns = List<VoiceTurn>.unmodifiable(turns), cards = List<VoiceCard>.unmodifiable(cards)`
+  - L92 `factory VoiceCallRecord.fromJson(Map<String, dynamic> json)`
+  - L115 `final String chatId`
+  - L116 `final VoiceCallMode mode`
+  - L117 `final DateTime startedAt`
+  - L118 `final DateTime endedAt`
+  - L119 `final List<VoiceTurn> turns`
+  - L123 `final List<VoiceCard> cards`  — What the agent showed on screen during the call (`ui.card`), oldest
+  - L125 `Duration get duration`
+  - L132 `int get finalTurnCount`  — The number of turns that finished (partials cut off by the hang-up are
+  - L134 `Map<String, dynamic> toJson()`
+- L151 `class VoiceCard`  — A rich payload the agent pushed to the screen during a call (`ui.card`
+  - L152 `VoiceCard({ required this.id, required this.kind, required this.title, required this.at, this.subtitle, this.source, Map<String, dynamic> data = const <String, dynamic>{}, }) : data = Map<String, dynamic>.unmodifiable(data)`
+  - L162 `factory VoiceCard.fromJson(Map<String, dynamic> json)`
+  - L175 `static const int supportedVersion = 1`  — The only `ui.card` protocol version this build reads.
+  - L178 `final String id`  — Server id, stable across re-sends of the same card.
+  - L183 `final String kind`  — Which renderer: `weather`, `search`, `news`, `article`, `stock`, `map`,
+  - L184 `final String title`
+  - L185 `final String? subtitle`
+  - L188 `final String? source`  — Attribution, e.g. "Open-Meteo".
+  - L191 `final Map<String, dynamic> data`  — Kind-specific payload. Renderers read what they know and skip the rest.
+  - L194 `final DateTime at`  — When the card arrived.
+  - L196 `double? number(String key)`
+  - L201 `String? text(String key)`
+  - L208 `List<Map<String, dynamic>> list(String key)`
+  - L217 `Map<String, dynamic> toJson()`
+- L229 `class VoiceToolActivity`  — The live state of one tool call on the worker (`ui.tool` data topic).
+  - L230 `const VoiceToolActivity({ required this.callId, required this.name, required this.status, required this.at, })`
+  - L237 `final String callId`
+  - L238 `final String name`
+  - L241 `final String status`  — `running`, `done`, `error` or `cancelled`.
+  - L242 `final DateTime at`
+  - L244 `bool get isRunning`
+  - L247 `VoiceToolActivity mergedWith(VoiceToolActivity update)`  — A follow-up update carries no name; keep the one the start gave.
+  - L255 `String get label`  — The status line while it runs, e.g. `search_web` -> "Searching the web".
+- L275 `String? _string(Object? raw)`
+- L278 `class VoiceTaskResult`  — A result for a task the worker started through the delegate.
+  - L279 `const VoiceTaskResult({ required this.taskId, required this.status, required this.result, })`
+  - L285 `static const String statusDone = 'done'`
+  - L286 `static const String statusFailed = 'failed'`
+  - L288 `final String taskId`
+  - L291 `final String status`  — `'done'` or `'failed'`.
+  - L292 `final String result`
+- L298 `abstract class VoiceTaskDelegate`  — Hands work from the voice worker to the chat model (normal chat) or the
+  - L300 `Future<String> startTask(String task)`  — Start a task; return an id at once. Do not wait for the result.
+  - L303 `Stream<VoiceTaskResult> get results`  — Results for started tasks: (taskId, status 'done'|'failed', resultText).
+- L306 `DateTime _parseTime(Object? raw)`
+
+## lib/voice/voice_call_service.dart  (152 Z.)
+- L20 `abstract final class VoiceCallService`
+  - L24 `static const String tokenUrl = String.fromEnvironment('VOICE_TOKEN_URL')`  — The token server, from the gitignored `.env`
+  - L29 `static bool get isAvailable`  — True when the call button may be shown: the build flag is on, a token
+  - L32 `static const Duration _tokenTimeout = Duration(seconds: 12)`
+  - L33 `static const String _installIdKey = 'voice_call_install_id'`
+  - L34 `static String? _sessionInstallId`
+  - L38 `static Future<String> callerId()`  — The id the worker keys the caller on: the Supabase user id, or a stable
+  - L44 `static Future<String> _installId()`
+  - L61 `static Uri tokenUri(String url, {bool allowHttp = kDebugMode})`  — The token server address, checked: https, or plain http in a debug
+  - L78 `static Map<String, String> tokenHeaders( Uri uri, { String? accessToken, String? apiBaseUrl, })`  — The headers of a token request to [uri]. The Supabase access token goes
+  - L99 `static Future<VoiceCredentials> fetchCredentials( Map<String, dynamic> body, { http.Client? client, })`  — POSTs [body] to the token server and returns where to join.
+  - L133 `static String? _accessToken()`
+- L144 `class VoiceCallException implements Exception`  — A call failure with a message that is safe to show and to log: it never
+  - L145 `const VoiceCallException(this.message)`
+  - L147 `final String message`
+  - L150 `String toString()`
+
+## lib/voice/voice_call_store.dart  (97 Z.)
+- L19 `abstract final class VoiceCallStore`
+  - L20 `static const String _keyPrefix = 'voice_calls:'`
+  - L23 `static const int maxRecordsPerChat = 200`  — The newest records kept per chat; older ones fall off.
+  - L26 `static Future<void> _tail = Future<void>.value()`  — Serialises read-modify-write so two saves never drop each other.
+  - L28 `static String _key(String chatId)`
+  - L32 `static Future<void> save(VoiceCallRecord r)`  — Appends [r] to its chat. A record with the same start time replaces the
+  - L57 `static Future<List<VoiceCallRecord>> forChat(String chatId)`  — Every stored record of [chatId], oldest first.
+  - L64 `static Future<void> deleteForChat(String chatId)`  — Drops every record of [chatId] (call it when the chat is deleted).
+  - L69 `static Future<List<VoiceCallRecord>> _read(String chatId)`
+  - L91 `static Future<T> _serial<T>(Future<T> Function() op)`
+
+## lib/voice/voice_location.dart  (105 Z.)
+- L18 `enum VoiceLocationPermission`  — What the OS says about location access, before asking.
+  - L19 `granted`
+  - L22 `denied`
+  - L25 `deniedForever`
+  - L28 `unavailable`
+- L31 `class VoiceLocationResolver`
+  - L32 `VoiceLocationResolver({ Future<VoiceLocationPermission> Function()? checkPermission, Future<Map<String, dynamic>> Function()? fetch, }) : _check = checkPermission ?? platform.checkLocationPermission, _fetch = fetch ?? platform.fetchCurrentLocation`
+  - L38 `final Future<VoiceLocationPermission> Function() _check`
+  - L42 `final Future<Map<String, dynamic>> Function() _fetch`  — Returns the DeviceServices map: `{success, latitude, longitude,
+  - L44 `bool _askedThisCall = false`
+  - L46 `static String permissionDenied()`
+  - L50 `void resetForNewCall()`  — Forget that this call already asked; call when a new call starts.
+  - L53 `Future<String> answer()`  — The RPC answer: `{"lat", "lon", "accuracy_m"}` or `{"error": ...}`.
+  - L102 `static String _error(String message)`
+
+## lib/voice/voice_location_platform_io.dart  (31 Z.)
+- L14 `Future<VoiceLocationPermission> checkLocationPermission()`
+- L29 `Future<Map<String, dynamic>> fetchCurrentLocation()`
+
+## lib/voice/voice_location_platform_stub.dart  (14 Z.)
+- L7 `Future<VoiceLocationPermission> checkLocationPermission()`
+- L10 `Future<Map<String, dynamic>> fetchCurrentLocation()`
+
+## lib/voice/voice_protocol.dart  (304 Z.)
+- L14 `abstract final class VoiceProtocol`
+  - L16 `static const String agentName = 'chuk-voice'`  — The worker's LiveKit agent name (explicit dispatch).
+  - L18 `static const String roomPrefix = 'chuk-voice-'`
+  - L19 `static const String identityPrefix = 'chuk-'`
+  - L22 `static const String delegateMethod = 'chuk.delegate'`  — Worker -> app: start a task through the delegate.
+  - L25 `static const String taskResultMethod = 'chuk.task_result'`  — App -> worker: a delegated task finished.
+  - L29 `static const String openLinkMethod = 'open_link'`  — Worker -> app device tools (names from the prototype's
+  - L30 `static const String getLocationMethod = 'get_location'`
+  - L31 `static const String getDeviceStatusMethod = 'get_device_status'`
+  - L33 `static const List<String> appMethods = <String>[ delegateMethod, openLinkMethod, getLocationMethod, getDeviceStatusMethod, ]`
+  - L43 `static const Duration delegateAnswerTimeout = Duration(seconds: 9)`  — The worker waits 10 s for the delegate answer; answer a little before
+  - L47 `static const String chatClosed = 'the chat was closed'`  — The failed result (and delegate error) when the chat that owned the
+  - L49 `static const int maxContextChars = 4000`
+  - L50 `static const int maxResultChars = 6000`
+  - L55 `static const int maxRpcPayloadBytes = 15000`  — LiveKit caps an RPC payload at 15 KiB. A result that fits in
+  - L63 `static Map<String, dynamic> dispatchMetadata({ required String userId, required VoiceCallMode mode, String? chatTitle, String? agentName, String context = '', String? sttLanguage, required bool delegateAvailable, bool initiatedByAgent = false, String? callId, String? callReason, })`  — The metadata JSON the worker reads from its job (`ctx.job.metadata`).
+  - L91 `static String? resolveSttLanguage(String? requested, String? deviceLanguage)`  — The STT language for the worker: the one the caller asked for, else the
+  - L101 `static Map<String, dynamic> tokenRequest({ required String roomName, required String participantIdentity, required String participantName, required Map<String, dynamic> metadata, })`  — The POST body for the token server (see new-voicemode's
+  - L122 `static VoiceCredentials parseTokenResponse(String body)`  — Reads `{server_url, participant_token}` from the token server's answer.
+  - L150 `static Future<String> handleDelegate( String payload, VoiceTaskDelegate? delegate, { Duration timeout = delegateAnswerTimeout, bool Function(String taskId)? onStarted, })`  — Answers a `chuk.delegate` call: `{"task": str}` ->
+  - L180 `static String taskResultPayload(VoiceTaskResult result)`  — The `chuk.task_result` payload: `{"task_id", "status", "result"}`, the
+  - L202 `static Uri? openLinkTarget(String payload)`  — `open_link` wants `{"url": str}`. Only web links are opened: the agent
+  - L211 `static String openLinkAnswer({required bool ok, String? error})`
+  - L215 `static String notAvailable()`  — The answer for device tools this app does not offer in a call.
+  - L218 `static const String cardTopic = 'ui.card'`  — Worker -> app data topics (new-voicemode `server/ui_bridge.py`).
+  - L219 `static const String toolTopic = 'ui.tool'`
+  - L223 `static VoiceCard? parseCard(List<int> bytes, {DateTime? at})`  — Parses a `ui.card` packet. Null for anything malformed or from a
+  - L238 `static VoiceToolActivity? parseToolActivity(List<int> bytes, {DateTime? at})`  — Parses a `ui.tool` packet (`{v, call_id, name?, status?}`).
+  - L253 `static Map<String, dynamic>? _decodeVersioned(List<int> bytes)`
+  - L266 `static Map<String, dynamic> decodeObject(String payload)`  — Decodes a JSON object payload; anything else is an empty map.
+  - L274 `static String _error(String message)`
+- L279 `class VoiceCredentials`  — Where and how to join: the LiveKit server URL and the room token.
+  - L280 `const VoiceCredentials({ required this.serverUrl, required this.participantToken, })`
+  - L285 `final String serverUrl`
+  - L286 `final String participantToken`
+- L291 `String truncateRunes(String text, int maxRunes)`  — Cuts [text] to at most [maxRunes] Unicode code points, never splitting a
+
+## lib/voice/voice_tasks.dart  (90 Z.)
+- L17 `class VoiceTaskLedger`  — The started tasks of one delegate that have no result yet.
+  - L18 `VoiceTaskDelegate? _delegate`
+  - L19 `final Set<String> _pending = <String>{}`
+  - L22 `VoiceTaskDelegate? get delegate`  — The delegate tasks are started through right now.
+  - L25 `Set<String> get pending`  — Task ids started through [delegate] with no result yet.
+  - L28 `void reset(VoiceTaskDelegate? delegate)`  — Starts a new call's bookkeeping with [delegate] (may be null).
+  - L37 `bool started(VoiceTaskDelegate? through, String taskId)`  — A task was started through [through]. Returns true when [through] is
+  - L44 `void resolved(String taskId)`  — A result for [taskId] is on its way to the worker.
+  - L49 `List<String> detach(VoiceTaskDelegate delegate)`  — Drops [delegate] if it is the current one. Returns the task ids that
+- L59 `kVoiceResultBackoff = <Duration>[ Duration(seconds: 1), Duration(seconds: 3), Duration(seconds: 6), ]`  — Waits between delivery attempts: 1 s, 3 s, 6 s, then give up.
+- L69 `Future<bool> deliverWithRetry( Future<bool> Function() attempt, { List<Duration> backoff = kVoiceResultBackoff, bool Function()? stillValid, Future<void> Function(Duration)? sleep, })`  — Runs [attempt] until it returns true, retrying after each wait in
+
+## lib/voice/voice_transcript.dart  (121 Z.)
+- L20 `abstract final class VoiceTranscriptionAttributes`  — Attribute keys livekit-agents puts on a transcription text stream.
+  - L21 `static const String topic = 'lk.transcription'`
+  - L22 `static const String segmentId = 'lk.segment_id'`
+  - L23 `static const String isFinal = 'lk.transcription_final'`
+  - L26 `static bool parseFinal(Map<String, String> attributes)`  — `'true'` / `'1'` -> true, anything else -> false.
+- L32 `class VoiceTranscript`
+  - L33 `final List<VoiceTurn> _turns = <VoiceTurn>[]`
+  - L34 `final Map<String, _Segment> _segments = <String, _Segment>{}`
+  - L38 `List<VoiceTurn> get turns`  — Turns in the order their segments started. Partials are replaced in
+  - L40 `bool get isEmpty`
+  - L43 `bool get hasFinalTurn`  — True once at least one turn with text is final.
+  - L48 `bool applyChunk({ required String role, required String segmentId, required String streamId, required String text, bool isFinal = false, DateTime? at, })`  — Applies one chunk of a transcription stream. Returns true when the
+  - L92 `bool finalizeSegment({required String role, required String segmentId})`  — Marks a segment final (its stream closed with the final flag in the
+  - L102 `List<VoiceTurn> recordTurns()`  — The turns worth keeping in a record: every turn with text, in order.
+  - L107 `void clear()`
+  - L112 `static String _key(String role, String segmentId)`
+- L115 `class _Segment`
+  - L116 `_Segment({required this.index, required this.streamId})`
+  - L118 `final int index`
+  - L119 `String streamId`

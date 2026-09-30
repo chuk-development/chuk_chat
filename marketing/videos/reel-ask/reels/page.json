@@ -1,0 +1,27 @@
+{
+  "slug": "page",
+  "title": "Ask Chuk Chat to|[build your café]|[a website]",
+  "surface": "chat",
+  "clock": "12:00",
+  "chat_title": "Café Linde menu",
+  "prompt": "Make a menu page for my café and publish it.",
+  "running": "Running create artifact",
+  "steps": [{"icon": "flash", "text": "Ran", "detail": "artifact manager"}, {"icon": "flash", "text": "Ran", "detail": "create artifact"}],
+  "worked": "Worked for 12s",
+  "answer": "Done. Your page is live, and anyone with the link can open it:",
+  "card": {
+    "type": "webpage",
+    "title": "Café Linde menu",
+    "kind": "HTML",
+    "url": "artifacts.chuk.chat/p2x6-cafe-linde",
+    "page": {
+      "brand": "Café Linde",
+      "nav": ["Menu", "Visit"],
+      "headline": "Coffee under the linden tree.",
+      "sub": "Open daily from 8 to 6.",
+      "menu_title": "MENU",
+      "menu": [["Flat white", "€3.40"], ["Cardamom bun", "€3.20"], ["Soup of the day", "€6.50"], ["Apple cake", "€3.90"], ["Fresh orange juice", "€3.80"]],
+      "cta": "Order ahead"
+    }
+  }
+}

@@ -1,0 +1,212 @@
+# lib/voice/widgets · Signaturen
+
+## lib/voice/widgets/voice_agent_card.dart  (861 Z.)
+- L18 `class VoiceAgentCard extends StatelessWidget`
+  - L19 `const VoiceAgentCard({super.key, required this.card, this.fill})`
+  - L21 `final VoiceCard card`
+  - L25 `final Color? fill`  — The card's fill. Null: `surfaceContainerHighest`, one step above the
+  - L27 `static const Map<String, HugeIconData> _icons = <String, HugeIconData>{ 'weather': HugeIcons.sun01, 'search': HugeIcons.search01, 'news': HugeIcons.note01, 'article': HugeIcons.fileText, 'stock': HugeIcons.presentation01, 'map': HugeIcons.mapPin, 'list': HugeIcons.listView, 'currency': HugeIcons.dollar01, 'calc': HugeIcons.braces, 'time': HugeIcons.clock01, 'memory': HugeIcons.bookmark01, 'task': HugeIcons.timer01, 'reminder': HugeIcons.notification01, 'device': HugeIcons.laptop, }`
+  - L45 `Widget build(BuildContext context)`
+  - L65 `Widget _body()`
+- L83 `class _Header extends StatelessWidget`
+  - L84 `const _Header({required this.card, required this.icon})`
+  - L86 `final VoiceCard card`
+  - L87 `final HugeIconData icon`
+  - L90 `Widget build(BuildContext context)`
+- L153 `void _openWebLink(String? url)`  — Opens a web link the card carries. Only http(s): the card comes from a
+- L166 `class _LinkRow extends StatelessWidget`
+  - L167 `const _LinkRow({required this.entry})`
+  - L169 `final Map<String, dynamic> entry`
+  - L172 `Widget build(BuildContext context)`
+- L223 `class _LinksBody extends StatelessWidget`
+  - L224 `const _LinksBody({required this.entries})`
+  - L226 `final List<Map<String, dynamic>> entries`
+  - L229 `Widget build(BuildContext context)`
+- L238 `class _TextLink extends StatelessWidget`  — A small text link in the card's accent ("Open in browser").
+  - L239 `const _TextLink({required this.label, required this.onTap})`
+  - L241 `final String label`
+  - L242 `final VoidCallback onTap`
+  - L245 `Widget build(BuildContext context)`
+- L280 `class _WeatherBody extends StatelessWidget`
+  - L281 `const _WeatherBody({required this.card})`
+  - L283 `final VoiceCard card`
+  - L286 `Widget build(BuildContext context)`
+  - L387 `static String _round(Object? v)`
+  - L389 `static const List<String> _weekdays = <String>[ 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', // ]`
+  - L394 `static String _day(Object? raw)`  — `2026-09-29` -> "Tue"; anything else as it came.
+- L401 `class _HourColumn extends StatelessWidget`
+  - L402 `const _HourColumn({required this.entry})`
+  - L404 `final Map<String, dynamic> entry`
+  - L407 `Widget build(BuildContext context)`
+- L433 `class _SearchBody extends StatelessWidget`
+  - L434 `const _SearchBody({required this.card})`
+  - L436 `final VoiceCard card`
+  - L439 `Widget build(BuildContext context)`
+- L485 `class _ArticleBody extends StatelessWidget`
+  - L486 `const _ArticleBody({required this.card})`
+  - L488 `final VoiceCard card`
+  - L491 `Widget build(BuildContext context)`
+- L514 `class _StockBody extends StatelessWidget`
+  - L515 `const _StockBody({required this.card})`
+  - L517 `final VoiceCard card`
+  - L520 `Widget build(BuildContext context)`
+- L576 `class _SparklinePainter extends CustomPainter`
+  - L577 `_SparklinePainter(this.values, this.color)`
+  - L579 `final List<double> values`
+  - L580 `final Color color`
+  - L583 `void paint(Canvas canvas, Size size)`
+  - L604 `bool shouldRepaint(_SparklinePainter old)`
+- L608 `class _MapBody extends StatelessWidget`
+  - L609 `const _MapBody({required this.card})`
+  - L611 `final VoiceCard card`
+  - L614 `Widget build(BuildContext context)`
+- L660 `class _ValueBody extends StatelessWidget`
+  - L661 `const _ValueBody({required this.card})`
+  - L663 `final VoiceCard card`
+  - L666 `(String?, String?) _lines()`  — The big value and the small line under it, per kind.
+  - L697 `Widget build(BuildContext context)`
+- L723 `class _FactsBody extends StatelessWidget`
+  - L724 `const _FactsBody({required this.card})`
+  - L726 `final VoiceCard card`
+  - L729 `Widget build(BuildContext context)`
+- L753 `class _TaskBody extends StatelessWidget`
+  - L754 `const _TaskBody({required this.card})`
+  - L756 `final VoiceCard card`
+  - L759 `Widget build(BuildContext context)`
+- L793 `class _DeviceBody extends StatelessWidget`
+  - L794 `const _DeviceBody({required this.card})`
+  - L796 `final VoiceCard card`
+  - L799 `Widget build(BuildContext context)`
+- L831 `class _GenericBody extends StatelessWidget`
+  - L832 `const _GenericBody({required this.card})`
+  - L834 `final VoiceCard card`
+  - L837 `Widget build(BuildContext context)`
+
+## lib/voice/widgets/voice_call_button.dart  (67 Z.)
+- L15 `class VoiceCallButton extends StatelessWidget`
+  - L16 `const VoiceCallButton({ super.key, required this.onPressed, this.size = 40, this.tooltip = 'Voice call', this.active = false, })`
+  - L24 `final VoidCallback onPressed`
+  - L27 `final double size`  — The square hit box. 40 matches the chat header slot.
+  - L28 `final String tooltip`
+  - L31 `final bool active`  — A call is running in this chat: the glyph takes the accent.
+  - L34 `Widget build(BuildContext context)`
+
+## lib/voice/widgets/voice_call_controls.dart  (253 Z.)
+- L16 `class VoiceCallControl extends StatelessWidget`  — A square call control: the expressive squircle (corner = size x 0.34),
+  - L17 `const VoiceCallControl({ super.key, required this.child, required this.onTap, required this.tooltip, required this.fill, this.size = 40, this.toggled, this.semanticsId, })`
+  - L28 `final Widget child`
+  - L29 `final VoidCallback? onTap`
+  - L30 `final String tooltip`
+  - L31 `final Color fill`
+  - L32 `final double size`
+  - L35 `final bool? toggled`  — Non-null for a toggle: its state for assistive tech.
+  - L36 `final String? semanticsId`
+  - L39 `Widget build(BuildContext context)`
+- L72 `class VoiceMicGlyph extends StatelessWidget`  — The microphone, with a slash across it when [muted]. The icon set has no
+  - L73 `const VoiceMicGlyph({ super.key, required this.muted, required this.color, required this.gapColor, this.size = 20, })`
+  - L81 `final bool muted`
+  - L82 `final Color color`
+  - L83 `final Color gapColor`
+  - L84 `final double size`
+  - L87 `Widget build(BuildContext context)`
+- L101 `class _SlashPainter extends CustomPainter`
+  - L102 `_SlashPainter({required this.color, required this.gapColor})`
+  - L104 `final Color color`
+  - L105 `final Color gapColor`
+  - L108 `void paint(Canvas canvas, Size size)`
+  - L132 `bool shouldRepaint(_SlashPainter old)`
+- L138 `class VoiceHangUpGlyph extends StatelessWidget`  — The handset laid down: `call02` turned 135 degrees, the hang-up sign
+  - L139 `const VoiceHangUpGlyph({super.key, required this.color, this.size = 20})`
+  - L141 `final Color color`
+  - L142 `final double size`
+  - L145 `Widget build(BuildContext context)`
+- L154 `class VoiceSpeakingBars extends StatefulWidget`  — Three bars that move while the agent speaks and rest flat when it does
+  - L155 `const VoiceSpeakingBars({ super.key, required this.speaking, required this.color, this.size = 18, })`
+  - L162 `final bool speaking`
+  - L163 `final Color color`
+  - L164 `final double size`
+  - L167 `State<VoiceSpeakingBars> createState()`
+- L170 `class _VoiceSpeakingBarsState extends State<VoiceSpeakingBars> with SingleTickerProviderStateMixin`
+  - L172 `late final AnimationController _controller = AnimationController( vsync: this, duration: const Duration(milliseconds: 900), )`
+  - L178 `void initState()`
+  - L184 `void didUpdateWidget(VoiceSpeakingBars old)`
+  - L197 `void dispose()`
+  - L203 `Widget build(BuildContext context)`
+- L223 `class _BarsPainter extends CustomPainter`
+  - L224 `_BarsPainter({required this.t, required this.active, required this.color})`
+  - L226 `final double t`
+  - L227 `final bool active`
+  - L228 `final Color color`
+  - L231 `void paint(Canvas canvas, Size size)`
+  - L250 `bool shouldRepaint(_BarsPainter old)`
+
+## lib/voice/widgets/voice_call_panel.dart  (486 Z.)
+- L22 `class VoiceCallPanel extends StatelessWidget`
+  - L23 `const VoiceCallPanel({super.key, this.chatId, this.controller})`
+  - L26 `final String? chatId`  — Show only the call of this chat. Null shows whatever call runs.
+  - L29 `final VoiceCallController? controller`  — Defaults to [VoiceCallController.instance].
+  - L32 `static const double transcriptMaxHeight = 132`  — The transcript's tallest height before it scrolls.
+  - L35 `static const double transcriptWithCardsMaxHeight = 88`  — Shorter when cards share the panel.
+  - L38 `static const double cardStripHeight = 196`  — The height of the card strip; a taller card scrolls inside.
+  - L41 `Widget build(BuildContext context)`
+- L60 `class _PanelBody extends StatelessWidget`
+  - L61 `const _PanelBody({required this.controller})`
+  - L63 `final VoiceCallController controller`
+  - L66 `Widget build(BuildContext context)`
+  - L112 `static String _assistantLabel(VoiceCallController c)`
+- L119 `class _StatusRow extends StatelessWidget`
+  - L120 `const _StatusRow({required this.controller})`
+  - L122 `final VoiceCallController controller`
+  - L124 `String _status(VoiceCallController c)`
+  - L143 `Widget build(BuildContext context)`
+- L219 `class _SpeakerToggle extends StatelessWidget`  — Speaker or earpiece. Words, not a glyph: the icon set has no speaker, and
+  - L220 `const _SpeakerToggle({required this.controller})`
+  - L222 `final VoiceCallController controller`
+  - L225 `Widget build(BuildContext context)`
+- L253 `class _CallClock extends StatefulWidget`  — mm:ss since the call went live, ticking once a second.
+  - L254 `const _CallClock({required this.startedAt})`
+  - L256 `final DateTime startedAt`
+  - L259 `State<_CallClock> createState()`
+- L262 `class _CallClockState extends State<_CallClock>`
+  - L263 `Timer? _ticker`
+  - L266 `void initState()`
+  - L274 `void dispose()`
+  - L280 `Widget build(BuildContext context)`
+- L293 `String formatVoiceCallClock(Duration d)`  — `mm:ss`, or `h:mm:ss` past an hour.
+- L301 `class _ToolLine extends StatelessWidget`  — "Searching the web…" while a worker tool runs.
+  - L302 `const _ToolLine({required this.tool})`
+  - L304 `final VoiceToolActivity tool`
+  - L307 `Widget build(BuildContext context)`
+- L332 `class _CardStrip extends StatelessWidget`  — The agent's cards, newest first, side by side. A card taller than the
+  - L333 `const _CardStrip({required this.cards})`
+  - L335 `final List<VoiceCard> cards`
+  - L338 `Widget build(BuildContext context)`
+- L366 `class _Transcript extends StatelessWidget`
+  - L367 `const _Transcript({ required this.turns, required this.assistantLabel, required this.maxHeight, })`
+  - L373 `final List<VoiceTurn> turns`
+  - L374 `final String assistantLabel`
+  - L375 `final double maxHeight`
+  - L378 `Widget build(BuildContext context)`
+- L403 `class VoiceTurnLine extends StatelessWidget`  — One transcript line: who spoke, then what was said. A partial line is
+  - L404 `const VoiceTurnLine({ super.key, required this.turn, required this.assistantLabel, this.userLabel = 'You', })`
+  - L411 `final VoiceTurn turn`
+  - L412 `final String assistantLabel`
+  - L413 `final String userLabel`
+  - L416 `Widget build(BuildContext context)`
+- L444 `class _FailedRow extends StatelessWidget`
+  - L445 `const _FailedRow({required this.controller})`
+  - L447 `final VoiceCallController controller`
+  - L450 `Widget build(BuildContext context)`
+
+## lib/voice/widgets/voice_call_record_card.dart  (176 Z.)
+- L15 `class VoiceCallRecordCard extends StatefulWidget`
+  - L16 `const VoiceCallRecordCard( this.record, { super.key, this.assistantLabel, this.initiallyExpanded = false, })`
+  - L23 `final VoiceCallRecord record`
+  - L27 `final String? assistantLabel`  — The name on the agent's lines. Null: "Agent" in an Agents thread,
+  - L28 `final bool initiallyExpanded`
+  - L31 `State<VoiceCallRecordCard> createState()`
+- L34 `class _VoiceCallRecordCardState extends State<VoiceCallRecordCard>`
+  - L35 `late bool _expanded = widget.initiallyExpanded`
+  - L38 `Widget build(BuildContext context)`
+- L146 `List<Object> voiceCallTimeline(VoiceCallRecord record)`  — The record's turns and cards in one list, by time. A card sorts after a
+- L167 `String describeVoiceCall(VoiceCallRecord record)`  — "Voice call · 3 min · 12 turns" — the collapsed line of a record.

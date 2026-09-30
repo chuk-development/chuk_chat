@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat
 
-568 Dateien · 2555 Typen/Funktionen · 13926 Member · 1127/1564 öffentliche Symbole mit Zweckzeile · Stand 2026-09-28
+611 Dateien · 2765 Typen/Funktionen · 15134 Member · 1251/1720 öffentliche Symbole mit Zweckzeile · Stand 2026-09-30
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -21,7 +21,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class EnvLoader`  — Loads environment variables from .env file at runtime.
   - load loadSync _parseEnvFile get has _isDesktop
 
-### main.dart  (773 Z.)
+### main.dart  (786 Z.)
 - `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
 - `Future<void> main()`
 - `class AgentsApp extends StatefulWidget`
@@ -63,8 +63,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _StatChip extends StatelessWidget`
   - label value
 
-### platform_config.dart  (172 Z.)
-- const: kPlatformMobile kPlatformDesktop kAutoDetectPlatform kFeatureVoiceMode kFeatureWorkspaces kFeatureArtifacts kFeatureImageGen kFeatureMediaManager kFeatureServerTools kFeatureMcp kFeatureArtifactHosting kFeatureSystemTray kFeatureLinuxKeyring kFeaturePaymentsDirect kFeatureAgents kFeatureAgentsDemo kFeatureSkills kFeatureSpotify kFeatureWhoop
+### platform_config.dart  (185 Z.)
+- const: kPlatformMobile kPlatformDesktop kAutoDetectPlatform kFeatureVoiceMode kFeatureVoiceCall kFeatureWorkspaces kFeatureArtifacts kFeatureImageGen kFeatureMediaManager kFeatureServerTools kFeatureMcp kFeatureArtifactHosting kFeatureSystemTray kFeatureLinuxKeyring kFeaturePaymentsDirect kFeatureAgents kFeatureAgentsDemo kFeatureSkills kFeatureSpotify kFeatureWhoop
 
 ### supabase_config.dart  (121 Z.)
 - `class SupabaseConfig`
@@ -320,13 +320,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AppShellConfig`  — Bundles all theme, display, image-generation, and AI-context settings
   - currentThemeMode currentAccentColor currentIconFgColor currentBgColor setThemeMode setAccentColor setIconFgColor setBgColor dynamicColorEnabled setDynamicColorEnabled contrast setContrast uiFontFamily setUiFontFamily showReasoningTokens setShowReasoningTokens showModelInfo setShowModelInfo showTps setShowTps autoSendVoiceTranscription setAutoSendVoiceTranscription imageGenEnabled setImageGenEnabled imageGenDefaultSize setImageGenDefaultSize imageGenCustomWidth setImageGenCustomWidth imageGenCustomHeight setImageGenCustomHeight imageGenUseCustomSize setImageGenUseCustomSize includeRecentImagesInHistory setIncludeRecentImagesInHistory includeAllImagesInHistory setIncludeAllImagesInHistory includeReasoningInHistory setIncludeReasoningInHistory includeToolResultsInHistory setIncludeToolResultsInHistory +14
 
-### artifact.dart  (219 Z.)
+### artifact.dart  (202 Z.)
 - `enum ArtifactType`
   - code markdown html mermaid svg technicalDrawing typst excalidraw
 - `extension ArtifactTypeX on ArtifactType`
   - fromValue value displayLabel defaultExtension
 - `class ArtifactDocument`
-  - copyWith toMap fromMap id chatId userId messageId title type language content version createdAt updatedAt attachmentPath
+  - copyWith id rowId chatId userId messageId title type language content version createdAt updatedAt attachmentPath updatedAtStamp
 - `class ArtifactVersionSnapshot`
   - fromMap artifactId version content createdAt attachmentPath
 - `class ArtifactEdit`
@@ -472,13 +472,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ShapeRow extends StatelessWidget`  — The silhouettes a coworker can be given, drawn as themselves.
   - agentId colour selected onPick
 
-### agent_profile_page.dart  (632 Z.)
+### agent_profile_page.dart  (663 Z.)
 - `class AgentProfilePage extends StatelessWidget`
-  - Function _build _confirmDelete _roleOf _briefOf _store agentId source onRename onDelete onOpenControls onOpenBrowser onMessage profiles
+  - Function _startVoiceCall _build _confirmDelete _roleOf _briefOf _store agentId source onRename onDelete onOpenControls onOpenBrowser onMessage profiles
 - `class _StatePill extends StatelessWidget`  — The live-state pill under the name: what the coworker is doing right now.
   - agent accent
 - `class _ActionRow extends StatelessWidget`  — The row of round targets under the header.
-  - onMessage onOpenControls onOpenBrowser
+  - onMessage onOpenControls onOpenBrowser onCall
 - `class _Action extends StatelessWidget`
   - icon label onTap color onColor parked
 - `class _InfoCard extends StatelessWidget`  — One labelled card in the profile body.
@@ -489,6 +489,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost`  — The Agents desktop layout: chuk_chat's desktop with coworkers in it.
   - _openSettings _agentsModeSwitch _deskInit _deskDispose _deskLoad _deskSave _deskScheduleSave _deskToggleRoster _deskToggleRightPane _deskShowRightPane _deskCloseRightPane _deskOpenRoom _deskCloseRoom _deskOpenNth _deskOpenQuickSwitcher _deskOnKey _deskBarActions _deskMenuActions _buildDesktopBody _buildDeskDetailsPane _deskRefreshDetails _buildDeskRoomsPane _buildDeskRoom _deskAgentOrder
 
+### agents_install_page.dart  (360 Z.)
+- `typedef AgentsCodePageOpener = Future<AgentsPairingInvite?> Function( BuildContext context, )`  — Opens the code page and hands back what the user scanned or typed.
+- `class AgentsInstallPage extends StatefulWidget`
+  - show timeLeftText ticketStore sessionSource claimWaiter pair openCodePage now commandKey copyKey newCommandKey useCodeKey statusKey messageKey
+- `class _AgentsInstallPageState extends State<AgentsInstallPage>`
+  - _onFlow _copy _useCode _children _status
+- `class _CommandBox extends StatelessWidget`  — The command, in a flat card, selectable. A long line wraps instead of
+  - command
+
 ### agents_pairing_page.dart  (310 Z.)
 - `typedef AgentsQrViewBuilder = Widget Function( BuildContext context, { required ValueChanged<String> onCode, required Va`  — Builds the live camera view. Injected so a widget test can drive the screen
 - `bool agentsCameraIsDefault()`  — True on the platforms where opening a camera is the right default.
@@ -497,11 +506,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _AgentsPairingPageState extends State<AgentsPairingPage>`
   - _accept _onScanned _onCameraUnavailable _submitCode _buildScanner _buildCodeForm _defaultQrView _cameraErrorText
 
-### agents_shell_state.dart  (1018 Z.)
+### agents_shell_state.dart  (1166 Z.)
 - part of 'messenger_shell.dart'
 - `Future<AgentsRelayController> _buildRelayController( AgentsPairingStore store, AccountSessionSource sessionSource, )`  — Builds the default production relay controller: a real [AgentsRelayClient]
 - `mixin AgentsShellHost on State<MessengerShell>`  — Everything the shell OWNS, as opposed to how it lays it out.
-  - _openAgentProfile _select _hostInit _onHostInbound _loadLastSelection _rememberSelection _writeRememberedSelection _decodePick _flushPendingWrites _onRosterChanged _seedActivityFromHistory _autoSelect _hostDispose _threadLabel _onNotificationTap _restoreCloudPairing _onRestoreReason _agentIdForThread _onPaired _openModelScreen _openOnboarding _renameAgent _openAgentRename _openRoomCreate _openRoom _buildRoomBody _onRoomOpened _manageRoomMembers _onController _hostDeleteRoom _deleteRoom _renameRoom _deleteAgent _copyFullChat _pairedControllerOrExplain _openAgentScreenOrNull _threadIsOnScreen _selectedAgent _readMarks _agentProfiles +3
+  - _openAgentProfile _select _hostInit _onHostInbound _loadLastSelection _rememberSelection _writeRememberedSelection _decodePick _flushPendingWrites _onRosterChanged _seedActivityFromHistory _autoSelect _hostDispose _threadLabel _onNotificationTap _restoreCloudPairing _onRestoreReason _onPairingStoreChanged _readLocalPairing _resolveHasComputer _pairWithInvite _waitForInstallClaim _openInstallPage _agentIdForThread _onPaired _openModelScreen _openOnboarding _renameAgent _openAgentRename _openRoomCreate _openRoom _buildRoomBody _onRoomOpened _manageRoomMembers _onController _hostDeleteRoom _deleteRoom _renameRoom _deleteAgent _copyFullChat +9
 - `@visibleForTesting DateTime? newestMessageTime(List<ChatMessage>? messages)`  — The newest timestamp among [messages] (`sentAt`, else `startedAt`), or
 
 ### assistant_settings_page.dart  (410 Z.)
@@ -590,7 +599,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _LoginPageState extends State<LoginPage>`
   - _handleSubmit _openSignupOtpVerification _toggleMode _validatePassword _authService
 
-### mcp_connectors_page.dart  (1097 Z.)
+### mcp_connectors_page.dart  (1108 Z.)
 - `class McpConnectorsPage extends StatefulWidget`
 - `class _McpConnectorsPageState extends State<McpConnectorsPage>`
   - _hostStatusOf _searchRegistry _row _open _addByUrl _report _query
@@ -634,12 +643,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _ArtifactTile extends StatelessWidget`
   - _relative _iconForType artifact onTap
 
-### messenger_shell.dart  (1048 Z.)
+### messenger_shell.dart  (1115 Z.)
 - part 'agents_shell_state.dart' · part 'agents_desktop_layout.dart'
 - `class MessengerShell extends StatefulWidget`  — The messenger: coworkers down the left, the selected thread in the middle,
-  - relayControllerBuilder sessionSource pairingStore rosterSource roomSource controlSource onSignOut themeController shellConfig chatDebugExport readMarks agentProfiles pairingRestoreBuilder appMode chatModeBuilder
+  - relayControllerBuilder sessionSource pairingStore rosterSource roomSource controlSource onSignOut themeController shellConfig chatDebugExport readMarks agentProfiles pairingRestoreBuilder appMode chatModeBuilder installClaimWaiter
 - `class _MessengerShellState extends State<MessengerShell> with AgentsShellHost, _AgentsDesktopLayout, SingleTickerProvide …)`
-  - _hasPairing _buildModeSwitch _onModeChanged _handOverChatPointer _readChatModeChatId _isAgentsChatId _onSharedChatPointer _buildChatMode _agentsModeSwitch _onPushStatus _onControllerForBrowser _onBrowserPresenceChanged _explainNoScreen _select _openRooms _openBrowserView _openAgentProfile _openSettings _openModelScreen _openChatModel _openChatFiles _openControlDrawer _openRoom _drivePush _buildPhoneBody _browserOpen _chatModeAvailable _threadIsOnScreen _openAgentScreenOrNull
+  - _hasPairing _buildModeSwitch _addComputer _onHasComputerChanged _onModeChanged _handOverChatPointer _readChatModeChatId _isAgentsChatId _onSharedChatPointer _buildChatMode _agentsModeSwitch _onPushStatus _onControllerForBrowser _onBrowserPresenceChanged _explainNoScreen _select _openRooms _openBrowserView _openAgentProfile _openSettings _openModelScreen _openChatModel _openChatFiles _openControlDrawer _openRoom _drivePush _buildPhoneBody _browserOpen _chatModeAvailable _wantedMode _showModeSwitch _addComputerAction _threadIsOnScreen _openAgentScreenOrNull
 
 ### mobile_agents_settings_page.dart  (398 Z.)
 - `class MobileAgentsSettingsPage extends StatefulWidget`  — The mobile contact page: everyday choices first, technical details second.
@@ -687,7 +696,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _SetNewPasswordPageState extends State<SetNewPasswordPage>`
   - _handleSetPassword
 
-### settings_page.dart  (1121 Z.)
+### settings_page.dart  (1127 Z.)
 - `class SettingsPage extends StatefulWidget`
   - config
 - `class _SettingsPageState extends State<SettingsPage>`
@@ -883,9 +892,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### root_wrapper.dart  (5 Z.)
 - reicht weiter: 'root_wrapper_stub.dart' if (dart.library.io) 'root_wrapper_io.dart'
 
-### root_wrapper_desktop.dart  (778 Z.)
+### root_wrapper_desktop.dart  (796 Z.)
 - `class RootWrapperDesktop extends StatefulWidget`
-  - config headerCenter selectedChatIdReader
+  - config headerCenter selectedChatIdReader onAddComputer
 - `class _RootWrapperDesktopState extends State<RootWrapperDesktop>`
   - _onArtifactChanged _onPanelOpenChanged _onArtifactOpenRequested _closeArtifactPanel _openSourceChatForArtifact _openSettingsPage _openWorkspacesPage _openWorkspace _startWorkspaceChat _exitProject _openMediaPage _handleChatSelected _toggleSidebar _copyDebugChat _buildMiniRail _onTrayNewChat _handleNewChatFromSidebar _handleChatDeleted _selectedChatId
 
@@ -893,9 +902,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class RootWrapper extends StatelessWidget`
   - _isMobilePhone config
 
-### root_wrapper_mobile.dart  (807 Z.)
+### root_wrapper_mobile.dart  (819 Z.)
 - `class RootWrapperMobile extends StatefulWidget`
-  - config headerCenter selectedChatIdReader
+  - config headerCenter selectedChatIdReader onAddComputer
 - `class _RootWrapperMobileState extends State<RootWrapperMobile> with WidgetsBindingObserver, SingleTickerProviderStateMix …)`
   - _onPanelOpenRequested _onArtifactChanged _maybeOpenArtifactSheet _refreshSessionOnResume _ensurePermissions _ensureBatteryOptimizationDisabled _showPermissionBlockedSnackBar _toggleSidebar _openSettingsPage _openWorkspacesPage _openMediaPage _handleChatSelected _handleChatDeleted _newChatFromAppBar _currentChatTitle _buildFloatingTopBar _floatIconChip _newChatFromSidebar _openArtifactSheet _copyDebugChat _selectedChatId
 
@@ -903,15 +912,15 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class RootWrapper extends StatelessWidget`  — Web wrapper - renders desktop UI since web is a desktop-like environment
   - config
 
-### sidebar_desktop.dart  (586 Z.)
+### sidebar_desktop.dart  (591 Z.)
 - `class SidebarDesktop extends StatefulWidget`
-  - onChatSelected onSettingsTapped onWorkspacesTapped onMediaTapped onNewChatTapped onChatDeleted selectedChatId isCompactMode showWorkspacesButton
+  - onChatSelected onSettingsTapped onWorkspacesTapped onMediaTapped onNewChatTapped onChatDeleted selectedChatId isCompactMode showWorkspacesButton onAddComputerTapped
 - `class _SidebarDesktopState extends State<SidebarDesktop> with SidebarStateCommon<SidebarDesktop>`
   - applyChatFilter _focusDesktopSearch _onSearchFocusChanged _onDesktopSearchChanged _clearDesktopSearch _refreshDesktopChats _filterDesktopChats _buildDesktopSlivers _buildDesktopNavigationCards _selectDesktopChat _buildDesktopChatItem _openChatActionsMenu _handleMenuSelection _buildMenuItems _showChatContextMenu onChatDeletedCallback
 
-### sidebar_mobile.dart  (694 Z.)
+### sidebar_mobile.dart  (699 Z.)
 - `class SidebarMobile extends StatefulWidget`
-  - onChatSelected onSettingsTapped onWorkspacesTapped onMediaTapped onNewChatTapped onChatDeleted onCollapseTapped selectedChatId isCompactMode
+  - onChatSelected onSettingsTapped onWorkspacesTapped onMediaTapped onNewChatTapped onChatDeleted onCollapseTapped onAddComputerTapped selectedChatId isCompactMode
 - `class _SidebarMobileState extends State<SidebarMobile> with SidebarStateCommon<SidebarMobile>`
   - applyChatFilter _focusMobileSearch _onSearchFocusChanged _onMobileSearchChanged _clearMobileSearch _refreshMobileChatsFromGesture _refreshChats _performRefresh _filterMobileChats _filterChatsLocally _buildMobileSlivers _buildMobileNavigationCards _selectMobileChat _buildMobileChatItem _showChatOptionsMenu _chatOptionRow onChatDeletedCallback
 - `List<String> _filterChatsIsolate(Map<String, dynamic> params)`
@@ -949,7 +958,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _TranscriptScrollController extends ScrollController`  — A [ScrollController] whose initial offset is read when a position is
   - initialScrollOffset
 
-### chat_ui_desktop.dart  (2650 Z.)
+### chat_ui_desktop.dart  (2706 Z.)
 - part 'desktop_send_logic.dart'
 - `class ChukChatUIDesktop extends StatefulWidget`
   - onToggleSidebar selectedChatId onChatIdChanged isSidebarExpanded isCompactMode showReasoningTokens showModelInfo showTps workspaceId onExitProject imageGenEnabled imageGenDefaultSize imageGenCustomWidth imageGenCustomHeight imageGenUseCustomSize includeRecentImagesInHistory includeAllImagesInHistory includeReasoningInHistory includeToolResultsInHistory toolCallingEnabled toolDiscoveryMode showToolCalls autoSendVoiceTranscription onOpenModelSettings agentsThread agentsTitle topInset
@@ -975,7 +984,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `bool messageStartsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] opens a new run: it is the first row, the sender
 - `bool messageEndsRun(List<Map<String, String>> messages, int index)`  — Whether the row at [index] closes its run: the last row, or the next row
 
-### chat_ui_mobile.dart  (4104 Z.)
+### chat_ui_mobile.dart  (4177 Z.)
 - `enum _AttachChoice`  — What the plus menu can start.
   - camera photos files workspace
 - `class _WorkspaceChoice`  — A row in the workspace menu: a workspace to switch to (null clears it),
@@ -984,7 +993,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ChukChatUIMobile extends StatefulWidget`
   - onToggleSidebar selectedChatId onChatIdChanged isSidebarExpanded showReasoningTokens showModelInfo showTps autoSendVoiceTranscription topInset imageGenEnabled imageGenDefaultSize imageGenCustomWidth imageGenCustomHeight imageGenUseCustomSize includeRecentImagesInHistory includeAllImagesInHistory includeReasoningInHistory includeToolResultsInHistory toolCallingEnabled toolDiscoveryMode showToolCalls messengerMode hostRunActive
 - `class ChukChatUIMobileState extends State<ChukChatUIMobile> with ChatScrollMixin, ModelProviderResolutionMixin, ChatMode …)`  — Serialize a [ChatMessageStatus] into the wire-format string used inside
-  - deleteComposerAttachment onEditStarted _onComposerFocusChanged _onMessengerStoreChanged _loadReactions _reactionKeyAt _toggleReaction _replyToMessage _onChatModelChanged _hydrateChatModel restoreChatMode _initializeHandlers _persistStreamTick _markAssistantMessageInterrupted _handleAppResumed _handleAppPaused _showPaymentRequiredDialog _initializeListeners _onControllerChanged _loadInitialData _loadChatById _applyLoadedChat _loadChatByIdAsync newChat _handleMicTap _handleAudioSend _handleAddAttachmentTap _showAnchoredComposerMenu _buildWorkspaceChip _openWorkspaceMenu _openProjectManagement startNewChatWithWorkspace _startNewChatWithProject _handleFileUploadUpdate _updateToolCallsForMessage _handleToolImagesProcessed _updateContentBlocksForMessage _updateRequestPayloadForMessage _finalizeAiMessage _resetThreadTransientState +51
+  - deleteComposerAttachment onEditStarted _onComposerFocusChanged _onMessengerStoreChanged _loadReactions _reactionKeyAt _toggleReaction _replyToMessage _onChatModelChanged _hydrateChatModel restoreChatMode _initializeHandlers _persistStreamTick _markAssistantMessageInterrupted _handleAppResumed _handleAppPaused _showPaymentRequiredDialog _initializeListeners _onControllerChanged _loadInitialData _loadChatById _applyLoadedChat _loadChatByIdAsync newChat _handleMicTap _handleAudioSend _handleAddAttachmentTap _showAnchoredComposerMenu _buildWorkspaceChip _openWorkspaceMenu _openProjectManagement startNewChatWithWorkspace _startNewChatWithProject _handleFileUploadUpdate _updateToolCallsForMessage _handleToolImagesProcessed _updateContentBlocksForMessage _updateRequestPayloadForMessage _finalizeAiMessage _resetThreadTransientState +52
 
 ### composer_menu.dart  (59 Z.)
 - `PopupMenuItem<T> composerMenuRow<T>({ required T value, required Color iconFg, required IconData icon, required String l …)`  — One row of a composer menu — same metrics as the mode menu.
@@ -1000,7 +1009,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ComposerMetrics`  — The numbers that make the mobile composer's action row read as one family.
   - targetSize targetGap
 
-### desktop_send_logic.dart  (2550 Z.)
+### desktop_send_logic.dart  (2573 Z.)
 - part of 'chat_ui_desktop.dart'
 - `extension DesktopSendLogic on ChukChatUIDesktopState`  — Extension on [ChukChatUIDesktopState] containing the large send/streaming
   - _extractResendUserQueryFromDisplayText _buildResendUserPrompt _beginSendOperation _isSendOperationCancelled _clearSendOperation _markLastAssistantMessageCancelled _cancelPendingSendOperation _cancelStream _cancelCurrentOperation _isSendingForChat _showPaymentRequiredDialog _sendMessage _detectImageMimeType _buildApiHistoryWithPendingMessage _updateToolCallsForMessage _appendDebugRequestForMessage _processToolImages _cancelPendingMessage _drainPendingMessage _enqueueOfflineSend removeFollowingAssistant foldVariant commit
@@ -1061,6 +1070,69 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _StreamingSnapshot`
   - chatId index content reasoning contentBlocksJson
 
+## lib/platform_specific/chat/voice
+### chat_voice_binding.dart  (474 Z.)
+- const: debugOnVoiceCallStart
+- `VoiceCallMode voiceCallModeFor(String chatId)`  — Whether this build shows the voice call at all: the build flag and a
+- `String? storedChatTitle(String chatId)`  — The stored title of [chatId], or null.
+- `List<Map<String, String>> storedChatRows(String chatId)`  — The stored messages of [chatId] as chat rows, for a call started from a
+- `class ChatVoiceBinding`
+  - isLiveFor showsPanelFor toggleCall _adopt debugAdoptDelegate _nonEmpty _onController _endCallTasks completeTurn failTurn recordsFor _load _onCallEnded _merge controller currentChatId isAgentsScreen messages onRecordsChanged agentName initiatedByAgent
+- `class ChatVoiceSessions extends ChangeNotifier`  — The chat screens that can hold a call, so a header drawn outside a
+  - _add _remove forRole forChat instance
+- `String? voiceThreadKeyFor(AgentsAgent agent)`  — The thread a call with [agent] runs in: the one open on the Agents
+- `Future<void> startAgentVoiceCall( AgentsAgent agent, { Duration waitForThread = Duration.zero, })`  — Starts a call with [agent] from a page that is not its thread (the
+- `Future<void> startAgentsThreadVoiceCall({ required String threadKey, String? agentName, Duration waitForThread = Duratio …)`  — Starts a call for an Agents thread from a page that is not the thread.
+- `typedef VoiceCallStartProbe = ({ String chatId, VoiceCallMode mode, String? agentName, String? callId, String? callReaso`  — What a start from this file hands to `VoiceCallController.start`, for a
+
+### chat_voice_call_button.dart  (263 Z.)
+- `enum ChatVoiceCallStyle`  — Which surface the target sits on.
+  - bar chip composer
+- `class ChatVoiceCallButton extends StatelessWidget`
+  - _bar _composer _chip binding agentsThread style size agentName semanticsId
+
+### voice_call_context.dart  (117 Z.)
+- const: kVoiceTaskMarker kVoiceContextMaxMessages kVoiceContextMaxChars kVoiceContextMaxLineChars kVoiceResultMaxChars _kThinkingPlaceholder _visualTag _whitespace
+- `String buildVoiceCallContext( List<Map<String, String>> messages, { int maxMessages = kVoiceContextMaxMessages, int maxC …)`  — The call context: the last [maxMessages] text messages of a chat as plain
+- `String? _contextLine(Map<String, String> message, int maxLineChars)`
+- `String _cut(String text, int max)`
+- `String? voiceTaskMessageText(String task)`  — The text a spoken task is sent with: the marker, then the task on one
+- `String voiceResultText(String text)`  — Cuts a task result to what the worker gets back.
+- `bool looksLikeFailedTurn(String text)`  — The texts the chat pipeline finalizes a turn with when the turn did not
+
+### voice_chat_widgets.dart  (102 Z.)
+- const: kVoiceRecordGap
+- `VoiceRecordPlacement<VoiceCallRecord> placeVoiceRecords( List<Map<String, String>> messages, List<VoiceCallRecord> recor …)`  — Places [records] against [messages] by the rows' own clocks
+- `Widget withVoiceRecords({ required Widget item, required int index, required int messageCount, required VoiceRecordPlace …)`  — [item] (message row [index] of [messageCount]) with the call cards that
+- `Widget _card(VoiceCallRecord record)`
+- `class VoiceCallPanelSlot extends StatelessWidget`  — The live call panel of [chatId] with its gap to the composer under it.
+  - chatId gap
+
+### voice_record_placement.dart  (88 Z.)
+- `class VoiceRecordPlacement<T>`  — The records of a chat, placed against its message rows.
+  - empty before isEmpty beforeIndex trailing
+- `VoiceRecordPlacement<T> placeRecordsByTime<T>({ required List<DateTime?> messageTimes, required List<T> records, require …)`  — Merges [records] into a message list by time.
+- `List<Object> flattenPlacement<T extends Object>( int messageCount, VoiceRecordPlacement<T> placement, )`  — One entry of the merged timeline: a message index or a record. Used by
+
+### voice_task_delegates.dart  (143 Z.)
+- const: kVoiceTaskChatClosed kVoiceTaskCallEnded
+- `typedef VoiceTaskSender = Future<VoiceTurnOutcome> Function(String text)`  — Sends one task text into the chat and completes when its turn ended.
+- `abstract class VoiceTurnDelegate implements VoiceTaskDelegate`  — The shared body of both delegates.
+  - startTask _finish _emit failOpenTasks close openTasks isClosed results reason
+- `class ChatVoiceDelegate extends VoiceTurnDelegate`  — A normal chat: the task goes through chuk_chat's send pipeline with its
+- `class AgentsVoiceDelegate extends VoiceTurnDelegate`  — An Agents thread: the task goes through the thread's send path to the
+
+### voice_turn_queue.dart  (262 Z.)
+- const: kVoiceTaskOffline
+- `class VoiceTurnOutcome`  — How one voice task ended in the chat.
+  - ok text
+- `typedef VoiceTurnStarted = void Function(String chatId, int placeholderIndex)`  — Called by the chat screen once the turn is under way: the chat it went to
+- `typedef VoiceTurnSend = Future<void> Function(String text, VoiceTurnStarted onStarted)`  — Sends [text] as a user message through the chat screen's send path. Calls
+- `class VoiceTurnQueue`
+  - enqueue complete fail cancelPending _key _pump length send isBusy currentChatId isOffline pollInterval maxWait turnTimeout
+- `class _Pending`
+  - finish chatId text enqueuedAt tag completer
+
 ## lib/platform_specific/chat/widgets
 ### chat_message_list_item.dart  (198 Z.)
 - `class ChatMessageListItem extends StatelessWidget`  — One message row shared by the desktop and mobile chat lists.
@@ -1099,11 +1171,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _UnreadBadge extends StatelessWidget`  — The number of new threads on a coworker, in that coworker's colour.
   - count colour
 
-### mobile_agent_sheet.dart  (189 Z.)
+### mobile_agent_sheet.dart  (211 Z.)
 - `class MobileAgentSheet extends StatelessWidget`
-  - show menuGroups agent onProfile onControls onRename onRooms onCopyChat onSettings onSignOut
+  - show menuGroups agent onProfile onControls onRename onRooms onCopyChat onSettings onSignOut onVoiceCall
 
-### mobile_chat_chrome.dart  (486 Z.)
+### mobile_chat_chrome.dart  (498 Z.)
 - const: kMobileChromeChip kMobileChromeRow kMobileChromePillRadius _kReach _kPillFaceSize _kPillStatusFontSize
 - `class MobileChatChrome extends StatelessWidget`
   - agent onBack onOpenProfile onOpenBrowser browserAvailable onOpenFiles onReconnect onMore profiles
@@ -1195,9 +1267,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ApiStatusService`  — Utility helpers for checking the availability of the primary API.
   - _buildUri _defaultBaseUrl timeout method
 
-### app_initialization_service.dart  (420 Z.)
+### app_initialization_service.dart  (467 Z.)
 - `class AppInitializationService`  — Callback for initialization events
-  - initializeCoreServices _preloadEncryptionKey initializeUserSession _startSyncWhenKeyReady _tryLoadKeyWithTimeout _loadUserData _startSyncAfterKey _startSyncAfterSidebarLoad _onLinuxKeyReady _startDeferredPreload instance _isLinuxDesktop timeout
+  - initializeCoreServices _preloadEncryptionKey initializeUserSession _startSyncWhenKeyReady _tryLoadKeyWithTimeout _loadUserData _startSyncAfterKey _startSyncAfterSidebarLoad _onLinuxKeyReady _afterKeyReady _startMetadataSweep _startDeferredPreload instance _isLinuxDesktop timeout
 
 ### app_lifecycle_service.dart  (165 Z.)
 - `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
@@ -1230,9 +1302,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ArtifactDiffEngine`
   - applyEdits _findOccurrences _buildMatchError _trimPreview _escapeForMessage _extractContext maxEditsPerUpdate
 
-### artifact_storage_service.dart  (1893 Z.)
+### artifact_storage_service.dart  (3209 Z.)
+- `typedef ArtifactRowRef = ({ String rowId, String handle, String chatId, String title, String? language, DateTime updated`  — What the service knows about one `artifacts` row without its content:
 - `class ArtifactStorageService`
-  - Function flushPendingEdits requestOpen listAllUserArtifacts loadArtifactById createArtifact updateArtifactWithEdits overwriteCurrentArtifact repairVersionChain _insertVersion rollbackArtifactsForMessages _rollbackOneArtifact _loadLatestRemainingSnapshot latestRemainingVersion computeOrphanBrackets filterOrphanSnapshotsInBrackets _findOrphanSnapshotsForMessages _removeArtifactFromCache deleteArtifactsByIds setAttachmentPath _emitChange _insertIntoCache _requireUser _ensureCacheForUser _validateArtifactId _validateContentSize _isDuplicateArtifactError _handleMissingArtifactSchema _isMissingArtifactSchemaError _encryptOrThrow _decryptMaybe changes activeChatId maxContentBytes activeArtifactNotifier panelOpenNotifier openRequestNotifier pendingInitialOpen currentMessageId forceRefresh +1
+  - Function flushPendingEdits requestOpen listAllUserArtifacts loadArtifactById createArtifact updateArtifactWithEdits _rewriteLocked overwriteCurrentArtifact _overwriteLocked repairVersionChain _repairVersionChainLocked _insertVersion rollbackArtifactsForMessages _rollbackForMessagesLocked _rollbackOneArtifact _loadLatestRemainingSnapshot latestRemainingVersion computeOrphanBrackets filterOrphanSnapshotsInBrackets _findOrphanSnapshotsForMessages _removeArtifactFromCache deleteArtifactsByIds _deleteRows setAttachmentPath _emitChange _insertIntoCache _cachedDocs _findCached _findCachedByRowId _fetchRow _documentsFromRows _openMeta _refOf _stampOf _stamped _indexUpsert _indexOlderThan _handleTaken _buildIndex +47
 
 ### artifact_tag_processor.dart  (142 Z.)
 - `class ArtifactTagProcessor`  — Processes inline `<artifact>` tags emitted by the assistant. For each tag:
@@ -1305,7 +1378,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-### chat_payload_migration_service.dart  (955 Z.)
+### chat_payload_migration_service.dart  (1247 Z.)
 - `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
 - `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
   - copyWith migrated verified total
@@ -1322,13 +1395,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
   - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion
 - `class ChatPayloadMigrationService`
-  - _stateKey startupCheck checkCloudInBackground Function _migrateLocalRow _verifyLocalRow _migrateCloudChat _loadState _saveState _logIncompleteCheck isDone isCloudPending parallelism cloud readKv writeKv localUpgradeIds debugBeforeLocalVerify hasLocalDatabase needsKey
+  - _stateKey checkCloudInBackground _checkCloudInBackground Function _noteLocalFailure _migrateLocalRow _verifyLocalRow _migrateCloudChat _isUnreadable _countFailure _leaveAsIs _loadState _saveState _logIncompleteCheck _log isDone isCloudPending hasWaitedForCloud isLeftAsIs parallelism backgroundParallelism maxTries maxLocalFailures cloud readKv writeKv localUpgradeIds debugBeforeLocalVerify hasLocalDatabase signIn behindApp width
 - `enum _CloudResult`
   - done skipped pending
-- `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
-  - toJson done cloudPending skip
+- `class _MigrationState`  — Persisted progress of one account on this device (`kv_cache`, which a
+  - toJson done cloudPending cloudWaited localFailures skip tries
 - `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
-  - noteRestoredSession ensureReady _check _run retry continueAnyway _release _set reset phase progress failure showsSyncHint holdsApp instance
+  - noteRestoredSession forgetRestoredSession watchSignOuts ensureReady _check _run retry continueAnyway _release _set reset phase progress failure showsSyncHint holdsApp instance
 - `enum ChatMaintenancePhase`
   - idle checking running failed done
 
@@ -1442,6 +1515,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### download_preferences_service.dart  (72 Z.)
 - `class DownloadPreferencesService`  — User preferences for how downloaded files are saved across the app.
   - ensureLoaded _loadFromPrefs setAlwaysAsk setDefaultFolder shouldSkipPrompt defaultFolder alwaysAsk alwaysAskNotifier defaultFolderNotifier
+
+### encrypted_meta.dart  (135 Z.)
+- const: kEncryptedPlaceholder kEncryptedMetaVersion
+- `class EncryptedMeta`
+  - resetCipher _defaultSeal _defaultOpen encode decode isMissingColumnError isRealPlaintext pick seal open
 
 ### encryption_service.dart  (1237 Z.)
 - const: kPlainEnvelopeVersion kCompressedEnvelopeVersion
@@ -1745,10 +1823,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class ServiceCredentialsService`  — Syncs encrypted OAuth tokens (Google, GitHub, MCP connectors, etc.) to
   - save load throwOnError
 
-### session_manager_service.dart  (256 Z.)
+### session_manager_service.dart  (275 Z.)
 - `typedef SessionEventCallback = void Function()`  — Callback for session-related events
 - `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
-  - initialize _handleAuthStateChange _handleSessionActive _initializeUserSessionAsync _verifyPasswordRevisionInBackground _handleSessionInactive _handlePasswordRevisionMismatch _checkNetworkStatus _performLogoutCleanup performFullLogout instance isInitialized
+  - initialize _handleAuthStateChange _handleSessionActive _initializeUserSessionAsync _verifyPasswordRevisionInBackground _handleSessionInactive _handlePasswordRevisionMismatch _checkNetworkStatus _performLogoutCleanup performFullLogout instance isInitialized sessionStashed
 
 ### session_recovery.dart  (559 Z.)
 - `@immutable class SessionStash`  — Session recovery through the paired host (bead cowork-2n1).
@@ -2011,9 +2089,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class WorkspaceMessageService`  — Service for composing AI messages with workspace context
   - _estimateContentLength buildProjectSystemMessage _buildChatSummary _formatDate getProjectContextSummary hasContext estimateTotalFileTokens estimateProjectContextTokens getModelContextWindow contextUsageRatio fileContextRatio remainingFileTokenBudget maxTotalContentLength maxChatHistoryContentLength
 
-### workspace_storage_service.dart  (1065 Z.)
+### workspace_storage_service.dart  (1992 Z.)
+- `typedef SealedRowRead = ({ /// The row with every sealed field resolved; safe for `fromJson`. Map<String, dynamic> row, `  — One `projects` / `project_files` row after its `encrypted_meta` envelope
+- `@visibleForTesting class ResealJob`  — One row to write again sealed: a snapshot of the row as it was read.
+  - isFile table key id workspaceId legacy updatedAt values
 - `class WorkspaceStorageService`  — Service for managing workspace workspaces, chat assignments, and file attachments
-  - _notifyChangesImmediate loadFromCache _saveToCache loadProjects createProject updateProject deleteProject archiveProject getWorkspace getWorkspaceForChat linkChatToWorkspace addChatToProject removeChatFromProject getProjectChats uploadAvatar deleteFile decryptFile downloadFile updateFileContent updateFileMarkdown reset _isLoading projects activeProjects archivedProjects changes bucketName selectedWorkspaceId updateCache generateMarkdown
+  - _notifyChangesImmediate loadFromCache _saveToCache resolveSealedRow patchSealedRow withResolvedFields rowNeedsReseal sealedProjectColumns sealedFileColumns mergeProjectFields isMissingEncryptedMetaColumn _hasEnvelope _blankToNull reloadIfWaitingForKey mergeProjectUpdate currentFileNameForUpdate _fetchProjectFields _fetchFileNameFields resealJobFromRead applyResealGuards Function claimResealJobs releaseResealClaim _queueReseal _runReseal _disableResealForMissingColumn resealLegacyRows _sweepLegacyRows _applySweptProject _applySweptFile _fileWith loadProjects createProject updateProject deleteProject archiveProject getWorkspace getWorkspaceForChat linkChatToWorkspace addChatToProject +23
 
 ## lib/services/agents
 ### agent_control_source.dart  (496 Z.)
@@ -2087,9 +2168,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentRosterStore`
   - load saveRoster saveDeleted flush clear _schedule _persist _readAgent _readTime _readIds loaded instance
 
-### agents_approved_devices.dart  (126 Z.)
+### agents_approved_devices.dart  (154 Z.)
 - `class AgentsApprovedDevices`  — The executor's **local** set of device public keys it will accept frames
-  - lookup isApproved approve revoke revokeAll toBase64Map base64EncodePublicKey _sameKey isEmpty isNotEmpty length deviceIds
+  - lookup isApproved approve replaceAfterPairing revoke revokeAll toBase64Map base64EncodePublicKey _sameKey isEmpty isNotEmpty length deviceIds
 
 ### agents_backoff.dart  (59 Z.)
 - `class AgentsBackoff`  — The delay curve for one kind of work.
@@ -2098,7 +2179,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_chat_core.dart  (31 Z.)
 - const: debugAgentsChatCoreOverride
 
-### agents_chat_transport.dart  (822 Z.)
+### agents_chat_transport.dart  (838 Z.)
 - const: _taskSeq
 - `class AgentsChatTransport`  — Service for handling streaming chat responses.
   - declareStopIntent withdrawStopIntent _takeStopIntent hasStopIntent _isReplay _toolOutcomeLine maxTokens
@@ -2108,15 +2189,17 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<OutboxTask?> _queueForLater( String message, String sessionKey, Future<ChatModelSelection> selectedRoute, { Strin …)`  — Puts a prompt the socket would not take into the per-thread outbox.
 - `Future<void> _queueAndMark( String message, String sessionKey, Future<ChatModelSelection> selectedRoute, { String? reaso …)`  — Queues the prompt, then marks the bubble it came from.
 
-### agents_cloud_relay.dart  (767 Z.)
+### agents_cloud_relay.dart  (1129 Z.)
 - const: kAgentsRelayPath kAgentsPairChannelParam kAgentsTargetDeviceParam kAgentsHealChannelParam
 - `@immutable class AgentsCloudRelayAddress`  — A dial address for the cloud relay, expressed as a [Uri] so it fits the
   - toUri tryParse forRestoredTrust dialUri base pairingChannel targetDeviceId healChannel operator
 - `class AgentsCloudRelayException implements Exception`  — Raised when the relay refuses the handshake or the pairing claim. The
   - message code
+- `class AgentsClaimCancel`  — Stops a waiting claim ([AgentsCloudRelaySocket.waitForPairingClaim]): the
+  - cancel isCancelled whenCancelled
 - `RelaySocketConnector agentsCloudRelayConnector({ required String deviceId, required AccountSessionSource sessionSource …)`  — Builds the app's production connector: cloud for `…/v2/relay/ws`, the plain
 - `class AgentsCloudRelaySocket implements RelaySocket`  — A [RelaySocket] that speaks the cloud relay downward and the local blind
-  - resetClaimCache learnedTarget _resolveSession _handshake _claimPairingChannel _healIfOffline _onlineExecutors _deviceIdFrom send _forward close _onTransportFrame _onTransportError _onTransportDone Function _authErrorText healInProgress targetDeviceId incoming debugHealInProgress address inner
+  - resetClaimCache hasHandoff _parkHandoff _dropHandoff _takeHandoff debugRememberClaim learnedTarget _markGone _resolveSession _authenticate _handshake _claimPairingChannel _sendClaim _isTransportFailure _healIfOffline _onlineExecutors _deviceIdFrom send _forward close _onTransportFrame _onTransportError _onTransportDone _emitUp _flushUp Function _authErrorText healInProgress targetDeviceId incoming debugHealInProgress kClaimHandoffTimeout address inner kClaimReconnectBackoff
 
 ### agents_controller_session.dart  (97 Z.)
 - `class AgentsControllerSession`
@@ -2153,7 +2236,27 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `typedef AgentsHostSessionMinter = Future<AgentsHostSession?> Function(AccountSession appSession)`  — Mints a host session for the signed-in account. Null when it could not.
 - `Future<AgentsHostSession?> mintAgentsHostSession( AccountSession appSession, { http.Client? client, String? baseUrl, Dur …)`  — The production minter: one POST with the app's own bearer token.
 
-### agents_pairing.dart  (933 Z.)
+### agents_install_flow.dart  (240 Z.)
+- `typedef AgentsInstallClaimWaiter = Future<String?> Function( AgentsPairingInvite invite, { required DateTime deadline, r`  — Waits until the computer has parked on the invite's channel and claims it.
+- `typedef AgentsInstallPairer = Future<void> Function(AgentsPairingInvite invite)`  — Runs the shared invite pairing and saves the trust. Throws on failure.
+- `enum AgentsInstallPhase`
+  - preparing waiting linking linked expired failed signedOut
+- `class AgentsInstallFlow extends ChangeNotifier`
+  - now start newCommand pairWithInvite _begin _wait _link _stopWaiting _stale _set phase ticket message
+
+### agents_install_ticket.dart  (245 Z.)
+- const: kAgentsInstallTicketLifetime kAgentsInstallChannelLength kAgentsInstallDigitsLength _channelPattern _digitsPattern
+- `@immutable class AgentsInstallTicket`  — A pending install: the token halves, when it was made, when it stops
+  - isExpiredAt remainingAt toJson tryParse token invite command isWellFormed channel digits createdAt expiresAt userId operator
+- `String agentsInstallCommand(String token)`  — The command for [token]: the installer piped to bash, the token as its one
+- `class AgentsInstallTicketStore`  — Keeps the one pending ticket in secure storage.
+  - loadFor save delete loadOrMint mintAndSave
+
+### agents_invite_pairing.dart  (111 Z.)
+- `Future<AgentsStoredPairing?> pairAgentsFromInvite({ required AgentsRelayController controller, required AgentsPairingInv …)`  — Runs the whole invite pairing on [controller] and returns the trust it
+- `Future<AgentsStoredPairing?> persistAgentsTrust({ required AgentsRelayController controller, required AgentsPairingStore …)`  — Saves the trust [controller] established, addressed at [hostUrl] when one
+
+### agents_pairing.dart  (955 Z.)
 - `enum AgentsPairingRole`  — Which side of the ceremony a session drives.
   - initiator joiner
 - `enum AgentsPairingState`  — Ordered lifecycle. Illegal transitions and any use after a terminal state
@@ -2165,7 +2268,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsPairingCrypto`  — Byte-exact protocol constants + pure crypto helpers, shared by both roles and
   - hkdf commitment transcript deriveSas deriveConfirmMac deviceMac deviceProofMessage deriveChannelKey constantTimeEquals x25519 ed25519 sasLabel confirmDLabel confirmCLabel deviceDLabel deviceCLabel deviceProofLabel commitLabel channelKeyInfo x25519PublicLength commitmentLength macLength channelKeyLength sasHkdfBytes defaultSasDigits defaultExpiryMs
 - `class AgentsPairing`  — A single-use pairing session state machine for one role.
-  - Function _require _checkNotExpired _abort createCommit onPubkey onConfirmD onCommit createPubkey onReveal onConfirmC confirmPeerSas createDeviceKey onPeerDeviceKey _maybeComplete _currentTranscript _establishKey _verifyConfirm _decodeKey _decodeBytes role state pairingCode channelId sas approvedDevices peerDeviceId channelKey sasDigits
+  - Function _require _checkNotExpired _abort createCommit onPubkey onConfirmD onCommit createPubkey onReveal onConfirmC confirmPeerSas createDeviceKey onPeerDeviceKey rollbackPeerApproval _maybeComplete _currentTranscript _establishKey _verifyConfirm _decodeKey _decodeBytes role state pairingCode channelId sas approvedDevices peerDeviceId channelKey sasDigits
 - `int _wallClock()`
 - `String _randomChannelId()`
 - `String _randomDigits(int n)`
@@ -2177,7 +2280,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsPairingRestore`  — Restores the account's pairing onto this device, and keeps trying until it
   - start nudge _end _listenForAuth _loop _attempt _waitBeforeRetry _defaultHasKey _hasCloudRoute _defaultLoadKey _defaultAuthChanges reason attempts isSettled kDefaultBackoff
 
-### agents_pairing_store.dart  (226 Z.)
+### agents_pairing_store.dart  (245 Z.)
 - `abstract interface class AgentsSecureKeyValueStore`  — The minimal secure key/value surface the store needs. Backed by
   - read write delete
 - `class FlutterSecureKeyValueStore implements AgentsSecureKeyValueStore`  — Production backend over `flutter_secure_storage`.
@@ -2187,12 +2290,25 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsStoredPairing`  — A persisted pairing: everything the app needs to reconnect with no code.
   - toJson tryParse hostUrl channelId channelKey peerDeviceId peerPublicKey
 - `class AgentsPairingStore`  — Loads and saves the app's stable identity and single trust record.
-  - loadOrCreateIdentity loadPairing savePairing loadPairingFromCloud readPairingFromCloud publishPairing clearPairing backend
+  - _notifyChanged loadOrCreateIdentity loadPairing savePairing loadPairingFromCloud readPairingFromCloud publishPairing clearPairing backend changes
+- `class _PairingChanges extends ChangeNotifier`  — The store's change signal. The store lives as long as the shell that made
+  - ping
 
-### agents_pairing_uri.dart  (195 Z.)
-- const: kDefaultAgentsRelayBase kAgentsPairingUriScheme kAgentsPairingUriHost
+### agents_pairing_uri.dart  (202 Z.)
+- const: kDefaultAgentsRelayBase kAgentsInstallScriptUrl kAgentsPairingUriScheme kAgentsPairingUriHost
 - `class AgentsPairingInvite`  — A parsed pairing invite: what to claim, what to prove, where to dial.
   - toUri tryParse _extractLink _fromUri _fromBareCode _resolveCode _relayBaseFrom codeDigits pairingChannel pairingCode relayBase operator
+
+### agents_permissions_service.dart  (347 Z.)
+- const: kAgentPermissionsCapability
+- `enum AgentWorkspaceMount`  — How the workspace is bound into the sandbox.
+  - rw ro
+- `@immutable class AgentPermissions`  — One coworker's permissions. The defaults are the host's defaults.
+  - isOn wireValue withSwitch copyWith toJson workspaceWritable defaults keySudo keyNetwork keySecretsEnv keyWorkspaceMount keyUserBrowser keys sudo network secretsEnv workspaceMount userBrowser operator
+- `typedef AgentsControlFrameSender = Future<void> Function( Map<String, dynamic> payload, )`  — Seals and sends one control frame to the host. Throws when nothing is
+- `Future<void> _sendOverRelay(Map<String, dynamic> payload)`
+- `class AgentsPermissionsService extends ChangeNotifier`  — The app's copy of the host's answers, per coworker.
+  - attach isKnown permissionsOf confirmedOf isEnforced errorOf appliesFromOf refresh setSwitch handleFrame reset connected supported instance
 
 ### agents_queued_marks.dart  (168 Z.)
 - `typedef QueuedMarkReader = List<Map<String, dynamic>>? Function(String sessionKey)`  — Reads and writes the transcript. Tests replace both.
@@ -2215,7 +2331,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - initiator joiner _resolveNonce _require _abort _currentTranscript _sign _verifyPeer _checkPeerDevice createHello onResponse onHello onConfirm _decodeNonce _decodeBytes _constantTimeStringEquals role state channelId peerDeviceId authenticated
 - `SimplePublicKey agentsReconnectPeerKeyFromBase64(String encoded)`  — Parses a peer public key stored in a trust record. Delegates the length +
 
-### agents_relay_client.dart  (3267 Z.)
+### agents_relay_client.dart  (3355 Z.)
 - const: kReplayPageSize
 - `abstract interface class RelaySocket`  — A minimal duplex socket seam: an inbound stream of text frames and a way to
   - send close incoming
@@ -2268,7 +2384,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class AgentsRelayRoomHistory extends AgentsRelayInbound`  — A room's stored transcript, replayed on request (§16.1). Replaces whatever
   - roomId turns
 - `class AgentsRelayRunError extends AgentsRelayInbound`  — The executor reported an error.
-  - message
+  - message sessionKey runId
 - `class AgentsRelayDebugContext extends AgentsRelayInbound`  — The raw context the executor sent to the model for one round, echoed back
   - sessionKey round payload
 - `class AgentsRelayBrowserData extends AgentsRelayInbound`  — One raw RFB byte chunk of the live browser view (§9.1). Opaque on purpose —
@@ -2288,7 +2404,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `abstract interface class AgentsAgentStatusControl`  — Asks the host what a coworker runs on and what it has spent
   - requestAgentStatus agentStatus
 - `class AgentsRelayClient implements AgentsRelayController, ExecutorTransport, AgentsAutomationControl, AgentsDocumentsCon …)`
-  - _effectiveSessionAdopter _reattach _publishAttachment channelIdOf connect reconnect provisionAccount _startAuthWatch _onAuthChange _reprovision _answerReprovisionRequest _adoptRotatedSession _answerHostSessionRequest _mintAndSendHostSession _reconnectDialUrl sendAuthentication setRoomAgentToAgent sendRoomTask deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember requestRoomHistory _openProvisionGate _awaitProvisionGate sendRunAck _maybeAutoReplay startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendAutomationControl requestAutomationList sendSkillControl requestSkillsList probeMcpServers requestAgentStatus +36
+  - sendControlFrame _effectiveSessionAdopter _reattach _publishAttachment channelIdOf _logSafe connect reconnect provisionAccount _startAuthWatch _onAuthChange _reprovision _answerReprovisionRequest _adoptRotatedSession _answerHostSessionRequest _mintAndSendHostSession _reconnectDialUrl sendAuthentication setRoomAgentToAgent sendRoomTask deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember requestRoomHistory _openProvisionGate _awaitProvisionGate sendRunAck _maybeAutoReplay startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendVoiceCallState sendAutomationControl requestAutomationList sendSkillControl +41
 
 ### agents_relay_link.dart  (89 Z.)
 - `class AgentsRelayLink`  — Process-wide singleton joining the relay transport to the imported chat UI.
@@ -2342,6 +2458,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agents_tool_call_handler.dart  (160 Z.)
 - `class AgentsToolCallHandler implements ToolCallHandler`  — The Agents fold: one pass per turn, no client-side tool dispatch.
   - buildInitialSystemPrompt nativeToolDefinitions toolExecutor instance toolCallingEnabled nativeToolCalls
+
+### agents_voice_call_frames.dart  (101 Z.)
+- `abstract interface class AgentsVoiceCallControl`  — The app → host half: a transport that can send a `voice_call_state`.
+  - sendVoiceCallState
+- `class AgentsVoiceCallFrames`  — The process-wide router of the voice-call control frames.
+  - stateFrame handles deliver frames instance incomingType stateType accepted declined ended missed appStates
 
 ### browser_presence.dart  (269 Z.)
 - const: kBrowserPresenceFreshness
@@ -3254,10 +3376,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### io_helper.dart  (4 Z.)
 - reicht weiter: 'io_helper_stub.dart' if (dart.library.io) 'io_helper_io.dart'
 
-### io_helper_io.dart  (5 Z.)
-- reicht weiter: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException
+### io_helper_io.dart  (12 Z.)
+- reicht weiter: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException, IOException
 
-### io_helper_stub.dart  (79 Z.)
+### io_helper_stub.dart  (83 Z.)
 - `class File`  — Stub File class for web
   - exists existsSync length lengthSync readAsBytes readAsBytesSync readAsString readAsStringSync openRead path flush recursive
 - `class Directory`  — Stub Directory class for web
@@ -3268,9 +3390,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - exitCode stdout stderr pid
 - `class Process`  — Stub Process class for web
   - runSync
-- `class SocketException implements Exception`  — Stub SocketException for web
+- `abstract class IOException implements Exception`  — Stub IOException for web: the common type of every I/O failure, as in
+- `class SocketException implements IOException`  — Stub SocketException for web
   - message
-- `class HttpException implements Exception`  — Stub HttpException for web
+- `class HttpException implements IOException`  — Stub HttpException for web
   - message
 
 ### json_helpers.dart  (72 Z.)
@@ -3404,6 +3527,265 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### url_launcher_helper.dart  (22 Z.)
 - `Future<void> launchExternalUrl(String url)`  — Opens [url] in the system browser.
 
+## lib/voice
+### voice_call.dart  (25 Z.)
+- reicht weiter: 'voice_call_controller.dart' show VoiceCallController · 'voice_call_models.dart' · 'voice_call_service.dart' show VoiceCallService, VoiceCallException · 'voice_call_store.dart' show VoiceCallStore · 'widgets/voice_call_button.dart' show VoiceCallButton · 'widgets/voice_call_panel.dart' show VoiceCallPanel, VoiceTurnLine, formatVoiceCallClock · 'widgets/voice_agent_card.dart' show VoiceAgentCard · 'widgets/voice_call_record_card.dart' show VoiceCallRecordCard, describeVoiceCall, voiceCallTimeline
+
+### voice_call_controller.dart  (944 Z.)
+- `class VoiceCallController extends ChangeNotifier`
+  - _connect _ensureMicPermission _attach _onData _onTranscriptionStream _publishTurns _refreshAgent _onParticipantLeft _armAgentJoinTimer _onDisconnected _failureFor _onOpenLink _handleDelegateRpc _listenForResults detachDelegate _deliverResult _sendResultOnce _armCallLimit setMicMuted setSpeakerOn end dismiss _setPhase _finish _teardown Function _describe debugHandleDelegateRpc debugHandleLocationRpc debugArmCallLimit instance phase micMuted agentSpeaking chatId mode turns cards runningTools error +13
+
+### voice_call_models.dart  (313 Z.)
+- `enum VoiceCallMode`  — Which kind of chat the call belongs to. The worker reads it from the
+  - chat agents
+- `enum VoiceCallPhase`  — Where the one app-wide call is in its life.
+  - idle connecting live ending ended failed
+- `class VoiceTurn`  — One spoken turn of the live transcript.
+  - copyWith toJson isUser roleUser roleAssistant role text at isFinal operator
+- `class VoiceCallRecord`  — What a finished call leaves behind in its chat: when it ran and what was
+  - toJson duration finalTurnCount chatId mode startedAt endedAt turns cards
+- `class VoiceCard`  — A rich payload the agent pushed to the screen during a call (`ui.card`
+  - number text list toJson supportedVersion id kind title subtitle source data at
+- `class VoiceToolActivity`  — The live state of one tool call on the worker (`ui.tool` data topic).
+  - mergedWith isRunning label callId name status at
+- `String? _string(Object? raw)`
+- `class VoiceTaskResult`  — A result for a task the worker started through the delegate.
+  - statusDone statusFailed taskId status result
+- `abstract class VoiceTaskDelegate`  — Hands work from the voice worker to the chat model (normal chat) or the
+  - startTask results
+- `DateTime _parseTime(Object? raw)`
+
+### voice_call_service.dart  (152 Z.)
+- `abstract final class VoiceCallService`
+  - callerId _installId tokenHeaders fetchCredentials _accessToken isAvailable tokenUrl allowHttp
+- `class VoiceCallException implements Exception`  — A call failure with a message that is safe to show and to log: it never
+  - message
+
+### voice_call_store.dart  (97 Z.)
+- `abstract final class VoiceCallStore`
+  - _key save forChat deleteForChat _read Function maxRecordsPerChat
+
+### voice_location.dart  (105 Z.)
+- `enum VoiceLocationPermission`  — What the OS says about location access, before asking.
+  - granted denied deniedForever unavailable
+- `class VoiceLocationResolver`
+  - permissionDenied resetForNewCall answer _error
+
+### voice_location_platform_io.dart  (31 Z.)
+- `Future<VoiceLocationPermission> checkLocationPermission()`
+- `Future<Map<String, dynamic>> fetchCurrentLocation()`
+
+### voice_location_platform_stub.dart  (14 Z.)
+- `Future<VoiceLocationPermission> checkLocationPermission()`
+- `Future<Map<String, dynamic>> fetchCurrentLocation()`
+
+### voice_protocol.dart  (304 Z.)
+- `abstract final class VoiceProtocol`
+  - resolveSttLanguage tokenRequest parseTokenResponse taskResultPayload openLinkTarget openLinkAnswer notAvailable parseCard parseToolActivity _decodeVersioned decodeObject _error agentName roomPrefix identityPrefix delegateMethod taskResultMethod openLinkMethod getLocationMethod getDeviceStatusMethod appMethods delegateAnswerTimeout chatClosed maxContextChars maxResultChars maxRpcPayloadBytes context timeout cardTopic toolTopic
+- `class VoiceCredentials`  — Where and how to join: the LiveKit server URL and the room token.
+  - serverUrl participantToken
+- `String truncateRunes(String text, int maxRunes)`  — Cuts [text] to at most [maxRunes] Unicode code points, never splitting a
+
+### voice_tasks.dart  (90 Z.)
+- const: kVoiceResultBackoff
+- `class VoiceTaskLedger`  — The started tasks of one delegate that have no result yet.
+  - reset started resolved detach delegate pending
+- `Future<bool> deliverWithRetry( Future<bool> Function() attempt, { List<Duration> backoff = kVoiceResultBackoff, bool Fun …)`  — Runs [attempt] until it returns true, retrying after each wait in
+
+### voice_transcript.dart  (121 Z.)
+- `abstract final class VoiceTranscriptionAttributes`  — Attribute keys livekit-agents puts on a transcription text stream.
+  - parseFinal topic segmentId isFinal
+- `class VoiceTranscript`
+  - finalizeSegment recordTurns clear _key turns isEmpty hasFinalTurn isFinal
+- `class _Segment`
+  - index streamId
+
+## lib/voice/incoming
+### callkit_port.dart  (67 Z.)
+- `class FlutterCallkitPort implements CallkitPort`
+  - signalFor showIncoming showMissed startOutgoing setConnected end signals
+
+### incoming_call.dart  (156 Z.)
+- `enum IncomingCallUrgency`  — How urgent the agent says the call is.
+  - normal high
+- `class IncomingCall`  — One `voice_call_incoming` frame.
+  - fromFrame _expiry _id remainingAt isUrgent defaultAgentName maxReasonChars maxCallIdChars callId threadId agentId agentName reason urgency expiresAt
+- `class HostCallState`  — One `voice_call_state` frame from the host (the echo).
+  - fromFrame callId state
+
+### incoming_call_book.dart  (137 Z.)
+- `enum IncomingCallStatus`  — Where one known call is on this device.
+  - isFinal ringing accepting accepted declined missed ended answeredElsewhere expired
+- `class IncomingCallEntry`  — One known call.
+  - callId call status params serviceDeferred sent
+- `enum IncomingAdmission`  — What [IncomingCallBook.admit] decided about a frame.
+  - ring duplicate expired
+- `class IncomingCallBook`
+  - operator [] admit _put _prune length ringing keepAfterExpiry maxEntries
+
+### incoming_call_bootstrap.dart  (70 Z.)
+- `abstract final class IncomingCallBootstrap`  — Whether this build takes agent calls and shows the ongoing-call
+  - start service
+
+### incoming_call_mapping.dart  (158 Z.)
+- const: kIncomingRingMax kIncomingRingMin kIncomingHandleNormal kIncomingHandleUrgent kOngoingChatCallName _callingNotification
+- `CallKitParams? incomingCallkitParams( IncomingCall call, DateTime now, { bool startServiceOnAccept = true, })`  — The callkit ring for [call] at [now], or null when the ring is already
+- `CallKitParams outgoingCallkitParams({ required String id, required String name, })`  — The callkit call for a call the user started: no ring, only the ongoing
+- `class VoiceStartRequest`  — What `VoiceCallController.start` gets for an accepted call.
+  - chatId mode chatTitle agentName context callId callReason initiatedByAgent
+- `VoiceStartRequest voiceStartRequestFor( IncomingCall call, { String? chatTitle, String context = '', })`  — The start of the voice session for an accepted [call]: its Agents thread,
+
+### incoming_call_ports.dart  (220 Z.)
+- `enum CallkitSignalKind`  — What the callkit UI reports.
+  - accept decline ended timeout
+- `@immutable class CallkitSignal`
+  - kind id operator
+- `abstract interface class CallkitPort`  — The ring screen and the self-managed "ongoing call" of the OS.
+  - showIncoming showMissed startOutgoing setConnected end signals
+- `abstract interface class CallStateSender`  — Sends `voice_call_state` to the host. Never throws: a frame that cannot go
+  - send
+- `enum OngoingCallAction`  — A button on the ongoing-call notification that needs the Dart side.
+  - hangUp toggleMute toggleSpeaker open
+- `@immutable class OngoingCallSnapshot`  — What the ongoing-call notification shows.
+  - callKey title status muted speakerOn canSwitchSpeaker connectedAt operator
+- `abstract interface class OngoingCallUi`  — The ongoing-call notification with its buttons, and the two small native
+  - show cancel requestUnlock notice actions
+- `abstract interface class MicPermission`  — The microphone permission. A call accepted without it would run the
+  - isGranted request
+- `typedef CallChatOpener = void Function(String chatId, VoiceCallMode? mode)`  — Opens the chat a call belongs to (the Agents thread for an agent call).
+- `typedef IncomingCallStarter = Future<void> Function(IncomingCall call)`  — Opens the thread of an accepted [call] and starts its voice session.
+- `abstract interface class VoiceCallView implements Listenable`  — The part of the app-wide call the service reads and drives.
+  - end setMicMuted setSpeakerOn phase isActive callId chatId mode agentName agentPresent micMuted speakerOn canSwitchSpeaker startedAt
+- `class ControllerVoiceCallView implements VoiceCallView`  — [VoiceCallView] over the real controller.
+  - addListener removeListener end setMicMuted setSpeakerOn phase isActive callId chatId mode agentName agentPresent micMuted speakerOn canSwitchSpeaker startedAt controller
+
+### incoming_call_service.dart  (513 Z.)
+- const: kMicNeededNotice
+- `class IncomingCallService`
+  - start _ignore onHostFrame _onIncoming _ring _onHostState onCallkitSignal _accept _send _onCall _stillRuns _close _titleFor _snapshotFor _show _scheduleReposts _cancelReposts onUiAction Function sessionKey hostFrames callkit sender ui call starter openChat mic book repostDelays
+- `class _Session`  — One voice call as the OS sees it: its callkit id, and the agent call it
+  - key entry chatId startedAt connected connectedAt
+
+### incoming_call_starter.dart  (64 Z.)
+- const: kAcceptedCallThreadWait
+- `void openVoiceCallChat(String chatId, VoiceCallMode? mode)`  — Brings the chat of a call to the front: the Agents thread through the
+- `Future<void> startAcceptedAgentCall( IncomingCall call, { VoiceCallController? controller, Duration waitForThread = kAcc …)`  — Opens the thread of an accepted [call] and starts its voice session:
+
+### ongoing_call_notification.dart  (104 Z.)
+- `class OngoingCallNotification implements OngoingCallUi`
+  - actionFor argumentsFor show cancel requestUnlock notice _android actions channelName eventChannelName channel events
+
+### relay_call_state_sender.dart  (135 Z.)
+- `class RelayCallStateSender implements CallStateSender`
+  - send _rebind _onState _flush queued maxQueued maxAge retryAfter
+- `class _Queued`
+  - callId state at
+
+### voice_call_permissions.dart  (143 Z.)
+- `enum VoiceCallGrant`  — One thing a voice call needs, in the order the settings show them.
+  - microphone notifications fullScreenIntent background
+- `abstract final class VoiceCallPermissions`
+  - statuses _granted request _ask requestUpFront _android
+- `class PermissionHandlerMic implements MicPermission`  — [MicPermission] over permission_handler (the incoming-call service).
+  - isGranted request
+
+### voice_call_permissions_section.dart  (144 Z.)
+- const: _copy
+- `class VoiceCallPermissionsSection extends StatefulWidget`
+  - load ask
+- `class _GrantCopy`
+  - icon title buys
+- `class _VoiceCallPermissionsSectionState extends State<VoiceCallPermissionsSection> with WidgetsBindingObserver`
+  - _refresh _ask _row
+
+## lib/voice/widgets
+### voice_agent_card.dart  (861 Z.)
+- `class VoiceAgentCard extends StatelessWidget`
+  - _body card fill
+- `class _Header extends StatelessWidget`
+  - card icon
+- `void _openWebLink(String? url)`  — Opens a web link the card carries. Only http(s): the card comes from a
+- `class _LinkRow extends StatelessWidget`
+  - entry
+- `class _LinksBody extends StatelessWidget`
+  - entries
+- `class _TextLink extends StatelessWidget`  — A small text link in the card's accent ("Open in browser").
+  - label onTap
+- `class _WeatherBody extends StatelessWidget`
+  - _round _day card
+- `class _HourColumn extends StatelessWidget`
+  - entry
+- `class _SearchBody extends StatelessWidget`
+  - card
+- `class _ArticleBody extends StatelessWidget`
+  - card
+- `class _StockBody extends StatelessWidget`
+  - card
+- `class _SparklinePainter extends CustomPainter`
+  - paint shouldRepaint values color
+- `class _MapBody extends StatelessWidget`
+  - card
+- `class _ValueBody extends StatelessWidget`
+  - _lines card
+- `class _FactsBody extends StatelessWidget`
+  - card
+- `class _TaskBody extends StatelessWidget`
+  - card
+- `class _DeviceBody extends StatelessWidget`
+  - card
+- `class _GenericBody extends StatelessWidget`
+  - card
+
+### voice_call_button.dart  (67 Z.)
+- `class VoiceCallButton extends StatelessWidget`
+  - onPressed size tooltip active
+
+### voice_call_controls.dart  (253 Z.)
+- `class VoiceCallControl extends StatelessWidget`  — A square call control: the expressive squircle (corner = size x 0.34),
+  - child onTap tooltip fill size toggled semanticsId
+- `class VoiceMicGlyph extends StatelessWidget`  — The microphone, with a slash across it when [muted]. The icon set has no
+  - muted color gapColor size
+- `class _SlashPainter extends CustomPainter`
+  - paint shouldRepaint color gapColor
+- `class VoiceHangUpGlyph extends StatelessWidget`  — The handset laid down: `call02` turned 135 degrees, the hang-up sign
+  - color size
+- `class VoiceSpeakingBars extends StatefulWidget`  — Three bars that move while the agent speaks and rest flat when it does
+  - speaking color size
+- `class _VoiceSpeakingBarsState extends State<VoiceSpeakingBars> with SingleTickerProviderStateMixin`
+- `class _BarsPainter extends CustomPainter`
+  - paint shouldRepaint t active color
+
+### voice_call_panel.dart  (486 Z.)
+- `class VoiceCallPanel extends StatelessWidget`
+  - chatId controller transcriptMaxHeight transcriptWithCardsMaxHeight cardStripHeight
+- `class _PanelBody extends StatelessWidget`
+  - _assistantLabel controller
+- `class _StatusRow extends StatelessWidget`
+  - _status controller
+- `class _SpeakerToggle extends StatelessWidget`  — Speaker or earpiece. Words, not a glyph: the icon set has no speaker, and
+  - controller
+- `class _CallClock extends StatefulWidget`  — mm:ss since the call went live, ticking once a second.
+  - startedAt
+- `class _CallClockState extends State<_CallClock>`
+- `String formatVoiceCallClock(Duration d)`  — `mm:ss`, or `h:mm:ss` past an hour.
+- `class _ToolLine extends StatelessWidget`  — "Searching the web…" while a worker tool runs.
+  - tool
+- `class _CardStrip extends StatelessWidget`  — The agent's cards, newest first, side by side. A card taller than the
+  - cards
+- `class _Transcript extends StatelessWidget`
+  - turns assistantLabel maxHeight
+- `class VoiceTurnLine extends StatelessWidget`  — One transcript line: who spoke, then what was said. A partial line is
+  - turn assistantLabel userLabel
+- `class _FailedRow extends StatelessWidget`
+  - controller
+
+### voice_call_record_card.dart  (176 Z.)
+- `class VoiceCallRecordCard extends StatefulWidget`
+  - record assistantLabel initiallyExpanded
+- `class _VoiceCallRecordCardState extends State<VoiceCallRecordCard>`
+- `List<Object> voiceCallTimeline(VoiceCallRecord record)`  — The record's turns and cards in one list, by time. A card sorts after a
+- `String describeVoiceCall(VoiceCallRecord record)`  — "Voice call · 3 min · 12 turns" — the collapsed line of a record.
+
 ## lib/widgets
 ### accent_icon_button.dart  (70 Z.)
 - `class AccentIconButton extends StatelessWidget`  — A round, accent-filled icon button — one shared widget so the "new chat"
@@ -3468,13 +3850,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _Primary extends StatelessWidget`  — The one filled action. While [busy] it says what it is doing and ignores
   - label icon busy busyLabel onTap
 
-### agents_thread_header.dart  (427 Z.)
+### agents_thread_header.dart  (444 Z.)
 - `enum AgentsThreadConnection`  — One button in the thread's floating row.
   - live connecting down
 - `@immutable class AgentsThreadAction`
   - selected icon tooltip onPressed
 - `class AgentsThreadHeader extends StatelessWidget`  — The actions of a desktop thread, as chuk_chat draws the buttons over its
-  - _screenButton _menuButton connection onReconnect automationLabel automationPaused automationExpanded onToggleAutomations actions menuActions showScreenTarget onOpenScreen slot
+  - _screenButton _menuButton agentName connection onReconnect automationLabel automationPaused automationExpanded onToggleAutomations actions menuActions showScreenTarget onOpenScreen slot
 - `class ChromeIconButton extends StatelessWidget`  — chuk's icon button over the chat: a 20 px glyph in the icon colour, round
   - icon tooltip onPressed selected parked semanticsId
 - `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
@@ -3482,12 +3864,12 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
   - label paused expanded onTap
 
-### agents_thread_view.dart  (2277 Z.)
+### agents_thread_view.dart  (2296 Z.)
 - const: kAgentsThreadHeaderInset kAgentsDevHostUrl
 - `class AgentsThreadView extends StatefulWidget`
   - controllerBuilder sessionSource onController pairingStore devHostUrl threadKey fileSaver onRunStateChanged onActivity onPaired onOpenModelScreen shellConfig title onOpenAgentScreen actions menuActions topInset phoneLayout linkReport emptyState
 - `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
-  - _readSwitchedThread _bootstrap _tryBuildController _warmCache _buildController _rebuildController _onStateChanged _flushOutbox _resendUnacknowledged _onTaskUnacknowledged _requestReplay _watchdogTick _scheduleAutoReconnect _reconnect openPairing _connect _persistTrust _pairFromInvite _pairingFailureText _connectionFailureText _connectionBanner _openPairingScreen _confirmForget _forget _loadVerbose _onVerboseChanged _onThemeChanged _onInbound _clearSecretRequest _submitSecretRequest _skipSecretRequest _decideApproval copyFullChat _onLedgerChanged _onRunClosed _releaseStaleComposer _onRunSilent _reconcileOnOpen _onLoaderChanged _onChatStoreChanged +23
+  - _readSwitchedThread _bootstrap _tryBuildController _warmCache _buildController _rebuildController _onStateChanged _flushOutbox _resendUnacknowledged _onTaskUnacknowledged _requestReplay _watchdogTick _scheduleAutoReconnect _reconnect openPairing _connect _persistTrust _pairFromInvite pairWithInvite _runInvitePairing _pairingFailureText _connectionFailureText _connectionBanner _openPairingScreen _confirmForget _forget _loadVerbose _onVerboseChanged _onThemeChanged _onInbound _clearSecretRequest _submitSecretRequest _skipSecretRequest _decideApproval copyFullChat _onLedgerChanged _onRunClosed _releaseStaleComposer _onRunSilent _reconcileOnOpen +25
 
 ### anchored_menu.dart  (395 Z.)
 - const: _kAnchorGap _kEdgeMargin _kMinRoomAbove _kMenuDuration
@@ -4427,6 +4809,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class _QuickSwitcherState extends State<QuickSwitcher>`
   - _move _onKey _open _row _matches
 
+## lib/widgets/agents_permissions
+### agent_permissions_section.dart  (316 Z.)
+- const: kAgentPermissionSpecs kPermissionsAppliesLine kPermissionNotEnforced
+- `@immutable class AgentPermissionSpec`  — One switch of the section: the wire key, the words and the icon.
+  - key title explanation icon
+- `class AgentPermissionsSection extends StatefulWidget`
+  - agentId service answerTimeout
+- `enum _Phase`
+  - asking offline unsupported noAnswer ready
+- `class _AgentPermissionsSectionState extends State<AgentPermissionsSection>`
+  - _bind _phaseNow _maybeAsk _ask _onChanged _toggle _row _statusLine
+
 ## lib/widgets/charts
 ### chart_painter.dart  (1458 Z.)
 - const: _kMinLabelFontSize _kAxisFontSize _kLabelFontSize _kValueFontSize
@@ -4661,8 +5055,8 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `class SbHairline extends StatelessWidget`  — Hairline divider matching app palette.
   - margin
 
-### sidebar_common.dart  (512 Z.)
-- const: kSidebarPageSize
+### sidebar_common.dart  (530 Z.)
+- const: kSidebarPageSize kSidebarAddComputerLabel kSidebarAddComputerKey
 - `String normalizeSidebarTitle(String title)`  — Strips generated Markdown decoration from a chat title before display.
 - `String deriveSidebarChatTitle(StoredChat chat)`
 - `String sidebarDisplayName(ProfileRecord? profile)`
@@ -4748,47 +5142,47 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `lib/ui/expressive/waveform.dart` — 9 Zeilen, von keiner Datei benutzt
 - `lib/widgets/chat_theme.dart` — 150 Zeilen, von keiner Datei benutzt
 
-**Importzyklen (15)**
+**Importzyklen (16)**
 - 3 Dateien: lib/services/account_session.dart → lib/services/session_refresh_scheduler.dart → lib/services/supabase_service.dart
 - 2 Dateien: lib/services/agents/agents_pairing_store.dart → lib/services/agents/supabase_pairing_sync.dart
 - 2 Dateien: lib/services/mcp/mcp_catalogue.dart → lib/services/mcp/mcp_connection.dart
 - 5 Dateien: lib/services/agents/agents_cloud_relay.dart → lib/services/agents/agents_relay_client.dart → lib/services/agents/agents_relay_link.dart → lib/services/mcp/mcp_service.dart → lib/services/mcp/mcp_store
 - 9 Dateien: lib/services/agents/agents_queued_marks.dart → lib/services/chat_preload_service.dart → lib/services/chat_storage_crud.dart → lib/services/chat_storage_mutations.dart → lib/services/chat_storage_servi
 
-**Größte Dateien (72 über der Schwelle)**
-- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4104 Zeilen, 165 Symbole
-- `lib/services/agents/agents_relay_client.dart` — 3267 Zeilen, 404 Symbole
-- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2650 Zeilen, 133 Symbole
-- `lib/platform_specific/chat/desktop_send_logic.dart` — 2550 Zeilen, 24 Symbole
-- `lib/widgets/agents_thread_view.dart` — 2277 Zeilen, 136 Symbole
+**Größte Dateien (76 über der Schwelle)**
+- `lib/platform_specific/chat/chat_ui_mobile.dart` — 4177 Zeilen, 167 Symbole
+- `lib/services/agents/agents_relay_client.dart` — 3355 Zeilen, 411 Symbole
+- `lib/services/artifact_storage_service.dart` — 3209 Zeilen, 133 Symbole
+- `lib/platform_specific/chat/chat_ui_desktop.dart` — 2706 Zeilen, 134 Symbole
+- `lib/platform_specific/chat/desktop_send_logic.dart` — 2573 Zeilen, 24 Symbole
 
 ## Mehrfach vergebene Namen
 
-249 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
+271 Namen existieren in mehr als einer Datei. Meist kopierter Code. Bevor du so etwas neu schreibst, eine der Stellen wiederverwenden. Volle Liste: `pseudomap dupes`.
 
+- `_load` — lib/pages/diagnostics_settings_page.dart:42 · lib/pages/settings/embedding_settings_page.dart:32 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 +7
 - `_save` — lib/pages/agent_profile_edit_page.dart:149 · lib/pages/skills_settings_page.dart:323 · lib/pages/workspace_instructions_page.dart:57 · lib/services/agents/agents_task_outbox.dart:229 +7
-- `_load` — lib/pages/diagnostics_settings_page.dart:42 · lib/pages/settings/embedding_settings_page.dart:32 · lib/pages/workspace_files_page.dart:70 · lib/pages/workspace_mobile_detail_page.dart:68 +6
+- `Function` — lib/pages/mcp_connectors_page.dart:1041 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/platform_specific/chat/voice/voice_record_placement.dart:43 · lib/services/chat_payload_codec.dart:488 +5
 - `_persist` — lib/services/agents/agent_profile_store.dart:264 · lib/services/agents/agent_read_marks.dart:156 · lib/services/agents/agent_roster_source.dart:184 · lib/services/agents/agent_roster_store.dart:169 +5
-- `Function` — lib/pages/mcp_connectors_page.dart:1030 · lib/platform_specific/chat/handlers/scanned_pdf_pages.dart:20 · lib/services/chat_payload_codec.dart:488 · lib/services/workspace_file_upload.dart:36 +3
-- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:343 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/agents_desktop/quick_switcher.dart:162 +3
-- `_onInbound` — lib/services/agents/browser_presence.dart:177 · lib/services/automations/automations_source.dart:139 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1149 +2
+- `_key` — lib/platform_specific/chat/voice/voice_turn_queue.dart:156 · lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:472 · lib/services/chat_dirty_store.dart:50 +4
+- `_open` — lib/pages/assistant_settings_page.dart:153 · lib/pages/mcp_connectors_page.dart:354 · lib/services/offline_queue_service_native.dart:37 · lib/widgets/agents_desktop/quick_switcher.dart:162 +3
+- `_row` — lib/pages/mcp_connectors_page.dart:330 · lib/pages/mobile_agents_settings_page.dart:345 · lib/pages/skills_settings_page.dart:724 · lib/voice/incoming/voice_call_permissions_section.dart:120 +3
+- `_onInbound` — lib/services/agents/browser_presence.dart:177 · lib/services/automations/automations_source.dart:139 · lib/services/skills/skills_source.dart:104 · lib/widgets/agents_thread_view.dart:1168 +2
 - `_formatDate` — lib/pages/media_manager_page.dart:580 · lib/pages/usage_details_page.dart:920 · lib/pages/workspace_mobile_detail_page.dart:526 · lib/services/workspace_message_service.dart:260 +1
-- `_key` — lib/services/agents/agents_task_outbox.dart:192 · lib/services/agents/agents_task_outbox.dart:472 · lib/services/chat_dirty_store.dart:50 · lib/services/chat_model_selection_service.dart:52 +1
-- `_row` — lib/pages/mcp_connectors_page.dart:319 · lib/pages/mobile_agents_settings_page.dart:345 · lib/pages/skills_settings_page.dart:724 · lib/widgets/agents_desktop/quick_switcher.dart:254 +1
-- `_build` — lib/pages/agent_profile_page.dart:115 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
+- `_onChanged` — lib/pages/automations_page.dart:60 · lib/pages/skills_settings_page.dart:592 · lib/pages/workspace_instructions_page.dart:53 · lib/widgets/agents_permissions/agent_permissions_section.dart:194 +1
+- `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:64 · lib/pages/skills_settings_page.dart:596 · lib/voice/incoming/voice_call_permissions_section.dart:87 +1
+- `_build` — lib/pages/agent_profile_page.dart:130 · lib/ui/expressive/agent_face.dart:235 · lib/ui/expressive/shapes.dart:29 · lib/ui/expressive/shapes.dart:140
 - `_coerceInt` — lib/services/tool_executor.dart:1288 · lib/tool_handlers/chat_search_tools.dart:726 · lib/tool_handlers/map_tools.dart:632 · lib/tool_handlers/web_tools.dart:24
-- `_confirmDelete` — lib/pages/agent_profile_page.dart:338 · lib/pages/skills_settings_page.dart:108 · lib/pages/workspace_mobile_detail_page.dart:111 · lib/widgets/agent_roster_view.dart:360
+- `_confirmDelete` — lib/pages/agent_profile_page.dart:362 · lib/pages/skills_settings_page.dart:108 · lib/pages/workspace_mobile_detail_page.dart:111 · lib/widgets/agent_roster_view.dart:360
+- `_connect` — lib/pages/mcp_connectors_page.dart:745 · lib/voice/voice_call_controller.dart:314 · lib/widgets/agents_thread_view.dart:943 · lib/widgets/mcp_connect_card.dart:54
+- `_copy` — lib/pages/agents_install_page.dart:161 · lib/widgets/chuk_table.dart:408 · lib/widgets/chuk_table_classic.dart:68 · lib/widgets/selection_copy_area.dart:175
+- `_emit` — lib/platform_specific/chat/voice/voice_task_delegates.dart:88 · lib/services/offline_queue_service_native.dart:223 · lib/services/offline_queue_service_web.dart:151 · lib/services/offline_retry_manager.dart:341
 - `_ensureEncryptionKey` — lib/services/agents/supabase_pairing_sync.dart:178 · lib/services/mcp/chuk_mcp_mirror.dart:182 · lib/services/mcp/mcp_connector_sync.dart:137 · lib/services/secrets/secrets_sync.dart:122
 - `_formatDuration` — lib/assistant/assistant_tools.dart:809 · lib/services/device_services.dart:518 · lib/utils/api_rate_limiter.dart:207 · lib/widgets/agent_run_views.dart:150
-- `_onChanged` — lib/pages/automations_page.dart:60 · lib/pages/skills_settings_page.dart:592 · lib/pages/workspace_instructions_page.dart:53 · lib/widgets/vnc_webview_controls.dart:310
-- `_onControllerChanged` — lib/platform_specific/chat/chat_ui_mobile.dart:844 · lib/widgets/settings_search_bar.dart:81 · lib/widgets/sidebar/sidebar_chrome.dart:685 · lib/widgets/vnc_trackpad_overlay.dart:188
-- `_refresh` — lib/pages/assistant_settings_page.dart:123 · lib/pages/automations_page.dart:64 · lib/pages/skills_settings_page.dart:596 · lib/widgets/message_bubble/cards.dart:384
-- `_select` — lib/pages/agents_shell_state.dart:173 · lib/pages/messenger_shell.dart:555 · lib/services/storage/agents_chat_store.dart:904 · lib/widgets/chat_documents_panel.dart:254
+- `_onControllerChanged` — lib/platform_specific/chat/chat_ui_mobile.dart:866 · lib/widgets/settings_search_bar.dart:81 · lib/widgets/sidebar/sidebar_chrome.dart:685 · lib/widgets/vnc_trackpad_overlay.dart:188
+- `_select` — lib/pages/agents_shell_state.dart:200 · lib/pages/messenger_shell.dart:622 · lib/services/storage/agents_chat_store.dart:904 · lib/widgets/chat_documents_panel.dart:254
+- `_set` — lib/assistant/assistant_session.dart:467 · lib/services/agents/agents_install_flow.dart:225 · lib/services/agents/agents_relay_client.dart:3334 · lib/services/chat_payload_migration_service.dart:1211
 - `_submit` — lib/pages/secrets_settings_page.dart:222 · lib/pages/workspaces_page.dart:619 · lib/widgets/coworker_name_dialog.dart:69 · lib/widgets/room_create_sheet.dart:85
 - `_syncCacheToCurrentUser` — lib/services/per_model_system_prompt_service.dart:153 · lib/services/skills/user_skills_service.dart:63 · lib/services/title_generation_service.dart:106 · lib/services/user_preferences_service.dart:45
 - `_table` — lib/services/customization_preferences_service.dart:214 · lib/services/profile_service.dart:44 · lib/services/theme_settings_service.dart:129 · lib/widgets/chat_document_view.dart:364
-- `Duration` — lib/services/agents/agents_cloud_relay.dart:249 · lib/services/agents/agents_host_session.dart:74 · lib/widgets/app_notification.dart:115
-- `NotificationService` — lib/services/notification_service.dart:16 · lib/services/notification_service_io.dart:12 · lib/services/notification_service_stub.dart:7
-- `StreamingForegroundService` — lib/services/streaming_foreground_service.dart:10 · lib/services/streaming_foreground_service_io.dart:9 · lib/services/streaming_foreground_service_stub.dart:6
-- `_CopyButton` — lib/widgets/chuk_table.dart:1113 · lib/widgets/chuk_table_classic.dart:367 · lib/widgets/markdown_message.dart:1861
-- … +224 weitere
+- … +246 weitere

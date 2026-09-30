@@ -1,0 +1,43 @@
+# lib/widgets/agents_permissions · Signaturen
+
+## lib/widgets/agents_permissions/agent_permissions_section.dart  (316 Z.)
+- L19 `@immutable class AgentPermissionSpec`  — One switch of the section: the wire key, the words and the icon.
+  - L21 `const AgentPermissionSpec({ required this.key, required this.title, required this.explanation, required this.icon, })`
+  - L28 `final String key`
+  - L29 `final String title`
+  - L30 `final String explanation`
+  - L33 `final IconData icon`  — A glyph the app's icon table maps to a HugeIcon.
+- L37 `kAgentPermissionSpecs = <AgentPermissionSpec>[ AgentPermissionSpec( key: AgentPermissions.keySudo, title: 'Root access (`  — The switches, in the order of [AgentPermissions.keys].
+- L71 `kPermissionsAppliesLine = 'Changes apply from the next task. The sandbox is rebuilt then; the ' 'files in its workspace `  — The line under the switches while everything is fine.
+- L76 `kPermissionNotEnforced = 'Not enforced on this host'`  — The subtitle of a switch this host cannot enforce (the local backend).
+- L78 `class AgentPermissionsSection extends StatefulWidget`
+  - L79 `const AgentPermissionsSection({ super.key, required this.agentId, this.service, this.answerTimeout = const Duration(seconds: 10), })`
+  - L87 `final String agentId`  — The coworker, which is also its thread's `session_key`.
+  - L90 `final AgentsPermissionsService? service`  — Defaults to [AgentsPermissionsService.instance].
+  - L94 `final Duration answerTimeout`  — How long to wait for the host (its capability, then its answer) before
+  - L97 `State<AgentPermissionsSection> createState()`
+- L101 `enum _Phase`
+  - L101 `asking`
+  - L101 `offline`
+  - L101 `unsupported`
+  - L101 `noAnswer`
+  - L101 `ready`
+- L103 `class _AgentPermissionsSectionState extends State<AgentPermissionsSection>`
+  - L104 `late AgentsPermissionsService _service`
+  - L105 `_Phase _phase = _Phase.asking`
+  - L106 `Timer? _answerTimer`
+  - L109 `bool _asked = false`  — A `get` went out on the current connection and was not answered yet.
+  - L110 `bool _wasConnected = false`
+  - L111 `bool _wasSupported = false`
+  - L114 `void initState()`
+  - L120 `void didUpdateWidget(AgentPermissionsSection old)`
+  - L129 `void dispose()`
+  - L137 `void _bind(AgentsPermissionsService service)`  — Called from [initState] and [didUpdateWidget], which both build next,
+  - L153 `_Phase _phaseNow()`
+  - L165 `void _maybeAsk()`  — Ask when there is a host that can answer and nothing went out yet. A
+  - L179 `Future<void> _ask()`
+  - L194 `void _onChanged()`
+  - L218 `Future<void> _toggle(String key, bool on)`
+  - L226 `Widget build(BuildContext context)`
+  - L275 `Widget _row( AgentPermissionSpec spec, AgentPermissions permissions, bool editable, )`
+  - L296 `String _statusLine(bool known)`

@@ -75,27 +75,31 @@
   - L30 `static Future<bool> _probe( Uri uri, Duration timeout, { String method = 'GET', })`
   - L50 `static Uri _buildUri(String base, String path)`
 
-## lib/services/app_initialization_service.dart  (420 Z.)
-- L24 `class AppInitializationService`  — Callback for initialization events
-  - L25 `AppInitializationService._()`
-  - L27 `static final AppInitializationService _instance = AppInitializationService._()`
-  - L29 `static AppInitializationService get instance`
-  - L31 `bool _isInitializing = false`
-  - L32 `bool _isSupabaseReady = false`
-  - L33 `bool get _isLinuxDesktop`
-  - L36 `static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3)`
-  - L37 `static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2)`
-  - L42 `Future<void> initializeCoreServices()`  — Initialize core services (call from main())
-  - L108 `Future<void> _preloadEncryptionKey()`
-  - L127 `Future<void> initializeUserSession(User user)`  — Initialize user session after authentication
-  - L215 `Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch)`
-  - L247 `Future<bool> _tryLoadKeyWithTimeout(Duration timeout)`
-  - L260 `Future<void> _loadUserData( Stopwatch stopwatch, { required bool startSync, })`
-  - L326 `void _startSyncAfterKey(Stopwatch stopwatch)`
-  - L346 `void _startSyncAfterSidebarLoad( Stopwatch stopwatch, { required bool keyReady, })`
-  - L367 `void _onLinuxKeyReady(Stopwatch stopwatch)`
-  - L379 `void _startDeferredPreload()`
-  - L390 `Future<bool> waitForSupabase({ Duration timeout = const Duration(seconds: 5), })`  — Wait for Supabase to be initialized
+## lib/services/app_initialization_service.dart  (467 Z.)
+- L25 `class AppInitializationService`  — Callback for initialization events
+  - L26 `AppInitializationService._()`
+  - L28 `static final AppInitializationService _instance = AppInitializationService._()`
+  - L30 `static AppInitializationService get instance`
+  - L32 `bool _isInitializing = false`
+  - L33 `bool _isSupabaseReady = false`
+  - L34 `bool get _isLinuxDesktop`
+  - L37 `static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3)`
+  - L38 `static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2)`
+  - L42 `static const Duration _metadataSweepDelay = Duration(seconds: 8)`  — Wait before the encrypted_meta sweep, so it does not compete with the
+  - L45 `String? _metadataSweepUserId`  — User whose rows the encrypted_meta sweep already ran for this session.
+  - L50 `Future<void> initializeCoreServices()`  — Initialize core services (call from main())
+  - L116 `Future<void> _preloadEncryptionKey()`
+  - L135 `Future<void> initializeUserSession(User user)`  — Initialize user session after authentication
+  - L223 `Future<void> _startSyncWhenKeyReady(Stopwatch stopwatch)`
+  - L255 `Future<bool> _tryLoadKeyWithTimeout(Duration timeout)`
+  - L268 `Future<void> _loadUserData( Stopwatch stopwatch, { required bool startSync, })`
+  - L334 `void _startSyncAfterKey(Stopwatch stopwatch)`
+  - L355 `void _startSyncAfterSidebarLoad( Stopwatch stopwatch, { required bool keyReady, })`
+  - L377 `void _onLinuxKeyReady(Stopwatch stopwatch)`
+  - L393 `void _afterKeyReady()`  — Work that needs the encryption key. The startup project load runs
+  - L403 `void _startMetadataSweep()`  — Seals this user's legacy project, project file and artifact rows into
+  - L426 `void _startDeferredPreload()`
+  - L437 `Future<bool> waitForSupabase({ Duration timeout = const Duration(seconds: 5), })`  — Wait for Supabase to be initialized
 
 ## lib/services/app_lifecycle_service.dart  (165 Z.)
 - L17 `class AppLifecycleService extends ChangeNotifier`  — Callback when app state changes
@@ -326,66 +330,140 @@
   - L115 `static String _escapeForMessage(String value)`
   - L123 `static String _extractContext( String text, int pos, int matchLen, int radius, )`
 
-## lib/services/artifact_storage_service.dart  (1893 Z.)
-- L20 `class ArtifactStorageService`
-  - L21 `const ArtifactStorageService._()`
-  - L28 `static final Map<String, Future<void> Function()> _pendingFlushers = <String, Future<void> Function()>{}`
-  - L36 `static void registerPendingFlusher( String artifactId, Future<void> Function() flush, )`  — Registers a callback that flushes pending in-memory edits for
-  - L49 `static void unregisterPendingFlusher( String artifactId, [ Future<void> Function()? expected, ])`  — Removes a previously registered flusher. Editors must call this from
-  - L70 `static Future<void> flushPendingEdits()`  — Invokes every registered flusher and awaits them all. Used right
-  - L100 `static const String _artifactsTable = 'artifacts'`
-  - L101 `static const String _versionsTable = 'artifact_versions'`
-  - L102 `static const String _missingSchemaMessage = 'Artifact storage is not configured on this server yet. ' 'Please run the database migrations for artifacts.'`
-  - L105 `static const int maxContentBytes = 500 * 1024`
-  - L106 `static final RegExp _artifactIdPattern = RegExp(r'^[A-Za-z0-9-]+$')`
-  - L108 `static final StreamController<void> _changesController = StreamController<void>.broadcast()`
-  - L110 `static Stream<void> get changes`
-  - L112 `static final ValueNotifier<ArtifactDocument?> activeArtifactNotifier = ValueNotifier<ArtifactDocument?>(null)`
-  - L121 `static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(false)`  — Controls whether the artifact panel is visible in the UI. Decoupled from
-  - L126 `static final ValueNotifier<int> openRequestNotifier = ValueNotifier<int>(0)`  — Monotonic counter fired each time the user asks to (re-)open the panel,
-  - L133 `static final ValueNotifier<({String artifactId, int? version})?> pendingInitialOpen = ValueNotifier<({String artifactId, int? version})?>(null)`  — When set, the artifact panel should open on this specific artifact +
-  - L139 `static void requestOpen({required String artifactId, int? version})`  — Request the panel to open (without toggling `panelOpenNotifier`).
-  - L145 `static String? _activeChatId`
-  - L157 `static String? currentMessageId`  — Stable id of the assistant message currently being streamed.
-  - L158 `static String? _cacheUserId`
-  - L159 `static bool _artifactStorageAvailable = true`
-  - L160 `static bool _missingSchemaLogged = false`
-  - L161 `static final Map<String, List<ArtifactDocument>> _cacheByChatId = <String, List<ArtifactDocument>>{}`
-  - L163 `static final Map<String, List<ArtifactVersionSnapshot>> _versionCache = <String, List<ArtifactVersionSnapshot>>{}`
-  - L166 `static String? get activeChatId`
-  - L168 `static Future<void> setActiveChat( String? chatId, { bool forceRefresh = false, })`
-  - L190 `static Future<List<ArtifactDocument>> listAllUserArtifacts()`  — Loads every active artifact owned by the signed-in user, across all
-  - L231 `static Future<List<ArtifactDocument>> loadArtifactsForChat( String chatId, { bool forceRefresh = false, })`
-  - L283 `static Future<ArtifactDocument?> loadLatestForChat( String chatId, { bool forceRefresh = false, })`
-  - L295 `static Future<ArtifactDocument?> loadArtifactById(String artifactId)`
-  - L341 `static Future<ArtifactDocument> createArtifact({ required String chatId, required String artifactId, required String title, required ArtifactType type, required String content, String? language, String? messageId, String? attachmentPath, })`
-  - L457 `static Future<ArtifactDocument> updateArtifactWithEdits({ required String artifactId, required List<ArtifactEdit> edits, })`
-  - L474 `static Future<ArtifactDocument> rewriteArtifact({ required String artifactId, required String content, String? title, ArtifactType? type, String? language, String? attachmentPath, bool preserveMetadata = false, bool clearAttachment = false, })`
-  - L628 `static Future<ArtifactDocument> overwriteCurrentArtifact({ required String artifactId, required String content, })`  — In-place update of the current artifact row WITHOUT bumping `version`
-  - L738 `static Future<List<ArtifactVersionSnapshot>> loadVersionHistory( String artifactId, { bool forceRefresh = false, })`
-  - L808 `static Future<int> repairVersionChain(String artifactId)`  — Rebuilds [artifact_versions] from the current [artifacts] row when the
-  - L922 `static Future<void> _insertVersion({ required String artifactId, required String chatId, required String userId, required int version, required String encryptedContent, required DateTime createdAt, String? attachmentPath, String? messageId, })`
-  - L997 `static Future<void> rollbackArtifactsForMessages( Iterable<String> messageIds, )`  — Roll back any artifact versions whose `message_id` is in [messageIds].
-  - L1126 `static Future<({bool deleted, String? affectedChatId})> _rollbackOneArtifact({ required String artifactId, required List<Map<String, dynamic>> discardedSnapshots, required String userId, })`  — Internal helper: roll back a single artifact based on its discarded
-  - L1267 `static Future<Map<String, dynamic>?> _loadLatestRemainingSnapshot({ required String artifactId, required String userId, })`  — Returns the latest remaining snapshot row for [artifactId] (after the
-  - L1302 `static int? latestRemainingVersion({ required List<int> snapshotVersions, required Set<int> discardedVersions, })`  — Pure helper extracted for testing. Given a sorted-by-version snapshot
-  - L1330 `static List<({String chatId, DateTime start, DateTime? end})> computeOrphanBrackets({ required List<Map<String, dynamic>> discardedStamps, required List<Map<String, dynamic>> nextStampedEvents, })`  — Pure helper: given a set of stamped artifact rows (each `{chat_id,
-  - L1391 `static List<Map<String, dynamic>> filterOrphanSnapshotsInBrackets({ required List<Map<String, dynamic>> candidateSnapshots, required List<({String chatId, DateTime start, DateTime? end})> brackets, })`  — Pure helper: filters [candidateSnapshots] (each `{message_id,
-  - L1453 `static Future<Map<String, List<Map<String, dynamic>>>> _findOrphanSnapshotsForMessages({ required List<String> messageIds, required String userId, })`  — Looks up legacy / un-stamped `artifact_versions` rows that belong to
-  - L1589 `static void _removeArtifactFromCache(String artifactId)`
-  - L1603 `static Future<void> deleteArtifactsByIds(Iterable<String> artifactIds)`  — Hard-deletes the given artifact ids (and their version history) for the
-  - L1675 `static Future<void> setAttachmentPath({ required String artifactId, required String attachmentPath, })`  — Sets [attachmentPath] on an existing artifact row **without** bumping
-  - L1738 `static void _emitChange(String chatId, ArtifactDocument updated)`
-  - L1745 `static void _insertIntoCache(ArtifactDocument doc)`
-  - L1755 `static User _requireUser()`
-  - L1764 `static void _ensureCacheForUser(String userId)`
-  - L1776 `static void _validateArtifactId(String id)`
-  - L1788 `static void _validateContentSize(String content)`
-  - L1797 `static bool _isDuplicateArtifactError(PostgrestException error)`
-  - L1803 `static bool _handleMissingArtifactSchema( PostgrestException error, { required String operation, })`
-  - L1840 `static bool _isMissingArtifactSchemaError(PostgrestException error)`
-  - L1860 `static Future<String> _encryptOrThrow(String content)`
-  - L1868 `static Future<String> _decryptMaybe(String value)`
+## lib/services/artifact_storage_service.dart  (3209 Z.)
+- L39 `typedef ArtifactRowRef = ({ String rowId, String handle, String chatId, String title, String? language, DateTime updated`  — What the service knows about one `artifacts` row without its content:
+- L49 `class ArtifactStorageService`
+  - L50 `const ArtifactStorageService._()`
+  - L57 `static final Map<String, Future<void> Function()> _pendingFlushers = <String, Future<void> Function()>{}`
+  - L65 `static void registerPendingFlusher( String artifactId, Future<void> Function() flush, )`  — Registers a callback that flushes pending in-memory edits for
+  - L78 `static void unregisterPendingFlusher( String artifactId, [ Future<void> Function()? expected, ])`  — Removes a previously registered flusher. Editors must call this from
+  - L99 `static Future<void> flushPendingEdits()`  — Invokes every registered flusher and awaits them all. Used right
+  - L129 `static const String _artifactsTable = 'artifacts'`
+  - L130 `static const String _versionsTable = 'artifact_versions'`
+  - L131 `static const String _missingSchemaMessage = 'Artifact storage is not configured on this server yet. ' 'Please run the database migrations for artifacts.'`
+  - L134 `static const int maxContentBytes = 500 * 1024`
+  - L135 `static final RegExp _artifactIdPattern = RegExp(r'^[A-Za-z0-9-]+$')`
+  - L136 `static const Uuid _uuid = Uuid()`
+  - L140 `static const String _metaColumns = 'id, chat_id, title, language, encrypted_meta, updated_at'`  — Columns the handle index and the re-seal sweep read: enough to resolve
+  - L144 `static const String _metaColumnsUnsealed = 'id, chat_id, title, language, updated_at'`  — [_metaColumns] for a server without the `encrypted_meta` column.
+  - L148 `static const int _pageSize = 1000`  — PostgREST returns at most this many rows per request by default.
+  - L152 `static const Duration _indexMaxAgeOnMiss = Duration(seconds: 5)`  — A handle that misses the index rebuilds it once, unless the index is
+  - L158 `static const Duration _indexMaxAgeOnCreate = Duration(minutes: 5)`  — A create rebuilds the index for a handle it cannot find at most this
+  - L162 `static const Duration _rowLockWait = Duration(seconds: 20)`  — How long an operation waits for the row lock before it goes ahead
+  - L168 `static const String resealCandidateFilter = 'encrypted_meta.is.null,' 'title.neq.$kEncryptedPlaceholder,' 'language.not.is.null'`  — Selects the rows [resealLegacyRows] must touch: never sealed, or
+  - L173 `static final StreamController<void> _changesController = StreamController<void>.broadcast()`
+  - L175 `static Stream<void> get changes`
+  - L177 `static final ValueNotifier<ArtifactDocument?> activeArtifactNotifier = ValueNotifier<ArtifactDocument?>(null)`
+  - L186 `static final ValueNotifier<bool> panelOpenNotifier = ValueNotifier<bool>(false)`  — Controls whether the artifact panel is visible in the UI. Decoupled from
+  - L191 `static final ValueNotifier<int> openRequestNotifier = ValueNotifier<int>(0)`  — Monotonic counter fired each time the user asks to (re-)open the panel,
+  - L198 `static final ValueNotifier<({String artifactId, int? version})?> pendingInitialOpen = ValueNotifier<({String artifactId, int? version})?>(null)`  — When set, the artifact panel should open on this specific artifact +
+  - L204 `static void requestOpen({required String artifactId, int? version})`  — Request the panel to open (without toggling `panelOpenNotifier`).
+  - L210 `static String? _activeChatId`
+  - L222 `static String? currentMessageId`  — Stable id of the assistant message currently being streamed.
+  - L223 `static String? _cacheUserId`
+  - L224 `static bool _artifactStorageAvailable = true`
+  - L225 `static bool _missingSchemaLogged = false`
+  - L226 `static final Map<String, List<ArtifactDocument>> _cacheByChatId = <String, List<ArtifactDocument>>{}`
+  - L233 `static final Map<String, ArtifactDocument> _looseDocs = <String, ArtifactDocument>{}`  — Documents fetched one by one ([loadArtifactById], create, rewrite) for
+  - L237 `static final Map<String, List<ArtifactVersionSnapshot>> _versionCache = <String, List<ArtifactVersionSnapshot>>{}`  — Version history, keyed by row id.
+  - L243 `static Map<String, ArtifactRowRef>? _indexByRowId`  — Every active row of the signed-in user, keyed by row id, without
+  - L247 `static DateTime? _indexBuiltAt`  — When [_indexByRowId] was built. Null marks it stale: the next handle
+  - L251 `static final Map<String, String> _rowIdRemap = <String, String>{}`  — Row ids this session moved (legacy id → UUID), so a copy that still
+  - L256 `static final Set<String> _unreadableRowIds = <String>{}`  — Rows whose `encrypted_meta` could not be opened (e.g. sealed with an
+  - L260 `static final Map<({String rowId, String envelope}), Map<String, dynamic>> _openedMeta = <({String rowId, String envelope}), Map<String, dynamic>>{}`  — Opened envelopes, keyed by the envelope itself. Every seal has a fresh
+  - L264 `static final Set<String> _resealSeen = <String>{}`  — Row ids queued for, or done with, a re-seal in this session.
+  - L265 `static final List<({String userId, ArtifactRowRef ref})> _resealQueue = <({String userId, ArtifactRowRef ref})>[]`
+  - L267 `static bool _resealRunning = false`
+  - L271 `static bool _sealColumnMissing = false`  — Set when the server has no `encrypted_meta` column (migration not
+  - L273 `static final Object _rowLockZoneKey = Object()`
+  - L274 `static Future<void> _rowLockTail = Future<void>.value()`
+  - L275 `static Object? _rowLockHolder`
+  - L277 `static String? get activeChatId`
+  - L279 `static Future<void> setActiveChat( String? chatId, { bool forceRefresh = false, })`
+  - L301 `static Future<List<ArtifactDocument>> listAllUserArtifacts()`  — Loads every active artifact owned by the signed-in user, across all
+  - L339 `static Future<List<ArtifactDocument>> loadArtifactsForChat( String chatId, { bool forceRefresh = false, })`
+  - L388 `static Future<ArtifactDocument?> loadLatestForChat( String chatId, { bool forceRefresh = false, })`
+  - L403 `static Future<ArtifactDocument?> loadArtifactById(String artifactId)`  — Loads an artifact by its handle (what the AI and the UI use) or by its
+  - L434 `static Future<ArtifactDocument> createArtifact({ required String chatId, required String artifactId, required String title, required ArtifactType type, required String content, String? language, String? messageId, String? attachmentPath, })`
+  - L571 `static Future<ArtifactDocument> updateArtifactWithEdits({ required String artifactId, required List<ArtifactEdit> edits, })`
+  - L588 `static Future<ArtifactDocument> rewriteArtifact({ required String artifactId, required String content, String? title, ArtifactType? type, String? language, String? attachmentPath, bool preserveMetadata = false, bool clearAttachment = false, })`
+  - L617 `static Future<ArtifactDocument> _rewriteLocked({ required String artifactId, required String content, required String? title, required ArtifactType? type, required String? language, required String? attachmentPath, required bool preserveMetadata, required bool clearAttachment, required bool retried, })`
+  - L825 `static Future<ArtifactDocument> overwriteCurrentArtifact({ required String artifactId, required String content, })`  — In-place update of the current artifact row WITHOUT bumping `version`
+  - L842 `static Future<ArtifactDocument> _overwriteLocked({ required String artifactId, required String content, required bool retried, })`
+  - L955 `static Future<List<ArtifactVersionSnapshot>> loadVersionHistory( String artifactId, { bool forceRefresh = false, })`
+  - L1046 `static Future<int> repairVersionChain(String artifactId)`  — Rebuilds [artifact_versions] from the current [artifacts] row when the
+  - L1054 `static Future<int> _repairVersionChainLocked(String artifactId)`
+  - L1162 `static Future<void> _insertVersion({ required String rowId, required String chatId, required String userId, required int version, required String encryptedContent, required DateTime createdAt, String? attachmentPath, String? messageId, })`
+  - L1237 `static Future<void> rollbackArtifactsForMessages( Iterable<String> messageIds, )`  — Roll back any artifact versions whose `message_id` is in [messageIds].
+  - L1255 `static Future<void> _rollbackForMessagesLocked( List<String> ids, String userId, )`
+  - L1373 `static Future<({bool deleted, String? affectedChatId})> _rollbackOneArtifact({ required String rowId, required List<Map<String, dynamic>> discardedSnapshots, required String userId, })`  — Internal helper: roll back a single artifact based on its discarded
+  - L1523 `static Future<Map<String, dynamic>?> _loadLatestRemainingSnapshot({ required String rowId, required String userId, })`  — Returns the latest remaining snapshot row for [rowId] (after the
+  - L1558 `static int? latestRemainingVersion({ required List<int> snapshotVersions, required Set<int> discardedVersions, })`  — Pure helper extracted for testing. Given a sorted-by-version snapshot
+  - L1586 `static List<({String chatId, DateTime start, DateTime? end})> computeOrphanBrackets({ required List<Map<String, dynamic>> discardedStamps, required List<Map<String, dynamic>> nextStampedEvents, })`  — Pure helper: given a set of stamped artifact rows (each `{chat_id,
+  - L1647 `static List<Map<String, dynamic>> filterOrphanSnapshotsInBrackets({ required List<Map<String, dynamic>> candidateSnapshots, required List<({String chatId, DateTime start, DateTime? end})> brackets, })`  — Pure helper: filters [candidateSnapshots] (each `{message_id,
+  - L1709 `static Future<Map<String, List<Map<String, dynamic>>>> _findOrphanSnapshotsForMessages({ required List<String> messageIds, required String userId, })`  — Looks up legacy / un-stamped `artifact_versions` rows that belong to
+  - L1848 `static Set<String> _removeArtifactFromCache(String rowId)`  — Drops every cached copy of [rowId]: chat lists, loose documents,
+  - L1868 `static Future<void> deleteArtifactsByIds(Iterable<String> artifactIds)`  — Hard-deletes the given artifacts (handles or row ids) and their version
+  - L1923 `static Future<Set<String>?> _deleteRows( Set<String> rowIds, String userId, )`  — Deletes the given rows and their versions. Returns the row ids that
+  - L1980 `static Future<void> setAttachmentPath({ required String artifactId, required String attachmentPath, })`  — Sets [attachmentPath] on an existing artifact row **without** bumping
+  - L2054 `static void _emitChange(String chatId, ArtifactDocument updated)`
+  - L2064 `static void _insertIntoCache(ArtifactDocument doc)`  — Puts [doc] into its chat's cached list, replacing the copy with the
+  - L2078 `static Iterable<ArtifactDocument> _cachedDocs()`
+  - L2087 `static ArtifactDocument? _findCached(String key)`  — A cached document for [key]: the newest one with that handle, else the
+  - L2104 `static ArtifactDocument? _findCachedByRowId(String rowId)`
+  - L2113 `static Future<ArtifactDocument?> _fetchRow(String rowId, String userId)`  — Fetches one active row by its row id and caches it.
+  - L2143 `static Future<List<ArtifactDocument>> _documentsFromRows( List<dynamic> response, { required String userId, })`  — Opens and decrypts fetched `artifacts` rows and queues every row that
+  - L2174 `static Future<({Map<String, dynamic>? meta, bool unreadable})> _openMeta( Map<String, dynamic> row, )`  — Opens a row's `encrypted_meta`, remembering the result. A row that
+  - L2214 `static ArtifactRowRef _refOf(ArtifactDocument doc)`
+  - L2226 `static String? _stampOf(List<dynamic> rows)`  — The raw `updated_at` of the first row a write returned, exactly as the
+  - L2235 `static ArtifactDocument _stamped(ArtifactDocument doc, String? stamp)`  — [doc] with [stamp] as its stamp, also when [stamp] is null: a stamp
+  - L2256 `static void _indexUpsert(Iterable<ArtifactDocument> docs)`  — Writes fresh documents into the index, when it exists. A missing index
+  - L2264 `static bool _indexOlderThan(Duration age)`
+  - L2270 `static Future<Map<String, ArtifactRowRef>> _ensureIndex( String userId, { bool rebuild = false, })`  — The index for [userId]; built on first use, or when [rebuild] is set.
+  - L2283 `static Future<ArtifactRowRef?> _findRef( String key, String userId, { bool rebuild = false, })`  — Resolves a handle or row id through the index. A miss rebuilds the
+  - L2299 `static Future<Set<String>> _rowIdsForKeys( List<String> keys, String userId, { bool rebuild = false, })`  — Every row the given handles or row ids name: per key the document
+  - L2334 `static Future<bool> _handleTaken(String handle, String userId)`  — True when this user already has an active artifact with [handle].
+  - L2346 `static Future<Map<String, ArtifactRowRef>> _buildIndex(String userId)`  — Reads every active row of [userId] without content (paged), opens the
+  - L2387 `static Future<List<dynamic>> _selectIndexPage(String userId, int from)`
+  - L2409 `static Future<ArtifactDocument?> _reloadAfterMiss( String staleRowId, String handle, String userId, )`  — After a write by row id matched nothing: drops the stale copy and
+  - L2423 `static Set<String> _forgetRow(String rowId)`  — Drops a row this device holds stale data about and marks the index
+  - L2448 `static Future<int> resealLegacyRows()`  — Seals every row of the signed-in user that still carries plaintext
+  - L2519 `static void _queueReseal(String userId, Iterable<ArtifactRowRef> refs)`  — Queues rows for a background re-seal, each at most once per session.
+  - L2539 `static Future<void> _drainResealQueue()`
+  - L2556 `static Future<bool> _resealOne(String userId, ArtifactRowRef queued)`  — Seals one row. Uses the freshest copy of its metadata this device
+  - L2636 `static void _releaseReseal(String rowId)`  — Lets a later load or the sweep try [rowId] again in this session.
+  - L2641 `static void _applyRekey(String oldRowId, String newRowId)`  — Moves every cached copy of a row to its new id.
+  - L2676 `static String _canonicalRowId(String rowId)`  — Follows the re-keys of this session, so a stale row id finds its row.
+  - L2686 `static bool _isSameRow(ArtifactDocument doc, String rowId)`
+  - L2689 `static void _markSealColumnMissing( PostgrestException error, { required String operation, })`
+  - L2712 `static void _logResealFailure(String operation, String reason)`
+  - L2737 `static Future<T> _withRowLock<T>(Future<T> Function() body)`  — Runs [body] while no other artifact row operation of this device runs.
+  - L2758 `static void _onRowLockTimeout()`
+  - L2778 `static Future<({Map<String, dynamic>? meta, bool unreadable})> decodeRowMeta(Object? envelope, {required String rowId})`  — Opens the `encrypted_meta` value of the `artifacts` row [rowId] (the
+  - L2801 `static ArtifactRowRef rowRefFromRow( Map<String, dynamic> row, { required Map<String, dynamic>? meta, bool metaUnreadable = false, })`  — Resolves an `artifacts` row and its opened metadata ([meta] null for a
+  - L2829 `static ArtifactDocument documentFromRow( Map<String, dynamic> row, { required String decryptedContent, required Map<String, dynamic>? meta, bool metaUnreadable = false, })`  — The document for an `artifacts` row: [ArtifactDocument.id] is the
+  - L2864 `static bool needsReseal( Map<String, dynamic> row, { required Map<String, dynamic>? meta, bool metaUnreadable = false, })`  — Whether a row still needs a re-seal: never sealed, plaintext in
+  - L2880 `static ArtifactRowRef? resolveRowRef( Iterable<ArtifactRowRef> refs, String key, )`  — The row a handle or row id names: the newest row with that handle
+  - L2904 `static ArtifactRowRef? freshestRef(Iterable<ArtifactRowRef> copies)`  — The snapshot a re-seal works from: of the copies this device holds of
+  - L2926 `static Map<String, String>? resealFilters( ArtifactRowRef ref, { required String userId, })`  — The filters of a re-seal update: the row, its owner, and the raw
+  - L2944 `static Future<Map<String, dynamic>> sealedMetaColumns({ required String rowId, required String handle, required String title, String? language, })`  — The metadata columns of a sealed row: the placeholder in `title`,
+  - L2968 `static Future<Map<String, dynamic>> buildInsertPayload({ required String rowId, required String handle, required String chatId, required String userId, required String title, required ArtifactType type, required String encryptedContent, required DateTime now, String? language, String? messageId, String? attachmentPath, })`  — The insert for a new artifact: a random row id, the handle only inside
+  - L3008 `static Future<Map<String, dynamic>> buildResealUpdate( ArtifactRowRef ref, { String Function()? newRowId, })`  — The update that re-seals [ref]'s row. A row whose id still is its
+  - L3028 `static bool isValidHandle(String id)`  — Whether [id] is a valid handle (the AI-facing artifact id).
+  - L3031 `static String _titleOrHandle(String title, String handle)`
+  - L3034 `static String? _cleanLanguage(String? language)`
+  - L3039 `static DateTime _parseTimestamp(Object? raw)`
+  - L3042 `static User _requireUser()`
+  - L3051 `static void _ensureCacheForUser(String userId)`
+  - L3071 `static void _validateArtifactId(String id)`
+  - L3083 `static void _validateContentSize(String content)`
+  - L3092 `static bool _isDuplicateArtifactError(PostgrestException error)`
+  - L3098 `static bool _handleMissingArtifactSchema( PostgrestException error, { required String operation, })`
+  - L3138 `static bool _isMissingArtifactSchemaError(PostgrestException error)`
+  - L3163 `static bool _isMissingMetaColumnError(PostgrestException error)`  — PostgREST names the column when it is missing (42703, or PGRST204
+  - L3166 `static Future<String> _encryptOrThrow(String content)`
+  - L3176 `static Future<T> _sealOrThrow<T>(Future<T> Function() seal)`  — Runs a sealing step; turns a cipher failure into the same kind of
+  - L3184 `static Future<String> _decryptMaybe(String value)`
 
 ## lib/services/artifact_tag_processor.dart  (142 Z.)
 - L16 `class ArtifactTagProcessor`  — Processes inline `<artifact>` tags emitted by the assistant. For each tag:
@@ -600,119 +678,139 @@
 - L518 `List<dynamic> _resolveToolCalls(List<dynamic> blocks, List<dynamic> toolCalls)`
 - L542 `Map<String, dynamic> _normalizeV1(Map<String, dynamic> msg)`  — A v1 message with its field names normalised; all fields are kept.
 
-## lib/services/chat_payload_migration_service.dart  (955 Z.)
-- L62 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
-- L89 `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
-  - L91 `const ChatMaintenanceProgress({ this.migrated = 0, this.verified = 0, this.total = 0, })`
-  - L97 `final int migrated`
-  - L98 `final int verified`
-  - L99 `final int total`
-  - L101 `ChatMaintenanceProgress copyWith({int? migrated, int? verified})`
-- L110 `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
-  - L112 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, this.localKnown = true, })`
-  - L120 `final String userId`
-  - L123 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
-  - L126 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
-  - L129 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
-  - L132 `final bool localKnown`  — Whether the cache scan ran (false: it failed). The done flag needs it.
-  - L134 `int get total`
-  - L135 `bool get hasWork`
-- L139 `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
-  - L141 `done`
-  - L144 `background`
-  - L148 `blocking`
-- L152 `enum ChatMaintenanceOutcome`  — How a run ended.
-  - L154 `complete`
-  - L157 `cloudPending`
-- L161 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
-  - L162 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
-  - L164 `final String stage`
-  - L165 `final Object cause`
-  - L166 `final bool restored`
-  - L169 `String toString()`
-- L173 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
-  - L175 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
-  - L178 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
-  - L185 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
-  - L194 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
-  - L197 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
-  - L200 `int get currentKeyVersion`  — The key version of the current key.
-  - L203 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
-- L207 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
-  - L208 `const SupabaseChatMigrationCloud()`
-  - L211 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L223 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L243 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L263 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L267 `Future<String> fingerprint(String encrypted)`
-  - L271 `int get currentKeyVersion`
-  - L274 `Future<bool> ensureKey()`
-- L287 `class ChatPayloadMigrationService`
-  - L288 `ChatPayloadMigrationService._()`
-  - L291 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
-  - L295 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
-  - L297 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
-  - L300 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
-  - L305 `static Future<List<String>> Function(String userId) localUpgradeIds = LocalChatCacheService.idsNeedingPayloadUpgrade`  — The cache scan for rows that are not a v3 frame yet.
-  - L311 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
-  - L315 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
-  - L317 `static String _stateKey(String userId)`
-  - L321 `static Future<ChatStartupCheck> startupCheck(String userId)`  — What a normal start of [userId] waits for. Reads the done flag and the
-  - L346 `static Future<void> checkCloudInBackground(String userId)`  — The cloud half of the check, run behind the app on a normal start. It
-  - L364 `static Future<ChatMaintenancePlan> plan( String userId, { bool needsKey = true, })`  — What is left to do for [userId]; an empty plan when the account is
-  - L435 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
-  - L545 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
-  - L579 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
-  - L597 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
-  - L680 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { bool Function()? shouldStop, })`  — Run [work] over [items], at most [parallelism] at a time.
-  - L699 `static Future<_MigrationState> _loadState(String userId)`
-  - L714 `static Future<void> _saveState(String userId, _MigrationState state)`
-  - L726 `static void _logIncompleteCheck(String reason, [Object? error])`  — Why a check could not set the done flag, for the opt-in diagnostics
-  - L741 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
-  - L746 `static Future<bool> isCloudPending(String userId)`  — Whether a check found cloud chats for the next start.
-- L750 `enum _CloudResult`
-  - L750 `done`
-  - L750 `skipped`
-  - L750 `pending`
-- L756 `class _MigrationState`  — Persisted progress of one account: the done flag, whether a check found
-  - L757 `_MigrationState({ this.done = false, this.cloudPending = false, Set<String>? skip, }) : skip = skip ?? <String>{}`
-  - L763 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
-  - L772 `bool done`
-  - L773 `bool cloudPending`
-  - L774 `final Set<String> skip`
-  - L776 `Map<String, dynamic> toJson()`
-- L785 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
-  - L786 `ChatMaintenanceController._()`
-  - L788 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
-  - L791 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
-  - L792 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
-  - L793 `ChatMaintenanceFailure? _failure`
-  - L794 `String? _userId`
-  - L795 `Completer<void>? _released`
-  - L796 `ChatMaintenancePlan? _plan`
-  - L799 `String? _restoredUserId`  — The user whose session was already there when the app started.
-  - L800 `bool _showsSyncHint = false`
-  - L802 `ChatMaintenancePhase get phase`
-  - L803 `ChatMaintenanceProgress get progress`
-  - L804 `ChatMaintenanceFailure? get failure`
-  - L808 `bool get showsSyncHint`  — Whether a slow check may say "Syncing your chats": only right after a
-  - L812 `void noteRestoredSession(String? userId)`  — Record the session the app started with (main(), after the Supabase
-  - L815 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
-  - L823 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
-  - L831 `Future<void> _check(String userId)`
-  - L867 `Future<void> _run()`
-  - L892 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
-  - L907 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
-  - L912 `void _release()`
-  - L918 `void _set(ChatMaintenancePhase phase)`
-  - L925 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, bool syncHint = false, })`  — Put the controller into [phase] with [progress] (widget tests).
-  - L939 `void reset()`  — Forget the run (sign-out, tests). A sign-in after this is not the
-- L954 `enum ChatMaintenancePhase`
-  - L954 `idle`
-  - L954 `checking`
-  - L954 `running`
-  - L954 `failed`
-  - L954 `done`
+## lib/services/chat_payload_migration_service.dart  (1247 Z.)
+- L74 `String bumpTimestampByOneMicrosecond(String timestamp)`  — `updated_at` + 1 µs, as Postgres wants it. Works on the web too, where a
+- L101 `@immutable class ChatMaintenanceProgress`  — Progress of a run, for the two bars of the maintenance screen.
+  - L103 `const ChatMaintenanceProgress({ this.migrated = 0, this.verified = 0, this.total = 0, })`
+  - L109 `final int migrated`
+  - L110 `final int verified`
+  - L111 `final int total`
+  - L113 `ChatMaintenanceProgress copyWith({int? migrated, int? verified})`
+- L122 `@immutable class ChatMaintenancePlan`  — What needs rewriting for one account.
+  - L124 `const ChatMaintenancePlan({ required this.userId, required this.localIds, required this.cloud, required this.cloudKnown, this.localKnown = true, })`
+  - L132 `final String userId`
+  - L135 `final List<String> localIds`  — Cache rows that are not a v3 frame yet.
+  - L138 `final List<String> cloud`  — Cloud chats with a `{"v":"1"}` envelope, minus skipped and dirty ones.
+  - L141 `final bool cloudKnown`  — Whether the cloud list is complete (false: offline, no key, an error).
+  - L144 `final bool localKnown`  — Whether the cache scan ran (false: it failed). The done flag needs it.
+  - L146 `int get total`
+  - L147 `bool get hasWork`
+- L151 `enum ChatStartupCheck`  — What a normal start has to wait for, from local state only.
+  - L153 `done`
+  - L156 `background`
+  - L161 `blocking`
+- L165 `enum ChatMaintenanceOutcome`  — How a run ended.
+  - L167 `complete`
+  - L170 `cloudPending`
+- L174 `class ChatMaintenanceFailure implements Exception`  — A run that failed. [restored] tells whether the cache backup was put back.
+  - L175 `const ChatMaintenanceFailure(this.stage, this.cause, {this.restored = false})`
+  - L177 `final String stage`
+  - L178 `final Object cause`
+  - L179 `final bool restored`
+  - L182 `String toString()`
+- L186 `abstract class ChatMigrationCloud`  — The cloud half, behind an interface so tests run it without Supabase.
+  - L188 `Future<List<String>> listPlainEnvelopeChats(String userId)`  — Ids of the chats whose envelope is still `{"v":"1"}`.
+  - L191 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`  — The row (ciphertext and `updated_at` as the server sent it), or null.
+  - L198 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`  — UPDATE with the `updated_at` guard. Returns the `updated_at` the server
+  - L207 `Future<ChatEnvelopeV3?> convert(String encrypted)`  — Convert a v1 envelope to a proven v3 envelope (null: proof failed).
+  - L210 `Future<String> fingerprint(String encrypted)`  — Decrypt an envelope and fingerprint its messages.
+  - L213 `int get currentKeyVersion`  — The key version of the current key.
+  - L216 `Future<bool> ensureKey()`  — Whether the encryption key is loaded (loads it if it can).
+- L220 `class SupabaseChatMigrationCloud implements ChatMigrationCloud`  — [ChatMigrationCloud] over Supabase and [EncryptionService].
+  - L221 `const SupabaseChatMigrationCloud()`
+  - L224 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L236 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L256 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L276 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L280 `Future<String> fingerprint(String encrypted)`
+  - L284 `int get currentKeyVersion`
+  - L287 `Future<bool> ensureKey()`
+- L300 `class ChatPayloadMigrationService`
+  - L301 `ChatPayloadMigrationService._()`
+  - L304 `static const int parallelism = 4`  — Concurrent chats in the cloud part (and conversions in the local part).
+  - L308 `static const int backgroundParallelism = kIsWeb ? 1 : 2`  — Concurrent chats when the cloud part is retried behind the app. The
+  - L311 `static const int maxTries = 3`  — Failures after which a cloud chat is left as it is for good.
+  - L315 `static const int maxLocalFailures = 2`  — Failed local runs (the backup put back) after which the cache rows are
+  - L319 `static ChatMigrationCloud cloud = const SupabaseChatMigrationCloud()`  — Test seams.
+  - L321 `static Future<String?> Function(String key) readKv = LocalChatCacheService.kvGet`
+  - L324 `static Future<void> Function(String key, String value) writeKv = LocalChatCacheService.kvSet`
+  - L329 `static Future<List<String>> Function(String userId) localUpgradeIds = LocalChatCacheService.idsNeedingPayloadUpgrade`  — The cache scan for rows that are not a v3 frame yet.
+  - L335 `static Future<void> Function()? debugBeforeLocalVerify`  — Called between the local rewrite and its verification (tests break a
+  - L339 `static bool hasLocalDatabase = !kIsWeb`  — Whether this platform has a cache database to upgrade.
+  - L341 `static String _stateKey(String userId)`
+  - L349 `static Future<ChatStartupCheck> startupCheck( String userId, { bool signIn = false, })`  — What a start of [userId] waits for. Reads the state in `kv_cache` and
+  - L376 `static final Map<String, Future<void>> _background = {}`  — The runs of [checkCloudInBackground] in flight, per user.
+  - L384 `static Future<void> checkCloudInBackground(String userId)`  — The cloud half of the check, run behind the app on a normal start. The
+  - L396 `static Future<void> _checkCloudInBackground(String userId)`
+  - L443 `static Future<ChatMaintenancePlan> plan( String userId, { bool behindApp = false, })`  — What is left to do for [userId]; an empty plan when the account is
+  - L525 `static Future<ChatMaintenanceOutcome> execute( ChatMaintenancePlan plan, { void Function(ChatMaintenanceProgress progress)? onProgress, })`  — Run [plan]; see the file comment. Throws [ChatMaintenanceFailure] when
+  - L632 `static Future<void> _noteLocalFailure( ChatMaintenancePlan plan, _MigrationState state, String reason, Object error, )`  — A local run failed (the backup is back in place, and with it the state
+  - L656 `static Future<String?> _migrateLocalRow( String userId, String chatId, _MigrationState state, )`  — Rewrite one cache row as v3. Returns the fingerprint of its original
+  - L704 `static Future<void> _verifyLocalRow( String userId, String chatId, String expected, )`
+  - L722 `static Future<_CloudResult> _migrateCloudChat( String userId, String chatId, _MigrationState state, )`
+  - L808 `static Future<({bool pending, ChatMaintenanceFailure? failure})> _runCloud( String userId, List<String> ids, _MigrationState state, { int width = parallelism, void Function()? onChat, })`  — Rewrite the cloud chats [ids] (step 4 of a run, or the retry behind the
+  - L859 `static bool _isUnreadable(Object error)`  — Whether [error] comes from the chat's own data: the same data fails the
+  - L868 `static void _countFailure( _MigrationState state, String chatId, String reason, [ Object? error, ])`  — Count a failure of the cloud chat [chatId]. The [maxTries]th one leaves
+  - L884 `static void _leaveAsIs( _MigrationState state, String chatId, String reason, [ Object? error, ])`  — Leave [chatId] as it is for good: it is never planned again. It stays
+  - L899 `static Future<void> _pool( List<String> items, Future<void> Function(String item) work, { int width = parallelism, bool Function()? shouldStop, })`  — Run [work] over [items], at most [width] at a time.
+  - L919 `static Future<_MigrationState> _loadState(String userId)`
+  - L934 `static Future<void> _saveState(String userId, _MigrationState state)`
+  - L946 `static void _logIncompleteCheck(String reason, [Object? error, int? ms])`  — Why a check could not set the done flag, for the opt-in diagnostics
+  - L956 `static void _log(String message, Map<String, Object?> data)`  — A line in the opt-in diagnostics log: reasons, counts and error types
+  - L968 `static Future<bool> isDone(String userId)`  — Whether the migration of [userId] is recorded as done.
+  - L973 `static Future<bool> isCloudPending(String userId)`  — Whether a check found cloud chats for the next start.
+  - L978 `static Future<bool> hasWaitedForCloud(String userId)`  — Whether the app has waited for the cloud of [userId] once already.
+  - L983 `static Future<bool> isLeftAsIs(String userId, String chatId)`  — Whether [chatId] is left as it is for good.
+- L987 `enum _CloudResult`
+  - L987 `done`
+  - L987 `skipped`
+  - L987 `pending`
+- L997 `class _MigrationState`  — Persisted progress of one account on this device (`kv_cache`, which a
+  - L998 `_MigrationState({ this.done = false, this.cloudPending = false, this.cloudWaited = false, this.localFailures = 0, Set<String>? skip, Map<String, int>? tries, }) : skip = skip ?? <String>{}, tries = tries ?? <String, int>{}`
+  - L1008 `factory _MigrationState.fromJson(Map<String, dynamic> json)`
+  - L1030 `bool done`
+  - L1031 `bool cloudPending`
+  - L1032 `bool cloudWaited`
+  - L1033 `int localFailures`
+  - L1034 `final Set<String> skip`
+  - L1035 `final Map<String, int> tries`
+  - L1037 `Map<String, dynamic> toJson()`
+- L1049 `class ChatMaintenanceController extends ChangeNotifier`  — Drives the maintenance screen: plans, runs, and holds the app until the
+  - L1050 `ChatMaintenanceController._()`
+  - L1052 `static final ChatMaintenanceController instance = ChatMaintenanceController._()`
+  - L1055 `ChatMaintenancePhase _phase = ChatMaintenancePhase.idle`
+  - L1056 `ChatMaintenanceProgress _progress = const ChatMaintenanceProgress()`
+  - L1057 `ChatMaintenanceFailure? _failure`
+  - L1058 `String? _userId`
+  - L1059 `Completer<void>? _released`
+  - L1060 `ChatMaintenancePlan? _plan`
+  - L1068 `String? _restoredUserId`  — The user whose session was already there when the app started. Kept
+  - L1069 `StreamSubscription<AuthState>? _signOuts`
+  - L1070 `bool _showsSyncHint = false`
+  - L1072 `ChatMaintenancePhase get phase`
+  - L1073 `ChatMaintenanceProgress get progress`
+  - L1074 `ChatMaintenanceFailure? get failure`
+  - L1078 `bool get showsSyncHint`  — Whether a slow check may say "Syncing your chats": only right after a
+  - L1082 `void noteRestoredSession(String? userId)`  — Record the session the app started with (main(), after the Supabase
+  - L1086 `void forgetRestoredSession()`  — Forget the session the app started with: after a real sign-out, the
+  - L1090 `void watchSignOuts(Stream<AuthState> events)`  — Follow [events] (the Supabase auth stream, from main()) and forget the
+  - L1098 `void dispose()`
+  - L1105 `bool get holdsApp`  — Whether the chat UI must wait (the gate shows the screen or nothing).
+  - L1113 `Future<void> ensureReady(String userId)`  — Plan and, when there is work, run the maintenance for [userId]. The
+  - L1121 `Future<void> _check(String userId)`
+  - L1160 `Future<void> _run()`
+  - L1185 `Future<void> retry()`  — Try again after a failure: plan anew (the cache was restored).
+  - L1200 `void continueAnyway()`  — Go on to the app after a failure. Safe: the reader reads v1 and v2,
+  - L1205 `void _release()`
+  - L1211 `void _set(ChatMaintenancePhase phase)`
+  - L1218 `void debugShow( ChatMaintenancePhase phase, { ChatMaintenanceProgress progress = const ChatMaintenanceProgress(), ChatMaintenanceFailure? failure, bool syncHint = false, })`  — Put the controller into [phase] with [progress] (widget tests).
+  - L1232 `void reset()`  — Forget the run (sign-out, tests). The session the app started with is
+- L1246 `enum ChatMaintenancePhase`
+  - L1246 `idle`
+  - L1246 `checking`
+  - L1246 `running`
+  - L1246 `failed`
+  - L1246 `done`
 
 ## lib/services/chat_preload_service.dart  (403 Z.)
 - L23 `class ChatPreloadService`  — Service for background preloading all chat messages.
@@ -1193,6 +1291,23 @@
   - L63 `static bool get shouldSkipPrompt`  — True when the next download should bypass the system save dialog and
   - L69 `static String? get defaultFolder`
   - L70 `static bool get alwaysAsk`
+
+## lib/services/encrypted_meta.dart  (135 Z.)
+- L23 `kEncryptedPlaceholder = '🔒'`  — Stands in the plaintext column of a sealed row. Old builds show it as the
+- L26 `kEncryptedMetaVersion = 1`  — Version of the JSON inside the envelope (not of the cipher envelope).
+- L28 `class EncryptedMeta`
+  - L29 `const EncryptedMeta._()`
+  - L33 `static const int _backgroundOpenMinChars = 16 * 1024`  — Envelopes above this many characters are opened off the UI isolate.
+  - L38 `static Future<String> Function(String plaintext) seal = _defaultSeal`  — Seals a plaintext string. Swappable so tests run without a signed-in
+  - L42 `static Future<String> Function(String envelope) open = _defaultOpen`  — Opens an envelope produced by [seal].
+  - L46 `static void resetCipher()`  — Restores the real cipher. Call from `tearDown` after overriding.
+  - L52 `static Future<String> _defaultSeal(String plaintext)`
+  - L55 `static Future<String> _defaultOpen(String envelope)`
+  - L68 `static Future<String> encode( Map<String, Object?> fields, { required String table, required String rowId, })`  — Encrypts [fields] into one envelope for the `encrypted_meta` column of
+  - L88 `static Future<Map<String, dynamic>?> decode( String? envelope, { required String table, required String rowId, })`  — Decrypts the `encrypted_meta` value of row [rowId] in [table]. Returns
+  - L108 `static bool isMissingColumnError(PostgrestException error)`  — True when [error] says the `encrypted_meta` column is not there yet
+  - L121 `static bool isRealPlaintext(Object? value)`  — True when [value] is a real plaintext value, not a gap or the
+  - L129 `static String? pick(Object? plaintext, Map<String, dynamic>? meta, String key)`  — Reads one field: real plaintext (legacy row, or an old build wrote after
 
 ## lib/services/encryption_service.dart  (1237 Z.)
 - L18 `kPlainEnvelopeVersion = '1'`  — Envelope version of a plain ciphertext: the cleartext is UTF-8 text or
@@ -2367,32 +2482,33 @@
   - L105 `static Future<Map<String, Map<String, dynamic>>> loadAll({ bool throwOnError = false, Set<String>? undecryptable, })`  — Load all stored credentials for the current user.
   - L178 `static Future<int> delete( String serviceName, { bool throwOnError = false, })`  — Delete credentials for [serviceName]. Returns how many rows were removed.
 
-## lib/services/session_manager_service.dart  (256 Z.)
-- L22 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
-- L25 `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
-  - L26 `SessionManagerService._()`
-  - L28 `static final SessionManagerService _instance = SessionManagerService._()`
-  - L29 `static SessionManagerService get instance`
-  - L32 `final List<SessionEventCallback> _onPasswordMismatchCallbacks = []`  — Callbacks for session events
-  - L34 `StreamSubscription<AuthState>? _authSubscription`
-  - L35 `bool _isInitialized = false`
-  - L36 `String? _sessionInitializedForUser`
-  - L37 `String? _revisionCheckedForUser`
-  - L38 `Future<void>? _revisionCheckInFlight`
-  - L39 `static const Duration _defaultThemeRefreshDelay = Duration(seconds: 4)`
-  - L40 `static const Duration _linuxThemeRefreshDelay = Duration(seconds: 18)`
-  - L42 `bool get isInitialized`
-  - L45 `void initialize({SessionEventCallback? onPasswordMismatch})`  — Initialize session management and listen to auth state changes
-  - L59 `void _handleAuthStateChange(AuthState event)`
-  - L67 `Future<void> _handleSessionActive(User user)`
-  - L91 `Future<void> _initializeUserSessionAsync(User user)`  — Runs user session initialization with error handling.
-  - L116 `Future<void> _verifyPasswordRevisionInBackground(User user)`
-  - L158 `Future<void> _handleSessionInactive()`
-  - L182 `Future<void> _handlePasswordRevisionMismatch(User user)`
-  - L199 `Future<bool> _checkNetworkStatus()`
-  - L210 `Future<void> _performLogoutCleanup()`
-  - L231 `Future<void> performFullLogout()`  — Perform a full logout with cleanup
-  - L246 `void dispose()`
+## lib/services/session_manager_service.dart  (275 Z.)
+- L23 `typedef SessionEventCallback = void Function()`  — Callback for session-related events
+- L26 `class SessionManagerService extends ChangeNotifier`  — Service for managing user authentication sessions and security
+  - L27 `SessionManagerService._()`
+  - L29 `static final SessionManagerService _instance = SessionManagerService._()`
+  - L30 `static SessionManagerService get instance`
+  - L33 `final List<SessionEventCallback> _onPasswordMismatchCallbacks = []`  — Callbacks for session events
+  - L35 `StreamSubscription<AuthState>? _authSubscription`
+  - L36 `bool _isInitialized = false`
+  - L37 `String? _sessionInitializedForUser`
+  - L38 `String? _revisionCheckedForUser`
+  - L39 `Future<void>? _revisionCheckInFlight`
+  - L40 `static const Duration _defaultThemeRefreshDelay = Duration(seconds: 4)`
+  - L41 `static const Duration _linuxThemeRefreshDelay = Duration(seconds: 18)`
+  - L43 `bool get isInitialized`
+  - L46 `void initialize({SessionEventCallback? onPasswordMismatch})`  — Initialize session management and listen to auth state changes
+  - L60 `void _handleAuthStateChange(AuthState event)`
+  - L82 `static bool isSignOutEvent(AuthState event, {bool sessionStashed = false})`  — Whether an auth event without a session means the user is signed out.
+  - L86 `Future<void> _handleSessionActive(User user)`
+  - L110 `Future<void> _initializeUserSessionAsync(User user)`  — Runs user session initialization with error handling.
+  - L135 `Future<void> _verifyPasswordRevisionInBackground(User user)`
+  - L177 `Future<void> _handleSessionInactive()`
+  - L201 `Future<void> _handlePasswordRevisionMismatch(User user)`
+  - L218 `Future<bool> _checkNetworkStatus()`
+  - L229 `Future<void> _performLogoutCleanup()`
+  - L250 `Future<void> performFullLogout()`  — Perform a full logout with cleanup
+  - L265 `void dispose()`
 
 ## lib/services/session_recovery.dart  (559 Z.)
 - L47 `@immutable class SessionStash`  — Session recovery through the paired host (bead cowork-2n1).
@@ -3542,45 +3658,100 @@
   - L368 `static double? fileContextRatio(WorkspaceFile file, String? modelId)`  — Calculate what % of the model's context a single file would use.
   - L377 `static int remainingFileTokenBudget(Workspace workspace, String? modelId)`  — Check whether adding [newFileTokens] additional tokens would exceed
 
-## lib/services/workspace_storage_service.dart  (1065 Z.)
-- L21 `class WorkspaceStorageService`  — Service for managing workspace workspaces, chat assignments, and file attachments
-  - L22 `static const String bucketName = 'workspace-files'`
-  - L23 `static const String _cacheKey = 'cached_projects'`
-  - L24 `static const Uuid _uuid = Uuid()`
-  - L27 `static final Map<String, Workspace> _projectsById = <String, Workspace>{}`
-  - L28 `static bool _cacheLoaded = false`
-  - L29 `static bool _isLoadingFromNetwork = false`
-  - L32 `static Completer<void>? _loadingCompleter`
-  - L33 `static bool get _isLoading`
-  - L36 `static final StreamController<void> _changesController = StreamController<void>.broadcast()`
-  - L40 `static Timer? _notifyDebounceTimer`
-  - L41 `static bool _hasPendingNotification = false`
-  - L42 `static const Duration _notifyDebounceDelay = Duration(milliseconds: 100)`
-  - L45 `static String? selectedWorkspaceId`
-  - L48 `static List<Workspace> get projects`
-  - L55 `static List<Workspace> get activeProjects`
-  - L60 `static List<Workspace> get archivedProjects`
-  - L64 `static Stream<void> get changes`
-  - L68 `static void _notifyChanges({bool updateCache = true})`  — Notify listeners of changes with debouncing to prevent rapid-fire UI rebuilds.
-  - L92 `static void _notifyChangesImmediate()`  — Notify immediately without debounce (for critical updates like initial cache load)
-  - L101 `static Future<void> loadFromCache()`  — Load projects from local cache (fast, for instant UI)
-  - L129 `static Future<void> _saveToCache()`  — Save projects to local cache
-  - L149 `static Future<void> loadProjects()`  — Load all projects from Supabase (updates cache)
-  - L261 `static Future<Workspace> createProject( String name, { String? description, String? customSystemPrompt, })`  — Create a new workspace
-  - L304 `static Future<Workspace> updateProject( String workspaceId, { String? name, String? description, String? customSystemPrompt, })`  — Update an existing workspace
-  - L358 `static Future<void> deleteProject(String workspaceId)`  — Delete a workspace (cascades to project_chats and project_files via DB)
-  - L389 `static Future<void> archiveProject(String workspaceId, bool archived)`  — Archive or unarchive a workspace
-  - L424 `static Workspace? getWorkspace(String workspaceId)`  — Get a specific workspace by ID
-  - L429 `static Workspace? getWorkspaceForChat(String chatId)`  — Get the workspace associated with a specific chat (if any)
-  - L437 `static Future<void> linkChatToWorkspace( String workspaceId, String chatId, )`  — Link a chat to a workspace (alias for addChatToProject)
-  - L445 `static Future<void> addChatToProject(String workspaceId, String chatId)`  — Add a chat to a workspace
-  - L486 `static Future<void> removeChatFromProject( String workspaceId, String chatId, )`  — Remove a chat from a workspace
-  - L526 `static Future<List<StoredChat>> getProjectChats(String workspaceId)`  — Get all chats in a workspace
-  - L539 `static Future<void> uploadAvatar( String workspaceId, Uint8List imageBytes, )`  — Upload an avatar image for a workspace.
-  - L590 `static Future<WorkspaceFile> uploadFile( String workspaceId, String fileName, Uint8List fileBytes, String fileType, { String? filePath, bool generateMarkdown = true, void Function(double progress)? onUploadProgress, void Function()? onConversionStart, })`  — Upload a file to a workspace (encrypted in Supabase Storage)
-  - L774 `static Future<void> deleteFile(String workspaceId, String fileId)`  — Delete a file from a workspace (also deletes from storage)
-  - L828 `static Future<String> decryptFile(String fileId)`  — Download and decrypt a file's content from Supabase Storage
-  - L880 `static Future<Uint8List> downloadFile(String workspaceId, String fileId)`  — Download and decrypt a file, returning raw bytes
-  - L924 `static Future<void> updateFileContent( String workspaceId, String fileId, Uint8List newBytes, )`  — Update a file's encrypted content
-  - L1007 `static Future<void> updateFileMarkdown( String workspaceId, String fileId, String? markdown, )`  — Update a file's markdown summary
-  - L1052 `static Future<void> reset()`  — Reset all state (on logout)
+## lib/services/workspace_storage_service.dart  (1992 Z.)
+- L24 `typedef SealedRowRead = ({ /// The row with every sealed field resolved; safe for `fromJson`. Map<String, dynamic> row, `  — One `projects` / `project_files` row after its `encrypted_meta` envelope
+- L42 `@visibleForTesting class ResealJob`  — One row to write again sealed: a snapshot of the row as it was read.
+  - L44 `const ResealJob({ required this.id, required this.workspaceId, required this.legacy, required this.updatedAt, required this.values, })`
+  - L52 `final String id`
+  - L55 `final String? workspaceId`  — Set for a `project_files` row: the workspace that holds the file.
+  - L58 `final bool legacy`  — The row had no envelope when it was read.
+  - L62 `final String updatedAt`  — `updated_at` exactly as the server sent it. Never rebuilt from a
+  - L65 `final Map<String, String?> values`  — Resolved (decrypted) values of the sealed fields.
+  - L67 `bool get isFile`
+  - L68 `String get table`
+  - L69 `String get key`
+- L73 `class WorkspaceStorageService`  — Service for managing workspace workspaces, chat assignments, and file attachments
+  - L74 `static const String bucketName = 'workspace-files'`
+  - L75 `static const String _cacheKey = 'cached_projects'`
+  - L76 `static const Uuid _uuid = Uuid()`
+  - L78 `static const String _projectsTable = 'projects'`
+  - L79 `static const String _filesTable = 'project_files'`
+  - L83 `static const List<String> projectSealedFields = [ 'name', 'description', 'custom_system_prompt', ]`  — `projects` columns whose values live in `encrypted_meta`.
+  - L91 `static const List<String> fileSealedFields = [ 'file_name', 'markdown_summary', ]`  — `project_files` columns whose values live in `encrypted_meta`.
+  - L97 `static final Map<String, Workspace> _projectsById = <String, Workspace>{}`
+  - L98 `static bool _cacheLoaded = false`
+  - L99 `static bool _isLoadingFromNetwork = false`
+  - L104 `static final Set<String> _undecryptableProjectIds = <String>{}`
+  - L105 `static final Set<String> _undecryptableFileIds = <String>{}`
+  - L109 `static final Set<String> _resealAttempted = <String>{}`
+  - L110 `static Future<void> _resealChain = Future<void>.value()`
+  - L111 `static bool _resealDisabled = false`
+  - L114 `static Completer<void>? _loadingCompleter`
+  - L115 `static bool get _isLoading`
+  - L118 `static final StreamController<void> _changesController = StreamController<void>.broadcast()`
+  - L122 `static Timer? _notifyDebounceTimer`
+  - L123 `static bool _hasPendingNotification = false`
+  - L124 `static const Duration _notifyDebounceDelay = Duration(milliseconds: 100)`
+  - L127 `static String? selectedWorkspaceId`
+  - L130 `static List<Workspace> get projects`
+  - L137 `static List<Workspace> get activeProjects`
+  - L142 `static List<Workspace> get archivedProjects`
+  - L146 `static Stream<void> get changes`
+  - L150 `static void _notifyChanges({bool updateCache = true})`  — Notify listeners of changes with debouncing to prevent rapid-fire UI rebuilds.
+  - L174 `static void _notifyChangesImmediate()`  — Notify immediately without debounce (for critical updates like initial cache load)
+  - L183 `static Future<void> loadFromCache()`  — Load projects from local cache (fast, for instant UI)
+  - L211 `static Future<void> _saveToCache()`  — Save projects to local cache
+  - L243 `static Future<SealedRowRead> resolveSealedRow( Map<String, dynamic> raw, List<String> fields, { required String requiredField, required String table, })`  — Opens [raw]'s envelope and resolves every field in [fields] with the
+  - L281 `static Map<String, dynamic> patchSealedRow( Map<String, dynamic> raw, Map<String, dynamic>? meta, List<String> fields, { required String requiredField, })`  — Returns a copy of [raw] with every field in [fields] resolved from the
+  - L298 `static Map<String, dynamic> withResolvedFields( Map<String, dynamic> row, Map<String, String?> values, )`  — Returns a copy of [row] with [values] written over the sealed fields,
+  - L312 `static bool rowNeedsReseal( Map<String, dynamic> raw, List<String> fields, { required String requiredField, })`  — True when [raw] is not in its clean sealed state and must be written
+  - L331 `static String get projectSweepFilter`  — PostgREST `or` filter for the `projects` rows [rowNeedsReseal] flags.
+  - L340 `static String get fileSweepFilter`  — PostgREST `or` filter for the `project_files` rows [rowNeedsReseal]
+  - L348 `static Future<Map<String, dynamic>> sealedProjectColumns({ required String rowId, required String name, String? description, String? customSystemPrompt, })`  — The sealed-column part of a `projects` insert or update of row
+  - L371 `static Future<Map<String, dynamic>> sealedFileColumns({ required String rowId, required String fileName, String? markdownSummary, })`  — The sealed-column part of a `project_files` insert or update of row
+  - L391 `static ({String name, String? description, String? customSystemPrompt}) mergeProjectFields({ required String currentName, String? currentDescription, String? currentCustomSystemPrompt, String? name, String? description, String? customSystemPrompt, })`  — Merges the optional fields of an update over the current values, so
+  - L424 `static bool isMissingEncryptedMetaColumn(PostgrestException error)`  — True when [error] says the `encrypted_meta` column is not there yet
+  - L427 `static bool _hasEnvelope(Object? value)`
+  - L430 `static String? _blankToNull(String? value)`
+  - L443 `static Future<void> _ensureKeyForSealedRows( Iterable<dynamic> rows, { bool mayLoadKey = true, })`  — Sealed rows need the key. Without it every sealed row would read as
+  - L460 `static bool _waitingForKey = false`  — A load found sealed rows before the key was there.
+  - L464 `static Future<void> reloadIfWaitingForKey()`  — Loads the projects again if a load had to wait for the key. The app
+  - L476 `static const String _undecryptableWorkspaceMessage = 'This workspace cannot be decrypted on this device, so it cannot be ' 'edited.'`
+  - L479 `static const String _undecryptableFileMessage = 'This file cannot be decrypted on this device, so it cannot be edited.'`
+  - L490 `static Future<({String name, String? description, String? customSystemPrompt})> mergeProjectUpdate( Map<String, dynamic> fetched, { String? name, String? description, String? customSystemPrompt, })`  — Merges an update over the project row as it is on the server now
+  - L519 `static Future<String> currentFileNameForUpdate( Map<String, dynamic> fetched, )`  — The file name to seal next to a new summary, read from the file row as
+  - L536 `static Future<Map<String, dynamic>> _fetchProjectFields( String workspaceId, String userId, )`  — The sealed fields of one project row, straight from the server.
+  - L552 `static Future<Map<String, dynamic>> _fetchFileNameFields( String fileId, )`  — The sealed name of one file row, straight from the server.
+  - L569 `static ResealJob? resealJobFromRead( SealedRowRead read, { required bool isFile, })`  — The re-seal job for one read row, or null when the row needs no
+  - L606 `static PostgrestFilterBuilder<T> applyResealGuards<T>( PostgrestFilterBuilder<T> query, ResealJob job, { String? userId, })`  — Adds the guards of a re-seal write to [query]: the row id, the owner
+  - L622 `static Future<bool> writeResealJob( ResealJob job, String userId, { PostgrestQueryBuilder Function(String table)? from, })`  — Writes [job] sealed. Returns false when nothing was written: the row
+  - L657 `static List<ResealJob> claimResealJobs( Iterable<ResealJob> jobs, Set<String> attempted, { required bool hasKey, })`  — Claims the jobs to run now and marks them as tried this session.
+  - L670 `static void releaseResealClaim( Set<String> attempted, ResealJob job, Object error, )`  — After a failed re-seal write: a server verdict (a PostgrestException)
+  - L681 `static void _queueReseal(List<ResealJob> jobs, String userId)`  — Queues [jobs] for the background re-seal, skipping rows already tried
+  - L698 `static Future<void> _runReseal(List<ResealJob> jobs, String userId)`
+  - L743 `static void _disableResealForMissingColumn( PostgrestException error, String table, )`
+  - L763 `static Future<int>? _sweepInFlight`
+  - L774 `static Future<int> resealLegacyRows()`  — Startup sweep: seals every legacy or old-build row of the signed-in
+  - L780 `static Future<int> _sweepLegacyRows()`
+  - L892 `static bool _applySweptProject(String id, Map<String, dynamic> row)`  — Puts the resolved values of a swept project row into the loaded model.
+  - L914 `static bool _applySweptFile(Map<String, dynamic> row)`  — Puts the resolved values of a swept file row into the loaded model.
+  - L936 `static WorkspaceFile _fileWith( WorkspaceFile f, { required String fileName, required String? markdownSummary, })`  — [WorkspaceFile.copyWith] cannot clear the summary; this can.
+  - L955 `static Future<void> loadProjects()`  — Load all projects from Supabase (updates cache)
+  - L1114 `static Future<Workspace> createProject( String name, { String? description, String? customSystemPrompt, })`  — Create a new workspace
+  - L1176 `static Future<Workspace> updateProject( String workspaceId, { String? name, String? description, String? customSystemPrompt, })`  — Update an existing workspace
+  - L1244 `static Future<void> deleteProject(String workspaceId)`  — Delete a workspace (cascades to project_chats and project_files via DB)
+  - L1275 `static Future<void> archiveProject(String workspaceId, bool archived)`  — Archive or unarchive a workspace
+  - L1310 `static Workspace? getWorkspace(String workspaceId)`  — Get a specific workspace by ID
+  - L1315 `static Workspace? getWorkspaceForChat(String chatId)`  — Get the workspace associated with a specific chat (if any)
+  - L1323 `static Future<void> linkChatToWorkspace( String workspaceId, String chatId, )`  — Link a chat to a workspace (alias for addChatToProject)
+  - L1331 `static Future<void> addChatToProject(String workspaceId, String chatId)`  — Add a chat to a workspace
+  - L1372 `static Future<void> removeChatFromProject( String workspaceId, String chatId, )`  — Remove a chat from a workspace
+  - L1412 `static Future<List<StoredChat>> getProjectChats(String workspaceId)`  — Get all chats in a workspace
+  - L1425 `static Future<void> uploadAvatar( String workspaceId, Uint8List imageBytes, )`  — Upload an avatar image for a workspace.
+  - L1476 `static Future<WorkspaceFile> uploadFile( String workspaceId, String fileName, Uint8List fileBytes, String fileType, { String? filePath, bool generateMarkdown = true, void Function(double progress)? onUploadProgress, void Function()? onConversionStart, })`  — Upload a file to a workspace (encrypted in Supabase Storage)
+  - L1681 `static Future<void> deleteFile(String workspaceId, String fileId)`  — Delete a file from a workspace (also deletes from storage)
+  - L1735 `static Future<String> decryptFile(String fileId)`  — Download and decrypt a file's content from Supabase Storage
+  - L1787 `static Future<Uint8List> downloadFile(String workspaceId, String fileId)`  — Download and decrypt a file, returning raw bytes
+  - L1831 `static Future<void> updateFileContent( String workspaceId, String fileId, Uint8List newBytes, )`  — Update a file's encrypted content
+  - L1914 `static Future<void> updateFileMarkdown( String workspaceId, String fileId, String? markdown, )`  — Update a file's markdown summary
+  - L1976 `static Future<void> reset()`  — Reset all state (on logout)

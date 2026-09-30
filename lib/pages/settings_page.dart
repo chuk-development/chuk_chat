@@ -59,7 +59,7 @@ import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/voice/incoming/incoming_call_bootstrap.dart';
-import 'package:chuk_chat/voice/incoming/voice_call_permissions_section.dart';
+import 'package:chuk_chat/voice/incoming/voice_call_settings_page.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -296,6 +296,22 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                 ),
+              // FEATURE_VOICE_CALL (owner-only test): what a call with the
+              // agent needs from Android, on its own page.
+              if (voiceIncomingEnabled)
+                _SettingsRow(
+                  icon: Icons.call_rounded,
+                  title: 'Voice calls',
+                  subtitle: 'What calls with your agent need from the phone',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const VoiceCallSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
               // The GitHub token backs the GitHub MCP connector, so the
               // entry point is shown together with the connectors.
               if (kFeatureMcp)
@@ -314,10 +330,6 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
-
-          // FEATURE_VOICE_CALL (owner-only test): what a call needs from
-          // Android, with a tap that asks for each.
-          if (voiceIncomingEnabled) const VoiceCallPermissionsSection(),
 
           // Agents only: about the host the coworkers run on, which a hosted
           // chat account has no equivalent for.

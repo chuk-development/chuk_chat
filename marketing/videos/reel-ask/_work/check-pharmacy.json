@@ -1,0 +1,1035 @@
+{
+  "ok": false,
+  "strict": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"reel\"> is a timeline element that contains nested <div>. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#reel",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"reel\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 5 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": false,
+    "errorCount": 2,
+    "warningCount": 11,
+    "infoCount": 13,
+    "findings": [
+      {
+        "code": "text_occluded",
+        "severity": "error",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(5) > text:nth-of-type(3)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 798.45,
+          "top": 1398.68,
+          "right": 835.37,
+          "bottom": 1601.61,
+          "width": 36.92,
+          "height": 202.93
+        },
+        "containerSelector": "div.nv-sheet",
+        "text": "Lindenstraße",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 798.45,
+          "y": 1398.68,
+          "width": 36.92,
+          "height": 202.93
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "error",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(5) > text:nth-of-type(5)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 1005.02,
+          "top": 1247.3,
+          "right": 1074.27,
+          "bottom": 1440.21,
+          "width": 69.25,
+          "height": 192.91
+        },
+        "containerSelector": "div.fill.ground",
+        "text": "Kieler Förde",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 1005.02,
+          "y": 1247.3,
+          "width": 69.25,
+          "height": 192.91
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "span.as-action-t > small:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 609.75,
+          "right": 454.29,
+          "bottom": 647.75,
+          "width": 314.29,
+          "height": 38
+        },
+        "containerSelector": "svg.nv-svg > g:nth-of-type(5) > text:nth-of-type(1)",
+        "text": "Pharmacy at the market",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 609.75,
+          "width": 314.29,
+          "height": 38
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "div.as-answer > span:nth-of-type(15)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 537.04,
+          "top": 1041.11,
+          "right": 627.86,
+          "bottom": 1080.11,
+          "width": 90.82,
+          "height": 39
+        },
+        "containerSelector": "svg.nv-svg > g:nth-of-type(5) > text:nth-of-type(2)",
+        "text": "away.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 537.04,
+          "y": 1041.11,
+          "width": 90.82,
+          "height": 39
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "span.pin.fpin2",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 884.33,
+          "top": 842.91,
+          "right": 946.61,
+          "bottom": 905.19,
+          "width": 62.28,
+          "height": 62.28
+        },
+        "containerSelector": "div.fs.fs-nav",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "right": 6.63
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 884.33,
+          "y": 842.91,
+          "width": 62.28,
+          "height": 62.28
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > rect:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -130.77,
+          "top": -469.07,
+          "right": 1133.83,
+          "bottom": 2060.14,
+          "width": 1264.6,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 270.77,
+          "right": 193.85,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -130.77,
+          "y": -469.07,
+          "width": 1264.6,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > path:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -38.46,
+          "top": 1229.37,
+          "right": 232.3,
+          "bottom": 1561.68,
+          "width": 270.77,
+          "height": 332.3
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 178.46
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -38.46,
+          "y": 1229.37,
+          "width": 270.77,
+          "height": 332.3
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(1)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -130.77,
+          "top": -469.07,
+          "right": 976.91,
+          "bottom": 2060.14,
+          "width": 1107.68,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 270.77,
+          "right": 36.93,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -130.77,
+          "y": -469.07,
+          "width": 1107.68,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(2)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -130.77,
+          "top": -469.07,
+          "right": 976.91,
+          "bottom": 2060.14,
+          "width": 1107.68,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 270.77,
+          "right": 36.93,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -130.77,
+          "y": -469.07,
+          "width": 1107.68,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(3)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -130.77,
+          "top": -469.07,
+          "right": 952.3,
+          "bottom": 2060.14,
+          "width": 1083.07,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 270.77,
+          "right": 12.32,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -130.77,
+          "y": -469.07,
+          "width": 1083.07,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(4)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": -130.77,
+          "top": -469.07,
+          "right": 952.3,
+          "bottom": 2060.14,
+          "width": 1083.07,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "left": 270.77,
+          "right": 12.32,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": -130.77,
+          "y": -469.07,
+          "width": 1083.07,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > path:nth-of-type(3)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 884.6,
+          "top": -469.07,
+          "right": 1133.83,
+          "bottom": 2060.14,
+          "width": 249.23,
+          "height": 2529.21
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "right": 193.85,
+          "top": 603.07,
+          "bottom": 326.16
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 884.6,
+          "y": -469.07,
+          "width": 249.23,
+          "height": 2529.21
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "warning",
+        "time": 10,
+        "selector": "svg.nv-svg > g:nth-of-type(5)",
+        "message": "Element extends outside a clipping layout container.",
+        "rect": {
+          "left": 176.92,
+          "top": 601.69,
+          "right": 1074.64,
+          "bottom": 1601.61,
+          "width": 897.73,
+          "height": 999.92
+        },
+        "containerSelector": "svg.nv-svg",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 140,
+          "top": 134,
+          "right": 939.98,
+          "bottom": 1733.98,
+          "width": 799.98,
+          "height": 1599.98
+        },
+        "overflow": {
+          "right": 134.66
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 176.92,
+          "y": 601.69,
+          "width": 897.73,
+          "height": 999.92
+        },
+        "firstSeen": 10,
+        "lastSeen": 11.333,
+        "occurrences": 2,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.333,
+        "selector": "span.as-action-t > small:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 331.13,
+          "top": 937.69,
+          "right": 688.83,
+          "bottom": 974.43,
+          "width": 357.7,
+          "height": 36.74
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Pharmacy at the market",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 331.13,
+          "y": 937.69,
+          "width": 357.7,
+          "height": 36.74
+        },
+        "firstSeen": 7.333,
+        "lastSeen": 7.333,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.333,
+        "selector": "p.as-heard > span:nth-of-type(9)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 1158.7,
+          "right": 285.03,
+          "bottom": 1197.7,
+          "width": 77.86,
+          "height": 39
+        },
+        "containerSelector": "div.as-panel.as-tools",
+        "text": "take",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.33,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 1158.7,
+          "width": 77.86,
+          "height": 39
+        },
+        "firstSeen": 7.333,
+        "lastSeen": 7.333,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.333,
+        "selector": "p.as-heard > span:nth-of-type(10)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 285.03,
+          "top": 1158.7,
+          "right": 344.58,
+          "bottom": 1197.7,
+          "width": 59.55,
+          "height": 39
+        },
+        "containerSelector": "div.as-panel.as-tools",
+        "text": "me",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.33,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 285.03,
+          "y": 1158.7,
+          "width": 59.55,
+          "height": 39
+        },
+        "firstSeen": 7.333,
+        "lastSeen": 7.333,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 7.333,
+        "selector": "p.as-heard > span:nth-of-type(11)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 344.58,
+          "top": 1158.7,
+          "right": 448.52,
+          "bottom": 1197.7,
+          "width": 103.94,
+          "height": 39
+        },
+        "containerSelector": "div.as-panel.as-tools",
+        "text": "there.”",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.33,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 344.58,
+          "y": 1158.7,
+          "width": 103.94,
+          "height": 39
+        },
+        "firstSeen": 7.333,
+        "lastSeen": 7.333,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-h > b:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 265.56,
+          "top": 556.94,
+          "right": 445.42,
+          "bottom": 597.94,
+          "width": 179.86,
+          "height": 41
+        },
+        "containerSelector": "div.r.r-act > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Pharmacy",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 265.56,
+          "y": 556.94,
+          "width": 179.86,
+          "height": 41
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-h > span:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 766.33,
+          "top": 557.91,
+          "right": 872.81,
+          "bottom": 595.91,
+          "width": 106.48,
+          "height": 38
+        },
+        "containerSelector": "div.r.r-act > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "3 open",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 766.33,
+          "y": 557.91,
+          "width": 106.48,
+          "height": 38
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r0 > span:nth-of-type(1) > b:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 888.06,
+          "right": 621.94,
+          "bottom": 929.06,
+          "width": 414.77,
+          "height": 41
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Pharmacy at the market",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 888.06,
+          "width": 414.77,
+          "height": 41
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r0 > span:nth-of-type(1) > small:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 938.61,
+          "right": 591.27,
+          "bottom": 976.61,
+          "width": 384.09,
+          "height": 38
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Open until 20:00 · 400 m",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 938.61,
+          "width": 384.09,
+          "height": 38
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r1 > span:nth-of-type(1) > b:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 1004.03,
+          "right": 513.11,
+          "bottom": 1045.03,
+          "width": 305.94,
+          "height": 41
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Linden Pharmacy",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 1004.03,
+          "width": 305.94,
+          "height": 41
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r1 > span:nth-of-type(1) > small:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 1054.58,
+          "right": 591.27,
+          "bottom": 1092.58,
+          "width": 384.09,
+          "height": 38
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Open until 19:00 · 650 m",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 1054.58,
+          "width": 384.09,
+          "height": 38
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r2 > span:nth-of-type(1) > b:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 1120,
+          "right": 535.53,
+          "bottom": 1161,
+          "width": 328.36,
+          "height": 41
+        },
+        "containerSelector": "div.r.r-stat > div:nth-of-type(1) > div:nth-of-type(1)",
+        "text": "Harbour Pharmacy",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 1,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 1120,
+          "width": 328.36,
+          "height": 41
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "text_occluded",
+        "severity": "info",
+        "time": 8.667,
+        "selector": "div.pc-r.pc-r2 > span:nth-of-type(1) > small:nth-of-type(1)",
+        "message": "Text is hidden beneath an opaque element.",
+        "rect": {
+          "left": 207.17,
+          "top": 1170.55,
+          "right": 591.27,
+          "bottom": 1208.55,
+          "width": 384.09,
+          "height": 38
+        },
+        "containerSelector": "div.as-panel.as-tools",
+        "text": "Open until 18:30 · 800 m",
+        "fixHint": "Give the text its own zone, raise its stacking order above the covering element, or mark intentional layering with data-layout-allow-occlusion.",
+        "coveredFraction": 0.67,
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 207.17,
+          "y": 1170.55,
+          "width": 384.09,
+          "height": 38
+        },
+        "firstSeen": 8.667,
+        "lastSeen": 8.667,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.5,
+        "selector": "span.p-pause2",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 263.57,
+          "top": 1613.14,
+          "right": 368.69,
+          "bottom": 1652.14,
+          "width": 105.12,
+          "height": 39
+        },
+        "containerSelector": "p.nv-name",
+        "text": "Pause",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 263.57,
+          "y": 1613.14,
+          "width": 105.12,
+          "height": 39
+        },
+        "firstSeen": 9.5,
+        "lastSeen": 9.5,
+        "occurrences": 1,
+        "heldMs": 0
+      }
+    ],
+    "duration": 12,
+    "samples": [
+      0.667,
+      2,
+      3.333,
+      4.667,
+      6,
+      7.333,
+      8.667,
+      10,
+      11.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 26,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      0.667,
+      3.333,
+      6,
+      8.667,
+      11.333
+    ],
+    "checked": 23,
+    "passed": 23
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.94",
+    "latestVersion": "0.8.94",
+    "updateAvailable": false
+  }
+}

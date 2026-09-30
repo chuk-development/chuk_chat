@@ -113,60 +113,61 @@
   - L1407 `final Color colour`
   - L1410 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_agent_sheet.dart  (189 Z.)
-- L27 `class MobileAgentSheet extends StatelessWidget`
-  - L28 `const MobileAgentSheet({ super.key, required this.agent, this.onProfile, this.onControls, this.onRename, this.onRooms, this.onCopyChat, this.onSettings, this.onSignOut, })`
-  - L40 `final AgentsAgent agent`
-  - L43 `final VoidCallback? onProfile`  — Opens the coworker's profile page.
-  - L44 `final VoidCallback? onControls`
-  - L45 `final VoidCallback? onRename`
-  - L46 `final VoidCallback? onRooms`
-  - L47 `final VoidCallback? onCopyChat`
-  - L48 `final VoidCallback? onSettings`
-  - L49 `final VoidCallback? onSignOut`
-  - L54 `static Future<void> show( BuildContext context, { required AgentsAgent agent, VoidCallback? onProfile, VoidCallback? onControls, VoidCallback? onRename, VoidCallback? onRooms, VoidCallback? onCopyChat, VoidCallback? onSettings, VoidCallback? onSignOut, })`  — Opens the sheet. Each row closes the sheet first, then runs its action,
-  - L88 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the coworker's own actions, the parked
-  - L176 `Widget build(BuildContext context)`
+## lib/platform_specific/mobile/mobile_agent_sheet.dart  (211 Z.)
+- L30 `class MobileAgentSheet extends StatelessWidget`
+  - L31 `const MobileAgentSheet({ super.key, required this.agent, this.onProfile, this.onControls, this.onRename, this.onRooms, this.onCopyChat, this.onSettings, this.onSignOut, this.onVoiceCall, })`
+  - L44 `final AgentsAgent agent`
+  - L47 `final VoidCallback? onProfile`  — Opens the coworker's profile page.
+  - L48 `final VoidCallback? onControls`
+  - L49 `final VoidCallback? onRename`
+  - L50 `final VoidCallback? onRooms`
+  - L51 `final VoidCallback? onCopyChat`
+  - L52 `final VoidCallback? onSettings`
+  - L53 `final VoidCallback? onSignOut`
+  - L58 `final VoidCallback? onVoiceCall`  — Starts a voice call with the coworker. Null starts it directly (the
+  - L63 `static Future<void> show( BuildContext context, { required AgentsAgent agent, VoidCallback? onProfile, VoidCallback? onControls, VoidCallback? onRename, VoidCallback? onRooms, VoidCallback? onCopyChat, VoidCallback? onSettings, VoidCallback? onSignOut, })`  — Opens the sheet. Each row closes the sheet first, then runs its action,
+  - L100 `List<List<Widget>> menuGroups(BuildContext context)`  — The runs of the menu: identity, the coworker's own actions, the parked
+  - L198 `Widget build(BuildContext context)`
 
-## lib/platform_specific/mobile/mobile_chat_chrome.dart  (486 Z.)
-- L38 `kMobileChromeChip = 42`  — Diameter of a round chip: chuk's floating chip.
-- L41 `kMobileChromeRow = 48`  — Height of the bar's row: chuk's top bar row.
-- L44 `kMobileChromePillRadius = 18`  — Corner radius of the title pill: chuk's title pill.
-- L48 `_kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2`  — How far a 48 px press reaches past a 42 px chip on each side. The row's
-- L52 `_kPillFaceSize = 30`  — The coworker's face inside the pill. 30 leaves the two text lines their
-- L55 `_kPillStatusFontSize = 11`  — The status line's font size. The presence dot is derived from it.
-- L57 `class MobileChatChrome extends StatelessWidget`
-  - L58 `const MobileChatChrome({ super.key, required this.agent, required this.onBack, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.profiles, })`
-  - L71 `final AgentsAgent agent`
-  - L74 `final VoidCallback onBack`  — Back to the coworker list.
-  - L77 `final VoidCallback? onOpenProfile`  — Tap on the coworker pill — its profile page. Null renders the pill flat.
-  - L82 `final VoidCallback? onOpenBrowser`  — The "computer" chip: the coworker's screen. Called whether or not a
-  - L86 `final bool browserAvailable`  — Is a screen open right now? False draws the chip parked: visibly not
-  - L87 `final VoidCallback? onOpenFiles`
-  - L88 `final VoidCallback? onReconnect`
-  - L91 `final VoidCallback? onMore`  — The "more" chip: the shell's secondary actions. Null hides it.
-  - L93 `final AgentProfileStore? profiles`
-  - L96 `Widget build(BuildContext context)`
-- L199 `class _ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
-  - L200 `const _ChromeChip({ required this.icon, required this.tooltip, required this.semanticsId, required this.onTap, this.accent = false, this.parked = false, })`
-  - L209 `final IconData icon`
-  - L210 `final String tooltip`
-  - L211 `final String semanticsId`
-  - L214 `final VoidCallback? onTap`  — Null disables the chip.
-  - L217 `final bool accent`  — chuk's accent-filled chip: the one thing on the bar that is ready.
-  - L221 `final bool parked`  — Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
-  - L224 `Widget build(BuildContext context)`
-- L275 `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
-  - L276 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
-  - L283 `final AgentsAgent agent`
-  - L284 `final VoidCallback? onTap`
-  - L285 `final VoidCallback? onReconnect`
-  - L286 `final AgentProfileStore? profiles`
-  - L289 `Widget build(BuildContext context)`
-  - L302 `Widget _surface(BuildContext context, {required bool paired})`
-  - L378 `Widget _status(BuildContext context, {required bool paired})`  — What the coworker is doing: offline with a way back, working, or here.
-  - L456 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
-  - L479 `String? _roleOf(AgentProfileStore store)`
+## lib/platform_specific/mobile/mobile_chat_chrome.dart  (498 Z.)
+- L40 `kMobileChromeChip = 42`  — Diameter of a round chip: chuk's floating chip.
+- L43 `kMobileChromeRow = 48`  — Height of the bar's row: chuk's top bar row.
+- L46 `kMobileChromePillRadius = 18`  — Corner radius of the title pill: chuk's title pill.
+- L50 `_kReach = (MobileLayout.minTouchTarget - kMobileChromeChip) / 2`  — How far a 48 px press reaches past a 42 px chip on each side. The row's
+- L54 `_kPillFaceSize = 30`  — The coworker's face inside the pill. 30 leaves the two text lines their
+- L57 `_kPillStatusFontSize = 11`  — The status line's font size. The presence dot is derived from it.
+- L59 `class MobileChatChrome extends StatelessWidget`
+  - L60 `const MobileChatChrome({ super.key, required this.agent, required this.onBack, this.onOpenProfile, this.onOpenBrowser, this.browserAvailable = false, this.onOpenFiles, this.onReconnect, this.onMore, this.profiles, })`
+  - L73 `final AgentsAgent agent`
+  - L76 `final VoidCallback onBack`  — Back to the coworker list.
+  - L79 `final VoidCallback? onOpenProfile`  — Tap on the coworker pill — its profile page. Null renders the pill flat.
+  - L84 `final VoidCallback? onOpenBrowser`  — The "computer" chip: the coworker's screen. Called whether or not a
+  - L88 `final bool browserAvailable`  — Is a screen open right now? False draws the chip parked: visibly not
+  - L89 `final VoidCallback? onOpenFiles`
+  - L90 `final VoidCallback? onReconnect`
+  - L93 `final VoidCallback? onMore`  — The "more" chip: the shell's secondary actions. Null hides it.
+  - L95 `final AgentProfileStore? profiles`
+  - L98 `Widget build(BuildContext context)`
+- L211 `class _ChromeChip extends StatelessWidget`  — One round chip of the bar: chuk's floating chip — the chrome surface, a
+  - L212 `const _ChromeChip({ required this.icon, required this.tooltip, required this.semanticsId, required this.onTap, this.accent = false, this.parked = false, })`
+  - L221 `final IconData icon`
+  - L222 `final String tooltip`
+  - L223 `final String semanticsId`
+  - L226 `final VoidCallback? onTap`  — Null disables the chip.
+  - L229 `final bool accent`  — chuk's accent-filled chip: the one thing on the bar that is ready.
+  - L233 `final bool parked`  — Not ready yet: a quieter glyph, and a tap still reaches [onTap], which
+  - L236 `Widget build(BuildContext context)`
+- L287 `class _AgentPill extends StatelessWidget`  — The coworker pill: chuk's title pill with the face, the name and the live
+  - L288 `const _AgentPill({ required this.agent, required this.onTap, this.profiles, this.onReconnect, })`
+  - L295 `final AgentsAgent agent`
+  - L296 `final VoidCallback? onTap`
+  - L297 `final VoidCallback? onReconnect`
+  - L298 `final AgentProfileStore? profiles`
+  - L301 `Widget build(BuildContext context)`
+  - L314 `Widget _surface(BuildContext context, {required bool paired})`
+  - L390 `Widget _status(BuildContext context, {required bool paired})`  — What the coworker is doing: offline with a way back, working, or here.
+  - L468 `Widget _statusLine( BuildContext context, { required bool paired, required Widget child, })`  — The bottom line of the pill: the presence dot and whatever says what the
+  - L491 `String? _roleOf(AgentProfileStore store)`
 
 ## lib/platform_specific/mobile/mobile_chat_screen.dart  (220 Z.)
 - L28 `typedef MobileChatBodyBuilder = Widget Function(BuildContext context, double topInset)`  — Builds the chat body. [topInset] is the space the body must leave at the

@@ -124,30 +124,48 @@ app language: "Please do not close the app. Your data is being rewritten.",
 with two bars: migration n of N, verification n of N. Not throttled; up to 4
 chats at a time. Code: `lib/services/chat_payload_migration_service.dart`.
 
-**A normal start never waits for the cloud.** When the session was already
-there at app start (`ChatMaintenanceController.noteRestoredSession`, called
-in `main()` after the Supabase init), the gate reads only local state
-(`ChatPayloadMigrationService.startupCheck`: the done flag, a `cloudPending`
-mark, the cache rows to rewrite) and opens the app in milliseconds. The cloud
-list is then read behind the app, without the key
-(`checkCloudInBackground`): none left sets the done flag; some left sets
-`cloudPending`, and the next start rewrites them behind the screen. Nothing
-is rewritten behind the app. Before this, the done flag could stay unset (a
-key that loads slowly, a scan that fails) and every start waited for the
-whole check (seen on desktop: `done=false` with 944 cached chats).
+**No start waits for the cloud, a new install included.** The gate reads
+only local state (`ChatPayloadMigrationService.startupCheck`: the state in
+`kv_cache`, the cache rows to rewrite) and opens the app in milliseconds.
+Only cache rows from an older client block a start; a new install has none,
+so it never sees the maintenance screen and never sees a "syncing" text. The
+cloud list is read behind the app, without the key
+(`checkCloudInBackground`): none left sets the done flag; the chats that are
+left are rewritten there, behind the app, with the same guards as behind the
+screen (2 at a time, 1 on the web). Meanwhile the app shows the cached and
+arriving chats: the reader reads v1 and v2. (Until 2026-10-01 a sign-in on a
+device that never checked the account waited for the whole cloud check once,
+with "Syncing your chats..."; the owner did not want that screen, so it is
+gone. The `cloudPending` and `cloudWaited` fields of the state are no longer
+read for a start.)
 
-Only a sign-in waits for the whole check. There the gate shows the empty app
-surface first; the first sign-in on a new install takes seconds (key set-up,
-then the cloud scan below), so after 400 ms a loader fades in with "Syncing
-your chats..." and "This can take a moment." A normal start never shows it.
-A check that ends without the done flag writes the reason (`no_key`,
-`scan_failed` + error type) to the opt-in diagnostics log.
+**Failures end.** A cloud chat that cannot pass (another key, not
+decryptable, not a payload this app can read: a `FormatException`,
+`UnsupportedError`, `TypeError`, `ArgumentError` or `RangeError` from the
+conversion, a failed proof or verification) is left as it is at once. Any
+other failure of a chat (a server error, a guard lost to a save, a
+timeout) is counted, and the third one leaves it as it is. Offline, no key
+or no user any more stop the run without counting. A cache row whose stored
+payload does not decode or does not convert is left as it is; a row that
+does not verify is left as it is after the restore; a row that changed
+during the run is not a failure (the app wrote a frame). After two local
+runs that failed (the backup put back), all cache rows of the run are left
+as they are and no longer hold a start. A chat left as it is stays readable
+(the reader reads v1 and v2) and its next save writes v3.
+
+The opt-in diagnostics log (area `maintenance`) gets every decision, with a reason and
+an error type, never an id: `Chat check incomplete` (`no_key`,
+`scan_failed` with the time the scan took, `cache_scan_failed`), `Chat left
+as it is`, `Chat maintenance failed`, `Chats retried behind the app`, `Chat
+check state not saved`.
 
 Plan (`ChatPayloadMigrationService.plan`): nothing when `kv_cache` holds the
-done flag (`chat_payload_v3_migration_<user id>`). Otherwise the cache rows
-that are not a frame yet (one SQL query, no payloads read) and the cloud
-chats whose envelope still starts with `{"v":"1"` (one PostgREST query, ids
-only), minus dirty chats and the ones skipped for good. No work: no screen.
+done flag (`chat_payload_v3_migration_<user id>`, JSON: `done`,
+`cloudPending`, `cloudWaited`, `localFailures`, `skip`, `tries`; a sign-out
+does not clear it). Otherwise the cache rows that are not a frame yet (one
+SQL query, no payloads read) and the cloud chats whose envelope still starts
+with `{"v":"1"` (one PostgREST query, ids only), minus dirty chats and the
+ones left as they are. No work: no screen.
 
 Run (`execute`):
 
@@ -173,13 +191,13 @@ Run (`execute`):
 6. Done flag set, backup deleted.
 
 Offline or a cloud error: the local part is finished, the cloud chats that
-are left keep their `{"v":"1"}` envelope and are found again at the next
-start, where the screen shows only for them. Nothing is half written: each
-cloud chat is one UPDATE, the cache is restored as a whole. Skipped: dirty
-chats (their next cloud save is v3), locked chats (another key; the recovery
-flow writes v3), chats that fail the proof (left readable as they are), and
-Agents threads.
+are left keep their `{"v":"1"}` envelope and are rewritten behind the app at
+a later start (see above). Nothing is half written: each cloud chat is one
+UPDATE, the cache is restored as a whole. Skipped: dirty chats (their next
+cloud save is v3), locked chats (another key; the recovery flow writes v3),
+chats left as they are (see above), and Agents threads.
 
-Web: no cache database, so only the cloud part runs, behind the same screen.
+Web: no cache database, so nothing blocks a start; only the cloud part
+runs, behind the app.
 There are no isolates on the web, so the conversion runs on the UI thread and
 seals with deflate only; the screen stays up while it runs.

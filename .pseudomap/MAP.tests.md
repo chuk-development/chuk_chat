@@ -1,6 +1,6 @@
 # pseudomap · chuk_chat · Tests
 
-322 Dateien · 864 Typen/Funktionen · 783 Member · Stand 2026-09-28
+357 Dateien · 974 Typen/Funktionen · 955 Member · Stand 2026-09-30
 
 Diese Datei ist `.pseudomap/MAP.md` — Stufe 1: was es gibt und wo es liegt.
 
@@ -68,6 +68,25 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
   - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets state inbound establishedTrust sessionKey agentToAgent
 - `void main()`
 
+## test/agents_permissions
+### agent_permissions_section_test.dart  (329 Z.)
+- `Widget _page(AgentsPermissionsService service, {String agentId = 'a'})`
+- `Switch _switch(WidgetTester tester, String key)`
+- `Future<(FakeHost, AgentsPermissionsService)> _open( WidgetTester tester, { bool connected = true, bool supported = true …)`
+- `void main()`
+
+### agents_error_routing_test.dart  (100 Z.)
+- `Future<void> _drain()`
+- `void main()`
+
+### agents_permissions_service_test.dart  (219 Z.)
+- `void main()`
+
+### permissions_fakes.dart  (51 Z.)
+- `class FakeHost`  — A stand-in for the host connection: what it sends, whether a host is
+  - send service attach detach nameCapability connection capabilities sent fail
+- `Map<String, dynamic> permissionsReply( String agentId, AgentPermissions? p, { String? error, Map<String, bool>? enforced …)`
+
 ## test/assistant
 ### assistant_microphone_test.dart  (153 Z.)
 - const: _frame
@@ -102,7 +121,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Map<String, dynamic> _table(String title)`
 - `void main()`
 
-### every_screen_layout_test.dart  (780 Z.)
+### every_screen_layout_test.dart  (842 Z.)
 - const: _cannotMount _chukSizes
 - `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
   - Function
@@ -119,6 +138,10 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `Future<void> _openSheet(WidgetTester tester)`
 - `List<_Screen> _screens()`
 - `void main()`
+- `class _InstallMemory implements AgentsSecureKeyValueStore`  — Secure storage for the install page, in memory.
+  - read write delete
+- `class _InstallSession implements AccountSessionSource`
+  - current refresh
 
 ### layout_harness.dart  (431 Z.)
 - const: kLayoutSizes kTextScales _kEdgeTolerance kMinFontSize
@@ -232,7 +255,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### stored_chat_test.dart  (314 Z.)
 - `void main()`
 
-### workspace_model_test.dart  (497 Z.)
+### workspace_model_test.dart  (535 Z.)
 - `void main()`
 
 ## test/pages
@@ -240,6 +263,13 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ### agent_profile_page_test.dart  (50 Z.)
+- `void main()`
+
+### agents_install_page_test.dart  (281 Z.)
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _Session implements AccountSessionSource`
+  - current refresh
 - `void main()`
 
 ### agents_pairing_page_test.dart  (229 Z.)
@@ -254,7 +284,7 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### desktop_settings_modal_test.dart  (180 Z.)
 - `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
-### mcp_connectors_page_test.dart  (212 Z.)
+### mcp_connectors_page_test.dart  (273 Z.)
 - `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - read write delete map
 - `void main()`
@@ -462,6 +492,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### artifact_diff_engine_test.dart  (102 Z.)
 - `void main()`
 
+### artifact_encrypted_meta_test.dart  (823 Z.)
+- const: _prefix _rowUuid
+- `Future<String> _fakeSeal(String plaintext)`
+- `Future<String> _fakeOpen(String envelope)`
+- `Map<String, dynamic> _row({ required String id, required Object? title, Object? language, Object? encryptedMeta, String …)`
+- `ArtifactRowRef _ref({ required String rowId, required String handle, required String updatedAt, String? title, String? s …)`
+- `Future<String> _seal(String rowId, Map<String, Object?> fields)`  — Seals [fields] the way the service does, bound to `artifacts` row
+- `Future<ArtifactDocument> _resolve(Map<String, dynamic> row)`
+- `Future<bool> _needsReseal(Map<String, dynamic> row)`
+- `Future<Map<String, dynamic>> _open(Object? envelope, String rowId)`  — Opens an envelope as the service does for `artifacts` row [rowId];
+- `void main()`
+
 ### artifact_repair_version_chain_test.dart  (33 Z.)
 - `void main()`
 
@@ -509,14 +551,14 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `String _chatJson({int rounds = 30})`
 - `void main()`
 
-### chat_payload_migration_test.dart  (591 Z.)
-- const: userId
+### chat_payload_migration_test.dart  (870 Z.)
+- const: userId _unreadableJson
 - `String _id(int i)`
 - `String _updatedAt(int i)`
 - `String _v2Json(int i)`
 - `Future<String> _sealV1(String text, List<int> key)`
 - `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
-  - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion key rows writes offline keyAvailable listGate changeBeforeWrite
+  - listPlainEnvelopeChats readRow writeRow convert fingerprint ensureKey currentKeyVersion key rows writes offline keyAvailable listGate changeBeforeWrite failRead
 - `void main()`
 
 ### chat_reaction_service_test.dart  (76 Z.)
@@ -612,6 +654,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### round_content_block_service_test.dart  (519 Z.)
 - `void main()`
 
+### session_manager_sign_out_event_test.dart  (51 Z.)
+- `void main()`
+
 ### session_recovery_test.dart  (464 Z.)
 - `String _jwt({required int exp, String sub = 'user-1'})`
 - `Session _session({required int exp, required String refresh})`
@@ -700,6 +745,20 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 - `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
 
+### workspace_encrypted_meta_test.dart  (1172 Z.)
+- const: _prefix _projectStamp _fileStamp
+- `Future<String> _fakeSeal(String plaintext)`  — Reversible and opaque: base64 hides the plaintext, like a real envelope.
+- `Future<String> _fakeOpen(String envelope)`  — Opens only envelopes of [_fakeSeal]; anything else acts like a wrong key.
+- `String _foreignEnvelope(Map<String, Object?> fields)`  — An envelope sealed with another key (cannot be opened).
+- `Future<String> _envelope( Map<String, Object?> fields, { String table = 'projects', String row = 'proj-1', })`  — Envelope bound to project row 'proj-1' (the default [_projectRow]).
+- `Future<String> _fileEnvelope(Map<String, Object?> fields)`  — Envelope bound to file row 'file-1' (the default [_fileRow]).
+- `Map<String, dynamic> _projectRow({ String id = 'proj-1', Object? name = kEncryptedPlaceholder, Object? description, Obje …)`
+- `Map<String, dynamic> _fileRow({ String id = 'file-1', Object? fileName = kEncryptedPlaceholder, Object? markdown, String …)`
+- `Future<SealedRowRead> _readProject(Map<String, dynamic> raw)`
+- `Future<SealedRowRead> _readFile(Map<String, dynamic> raw)`
+- `bool _matchesOrFilter(String filter, Map<String, dynamic> row)`  — Evaluates a PostgREST `or` filter of the sweep against one row with SQL
+- `void main()`
+
 ## test/services/agents
 ### agent_profile_store_test.dart  (58 Z.)
 - `void main()`
@@ -710,11 +769,11 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### agent_roster_store_test.dart  (249 Z.)
 - `void main()`
 
-### agents_cloud_relay_test.dart  (615 Z.)
+### agents_cloud_relay_test.dart  (754 Z.)
 - `class _FakeRelayServer implements RelaySocket`  — A stand-in for `api.chuk.chat/v2/relay/ws`.
   - send fromHost _deliver close toHost incoming authOk claimReply sent closed hostDeviceId
 - `class _HostSide`  — The §15 initiator, exactly as the host runs it, speaking the LOCAL relay
-  - mac start _send _onEnvelope _establishCodec emit server channelId digits signingKeyPair deviceId connection sessionTranscript sessionKey controllerKey opened paired
+  - mac start _send _onEnvelope _establishCodec emit answerResume server channelId digits signingKeyPair deviceId connection sessionTranscript sessionKey controllerKey opened paired
 - `class _Session implements AccountSessionSource`
   - current refresh
 - `void main()`
@@ -734,6 +793,39 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 - `Future<SimpleKeyPair> _keyPair()`
 - `Future<AgentsStoredPairing> _pairing(Uint8List key, Uri hostUrl)`
+
+### agents_install_claim_wait_test.dart  (552 Z.)
+- `class _ClaimSocket implements RelaySocket`  — One relay socket. It signs the app in, then answers each claim with the
+  - send _deliver close relayed incoming script authOk commitOnBind commit claims sent closed hostDeviceId
+- `class _Session implements AccountSessionSource`
+  - current refresh
+- `void main()`
+
+### agents_install_flow_test.dart  (252 Z.)
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _Session implements AccountSessionSource`
+  - current refresh userId
+- `class _Wait`  — One pending wait: the test decides when and how it ends.
+  - invite deadline cancel result
+- `void main()`
+
+### agents_install_ticket_test.dart  (225 Z.)
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `void main()`
+
+### agents_invite_pairing_test.dart  (236 Z.)
+- `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - read write delete map
+- `class _RecordingMirror extends SupabasePairingSync`  — The encrypted mirror, recording what it was asked to store.
+  - saveEncryptedPairing clearEncryptedPairing saved
+- `class _Session implements AccountSessionSource`
+  - current refresh
+- `void main()`
+
+### agents_pairing_key_replace_test.dart  (173 Z.)
+- `void main()`
 
 ### agents_pairing_restore_test.dart  (425 Z.)
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
@@ -1030,9 +1122,9 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 - `void main()`
 
 ## test/support
-### fake_relay_controller.dart  (245 Z.)
+### fake_relay_controller.dart  (265 Z.)
 - `class FakeRelayController implements AgentsRelayController`  — A controller the test drives directly: set [set], push [emit] — no socket
-  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets set emit state inbound establishedTrust replaySessionKeys connectCalls replayPages reconnectCalls provisioned reconnectFails tasks taskSessionKeys taskModelIds taskProviderSlugs taskReasoning taskDebugFlags taskRegenerateFlags taskIds stopCalls stopSessionKeys +8
+  - connect reconnect provisionAccount setRoomAgentToAgent sendRoomTask requestRoomHistory deleteRoom renameRoom createAgent renameAgent requestAgentList addRoomMember removeRoomMember sendRunAck startBrowserView stopBrowserView sendBrowserData sendApprovalDecision sendSecrets set emit state inbound establishedTrust replaySessionKeys connectCalls connects trustOnConnect connectError replayPages reconnectCalls provisioned reconnectFails tasks taskSessionKeys taskModelIds taskProviderSlugs taskReasoning taskDebugFlags taskRegenerateFlags +12
 
 ### icon_finder.dart  (34 Z.)
 - `Finder findIcon(IconData icon)`  — Finds an icon whether it draws as Material or as the app's own set.
@@ -1195,6 +1287,119 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### vnc_local_server_test.dart  (308 Z.)
 - `void main()`  — The loopback server behind the noVNC viewer.
 
+## test/voice
+### voice_call_controller_test.dart  (231 Z.)
+- `class _FakeDelegate implements VoiceTaskDelegate`
+  - startTask results controller
+- `Map<String, dynamic> _json(String s)`
+- `void main()`
+
+### voice_call_models_test.dart  (147 Z.)
+- `void main()`
+
+### voice_call_service_token_test.dart  (112 Z.)
+- `void main()`
+
+### voice_call_store_test.dart  (80 Z.)
+- `VoiceCallRecord _record(String chatId, DateTime start, {String text = 'Hi'})`
+- `void main()`
+
+### voice_location_test.dart  (116 Z.)
+- `Map<String, dynamic> _json(String s)`
+- `void main()`
+
+### voice_protocol_test.dart  (398 Z.)
+- `class _FakeDelegate implements VoiceTaskDelegate`
+  - startTask results onStart started
+- `Map<String, dynamic> _json(String s)`
+- `void main()`
+
+### voice_tasks_test.dart  (113 Z.)
+- `class _Delegate implements VoiceTaskDelegate`
+  - startTask results
+- `void main()`
+
+### voice_transcript_test.dart  (254 Z.)
+- `void main()`
+
+### voice_widgets_test.dart  (348 Z.)
+- const: _t0
+- `Widget _host(Widget child, {double width = 360, double textScale = 1.0})`  — A 360 px column that scrolls, like the chat the widgets live in.
+- `List<VoiceTurn> _turns()`
+- `List<VoiceCard> _cards()`
+- `void main()`
+
+## test/voice_incoming
+### fakes.dart  (253 Z.)
+- `Map<String, dynamic> incomingFrame({ String callId = '3f2a9c1d0b7e4a55', String threadId = 'local:crypto-desk:1:74112' …)`  — A frame as the host sends it.
+- `Map<String, dynamic> stateFrame(String callId, String state)`
+- `class FakeCallkit implements CallkitPort`
+  - emit showIncoming showMissed startOutgoing setConnected end signals controller shown missed started connected ended echoOnEnd
+- `class FakeMic implements MicPermission`  — The microphone permission, as the test sets it. [pending] holds the
+  - isGranted request granted grantOnRequest requests pending
+- `class FakeSender implements CallStateSender`
+  - send sent
+- `class FakeUi implements OngoingCallUi`
+  - show cancel requestUnlock notice actions controller shown cancelled unlocks notices
+- `class FakeCall extends ChangeNotifier implements VoiceCallView`  — The app-wide call, driven by the test.
+  - begin end setMicMuted setSpeakerOn isActive phase callId chatId mode agentName agentPresent micMuted speakerOn canSwitchSpeaker startedAt endCalls agent to
+- `class FakeStarter`  — A starter that records the calls it was asked to start and, like the real
+  - start call started
+
+### incoming_call_mapping_test.dart  (214 Z.)
+- `void main()`
+
+### incoming_call_parsing_test.dart  (269 Z.)
+- `void main()`
+
+### incoming_call_service_test.dart  (522 Z.)
+- `void main()`
+
+### incoming_call_starter_test.dart  (115 Z.)
+- const: _thread _reason
+- `ChatVoiceBinding _binding(VoiceCallController controller)`
+- `void main()`
+
+### relay_call_state_sender_test.dart  (130 Z.)
+- `class _Transport implements AgentsRelayController, AgentsVoiceCallControl`
+  - pair drop sendVoiceCallState state sent fail
+- `class _PlainTransport implements AgentsRelayController`  — A paired transport that is an [AgentsRelayController] but NOT an
+  - state
+- `void main()`
+
+### voice_call_permissions_section_test.dart  (60 Z.)
+- `void main()`
+
+## test/voice_integration
+### chat_voice_binding_agent_call_test.dart  (138 Z.)
+- const: _thread
+- `ChatVoiceBinding _binding(VoiceCallController controller, String chatId)`
+- `void main()`
+
+### chat_voice_binding_test.dart  (193 Z.)
+- `ChatVoiceBinding _binding({ required VoiceCallController controller, required String? Function() chatId, bool agents = f …)`  — A binding over a fake screen. No LiveKit: the test build has no token
+- `void main()`
+
+### voice_call_context_test.dart  (130 Z.)
+- `Map<String, String> _user(String text)`
+- `Map<String, String> _ai(String text)`
+- `void main()`
+
+### voice_record_placement_test.dart  (156 Z.)
+- `DateTime _t(int minute)`
+- `VoiceCallRecord _record(int minute)`
+- `void main()`
+
+### voice_task_delegates_test.dart  (158 Z.)
+- `class _FakeSender`  — A sender that records what it was asked and lets the test finish each
+  - call sent turns
+- `void main()`
+
+### voice_turn_queue_test.dart  (251 Z.)
+- `class _FakeChat`  — Stands in for a chat screen: each send appends a user row and an
+  - send chatId busy refuse sent rows offline maxWait
+- `void main()`
+
 ## test/widgets
 ### agent_activity_timeline_test.dart  (679 Z.)
 - const: _t0
@@ -1327,16 +1532,18 @@ Vor dem Schreiben neuer Funktionen hier nachsehen, ob die Sache schon existiert.
 ### app_lifecycle_observer_test.dart  (43 Z.)
 - `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 
-### app_mode_switch_test.dart  (669 Z.)
+### app_mode_switch_test.dart  (943 Z.)
 - const: kPhone kSwitchOnPhone kWidePhone kPhoneInsets
 - `class _MemoryStore implements AgentsSecureKeyValueStore`
   - read write delete map
 - `class _EmptyMirror extends SupabasePairingSync`  — The encrypted mirror, with nothing in it.
   - readEncryptedPairing publishEncryptedPairing saveEncryptedPairing clearEncryptedPairing
+- `class _SlowMirror extends _EmptyMirror`  — A mirror whose read answers only when the test says so.
+  - readEncryptedPairing
 - `class _Session implements AccountSessionSource`
   - current refresh
 - `class _FakeChatHalf extends StatefulWidget`  — Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
-  - phone modeSwitch
+  - phone modeSwitch onAddComputer
 - `class _FakeChatHalfState extends State<_FakeChatHalf>`
   - taps draft
 - `void main()`
