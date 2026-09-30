@@ -62,9 +62,10 @@ def test_the_sender_returns_the_final_answer(tmp_path):
 def test_an_empty_answer_is_none(tmp_path):
     channel = paired_channel()
     controller_ep, executor_ep = loopback_pair()
-    # A bare-text turn with empty text -> done with no usable answer.
+    # A bare-text turn with empty text -> done with no usable answer. The loop
+    # asks once more after an empty reply, so the model stays empty twice.
     executor = _executor(
-        tmp_path, executor_ep, channel, lambda: MockModelClient([""])
+        tmp_path, executor_ep, channel, lambda: MockModelClient(["", ""])
     )
     controller = _controller(controller_ep, channel)
 

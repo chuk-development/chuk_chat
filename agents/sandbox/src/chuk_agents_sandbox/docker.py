@@ -40,7 +40,7 @@ import time
 import uuid
 from collections.abc import Mapping
 
-from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
+from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment, PolicyProvider
 from .lifecycle import (
     DEFAULT_TASK_ID,
     LABEL_IMAGE,
@@ -56,6 +56,7 @@ from .lifecycle import (
     label_args,
     remove_container,
 )
+from .policy import DEFAULT_CONTAINER_KEY, LABEL_POLICY, SandboxPolicy
 from .result import ProcessResult
 
 #: The image ``install.sh`` builds (``sandbox/docker/Dockerfile``).
@@ -196,6 +197,8 @@ class DockerEnvironment(BaseEnvironment):
         cli: DockerCli | None = None,
         owner: str | None = None,
         legacy_workspace_roots: tuple[str, ...] = (),
+        policy: SandboxPolicy | None = None,
+        policy_provider: PolicyProvider | None = None,
     ) -> None:
         self._image = resolve_image(image)
         self._agent_id = agent_id
@@ -230,6 +233,8 @@ class DockerEnvironment(BaseEnvironment):
             snapshot_path=snap,
             initial_cwd=cwd,
             max_output_chars=max_output_chars,
+            policy=policy,
+            policy_provider=policy_provider,
         )
 
     # ------------------------------------------------------------------ #
@@ -289,7 +294,7 @@ class DockerEnvironment(BaseEnvironment):
         return self._task_id != DEFAULT_TASK_ID
 
     def labels(self) -> dict[str, str]:
-        return build_labels(
+        labels = build_labels(
             agent_id=self._agent_id,
             task_id=self._task_id,
             session_id=self._session_id,
@@ -297,6 +302,10 @@ class DockerEnvironment(BaseEnvironment):
             image=self._image,
             owner=self._owner,
         )
+        # The permissions the container was created with (docs/WIRE_CONTRACT.md,
+        # "Agent permissions"): the third half of the reuse guard.
+        labels[LABEL_POLICY] = self.effective_policy.container_key()
+        return labels
 
     # ------------------------------------------------------------------ #
     # Container lifecycle
@@ -379,9 +388,16 @@ class DockerEnvironment(BaseEnvironment):
             time.sleep(min(0.1 * attempt, 0.5))
 
     def _matches(self, container: ContainerInfo) -> bool:
-        """False when a found container's mount or image no longer fits."""
+        """False when a found container's mount, image or permissions no
+        longer fit."""
         labelled_workspace = container.labels.get(LABEL_WORKSPACE)
         if (labelled_workspace or None) != (self._workspace or None):
+            return False
+        # Permissions fixed at creation (sudo, network, workspace mode). A
+        # container from before the label ran with every permission, so it
+        # matches the default policy and is kept, not rebuilt.
+        labelled_policy = container.labels.get(LABEL_POLICY) or DEFAULT_CONTAINER_KEY
+        if labelled_policy != self.effective_policy.container_key():
             return False
         labelled_image = container.labels.get(LABEL_IMAGE)
         # Containers from before the image label existed are given the benefit of
@@ -389,11 +405,15 @@ class DockerEnvironment(BaseEnvironment):
         return labelled_image is None or labelled_image == self._image
 
     def _create(self) -> str:
+        policy = self.effective_policy
         argv = ["run", "-d", *label_args(self.labels())]
         argv += ["--name", self.container_name, "--workdir", self._cwd]
         if self._workspace is not None:
             os.makedirs(self._workspace, exist_ok=True)
-            argv += ["-v", f"{self._workspace}:{CONTAINER_WORKSPACE}"]
+            # ``workspace_mount: ro`` (docs/WIRE_CONTRACT.md, "Agent
+            # permissions"): the agent reads its files and cannot change them.
+            mode = ":ro" if policy.read_only_workspace else ""
+            argv += ["-v", f"{self._workspace}:{CONTAINER_WORKSPACE}{mode}"]
             # The transcript folder is the host's record of the thread
             # (cowork-b5): mounted read-only over the workspace mount, so a
             # `run_command` inside the container cannot delete or rewrite it.
@@ -406,6 +426,9 @@ class DockerEnvironment(BaseEnvironment):
                 # The base image's entrypoint aligns its `agents` user with these,
                 # so files the agent writes land on the host owned by the user.
                 argv += ["-e", f"AGENTS_UID={uid}", "-e", f"AGENTS_GID={gid}"]
+        # No sudo -> no-new-privileges; no network -> ``--network none``. The
+        # default policy adds nothing, so a default box is created as before.
+        argv += list(policy.docker_run_args())
         argv += [*self._extra_run_args, self._image, "sleep", "infinity"]
 
         result = self._cli.run(*argv, timeout=180)

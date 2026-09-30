@@ -32,7 +32,7 @@ from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .mcp_client import MCPManager, open_browser_gui_async, register_mcp_tools
 from .media import WorkspaceMount
-from .memory import MemoryStore, register_memory_tool
+from .memory import MemoryStore, make_memory_store, register_memory_tool
 from .model import ModelClient, ModelResponse
 from .oauth_bridge import (
     BackendOAuthClient,
@@ -42,10 +42,13 @@ from .oauth_bridge import (
     config_token_exchange,
     register_oauth_tool,
 )
+from .pai.wiring import herenow_tool_gate, loop_setup
 from .prompt import build_system_prompt, upgrade_research_instructions
+from .registry import ToolRegistry
 from .search import register_search_tool
 from .secrets import SecretsAccess
 from .automations import AutomationBackend, register_automation_tools
+from .calls import CallBackend, register_call_tools
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
 from .state import StateStore
 from .subagents import (
@@ -216,6 +219,34 @@ def make_child_runner(config: SubagentConfig) -> ChildRunner:
     return run
 
 
+#: Tools that reach the internet from the HOST process, not from the sandbox
+#: (docs/WIRE_CONTRACT.md, "Agent permissions"). A policy with ``network:
+#: false`` withholds every one of them, and every MCP server that runs on the
+#: host or on the internet, so switching the internet off also covers what the
+#: host would fetch on the agent's behalf.
+HOST_NETWORK_TOOLS: tuple[str, ...] = (
+    "web_fetch",
+    "web_search",
+    "herenow_publish",
+    "browser_task",
+    "mcp_oauth_connect",
+)
+
+
+def network_allowed(policy: Any) -> bool:
+    """True unless ``policy`` (a ``SandboxPolicy`` or ``None``) switches the
+    network off. No policy is the old behaviour: everything on."""
+    return policy is None or bool(getattr(policy, "network", True))
+
+
+def _withhold_tools(registry: ToolRegistry, names: Sequence[str]) -> None:
+    """Take tools out of the registry again, as if never registered: they are
+    not in the prompt, and a call answers "unknown tool"."""
+    for name in names:
+        registry._tools.pop(name, None)
+        registry._deferred.discard(name)
+
+
 def build_runtime(
     model: ModelClient,
     *,
@@ -233,6 +264,8 @@ def build_runtime(
     memory_root: str | None = None,
     skills_root: str | None = None,
     enable_memory: bool = True,
+    memory_bank_id: str | None = None,
+    memory_service: Any = None,
     enable_skills: bool = True,
     enable_chat_search: bool = True,
     context_ladder: bool = True,
@@ -262,8 +295,10 @@ def build_runtime(
     tool_event_observer: Callable[[dict], None] | None = None,
     secrets: SecretsAccess | None = None,
     automations: AutomationBackend | None = None,
+    calls: CallBackend | None = None,
     shell_session_key: str | None = None,
     context_providers: Sequence[Callable[[], list[dict]]] | None = None,
+    policy: Any = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -332,6 +367,10 @@ def build_runtime(
     result filter masks every value in every dispatch result. Unset, nothing
     of it exists.
 
+    ``calls`` (docs/WIRE_CONTRACT.md, "The agent calls the user") adds
+    ``call_user`` / ``call_status``, bound to one session by the executor.
+    Unset, neither tool exists.
+
     ``shell_session_key`` (docs/WIRE_CONTRACT.md, "Interactive shell and
     background commands") is the conversation a background job's end is
     routed to; the executor passes the task's session key. ``None`` still runs
@@ -380,12 +419,24 @@ def build_runtime(
     # is the executor's approval round-trip, so a public publish waits on the
     # user in ``ask`` mode. Not deferrable — a publish is a real, user-visible
     # action, kept in the prompt like the other core tools.
-    register_herenow_tools(registry, env, herenow_config, herenow_gate)
+    # The ask itself is the loop's approval policy (a Pydantic AI deferred
+    # tool, docs/PYDANTIC_AI_LOOP.md section 7), so the tool gets a gate that
+    # only runs after the user said yes.
+    register_herenow_tools(
+        registry, env, herenow_config, herenow_tool_gate(herenow_config, herenow_gate)
+    )
 
     # Automations (docs/WIRE_CONTRACT.md, "Automations"): schedule_task /
     # start_watcher / list / pause / resume / cancel, bound to ONE session by
     # the executor. ``None`` (no host, no clock) registers nothing.
     register_automation_tools(registry, automations)
+
+    # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls the
+    # user"): ``call_user`` rings the app and returns at once, ``call_status``
+    # reads the outcome. Bound to ONE session by the executor, like the
+    # automations above, so a fired reminder can ring too. ``None`` (no host,
+    # no app to ring) registers nothing.
+    register_call_tools(registry, calls)
 
     if enable_terminal:
         # The interactive shell (docs/WIRE_CONTRACT.md, "Interactive shell and
@@ -460,12 +511,24 @@ def build_runtime(
             str(Path(workspace) / MEMORY_DIRNAME) if workspace else None
         )
         if root:
-            # Mem0's fact-extraction writer runs on our own backend via the
-            # `chukbackend` provider; the cheap aux client is preferred, falling
-            # back to the loop's own model. `snapshot()` (soul.md/agents.md) needs
-            # no client, so memory still injects the persona without a backend.
-            memory = MemoryStore(root, llm_client=aux_model or model)
+            # `memory.backend` picks the store (§12). Mem0: the fact-extraction
+            # writer runs on our own backend via the `chukbackend` provider; the
+            # cheap aux client is preferred, falling back to the loop's own
+            # model. Hindsight: the host's shared sidecar, one bank per agent
+            # (`memory_bank_id`). `snapshot()` (soul.md/agents.md) needs no
+            # backend either way, so the persona is injected regardless.
+            memory = make_memory_store(
+                root,
+                llm_client=aux_model or model,
+                bank_id=memory_bank_id,
+                service=memory_service,
+            )
             register_memory_tool(registry, memory)
+            # Subagents write into their parent's bank, not a bank of their own
+            # worktree: what a child learns belongs to the agent.
+            bank = getattr(memory, "bank_id", None)
+            if subagents is not None and bank:
+                subagents.runtime_kwargs.setdefault("memory_bank_id", bank)
             # Nothing a compaction summarized away is lost: every new tier-2/3
             # summary is handed to memory as facts (§12).
             if ladder is not None and memory.automatic:
@@ -489,11 +552,21 @@ def build_runtime(
         # sessions then needs no re-wiring.
         register_skill_tool(registry, library)
 
+    # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions"):
+    # with the network switched off, the host fetches nothing for the agent
+    # either. The web tools, the here.now publish and the browser fallback are
+    # withheld, and the workspace ``mcp.json`` is not read at all: its servers
+    # run on the host (stdio) or on the internet (http). What the executor
+    # passes as ``mcp=`` it has already cut down to the sandbox's own browser.
+    online = network_allowed(policy)
+    if not online:
+        _withhold_tools(registry, HOST_NETWORK_TOOLS)
+
     # MCP last, after every core tool is in (§9): the tool-search threshold is
     # measured on the deferrable surface, and a core tool registered afterwards
     # would not be counted in the baseline.
     manager = mcp
-    if manager is None and enable_mcp:
+    if manager is None and enable_mcp and online:
         manager = MCPManager.from_workspace(workspace, token_provider=stash.get)
     if manager is not None:
         register_mcp_tools(registry, manager)
@@ -518,7 +591,9 @@ def build_runtime(
             for c in manager.configs
             if c.oauth and c.oauth.get("token_url")
         }
-        if session is not None and exchange_configs:
+        # The sign-in reaches the backend and the provider: with the network
+        # switched off by the agent's permissions it is withheld too.
+        if session is not None and exchange_configs and online:
             register_oauth_tool(
                 registry,
                 OAuthBridge(),
@@ -553,16 +628,6 @@ def build_runtime(
             threshold=tool_search_threshold,
         )
 
-    # Native tool calling (§ native tool calls): hand the model the OpenAI `tools`
-    # array built from the registry AFTER deferral, so deferred tools (which stay
-    # reachable through the tool_search bridge) are not double-declared. The seam
-    # is a settable `set_tools`, mirroring `on_delta`; the backend client and the
-    # streaming wrappers forward it, and a client without it (the mock, which is
-    # scripted anyway) simply ignores it. Gated on `include_tool_docs`: a bare
-    # run that was told to use its persona verbatim declares no tools either.
-    if include_tool_docs and hasattr(model, "set_tools"):
-        model.set_tools(registry.openai_tools())  # type: ignore[attr-defined]
-
     def _prompt_factory() -> str:
         """Resolved once, when a session is seeded (see ``AgentLoop.run``).
         Reading memory here and not at build time is what makes the snapshot
@@ -590,10 +655,23 @@ def build_runtime(
 
     prompt = _prompt_factory if include_tool_docs else system_prompt
 
-    loop = AgentLoop(
+    # The Pydantic AI parts (docs/PYDANTIC_AI_LOOP.md, section 18): the approval
+    # policy, tool search for deferred tools, OTel when configured, and the
+    # model — the streamed OpenAI-compatible route for the account client, the
+    # legacy adapter for a scripted one. A bare run that uses its persona
+    # verbatim (``include_tool_docs=False``) offers no tools.
+    loop_model, loop_extra = loop_setup(
         model,
+        env=env,
+        herenow_config=herenow_config,
+        herenow_gate=herenow_gate,
+        expose_tools=include_tool_docs,
+    )
+    loop = AgentLoop(
+        loop_model,
         registry,
         store,
+        **loop_extra,
         max_iterations=max_iterations,
         budget=IterationBudget(budget if budget is not None else max_iterations),
         token_budget=token_budget,
@@ -630,6 +708,7 @@ def build_runtime(
                     record.user_message,
                     record.final_answer,
                     tool_names=record.tool_names,
+                    session_key=record.session_key,
                 )
             )
             if memory is not None and memory.automatic

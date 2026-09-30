@@ -170,6 +170,16 @@ def close_cached_memories() -> int:
     # A turn extraction still writing would hold the storage lock past the
     # close; let it finish first (bounded).
     wait_for_extractions()
+    # The Hindsight backend (``memory.backend = hindsight``) keeps no handle
+    # here, but its background retains should reach the sidecar before the
+    # executor that queued them goes away. The sidecar itself belongs to the
+    # host and outlives any one executor.
+    try:
+        from .memory_hindsight import drain_retains
+
+        drain_retains(timeout=EXTRACT_JOIN_TIMEOUT)
+    except Exception:  # noqa: BLE001 — teardown must not raise
+        pass
     # A timed-out foreground recall may still be initializing/searching. Never
     # close its vector store underneath it or wait minutes for a model download.
     if not _OP_LOCK.acquire(timeout=AUTO_RECALL_TIMEOUT):
@@ -682,6 +692,7 @@ class MemoryStore:
         *,
         tool_names: tuple[str, ...] | list[str] = (),
         wait: bool = False,
+        session_key: str | None = None,  # noqa: ARG002 — used by the Hindsight store
     ) -> threading.Thread | None:
         """The loop's turn hook: extract the turn's facts WITHOUT holding up the
         answer. The extraction is one aux-model call plus an embedding, so it
@@ -736,6 +747,38 @@ class MemoryStore:
             _EXTRACT_THREADS.add(thread)
         thread.start()
         return thread
+
+
+def memory_backend() -> str:
+    """``mem0`` or ``hindsight`` (``AGENTS_MEM_BACKEND``), read at call time."""
+    from .hindsight_service import memory_backend as _backend
+
+    return _backend()
+
+
+def make_memory_store(
+    root: str | Path,
+    *,
+    llm_client: ModelClient | None = None,
+    bank_id: str | None = None,
+    service=None,
+    backend: str | None = None,
+) -> MemoryStore:
+    """The store for ``memory.backend``: the Mem0 :class:`MemoryStore`, or the
+    :class:`~chuk_agents_runtime.memory_hindsight.HindsightMemoryStore` on the
+    host's shared Hindsight service (``service`` overrides it; tests)."""
+    chosen = backend or memory_backend()
+    if chosen == "hindsight":
+        from .hindsight_service import shared_memory_service
+        from .memory_hindsight import HindsightMemoryStore
+
+        return HindsightMemoryStore(
+            root,
+            bank_id=bank_id,
+            service=service if service is not None else shared_memory_service(),
+            llm_client=llm_client,
+        )
+    return MemoryStore(root, llm_client=llm_client)
 
 
 def _extract_memories(result: object, limit: int) -> list[str]:

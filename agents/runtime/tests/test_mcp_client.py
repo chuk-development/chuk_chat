@@ -39,6 +39,12 @@ from chuk_agents_runtime.registry import ToolRegistry
 
 FAKE_SERVER = str(Path(__file__).parent / "fake_mcp_server.py")
 
+#: Bearers the loopback HTTP server answers with 401 (a token that lapsed
+#: server-side in the middle of a session).
+REJECTED_BEARERS: set[str] = set()
+#: The status those refusals use (401, or 403 with an ``invalid_token`` body).
+REJECT_STATUS: list[int] = [401]
+
 
 def stdio_config(name: str = "fake", **kwargs) -> MCPServerConfig:
     return MCPServerConfig(
@@ -314,9 +320,14 @@ def http_transport(request):
 
     async def record(scope, receive, send):
         if scope["type"] == "http":
-            seen_headers.append(
-                {k.decode(): v.decode() for k, v in scope.get("headers", [])}
-            )
+            headers = {k.decode(): v.decode() for k, v in scope.get("headers", [])}
+            seen_headers.append(headers)
+            if headers.get("authorization") in REJECTED_BEARERS:
+                status = REJECT_STATUS[0]
+                body = b'{"error": "invalid_token"}' if status == 403 else b"unauthorized"
+                await send({"type": "http.response.start", "status": status, "headers": []})
+                await send({"type": "http.response.body", "body": body})
+                return
         await app(scope, receive, send)
 
     listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -815,88 +826,6 @@ def test_a_forwarded_oauth_entry_renews_itself_against_a_real_server(
     )
 
 
-def test_a_refused_handshake_is_retried_once_with_a_fresh_token(monkeypatch):
-    """A 401 on connect is the case the whole block exists for: nobody can open
-    a browser, so the executor renews the token itself and dials again."""
-    server = _FakeTokenServer()
-    monkeypatch.setattr("httpx.post", server)
-    config = _oauth_config(name="notion", expires_at=_far_future())
-    attempts: list[str | None] = []
-
-    class _Refusing(MCPConnection):
-        def start(self) -> bool:
-            attempts.append(self.config.auth_token)
-            if self.config.auth_token == "at-new":
-                self._error = None
-                self._ready.set()
-                self._session = object()
-                self._thread = threading.current_thread()
-                return True
-            self._error = "McpError: HTTP 401 Unauthorized"
-            return False
-
-    manager = MCPManager([config], connection_factory=_Refusing)
-    try:
-        status = manager.start()
-    finally:
-        manager.close()
-
-    assert status == {"notion": True}
-    assert attempts == ["at-old", "at-new"]
-    assert manager.errors == []
-
-
-def test_a_failure_that_is_not_a_refused_token_is_not_retried(monkeypatch):
-    server = _FakeTokenServer()
-    monkeypatch.setattr("httpx.post", server)
-    config = _oauth_config(name="notion", expires_at=_far_future())
-    attempts: list[str | None] = []
-
-    class _Missing(MCPConnection):
-        def start(self) -> bool:
-            attempts.append(self.config.auth_token)
-            self._error = "HTTPStatusError: 404 Not Found"
-            return False
-
-    manager = MCPManager([config], connection_factory=_Missing)
-    try:
-        status = manager.start()
-    finally:
-        manager.close()
-
-    assert status == {"notion": False}
-    assert attempts == ["at-old"]
-    # Refreshing a token a 404 never looked at would spend it for nothing.
-    assert server.calls == []
-    assert len(manager.errors) == 1
-
-
-def test_a_refused_handshake_without_refresh_material_stays_failed(monkeypatch):
-    server = _FakeTokenServer()
-    monkeypatch.setattr("httpx.post", server)
-    config = MCPServerConfig(
-        name="legacy",
-        transport=HTTP,
-        url="https://mcp.example/mcp",
-        auth_token="at-legacy",
-    )
-
-    class _Refusing(MCPConnection):
-        def start(self) -> bool:
-            self._error = "401 Unauthorized"
-            return False
-
-    manager = MCPManager([config], connection_factory=_Refusing)
-    try:
-        status = manager.start()
-    finally:
-        manager.close()
-
-    assert status == {"legacy": False}
-    assert server.calls == []
-    assert "not available" in manager.errors[0]
-
-
 # -- the whole chain on real sockets, no mocks -----------------------------
 
 
@@ -1079,17 +1008,137 @@ def test_closed_reader_invalidates_connection_without_replaying_tool(monkeypatch
     assert result["ok"] is False
     assert not connection.alive()
     assert "Connection closed" in connection.error
-    connection._session.call_tool.assert_called_once()
+    connection._session.client.call_tool.assert_called_once()
 
 
-def test_a_401_from_a_live_session_is_renewed_and_the_call_retried(monkeypatch):
+def test_a_token_that_lapses_mid_session_is_renewed_in_place(http_transport, monkeypatch):
     """The case the whole feature exists for, and the one connect-time refresh
-    does not cover: the run outlives its token.
+    does not cover: the run outlives its token. The server starts refusing the
+    bearer while the session stays up; the transport's auth renews it from the
+    forwarded refresh material and sends the call again — no reconnect."""
+    transport, url, seen_headers = http_transport
+    server = _FakeTokenServer(payload={"access_token": "at-renewed", "expires_in": 3600})
+    monkeypatch.setattr("httpx.post", server)
+    configs, errors = configs_from_entries(
+        [
+            {
+                "name": "http-fake",
+                "url": url,
+                "transport": transport,
+                "auth": AUTH_OAUTH,
+                "access_token": "at-live",
+                "oauth": {
+                    "token_endpoint": "https://auth.example/token",
+                    "client_id": "cid-1",
+                    "refresh_token": "rt-1",
+                    "expires_at": _far_future(),
+                },
+            }
+        ]
+    )
+    assert errors == []
+    connection = MCPConnection(configs[0])
+    try:
+        assert connection.start() is True, connection.error
+        assert connection.call("shout", {"text": "one"})["content"] == "ONE"
+        REJECTED_BEARERS.add("Bearer at-live")  # the token lapsed server-side
+        assert connection.call("shout", {"text": "two"})["content"] == "TWO"
+    finally:
+        REJECTED_BEARERS.clear()
+        connection.close()
 
-    Headers are fixed when the transport is built, so a token that lapses
-    mid-session cannot be swapped in place. The server answers the tool call
-    with a 401 while the session stays up and looks healthy, so nothing else
-    notices."""
+    assert len(server.calls) == 1
+    assert any(h.get("authorization") == "Bearer at-renewed" for h in seen_headers)
+
+
+def test_a_refused_handshake_renews_the_token_and_connects(http_transport, monkeypatch):
+    """A 401 on connect with a bearer that still looks valid: nobody can open a
+    browser, so the transport's auth renews from the forwarded refresh material
+    and the handshake goes through on the new token."""
+    transport, url, seen_headers = http_transport
+    server = _FakeTokenServer(payload={"access_token": "at-renewed", "expires_in": 3600})
+    monkeypatch.setattr("httpx.post", server)
+    configs, _ = configs_from_entries(
+        [
+            {
+                "name": "http-fake",
+                "url": url,
+                "transport": transport,
+                "auth": AUTH_OAUTH,
+                "access_token": "at-revoked",
+                "oauth": {
+                    "token_endpoint": "https://auth.example/token",
+                    "client_id": "cid-1",
+                    "refresh_token": "rt-1",
+                    "expires_at": _far_future(),
+                },
+            }
+        ]
+    )
+    REJECTED_BEARERS.add("Bearer at-revoked")
+    connection = MCPConnection(configs[0])
+    try:
+        assert connection.start() is True, connection.error
+        assert connection.call("shout", {"text": "hi"})["content"] == "HI"
+    finally:
+        REJECTED_BEARERS.clear()
+        connection.close()
+    assert len(server.calls) == 1
+
+
+def test_a_refused_handshake_without_refresh_material_stays_failed(http_transport):
+    transport, url, _ = http_transport
+    REJECTED_BEARERS.add("Bearer at-legacy")
+    connection = MCPConnection(
+        MCPServerConfig(name="legacy", transport=transport, url=url, auth_token="at-legacy", connect_timeout=10.0)
+    )
+    try:
+        assert connection.start() is False
+        assert connection.error
+    finally:
+        REJECTED_BEARERS.clear()
+        connection.close()
+
+
+def test_a_403_naming_an_invalid_token_is_renewed_too(http_transport, monkeypatch):
+    transport, url, seen_headers = http_transport
+    server = _FakeTokenServer(payload={"access_token": "at-renewed", "expires_in": 3600})
+    monkeypatch.setattr("httpx.post", server)
+    configs, _ = configs_from_entries(
+        [
+            {
+                "name": "http-fake", "url": url, "transport": transport, "auth": AUTH_OAUTH,
+                "access_token": "at-revoked",
+                "oauth": {"token_endpoint": "https://auth.example/token", "client_id": "cid-1",
+                          "refresh_token": "rt-1", "expires_at": _far_future()},
+            }
+        ]
+    )
+    REJECTED_BEARERS.add("Bearer at-revoked")
+    REJECT_STATUS[0] = 403
+    connection = MCPConnection(configs[0])
+    try:
+        assert connection.start() is True, connection.error
+        assert connection.call("shout", {"text": "hi"})["content"] == "HI"
+    finally:
+        REJECTED_BEARERS.clear()
+        REJECT_STATUS[0] = 401
+        connection.close()
+    assert len(server.calls) == 1
+
+
+def test_a_refresh_for_a_bearer_already_replaced_spends_nothing(monkeypatch):
+    """Two requests refused at once: the second finds the token renewed and
+    must not spend (and rotate) the refresh token again."""
+    server = _FakeTokenServer()
+    monkeypatch.setattr("httpx.post", server)
+    connection = MCPConnection(_oauth_config(name="notion", expires_at=_far_future()))
+    assert connection.refresh_token(force=True, seen_token="at-old") == "at-new"
+    assert connection.refresh_token(force=True, seen_token="at-old") == "at-new"
+    assert len(server.calls) == 1
+
+
+def test_a_401_reported_as_a_tool_error_is_renewed_and_the_call_retried(monkeypatch):
     monkeypatch.setattr("httpx.post", _FakeTokenServer())
     config = _oauth_config(name="notion", expires_at=_far_future())
     seen: list[str | None] = []
@@ -1102,14 +1151,9 @@ def test_a_401_from_a_live_session_is_renewed_and_the_call_retried(monkeypatch):
         def call(self, tool, arguments=None):
             seen.append(self.config.auth_token)
             if self.config.auth_token != "at-new":
-                return {
-                    "ok": False,
-                    "server": self.config.name,
-                    "tool": tool,
-                    "error": "McpError: HTTP 401 Unauthorized",
-                }
-            return {"ok": True, "server": self.config.name, "tool": tool,
-                    "content": "HI"}
+                return {"ok": False, "server": self.config.name, "tool": tool,
+                        "error": "McpError: HTTP 401 Unauthorized"}
+            return {"ok": True, "server": self.config.name, "tool": tool, "content": "HI"}
 
     manager = MCPManager([config], connection_factory=_Lapsing)
     try:
@@ -1117,9 +1161,31 @@ def test_a_401_from_a_live_session_is_renewed_and_the_call_retried(monkeypatch):
         result = manager.call("notion", "shout", {"text": "hi"})
     finally:
         manager.close()
-
     assert result["ok"] is True
     assert seen == ["at-old", "at-new"]
+
+
+@pytest.mark.parametrize(
+    "error",
+    ["McpError: HTTP 401 Unauthorized", "401 unauthorized", "OAuthError: invalid_token", "OAuthError: invalid_grant"],
+)
+def test_a_refused_credential_is_recognised(error):
+    assert _looks_unauthorized(error) is True
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        None,
+        "",
+        "HTTPStatusError: 404 for https://api.example/mcp/401k-planner",
+        "ConnectError: connection refused to 127.0.0.1:4010",
+        "HTTPStatusError: 1401 unknown",
+        "TimeoutError: connect timed out",
+    ],
+)
+def test_an_error_that_is_not_a_refused_credential_is_left_alone(error):
+    assert _looks_unauthorized(error) is False
 
 
 def test_a_tool_error_that_is_not_a_401_is_returned_untouched(monkeypatch):
@@ -1201,36 +1267,6 @@ def test_a_server_that_never_answered_is_not_redialed_every_task(monkeypatch):
         manager.close()
 
     assert len(starts) == 1
-
-
-@pytest.mark.parametrize(
-    "error",
-    [
-        "McpError: HTTP 401 Unauthorized",
-        "401 unauthorized",
-        "OAuthError: invalid_token",
-        "OAuthError: invalid_grant",
-    ],
-)
-def test_a_refused_credential_is_recognised(error):
-    assert _looks_unauthorized(error) is True
-
-
-@pytest.mark.parametrize(
-    "error",
-    [
-        None,
-        "",
-        # A path segment that merely contains the digits.
-        "HTTPStatusError: 404 for https://api.example/mcp/401k-planner",
-        # A port number that contains them.
-        "ConnectError: connection refused to 127.0.0.1:4010",
-        "HTTPStatusError: 1401 unknown",
-        "TimeoutError: connect timed out",
-    ],
-)
-def test_an_error_that_is_not_a_refused_credential_is_left_alone(error):
-    assert _looks_unauthorized(error) is False
 
 
 def test_a_recorded_error_does_not_carry_an_api_key():

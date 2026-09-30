@@ -1,7 +1,11 @@
-"""Model client (§7.4).
+"""The small blocking model protocol (§7.4).
 
-The real backend is the ChukChat account proxy. Chat runs over the multiplexed
-``wss://api.chuk.chat/v2/ws`` socket (see :mod:`chuk_agents_runtime.backend`).
+The agent loop talks to the model through Pydantic AI
+(:mod:`chuk_agents_runtime.pai.model`, the OpenAI-compatible route of the
+account proxy). This protocol is what the rest still uses: the housekeeping
+calls (context summary, memory extraction, the browser fallback) and the
+scripted :class:`MockModelClient` of the tests, which the loop runs behind
+:class:`~chuk_agents_runtime.pai.model.LegacyClientModel`.
 
 **Native tool calling is the one and only protocol.** The runtime declares its
 tools as an OpenAI ``tools`` array (:meth:`chuk_agents_runtime.registry.ToolRegistry.openai_tools`)
@@ -10,20 +14,12 @@ and the provider answers with structured ``tool_calls`` — a list of
 frame, never inside the assistant text. There is no text/markdown fallback: a
 turn is a tool-call turn only if the server sent tool calls, and assistant
 content is always plain prose for the user.
-
-The runtime depends only on the ``ModelClient`` protocol, so the real WebSocket
-impl is swappable for a mock in tests. An OpenAI-compatible HTTP client is kept
-for reference / non-``/v2/ws`` deployments; it speaks the same native shape
-through :func:`parse_openai_response`.
 """
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
-from typing import Any, Protocol, runtime_checkable
-
-import httpx
+from typing import Protocol, runtime_checkable
 
 
 @dataclass
@@ -79,77 +75,6 @@ def tool_call_response(
         ],
         housekeeping=housekeeping,
     )
-
-
-def parse_openai_response(data: dict) -> ModelResponse:
-    """Map an OpenAI-compatible chat completion into a ``ModelResponse``."""
-    choices = data.get("choices") or [{}]
-    message = choices[0].get("message", {}) or {}
-    raw_calls = message.get("tool_calls") or []
-    calls: list[ToolCall] = []
-    for i, call in enumerate(raw_calls):
-        fn = call.get("function", {}) or {}
-        raw_args = fn.get("arguments", "{}")
-        if isinstance(raw_args, str):
-            try:
-                args = json.loads(raw_args) if raw_args.strip() else {}
-            except json.JSONDecodeError:
-                args = {}
-        elif isinstance(raw_args, dict):
-            args = raw_args
-        else:
-            args = {}
-        calls.append(
-            ToolCall(
-                id=call.get("id", f"call_{i}"),
-                name=fn.get("name", ""),
-                arguments=args,
-            )
-        )
-    return ModelResponse(
-        text=message.get("content"),
-        tool_calls=calls,
-        raw=data,
-    )
-
-
-class OpenAICompatModelClient:
-    """Calls an OpenAI-compatible ``/chat/completions`` endpoint over httpx.
-
-    ``base_url`` and ``token`` are injected — the backend proxy and account
-    token. No provider keys ever live here.
-    """
-
-    def __init__(
-        self,
-        base_url: str,
-        token: str,
-        model: str,
-        *,
-        tools: list[dict] | None = None,
-        timeout: float = 120.0,
-        http_client: httpx.Client | None = None,
-    ) -> None:
-        self._base_url = base_url.rstrip("/")
-        self._token = token
-        self._model = model
-        self._tools = tools
-        self._client = http_client or httpx.Client(timeout=timeout)
-
-    def complete(self, messages: list[dict]) -> ModelResponse:
-        payload: dict[str, Any] = {"model": self._model, "messages": messages}
-        if self._tools:
-            payload["tools"] = self._tools
-        resp = self._client.post(
-            f"{self._base_url}/chat/completions",
-            json=payload,
-            headers={"Authorization": f"Bearer {self._token}"},
-        )
-        resp.raise_for_status()
-        return parse_openai_response(resp.json())
-
-    def close(self) -> None:
-        self._client.close()
 
 
 class MockModelClient:

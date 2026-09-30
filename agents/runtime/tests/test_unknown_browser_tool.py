@@ -25,13 +25,3 @@ def test_dispatch_carries_the_hint():
     registry = ToolRegistry()
     result = registry.dispatch("mcp__playwright__browser_click", {"ref": "x"})
     assert "browser_task" in result["error"]
-
-
-def test_the_deferred_bridge_carries_it_too():
-    from chuk_agents_runtime.tool_search import make_tool_call_handler
-
-    registry = ToolRegistry()
-    tool_call = make_tool_call_handler(registry)
-    result = tool_call("mcp__playwright__browser_navigate", {"url": "https://x"})
-    assert result["ok"] is False
-    assert "browser_task" in result["error"]

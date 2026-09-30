@@ -315,6 +315,14 @@ if [ "${DO_ENV}" -eq 0 ]; then
 else
     say "uv sync --project ${HOST_PROJECT}"
     run uv sync --project "${HOST_PROJECT}"
+    # The Hindsight memory sidecar has its own venv (~900 MB, no torch).
+    # Sync it here, or the host's first start downloads it and can run past
+    # its start timeout.
+    MEMORY_PROJECT="${REPO_ROOT}/agents/memory"
+    if [ -f "${MEMORY_PROJECT}/pyproject.toml" ]; then
+        say "uv sync --project ${MEMORY_PROJECT}"
+        run uv sync --project "${MEMORY_PROJECT}"
+    fi
 fi
 
 # The launcher is what systemd and the user's shell call. It is a wrapper, not a

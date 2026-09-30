@@ -52,6 +52,15 @@ if [ "$(id -u)" = "0" ] && [ -n "${AGENTS_UID:-}" ] && [ -n "${AGENTS_GID:-}" ];
     remap_user "$AGENTS_UID" "$AGENTS_GID"
 fi
 
+# The agent's `sudo` permission (docs/WIRE_CONTRACT.md, "Agent permissions").
+# Switched off, the sandbox also starts with `no-new-privileges`, which already
+# makes sudo fail. Removing the sudoers entry is the second lock: without the
+# flag there would still be no sudo rule for the agent. The container is rebuilt
+# when the permission changes, so the entry never has to come back.
+if [ "$(id -u)" = "0" ] && [ "${AGENTS_SUDO:-1}" = "0" ]; then
+    rm -f "/etc/sudoers.d/${user}" 2>/dev/null || true
+fi
+
 # The workspace mount point itself must be enterable and writable by the agent.
 # When a fresh host directory is mounted it already belongs to the host user, so
 # this only fixes the empty-image case.

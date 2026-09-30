@@ -24,6 +24,7 @@ from __future__ import annotations
 import calendar
 import json
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
@@ -91,7 +92,7 @@ def _parse_at(text: str) -> float:
     return when.timestamp()
 
 
-def parse_schedule_spec(spec: str | dict) -> dict[str, Any]:
+def parse_schedule_spec(spec: str | dict, *, now: float | None = None) -> dict[str, Any]:
     """Read a schedule spec into its JSON form.
 
     Accepted strings (case-insensitive prefixes, ``:`` optional):
@@ -99,6 +100,11 @@ def parse_schedule_spec(spec: str | dict) -> dict[str, Any]:
     - ``0 9 * * 1-5`` or ``cron: 0 9 * * 1-5`` -> ``{"cron": "0 9 * * 1-5"}``
     - ``every 5m`` / ``every: 300`` -> ``{"every": 300}``
     - ``at 2026-09-06T09:00`` / ``at: ...`` -> ``{"at": "<iso 8601>"}``
+    - ``in 10m`` / ``in: 600`` -> ``{"at": "<now + 10 min, iso 8601>"}`` — a
+      one-shot relative time, so "remind me in 10 minutes" needs no clock
+      on the model's side. ``now`` is the reference (unix seconds; default
+      the wall clock). It is stored as the ``at`` form: nothing downstream
+      sees a new spec kind.
 
     A dict in that form is validated and returned normalised. Raises
     :class:`AutomationSpecError` for anything else.
@@ -118,7 +124,7 @@ def parse_schedule_spec(spec: str | dict) -> dict[str, Any]:
         raise AutomationSpecError("the spec is empty")
     text = spec.strip()
     lowered = text.lower()
-    for prefix in ("every", "at", "cron"):
+    for prefix in ("every", "at", "in", "cron"):
         if lowered.startswith(prefix) and (
             len(lowered) == len(prefix) or lowered[len(prefix)] in " :"
         ):
@@ -127,6 +133,10 @@ def parse_schedule_spec(spec: str | dict) -> dict[str, Any]:
                 seconds = _parse_duration(rest)
                 _check_interval(seconds)
                 return {"every": seconds}
+            if prefix == "in":
+                seconds = _parse_duration(rest)
+                base = time.time() if now is None else float(now)
+                return {"at": datetime.fromtimestamp(base + seconds, UTC).isoformat()}
             if prefix == "at":
                 stamp = _parse_at(rest)
                 return {"at": datetime.fromtimestamp(stamp, UTC).isoformat()}
@@ -367,12 +377,17 @@ SCHEDULE_TASK_SCHEMA = {
         "Put a task on a clock. When it fires, a new task with `prompt` starts "
         "in this same conversation and the user is notified when it ends. "
         "`spec` is one of: a 5-field cron ('0 9 * * 1-5'), 'every 5m' / "
-        "'every 2h' (60 s minimum), or 'at 2026-09-06T09:00' (once). For "
-        "polling faster than a minute write a watcher script instead "
-        "(start_watcher)."
+        "'every 2h' (60 s minimum), 'at 2026-09-06T09:00' (once) or "
+        "'in 10m' (once, 10 minutes from now). For polling faster than a "
+        "minute write a watcher script instead (start_watcher). A reminder by "
+        "call ('remind me in 10 minutes by calling me') is spec 'in 10m' with "
+        "a prompt that tells your future self to call_user(reason=...)."
     ),
     "properties": {
-        "spec": {"type": "string", "description": "cron | every <n>[s|m|h|d] | at <iso 8601>"},
+        "spec": {
+            "type": "string",
+            "description": "cron | every <n>[s|m|h|d] | at <iso 8601> | in <n>[s|m|h|d]",
+        },
         "prompt": {
             "type": "string",
             "description": "What the fired task should do, written to your future self.",

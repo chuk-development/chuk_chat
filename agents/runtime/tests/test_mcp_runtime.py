@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from chuk_agents_runtime.context import LadderConfig
-from chuk_agents_runtime.model import MockModelClient
+from chuk_agents_runtime.model import MockModelClient, tool_call_response
 from chuk_agents_runtime.prompt import render_tool_docs
 from chuk_agents_runtime.runtime import build_runtime
 from chuk_agents_runtime.tool_search import tool_doc_tokens
@@ -84,7 +84,7 @@ def test_small_server_stays_visible_in_the_prompt(workspace):
 
 def test_big_server_is_deferred_and_the_saving_is_measured(workspace):
     """A 64-tool MCP server against a 32k window: the schemas pass 10% of the
-    effective budget, so they leave the prompt and the bridge takes over."""
+    effective budget, so they leave the prompt and tool search takes over."""
     write_config(workspace, extra_tools=60)
     loop = build(workspace, context_length=32_000)
     try:
@@ -96,31 +96,48 @@ def test_big_server_is_deferred_and_the_saving_is_measured(workspace):
         assert tool_doc_tokens(registry) == decision.tokens_after
 
         docs = render_tool_docs(registry)
-        # The MCP surface is gone...
+        # The MCP surface is gone, and no bridge tools replace it...
         assert "mcp__records__records_0" not in docs
-        # ...the bridge is there...
-        for name in ("tool_search", "tool_describe", "tool_call"):
-            assert f"## {name}" in docs
+        assert "tool_search" not in docs
         # ...and every core tool is still there.
         for name in ("run_command", "write_file", "read_file", "list_dir"):
             assert f"## {name}" in docs
+    finally:
+        loop.mcp.close()
 
-        # The bridge really reaches the server, over the same live session.
-        found = registry.dispatch("tool_search", {"query": "records collection 3"})
-        assert any(m["name"] == "mcp__records__records_3" for m in found["matches"])
-        described = registry.dispatch(
-            "tool_describe", {"name": "mcp__records__records_3"}
-        )
-        assert "`query` (string" in described["documentation"]
-        ran = registry.dispatch(
-            "tool_call",
-            {
-                "name": "mcp__records__records_3",
-                "arguments": {"query": "abc", "limit": 5},
-            },
-        )
-        assert ran["ok"] is True
-        assert '"tool": 3' in ran["content"]
+
+def test_search_then_call_reaches_the_live_server(workspace):
+    """The model searches, Pydantic AI reveals the tool, the model calls it by
+    its own name, and the call goes over the same live MCP session."""
+    write_config(workspace, extra_tools=60)
+    model = MockModelClient(
+        [
+            tool_call_response(("search_tools", {"queries": ["collection 3"]})),
+            tool_call_response(("mcp__records__records_3", {"query": "abc", "limit": 5})),
+            "done",
+        ]
+    )
+    loop = build_runtime(
+        model,
+        db_path=str(workspace.parent / "state.db"),
+        workspace=str(workspace),
+        version_workspace=False,
+        enable_chat_search=False,
+        context_config=LadderConfig(context_length=32_000, reserved_output=8_000),
+    )
+    try:
+        result = loop.run("mcp", "look up collection 3")
+        assert result.final_answer == "done"
+        rows = [
+            m.content
+            for m in loop.store.get_conversation(result.session_id)
+            if m.content.get("role") == "tool"
+        ]
+        found = [t["name"] for t in rows[0]["content"]["discovered_tools"]]
+        assert "mcp__records__records_3" in found
+        assert rows[1]["name"] == "mcp__records__records_3"
+        assert rows[1]["content"]["ok"] is True
+        assert '"tool": 3' in rows[1]["content"]["content"]
     finally:
         loop.mcp.close()
 

@@ -475,7 +475,7 @@ def _start_tracing(args: argparse.Namespace) -> None:
     :meth:`TraceSettings.from_env` drops ``None``/``False`` overrides, so
     ``AGENTS_TRACE=1`` still decides for a systemd unit that passes no flags.
     """
-    from chuk_agents_runtime.trace import TraceSettings, configure_tracing
+    from chuk_agents_runtime.telemetry import TraceSettings, configure_tracing
 
     settings = TraceSettings.from_env(
         enabled=getattr(args, "trace", False) or getattr(args, "trace_content", False) or None,
@@ -930,7 +930,7 @@ TRACE_HOW_TO = (
 
 
 def _trace_source(args: argparse.Namespace):
-    from chuk_agents_runtime.trace import trace_dir_for
+    from chuk_agents_runtime.telemetry import trace_dir_for
 
     explicit = getattr(args, "trace_dir", None) or os.environ.get("AGENTS_TRACE_DIR")
     if explicit:
@@ -963,7 +963,7 @@ def _print_run_table(rows: list[dict], out: Callable[..., Any]) -> None:
 def cmd_trace(args: argparse.Namespace, *, out: Callable[..., Any] = print) -> int:
     """Read a trace back. Starts no host, opens no port, needs no pairing —
     the moment you need this is the moment the host is the thing misbehaving."""
-    from chuk_agents_runtime.trace_report import list_runs, read_lines, trace_files, waterfall
+    from chuk_agents_runtime.telemetry_report import list_runs, read_lines, trace_files, waterfall
 
     source = _trace_source(args)
     if not any(candidate.is_file() for candidate in trace_files(source)):

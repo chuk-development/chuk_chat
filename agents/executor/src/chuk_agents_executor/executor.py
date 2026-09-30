@@ -93,8 +93,9 @@ from chuk_agents_runtime import (
     run_stamp_fields,
     skills_inventory,
 )
-from chuk_agents_runtime.trace import get_tracer
-from chuk_agents_runtime.trace import run_scope as trace_run_scope
+from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
+from chuk_agents_runtime.telemetry import get_tracer
+from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
 from chuk_agents_runtime.mcp_client import auto_open_enabled
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
 from chuk_agents_crypto import (
@@ -257,6 +258,14 @@ class StreamingModelClient:
             inner.on_reasoning = on_reasoning  # type: ignore[attr-defined]
             self._inner_streams_reasoning = True
 
+    @property
+    def inner(self) -> ModelClient:
+        """The wrapped client. The Pydantic AI loop reads it to build the HTTP
+        model from the same session and model choice
+        (``chuk_agents_runtime.pai.wiring.openai_model_from_client``); the
+        sinks this wrapper set on it become the loop's delta / reasoning sinks."""
+        return self._inner
+
     def set_tools(self, tools: list[dict] | None) -> None:
         """Forward the native tool set to the inner client (§ native tool calls).
         ``build_runtime`` calls this on the model it was handed; the seam mirrors
@@ -404,6 +413,50 @@ class _PendingSecretRequest:
     #: The relay request id of the task whose stream carries the frame.
     stream_request_id: str
     event: threading.Event = field(default_factory=threading.Event)
+
+
+def _run_error(run: "_Run", message: str) -> dict[str, Any]:
+    """The ``error`` that ends one run. It names the run and its thread: the
+    app ends that stream only, and an ``error`` that names no run (a refused
+    control frame) ends none."""
+    payload = {**error_payload(message), "session_key": run.session_key}
+    if getattr(run, "run_id", None):
+        payload["run_id"] = run.run_id
+    return payload
+
+
+#: What ``request_secrets`` tells the model when the user switched the agent's
+#: ``secrets_env`` permission off (docs/WIRE_CONTRACT.md, "Agent permissions").
+SECRETS_OFF_MESSAGE = (
+    "secrets are switched off for this agent: the user turned off the "
+    "'Secrets as env vars' permission in the app, so no key reaches this "
+    "sandbox. Ask the user to switch it on; it applies from the next task."
+)
+
+
+class _SecretsOff:
+    """The ``SecretsAccess`` of an agent whose ``secrets_env`` is off.
+
+    No names for the model, and a ``request`` that explains instead of asking
+    (the registry turns the exception into the tool's error envelope).
+    ``env`` still returns the vault's values, because it is also what the
+    runtime builds its result scrubber from: a value an earlier task wrote into
+    a file must stay masked. They cannot reach the sandbox: the environment's
+    policy snapshot drops every per-command variable while ``secrets_env`` is
+    off (``BaseEnvironment.run``), and the tmux server and the jobs of the old
+    box are gone with it (a changed ``secrets_env`` rebuilds the box)."""
+
+    def __init__(self, vault: SecretsVault) -> None:
+        self._vault = vault
+
+    def names(self) -> list[str]:
+        return []
+
+    def env(self) -> dict[str, str]:
+        return self._vault.env()
+
+    def request(self, names: list[str], purpose: str) -> dict[str, str]:
+        raise PermissionError(SECRETS_OFF_MESSAGE)
 
 
 @dataclass
@@ -740,6 +793,8 @@ class Executor:
         job_frame_sender: Callable[[dict], Any] | None = None,
         skills_seed_root: str | None = None,
         on_agent_frame: Callable[[dict], list | None] | None = None,
+        calls=None,
+        on_call_frame: Callable[[dict], Any] | None = None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -853,6 +908,13 @@ class Executor:
         # returns the current list (each answered with one ``agent_list``).
         # ``None`` -> those frames are unknown.
         self._on_agent_frame = on_agent_frame
+        # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls
+        # the user"): the host's call service (``bound(session_key)`` gives a
+        # task ``call_user`` / ``call_status``) and the hook that takes the
+        # app's ``voice_call_state`` frame. ``None`` -> no call tools, and the
+        # frame is unknown.
+        self._calls = calls
+        self._on_call_frame = on_call_frame
         # Skills (docs/WIRE_CONTRACT.md, "Skills"): the app lists and switches
         # the workspace's skills through ``skills_list`` / ``skill_control``.
         # The executor answers both itself from ``<workspace>/skills`` and the
@@ -1027,7 +1089,8 @@ class Executor:
         for run in self._live_runs():
             self._forget(run.request_id)
             self._terminal(
-                run.request_id, error_payload("executor stopped before the task ran")
+                run.request_id,
+                _run_error(run, "executor stopped before the task ran"),
             )
         # Per-session MCP managers own transport threads (and stdio subprocesses);
         # close them so nothing outlives the executor.
@@ -1148,6 +1211,10 @@ class Executor:
                 run = self._queue.get(timeout=self._poll)
             except queue.Empty:
                 continue
+            # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
+            # permissions"): the policy is snapshot here, and the box cannot
+            # change under this run — not even for a room turn that shares it.
+            leased = self._lease_sandbox(run.session_key)
             try:
                 self._run_task(run)
             except Exception as exc:  # noqa: BLE001 — one bad task must not kill the worker
@@ -1168,7 +1235,7 @@ class Executor:
                 # The durable record closes first (docs/WIRE_CONTRACT.md): an
                 # app that reconnects later must see this run as failed too.
                 self._record_run(run, failed=message)
-                self._terminal(run.request_id, error_payload(message))
+                self._terminal(run.request_id, _run_error(run, message))
                 self._call_hook(
                     self._on_run_finished,
                     self._run_summary(
@@ -1176,6 +1243,7 @@ class Executor:
                     ),
                 )
             finally:
+                self._release_sandbox(leased)
                 self._forget(run.request_id)
                 # A job wake queued for this run that its turn never consumed
                 # becomes a new task of the session (docs/WIRE_CONTRACT.md,
@@ -1345,6 +1413,12 @@ class Executor:
             # one terminal frame, like a skills list: every figure measured.
             self._handle_agent_status(request_id, payload)
             return
+        if kind in ("agent_permissions_get", "agent_permissions_set"):
+            # What this coworker may do in its sandbox (docs/WIRE_CONTRACT.md,
+            # "Agent permissions"). The host keeps them; answered with one
+            # terminal ``agent_permissions`` frame.
+            self._handle_permissions_frame(request_id, payload)
+            return
         if kind == "mcp_probe":
             # The app just connected a server (or opened the connector list) and
             # wants to know what it holds. Answered with one terminal
@@ -1356,6 +1430,16 @@ class Executor:
             # "Skills"). Both are answered with one terminal ``skills_list``
             # frame, like a replay: the list is the truth after any control.
             self._handle_skills_frame(kind, request_id, payload)
+            return
+        if kind == "voice_call_state":
+            # The app answered, declined or hung up a call the agent started
+            # (docs/WIRE_CONTRACT.md, "The agent calls the user"). A control
+            # frame like approval_decision: no terminal. Without the host hook
+            # it is an unknown frame.
+            if self._on_call_frame is None:
+                self._terminal(request_id, error_payload("calls not enabled"))
+                return
+            self._call_hook(self._on_call_frame, payload)
             return
         if kind == "run_ack":
             # The app saw a live ``done`` for this run. Record it so a later
@@ -1404,9 +1488,13 @@ class Executor:
         if not isinstance(prompt, str):
             self._terminal(
                 request_id,
-                error_payload(
-                    f"bad task payload: prompt must be a string, got {type(prompt).__name__}"
-                ),
+                {
+                    **error_payload(
+                        f"bad task payload: prompt must be a string, got {type(prompt).__name__}"
+                    ),
+                    # Names the thread, so the app ends that stream and no other.
+                    "session_key": str(session_key),
+                },
             )
             return
         raw_servers = payload.get("mcp_servers")
@@ -1621,6 +1709,31 @@ class Executor:
             self._terminal(request_id, error_payload(f"agent frame failed: {type(exc).__name__}"))
             return
         self._terminal(request_id, agent_list_payload(rows if isinstance(rows, list) else []))
+
+    def _handle_permissions_frame(self, request_id: str, payload: dict) -> None:
+        """Hand ``agent_permissions_get`` / ``_set`` to the host's agent hook
+        (the host keeps the permissions) and send its answer as the terminal."""
+        # Never a bare ``error``: the app reads that as the end of a run.
+        agent_id = payload.get("agent_id")
+        failure = {
+            "type": "agent_permissions",
+            "agent_id": agent_id if isinstance(agent_id, str) else "",
+            "applies_from": "next_task",
+        }
+        hook = self._on_agent_frame
+        if hook is None:
+            self._terminal(request_id, {**failure, "error": "agent permissions not enabled"})
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(
+                request_id, {**failure, "error": f"agent permissions failed: {type(exc).__name__}"}
+            )
+            return
+        if not isinstance(answer, dict) or answer.get("type") != "agent_permissions":
+            answer = {**failure, "error": "agent permissions not enabled"}
+        self._terminal(request_id, answer)
 
     # -- agent status (docs/WIRE_CONTRACT.md, "Agent status") -------------
     def _handle_agent_status(self, request_id: str, payload: dict) -> None:
@@ -2008,7 +2121,7 @@ class Executor:
         screen that is not there is what made "take over" open a black page
         (bead cowork-tf1u).
         """
-        if not self._browser_open or not self._browser_mcp or browser_target() == USER_BROWSER:
+        if not self._browser_open or not self._browser_mcp or self._uses_user_browser(session_key):
             return False
         env = self._environment_for(session_key)
         binary = getattr(getattr(env, "_cli", None), "binary", None)
@@ -2181,7 +2294,7 @@ class Executor:
             the browser the user already has open. No container is involved, so
             this one also works on the base image and with the local sandbox.
         """
-        if browser_target() == USER_BROWSER:
+        if self._uses_user_browser(session_key):
             return extension_mcp_entry()
         if not self._browser_mcp:
             return None
@@ -2925,6 +3038,12 @@ class Executor:
         if vault is None:
             return None
         executor = self
+        policy = self._sandbox_policy_for(session_key)
+        if policy is not None and not policy.secrets_env:
+            # ``secrets_env`` off: no value reaches this agent's sandbox, and
+            # ``request_secrets`` says why instead of asking the user. The
+            # scrubber still masks with the vault's values.
+            return _SecretsOff(vault)
 
         class _Bridge:
             def names(self) -> list[str]:
@@ -3037,6 +3156,10 @@ class Executor:
         # loop's dispatch is the one source — ``tool_event_observer`` below.
         env_shim = self._shim_for(session_key)
         env_shim.on_run = None
+        # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions"):
+        # the snapshot ``_work`` leased for this run. It holds from the first
+        # command to the last; a changed box is rebuilt on its first command.
+        run_policy = self._sandbox_policy_for(session_key)
         # A task may name the model to run on and how hard it thinks. If it named
         # either and a per-task selector is wired (production), build that model;
         # otherwise fall back to the default factory — which is both the
@@ -3125,12 +3248,15 @@ class Executor:
         # Merge the always-on Playwright MCP (§9.1, browser image only) with the
         # UI-forwarded connectors. Appended, so a user's own server of another
         # name is untouched; on the base image `_browser_mcp_entry` is None.
-        servers = list(run.mcp_servers or [])
+        # With the network switched off only the sandbox's own browser server
+        # stays: the forwarded connectors run on the internet or on the host.
+        online = run_policy is None or run_policy.network
+        servers = list(run.mcp_servers or []) if online else []
         browser_entry = self._browser_mcp_entry(session_key)
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
-        if mcp_manager is None and run.origin == "automation":
+        if mcp_manager is None and run.origin == "automation" and online:
             # A fired automation carries no forwarded connectors (no frame,
             # no app). It runs with the connectors the session already has,
             # exactly as the last task of that session did.
@@ -3184,6 +3310,10 @@ class Executor:
             max_iterations=self._max_iterations,
             system_prompt=self._system_prompt,
             workspace=self._workspace_for(session_key),
+            # One memory bank per agent (§12, Hindsight backend): keyed on the
+            # agent's own workspace, so the primary executor and a room member
+            # of the same coworker share it. Mem0 ignores it.
+            memory_bank_id=bank_id_for_workspace(self._workspace_for(session_key)),
             subagents=subagents,
             herenow_config=herenow_config,
             herenow_gate=herenow_gate,
@@ -3193,6 +3323,15 @@ class Executor:
             automations=(
                 self._automations.bound(session_key)
                 if self._automations is not None
+                else None
+            ),
+            # ``call_user`` / ``call_status`` (docs/WIRE_CONTRACT.md, "The
+            # agent calls the user"), bound to ``session_key`` the same way:
+            # a fired automation run gets them too, which is what makes a
+            # reminder by call work.
+            calls=(
+                self._calls.bound(session_key)
+                if self._calls is not None
                 else None
             ),
             # The hero/aux client (§7.3): same model, reasoning off, cheap. Enables
@@ -3208,6 +3347,10 @@ class Executor:
                 request_id, session_key, fields
             ),
             secrets=secrets_access,
+            # The run's permissions (docs/WIRE_CONTRACT.md, "Agent
+            # permissions"): with the network off the host-side web tools
+            # are withheld too.
+            policy=run_policy,
             # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
             # background commands"): the session a job's end is routed to, and
             # the provider that hands a finished job's output to this turn.
@@ -3252,7 +3395,7 @@ class Executor:
         # beat for a run that is running.
         heartbeat = self._arm_heartbeat(run)
         try:
-            # The run trace's identity (chuk_agents_runtime.trace): every line the
+            # The run trace's identity (chuk_agents_runtime.telemetry): every line the
             # loop and the model client write inside this block carries this run
             # id and session key, so `cowork-host trace <run id>` can rebuild the
             # whole waterfall. A fresh thread starts with a fresh context, so two
@@ -3262,11 +3405,13 @@ class Executor:
             with trace_run_scope(run.run_id or run.request_id, session_key):
                 result = loop.run(session_key, prompt, regenerate=run.regenerate)
         except Exception as exc:  # a crashing loop must not kill the serve thread
-            message = f"loop failed: {type(exc).__name__}"
+            # A model failure the user can act on (no credits, rate limited, a
+            # stalled model) carries its own message (loop.ModelServiceError).
+            message = getattr(exc, "user_message", None) or f"loop failed: {type(exc).__name__}"
             # The durable record closes BEFORE the stream: it must exist even if
             # nobody is listening (docs/WIRE_CONTRACT.md).
             self._record_run(run, failed=message)
-            self._terminal(request_id, error_payload(message))
+            self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
             self._forget(request_id)
@@ -3945,6 +4090,86 @@ class Executor:
             except Exception:  # noqa: BLE001 — shutdown must not raise
                 pass
 
+    # -- agent permissions (docs/WIRE_CONTRACT.md, "Agent permissions") ---
+    def _sandbox_policy_for(self, session_key: str | None):
+        """The permissions the session's sandbox applies now, or ``None`` when
+        its environment carries no policy (then every old default holds)."""
+        try:
+            return getattr(self._environment_for(session_key), "policy", None)
+        except Exception:  # noqa: BLE001 — no box, no policy; the defaults hold
+            return None
+
+    def _lease_sandbox(self, session_key: str | None):
+        """Run start: lease the session's environment and snapshot its policy.
+
+        Returns the leased environment (``None`` when it takes no leases). The
+        first run to hold the box applies a changed policy; a run that starts
+        while another holds the same box (a room turn) keeps what is in force.
+        When the snapshot switches secrets off, the tmux sessions and jobs of
+        the agent are ended here, before the run can touch them.
+        """
+        try:
+            env = self._environment_for(session_key)
+            begin = getattr(env, "begin_run", None)
+            if not callable(begin):
+                return None
+            before = getattr(env, "effective_policy", None)
+            after = begin()
+        except Exception:  # noqa: BLE001 — a store hiccup must not refuse a task
+            logger.info("policy lease failed for session=%s", session_key)
+            return None
+        if (
+            before is not None
+            and after is not None
+            and before.secrets_env
+            and not after.secrets_env
+        ):
+            self._revoke_sandbox_secrets(session_key)
+        return env
+
+    @staticmethod
+    def _release_sandbox(env) -> None:
+        end = getattr(env, "end_run", None) if env is not None else None
+        if callable(end):
+            try:
+                end()
+            except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                pass
+
+    def _revoke_sandbox_secrets(self, session_key: str | None) -> None:
+        """``secrets_env`` went off: end what may still hold a value.
+
+        With docker the box is rebuilt (``secrets_env`` is in its key), which
+        ends its tmux server and its jobs; these commands then find nothing.
+        With the local backend they are host processes: the agent's own tmux
+        sessions (``cw-task-*``, never the user's) and its running jobs are
+        killed. Best effort: a failure here must not refuse the task."""
+        from chuk_agents_runtime.shell_tools import JOB_RUNNING, JobManager
+        from chuk_agents_runtime.terminal import TerminalManager
+
+        try:
+            shim = self._shim_for(session_key)
+            jobs = JobManager(shim, workspace=self._workspace_for(session_key))
+            for job in jobs.status().get("jobs", []) or []:
+                if job.get("state") == JOB_RUNNING:
+                    jobs.cancel(str(job.get("job_id")))
+            terminals = TerminalManager(shim)
+            for name in terminals.live_names():
+                terminals.close(name)
+        except Exception as exc:  # noqa: BLE001
+            logger.info("secret revoke failed for session=%s: %s", session_key, type(exc).__name__)
+
+    def _uses_user_browser(self, session_key: str | None) -> bool:
+        """True when this agent drives the user's own browser (the add-on).
+
+        Per agent: its ``user_browser`` permission, and never with the network
+        switched off (the add-on browses the internet). An environment with no
+        policy keeps the old host-wide switch (``AGENTS_BROWSER_TARGET``)."""
+        policy = self._sandbox_policy_for(session_key)
+        if policy is None:
+            return browser_target() == USER_BROWSER
+        return bool(policy.user_browser and policy.network)
+
     # -- subagents (§7.6) ------------------------------------------------
     def _subagent_config(
         self, request_id: str, session_key: str, secrets_access=None
@@ -3960,11 +4185,17 @@ class Executor:
             return None
         kind = self._subagent_sandbox
         options = self._subagent_sandbox_options
+        # A child never has more permissions than its parent
+        # (docs/WIRE_CONTRACT.md, "Agent permissions"): it runs under the
+        # policy the parent's task started with.
+        parent_policy = self._sandbox_policy_for(session_key)
 
         def env_factory(task_id: str) -> BaseEnvironment:
             opts = dict(options)
             if kind == "docker":
                 opts.setdefault("session_id", task_id)
+            if parent_policy is not None:
+                opts.setdefault("policy", parent_policy)
             return make_environment(kind, **opts)
 
         config = SubagentConfig(
@@ -3979,6 +4210,8 @@ class Executor:
             runtime_kwargs=(
                 {
                     **({"secrets": secrets_access} if secrets_access is not None else {}),
+                    # The parent's permissions gate the child's tools too.
+                    **({"policy": parent_policy} if parent_policy is not None else {}),
                     "session": (self._account_session_provider()
                                 if self._account_session_provider is not None else None),
                 }

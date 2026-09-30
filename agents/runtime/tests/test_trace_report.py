@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import json
 
-from chuk_agents_runtime.trace import TRACE_FILENAME
-from chuk_agents_runtime.trace_report import (
+from chuk_agents_runtime.telemetry import TRACE_FILENAME
+from chuk_agents_runtime.telemetry_report import (
     attribution,
     list_runs,
     read_lines,

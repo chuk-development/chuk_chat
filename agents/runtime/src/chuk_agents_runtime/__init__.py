@@ -135,9 +135,7 @@ from .model import (
     ModelClient,
     ModelResponse,
     MockModelClient,
-    OpenAICompatModelClient,
     ToolCall,
-    parse_openai_response,
     tool_call_response,
 )
 from .oauth_bridge import (
@@ -196,6 +194,11 @@ from .automations import (
     parse_schedule_spec,
     register_automation_tools,
 )
+from .calls import (
+    CALL_TOOL_NAMES,
+    CallBackend,
+    register_call_tools,
+)
 from .secrets import (
     LIST_SECRETS_TOOL,
     REDACT_MIN_LEN,
@@ -222,7 +225,7 @@ from .skills import (
     skills_inventory,
 )
 from .state import Message, StateStore, run_stamp_fields
-from .trace import (
+from .telemetry import (
     PHASES,
     JsonlTracer,
     NullTracer,
@@ -256,7 +259,6 @@ from .tool_search import (
     DEFAULT_THRESHOLD,
     ToolSearchDecision,
     apply_tool_search,
-    register_bridge_tools,
     tool_doc_tokens,
 )
 from .tools import register_builtin_tools, register_file_tools, register_run_command
@@ -310,6 +312,9 @@ __all__ = [
     "next_fire",
     "parse_schedule_spec",
     "register_automation_tools",
+    "CALL_TOOL_NAMES",
+    "CallBackend",
+    "register_call_tools",
     "status_map",
     "valid_name",
     "ARG_VALUE_CAP",
@@ -371,7 +376,6 @@ __all__ = [
     "OAuthBridge",
     "OAuthFlow",
     "parse_mcp_config",
-    "register_bridge_tools",
     "browser_servers",
     "open_browser_gui",
     "open_browser_gui_async",
@@ -422,7 +426,6 @@ __all__ = [
     "MockModelClient",
     "ModelClient",
     "ModelResponse",
-    "OpenAICompatModelClient",
     "ProcessResult",
     "ResolvedModel",
     "SentFile",
@@ -497,7 +500,6 @@ __all__ = [
     "make_web_fetch_handler",
     "make_web_search_handler",
     "normalize_screen",
-    "parse_openai_response",
     "pkce_pair",
     "parse_skill",
     "prompt_tokens_from_usage",

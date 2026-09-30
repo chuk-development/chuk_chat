@@ -33,10 +33,16 @@ from __future__ import annotations
 
 import secrets
 import shlex
+import threading
 from abc import ABC, abstractmethod
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
+from .policy import DEFAULT_POLICY, SandboxPolicy
 from .result import ProcessResult
+
+#: Reads an agent's current permissions (docs/WIRE_CONTRACT.md, "Agent
+#: permissions"). The host passes one per agent; ``None`` means "no policy".
+PolicyProvider = Callable[[], "SandboxPolicy | None"]
 
 # Default cap on captured stdout/stderr, in characters. Long-running tools can
 # emit unbounded output; the base trims it and flags the truncation so a single
@@ -53,10 +59,27 @@ class BaseEnvironment(ABC):
         snapshot_path: str,
         initial_cwd: str,
         max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
+        policy: SandboxPolicy | None = None,
+        policy_provider: PolicyProvider | None = None,
     ) -> None:
         self._snapshot_path = snapshot_path
         self._cwd = initial_cwd
         self._max_output_chars = max_output_chars
+        # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions").
+        # ``None`` = nobody configured any: the environment behaves exactly as
+        # it did before permissions existed. The provider is read here once
+        # and then only when a run starts while no other run holds this
+        # environment (``begin_run``), so a change never lands in the middle of
+        # a run — not even of a second run that shares the box (a room turn).
+        self._policy_provider = policy_provider
+        self._policy: SandboxPolicy | None = policy
+        if policy is None and policy_provider is not None:
+            self._policy = policy_provider()
+        # Runs that hold this environment now, and a policy set while one did.
+        self._policy_lock = threading.Lock()
+        self._leases = 0
+        self._pending_policy: SandboxPolicy | None = None
+        self._has_pending = False
         # A per-instance random marker keeps the cwd line from colliding with any
         # legitimate command output.
         self._cwd_marker = f"__AGENTS_CWD_{secrets.token_hex(8)}__:"
@@ -121,6 +144,77 @@ class BaseEnvironment(ABC):
         """The current working directory, recovered from the last command."""
         return self._cwd
 
+    @property
+    def policy(self) -> SandboxPolicy | None:
+        """The permissions this environment applies now, or ``None`` when no
+        policy was configured (then every permission is on, as before)."""
+        return self._policy
+
+    @property
+    def effective_policy(self) -> SandboxPolicy:
+        """:attr:`policy`, with the defaults standing in for "none"."""
+        return self._policy or DEFAULT_POLICY
+
+    @property
+    def leases(self) -> int:
+        """How many runs hold this environment now."""
+        with self._policy_lock:
+            return self._leases
+
+    def set_policy(self, policy: SandboxPolicy | None) -> bool:
+        """Apply ``policy`` from the next command on. True when it changed now.
+
+        While a run holds the environment the policy is kept as pending and
+        applied when the next run starts with none holding it: a backend with
+        a fixed-at-creation part (the docker container) rebuilds on a changed
+        policy, and a box must never be rebuilt under a running task.
+        """
+        with self._policy_lock:
+            if self._leases:
+                self._pending_policy = policy
+                self._has_pending = True
+                return False
+            return self._apply_locked(policy)
+
+    def refresh_policy(self) -> bool:
+        """Read the provider and apply what it says, unless a run holds the
+        environment (then nothing changes). True when the policy changed."""
+        with self._policy_lock:
+            if self._leases or self._policy_provider is None:
+                return False
+            return self._apply_locked(self._policy_provider())
+
+    def begin_run(self) -> SandboxPolicy | None:
+        """A run starts: take a lease and return the policy it runs under.
+
+        The first run to hold the environment applies what is new (the
+        provider's answer, else a pending :meth:`set_policy`). A run that
+        starts while another holds it gets the policy already in force: they
+        share one box, and that box stays as it is until both are done. Every
+        ``begin_run`` needs one :meth:`end_run`.
+        """
+        with self._policy_lock:
+            if self._leases == 0:
+                if self._policy_provider is not None:
+                    self._apply_locked(self._policy_provider())
+                elif self._has_pending:
+                    self._apply_locked(self._pending_policy)
+                self._has_pending = False
+                self._pending_policy = None
+            self._leases += 1
+            return self._policy
+
+    def end_run(self) -> None:
+        """The run that called :meth:`begin_run` is over."""
+        with self._policy_lock:
+            self._leases = max(0, self._leases - 1)
+
+    def _apply_locked(self, policy: SandboxPolicy | None) -> bool:
+        if policy == self._policy:
+            return False
+        self._policy = policy
+        return True
+
     def init_session(self) -> None:
         """Seed the snapshot once from a login shell (PATH, profile env, ...)."""
         if self._session_initialized:
@@ -148,7 +242,10 @@ class BaseEnvironment(ABC):
         if not self._session_initialized:
             self.init_session()
 
-        extra = {k: v for k, v in (env or {}).items() if _is_env_name(k)}
+        # ``secrets_env`` off (docs/WIRE_CONTRACT.md, "Agent permissions"): the
+        # secret values never reach the sandbox, whatever the caller passed.
+        allowed = self.effective_policy.secrets_env
+        extra = {k: v for k, v in (env or {}).items() if allowed and _is_env_name(k)}
         wrapped = self._wrap(cmd, unset=list(extra))
         raw = self._run_bash(
             wrapped, login=login, timeout=timeout, stdin=stdin, env=extra or None

@@ -18,7 +18,7 @@ import json
 import pytest
 
 from chuk_agents_host.cli import _build_parser, main, normalize_argv
-from chuk_agents_runtime.trace import TRACE_FILENAME, get_tracer, set_tracer
+from chuk_agents_runtime.telemetry import TRACE_FILENAME, get_tracer, set_tracer
 
 WALL = 1_780_000_000.0
 

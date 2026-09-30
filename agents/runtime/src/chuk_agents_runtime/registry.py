@@ -40,10 +40,21 @@ BROWSER_UNAVAILABLE_HINT = (
 )
 
 
+#: The tool-search bridge of the old loop. A model that read an old session
+#: may still reach for it.
+OLD_BRIDGE_TOOLS = ("tool_search", "tool_describe", "tool_call")
+OLD_BRIDGE_HINT = (
+    "that tool was replaced. Use search_tools to find a hidden tool, then call "
+    "it by its own name."
+)
+
+
 def unknown_tool_message(name: str) -> str:
     """The error body for a name no tool answers to."""
     if name.startswith(BROWSER_TOOL_PREFIX):
         return f"unknown tool: {name} — {BROWSER_UNAVAILABLE_HINT}"
+    if name in OLD_BRIDGE_TOOLS:
+        return f"unknown tool: {name} — {OLD_BRIDGE_HINT}"
     return f"unknown tool: {name}"
 
 

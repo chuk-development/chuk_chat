@@ -1,21 +1,22 @@
-"""BackendModelClient + SupabaseSession, tested against a local mock ``/v2/ws``
-server and a mocked GoTrue — no real credits, no network.
+"""BackendModelClient + SupabaseSession, against a mocked
+``/v1/chat/completions`` route and a mocked GoTrue — no real credits, no
+network.
 
-The mock server replicates the confirmed protocol: the auth handshake, ping/pong,
-and the chat frame stream (content / reasoning / usage / error / done), routed by
-``req_id``. A token of ``"expired"`` is rejected with ``auth_error`` so the refresh
-+ reconnect path is exercised.
+The agent loop streams through Pydantic AI (``test_pai_gates.py``); the client
+here is what a task runs on (``chat_spec``) and the blocking path for the
+housekeeping calls. A token of ``"expired"`` is answered with ``401
+invalid_api_key`` so the refresh-and-retry path is exercised.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
-import os
 import threading
 
 import httpx
+import httpx2
 import pytest
-from websockets.sync.server import serve
 
 from chuk_agents_runtime.backend import (
     clamp_reasoning_effort,
@@ -28,60 +29,304 @@ from chuk_agents_runtime.backend import (
 )
 
 
-# -- a mock /v2/ws server ----------------------------------------------------
+# -- a mock /v1/chat/completions route ------------------------------------------
 
 
-class MockWsServer:
-    """A local websockets server that speaks the ChukChat ``/v2/ws`` protocol.
+class MockRoute:
+    """Answers each request from ``reply(body) -> dict | (status, dict)``;
+    rejects any bearer outside ``valid_tokens`` with the route's 401."""
 
-    ``script`` maps the chat payload's ``message`` to a list of outgoing frame
-    dicts (without ``req_id``/``kind`` fixed up) — the test decides what the
-    "model" streams back. A ``valid_tokens`` set gates the handshake.
-    """
+    def __init__(self, reply, *, valid_tokens=("valid-token",)):
+        self.reply = reply
+        self.valid_tokens = set(valid_tokens)
+        self.bodies: list[dict] = []
+        self.tokens: list[str] = []
+        self.paths: list[str] = []
 
-    def __init__(self, script, *, valid_tokens):
-        self._script = script
-        self._valid_tokens = valid_tokens
-        self._server = serve(self._handler, "127.0.0.1", 0)
-        self.auth_tokens_seen: list[str] = []
-        sock = self._server.socket.getsockname()
-        self.url = f"ws://{sock[0]}:{sock[1]}/v2/ws"
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
+    def handler(self, request: httpx2.Request) -> httpx2.Response:
+        token = request.headers.get("authorization", "").removeprefix("Bearer ")
+        self.tokens.append(token)
+        self.paths.append(request.url.path)
+        if token not in self.valid_tokens:
+            return httpx2.Response(401, json={"error": {"message": "invalid token", "type": "auth", "param": None, "code": "invalid_api_key"}})
+        body = json.loads(request.content)
+        self.bodies.append(body)
+        answer = self.reply(body)
+        if isinstance(answer, tuple):
+            return httpx2.Response(answer[0], json=answer[1])
+        return httpx2.Response(200, json=answer)
 
-    def _handler(self, ws):
-        # 1. Handshake.
-        raw = ws.recv()
-        frame = json.loads(raw)
-        assert frame["type"] == "auth"
-        token = frame["token"]
-        self.auth_tokens_seen.append(token)
-        if token not in self._valid_tokens:
-            ws.send(json.dumps({"type": "auth_error", "detail": "token rejected"}))
-            return
-        ws.send(json.dumps({"type": "auth_ok"}))
+    def transport(self) -> httpx2.MockTransport:
+        return httpx2.MockTransport(self.handler)
 
-        # 2. Serve chat requests until the client goes away.
+
+def completion(content=None, *, reasoning=None, tool_calls=None, usage=None, finish="stop"):
+    message: dict = {"role": "assistant", "content": content}
+    if reasoning is not None:
+        message["reasoning_content"] = reasoning
+    if tool_calls is not None:
+        message["tool_calls"] = tool_calls
+    return {
+        "id": "c", "object": "chat.completion", "model": "m",
+        "choices": [{"index": 0, "message": message, "finish_reason": finish}],
+        "usage": usage or {"prompt_tokens": 7, "completion_tokens": 3, "total_tokens": 10},
+    }
+
+
+def _client(route: MockRoute, session, **kw) -> BackendModelClient:
+    return BackendModelClient(
+        session,
+        model_id="deepseek/deepseek-v4-flash",
+        provider_slug="fireworks/serverless",
+        base_url="https://api.test",
+        transport=route.transport(),
+        **kw,
+    )
+
+
+# -- the blocking completion ------------------------------------------------------
+
+
+def test_complete_returns_the_text_and_the_usage():
+    route = MockRoute(lambda body: completion("  hello there  "))
+    response = _client(route, _session()).complete([{"role": "user", "content": "hi"}])
+    assert response.text == "hello there"
+    assert response.tool_calls == []
+    assert response.raw["usage"]["total_tokens"] == 10
+    assert route.paths == ["/v1/chat/completions"]
+
+
+def test_reasoning_is_separate_and_never_folded_into_the_text():
+    route = MockRoute(lambda body: completion("answer", reasoning="let me think"))
+    response = _client(route, _session()).complete([{"role": "user", "content": "q"}])
+    assert response.text == "answer"
+    assert response.raw["reasoning"] == "let me think"
+
+
+def test_content_is_never_parsed_for_calls():
+    text = '{"tool": "run_command", "args": {"command": "ls"}}'
+    route = MockRoute(lambda body: completion(text))
+    response = _client(route, _session()).complete([{"role": "user", "content": "q"}])
+    assert response.tool_calls == []
+    assert response.text == text
+
+
+def test_an_error_body_surfaces_as_an_exception_with_its_code():
+    route = MockRoute(lambda body: (402, {"error": {"message": "no credits", "type": "billing", "param": None, "code": "insufficient_quota"}}))
+    with pytest.raises(BackendModelError) as caught:
+        _client(route, _session()).complete([{"role": "user", "content": "q"}])
+    assert caught.value.code == "insufficient_quota"
+    assert "no credits" in caught.value.detail
+
+
+def test_payload_is_the_openai_request_with_the_provider_pin():
+    route = MockRoute(lambda body: completion("ok"))
+    client = _client(route, _session(), reasoning_effort="low")
+    client.complete(
+        [
+            {"role": "system", "content": "be brief"},
+            {"role": "user", "content": "run it"},
+            {
+                "role": "assistant",
+                "content": None,
+                "reasoning": "stored thinking",
+                "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "run_command", "arguments": {"command": "ls"}}}],
+            },
+            {"role": "tool", "tool_call_id": "c1", "name": "run_command", "content": {"exit_code": 0, "stdout": "a"}},
+            {"role": "user", "content": "[memory recall] x"},
+        ]
+    )
+    body = route.bodies[0]
+    assert body["model"] == "deepseek/deepseek-v4-flash"
+    assert body["provider"] == "fireworks/serverless"
+    assert body["reasoning_effort"] == "low"
+    assert not body.get("stream")
+    # The WebSocket route ignored sampling fields; nothing is forced here.
+    assert "max_tokens" not in body and "max_completion_tokens" not in body
+    assert "temperature" not in body
+    messages = body["messages"]
+    assert messages[0] == {"role": "system", "content": "be brief"}
+    assistant = messages[2]
+    assert "reasoning" not in assistant and "reasoning_content" not in assistant
+    assert assistant["tool_calls"][0]["function"]["arguments"] == '{"command":"ls"}'
+    assert messages[3] == {"role": "tool", "tool_call_id": "c1", "content": '{"exit_code":0,"stdout":"a"}'}
+
+
+def test_native_tools_are_sent_and_tool_calls_parsed():
+    calls = [
+        {"id": "call_a", "type": "function", "function": {"name": "write_file", "arguments": '{"path": "x", "content": "y"}'}},
+        {"id": "call_b", "type": "function", "function": {"name": "run_command", "arguments": '{"command": "ls"}'}},
+    ]
+    route = MockRoute(lambda body: completion(None, tool_calls=calls, finish="tool_calls"))
+    client = _client(route, _session())
+    tools = [{"type": "function", "function": {"name": "write_file", "description": "", "parameters": {"type": "object"}}}]
+    client.set_tools(tools)
+    response = client.complete([{"role": "user", "content": "go"}])
+    assert [t["function"]["name"] for t in route.bodies[0]["tools"]] == ["write_file"]
+    assert route.bodies[0]["tools"][0]["function"]["parameters"]["type"] == "object"
+    assert [(c.id, c.name, c.arguments) for c in response.tool_calls] == [
+        ("call_a", "write_file", {"path": "x", "content": "y"}),
+        ("call_b", "run_command", {"command": "ls"}),
+    ]
+    assert response.text is None
+
+
+def test_malformed_tool_call_arguments_fall_back_to_empty():
+    calls = [{"id": "c9", "type": "function", "function": {"name": "t", "arguments": "{not json"}}]
+    route = MockRoute(lambda body: completion(None, tool_calls=calls))
+    response = _client(route, _session()).complete([{"role": "user", "content": "go"}])
+    assert response.tool_calls[0].arguments == {}
+    assert response.tool_calls[0].name == "t"
+
+
+def test_a_401_refreshes_the_token_then_retries_once():
+    route = MockRoute(lambda body: completion("after refresh"), valid_tokens={"fresh-token"})
+    http, calls = _gotrue_transport(new_token="fresh-token")
+    try:
+        session = _session(token="expired", http_client=http)
+        response = _client(route, session).complete([{"role": "user", "content": "hi"}])
+        assert response.text == "after refresh"
+        assert calls["refresh"] == 1
+        assert route.tokens == ["expired", "fresh-token"]
+    finally:
+        http.close()
+
+
+def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatch):
+    """The c91 rule at the client: the route rejects the token, the client asks
+    the app (not GoTrue), the app's re-provision lands, and the SAME request is
+    sent again and succeeds."""
+    session = _attached_session(monkeypatch)
+
+    def request(reason: str) -> None:
+        def app_answers():
+            session.access_token = "fresh-from-app"
+            session.mark_reprovisioned()
+
+        threading.Timer(0.05, app_answers).start()
+
+    session.request_reprovision = request
+    route = MockRoute(lambda body: completion("ok"), valid_tokens={"fresh-from-app"})
+    response = _client(route, session).complete([{"role": "user", "content": "hi"}])
+    assert response.text == "ok"
+    assert route.tokens == ["expired", "fresh-from-app"]
+
+
+def test_the_sinks_get_the_whole_turn_once():
+    route = MockRoute(lambda body: completion("answer", reasoning="thinking"))
+    client = _client(route, _session())
+    seen: list[tuple[str, str]] = []
+    client.on_delta = lambda text: seen.append(("delta", text))
+    client.on_reasoning = lambda text: seen.append(("reasoning", text))
+    client.complete([{"role": "user", "content": "q"}])
+    assert seen == [("reasoning", "thinking"), ("delta", "answer")]
+
+
+def test_a_failing_sink_never_aborts_the_turn():
+    route = MockRoute(lambda body: completion("answer", reasoning="thinking"))
+    client = _client(route, _session())
+    client.on_reasoning = lambda text: (_ for _ in ()).throw(RuntimeError("ui gone"))
+    assert client.complete([{"role": "user", "content": "q"}]).text == "answer"
+
+
+def test_cancel_mid_call_reports_cancelled():
+    started = threading.Event()
+
+    async def slow(request: httpx2.Request) -> httpx2.Response:
+        started.set()
+        await asyncio.sleep(30)
+        return httpx2.Response(200, json=completion("too late"))
+
+    client = BackendModelClient(
+        _session(), model_id="m", provider_slug="p", base_url="https://api.test",
+        transport=httpx2.MockTransport(slow),
+    )
+    errors: list[BaseException] = []
+
+    def call() -> None:
         try:
-            while True:
-                raw = ws.recv()
-                frame = json.loads(raw)
-                if frame.get("type") == "ping":
-                    ws.send(json.dumps({"type": "pong"}))
-                    continue
-                if frame.get("type") != "chat":
-                    continue
-                req_id = frame["req_id"]
-                message = frame["payload"].get("message", "")
-                for out in self._script(message, frame["payload"]):
-                    out = dict(out)
-                    out["req_id"] = req_id
-                    ws.send(json.dumps(out))
-        except Exception:
-            return
+            client.complete([{"role": "user", "content": "q"}])
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
 
-    def stop(self):
-        self._server.shutdown()
+    worker = threading.Thread(target=call)
+    worker.start()
+    assert started.wait(5)
+    client.cancel()
+    worker.join(5)
+    assert not worker.is_alive()
+    assert isinstance(errors[0], BackendModelError) and errors[0].code == "cancelled"
+
+
+def test_a_token_the_route_keeps_rejecting_is_an_auth_error():
+    from chuk_agents_runtime.backend import SupabaseAuthError
+
+    route = MockRoute(lambda body: completion("never"), valid_tokens=set())
+    http, _ = _gotrue_transport(new_token="still-bad")
+    try:
+        with pytest.raises(SupabaseAuthError):
+            _client(route, _session(token="expired", http_client=http)).complete(
+                [{"role": "user", "content": "q"}]
+            )
+    finally:
+        http.close()
+
+
+# -- what a task runs on ------------------------------------------------------------
+
+
+def test_chat_spec_describes_the_client_for_the_loop():
+    session = _session()
+    client = BackendModelClient(
+        session, model_id="moonshotai/kimi-k2.6", provider_slug="fireworks", base_url="https://api.test/",
+        reasoning_effort="high",
+    )
+    assert client.chat_spec() == {
+        "session": session,
+        "model_id": "moonshotai/kimi-k2.6",
+        "provider_slug": "fireworks",
+        "reasoning_effort": "high",
+        "base_url": "https://api.test",
+    }
+
+
+def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
+    session = _session()
+    client = BackendModelClient(
+        session,
+        model_id="deepseek/deepseek-v4-flash",
+        provider_slug="fireworks",
+        base_url="https://api.chuk.chat",
+        reasoning_effort="high",
+    )
+    clone = client.cheap_clone()
+    assert clone.reasoning_effort == "none"
+    assert clone._max_tokens == 512
+    assert clone.chat_spec()["model_id"] == client.chat_spec()["model_id"]
+    assert clone.chat_spec()["provider_slug"] == "fireworks"
+    assert clone.chat_spec()["base_url"] == "https://api.chuk.chat"
+    assert clone._session is client._session
+    assert clone is not client
+    # Housekeeping never narrates into the thread.
+    client.on_delta = lambda text: None
+    assert client.cheap_clone().on_delta is None
+
+
+def test_cheap_clone_honours_a_custom_max_tokens_and_sends_it():
+    route = MockRoute(lambda body: completion("summary"))
+    clone = _client(route, _session()).cheap_clone(max_tokens=256)
+    clone.complete([{"role": "user", "content": "summarise"}])
+    assert (route.bodies[0].get("max_tokens") or route.bodies[0].get("max_completion_tokens")) == 256
+    assert route.bodies[0]["reasoning_effort"] == "none"
+
+
+def test_client_exposes_the_effort_it_sends():
+    client = BackendModelClient(_session(), model_id="m", provider_slug="p", reasoning_effort="high")
+    assert client.reasoning_effort == "high"
+    assert client.cheap_clone().reasoning_effort == "none"
+
+
+# -- session, login, catalogue (unchanged) --------------------------------------------
 
 
 def _session(token="valid-token", *, refresh_token="refresh-1", http_client=None):
@@ -92,284 +337,6 @@ def _session(token="valid-token", *, refresh_token="refresh-1", http_client=None
         anon_key="anon-key",
         http_client=http_client,
     )
-
-
-def _client(server, session, **kw):
-    # base_url is the ws server; _ws_url_from_base turns ws://host/v2/ws through.
-    base = server.url[: -len("/v2/ws")]  # strip the path the client re-adds
-    return BackendModelClient(
-        session,
-        model_id="openai/gpt-oss-20b",
-        provider_slug="groq",
-        base_url=base,
-        **kw,
-    )
-
-
-# -- chat / accumulation ------------------------------------------------------
-
-
-def test_auth_and_chat_accumulates_content():
-    def script(message, payload):
-        return [
-            {"kind": "content", "data": "Hello "},
-            {"kind": "content", "data": "world"},
-            {"kind": "usage", "data": {"total_tokens": 5}},
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        resp = client.complete([{"role": "user", "content": "hi"}])
-        assert resp.text == "Hello world"
-        assert resp.raw["usage"] == {"total_tokens": 5}
-        assert not resp.has_tool_calls
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_reasoning_is_separate_channel_not_folded_into_text():
-    def script(message, payload):
-        return [
-            {"kind": "reasoning", "data": "let me think"},
-            {"kind": "content", "data": "answer"},
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        resp = client.complete([{"role": "user", "content": "hi"}])
-        assert resp.text == "answer"
-        assert resp.raw["reasoning"] == "let me think"
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_content_is_never_parsed_for_calls():
-    """No text fallback. A turn is a tool-call turn only when the server sent a
-    `tool_calls` frame; content that merely *looks* like a call — a name and an
-    argument object — is the assistant's answer text and is delivered verbatim.
-
-    This is the whole point of the native migration: one protocol, on its own
-    frame, so an answer that quotes JSON can never be executed by accident.
-    """
-    shaped_like_a_call = '{"name":"run_command","arguments":{"command":"ls"}}'
-
-    def script(message, payload):
-        return [
-            {"kind": "content", "data": "the call would be "},
-            {"kind": "content", "data": shaped_like_a_call},
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        resp = client.complete([{"role": "user", "content": "list files"}])
-        assert not resp.has_tool_calls
-        assert resp.text == "the call would be " + shaped_like_a_call
-        assert resp.raw.get("native") is False
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_error_frame_surfaces_as_exception():
-    def script(message, payload):
-        return [{"kind": "error", "detail": "model exploded", "code": "500"}]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        with pytest.raises(BackendModelError) as exc:
-            client.complete([{"role": "user", "content": "hi"}])
-        assert exc.value.detail == "model exploded"
-        assert exc.value.code == "500"
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_payload_carries_system_prompt_history_and_params():
-    seen = {}
-
-    def script(message, payload):
-        seen.update(payload)
-        return [{"kind": "content", "data": "ok"}, {"kind": "done"}]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(
-            server, _session(), max_tokens=1234, temperature=0.3, reasoning_effort="high"
-        )
-        client.complete(
-            [
-                {"role": "system", "content": "be terse"},
-                {"role": "user", "content": "first"},
-                {"role": "assistant", "content": "prior answer"},
-                {"role": "user", "content": "second"},
-            ]
-        )
-        assert seen["message"] == "second"
-        assert seen["system_prompt"] == "be terse"
-        assert seen["model_id"] == "openai/gpt-oss-20b"
-        assert seen["provider_slug"] == "groq"
-        assert seen["max_tokens"] == 1234
-        assert seen["temperature"] == 0.3
-        assert seen["reasoning_effort"] == "high"
-        # history is everything before the last turn (minus the system prompt).
-        assert seen["history"] == [
-            {"role": "user", "content": "first"},
-            {"role": "assistant", "content": "prior answer"},
-        ]
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_native_tools_sent_and_tool_calls_frame_parsed():
-    """With tools declared, the payload carries them and a `tool_calls` frame is
-    parsed into structured calls. The content of the same turn stays the
-    assistant's interim text — the two channels never mix."""
-    seen = {}
-
-    def script(message, payload):
-        seen.update(payload)
-        return [
-            {"kind": "content", "data": "sure"},
-            {
-                "kind": "tool_calls",
-                "data": [
-                    {
-                        "id": "call_9",
-                        "type": "function",
-                        "function": {
-                            "name": "run_command",
-                            "arguments": '{"command":"ls"}',
-                        },
-                    }
-                ],
-            },
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        client.set_tools(
-            [
-                {
-                    "type": "function",
-                    "function": {
-                        "name": "run_command",
-                        "description": "run a shell command",
-                        "parameters": {
-                            "type": "object",
-                            "properties": {"command": {"type": "string"}},
-                            "required": ["command"],
-                        },
-                    },
-                }
-            ]
-        )
-        resp = client.complete([{"role": "user", "content": "list files"}])
-        # tools travelled on the wire — presence is what enables native mode
-        assert seen["tools"][0]["function"]["name"] == "run_command"
-        # the tool_calls frame is the only place a call can come from
-        assert resp.has_tool_calls
-        assert resp.tool_calls[0].id == "call_9"
-        assert resp.tool_calls[0].name == "run_command"
-        assert resp.tool_calls[0].arguments == {"command": "ls"}
-        assert resp.text == "sure"
-        assert resp.raw.get("native") is True
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_native_history_roundtrip_and_empty_message_after_tools():
-    """A stored assistant tool_calls turn + its tool result serialise to native
-    OpenAI history (arguments as a JSON string, tool_call_id kept), and the newest
-    `message` is empty because the tool results are the model's next input."""
-    seen = {}
-
-    def script(message, payload):
-        seen.update(payload)
-        return [{"kind": "content", "data": "done"}, {"kind": "done"}]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        client.complete(
-            [
-                {"role": "system", "content": "sys"},
-                {"role": "user", "content": "do it"},
-                {
-                    "role": "assistant",
-                    "tool_calls": [
-                        {
-                            "id": "call_1",
-                            "type": "function",
-                            "function": {"name": "run_command", "arguments": {"command": "ls"}},
-                        }
-                    ],
-                },
-                {
-                    "role": "tool",
-                    "tool_call_id": "call_1",
-                    "name": "run_command",
-                    "content": {"stdout": "a\nb"},
-                },
-            ]
-        )
-        assert seen["message"] == ""  # tool results are the input, not a user turn
-        hist = seen["history"]
-        assert hist[0] == {"role": "user", "content": "do it"}
-        assistant = hist[1]
-        assert assistant["role"] == "assistant"
-        assert assistant["content"] is None  # tool-calls-only turn, like chuk
-        # arguments serialised to a JSON STRING on the wire, not a dict
-        assert assistant["tool_calls"][0]["function"]["arguments"] == '{"command":"ls"}'
-        assert assistant["tool_calls"][0]["id"] == "call_1"
-        tool_turn = hist[2]
-        assert tool_turn["role"] == "tool"
-        assert tool_turn["tool_call_id"] == "call_1"
-        assert isinstance(tool_turn["content"], str)  # dict result stringified
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_malformed_tool_call_arguments_fall_back_to_empty():
-    """Providers emit truncated JSON in arguments; a bad string must not raise."""
-
-    def script(message, payload):
-        return [
-            {
-                "kind": "tool_calls",
-                "data": [
-                    {"id": "c1", "type": "function", "function": {"name": "x", "arguments": "{not json"}},
-                ],
-            },
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        resp = client.complete([{"role": "user", "content": "go"}])
-        assert resp.tool_calls[0].name == "x"
-        assert resp.tool_calls[0].arguments == {}
-        client.close()
-    finally:
-        server.stop()
-
-
-# -- refresh / reconnect ------------------------------------------------------
 
 
 def _gotrue_transport(new_token="fresh-token"):
@@ -408,29 +375,6 @@ def _gotrue_transport(new_token="fresh-token"):
     return httpx.Client(transport=httpx.MockTransport(handler)), calls
 
 
-def test_auth_error_triggers_refresh_then_reconnects():
-    def script(message, payload):
-        return [{"kind": "content", "data": "after refresh"}, {"kind": "done"}]
-
-    # Server accepts only the FRESH token, so the first (expired) connect is
-    # rejected with auth_error, forcing a refresh + reconnect.
-    server = MockWsServer(script, valid_tokens={"fresh-token"})
-    http, calls = _gotrue_transport(new_token="fresh-token")
-    try:
-        session = _session(token="expired", http_client=http)
-        client = _client(server, session)
-        resp = client.complete([{"role": "user", "content": "hi"}])
-        assert resp.text == "after refresh"
-        assert calls["refresh"] == 1
-        assert session.access_token == "fresh-token"
-        # The server saw the expired token first, then the refreshed one.
-        assert server.auth_tokens_seen == ["expired", "fresh-token"]
-        client.close()
-    finally:
-        server.stop()
-        http.close()
-
-
 def test_session_refresh_absorbs_new_tokens():
     http, calls = _gotrue_transport(new_token="rotated")
     try:
@@ -459,9 +403,6 @@ def test_login_helper_trades_credentials_for_a_session():
         assert calls["password"] == 1
     finally:
         http.close()
-
-
-# -- model / provider resolution ---------------------------------------------
 
 
 _MODELS = [
@@ -518,91 +459,6 @@ def test_fetch_models_info_uses_bearer_token():
         assert len(models) == 2
     finally:
         http.close()
-
-
-# -- cheap_clone: the hero/aux twin (§7.3) -----------------------------------
-
-
-def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
-    session = _session()
-    client = BackendModelClient(
-        session,
-        model_id="deepseek/deepseek-v4-flash",
-        provider_slug="fireworks",
-        base_url="https://api.chuk.chat",
-        max_tokens=2048,
-        temperature=0.4,
-        reasoning_effort="high",
-    )
-    clone = client.cheap_clone()
-
-    # Reasoning off, at the weakest level the chat API accepts.
-    assert clone._reasoning_effort == "none"
-    # Small output cap by default.
-    assert clone._max_tokens == 512
-    # Same model + provider + backend endpoint.
-    assert clone._model_id == client._model_id
-    assert clone._provider_slug == client._provider_slug
-    assert clone._ws_url == client._ws_url
-    assert clone._temperature == client._temperature
-    # The SAME session object — no second login, one shared token + refresh.
-    assert clone._session is client._session
-    # A distinct client (own socket), not the original.
-    assert clone is not client
-
-
-def test_cheap_clone_honours_a_custom_max_tokens():
-    client = BackendModelClient(
-        _session(),
-        model_id="deepseek/deepseek-v4-flash",
-        provider_slug="fireworks",
-    )
-    clone = client.cheap_clone(max_tokens=256)
-    assert clone._max_tokens == 256
-    assert clone._reasoning_effort == "none"
-
-
-# -- optional live smoke test (never required, never hardcodes creds) --------
-
-
-@pytest.mark.skipif(
-    not (
-        os.getenv("AGENTS_LIVE_ACCESS_TOKEN")
-        or (os.getenv("AGENTS_LIVE_EMAIL") and os.getenv("AGENTS_LIVE_PASSWORD"))
-    ),
-    reason="live smoke test needs AGENTS_LIVE_ACCESS_TOKEN or AGENTS_LIVE_EMAIL/PASSWORD",
-)
-def test_live_smoke_real_backend():  # pragma: no cover - opt-in, spends real credits
-    supabase_url = os.environ["AGENTS_LIVE_SUPABASE_URL"]
-    anon_key = os.environ["AGENTS_LIVE_SUPABASE_ANON_KEY"]
-    token = os.getenv("AGENTS_LIVE_ACCESS_TOKEN")
-    if token:
-        session = SupabaseSession(
-            access_token=token,
-            refresh_token=os.getenv("AGENTS_LIVE_REFRESH_TOKEN", ""),
-            supabase_url=supabase_url,
-            anon_key=anon_key,
-        )
-    else:
-        session = login(
-            os.environ["AGENTS_LIVE_EMAIL"],
-            os.environ["AGENTS_LIVE_PASSWORD"],
-            supabase_url=supabase_url,
-            anon_key=anon_key,
-        )
-    models = fetch_models_info(session)
-    resolved = resolve_model(models)
-    client = BackendModelClient(
-        session, model_id=resolved.model_id, provider_slug=resolved.provider_slug
-    )
-    resp = client.complete(
-        [{"role": "user", "content": "Reply with the single word: pong"}]
-    )
-    assert resp.text
-    client.close()
-
-
-# -- who refreshes (bead cowork-c91) -----------------------------------------
 
 
 def _attached_session(monkeypatch, *, timeout=2.0):
@@ -702,117 +558,6 @@ def test_refresh_is_single_flight():
         http.close()
 
 
-def test_complete_survives_an_expired_token_while_the_app_is_attached(monkeypatch):
-    """The c91 symptom end to end at the client: the backend rejects the token,
-    the client asks the app (not GoTrue), the app's re-provision lands, and the
-    SAME request is retried and succeeds — the task loop never sees an error."""
-    import threading
-
-    from chuk_agents_runtime.backend import BackendModelClient, _AuthRejected
-    from chuk_agents_runtime.model import ModelResponse
-
-    session = _attached_session(monkeypatch)
-
-    def request(reason: str) -> None:
-        def app_answers():
-            session.access_token = "fresh-from-app"
-            session.mark_reprovisioned()
-
-        threading.Timer(0.05, app_answers).start()
-
-    session.request_reprovision = request
-    client = BackendModelClient(session, model_id="m", provider_slug="p")
-
-    attempts: list[str] = []
-
-    def fake_chat_once(payload, **_kw):
-        attempts.append(session.access_token)
-        if len(attempts) == 1:
-            raise _AuthRejected("token expired")
-        return ModelResponse(text="ok")
-
-    monkeypatch.setattr(client, "_chat_once", fake_chat_once)
-
-    response = client.complete([{"role": "user", "content": "hi"}])
-
-    assert response.text == "ok"
-    assert attempts == ["expired", "fresh-from-app"]
-
-
-def test_on_reasoning_streams_each_thinking_chunk_as_it_arrives():
-    """The thinking channel streams live, exactly like ``on_delta`` does for
-    content: every ``reasoning`` frame reaches the sink as it comes off the wire,
-    in order, and never leaks into ``on_delta`` or the answer text. The full
-    reasoning is still accumulated in ``raw`` for persistence."""
-
-    def script(message, payload):
-        return [
-            {"kind": "reasoning", "data": "let me "},
-            {"kind": "reasoning", "data": "think"},
-            {"kind": "content", "data": "answer"},
-            {"kind": "done"},
-        ]
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        seen: list[tuple[str, str]] = []
-        client.on_delta = lambda text: seen.append(("delta", text))
-        client.on_reasoning = lambda text: seen.append(("reasoning", text))
-        resp = client.complete([{"role": "user", "content": "hi"}])
-        assert seen == [
-            ("reasoning", "let me "),
-            ("reasoning", "think"),
-            ("delta", "answer"),
-        ]
-        assert resp.text == "answer"
-        assert resp.raw["reasoning"] == "let me think"
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_a_failing_reasoning_sink_never_aborts_the_turn():
-    def script(message, payload):
-        return [
-            {"kind": "reasoning", "data": "hmm"},
-            {"kind": "content", "data": "answer"},
-            {"kind": "done"},
-        ]
-
-    def boom(_text: str) -> None:
-        raise RuntimeError("ui went away")
-
-    server = MockWsServer(script, valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        client.on_reasoning = boom
-        resp = client.complete([{"role": "user", "content": "hi"}])
-        assert resp.text == "answer"
-        assert resp.raw["reasoning"] == "hmm"
-        client.close()
-    finally:
-        server.stop()
-
-
-def test_cheap_clone_does_not_inherit_the_reasoning_sink():
-    """Housekeeping turns (compaction, fact extraction) run with reasoning off
-    and must never narrate into the thread's thinking block."""
-    server = MockWsServer(lambda m, p: [{"kind": "done"}], valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session())
-        client.on_reasoning = lambda text: None
-        client.on_delta = lambda text: None
-        clone = client.cheap_clone()
-        assert clone.on_reasoning is None
-        assert clone.on_delta is None
-        client.close()
-    finally:
-        server.stop()
-
-
-# -- reasoning effort clamp (the catalogue decides what a model accepts) ------
-
 _CATALOGUE = [
     {
         "id": "z-ai/glm-5.3-flash",
@@ -872,17 +617,6 @@ def test_clamp_handles_the_binary_on_token():
     assert clamp_reasoning_effort(_CATALOGUE, "z-ai/glm-5.3-flash", "on") == "max"
 
 
-def test_client_exposes_the_effort_it_sends():
-    server = MockWsServer(lambda m, p: [{"kind": "done"}], valid_tokens={"valid-token"})
-    try:
-        client = _client(server, _session(), reasoning_effort="high")
-        assert client.reasoning_effort == "high"
-        assert client.cheap_clone().reasoning_effort == "none"
-        client.close()
-    finally:
-        server.stop()
-
-
 def _jwt(exp: float) -> str:
     """A token shaped like a GoTrue JWT: only the payload is ever read."""
     import base64
@@ -913,9 +647,6 @@ def test_session_without_a_readable_token_still_assumes_valid():
     """An opaque token carries no deadline, and guessing one would refresh in a
     loop. The ``auth_error`` frame stays the backstop there."""
     assert _session(token="not-a-jwt").is_expired() is False
-
-
-# -- a refused refresh names its status (the host heals on it) -----------------
 
 
 def _refusing_gotrue(status: int) -> httpx.Client:
@@ -950,3 +681,15 @@ def test_a_failing_listener_does_not_mask_the_refusal():
     session.on_refresh_failed = boom
     with pytest.raises(SupabaseAuthError):
         session.refresh()
+
+
+def test_a_stop_before_the_call_is_published_is_not_lost():
+    """``cancel()`` before ``complete()`` starts: the call is cancelled before
+    it sends anything (the cancel is sticky for this per-task client)."""
+    route = MockRoute(lambda body: completion("never"))
+    client = _client(route, _session())
+    client.cancel()
+    with pytest.raises(BackendModelError) as caught:
+        client.complete([{"role": "user", "content": "q"}])
+    assert caught.value.code == "cancelled"
+    assert route.bodies == []

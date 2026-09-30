@@ -15,8 +15,7 @@ This module owns the whole system prompt:
 
 - :data:`BASE_INSTRUCTIONS` — the behaviour contract (act, don't describe).
 - :func:`render_tool_block` — one tool as readable prose. NOT in the prompt:
-  ``tool_describe`` (§7.2) hands this text back for a deferred tool, which the
-  native ``tools`` array deliberately omits.
+  the readable view of a declared tool (``render_tool_docs``, diagnostics).
 - :func:`build_system_prompt` — the composition, with the operator persona last
   so it overrides the defaults.
 """
@@ -87,7 +86,7 @@ job is to remove that friction, not to add to it.
 - When the user asks what you can do, what tools, skills, or integrations you
   have, answer from your real inventory: name the SKILLS listed in this prompt
   and the CONNECTED MCP SERVERS listed in this prompt, plus the tools you have
-  been given natively (use `tool_search` to list any that are deferred). Report
+  been given natively (use `search_tools` to find any that are deferred). Report
   what is actually wired up; never invent an integration.
 - Do NOT answer such a question with programming languages or "I can write
   Python". The user is asking which capabilities are wired up, not which
@@ -96,7 +95,7 @@ job is to remove that friction, not to add to it.
 # Online research
 
 - For online discovery and current facts, use `web_search`, the account-backed
-  search tool on our API server. If it is deferred, find it with `tool_search`.
+  search tool on our API server. If it is deferred, find it with `search_tools`.
   Do not fetch Google, Bing or DuckDuckGo search-result HTML with `web_fetch`.
 - Use search to find real source URLs; never guess product paths or product IDs.
 - Open sources in the browser when you need dynamic content, local store
@@ -153,6 +152,10 @@ def upgrade_research_instructions(prompt: str) -> str:
     Stored personas/catalogues remain frozen. Only the missing built-in research
     section is added to the outbound system message; transcript rows stay intact.
     """
+    # Sessions seeded before the Pydantic AI loop name the old bridge tool;
+    # deferred tools are found with ``search_tools`` now. The quoted name is
+    # specific enough to rewrite in any system prompt.
+    prompt = prompt.replace("`tool_search`", "`search_tools`")
     if not prompt.startswith("You are Agents, an AI coworker."):
         return prompt
     if "\n# Online research\n" in prompt or "\n# Your workspace\n" not in prompt:
@@ -188,9 +191,8 @@ def render_tool_block(name: str, schema: dict | None) -> str:
     """One tool as readable prose: heading, description, argument lines.
 
     This is NOT what the model is given for a normal tool — those travel as
-    native schemas in the ``tools`` array. It is the text ``tool_describe``
-    (§7.2) hands back for a *deferred* tool, which the native array omits, so a
-    hidden tool is documented exactly as well as a visible one. Kept public
+    native schemas in the ``tools`` array. It is the readable view of one
+    declaration, the same fields the schema carries. Kept public
     because :func:`render_tool_docs` and the tests that ask "is this tool
     offered at all?" must agree with it to the character.
     """
@@ -215,7 +217,7 @@ def render_tool_docs(registry: ToolRegistry) -> str:
     :meth:`chuk_agents_runtime.registry.ToolRegistry.openai_tools`): unavailable tools
     (a failing ``check_fn``) are left out — the model must not be offered what
     cannot run — and so are deferred tools (§7.2), which the model reaches
-    through ``tool_search`` / ``tool_call`` instead.
+    through ``search_tools`` (the loop's Pydantic AI ToolSearch) instead.
 
     :func:`build_system_prompt` does NOT include this: the schemas go over the
     wire natively. It stays as the human-readable view of the offered surface,
@@ -243,7 +245,7 @@ def build_system_prompt(
     (last, so it wins on any conflict).
 
     ``mcp_servers`` is names only. The tools themselves ride natively (or behind
-    ``tool_search`` when deferred), but the model must still be able to answer
+    ``search_tools`` when deferred), but the model must still be able to answer
     "what integrations do you have" from the prompt — so the *inventory* is
     listed, at a cost of one line per server, never the schemas.
 
@@ -270,7 +272,7 @@ def build_system_prompt(
             "# Connected MCP servers\n\n"
             + "\n".join(f"- {name}" for name in names)
             + "\n\nThese are wired up for you. Their tools are in your tool list, or "
-            "reachable through `tool_search` when deferred."
+            "found with `search_tools` when deferred."
         )
     if memory and memory.strip():
         parts.append(memory.strip())

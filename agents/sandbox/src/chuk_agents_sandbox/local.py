@@ -11,7 +11,8 @@ import threading
 
 from collections.abc import Mapping
 
-from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment
+from .base import DEFAULT_MAX_OUTPUT_CHARS, BaseEnvironment, PolicyProvider
+from .policy import SandboxPolicy
 from .result import ProcessResult
 
 
@@ -20,6 +21,11 @@ class LocalEnvironment(BaseEnvironment):
 
     A private workspace directory and snapshot file are created under a temp
     root and removed on :meth:`cleanup`.
+
+    Of the agent permissions (docs/WIRE_CONTRACT.md, "Agent permissions") only
+    ``secrets_env`` can be enforced here: a host process has the host's sudo,
+    network and file access, and no flag of ours takes them away. The docker
+    backend enforces the rest.
     """
 
     def __init__(
@@ -27,6 +33,8 @@ class LocalEnvironment(BaseEnvironment):
         *,
         workdir: str | None = None,
         max_output_chars: int = DEFAULT_MAX_OUTPUT_CHARS,
+        policy: SandboxPolicy | None = None,
+        policy_provider: PolicyProvider | None = None,
     ) -> None:
         self._root = tempfile.mkdtemp(prefix="agents-local-")
         self._owns_workdir = workdir is None
@@ -42,6 +50,8 @@ class LocalEnvironment(BaseEnvironment):
             snapshot_path=snapshot,
             initial_cwd=work,
             max_output_chars=max_output_chars,
+            policy=policy,
+            policy_provider=policy_provider,
         )
 
     @property

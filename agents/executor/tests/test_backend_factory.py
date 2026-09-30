@@ -1,22 +1,24 @@
 """The production model path: a real :class:`BackendModelClient` (built by
 ``make_backend_model_factory`` from a :class:`SupabaseSession`) drives the real
-encrypted Executor against a local mock ``/v2/ws`` server. No real credits.
+encrypted Executor against a local OpenAI-compatible ``/v1/chat/completions``
+server. No real credits.
 
 Proves the prod wiring end to end: the executor opens an encrypted task, the
-backend client authenticates over ``/v2/ws``, relays a native ``tool_calls``
-frame, the sandbox runs the command, and the controller receives encrypted
-result frames — all without the mock model used elsewhere.
+agent loop streams from the route with the session's bearer (Pydantic AI's
+``OpenAIChatModel``), a native tool call runs in the sandbox, and the
+controller receives encrypted result frames — without the mock model used
+elsewhere.
 """
 
 from __future__ import annotations
 
 import json
 import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from chuk_agents_runtime import SupabaseSession
 from chuk_agents_manager import RosterStore, RuntimeStatus
 from chuk_agents_sandbox import LocalEnvironment
-from websockets.sync.server import serve
 
 from chuk_agents_executor import (
     ControllerSession,
@@ -29,60 +31,70 @@ from chuk_agents_executor import (
 from wiring import paired_channel
 
 
-class _MockWsServer:
-    """Speaks the ChukChat /v2/ws protocol. First chat -> a run_command tool call,
-    second chat -> the final answer. Routes frames by req_id."""
+def _chunk(delta: dict, finish: str | None = None, usage: dict | None = None) -> str:
+    body = {
+        "id": "c",
+        "object": "chat.completion.chunk",
+        "created": 0,
+        "model": "m",
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+    }
+    if usage is not None:
+        body["usage"] = usage
+    return "data: " + json.dumps(body) + "\n\n"
+
+
+class _MockRoute:
+    """``POST /v1/chat/completions`` as the account proxy speaks it. First
+    request -> one complete ``run_command`` tool call, second -> the answer.
+    Anything but the session's bearer gets the route's 401."""
 
     def __init__(self):
-        self._server = serve(self._handler, "127.0.0.1", 0)
-        host, port = self._server.socket.getsockname()[:2]
-        self.base_url = f"ws://{host}:{port}"
-        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
-        self._thread.start()
+        route = self
+        self.requests: list[dict] = []
 
-    def _handler(self, ws):
-        raw = ws.recv()
-        assert json.loads(raw)["type"] == "auth"
-        ws.send(json.dumps({"type": "auth_ok"}))
-        chat_count = 0
-        try:
-            while True:
-                frame = json.loads(ws.recv())
-                if frame.get("type") == "ping":
-                    ws.send(json.dumps({"type": "pong"}))
-                    continue
-                if frame.get("type") != "chat":
-                    continue
-                req_id = frame["req_id"]
-                if chat_count == 0:
-                    # Native function calling: the server relays complete OpenAI
-                    # call objects on a ``tool_calls`` frame. ``arguments`` is a
-                    # JSON *string*, exactly as a provider streams it.
+        class Handler(BaseHTTPRequestHandler):
+            def log_message(self, *args):  # keep the test output clean
+                return
+
+            def do_POST(self):
+                body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+                route.requests.append({"path": self.path, "auth": self.headers.get("Authorization"), "body": body})
+                if self.headers.get("Authorization") != "Bearer valid-token":
+                    self.send_response(401)
+                    self.end_headers()
+                    return
+                usage = {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7}
+                if len(route.requests) == 1:
                     call = {
+                        "index": 0,
                         "id": "call_0",
                         "type": "function",
-                        "function": {
-                            "name": "run_command",
-                            "arguments": json.dumps(
-                                {"command": "echo hi > out.txt"}
-                            ),
-                        },
+                        "function": {"name": "run_command", "arguments": json.dumps({"command": "echo hi > out.txt"})},
                     }
-                    outs = [
-                        {"kind": "tool_calls", "data": [call]},
-                        {"kind": "done"},
+                    events = [
+                        _chunk({"role": "assistant", "content": None}),
+                        _chunk({"tool_calls": [call]}),
+                        _chunk({}, "tool_calls", usage),
                     ]
                 else:
-                    outs = [
-                        {"kind": "content", "data": "all set"},
-                        {"kind": "done"},
+                    events = [
+                        _chunk({"role": "assistant", "content": ""}),
+                        _chunk({"content": "all set"}),
+                        _chunk({}, "stop", usage),
                     ]
-                chat_count += 1
-                for out in outs:
-                    out = {**out, "req_id": req_id}
-                    ws.send(json.dumps(out))
-        except Exception:
-            return
+                payload = ("".join(events) + "data: [DONE]\n\n").encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/event-stream")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        host, port = self._server.server_address[:2]
+        self.base_url = f"http://{host}:{port}"
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+        self._thread.start()
 
     def stop(self):
         self._server.shutdown()
@@ -92,7 +104,7 @@ def test_backend_factory_drives_encrypted_executor(tmp_path):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
 
-    server = _MockWsServer()
+    server = _MockRoute()
     session = SupabaseSession(
         access_token="valid-token",
         refresh_token="r",
@@ -156,3 +168,10 @@ def test_backend_factory_drives_encrypted_executor(tmp_path):
     assert tool_events[0]["exit_code"] == 0
     assert events[-1]["final_answer"] == "all set"
     assert events[-1]["reason"] == "finished"
+    # The loop streamed from the OpenAI-compatible route with the bearer.
+    assert [r["path"] for r in server.requests] == ["/v1/chat/completions"] * 2
+    assert all(r["auth"] == "Bearer valid-token" for r in server.requests)
+    first = server.requests[0]["body"]
+    assert first["model"] == "openai/gpt-oss-20b" and first["provider"] == "groq"
+    assert first["stream"] is True
+    assert "run_command" in [t["function"]["name"] for t in first["tools"]]
