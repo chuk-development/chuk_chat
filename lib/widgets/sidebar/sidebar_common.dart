@@ -65,6 +65,13 @@ String sidebarDisplayName(ProfileRecord? profile) {
   return 'Account';
 }
 
+/// The Agents build's install entry: its label and its key. English, as the
+/// rest of the Agents UI is.
+const String kSidebarAddComputerLabel = 'Add your computer';
+const ValueKey<String> kSidebarAddComputerKey = ValueKey<String>(
+  'sidebar-add-computer',
+);
+
 /// The destinations shared by both sidebars, with a platform-owned search
 /// entry because mobile morphs that card into a field while desktop does not.
 ///
@@ -82,6 +89,10 @@ List<Widget> buildSidebarNavigationCards({
   /// there starts at Media. The desktop keeps the row because its collapsed
   /// rail is built from these same rows.
   bool showNewChat = true,
+
+  /// The Agents build's "Add your computer" entry. Null, as in chuk_chat and
+  /// on any device that already has a computer, draws no row.
+  VoidCallback? onAddComputerTapped,
 }) {
   final l = AppLocalizations.of(context);
   return <Widget>[
@@ -102,6 +113,13 @@ List<Widget> buildSidebarNavigationCards({
         icon: Icons.image_rounded,
         label: l?.media ?? 'Media',
         onTap: onMediaTapped,
+      ),
+    if (onAddComputerTapped != null)
+      SbNavCard(
+        key: kSidebarAddComputerKey,
+        icon: Icons.computer,
+        label: kSidebarAddComputerLabel,
+        onTap: onAddComputerTapped,
       ),
     searchEntry,
   ];

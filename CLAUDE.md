@@ -48,6 +48,19 @@ the owner says CoWork, he means Agents. Code, flags and docs use "Agents".
   (`lib/services/agents/agents_pairing_restore.dart`). The connection is the
   blind cloud relay `wss://api.chuk.chat/v2/relay/ws` (api_server,
   `routers/cowork/`). No user-visible host URL, port or "WebSocket" wording.
+- **A new computer is added by an install command the app mints.** No
+  computer paired → no Chat | Agents switch, only "Add your computer" in the
+  sidebar. That page shows
+  `curl -fsSL https://api.chuk.chat/agents/install.sh | bash -s -- --token=<P>-<D>`
+  (P = 64 hex, the relay pairing channel AND the §15 channel id; D = 8
+  digits; valid 30 min, single use, stored per user in secure storage). The
+  app claims P until the host parks there, then pairs on that SAME socket
+  (`waitForPairingClaim` hands it over — a second socket never sees the
+  host's commit). Server route: api_server `routers/agents_install.py`
+  (302 to `scripts/agents-bootstrap.sh`). Host: `agents-host connect --token`.
+  Full live test recipe (fresh Docker "computer" + emulator + throwaway
+  account): cold-boot the AVD (`AGENTS_AVD_EXTRA=-no-snapshot-load`), or its
+  clock lags and the host drops every frame as `timestampOutOfWindow`.
 - **Design:** Agents keeps its design (`docs/agents/DESIGN.md` if present,
   otherwise the rules in the reference), fitted to chuk_chat's theme so the
   two do not collide. No glow — no coloured `BoxShadow`, ever.

@@ -21,6 +21,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:flutter/foundation.dart' show ChangeNotifier, Listenable;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:uuid/uuid.dart';
 
@@ -160,6 +161,16 @@ class AgentsPairingStore {
   /// SharedPreferences.
   AgentsSecureKeyValueStore get backend => _store;
 
+  /// Notifies after every write to or delete of the trust record (a new
+  /// pairing, a restored one, a trust update from the host, "Remove this
+  /// computer"). Listeners read the record again with [loadPairing]; the
+  /// notification itself carries no data. The shell listens here to show or
+  /// hide the Agents half, so it never has to poll the secure store.
+  Listenable get changes => _changes;
+  final _PairingChanges _changes = _PairingChanges();
+
+  void _notifyChanged() => _changes.ping();
+
   /// Loads the stable device identity, creating and persisting a fresh one on
   /// first use. The same identity is returned on every later launch.
   Future<AgentsDeviceIdentity> loadOrCreateIdentity() async {
@@ -193,6 +204,7 @@ class AgentsPairingStore {
   /// caller never waits on the network.
   Future<void> savePairing(AgentsStoredPairing pairing) async {
     await _store.write(_kPairing, jsonEncode(pairing.toJson()));
+    _notifyChanged();
     // A local address cannot be restored on another device. Wait for the
     // authenticated host_route announcement before publishing the capability.
     if (pairing.hostUrl.path == '/v2/relay/ws' &&
@@ -220,6 +232,13 @@ class AgentsPairingStore {
   /// encrypted Supabase mirror is cleared too (best-effort).
   Future<void> clearPairing() async {
     await _store.delete(_kPairing);
+    _notifyChanged();
     unawaited(_cloudSync.clearEncryptedPairing());
   }
+}
+
+/// The store's change signal. The store lives as long as the shell that made
+/// it and is never disposed, so a ping after the last listener left is safe.
+class _PairingChanges extends ChangeNotifier {
+  void ping() => notifyListeners();
 }

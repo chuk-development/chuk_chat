@@ -35,6 +35,9 @@ class SidebarMobile extends StatefulWidget {
 
   /// Slides the drawer shut. Null hides the profile card's collapse button.
   final VoidCallback? onCollapseTapped;
+
+  /// The Agents build's "Add your computer" entry. Null draws no row.
+  final VoidCallback? onAddComputerTapped;
   final String? selectedChatId;
   final bool isCompactMode; // Not directly used in the UI, but kept for context
 
@@ -47,6 +50,7 @@ class SidebarMobile extends StatefulWidget {
     required this.onNewChatTapped,
     this.onChatDeleted,
     this.onCollapseTapped,
+    this.onAddComputerTapped,
     required this.selectedChatId,
     required this.isCompactMode,
   });
@@ -518,6 +522,7 @@ class _SidebarMobileState extends State<SidebarMobile>
       onNewChatTapped: widget.onNewChatTapped,
       showNewChat: false,
       searchEntry: searchEntry,
+      onAddComputerTapped: widget.onAddComputerTapped,
     );
   }
 

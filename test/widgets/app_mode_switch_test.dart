@@ -12,6 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/pages/agents_install_page.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_agent_list.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_nav_bar.dart';
@@ -19,9 +20,12 @@ import 'package:chuk_chat/platform_specific/root_wrapper_desktop.dart';
 import 'package:chuk_chat/platform_specific/root_wrapper_mobile.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_device_keys.dart';
+import 'package:chuk_chat/services/agents/agents_install_flow.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_restore.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
@@ -34,6 +38,8 @@ import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/brand_wordmark.dart';
+import 'package:chuk_chat/widgets/sidebar/sidebar_common.dart'
+    show kSidebarAddComputerKey, kSidebarAddComputerLabel;
 
 import '../platform_specific/mobile/mobile_support.dart' show findId;
 import '../support/icon_finder.dart';
@@ -71,6 +77,16 @@ class _EmptyMirror extends SupabasePairingSync {
   Future<void> clearEncryptedPairing() async {}
 }
 
+/// A mirror whose read answers only when the test says so.
+class _SlowMirror extends _EmptyMirror {
+  _SlowMirror(this._read);
+
+  final Future<AgentsCloudPairingRead> _read;
+
+  @override
+  Future<AgentsCloudPairingRead> readEncryptedPairing() => _read;
+}
+
 class _Session implements AccountSessionSource {
   const _Session();
 
@@ -89,10 +105,19 @@ class _Session implements AccountSessionSource {
 /// 42 px chip, then the switch left-aligned in the rest of a 48 px row), a
 /// counter and a draft, so a test can see that its state survives a switch.
 class _FakeChatHalf extends StatefulWidget {
-  const _FakeChatHalf({required this.phone, required this.modeSwitch});
+  const _FakeChatHalf({
+    required this.phone,
+    required this.modeSwitch,
+    this.onAddComputer,
+  });
 
   final bool phone;
-  final Widget modeSwitch;
+
+  /// Null while the device has no computer.
+  final Widget? modeSwitch;
+
+  /// The install entry's action; null unless the device has no computer.
+  final VoidCallback? onAddComputer;
 
   @override
   State<_FakeChatHalf> createState() => _FakeChatHalfState();
@@ -120,6 +145,12 @@ class _FakeChatHalfState extends State<_FakeChatHalf> {
                 children: <Widget>[
                   Text(widget.phone ? 'chuk phone chat' : 'chuk desktop chat'),
                   Text('taps $taps'),
+                  if (widget.onAddComputer != null)
+                    TextButton(
+                      key: const ValueKey<String>('fake-add-computer'),
+                      onPressed: widget.onAddComputer,
+                      child: const Text('Add your computer'),
+                    ),
                   TextButton(
                     onPressed: () => setState(() => taps++),
                     child: const Text('tap'),
@@ -152,7 +183,8 @@ class _FakeChatHalfState extends State<_FakeChatHalf> {
                       Expanded(
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: widget.modeSwitch,
+                          child:
+                              widget.modeSwitch ?? const SizedBox.shrink(),
                         ),
                       ),
                     ],
@@ -217,12 +249,17 @@ void main() {
 
   /// Pumps the shell with a Chat half. [paired] seeds a stored pairing (the
   /// default half with nothing remembered); [mode] injects the mode state.
+  /// The pairing store of the last [pumpShell].
+  late AgentsPairingStore lastStore;
+
   Future<LocalAgentRosterSource> pumpShell(
     WidgetTester tester, {
     Size size = kPhone,
     bool paired = true,
     AppModeService? mode,
     bool withChat = true,
+    AgentsStoredPairing? trustOnConnect,
+    AgentsInstallClaimWaiter? installClaimWaiter,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -235,14 +272,16 @@ void main() {
       cloudSync: _EmptyMirror(),
     );
     if (paired) await store.savePairing(record);
+    lastStore = store;
     final LocalAgentRosterSource roster = LocalAgentRosterSource();
     await tester.pumpWidget(
       testApp(
         MessengerShell(
           relayControllerBuilder: () async {
             controllerBuilds++;
-            return FakeRelayController();
+            return FakeRelayController()..trustOnConnect = trustOnConnect;
           },
+          installClaimWaiter: installClaimWaiter,
           sessionSource: const _Session(),
           pairingStore: store,
           rosterSource: roster,
@@ -259,8 +298,16 @@ void main() {
                 sleep: (_) => Completer<void>().future,
               ),
           chatModeBuilder: withChat
-              ? (context, {required phone, required modeSwitch}) =>
-                    _FakeChatHalf(phone: phone, modeSwitch: modeSwitch)
+              ? (
+                  context, {
+                  required phone,
+                  required modeSwitch,
+                  required onAddComputer,
+                }) => _FakeChatHalf(
+                  phone: phone,
+                  modeSwitch: modeSwitch,
+                  onAddComputer: onAddComputer,
+                )
               : null,
         ),
       ),
@@ -552,6 +599,171 @@ void main() {
     });
   });
 
+  group('no computer', () {
+    final Finder addComputer = find.byKey(
+      const ValueKey<String>('fake-add-computer'),
+    );
+
+    testWidgets('no pairing: Chat in front, no switch, the install entry', (
+      tester,
+    ) async {
+      await pumpShell(tester, paired: false, size: kWidePhone);
+      expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(addComputer, findsOneWidget);
+      // The Agents half is still mounted behind it: it owns the socket.
+      expect(threadView, findsOneWidget);
+    });
+
+    testWidgets('a remembered "agents" does not open an empty Agents half', (
+      tester,
+    ) async {
+      SharedPreferences.setMockInitialValues(<String, Object>{
+        AppModeService.prefsKey: 'agents',
+      });
+      await pumpShell(tester, paired: false, size: kWidePhone);
+      expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(addComputer, findsOneWidget);
+      // The stored choice is left alone for when a computer comes.
+      final SharedPreferences prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString(AppModeService.prefsKey), 'agents');
+    });
+
+    testWidgets('a pairing: the switch, and no install entry', (tester) async {
+      await pumpShell(tester);
+      expect(find.byType(AppModeSwitch), findsOneWidget);
+      await pick(tester, 'Chat');
+      expect(find.byType(AppModeSwitch), findsOneWidget);
+      expect(addComputer, findsNothing);
+    });
+
+    testWidgets('install: the page pairs on the live thread view, closes, '
+        'the switch appears and Agents comes to the front', (tester) async {
+      final List<AgentsPairingInvite> claimed = <AgentsPairingInvite>[];
+      await pumpShell(
+        tester,
+        paired: false,
+        size: kWidePhone,
+        trustOnConnect: record,
+        installClaimWaiter:
+            (
+              AgentsPairingInvite invite, {
+              required DateTime deadline,
+              required AgentsClaimCancel cancel,
+            }) async {
+              claimed.add(invite);
+              return 'host-1';
+            },
+      );
+      expect(controllerBuilds, 1);
+
+      await tester.tap(addComputer);
+      await tester.pumpAndSettle();
+
+      // The page opened, claimed its own ticket's channel, paired and closed.
+      expect(claimed, hasLength(1));
+      expect(claimed.single.pairingChannel, matches(RegExp(r'^[0-9a-f]{64}$')));
+      expect(find.byType(AgentsInstallPage), findsNothing);
+      // The trust is in the store, as after a scan.
+      expect(await lastStore.loadPairing(), isNotNull);
+      // One socket owner the whole time: the thread view paired itself.
+      expect(controllerBuilds, 1);
+      // The switch is back and Agents is in front.
+      expect(find.byType(AppModeSwitch), findsOneWidget);
+      expect(tester.widget<AppModeSwitch>(onStageSwitch()).mode, AppMode.agents);
+      expect(find.byType(MobileAgentList), findsOneWidget);
+      expect(addComputer, findsNothing);
+    });
+
+    testWidgets('a restored pairing shows the switch without a move', (
+      tester,
+    ) async {
+      await pumpShell(tester, paired: false, size: kWidePhone);
+      expect(addComputer, findsOneWidget);
+
+      // Another device paired; the restore writes the record here.
+      await lastStore.savePairing(record);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppModeSwitch), findsOneWidget);
+      expect(addComputer, findsNothing);
+      expect(find.text('chuk phone chat'), findsOneWidget);
+    });
+
+    testWidgets('"Remove this computer": back to Chat, no switch, the entry', (
+      tester,
+    ) async {
+      await pumpShell(tester);
+      expect(find.byType(MobileAgentList), findsOneWidget);
+
+      await lastStore.clearPairing();
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(find.text('chuk phone chat'), findsOneWidget);
+      expect(addComputer, findsOneWidget);
+    });
+
+    testWidgets('while the answer is not known, neither the entry nor the '
+        'switch', (tester) async {
+      final Completer<AgentsCloudPairingRead> read =
+          Completer<AgentsCloudPairingRead>();
+      tester.view.physicalSize = kWidePhone;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      final AgentsPairingStore store = AgentsPairingStore(
+        backend: _MemoryStore(),
+        cloudSync: _SlowMirror(read.future),
+      );
+      await tester.pumpWidget(
+        testApp(
+          MessengerShell(
+            relayControllerBuilder: () async => FakeRelayController(),
+            sessionSource: const _Session(),
+            pairingStore: store,
+            rosterSource: LocalAgentRosterSource(),
+            roomSource: LocalRoomSource(),
+            onSignOut: () {},
+            pairingRestoreBuilder: (store, session, onRestored) =>
+                AgentsPairingRestore(
+                  store: store,
+                  sessionSource: session,
+                  onRestored: onRestored,
+                  authChanges: const Stream<Never>.empty(),
+                  hasEncryptionKey: () => true,
+                  sleep: (_) => Completer<void>().future,
+                ),
+            chatModeBuilder:
+                (
+                  context, {
+                  required phone,
+                  required modeSwitch,
+                  required onAddComputer,
+                }) => _FakeChatHalf(
+                  phone: phone,
+                  modeSwitch: modeSwitch,
+                  onAddComputer: onAddComputer,
+                ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(addComputer, findsNothing);
+
+      // The restore answers: no computer on the account.
+      read.complete(
+        const AgentsCloudPairingRead(AgentsCloudPairingOutcome.noRecord),
+      );
+      await tester.pumpAndSettle();
+      expect(addComputer, findsOneWidget);
+      expect(find.byType(AppModeSwitch), findsNothing);
+
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  });
+
   group('RootWrapperMobile', () {
     /// The wordmarks on screen. The sidebar holds one too, parked off the
     /// left edge until it is opened.
@@ -593,6 +805,33 @@ void main() {
       expect(find.byType(AppModeSwitch), findsNothing);
       expect(findId('copy_debug_chat_button'), findsOneWidget);
       expect(findId('new_chat_button'), findsOneWidget);
+      await drain(tester);
+    });
+
+    testWidgets('the install entry is a sidebar row, only when asked for', (
+      tester,
+    ) async {
+      tester.view.physicalSize = kPhone;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        testApp(
+          RootWrapperMobile(config: testShellConfig(), onAddComputer: () {}),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.byKey(kSidebarAddComputerKey, skipOffstage: false),
+        findsOneWidget,
+      );
+      await drain(tester);
+
+      await pumpWrapper(tester);
+      expect(
+        find.byKey(kSidebarAddComputerKey, skipOffstage: false),
+        findsNothing,
+      );
       await drain(tester);
     });
 
@@ -645,6 +884,41 @@ void main() {
       expect(sw.left, greaterThan(menu.right));
       expect(tester.takeException(), isNull);
 
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 9));
+    });
+
+    testWidgets('the install entry sits in the folded rail, and only when '
+        'asked for', (tester) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      int taps = 0;
+      await tester.pumpWidget(
+        testApp(
+          RootWrapperDesktop(
+            config: testShellConfig(),
+            onAddComputer: () => taps++,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byTooltip(kSidebarAddComputerLabel), findsOneWidget);
+      await tester.tap(find.byTooltip(kSidebarAddComputerLabel));
+      await tester.pump();
+      expect(taps, 1);
+
+      // The plain build passes nothing and draws nothing.
+      await tester.pumpWidget(
+        testApp(RootWrapperDesktop(config: testShellConfig())),
+      );
+      await tester.pump();
+      expect(find.byTooltip(kSidebarAddComputerLabel), findsNothing);
+      expect(
+        find.byKey(kSidebarAddComputerKey, skipOffstage: false),
+        findsNothing,
+      );
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 9));
     });

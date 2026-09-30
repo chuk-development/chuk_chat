@@ -13,6 +13,8 @@
 /// control added tomorrow is measured tomorrow.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -27,6 +29,7 @@ import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/pages/agent_profile_page.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
 import 'package:chuk_chat/pages/coming_soon_page.dart';
+import 'package:chuk_chat/pages/agents_install_page.dart';
 import 'package:chuk_chat/pages/agents_pairing_page.dart';
 import 'package:chuk_chat/pages/customization_page.dart';
 import 'package:chuk_chat/pages/desktop_settings_modal.dart';
@@ -51,7 +54,12 @@ import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
+import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
+import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
@@ -254,6 +262,22 @@ List<_Screen> _screens() => <_Screen>[
   _Screen('login_page', (_) => const LoginPage()),
   _Screen('agents_pairing_page',
       (_) => const AgentsPairingPage(cameraAvailable: false)),
+  _Screen(
+    'agents_install_page',
+    (_) => AgentsInstallPage(
+      ticketStore: AgentsInstallTicketStore(backend: _InstallMemory()),
+      sessionSource: const _InstallSession(),
+      now: () => DateTime.utc(2026, 9, 29, 12),
+      // The computer never reports in: the page stays on its waiting state.
+      claimWaiter: (
+        AgentsPairingInvite invite, {
+        required DateTime deadline,
+        required AgentsClaimCancel cancel,
+      }) =>
+          Completer<String?>().future,
+      pair: (AgentsPairingInvite invite) async {},
+    ),
+  ),
   _Screen('coming_soon_page', (_) => const ComingSoonPage(
         title: 'Workspaces',
         message: 'Not on the phone yet. The host still owns this one.',
@@ -786,4 +810,32 @@ void main() {
     }
   }
   }
+}
+
+/// Secure storage for the install page, in memory.
+class _InstallMemory implements AgentsSecureKeyValueStore {
+  final Map<String, String> _map = <String, String>{};
+
+  @override
+  Future<String?> read(String key) async => _map[key];
+
+  @override
+  Future<void> write(String key, String value) async => _map[key] = value;
+
+  @override
+  Future<void> delete(String key) async => _map.remove(key);
+}
+
+class _InstallSession implements AccountSessionSource {
+  const _InstallSession();
+
+  @override
+  AccountSession? current() => const AccountSession(
+    accessToken: 'jwt',
+    refreshToken: 'r',
+    userId: 'user-1',
+  );
+
+  @override
+  Future<AccountSession?> refresh() async => current();
 }

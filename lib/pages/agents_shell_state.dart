@@ -95,6 +95,33 @@ mixin AgentsShellHost on State<MessengerShell> {
         AgentsPairingRestoreReason.checking,
       );
 
+  /// Whether this device has a computer to talk to: true with a stored
+  /// pairing, false when there is none and the cloud restore has had its
+  /// chance, null while that is not known yet.
+  ///
+  /// The shell shows the Chat | Agents switch only on true, and the "Add your
+  /// computer" entry only on false. Null shows neither, so a cold start never
+  /// flashes the entry and then the switch. It follows the pairing store's
+  /// change signal and the restore's reason; nothing polls.
+  final ValueNotifier<bool?> _hasComputer = ValueNotifier<bool?>(null);
+
+  /// The last local read of the pairing store, and whether one has finished.
+  bool _localPairing = false;
+  bool _localPairingKnown = false;
+  int _pairingReads = 0;
+
+  /// The pairing was here and is gone ("Remove this computer"). That is a
+  /// clear "no computer" at once, whatever the restore last said.
+  bool _pairingRemoved = false;
+
+  /// How long an unpaired device waits for a restore that can still work
+  /// (no session yet, a locked key, no network) before it offers the install
+  /// entry anyway. A restore that lands later still wins: the entry goes and
+  /// the switch comes.
+  static const Duration _kRestoreGrace = Duration(seconds: 10);
+  Timer? _restoreGraceTimer;
+  bool _restoreGraceOver = false;
+
   /// Rooms deleted while the socket was down. The host never heard the delete
   /// (a deleted room has no later "open" to reconcile it, unlike an edit), so it
   /// would keep an orphan. These flush the moment a transport arrives.
@@ -227,6 +254,15 @@ mixin AgentsShellHost on State<MessengerShell> {
     // the auth event, because "the key is not unlocked yet" is a not-yet, not a
     // no (see [_restoreCloudPairing]).
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreCloudPairing());
+    // Show or hide the Agents half with the pairing, not with a poll: the
+    // store signals every write and delete, the restore every new reason.
+    _pairingStore.changes.addListener(_onPairingStoreChanged);
+    _restoreReason.addListener(_resolveHasComputer);
+    _restoreGraceTimer = Timer(_kRestoreGrace, () {
+      _restoreGraceOver = true;
+      _resolveHasComputer();
+    });
+    unawaited(_readLocalPairing());
     // WS-7: a tapped "answer ready" toast (local or push) names a thread. The
     // router keeps the target until this shell takes it, so a tap that
     // launched the app cold is picked up right after the first frame.
@@ -448,11 +484,15 @@ mixin AgentsShellHost on State<MessengerShell> {
     _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
+    _pairingStore.changes.removeListener(_onPairingStoreChanged);
+    _restoreReason.removeListener(_resolveHasComputer);
+    _restoreGraceTimer?.cancel();
     _pairingRestore?.reason.removeListener(_onRestoreReason);
     unawaited(_pairingRestore?.dispose() ?? Future<void>.value());
     _controller.dispose();
     _linkReport.dispose();
     _restoreReason.dispose();
+    _hasComputer.dispose();
     if (_ownsControlSource) _controlSource.dispose();
     if (_ownsThemeController) _themeController.dispose();
   }
@@ -538,6 +578,114 @@ mixin AgentsShellHost on State<MessengerShell> {
     final restore = _pairingRestore;
     if (!mounted || restore == null) return;
     _restoreReason.value = restore.reason.value;
+  }
+
+  void _onPairingStoreChanged() => unawaited(_readLocalPairing());
+
+  /// Reads the pairing store once and folds the answer into [_hasComputer].
+  /// Only the newest read counts, so a slow read cannot undo a later write.
+  Future<void> _readLocalPairing() async {
+    final int read = ++_pairingReads;
+    bool paired;
+    try {
+      paired = await _pairingStore.loadPairing() != null;
+    } catch (_) {
+      // A locked keystore reads as "no pairing here yet"; the restore keeps
+      // trying and its reason decides what the shell offers meanwhile.
+      paired = false;
+    }
+    if (!mounted || read != _pairingReads) return;
+    _pairingRemoved = paired ? false : (_pairingRemoved || _localPairing);
+    _localPairingKnown = true;
+    _localPairing = paired;
+    _resolveHasComputer();
+  }
+
+  void _resolveHasComputer() {
+    if (!mounted) return;
+    final bool? next;
+    if (!_localPairingKnown) {
+      next = null;
+    } else if (_localPairing) {
+      next = true;
+    } else {
+      final AgentsPairingRestoreReason reason = _restoreReason.value;
+      // `paired` with no local record is the moment between a restore and
+      // its store write, or the restore's last word before a removal: not a
+      // final "no" by itself.
+      final bool restoreSaysNo =
+          reason != AgentsPairingRestoreReason.paired &&
+          !reason.mayStillRestore;
+      next = (_pairingRemoved || restoreSaysNo || _restoreGraceOver)
+          ? false
+          : null;
+    }
+    _hasComputer.value = next;
+  }
+
+  /// Runs the shared invite pairing for the install page.
+  ///
+  /// It runs on the live thread view's transport, exactly as a scan does, so
+  /// the view takes the new trust, the host coworker lands in the roster and
+  /// the encrypted mirror is written. Without a thread view (it is always
+  /// mounted in practice) it pairs on a transport of its own and then remounts
+  /// the view, which reconnects from the stored trust.
+  Future<void> _pairWithInvite(AgentsPairingInvite invite) async {
+    final AgentsThreadViewState? view = _threadViewState;
+    if (view != null) {
+      await view.pairWithInvite(invite);
+      return;
+    }
+    final AgentsRelayController controller =
+        await (widget.relayControllerBuilder ??
+            () => _buildRelayController(_pairingStore, widget.sessionSource))();
+    try {
+      await pairAgentsFromInvite(
+        controller: controller,
+        invite: invite,
+        sessionSource: widget.sessionSource,
+        store: _pairingStore,
+      );
+    } finally {
+      controller.dispose();
+    }
+    if (mounted) setState(() => _threadViewKey = GlobalKey());
+  }
+
+  /// The install page's wait: the app's own device identity claims the
+  /// command's channel on the relay until the computer has parked there.
+  Future<String?> _waitForInstallClaim(
+    AgentsPairingInvite invite, {
+    required DateTime deadline,
+    required AgentsClaimCancel cancel,
+  }) async {
+    final AgentsDeviceIdentity identity = await _pairingStore
+        .loadOrCreateIdentity();
+    return AgentsCloudRelaySocket.waitForPairingClaim(
+      base: invite.relayBase,
+      pairingChannel: invite.pairingChannel,
+      deviceId: identity.deviceId,
+      sessionSource: widget.sessionSource,
+      deadline: deadline,
+      cancel: cancel,
+    );
+  }
+
+  /// Opens the install page. Completes with true when a computer was linked.
+  Future<bool> _openInstallPage() async {
+    final bool linked = await AgentsInstallPage.show(
+      context,
+      ticketStore: AgentsInstallTicketStore(backend: _pairingStore.backend),
+      sessionSource: widget.sessionSource,
+      claimWaiter: widget.installClaimWaiter ?? _waitForInstallClaim,
+      pair: _pairWithInvite,
+    );
+    if (linked && mounted) {
+      // The store signalled the write already; this makes sure the answer is
+      // in before the caller moves to the Agents half.
+      await _readLocalPairing();
+    }
+    return linked && mounted;
   }
 
   /// The live thread view's state, for the status panel's actions.

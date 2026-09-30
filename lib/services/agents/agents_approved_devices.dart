@@ -95,6 +95,34 @@ class AgentsApprovedDevices {
     _approved[deviceId] = publicKey;
   }
 
+  /// Approves [deviceId] with [publicKey] after a fresh pairing ceremony, and
+  /// REPLACES a key already approved for that id. Returns the key it
+  /// replaced (null when there was none), so the caller can roll back.
+  ///
+  /// This is the deliberate key swap [approve] asks for, and it has exactly
+  /// one legitimate caller: the §15 ceremony, after the peer proved the
+  /// pairing code in its device MAC and signed the transcript with this key.
+  /// That proof IS the authorisation. A reinstalled computer keeps its device
+  /// id and gets a new key, and without this it could never be paired again.
+  /// Never call it from a reconnect: a reconnect must match the stored key.
+  SimplePublicKey? replaceAfterPairing(
+    String deviceId,
+    SimplePublicKey publicKey,
+  ) {
+    final SimplePublicKey? previous = _approved[deviceId];
+    if (previous != null && !_sameKey(previous, publicKey)) {
+      _approved.remove(deviceId);
+    }
+    try {
+      approve(deviceId, publicKey);
+    } catch (_) {
+      // An invalid key: leave the store exactly as it was.
+      if (previous != null) _approved[deviceId] = previous;
+      rethrow;
+    }
+    return previous;
+  }
+
   /// Removes [deviceId]. Returns true if it had been approved.
   ///
   /// This is kill switch #1: after this returns, every frame from that device

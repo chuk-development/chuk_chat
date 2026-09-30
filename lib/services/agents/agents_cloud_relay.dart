@@ -43,7 +43,10 @@
 ///                 target_device_id (an executor addresses nobody).
 ///
 /// Step 2 binds the scanned channel to the signed-in account; it lives in
-/// [_claimPairingChannel], which is the one place the claim's shape is written.
+/// [_sendClaim], which is the one place the claim's shape is written. The
+/// install flow, where the app mints the channel before the host exists,
+/// repeats step 2 until the host has parked
+/// ([AgentsCloudRelaySocket.waitForPairingClaim]).
 ///
 /// The same claim heals a paired host whose account session died. Such a host
 /// cannot open the relay with a token any more, so it parks on a *heal
@@ -77,10 +80,13 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:web_socket_channel/web_socket_channel.dart'
+    show WebSocketChannelException;
 
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_uri.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/utils/io_helper.dart' show IOException;
 
 /// The endpoint path on the API server.
 const String kAgentsRelayPath = '/v2/relay/ws';
@@ -239,6 +245,21 @@ class AgentsCloudRelayException implements Exception {
   String toString() => message;
 }
 
+/// Stops a waiting claim ([AgentsCloudRelaySocket.waitForPairingClaim]): the
+/// install page closed, or the user asked for a new command.
+class AgentsClaimCancel {
+  final Completer<void> _cancelled = Completer<void>();
+
+  bool get isCancelled => _cancelled.isCompleted;
+
+  /// Completes on [cancel]. Never fails.
+  Future<void> get whenCancelled => _cancelled.future;
+
+  void cancel() {
+    if (!_cancelled.isCompleted) _cancelled.complete();
+  }
+}
+
 /// Builds the app's production connector: cloud for `…/v2/relay/ws`, the plain
 /// local socket for everything else.
 ///
@@ -288,7 +309,76 @@ class AgentsCloudRelaySocket implements RelaySocket {
 
   /// Clears the learned targets. Tests only.
   @visibleForTesting
-  static void resetClaimCache() => _claimedTargets.clear();
+  static void resetClaimCache() {
+    _claimedTargets.clear();
+    for (final String key in List<String>.of(_handoffs.keys)) {
+      _dropHandoff(key);
+    }
+  }
+
+  /// Sockets that won a waiting claim and wait for the pairing to take them,
+  /// keyed like [_claimedTargets]. At most one per key.
+  static final Map<String, AgentsCloudRelaySocket> _handoffs =
+      <String, AgentsCloudRelaySocket>{};
+  static final Map<String, Timer> _handoffTimers = <String, Timer>{};
+
+  /// How long a won claim's socket waits for the pairing before it is closed.
+  static const Duration kClaimHandoffTimeout = Duration(seconds: 60);
+
+  /// Whether a won claim's socket waits for the pairing. Tests only.
+  @visibleForTesting
+  static bool hasHandoff({required Uri base, required String pairingChannel}) =>
+      _handoffs.containsKey('$base|$pairingChannel');
+
+  /// Keeps [socket] for the pairing of [key]. It is closed and dropped when
+  /// [cancel] fires (the page closed, a new command), when [timeout] passes
+  /// unused, or when the connection goes away on its own.
+  static void _parkHandoff(
+    String key,
+    AgentsCloudRelaySocket socket,
+    AgentsClaimCancel cancel,
+    Duration timeout,
+  ) {
+    _dropHandoff(key);
+    _handoffs[key] = socket;
+    _handoffTimers[key] = Timer(timeout, () => _dropHandoff(key, socket));
+    unawaited(cancel.whenCancelled.then((_) => _dropHandoff(key, socket)));
+    unawaited(socket._transportGone.future.then((_) {
+      if (identical(_handoffs[key], socket)) {
+        _handoffs.remove(key);
+        _handoffTimers.remove(key)?.cancel();
+      }
+    }));
+  }
+
+  /// Closes and forgets the parked socket of [key]. With [only], only when
+  /// that socket is still the one parked there: a socket the pairing has
+  /// taken belongs to the pairing and is never closed from here.
+  static void _dropHandoff(String key, [AgentsCloudRelaySocket? only]) {
+    final AgentsCloudRelaySocket? parked = _handoffs[key];
+    if (parked == null || (only != null && !identical(parked, only))) return;
+    _handoffs.remove(key);
+    _handoffTimers.remove(key)?.cancel();
+    unawaited(parked.close());
+  }
+
+  /// Takes the parked socket of [key], or null when there is none or it is
+  /// gone.
+  static AgentsCloudRelaySocket? _takeHandoff(String key) {
+    final AgentsCloudRelaySocket? parked = _handoffs.remove(key);
+    _handoffTimers.remove(key)?.cancel();
+    if (parked == null) return null;
+    if (parked._closed || parked._transportGone.isCompleted) return null;
+    return parked;
+  }
+
+  /// Records a claim as if the relay had answered it. Tests only.
+  @visibleForTesting
+  static void debugRememberClaim({
+    required Uri base,
+    required String pairingChannel,
+    required String deviceId,
+  }) => _claimedTargets['$base|$pairingChannel'] = deviceId;
 
   /// The host device id a claim on [pairingChannel] returned, or null when this
   /// process has not claimed it. The claim is the only source of that id, so
@@ -304,8 +394,24 @@ class AgentsCloudRelaySocket implements RelaySocket {
   final String _deviceId;
   final AgentsCloudRelayAddress address;
 
-  final StreamController<dynamic> _upward =
-      StreamController<dynamic>.broadcast();
+  /// What the relay client reads. Frames that arrive while nobody listens
+  /// yet are held in [_upBuffer] and handed to the first listener, in order.
+  /// That is the ordinary case at pairing: the host publishes its §15 commit
+  /// the moment the claim binds it, which is before the client has had the
+  /// socket back and subscribed. A broadcast stream would drop that frame,
+  /// and the ceremony would then wait for a commit that never comes again.
+  late final StreamController<dynamic> _upward =
+      StreamController<dynamic>.broadcast(onListen: _flushUp);
+  final List<dynamic> _upBuffer = <dynamic>[];
+
+  /// The transport ended while frames were still held for the first
+  /// listener: the stream closes right after they are handed over.
+  bool _closeUpAfterFlush = false;
+
+  /// How many frames are held for a listener at most. A pairing needs one or
+  /// two; this only bounds a socket that nobody ever reads.
+  static const int _upBufferLimit = 256;
+
   StreamSubscription<dynamic>? _sub;
 
   /// Where relayed payloads are addressed. Set before the first send.
@@ -317,6 +423,15 @@ class AgentsCloudRelaySocket implements RelaySocket {
   final List<String> _pending = <String>[];
   bool _ready = false;
   bool _closed = false;
+
+  /// Completes when the transport is gone (done, failed or closed). The
+  /// waiting claim races its pause against it, so a dropped socket is dialled
+  /// again at once instead of after the next claim times out.
+  final Completer<void> _transportGone = Completer<void>();
+
+  void _markGone() {
+    if (!_transportGone.isCompleted) _transportGone.complete();
+  }
 
   /// The first presence snapshot the relay sends after `auth_ok`: the device
   /// ids of this account's executors that are online. It is sent
@@ -354,6 +469,15 @@ class AgentsCloudRelaySocket implements RelaySocket {
     RelaySocketConnector inner = defaultRelaySocketConnector,
     Duration handshakeTimeout = const Duration(seconds: 20),
   }) async {
+    final channel = address.pairingChannel;
+    if (channel != null && channel.isNotEmpty) {
+      // The install flow's waiting claim already holds a signed-in socket
+      // that won this claim, and the host has already sent its §15 commit
+      // down it. Pairing must go on over THAT socket: the host opens one
+      // session per claim and ignores a second `join`.
+      final handed = _takeHandoff('${address.base}|$channel');
+      if (handed != null) return handed;
+    }
     final session = await _resolveSession(sessionSource);
     final transport = await inner(address.dialUri);
     final socket = AgentsCloudRelaySocket._(
@@ -389,7 +513,9 @@ class AgentsCloudRelaySocket implements RelaySocket {
     return session;
   }
 
-  Future<void> _handshake(AccountSession session, Duration timeout) async {
+  /// Listens on the transport and signs in as this account's controller.
+  /// Throws [AgentsCloudRelayException] on a refusal.
+  Future<void> _authenticate(AccountSession session, Duration timeout) async {
     _sub = _transport.incoming.listen(
       _onTransportFrame,
       onError: _onTransportError,
@@ -416,6 +542,10 @@ class AgentsCloudRelaySocket implements RelaySocket {
         code: 'auth_error',
       );
     }
+  }
+
+  Future<void> _handshake(AccountSession session, Duration timeout) async {
+    await _authenticate(session, timeout);
 
     final channel = address.pairingChannel;
     if (channel != null && channel.isNotEmpty) {
@@ -475,6 +605,31 @@ class AgentsCloudRelaySocket implements RelaySocket {
     String channel, {
     required Duration timeout,
   }) async {
+    final Map<String, dynamic> frame;
+    try {
+      frame = await _sendClaim(channel, timeout: timeout);
+    } on TimeoutException {
+      throw const AgentsCloudRelayException(
+        _staleCodeText,
+        code: 'claim_timeout',
+      );
+    }
+    if ('${frame['type']}' != 'cowork_pair_claimed') {
+      throw AgentsCloudRelayException(
+        _staleCodeText,
+        code: '${frame['code'] ?? frame['type']}',
+      );
+    }
+    return _deviceIdFrom(frame);
+  }
+
+  /// Sends one claim for [channel] and hands back the relay's answer frame,
+  /// whatever it says. The only place the claim frame is written. Throws
+  /// [TimeoutException] when nothing answers within [timeout].
+  Future<Map<String, dynamic>> _sendClaim(
+    String channel, {
+    required Duration timeout,
+  }) {
     final reqId = _uuid.v4().replaceAll('-', '');
     final answer = _expect((frame) {
       final type = '${frame['type']}';
@@ -490,24 +645,197 @@ class AgentsCloudRelaySocket implements RelaySocket {
         'req_id': reqId,
       }),
     );
-
-    final Map<String, dynamic> frame;
-    try {
-      frame = await answer;
-    } on TimeoutException {
-      throw const AgentsCloudRelayException(
-        _staleCodeText,
-        code: 'claim_timeout',
-      );
-    }
-    if ('${frame['type']}' != 'cowork_pair_claimed') {
-      throw AgentsCloudRelayException(
-        _staleCodeText,
-        code: '${frame['code'] ?? frame['type']}',
-      );
-    }
-    return _deviceIdFrom(frame);
+    return answer;
   }
+
+  // --- THE WAITING CLAIM ----------------------------------------------------
+  // The install flow. The app mints the pairing channel itself and shows the
+  // user a command; the host parks on that channel only when the command has
+  // run, which can be many minutes later. Until then every claim is answered
+  // `pairing_channel_unknown`. So this claims again on the same socket every
+  // [retryEvery] until the relay answers `cowork_pair_claimed`, the deadline
+  // passes, or the caller cancels.
+  //
+  // A socket that drops while it waits is dialled again with backoff, and the
+  // wait goes on. Claims on an authenticated controller socket are not rate
+  // limited by the relay, and a claim from the same account is idempotent.
+  //
+  // The learned host device id goes into the same claim cache the one-shot
+  // claim fills. The pairing that follows dials the same pairing address and
+  // finds it there, so it never claims a second time.
+
+  /// Pair error codes that mean "try again later", not "this cannot work".
+  static const Set<String> _claimRetryCodes = <String>{
+    'pairing_channel_unknown',
+    'claim_failed',
+  };
+
+  /// Waits until the host has parked on [pairingChannel], claims it for the
+  /// signed-in account, and returns the host's device id.
+  ///
+  /// Returns null when [cancel] fires first. Throws
+  /// [AgentsCloudRelayException] with code `claim_expired` at [deadline], and
+  /// for a refusal that no retry can change (no session, a refused sign-in, a
+  /// malformed channel). The channel is key material: it is never logged and
+  /// never part of an error.
+  static Future<String?> waitForPairingClaim({
+    required Uri base,
+    required String pairingChannel,
+    required String deviceId,
+    required AccountSessionSource sessionSource,
+    required DateTime deadline,
+    AgentsClaimCancel? cancel,
+    RelaySocketConnector inner = defaultRelaySocketConnector,
+    Duration retryEvery = const Duration(seconds: 3),
+    Duration handshakeTimeout = const Duration(seconds: 20),
+    List<Duration> reconnectBackoff = kClaimReconnectBackoff,
+    DateTime Function()? now,
+    Future<void> Function(Duration delay)? sleep,
+    Duration handoffTimeout = kClaimHandoffTimeout,
+  }) async {
+    final AgentsClaimCancel token = cancel ?? AgentsClaimCancel();
+    final DateTime Function() clock = now ?? DateTime.now;
+    final Future<void> Function(Duration) wait =
+        sleep ?? (Duration d) => Future<void>.delayed(d);
+    final String cacheKey = '$base|$pairingChannel';
+    final address = AgentsCloudRelayAddress(
+      base: base,
+      pairingChannel: pairingChannel,
+    );
+
+    /// Waits [delay], but never past the deadline, and wakes early on a
+    /// cancel or on [gone].
+    Future<void> pause(Duration delay, [Future<void>? gone]) async {
+      final Duration left = deadline.difference(clock());
+      final Duration step = left < delay ? left : delay;
+      if (step <= Duration.zero) return;
+      await Future.any(<Future<void>>[wait(step), token.whenCancelled, ?gone]);
+    }
+
+    bool over() => !clock().isBefore(deadline);
+
+    var failures = 0;
+    while (true) {
+      if (token.isCancelled) return null;
+      if (over()) throw _claimExpired;
+      final String? known = _claimedTargets[cacheKey];
+      if (known != null) return known;
+
+      AgentsCloudRelaySocket? socket;
+      var handedOff = false;
+      try {
+        final AccountSession session = await _resolveSession(sessionSource);
+        if (token.isCancelled) return null;
+        final RelaySocket transport = await inner(address.dialUri);
+        socket = AgentsCloudRelaySocket._(
+          transport: transport,
+          deviceId: deviceId,
+          address: address,
+        );
+        await socket._authenticate(session, handshakeTimeout);
+        failures = 0;
+        while (true) {
+          if (token.isCancelled) return null;
+          if (over()) throw _claimExpired;
+          if (socket._transportGone.isCompleted) break;
+          final Map<String, dynamic> frame;
+          try {
+            frame = await socket._sendClaim(
+              pairingChannel,
+              timeout: handshakeTimeout,
+            );
+          } on TimeoutException {
+            // A claim nobody answered leaves its waiter armed; clear it so a
+            // later answer is not taken for this one. Then dial again.
+            socket._awaiting = null;
+            socket._awaitingMatch = null;
+            break;
+          }
+          final String type = '${frame['type']}';
+          if (type == 'cowork_pair_claimed') {
+            final String? device = _deviceIdFrom(frame);
+            if (device == null) {
+              // A claim answer with no device cannot be used, and a retry
+              // gets the same answer.
+              throw const AgentsCloudRelayException(
+                _installClaimFailedText,
+                code: 'claim_no_device',
+              );
+            }
+            _claimedTargets[cacheKey] = device;
+            // Keep this socket for the pairing: the host's commit is already
+            // on its way down it (see [connect]).
+            socket._targetDeviceId = device;
+            socket._ready = true;
+            _parkHandoff(cacheKey, socket, token, handoffTimeout);
+            handedOff = true;
+            if (kDebugMode) {
+              debugPrint('[agents-cloud] install claim: computer linked');
+            }
+            return device;
+          }
+          final String code = '${frame['code'] ?? type}';
+          if (type == 'cowork_pair_error' && !_claimRetryCodes.contains(code)) {
+            throw AgentsCloudRelayException(
+              _installClaimFailedText,
+              code: code,
+            );
+          }
+          // Not parked yet (or a passing relay error): wait and claim again.
+          await pause(retryEvery, socket._transportGone.future);
+        }
+      } on AgentsCloudRelayException catch (error) {
+        // The relay closed under us: a network matter, so dial again. Every
+        // other refusal is final.
+        if (error.code != 'closed') rethrow;
+      } on TimeoutException {
+        // No answer to the dial or the sign-in: dial again.
+      } catch (error) {
+        // Only a transport failure is worth another dial (offline, DNS, TLS,
+        // a dropped connection). Anything else is a bug, and a bug must not
+        // hide behind "waiting" for half an hour: it ends the wait, and the
+        // page shows the failed state.
+        if (!_isTransportFailure(error)) rethrow;
+        if (kDebugMode) {
+          debugPrint(
+            '[agents-cloud] install claim: dial failed '
+            '(${error.runtimeType}), retrying',
+          );
+        }
+      } finally {
+        if (!handedOff) await socket?.close();
+      }
+      if (token.isCancelled) return null;
+      final Duration delay =
+          reconnectBackoff[failures.clamp(0, reconnectBackoff.length - 1)];
+      failures++;
+      await pause(delay);
+    }
+  }
+
+  /// True for a failure of the connection itself: an I/O error (socket,
+  /// HTTP upgrade, TLS) or the WebSocket layer's wrapper around one.
+  static bool _isTransportFailure(Object error) =>
+      error is IOException || error is WebSocketChannelException;
+
+  /// How long the waiting claim waits before it dials a dropped socket again.
+  static const List<Duration> kClaimReconnectBackoff = <Duration>[
+    Duration(seconds: 1),
+    Duration(seconds: 2),
+    Duration(seconds: 4),
+    Duration(seconds: 8),
+    Duration(seconds: 15),
+  ];
+
+  static const AgentsCloudRelayException _claimExpired =
+      AgentsCloudRelayException(
+        'This command has expired. Make a new command and run it again.',
+        code: 'claim_expired',
+      );
+
+  static const String _installClaimFailedText =
+      'Your computer could not be linked. Make a new command and run it '
+      'again.';
 
   /// Claims the heal channel when the target host is not online.
   ///
@@ -634,10 +962,12 @@ class AgentsCloudRelaySocket implements RelaySocket {
     if (_closed) return;
     _closed = true;
     _ready = false;
+    _markGone();
     _pending.clear();
     await _sub?.cancel();
     _sub = null;
     await _transport.close();
+    _upBuffer.clear();
     if (!_upward.isClosed) await _upward.close();
   }
 
@@ -671,7 +1001,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
         // Upward it must look exactly like the local relay: one JSON text
         // frame carrying the envelope.
         final text = payload is String ? payload : jsonEncode(payload);
-        if (!_upward.isClosed) _upward.add(text);
+        _emitUp(text);
       case 'cowork_error':
         // Routing failed (the host went offline mid-run, a bad target). There
         // is nothing to render and nothing the ceremony can do with it; the
@@ -716,6 +1046,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
   }
 
   void _onTransportError(Object error, StackTrace _) {
+    _markGone();
     final waiting = _awaiting;
     _awaiting = null;
     _awaitingMatch = null;
@@ -724,6 +1055,7 @@ class AgentsCloudRelaySocket implements RelaySocket {
   }
 
   void _onTransportDone() {
+    _markGone();
     final waiting = _awaiting;
     _awaiting = null;
     _awaitingMatch = null;
@@ -736,7 +1068,37 @@ class AgentsCloudRelaySocket implements RelaySocket {
       );
     }
     _ready = false;
-    if (!_upward.isClosed) unawaited(_upward.close());
+    if (_upward.isClosed) return;
+    if (!_upward.hasListener && _upBuffer.isNotEmpty) {
+      // Keep the held frames for the listener that is about to come.
+      _closeUpAfterFlush = true;
+      return;
+    }
+    unawaited(_upward.close());
+  }
+
+  /// Passes one frame up, or holds it until the first listener arrives.
+  void _emitUp(dynamic frame) {
+    if (_upward.isClosed) return;
+    if (_upward.hasListener) {
+      _upward.add(frame);
+      return;
+    }
+    if (_upBuffer.length < _upBufferLimit) _upBuffer.add(frame);
+  }
+
+  /// The first listener subscribed: hand it what arrived before it.
+  void _flushUp() {
+    if (_upward.isClosed) return;
+    final List<dynamic> held = List<dynamic>.of(_upBuffer);
+    _upBuffer.clear();
+    for (final dynamic frame in held) {
+      _upward.add(frame);
+    }
+    if (_closeUpAfterFlush) {
+      _closeUpAfterFlush = false;
+      unawaited(_upward.close());
+    }
   }
 
   Future<Map<String, dynamic>> _expect(
