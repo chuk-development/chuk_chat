@@ -240,192 +240,195 @@
   - L264 `final VoidCallback onTap`
   - L267 `Widget build(BuildContext context)`
 
-## lib/widgets/agents_thread_header.dart  (427 Z.)
-- L18 `enum AgentsThreadConnection`  — One button in the thread's floating row.
-  - L18 `live`
-  - L18 `connecting`
-  - L18 `down`
-- L20 `@immutable class AgentsThreadAction`
-  - L22 `const AgentsThreadAction({ required this.icon, required this.tooltip, required this.onPressed, this.selected = false, })`
-  - L30 `final bool selected`  — A toggle that is on (the details pane): its glyph takes the accent.
-  - L32 `final IconData icon`
-  - L37 `final String tooltip`  — Shown on hover, read aloud by a screen reader, and used as the label when
-  - L39 `final VoidCallback onPressed`
-- L52 `class AgentsThreadHeader extends StatelessWidget`  — The actions of a desktop thread, as chuk_chat draws the buttons over its
-  - L53 `const AgentsThreadHeader({ super.key, this.automationLabel, this.automationPaused = false, this.automationExpanded = false, this.onToggleAutomations, this.actions = const <AgentsThreadAction>[], this.menuActions = const <AgentsThreadAction>[], this.showScreenTarget = false, this.onOpenScreen, this.connection = AgentsThreadConnection.live, this.onReconnect, })`
-  - L70 `final AgentsThreadConnection connection`  — The relay. A live socket, and one on its way back, are not news: only a
-  - L73 `final VoidCallback? onReconnect`  — Tap on the offline chip. Null keeps it a plain "Offline".
-  - L77 `final String? automationLabel`  — The running automation as one short line ("Wahlradar · Active", or
-  - L80 `final bool automationPaused`  — Colours the chip's dot: a paused automation is not a live one.
-  - L84 `final bool automationExpanded`  — Whether the automation cards under the row are open. Drives the chevron
-  - L87 `final VoidCallback? onToggleAutomations`  — Tap on the chip. Null renders the chip flat (nothing to open).
-  - L89 `final List<AgentsThreadAction> actions`
-  - L93 `final List<AgentsThreadAction> menuActions`  — Actions that are not worth a button of their own. Anything from
-  - L97 `final bool showScreenTarget`  — Whether the coworker's screen target is shown: only while a thread is
-  - L101 `final VoidCallback? onOpenScreen`  — Opens the live view of the coworker's screen (its sandbox VNC). Null keeps
-  - L105 `static const double slot = 40`  — One button's footprint: a 20 px glyph with 10 px of ink around it, the
-  - L108 `static const double _automationReserve = 160`  — Width the automation chip keeps for itself before buttons fold.
-  - L111 `Widget build(BuildContext context)`
-  - L177 `Widget _screenButton(BuildContext context)`  — The coworker's screen. Parked while it has none open: a quieter glyph
-  - L195 `Widget _menuButton(BuildContext context, List<AgentsThreadAction> folded)`  — What no longer fits, in chuk's popup menu under the button — folded,
-- L251 `class ChromeIconButton extends StatelessWidget`  — chuk's icon button over the chat: a 20 px glyph in the icon colour, round
-  - L252 `const ChromeIconButton({ super.key, required this.icon, required this.tooltip, required this.onPressed, this.selected = false, this.parked = false, this.semanticsId, })`
-  - L262 `final IconData icon`
-  - L263 `final String tooltip`
-  - L264 `final VoidCallback? onPressed`
-  - L267 `final bool selected`  — A toggle that is on: the glyph takes the accent.
-  - L271 `final bool parked`  — Not ready: the glyph is quieter, and a tap still reaches [onPressed],
-  - L273 `final String? semanticsId`
-  - L276 `Widget build(BuildContext context)`
-- L312 `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
-  - L313 `const _OfflineChip({super.key, this.onReconnect})`
-  - L315 `final VoidCallback? onReconnect`
-  - L318 `Widget build(BuildContext context)`
-- L368 `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
-  - L369 `const _AutomationChip({ required this.label, required this.paused, required this.expanded, this.onTap, })`
-  - L376 `final String label`
-  - L377 `final bool paused`
-  - L378 `final bool expanded`
-  - L379 `final VoidCallback? onTap`
-  - L382 `Widget build(BuildContext context)`
+## lib/widgets/agents_thread_header.dart  (444 Z.)
+- L20 `enum AgentsThreadConnection`  — One button in the thread's floating row.
+  - L20 `live`
+  - L20 `connecting`
+  - L20 `down`
+- L22 `@immutable class AgentsThreadAction`
+  - L24 `const AgentsThreadAction({ required this.icon, required this.tooltip, required this.onPressed, this.selected = false, })`
+  - L32 `final bool selected`  — A toggle that is on (the details pane): its glyph takes the accent.
+  - L34 `final IconData icon`
+  - L39 `final String tooltip`  — Shown on hover, read aloud by a screen reader, and used as the label when
+  - L41 `final VoidCallback onPressed`
+- L54 `class AgentsThreadHeader extends StatelessWidget`  — The actions of a desktop thread, as chuk_chat draws the buttons over its
+  - L55 `const AgentsThreadHeader({ super.key, this.automationLabel, this.automationPaused = false, this.automationExpanded = false, this.onToggleAutomations, this.actions = const <AgentsThreadAction>[], this.menuActions = const <AgentsThreadAction>[], this.showScreenTarget = false, this.onOpenScreen, this.connection = AgentsThreadConnection.live, this.onReconnect, this.agentName, })`
+  - L73 `final String? agentName`  — The coworker's display name, for the voice call's greeting. Null lets
+  - L78 `final AgentsThreadConnection connection`  — The relay. A live socket, and one on its way back, are not news: only a
+  - L81 `final VoidCallback? onReconnect`  — Tap on the offline chip. Null keeps it a plain "Offline".
+  - L85 `final String? automationLabel`  — The running automation as one short line ("Wahlradar · Active", or
+  - L88 `final bool automationPaused`  — Colours the chip's dot: a paused automation is not a live one.
+  - L92 `final bool automationExpanded`  — Whether the automation cards under the row are open. Drives the chevron
+  - L95 `final VoidCallback? onToggleAutomations`  — Tap on the chip. Null renders the chip flat (nothing to open).
+  - L97 `final List<AgentsThreadAction> actions`
+  - L101 `final List<AgentsThreadAction> menuActions`  — Actions that are not worth a button of their own. Anything from
+  - L105 `final bool showScreenTarget`  — Whether the coworker's screen target is shown: only while a thread is
+  - L109 `final VoidCallback? onOpenScreen`  — Opens the live view of the coworker's screen (its sandbox VNC). Null keeps
+  - L113 `static const double slot = 40`  — One button's footprint: a 20 px glyph with 10 px of ink around it, the
+  - L116 `static const double _automationReserve = 160`  — Width the automation chip keeps for itself before buttons fold.
+  - L119 `Widget build(BuildContext context)`
+  - L194 `Widget _screenButton(BuildContext context)`  — The coworker's screen. Parked while it has none open: a quieter glyph
+  - L212 `Widget _menuButton(BuildContext context, List<AgentsThreadAction> folded)`  — What no longer fits, in chuk's popup menu under the button — folded,
+- L268 `class ChromeIconButton extends StatelessWidget`  — chuk's icon button over the chat: a 20 px glyph in the icon colour, round
+  - L269 `const ChromeIconButton({ super.key, required this.icon, required this.tooltip, required this.onPressed, this.selected = false, this.parked = false, this.semanticsId, })`
+  - L279 `final IconData icon`
+  - L280 `final String tooltip`
+  - L281 `final VoidCallback? onPressed`
+  - L284 `final bool selected`  — A toggle that is on: the glyph takes the accent.
+  - L288 `final bool parked`  — Not ready: the glyph is quieter, and a tap still reaches [onPressed],
+  - L290 `final String? semanticsId`
+  - L293 `Widget build(BuildContext context)`
+- L329 `class _OfflineChip extends StatelessWidget`  — The relay is down: a quiet dot and "Offline", with the way back when there
+  - L330 `const _OfflineChip({super.key, this.onReconnect})`
+  - L332 `final VoidCallback? onReconnect`
+  - L335 `Widget build(BuildContext context)`
+- L385 `class _AutomationChip extends StatelessWidget`  — The running automation, as small as it can be and still be read: a state
+  - L386 `const _AutomationChip({ required this.label, required this.paused, required this.expanded, this.onTap, })`
+  - L393 `final String label`
+  - L394 `final bool paused`
+  - L395 `final bool expanded`
+  - L396 `final VoidCallback? onTap`
+  - L399 `Widget build(BuildContext context)`
 
-## lib/widgets/agents_thread_view.dart  (2277 Z.)
-- L48 `kAgentsThreadHeaderInset = kTopInitialSpacing + AgentsThreadHeader.slot`  — Room a desktop thread keeps above its first message for the header that
-- L76 `kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST')`  — The Agents chat surface: the imported chuk_chat chat screen, wired to the
-- L78 `class AgentsThreadView extends StatefulWidget`
-  - L79 `const AgentsThreadView({ super.key, required this.controllerBuilder, required this.sessionSource, this.pairingStore, this.devHostUrl = kAgentsDevHostUrl, this.threadKey = 'default', this.fileSaver = const DownloadsAgentFileSaver(), this.onRunStateChanged, this.onActivity, this.onPaired, this.onController, this.onOpenModelScreen, this.shellConfig, this.title, this.onOpenAgentScreen, this.actions = const <AgentsThreadAction>[], this.menuActions = const <AgentsThreadAction>[], this.topInset = 0, this.phoneLayout = false, this.linkReport, this.emptyState, })`
-  - L106 `final Future<AgentsRelayController> Function() controllerBuilder`  — Builds the transport controller. Async because a real client generates a
-  - L109 `final AccountSessionSource sessionSource`  — Supplies the account session that gets provisioned once paired.
-  - L115 `final void Function(AgentsRelayController controller)? onController`  — Called with the live transport controller whenever it is built or rebuilt,
-  - L121 `final AgentsPairingStore? pairingStore`  — Persistent trust store. When provided and a pairing is stored, the view
-  - L128 `final String devHostUrl`  — A developer's escape hatch, never the product path: with a non-empty
-  - L132 `final String threadKey`  — The executor-side session this view talks to (§4: many threads per agent),
-  - L139 `final AgentFileSaver fileSaver`  — Where a file card writes when the user saves.
-  - L143 `final void Function(String threadKey, bool running)? onRunStateChanged`  — Reports whether a run is in flight, and for which thread, so the roster can
-  - L146 `final void Function(String threadKey, DateTime when)? onActivity`  — Reports that something happened in [threadKey], for "last active".
-  - L150 `final void Function(String peerDeviceId)? onPaired`  — Reports the host device id the moment the transport is paired, so the
-  - L154 `final VoidCallback? onOpenModelScreen`  — Opens the full model catalogue — the composer's "More models" row calls
-  - L159 `final AppShellConfig? shellConfig`  — chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
-  - L163 `final String? title`  — The coworker this thread belongs to, handed to the desktop chat screen.
-  - L166 `final VoidCallback? onOpenAgentScreen`  — Opens the live view of the coworker's screen. Null parks the target.
-  - L172 `final List<AgentsThreadAction> actions`  — Actions the SHELL owns but this thread's floating row shows on a desktop
-  - L175 `final List<AgentsThreadAction> menuActions`  — The floating row's "…" menu on a desktop window.
-  - L179 `final double topInset`  — On a phone: the height of the floating chrome over the chat. The chat
-  - L184 `final bool phoneLayout`  — Force chuk's phone screen. The mobile shell sets it below the phone
-  - L190 `final ValueNotifier<AgentsLinkReport>? linkReport`  — Where this view publishes what it knows about the link: not read yet, no
-  - L196 `final Widget? emptyState`  — Shown in place of the chat while no thread is selected ([threadKey] is
-  - L199 `State<AgentsThreadView> createState()`
-- L202 `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
-  - L204 `bool _wasBackgrounded = false`
-  - L205 `bool _rebuildingForResume = false`
-  - L206 `late final TextEditingController _hostController`
-  - L207 `final TextEditingController _codeController = TextEditingController()`
-  - L209 `AgentsRelayController? _controller`
-  - L210 `StreamSubscription<AgentsRelayInbound>? _inboundSub`
-  - L212 `final AgentsRelayLink _link = AgentsRelayLink.instance`
-  - L213 `final AgentsRunLedger _ledger = AgentsRunLedger.instance`
-  - L214 `final AgentsReplayLoader _loader = AgentsReplayLoader.instance`
-  - L226 `bool _verbose = false`  — Mirrors [VerboseService.instance]: the single source of truth for the two
-  - L231 `int _revision = 0`  — The replay revision this view has painted for [AgentsThreadView.threadKey].
-  - L238 `int _cacheRevision = 0`  — Extra turns of the same key, for rows that arrive from the CACHE rather
-  - L248 `int _screenGeneration = 0`  — The chat screen's identity. It moves ONLY when the screen has to read
-  - L251 `StreamSubscription<String?>? _storeSub`  — Watches the chat store for the late arrival described above.
-  - L257 `bool _mountedWithRows = false`  — Whether this thread already had rows in memory when the screen mounted.
-  - L262 `int _revisionAtMount = 0`  — The loader revision the screen was mounted at for this thread. A thread
-  - L266 `AgentsRelayApprovalRequest? _approval`  — A here.now publish waiting on the user. The run is BLOCKED on the executor
-  - L267 `bool? _approvalDecision`
-  - L272 `final AutomationsSource _automations = AutomationsSource.instance`  — This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
-  - L273 `bool _automationsCollapsed = true`
-  - L279 `AgentsRelaySecretRequest? _secretRequest`  — A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
-  - L280 `final Map<String, TextEditingController> _secretFields = <String, TextEditingController>{}`
-  - L282 `bool _secretsBusy = false`
-  - L285 `final Set<String> _ackedRuns = <String>{}`  — Run ids already acknowledged, so a rebuild cannot ack the same run twice.
-  - L287 `String? _localError`
-  - L288 `bool _busy = false`
-  - L301 `bool _cacheReady = false`  — Whether the local chat cache has been read once.
-  - L302 `final _startupState = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.connecting), )`
-  - L308 `AgentsStoredPairing? _storedPairing`  — The persisted trust, loaded once at startup. Non-null means "already
-  - L313 `bool _pairingLoaded = false`  — Whether the stored pairing has been read. Before that the link is
-  - L317 `AgentsLinkReport? _publishedLink`  — The last report handed to [AgentsThreadView.linkReport], and whether a
-  - L318 `bool _linkWriteQueued = false`
-  - L321 `bool _manuallyDisconnected = false`  — The user tapped Disconnect: stay down until they act, no auto-reconnect.
-  - L323 `Timer? _autoReconnectTimer`
-  - L324 `int _reconnectAttempts = 0`
-  - L329 `AgentsRelayPhase? _lastPhase`  — The transport phase this view last saw. It is how "we just became paired"
-  - L338 `int _failedReconnects = 0`  — How many reconnects have been tried since the link was last up.
-  - L348 `Timer? _watchdogTimer`  — A safety net that periodically forces a reconnect when the app is down but
-  - L351 `static const Duration _baseBackoff = Duration(seconds: 1)`  — Capped exponential backoff for auto-reconnect after an unexpected drop.
-  - L352 `static const Duration _maxBackoff = Duration(seconds: 30)`
-  - L355 `void initState()`
-  - L405 `void didUpdateWidget(AgentsThreadView oldWidget)`
-  - L434 `Future<void> _readSwitchedThread(String key)`  — A switch to a thread with no rows in memory reads its local copy, the
-  - L447 `void dispose()`
-  - L479 `void didChangeAppLifecycleState(AppLifecycleState state)`
-  - L505 `Future<void> _bootstrap()`  — Load any stored pairing first, then build the controller. If a pairing is
-  - L551 `Future<bool> _tryBuildController()`  — [_buildController], with a failure turned into state the user can see
-  - L575 `Future<void> _warmCache()`  — Reads the local chat cache once and then lets the chat area mount. A
-  - L606 `bool get _threadHasRows`  — Whether the store holds a transcript for this thread right now.
-  - L614 `Future<void> _buildController()`
-  - L628 `Future<void> _rebuildController()`  — Tears down the live controller and spins up a fresh one, without touching
-  - L652 `void _onStateChanged()`  — Watches the transport state for an unexpected drop after being paired, and
-  - L710 `Future<int> _flushOutbox(AgentsRelayController controller)`  — Sends what the user typed while the host was unreachable.
-  - L761 `Future<void> _resendUnacknowledged(AgentsRelayController controller)`  — Sends every task of this thread the host has not acknowledged again.
-  - L792 `void _onTaskUnacknowledged(String sessionKey)`  — The ledger's pre-run window expired: this task has no `task_ack`, no
-  - L800 `void _requestReplay()`  — Asks the host to re-stream this thread from the replay cursor.
-  - L819 `void _watchdogTick()`  — Force a reconnect if we are paired-but-down and nothing is already trying.
-  - L841 `void _scheduleAutoReconnect()`
-  - L874 `Future<void> _reconnect()`  — Reconnects the current controller to the stored host with no code, then
-  - L905 `Future<void> reconnect({bool force = false})`  — Retry stored trust without exposing transport controls in the chat.
-  - L934 `Future<void> openPairing()`  — Opens the "Add your computer" flow (the QR scan). Public so the shell's
-  - L942 `Future<void> _connect()`
-  - L973 `Future<void> _persistTrust( AgentsRelayController controller, { Uri? hostUrl, })`
-  - L1001 `Future<void> _pairFromInvite(AgentsPairingInvite invite)`  — The QR path, and the whole of what a phone ever does to get linked: open
-  - L1047 `static String _pairingFailureText(Object error)`  — One plain sentence for whatever went wrong. The user is not shown a code,
-  - L1054 `static String _connectionFailureText(Object error)`  — The same for a reconnect of a computer that is already paired.
-  - L1059 `static const String _kComputerAway = 'Your computer is not reachable right now. Make sure it is on and ' 'Agents is running there.'`
-  - L1066 `String? _connectionBanner(AgentsRelayState state)`  — What the connect bar says about the transport. The relay's own detail
-  - L1076 `Future<void> _openPairingScreen()`
-  - L1087 `Future<void> _confirmForget()`  — Deletes the stored trust — the next connection needs a fresh code again —
-  - L1112 `Future<void> _forget()`
-  - L1134 `Future<void> _loadVerbose()`  — Load the persisted verbose flag once at startup. Never throws: a failure
-  - L1139 `void _onVerboseChanged()`
-  - L1143 `void _onThemeChanged()`
-  - L1149 `void _onInbound(AgentsRelayInbound event)`
-  - L1298 `void _clearSecretRequest()`
-  - L1311 `Future<void> _submitSecretRequest()`  — Save what the user typed and answer the host. An empty field for a name
-  - L1337 `Future<void> _skipSecretRequest()`  — The user does not have (or want to give) the keys: tell the host so the
-  - L1353 `void _decideApproval(bool approved)`  — Answer a here.now publish approval. Idempotent: once a decision is sent
-  - L1374 `Future<void> copyFullChat()`  — Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
-  - L1386 `bool _running = false`  — The ledger is the run's truth: it knows a run is in flight whether this
-  - L1388 `void _onLedgerChanged()`
-  - L1409 `void _onRunClosed()`  — A run just ended and left the thread with nothing to show. Never silence:
-  - L1438 `void _releaseStaleComposer(String key)`  — The composer goes back to the send target when the run is over.
-  - L1451 `void _onRunSilent(String sessionKey)`  — The run for [sessionKey] has produced nothing for the ledger's ceiling.
-  - L1463 `void _reconcileOnOpen()`  — The thread is being opened. A run the ledger still draws as live is
-  - L1474 `void _onLoaderChanged()`
-  - L1507 `void _onChatStoreChanged(String? changedId)`  — The chat cache changed. Remount the screen ONLY when this thread's rows
-  - L1526 `bool get _screenIsEmpty`  — Whether the screen on the tree is showing an empty transcript. The
-  - L1534 `void _syncRevision()`  — Adopt a new replay revision — but never while a run is in flight: the
-  - L1547 `Widget build(BuildContext context)`
-  - L1624 `Widget _buildHeader( BuildContext context, AgentsRelayState state, List<AgentsAutomation>? automations, )`  — The floating row over a desktop thread: the relay while it is down, the
-  - L1674 `String _automationLabel(List<AgentsAutomation> automations)`  — One automation reads as itself; several read as a count, because the
-  - L1680 `void _openDocuments(BuildContext context)`
-  - L1699 `Widget _buildChat(BuildContext context, {double desktopTopInset = 0})`  — The imported chuk_chat renderer. Everything Agents-specific about it is in
-  - L1769 `void _noopToggleSidebar()`  — The sidebar is the shell's (the Agents roster), not the chat screen's.
-  - L1773 `void _onChatIdChanged(String? id)`  — Agents's chat id is the thread key and never changes under the screen, so
-  - L1779 `bool _useDesktopChat(BuildContext context)`  — Desktop chrome for desktop, web and tablets; the phone layout only for a
-  - L1808 `bool get _showsEmptyState`  — The connection is not something the user manages. Once paired the socket
-  - L1814 `AgentsLinkReport _linkReportFor(AgentsRelayState state)`  — What the link is, in the words the shell's status panel uses. The
-  - L1845 `void _publishLink(AgentsLinkReport report)`  — Hands [report] to the shell after this frame, once per change.
-  - L1859 `bool get _showConnectBar`
-  - L1869 `Widget _buildSecretRequestBar( BuildContext context, AgentsRelaySecretRequest request, )`  — One field per name the model asked for. A name already set shows a
-  - L1968 `void _onAutomationsChanged()`
-  - L1975 `Widget _buildAutomationCards( BuildContext context, List<AgentsAutomation> automations, )`  — The active and paused automations of this thread, with Pause / Resume /
-  - L2005 `Widget _buildApprovalBar( BuildContext context, AgentsRelayApprovalRequest request, )`  — A here.now publish the user must answer before the blocked run continues.
-  - L2091 `static String _humanBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
-  - L2105 `Widget _buildConnectBar(BuildContext context, AgentsRelayState state)`
-  - L2170 `Widget _buildDevConnectRow()`
-  - L2220 `Widget _buildReconnectBar(BuildContext context, String? banner)`  — The bottom bar shown when the app is paired but not currently connected:
+## lib/widgets/agents_thread_view.dart  (2296 Z.)
+- L49 `kAgentsThreadHeaderInset = kTopInitialSpacing + AgentsThreadHeader.slot`  — Room a desktop thread keeps above its first message for the header that
+- L77 `kAgentsDevHostUrl = String.fromEnvironment('AGENTS_DEV_HOST')`  — The Agents chat surface: the imported chuk_chat chat screen, wired to the
+- L79 `class AgentsThreadView extends StatefulWidget`
+  - L80 `const AgentsThreadView({ super.key, required this.controllerBuilder, required this.sessionSource, this.pairingStore, this.devHostUrl = kAgentsDevHostUrl, this.threadKey = 'default', this.fileSaver = const DownloadsAgentFileSaver(), this.onRunStateChanged, this.onActivity, this.onPaired, this.onController, this.onOpenModelScreen, this.shellConfig, this.title, this.onOpenAgentScreen, this.actions = const <AgentsThreadAction>[], this.menuActions = const <AgentsThreadAction>[], this.topInset = 0, this.phoneLayout = false, this.linkReport, this.emptyState, })`
+  - L107 `final Future<AgentsRelayController> Function() controllerBuilder`  — Builds the transport controller. Async because a real client generates a
+  - L110 `final AccountSessionSource sessionSource`  — Supplies the account session that gets provisioned once paired.
+  - L116 `final void Function(AgentsRelayController controller)? onController`  — Called with the live transport controller whenever it is built or rebuilt,
+  - L122 `final AgentsPairingStore? pairingStore`  — Persistent trust store. When provided and a pairing is stored, the view
+  - L129 `final String devHostUrl`  — A developer's escape hatch, never the product path: with a non-empty
+  - L133 `final String threadKey`  — The executor-side session this view talks to (§4: many threads per agent),
+  - L140 `final AgentFileSaver fileSaver`  — Where a file card writes when the user saves.
+  - L144 `final void Function(String threadKey, bool running)? onRunStateChanged`  — Reports whether a run is in flight, and for which thread, so the roster can
+  - L147 `final void Function(String threadKey, DateTime when)? onActivity`  — Reports that something happened in [threadKey], for "last active".
+  - L151 `final void Function(String peerDeviceId)? onPaired`  — Reports the host device id the moment the transport is paired, so the
+  - L155 `final VoidCallback? onOpenModelScreen`  — Opens the full model catalogue — the composer's "More models" row calls
+  - L160 `final AppShellConfig? shellConfig`  — chuk_chat's shell config, handed down from the shell (bead cowork-8y2).
+  - L164 `final String? title`  — The coworker this thread belongs to, handed to the desktop chat screen.
+  - L167 `final VoidCallback? onOpenAgentScreen`  — Opens the live view of the coworker's screen. Null parks the target.
+  - L173 `final List<AgentsThreadAction> actions`  — Actions the SHELL owns but this thread's floating row shows on a desktop
+  - L176 `final List<AgentsThreadAction> menuActions`  — The floating row's "…" menu on a desktop window.
+  - L180 `final double topInset`  — On a phone: the height of the floating chrome over the chat. The chat
+  - L185 `final bool phoneLayout`  — Force chuk's phone screen. The mobile shell sets it below the phone
+  - L191 `final ValueNotifier<AgentsLinkReport>? linkReport`  — Where this view publishes what it knows about the link: not read yet, no
+  - L197 `final Widget? emptyState`  — Shown in place of the chat while no thread is selected ([threadKey] is
+  - L200 `State<AgentsThreadView> createState()`
+- L203 `class AgentsThreadViewState extends State<AgentsThreadView> with WidgetsBindingObserver`
+  - L205 `bool _wasBackgrounded = false`
+  - L206 `bool _rebuildingForResume = false`
+  - L207 `late final TextEditingController _hostController`
+  - L208 `final TextEditingController _codeController = TextEditingController()`
+  - L210 `AgentsRelayController? _controller`
+  - L211 `StreamSubscription<AgentsRelayInbound>? _inboundSub`
+  - L213 `final AgentsRelayLink _link = AgentsRelayLink.instance`
+  - L214 `final AgentsRunLedger _ledger = AgentsRunLedger.instance`
+  - L215 `final AgentsReplayLoader _loader = AgentsReplayLoader.instance`
+  - L227 `bool _verbose = false`  — Mirrors [VerboseService.instance]: the single source of truth for the two
+  - L232 `int _revision = 0`  — The replay revision this view has painted for [AgentsThreadView.threadKey].
+  - L239 `int _cacheRevision = 0`  — Extra turns of the same key, for rows that arrive from the CACHE rather
+  - L249 `int _screenGeneration = 0`  — The chat screen's identity. It moves ONLY when the screen has to read
+  - L252 `StreamSubscription<String?>? _storeSub`  — Watches the chat store for the late arrival described above.
+  - L258 `bool _mountedWithRows = false`  — Whether this thread already had rows in memory when the screen mounted.
+  - L263 `int _revisionAtMount = 0`  — The loader revision the screen was mounted at for this thread. A thread
+  - L267 `AgentsRelayApprovalRequest? _approval`  — A here.now publish waiting on the user. The run is BLOCKED on the executor
+  - L268 `bool? _approvalDecision`
+  - L273 `final AutomationsSource _automations = AutomationsSource.instance`  — This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
+  - L274 `bool _automationsCollapsed = true`
+  - L280 `AgentsRelaySecretRequest? _secretRequest`  — A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
+  - L281 `final Map<String, TextEditingController> _secretFields = <String, TextEditingController>{}`
+  - L283 `bool _secretsBusy = false`
+  - L286 `final Set<String> _ackedRuns = <String>{}`  — Run ids already acknowledged, so a rebuild cannot ack the same run twice.
+  - L288 `String? _localError`
+  - L289 `bool _busy = false`
+  - L302 `bool _cacheReady = false`  — Whether the local chat cache has been read once.
+  - L303 `final _startupState = ValueNotifier<AgentsRelayState>( const AgentsRelayState(phase: AgentsRelayPhase.connecting), )`
+  - L309 `AgentsStoredPairing? _storedPairing`  — The persisted trust, loaded once at startup. Non-null means "already
+  - L314 `bool _pairingLoaded = false`  — Whether the stored pairing has been read. Before that the link is
+  - L318 `AgentsLinkReport? _publishedLink`  — The last report handed to [AgentsThreadView.linkReport], and whether a
+  - L319 `bool _linkWriteQueued = false`
+  - L322 `bool _manuallyDisconnected = false`  — The user tapped Disconnect: stay down until they act, no auto-reconnect.
+  - L324 `Timer? _autoReconnectTimer`
+  - L325 `int _reconnectAttempts = 0`
+  - L330 `AgentsRelayPhase? _lastPhase`  — The transport phase this view last saw. It is how "we just became paired"
+  - L339 `int _failedReconnects = 0`  — How many reconnects have been tried since the link was last up.
+  - L349 `Timer? _watchdogTimer`  — A safety net that periodically forces a reconnect when the app is down but
+  - L352 `static const Duration _baseBackoff = Duration(seconds: 1)`  — Capped exponential backoff for auto-reconnect after an unexpected drop.
+  - L353 `static const Duration _maxBackoff = Duration(seconds: 30)`
+  - L356 `void initState()`
+  - L406 `void didUpdateWidget(AgentsThreadView oldWidget)`
+  - L435 `Future<void> _readSwitchedThread(String key)`  — A switch to a thread with no rows in memory reads its local copy, the
+  - L448 `void dispose()`
+  - L480 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L506 `Future<void> _bootstrap()`  — Load any stored pairing first, then build the controller. If a pairing is
+  - L552 `Future<bool> _tryBuildController()`  — [_buildController], with a failure turned into state the user can see
+  - L576 `Future<void> _warmCache()`  — Reads the local chat cache once and then lets the chat area mount. A
+  - L607 `bool get _threadHasRows`  — Whether the store holds a transcript for this thread right now.
+  - L615 `Future<void> _buildController()`
+  - L629 `Future<void> _rebuildController()`  — Tears down the live controller and spins up a fresh one, without touching
+  - L653 `void _onStateChanged()`  — Watches the transport state for an unexpected drop after being paired, and
+  - L711 `Future<int> _flushOutbox(AgentsRelayController controller)`  — Sends what the user typed while the host was unreachable.
+  - L762 `Future<void> _resendUnacknowledged(AgentsRelayController controller)`  — Sends every task of this thread the host has not acknowledged again.
+  - L793 `void _onTaskUnacknowledged(String sessionKey)`  — The ledger's pre-run window expired: this task has no `task_ack`, no
+  - L801 `void _requestReplay()`  — Asks the host to re-stream this thread from the replay cursor.
+  - L820 `void _watchdogTick()`  — Force a reconnect if we are paired-but-down and nothing is already trying.
+  - L842 `void _scheduleAutoReconnect()`
+  - L875 `Future<void> _reconnect()`  — Reconnects the current controller to the stored host with no code, then
+  - L906 `Future<void> reconnect({bool force = false})`  — Retry stored trust without exposing transport controls in the chat.
+  - L935 `Future<void> openPairing()`  — Opens the "Add your computer" flow (the QR scan). Public so the shell's
+  - L943 `Future<void> _connect()`
+  - L974 `Future<void> _persistTrust( AgentsRelayController controller, { Uri? hostUrl, })`
+  - L989 `Future<void> _pairFromInvite(AgentsPairingInvite invite)`  — The QR path, and the whole of what a phone ever does to get linked: open
+  - L1014 `Future<void> pairWithInvite(AgentsPairingInvite invite)`  — The install page's way in: the same pairing as [_pairFromInvite], on this
+  - L1051 `Future<void> _runInvitePairing( AgentsRelayController controller, AgentsPairingInvite invite, )`  — The shared sequence ([pairAgentsFromInvite]) plus this view's own record
+  - L1066 `static String _pairingFailureText(Object error)`  — One plain sentence for whatever went wrong. The user is not shown a code,
+  - L1073 `static String _connectionFailureText(Object error)`  — The same for a reconnect of a computer that is already paired.
+  - L1078 `static const String _kComputerAway = 'Your computer is not reachable right now. Make sure it is on and ' 'Agents is running there.'`
+  - L1085 `String? _connectionBanner(AgentsRelayState state)`  — What the connect bar says about the transport. The relay's own detail
+  - L1095 `Future<void> _openPairingScreen()`
+  - L1106 `Future<void> _confirmForget()`  — Deletes the stored trust — the next connection needs a fresh code again —
+  - L1131 `Future<void> _forget()`
+  - L1153 `Future<void> _loadVerbose()`  — Load the persisted verbose flag once at startup. Never throws: a failure
+  - L1158 `void _onVerboseChanged()`
+  - L1162 `void _onThemeChanged()`
+  - L1168 `void _onInbound(AgentsRelayInbound event)`
+  - L1317 `void _clearSecretRequest()`
+  - L1330 `Future<void> _submitSecretRequest()`  — Save what the user typed and answer the host. An empty field for a name
+  - L1356 `Future<void> _skipSecretRequest()`  — The user does not have (or want to give) the keys: tell the host so the
+  - L1372 `void _decideApproval(bool approved)`  — Answer a here.now publish approval. Idempotent: once a decision is sent
+  - L1393 `Future<void> copyFullChat()`  — Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
+  - L1405 `bool _running = false`  — The ledger is the run's truth: it knows a run is in flight whether this
+  - L1407 `void _onLedgerChanged()`
+  - L1428 `void _onRunClosed()`  — A run just ended and left the thread with nothing to show. Never silence:
+  - L1457 `void _releaseStaleComposer(String key)`  — The composer goes back to the send target when the run is over.
+  - L1470 `void _onRunSilent(String sessionKey)`  — The run for [sessionKey] has produced nothing for the ledger's ceiling.
+  - L1482 `void _reconcileOnOpen()`  — The thread is being opened. A run the ledger still draws as live is
+  - L1493 `void _onLoaderChanged()`
+  - L1526 `void _onChatStoreChanged(String? changedId)`  — The chat cache changed. Remount the screen ONLY when this thread's rows
+  - L1545 `bool get _screenIsEmpty`  — Whether the screen on the tree is showing an empty transcript. The
+  - L1553 `void _syncRevision()`  — Adopt a new replay revision — but never while a run is in flight: the
+  - L1566 `Widget build(BuildContext context)`
+  - L1643 `Widget _buildHeader( BuildContext context, AgentsRelayState state, List<AgentsAutomation>? automations, )`  — The floating row over a desktop thread: the relay while it is down, the
+  - L1693 `String _automationLabel(List<AgentsAutomation> automations)`  — One automation reads as itself; several read as a count, because the
+  - L1699 `void _openDocuments(BuildContext context)`
+  - L1718 `Widget _buildChat(BuildContext context, {double desktopTopInset = 0})`  — The imported chuk_chat renderer. Everything Agents-specific about it is in
+  - L1788 `void _noopToggleSidebar()`  — The sidebar is the shell's (the Agents roster), not the chat screen's.
+  - L1792 `void _onChatIdChanged(String? id)`  — Agents's chat id is the thread key and never changes under the screen, so
+  - L1798 `bool _useDesktopChat(BuildContext context)`  — Desktop chrome for desktop, web and tablets; the phone layout only for a
+  - L1827 `bool get _showsEmptyState`  — The connection is not something the user manages. Once paired the socket
+  - L1833 `AgentsLinkReport _linkReportFor(AgentsRelayState state)`  — What the link is, in the words the shell's status panel uses. The
+  - L1864 `void _publishLink(AgentsLinkReport report)`  — Hands [report] to the shell after this frame, once per change.
+  - L1878 `bool get _showConnectBar`
+  - L1888 `Widget _buildSecretRequestBar( BuildContext context, AgentsRelaySecretRequest request, )`  — One field per name the model asked for. A name already set shows a
+  - L1987 `void _onAutomationsChanged()`
+  - L1994 `Widget _buildAutomationCards( BuildContext context, List<AgentsAutomation> automations, )`  — The active and paused automations of this thread, with Pause / Resume /
+  - L2024 `Widget _buildApprovalBar( BuildContext context, AgentsRelayApprovalRequest request, )`  — A here.now publish the user must answer before the blocked run continues.
+  - L2110 `static String _humanBytes(int bytes)`  — 1024 -> "1.0 KB". A plain binary size, no locale or package dependency.
+  - L2124 `Widget _buildConnectBar(BuildContext context, AgentsRelayState state)`
+  - L2189 `Widget _buildDevConnectRow()`
+  - L2239 `Widget _buildReconnectBar(BuildContext context, String? banner)`  — The bottom bar shown when the app is paired but not currently connected:
 
 ## lib/widgets/anchored_menu.dart  (395 Z.)
 - L19 `_kAnchorGap = 6`  — Gap between the anchor and the menu.

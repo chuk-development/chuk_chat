@@ -25,5 +25,5 @@
 ## test/models/stored_chat_test.dart  (314 Z.)
 - L5 `void main()`
 
-## test/models/workspace_model_test.dart  (497 Z.)
-- L4 `void main()`
+## test/models/workspace_model_test.dart  (535 Z.)
+- L6 `void main()`

@@ -367,10 +367,10 @@
 ## lib/utils/io_helper.dart  (4 Z.)
 - reicht weiter: 'io_helper_stub.dart' if (dart.library.io) 'io_helper_io.dart'
 
-## lib/utils/io_helper_io.dart  (5 Z.)
-- reicht weiter: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException
+## lib/utils/io_helper_io.dart  (12 Z.)
+- reicht weiter: 'dart:io' show File, Directory, Platform, Process, SocketException, HttpException, IOException
 
-## lib/utils/io_helper_stub.dart  (79 Z.)
+## lib/utils/io_helper_stub.dart  (83 Z.)
 - L7 `class File`  — Stub File class for web
   - L8 `final String path`
   - L9 `File(this.path)`
@@ -410,14 +410,15 @@
   - L54 `ProcessResult(this.pid, this.exitCode, this.stdout, this.stderr)`
 - L58 `class Process`  — Stub Process class for web
   - L59 `static ProcessResult runSync(String executable, List<String> arguments)`
-- L65 `class SocketException implements Exception`  — Stub SocketException for web
-  - L66 `final String message`
-  - L67 `const SocketException(this.message)`
-  - L69 `String toString()`
-- L73 `class HttpException implements Exception`  — Stub HttpException for web
-  - L74 `final String message`
-  - L75 `const HttpException(this.message)`
-  - L77 `String toString()`
+- L66 `abstract class IOException implements Exception`  — Stub IOException for web: the common type of every I/O failure, as in
+- L69 `class SocketException implements IOException`  — Stub SocketException for web
+  - L70 `final String message`
+  - L71 `const SocketException(this.message)`
+  - L73 `String toString()`
+- L77 `class HttpException implements IOException`  — Stub HttpException for web
+  - L78 `final String message`
+  - L79 `const HttpException(this.message)`
+  - L81 `String toString()`
 
 ## lib/utils/json_helpers.dart  (72 Z.)
 - L14 `Map<String, dynamic>? tryDecodeJsonObject(String body)`  — Decodes [body] into a JSON object, or returns null when it is not one.

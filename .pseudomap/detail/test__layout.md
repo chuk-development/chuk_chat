@@ -15,29 +15,38 @@
 - L73 `_catalog = <Map<String, dynamic>>[ _table('Wahlkreise Sachsen-Anhalt 2026'), _file('skills/youtube-transcript/SKILL.md',`
 - L82 `void main()`
 
-## test/layout/every_screen_layout_test.dart  (780 Z.)
-- L73 `_cannotMount = <String, String>{ 'model_selector_page': 'its initState reaches SupabaseService.client, which ' 'throws "`  — Screens left out of the sweep, and why. Never delete a line here to make
-- L108 `_chukSizes = <String, String>{ 'theme_page': 'upstream\'s 32 dp colour swatches', 'desktop_settings_modal': 'upstream\'s`  — Screens that draw upstream chuk_chat's settings frame and rows in BOTH
-- L119 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
-  - L120 `final List<void Function()> _disposers = <void Function()>[]`
-  - L122 `T keep<T>(T value, void Function() dispose)`
-  - L127 `void dispose()`
-- L136 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
-- L142 `typedef ScreenBuilder = Widget Function(_Bag bag)`
-- L144 `class _Screen`
-  - L145 `const _Screen(this.name, this.build, {this.after})`
-  - L147 `final String name`
-  - L148 `final ScreenBuilder build`
-  - L152 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
-- L159 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
-- L177 `List<AgentsAgent> _roster()`
-- L184 `AgentsRoomMember _member(String id, String handle)`
-- L188 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
-- L202 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
-- L208 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
-- L223 `Future<void> _openSheet(WidgetTester tester)`
-- L232 `List<_Screen> _screens()`
-- L648 `void main()`
+## test/layout/every_screen_layout_test.dart  (842 Z.)
+- L84 `_cannotMount = <String, String>{ 'model_selector_page': 'its initState reaches SupabaseService.client, which ' 'throws "`  — Screens left out of the sweep, and why. Never delete a line here to make
+- L119 `_chukSizes = <String, String>{ 'theme_page': 'upstream\'s 32 dp colour swatches', 'desktop_settings_modal': 'upstream\'s`  — Screens that draw upstream chuk_chat's settings frame and rows in BOTH
+- L132 `class _Bag`  — Anything a screen made that has to be thrown away afterwards.
+  - L133 `final List<void Function()> _disposers = <void Function()>[]`
+  - L135 `T keep<T>(T value, void Function() dispose)`
+  - L140 `void dispose()`
+- L149 `FakeAgentControlSource _keepControl(_Bag bag, FakeAgentControlSource source)`
+- L155 `typedef ScreenBuilder = Widget Function(_Bag bag)`
+- L157 `class _Screen`
+  - L158 `const _Screen(this.name, this.build, {this.after})`
+  - L160 `final String name`
+  - L161 `final ScreenBuilder build`
+  - L165 `final Future<void> Function(WidgetTester tester)? after`  — Runs after the first frames, for a surface that only exists once it is
+- L172 `AgentsAgent _agent({ String id = 'amber', String name = 'Amber Fitzgerald-Okonkwo', String? role = 'Research and long-form writing', bool running = true, })`
+- L190 `List<AgentsAgent> _roster()`
+- L197 `AgentsRoomMember _member(String id, String handle)`
+- L201 `AgentsRoom _fullRoom()`  — A room at the cap, which is the case the member sheet has to survive.
+- L215 `Widget _hosted(Widget child)`  — Wraps a panel that has no scaffold of its own.
+- L221 `Widget _sheetHost(WidgetBuilder builder)`  — Presents [builder] the way `agents_shell_state` presents it: a scroll
+- L236 `Future<void> _openSheet(WidgetTester tester)`
+- L245 `List<_Screen> _screens()`
+- L682 `void main()`
+- L816 `class _InstallMemory implements AgentsSecureKeyValueStore`  — Secure storage for the install page, in memory.
+  - L817 `final Map<String, String> _map = <String, String>{}`
+  - L820 `Future<String?> read(String key)`
+  - L823 `Future<void> write(String key, String value)`
+  - L826 `Future<void> delete(String key)`
+- L829 `class _InstallSession implements AccountSessionSource`
+  - L830 `const _InstallSession()`
+  - L833 `AccountSession? current()`
+  - L840 `Future<AccountSession?> refresh()`
 
 ## test/layout/layout_harness.dart  (431 Z.)
 - L25 `class LayoutSize`  — One window the app has to fit into.

@@ -66,55 +66,55 @@
   - L151 `static bool has(String key)`  — Check if a key exists in the loaded .env file.
   - L153 `static bool get _isDesktop`
 
-## lib/main.dart  (773 Z.)
-- L78 `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
-- L110 `Future<void> main()`
-- L247 `class AgentsApp extends StatefulWidget`
-  - L248 `const AgentsApp({super.key})`
-  - L251 `State<AgentsApp> createState()`
-- L254 `class _AgentsAppState extends State<AgentsApp>`
-  - L255 `static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>()`
-  - L261 `final AppThemeService _themeService = AppThemeService.instance`  — The single source of truth for theme, accent, fonts, UI scale and the
-  - L262 `final AppLifecycleService _lifecycleService = AppLifecycleService.instance`
-  - L263 `final SessionManagerService _sessionManager = SessionManagerService.instance`
-  - L264 `final AppInitializationService _initService = AppInitializationService.instance`
-  - L273 `final ThemeController _theme = ThemeController()`  — Kept alive only as a bridge: the settings pages that are still Agents's
-  - L276 `bool _bridging = false`  — Guards the two-way bridge against feeding a change straight back.
-  - L278 `late final DateTime _appStartedAt`
-  - L279 `Timer? _resumeSettingsSyncTimer`
-  - L280 `DateTime? _lastResumeSettingsSyncAt`
-  - L281 `static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90)`
-  - L282 `static const Duration _linuxResumeSyncDelay = Duration(seconds: 2)`
-  - L284 `bool get _isLinuxDesktop`
-  - L288 `void initState()`
-  - L308 `Future<void> _initializeDesktopTrayInBackground()`
-  - L327 `void _onThemeChanged()`
-  - L332 `void _pushServiceIntoController()`
-  - L342 `void _onThemeControllerChanged()`
-  - L359 `Future<void> _migrateLegacyThemeMode()`  — One-shot migration off Agents's own `theme_mode_v1` preference.
-  - L382 `void _onPasswordMismatch()`
-  - L391 `void _syncSettingsInBackground()`
-  - L433 `void _scheduleStartupSettingsSync()`
-  - L446 `void _initializeNotificationsInBackground()`
-  - L467 `Future<void> _initializeApp()`
-  - L498 `void dispose()`
-  - L516 `bool get _isAssistantLaunch`  — True when this Flutter engine was started by the Android assist
-  - L541 `Widget _buildHome(AppShellConfig shellConfig)`  — The app home: auth gate, onboarding gate, then the shell.
-  - L557 `Widget build(BuildContext context)`
-  - L626 `ColorScheme? _toFlutterScheme( mui.ColorScheme? scheme, Brightness brightness, )`  — Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
-  - L644 `AppShellConfig _buildShellConfig()`
-- L713 `class _OnboardingFirstLaunchGate extends StatefulWidget`  — Starts the interactive onboarding tour if the signed-in user has never
-  - L714 `const _OnboardingFirstLaunchGate({ required this.child, required this.shellConfig, })`
-  - L719 `final Widget child`
-  - L720 `final AppShellConfig shellConfig`
-  - L723 `State<_OnboardingFirstLaunchGate> createState()`
-- L727 `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
-  - L729 `bool _didStartTour = false`
-  - L730 `StreamSubscription<AuthState>? _authSub`
-  - L733 `void initState()`
-  - L748 `void dispose()`
-  - L753 `Future<void> _maybeStart()`
-  - L771 `Widget build(BuildContext context)`
+## lib/main.dart  (786 Z.)
+- L79 `void _installLogDeduper()`  — Collapse consecutive identical debug log lines into a single line with a
+- L111 `Future<void> main()`
+- L260 `class AgentsApp extends StatefulWidget`
+  - L261 `const AgentsApp({super.key})`
+  - L264 `State<AgentsApp> createState()`
+- L267 `class _AgentsAppState extends State<AgentsApp>`
+  - L268 `static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>()`
+  - L274 `final AppThemeService _themeService = AppThemeService.instance`  — The single source of truth for theme, accent, fonts, UI scale and the
+  - L275 `final AppLifecycleService _lifecycleService = AppLifecycleService.instance`
+  - L276 `final SessionManagerService _sessionManager = SessionManagerService.instance`
+  - L277 `final AppInitializationService _initService = AppInitializationService.instance`
+  - L286 `final ThemeController _theme = ThemeController()`  — Kept alive only as a bridge: the settings pages that are still Agents's
+  - L289 `bool _bridging = false`  — Guards the two-way bridge against feeding a change straight back.
+  - L291 `late final DateTime _appStartedAt`
+  - L292 `Timer? _resumeSettingsSyncTimer`
+  - L293 `DateTime? _lastResumeSettingsSyncAt`
+  - L294 `static const Duration _linuxResumeSyncCooldown = Duration(seconds: 90)`
+  - L295 `static const Duration _linuxResumeSyncDelay = Duration(seconds: 2)`
+  - L297 `bool get _isLinuxDesktop`
+  - L301 `void initState()`
+  - L321 `Future<void> _initializeDesktopTrayInBackground()`
+  - L340 `void _onThemeChanged()`
+  - L345 `void _pushServiceIntoController()`
+  - L355 `void _onThemeControllerChanged()`
+  - L372 `Future<void> _migrateLegacyThemeMode()`  — One-shot migration off Agents's own `theme_mode_v1` preference.
+  - L395 `void _onPasswordMismatch()`
+  - L404 `void _syncSettingsInBackground()`
+  - L446 `void _scheduleStartupSettingsSync()`
+  - L459 `void _initializeNotificationsInBackground()`
+  - L480 `Future<void> _initializeApp()`
+  - L511 `void dispose()`
+  - L529 `bool get _isAssistantLaunch`  — True when this Flutter engine was started by the Android assist
+  - L554 `Widget _buildHome(AppShellConfig shellConfig)`  — The app home: auth gate, onboarding gate, then the shell.
+  - L570 `Widget build(BuildContext context)`
+  - L639 `ColorScheme? _toFlutterScheme( mui.ColorScheme? scheme, Brightness brightness, )`  — Maps a `material_ui` [mui.ColorScheme] (what dynamic_color 2.x provides) to
+  - L657 `AppShellConfig _buildShellConfig()`
+- L726 `class _OnboardingFirstLaunchGate extends StatefulWidget`  — Starts the interactive onboarding tour if the signed-in user has never
+  - L727 `const _OnboardingFirstLaunchGate({ required this.child, required this.shellConfig, })`
+  - L732 `final Widget child`
+  - L733 `final AppShellConfig shellConfig`
+  - L736 `State<_OnboardingFirstLaunchGate> createState()`
+- L740 `class _OnboardingFirstLaunchGateState extends State<_OnboardingFirstLaunchGate>`
+  - L742 `bool _didStartTour = false`
+  - L743 `StreamSubscription<AuthState>? _authSub`
+  - L746 `void initState()`
+  - L761 `void dispose()`
+  - L766 `Future<void> _maybeStart()`
+  - L784 `Widget build(BuildContext context)`
 
 ## lib/model_selector_page.dart  (1988 Z.)
 - L44 `class PricingDetails`
@@ -281,26 +281,27 @@
   - L1952 `const _StatChip({required this.label, required this.value})`
   - L1955 `Widget build(BuildContext context)`
 
-## lib/platform_config.dart  (172 Z.)
+## lib/platform_config.dart  (185 Z.)
 - L12 `kPlatformMobile = bool.fromEnvironment( 'PLATFORM_MOBILE', defaultValue: false, )`
 - L16 `kPlatformDesktop = bool.fromEnvironment( 'PLATFORM_DESKTOP', defaultValue: false, )`
 - L22 `kAutoDetectPlatform = !kPlatformMobile && !kPlatformDesktop`
 - L37 `kFeatureVoiceMode = bool.fromEnvironment( 'FEATURE_VOICE_MODE', defaultValue: false, )`  — Voice mode - audio recording and transcription
-- L46 `kFeatureWorkspaces = bool.fromEnvironment( 'FEATURE_WORKSPACES', defaultValue: false, )`  — Workspaces — custom AI personas with system prompts, files, and memory
-- L52 `kFeatureArtifacts = bool.fromEnvironment( 'FEATURE_ARTIFACTS', defaultValue: true, )`  — Artifacts - editable code/markdown/HTML/technical drawing panels alongside chat
-- L59 `kFeatureImageGen = true`  — Image Generation - AI image creation via Z-Image Turbo
-- L62 `kFeatureMediaManager = true`  — Media Manager - View and manage stored media (images) in Supabase
-- L67 `kFeatureServerTools = bool.fromEnvironment( 'FEATURE_SERVER_TOOLS', defaultValue: false, )`  — Server-backed integration tools (GitHub, Slack, Google, Email,
-- L75 `kFeatureMcp = bool.fromEnvironment( 'FEATURE_MCP', defaultValue: true, )`  — Remote MCP connectors: sign in to a server in the browser and its tools
-- L83 `kFeatureArtifactHosting = bool.fromEnvironment( 'FEATURE_ARTIFACT_HOSTING', defaultValue: true, )`  — Artifact hosting: the `create_artifact` / `update_artifact` tools publish a
-- L90 `kFeatureSystemTray = bool.fromEnvironment( 'FEATURE_SYSTEM_TRAY', defaultValue: false, )`  — Desktop system tray integration (Linux, Windows, macOS).
-- L97 `kFeatureLinuxKeyring = bool.fromEnvironment( 'FEATURE_LINUX_KEYRING', defaultValue: false, )`  — Linux secure storage backend for encryption keys.
-- L105 `kFeaturePaymentsDirect = bool.fromEnvironment( 'FEATURE_PAYMENTS_DIRECT', defaultValue: true, )`  — Direct payment integration via Stripe (web + mobile + desktop).
-- L124 `kFeatureAgents = bool.fromEnvironment( 'FEATURE_AGENTS', defaultValue: false, )`  — Agents mode — a phone-driven agent that runs on the user's laptop with real
-- L139 `kFeatureAgentsDemo = bool.fromEnvironment( 'FEATURE_AGENTS_DEMO', defaultValue: false, )`  — Agents Demo — laptop-native agent tools (`run_command`, `read_file`,
-- L153 `kFeatureSkills = bool.fromEnvironment( 'FEATURE_SKILLS', defaultValue: false, )`  — Agent Skills — named procedures the AI loads on demand via the `skill`
-- L161 `kFeatureSpotify = bool.fromEnvironment( 'FEATURE_SPOTIFY', defaultValue: false, )`  — Spotify playback tool. Disabled by default — API server no longer
-- L168 `kFeatureWhoop = bool.fromEnvironment( 'FEATURE_WHOOP', defaultValue: false, )`  — WHOOP health/fitness tool. Disabled by default — integration removed
+- L50 `kFeatureVoiceCall = bool.fromEnvironment( 'FEATURE_VOICE_CALL', defaultValue: false, )`  — Voice call — a live, full-duplex call with a LiveKit voice worker
+- L59 `kFeatureWorkspaces = bool.fromEnvironment( 'FEATURE_WORKSPACES', defaultValue: false, )`  — Workspaces — custom AI personas with system prompts, files, and memory
+- L65 `kFeatureArtifacts = bool.fromEnvironment( 'FEATURE_ARTIFACTS', defaultValue: true, )`  — Artifacts - editable code/markdown/HTML/technical drawing panels alongside chat
+- L72 `kFeatureImageGen = true`  — Image Generation - AI image creation via Z-Image Turbo
+- L75 `kFeatureMediaManager = true`  — Media Manager - View and manage stored media (images) in Supabase
+- L80 `kFeatureServerTools = bool.fromEnvironment( 'FEATURE_SERVER_TOOLS', defaultValue: false, )`  — Server-backed integration tools (GitHub, Slack, Google, Email,
+- L88 `kFeatureMcp = bool.fromEnvironment( 'FEATURE_MCP', defaultValue: true, )`  — Remote MCP connectors: sign in to a server in the browser and its tools
+- L96 `kFeatureArtifactHosting = bool.fromEnvironment( 'FEATURE_ARTIFACT_HOSTING', defaultValue: true, )`  — Artifact hosting: the `create_artifact` / `update_artifact` tools publish a
+- L103 `kFeatureSystemTray = bool.fromEnvironment( 'FEATURE_SYSTEM_TRAY', defaultValue: false, )`  — Desktop system tray integration (Linux, Windows, macOS).
+- L110 `kFeatureLinuxKeyring = bool.fromEnvironment( 'FEATURE_LINUX_KEYRING', defaultValue: false, )`  — Linux secure storage backend for encryption keys.
+- L118 `kFeaturePaymentsDirect = bool.fromEnvironment( 'FEATURE_PAYMENTS_DIRECT', defaultValue: true, )`  — Direct payment integration via Stripe (web + mobile + desktop).
+- L137 `kFeatureAgents = bool.fromEnvironment( 'FEATURE_AGENTS', defaultValue: false, )`  — Agents mode — a phone-driven agent that runs on the user's laptop with real
+- L152 `kFeatureAgentsDemo = bool.fromEnvironment( 'FEATURE_AGENTS_DEMO', defaultValue: false, )`  — Agents Demo — laptop-native agent tools (`run_command`, `read_file`,
+- L166 `kFeatureSkills = bool.fromEnvironment( 'FEATURE_SKILLS', defaultValue: false, )`  — Agent Skills — named procedures the AI loads on demand via the `skill`
+- L174 `kFeatureSpotify = bool.fromEnvironment( 'FEATURE_SPOTIFY', defaultValue: false, )`  — Spotify playback tool. Disabled by default — API server no longer
+- L181 `kFeatureWhoop = bool.fromEnvironment( 'FEATURE_WHOOP', defaultValue: false, )`  — WHOOP health/fitness tool. Disabled by default — integration removed
 
 ## lib/supabase_config.dart  (121 Z.)
 - L22 `class SupabaseConfig`

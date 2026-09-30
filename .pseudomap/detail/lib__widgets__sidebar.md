@@ -258,40 +258,42 @@
   - L1785 `const SbHairline({super.key, this.margin = EdgeInsets.zero})`
   - L1787 `Widget build(BuildContext context)`
 
-## lib/widgets/sidebar/sidebar_common.dart  (512 Z.)
+## lib/widgets/sidebar/sidebar_common.dart  (530 Z.)
 - L19 `kSidebarPageSize = 40`
 - L22 `String normalizeSidebarTitle(String title)`  — Strips generated Markdown decoration from a chat title before display.
 - L53 `String deriveSidebarChatTitle(StoredChat chat)`
 - L59 `String sidebarDisplayName(ProfileRecord? profile)`
-- L74 `List<Widget> buildSidebarNavigationCards({ required BuildContext context, required bool showWorkspaces, required VoidCallback onWorkspacesTapped, required VoidCallback onMediaTapped, required VoidCallback onNewChatTapped, required Widget searchEntry, /// The phone keeps its one new-chat action in the head bar, so the list /// there starts at Media. The desktop keeps the row because its collapsed /// rail is built from these same rows. bool showNewChat = true, })`  — The destinations shared by both sidebars, with a platform-owned search
-- L114 `mixin SidebarStateCommon<T extends StatefulWidget> on State<T>`  — Common state, mutations, and grouped-list construction for both sidebars.
-  - L115 `final TextEditingController searchController = TextEditingController()`
-  - L116 `final ScrollController scrollController = ScrollController()`
-  - L117 `final FocusNode searchFocus = FocusNode()`
-  - L118 `final Set<String> collapsedGroups = <String>{}`
-  - L120 `String searchQuery = ''`
-  - L121 `List<StoredChat> filteredRecentChats = <StoredChat>[]`
-  - L122 `int displayLimit = kSidebarPageSize`
-  - L123 `ProfileRecord? profile`
-  - L124 `bool isOfflineMode = false`
-  - L126 `StreamSubscription<String?>? _chatUpdatesSubscription`
-  - L127 `Timer? _deleteNotificationTimer`
-  - L128 `String? _lastDeletedChatTitle`
-  - L130 `Future<void> Function(String chatId)? get onChatDeletedCallback`
-  - L133 `Future<void> applyChatFilter()`  — Desktop filters synchronously; mobile may hand this work to an isolate.
-  - L135 `void initSidebarCommon()`
-  - L151 `void disposeSidebarCommon()`
-  - L166 `void handleSidebarWidgetUpdate({required bool selectedChatChanged})`
-  - L174 `void onScrollForAutoLoad()`
-  - L184 `void toggleSidebarGroup(String label)`
-  - L193 `void onSidebarNetworkStatusChanged()`
-  - L198 `Future<void> loadSidebarProfile()`
-  - L212 `void showSidebarNotification( ScaffoldMessengerState messenger, String message, { AppNotificationKind kind = AppNotificationKind.info, })`
-  - L221 `Future<void> toggleSidebarChatStarred(StoredChat chat)`
-  - L241 `Future<void> renameSidebarChat(StoredChat chat)`
-  - L301 `Future<void> confirmAndDeleteSidebarChat(StoredChat chat)`
-  - L357 `Future<void> _refreshSidebarAfterMutation( ScaffoldMessengerState messenger, String action, )`
-  - L372 `void _showDebouncedDeleteNotification(String chatTitle)`
-  - L389 `void showLockedSidebarChatDialog({required Color accentColor})`
-  - L417 `List<Widget> buildSidebarChatSlivers({ required List<Widget> leadingSlivers, required Color accent, required Color emptyTextColor, required Widget Function(StoredChat chat, int index, int length) itemBuilder, })`
-  - L486 `List<Widget> _buildSidebarGroup( String label, List<StoredChat> chats, Widget Function(StoredChat chat, int index, int length) itemBuilder, { int? total, })`
+- L70 `kSidebarAddComputerLabel = 'Add your computer'`  — The Agents build's install entry: its label and its key. English, as the
+- L71 `kSidebarAddComputerKey = ValueKey<String>( 'sidebar-add-computer', )`
+- L81 `List<Widget> buildSidebarNavigationCards({ required BuildContext context, required bool showWorkspaces, required VoidCallback onWorkspacesTapped, required VoidCallback onMediaTapped, required VoidCallback onNewChatTapped, required Widget searchEntry, /// The phone keeps its one new-chat action in the head bar, so the list /// there starts at Media. The desktop keeps the row because its collapsed /// rail is built from these same rows. bool showNewChat = true, /// The Agents build's "Add your computer" entry. Null, as in chuk_chat and /// on any device that already has a computer, draws no row. VoidCallback? onAddComputerTapped, })`  — The destinations shared by both sidebars, with a platform-owned search
+- L132 `mixin SidebarStateCommon<T extends StatefulWidget> on State<T>`  — Common state, mutations, and grouped-list construction for both sidebars.
+  - L133 `final TextEditingController searchController = TextEditingController()`
+  - L134 `final ScrollController scrollController = ScrollController()`
+  - L135 `final FocusNode searchFocus = FocusNode()`
+  - L136 `final Set<String> collapsedGroups = <String>{}`
+  - L138 `String searchQuery = ''`
+  - L139 `List<StoredChat> filteredRecentChats = <StoredChat>[]`
+  - L140 `int displayLimit = kSidebarPageSize`
+  - L141 `ProfileRecord? profile`
+  - L142 `bool isOfflineMode = false`
+  - L144 `StreamSubscription<String?>? _chatUpdatesSubscription`
+  - L145 `Timer? _deleteNotificationTimer`
+  - L146 `String? _lastDeletedChatTitle`
+  - L148 `Future<void> Function(String chatId)? get onChatDeletedCallback`
+  - L151 `Future<void> applyChatFilter()`  — Desktop filters synchronously; mobile may hand this work to an isolate.
+  - L153 `void initSidebarCommon()`
+  - L169 `void disposeSidebarCommon()`
+  - L184 `void handleSidebarWidgetUpdate({required bool selectedChatChanged})`
+  - L192 `void onScrollForAutoLoad()`
+  - L202 `void toggleSidebarGroup(String label)`
+  - L211 `void onSidebarNetworkStatusChanged()`
+  - L216 `Future<void> loadSidebarProfile()`
+  - L230 `void showSidebarNotification( ScaffoldMessengerState messenger, String message, { AppNotificationKind kind = AppNotificationKind.info, })`
+  - L239 `Future<void> toggleSidebarChatStarred(StoredChat chat)`
+  - L259 `Future<void> renameSidebarChat(StoredChat chat)`
+  - L319 `Future<void> confirmAndDeleteSidebarChat(StoredChat chat)`
+  - L375 `Future<void> _refreshSidebarAfterMutation( ScaffoldMessengerState messenger, String action, )`
+  - L390 `void _showDebouncedDeleteNotification(String chatTitle)`
+  - L407 `void showLockedSidebarChatDialog({required Color accentColor})`
+  - L435 `List<Widget> buildSidebarChatSlivers({ required List<Widget> leadingSlivers, required Color accent, required Color emptyTextColor, required Widget Function(StoredChat chat, int index, int length) itemBuilder, })`
+  - L504 `List<Widget> _buildSidebarGroup( String label, List<StoredChat> chats, Widget Function(StoredChat chat, int index, int length) itemBuilder, { int? total, })`

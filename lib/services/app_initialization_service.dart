@@ -6,6 +6,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_payload_migration_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -35,6 +36,13 @@ class AppInitializationService {
 
   static const Duration _linuxDeferredKeySyncDelay = Duration(seconds: 3);
   static const Duration _linuxInitialKeyPreloadDelay = Duration(seconds: 2);
+
+  /// Wait before the encrypted_meta sweep, so it does not compete with the
+  /// first sidebar render and chat sync.
+  static const Duration _metadataSweepDelay = Duration(seconds: 8);
+
+  /// User whose rows the encrypted_meta sweep already ran for this session.
+  String? _metadataSweepUserId;
 
 
 
@@ -326,6 +334,7 @@ class AppInitializationService {
   void _startSyncAfterKey(Stopwatch stopwatch) {
     // Start sync after cache and encryption key are ready.
     ChatSyncService.start();
+    _afterKeyReady();
 
     // Delay preload to keep startup/input smooth, then run in background.
     _startDeferredPreload();
@@ -349,6 +358,7 @@ class AppInitializationService {
   }) {
     // Start sync timer immediately after sidebar cache is ready on Linux.
     ChatSyncService.start();
+    if (keyReady) _afterKeyReady();
     _startDeferredPreload();
 
     unawaited(
@@ -374,6 +384,43 @@ class AppInitializationService {
     );
     // Trigger a sync cycle now that encryption/decryption is available.
     unawaited(ChatSyncService.syncNow());
+    _afterKeyReady();
+  }
+
+  /// Work that needs the encryption key. The startup project load runs
+  /// before the key on purpose; if it met sealed rows it waits and loads
+  /// again here.
+  void _afterKeyReady() {
+    unawaited(WorkspaceStorageService.reloadIfWaitingForKey());
+    _startMetadataSweep();
+  }
+
+  /// Seals this user's legacy project, project file and artifact rows into
+  /// `encrypted_meta` (see `lib/services/encrypted_meta.dart`). Only the app
+  /// holds the key, so an updated app seals the rows an older build left in
+  /// plaintext. Once per user and session; costs a few empty queries once
+  /// nothing is left. Needs the key, so it starts only after the key loaded.
+  void _startMetadataSweep() {
+    final userId = SupabaseService.auth.currentUser?.id;
+    if (userId == null || _metadataSweepUserId == userId) return;
+    _metadataSweepUserId = userId;
+    unawaited(
+      Future<void>.delayed(_metadataSweepDelay, () async {
+        if (SupabaseService.auth.currentUser?.id != userId) return;
+        // Both sweeps never throw; they log their own failures.
+        final projects = await WorkspaceStorageService.resealLegacyRows();
+        if (SupabaseService.auth.currentUser?.id != userId) return;
+        final artifacts = await ArtifactStorageService.resealLegacyRows();
+        if (projects + artifacts == 0) return;
+        unawaited(
+          DiagnosticsLogService.info(
+            'startup',
+            'Sealed legacy row metadata',
+            data: {'projects_and_files': projects, 'artifacts': artifacts},
+          ),
+        );
+      }),
+    );
   }
 
   void _startDeferredPreload() {

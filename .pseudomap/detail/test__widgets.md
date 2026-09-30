@@ -175,36 +175,41 @@
 ## test/widgets/app_lifecycle_observer_test.dart  (43 Z.)
 - L9 `void main()`  — `AppLifecycleService.handleLifecycleState` was called by NOBODY in
 
-## test/widgets/app_mode_switch_test.dart  (669 Z.)
-- L44 `class _MemoryStore implements AgentsSecureKeyValueStore`
-  - L45 `final Map<String, String> map = <String, String>{}`
-  - L48 `Future<String?> read(String key)`
-  - L51 `Future<void> write(String key, String value)`
-  - L54 `Future<void> delete(String key)`
-- L58 `class _EmptyMirror extends SupabasePairingSync`  — The encrypted mirror, with nothing in it.
-  - L60 `Future<AgentsCloudPairingRead> readEncryptedPairing()`
-  - L64 `Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing)`
-  - L68 `Future<void> saveEncryptedPairing(AgentsStoredPairing pairing)`
-  - L71 `Future<void> clearEncryptedPairing()`
-- L74 `class _Session implements AccountSessionSource`
-  - L75 `const _Session()`
-  - L78 `AccountSession? current()`
-  - L85 `Future<AccountSession?> refresh()`
-- L91 `class _FakeChatHalf extends StatefulWidget`  — Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
-  - L92 `const _FakeChatHalf({required this.phone, required this.modeSwitch})`
-  - L94 `final bool phone`
-  - L95 `final Widget modeSwitch`
-  - L98 `State<_FakeChatHalf> createState()`
-- L101 `class _FakeChatHalfState extends State<_FakeChatHalf>`
-  - L102 `int taps = 0`
-  - L103 `final TextEditingController draft = TextEditingController()`
-  - L106 `void dispose()`
-  - L112 `Widget build(BuildContext context)`
-- L170 `kPhone = Size(360, 800)`
-- L174 `kSwitchOnPhone = Rect.fromLTWH( 10 + 42 + 8, 24 + 8, AppModeSwitch.width, AppModeSwitch.boxHeight, )`  — Where the switch sits on a 360 px phone with a 24 px status bar, over
-- L183 `kWidePhone = Size(412, 800)`  — A phone wide enough for the "Add your computer" panel an unpaired device
-- L184 `kPhoneInsets = EdgeInsets.only(top: 24)`
-- L186 `void main()`
+## test/widgets/app_mode_switch_test.dart  (943 Z.)
+- L50 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L51 `final Map<String, String> map = <String, String>{}`
+  - L54 `Future<String?> read(String key)`
+  - L57 `Future<void> write(String key, String value)`
+  - L60 `Future<void> delete(String key)`
+- L64 `class _EmptyMirror extends SupabasePairingSync`  — The encrypted mirror, with nothing in it.
+  - L66 `Future<AgentsCloudPairingRead> readEncryptedPairing()`
+  - L70 `Future<bool> publishEncryptedPairing(AgentsStoredPairing pairing)`
+  - L74 `Future<void> saveEncryptedPairing(AgentsStoredPairing pairing)`
+  - L77 `Future<void> clearEncryptedPairing()`
+- L81 `class _SlowMirror extends _EmptyMirror`  — A mirror whose read answers only when the test says so.
+  - L82 `_SlowMirror(this._read)`
+  - L84 `final Future<AgentsCloudPairingRead> _read`
+  - L87 `Future<AgentsCloudPairingRead> readEncryptedPairing()`
+- L90 `class _Session implements AccountSessionSource`
+  - L91 `const _Session()`
+  - L94 `AccountSession? current()`
+  - L101 `Future<AccountSession?> refresh()`
+- L107 `class _FakeChatHalf extends StatefulWidget`  — Stands in for chuk_chat's root wrapper: a top bar shaped like chuk's (a
+  - L108 `const _FakeChatHalf({ required this.phone, required this.modeSwitch, this.onAddComputer, })`
+  - L114 `final bool phone`
+  - L117 `final Widget? modeSwitch`  — Null while the device has no computer.
+  - L120 `final VoidCallback? onAddComputer`  — The install entry's action; null unless the device has no computer.
+  - L123 `State<_FakeChatHalf> createState()`
+- L126 `class _FakeChatHalfState extends State<_FakeChatHalf>`
+  - L127 `int taps = 0`
+  - L128 `final TextEditingController draft = TextEditingController()`
+  - L131 `void dispose()`
+  - L137 `Widget build(BuildContext context)`
+- L202 `kPhone = Size(360, 800)`
+- L206 `kSwitchOnPhone = Rect.fromLTWH( 10 + 42 + 8, 24 + 8, AppModeSwitch.width, AppModeSwitch.boxHeight, )`  — Where the switch sits on a 360 px phone with a 24 px status bar, over
+- L215 `kWidePhone = Size(412, 800)`  — A phone wide enough for the "Add your computer" panel an unpaired device
+- L216 `kPhoneInsets = EdgeInsets.only(top: 24)`
+- L218 `void main()`
 
 ## test/widgets/app_notification_test.dart  (87 Z.)
 - L8 `void main()`

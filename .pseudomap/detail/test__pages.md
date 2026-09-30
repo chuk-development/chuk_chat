@@ -6,6 +6,18 @@
 ## test/pages/agent_profile_page_test.dart  (50 Z.)
 - L13 `void main()`
 
+## test/pages/agents_install_page_test.dart  (281 Z.)
+- L19 `class _MemoryStore implements AgentsSecureKeyValueStore`
+  - L20 `final Map<String, String> map = <String, String>{}`
+  - L23 `Future<String?> read(String key)`
+  - L26 `Future<void> write(String key, String value)`
+  - L29 `Future<void> delete(String key)`
+- L32 `class _Session implements AccountSessionSource`
+  - L33 `const _Session()`
+  - L36 `AccountSession? current()`
+  - L43 `Future<AccountSession?> refresh()`
+- L46 `void main()`
+
 ## test/pages/agents_pairing_page_test.dart  (229 Z.)
 - L10 `class _FakeCamera`  — A stand-in camera. It renders a marker instead of a preview and exposes the
   - L11 `ValueChanged<String>? onCode`
@@ -21,7 +33,7 @@
 ## test/pages/desktop_settings_modal_test.dart  (180 Z.)
 - L20 `void main()`  — The desktop settings modal lists the same destinations as the phone's
 
-## test/pages/mcp_connectors_page_test.dart  (212 Z.)
+## test/pages/mcp_connectors_page_test.dart  (273 Z.)
 - L19 `class _MemorySecrets implements AgentsSecureKeyValueStore`  — In-memory secure backend so secrets round-trip with no platform channel.
   - L20 `final Map<String, String> map = <String, String>{}`
   - L23 `Future<String?> read(String key)`

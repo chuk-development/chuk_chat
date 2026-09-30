@@ -21,6 +21,19 @@
 ## test/services/artifact_diff_engine_test.dart  (102 Z.)
 - L6 `void main()`
 
+## test/services/artifact_encrypted_meta_test.dart  (823 Z.)
+- L13 `_prefix = 'fake:'`
+- L15 `Future<String> _fakeSeal(String plaintext)`
+- L18 `Future<String> _fakeOpen(String envelope)`
+- L25 `_rowUuid = '3f2b8c1e-6a4d-4f0e-9b7a-2c5d8e1f0a93'`
+- L27 `Map<String, dynamic> _row({ required String id, required Object? title, Object? language, Object? encryptedMeta, String updatedAt = '2026-09-01T10:00:00.000Z', })`
+- L51 `ArtifactRowRef _ref({ required String rowId, required String handle, required String updatedAt, String? title, String? stamp, })`
+- L71 `Future<String> _seal(String rowId, Map<String, Object?> fields)`  — Seals [fields] the way the service does, bound to `artifacts` row
+- L74 `Future<ArtifactDocument> _resolve(Map<String, dynamic> row)`
+- L87 `Future<bool> _needsReseal(Map<String, dynamic> row)`
+- L101 `Future<Map<String, dynamic>> _open(Object? envelope, String rowId)`  — Opens an envelope as the service does for `artifacts` row [rowId];
+- L111 `void main()`
+
 ## test/services/artifact_repair_version_chain_test.dart  (33 Z.)
 - L5 `void main()`
 
@@ -74,29 +87,31 @@
 - L116 `String _chatJson({int rounds = 30})`
 - L140 `void main()`
 
-## test/services/chat_payload_migration_test.dart  (591 Z.)
-- L26 `userId = 'user-1'`
-- L28 `String _id(int i)`
-- L30 `String _updatedAt(int i)`
-- L32 `String _v2Json(int i)`
-- L53 `Future<String> _sealV1(String text, List<int> key)`
-- L71 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
-  - L72 `_FakeCloud(this.key)`
-  - L74 `final List<int> key`
-  - L75 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
-  - L76 `final List<String> writes = []`
-  - L77 `bool offline = false`
-  - L78 `bool keyAvailable = true`
-  - L81 `Completer<void>? listGate`  — Holds the cloud list until completed (a slow network).
-  - L84 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
-  - L87 `Future<List<String>> listPlainEnvelopeChats(String userId)`
-  - L97 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
-  - L103 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
-  - L128 `Future<ChatEnvelopeV3?> convert(String encrypted)`
-  - L135 `Future<String> fingerprint(String encrypted)`
-  - L139 `int get currentKeyVersion`
-  - L142 `Future<bool> ensureKey()`
-- L145 `void main()`
+## test/services/chat_payload_migration_test.dart  (870 Z.)
+- L29 `userId = 'user-1'`
+- L31 `String _id(int i)`
+- L33 `String _updatedAt(int i)`
+- L38 `_unreadableJson = '{"v":2,"messages":[42]}'`  — JSON that parses but is no chat payload this app can read: a message
+- L40 `String _v2Json(int i)`
+- L61 `Future<String> _sealV1(String text, List<int> key)`
+- L79 `class _FakeCloud implements ChatMigrationCloud`  — An in-memory `encrypted_chats` with the prod trigger's rule: a written
+  - L80 `_FakeCloud(this.key)`
+  - L82 `final List<int> key`
+  - L83 `final Map<String, ({String encrypted, String updatedAt})> rows = {}`
+  - L84 `final List<String> writes = []`
+  - L85 `bool offline = false`
+  - L86 `bool keyAvailable = true`
+  - L89 `Completer<void>? listGate`  — Holds the cloud list until completed (a slow network).
+  - L92 `String? changeBeforeWrite`  — Simulates another device saving a chat between read and write.
+  - L95 `final Map<String, Object> failRead = {}`  — Chats whose read fails with the given error (a server error, say).
+  - L98 `Future<List<String>> listPlainEnvelopeChats(String userId)`
+  - L108 `Future<({String encrypted, String updatedAt})?> readRow( String userId, String chatId, )`
+  - L118 `Future<String?> writeRow( String userId, String chatId, { required String encrypted, required String updatedAt, required String expectedUpdatedAt, })`
+  - L143 `Future<ChatEnvelopeV3?> convert(String encrypted)`
+  - L150 `Future<String> fingerprint(String encrypted)`
+  - L154 `int get currentKeyVersion`
+  - L157 `Future<bool> ensureKey()`
+- L160 `void main()`
 
 ## test/services/chat_reaction_service_test.dart  (76 Z.)
 - L5 `void main()`
@@ -213,6 +228,9 @@
 
 ## test/services/round_content_block_service_test.dart  (519 Z.)
 - L8 `void main()`
+
+## test/services/session_manager_sign_out_event_test.dart  (51 Z.)
+- L6 `void main()`
 
 ## test/services/session_recovery_test.dart  (464 Z.)
 - L17 `String _jwt({required int exp, String sub = 'user-1'})`
@@ -332,3 +350,19 @@
 - L23 `List<AgentsRelayInbound> _everyVariant()`  — Every inbound variant the relay can produce, so the "never a ToolCallsEvent"
 - L78 `void main()`
 - L725 `Future<void> _drain()`  — Lets the adapter's internal handler chain settle.
+
+## test/services/workspace_encrypted_meta_test.dart  (1172 Z.)
+- L16 `_prefix = 'FAKEKEY:'`
+- L19 `_projectStamp = '2026-09-30T10:15:42.123456+00:00'`
+- L20 `_fileStamp = '2026-09-30T11:00:00.000001+00:00'`
+- L23 `Future<String> _fakeSeal(String plaintext)`  — Reversible and opaque: base64 hides the plaintext, like a real envelope.
+- L27 `Future<String> _fakeOpen(String envelope)`  — Opens only envelopes of [_fakeSeal]; anything else acts like a wrong key.
+- L35 `String _foreignEnvelope(Map<String, Object?> fields)`  — An envelope sealed with another key (cannot be opened).
+- L39 `Future<String> _envelope( Map<String, Object?> fields, { String table = 'projects', String row = 'proj-1', })`  — Envelope bound to project row 'proj-1' (the default [_projectRow]).
+- L46 `Future<String> _fileEnvelope(Map<String, Object?> fields)`  — Envelope bound to file row 'file-1' (the default [_fileRow]).
+- L49 `Map<String, dynamic> _projectRow({ String id = 'proj-1', Object? name = kEncryptedPlaceholder, Object? description, Object? prompt, String? envelope, })`
+- L67 `Map<String, dynamic> _fileRow({ String id = 'file-1', Object? fileName = kEncryptedPlaceholder, Object? markdown, String? envelope, })`
+- L85 `Future<SealedRowRead> _readProject(Map<String, dynamic> raw)`
+- L93 `Future<SealedRowRead> _readFile(Map<String, dynamic> raw)`
+- L104 `bool _matchesOrFilter(String filter, Map<String, dynamic> row)`  — Evaluates a PostgREST `or` filter of the sweep against one row with SQL
+- L127 `void main()`

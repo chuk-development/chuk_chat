@@ -1,0 +1,328 @@
+# lib/voice/incoming · Signaturen
+
+## lib/voice/incoming/callkit_port.dart  (67 Z.)
+- L15 `class FlutterCallkitPort implements CallkitPort`
+  - L16 `FlutterCallkitPort()`
+  - L18 `late final Stream<CallkitSignal> _signals = FlutterCallkitIncoming.onEvent .handleError((Object e) { // A malformed plugin event is dropped, never fatal. if (kDebugMode) debugPrint('[callkit] bad event: ${e.runtimeType}'); }) .map(signalFor) .where((CallkitSignal? s) => s != null) .cast<CallkitSignal>() .asBroadcastStream()`
+  - L29 `Stream<CallkitSignal> get signals`
+  - L34 `static CallkitSignal? signalFor(CallEvent? event)`  — The signal an event maps to, or null for the events the service does
+  - L49 `Future<void> showIncoming(CallKitParams params)`
+  - L53 `Future<void> showMissed(CallKitParams params)`
+  - L57 `Future<void> startOutgoing(CallKitParams params)`
+  - L61 `Future<void> setConnected(String id)`
+  - L65 `Future<void> end(String id)`
+
+## lib/voice/incoming/incoming_call.dart  (156 Z.)
+- L15 `enum IncomingCallUrgency`  — How urgent the agent says the call is.
+  - L15 `normal`
+  - L15 `high`
+- L18 `class IncomingCall`  — One `voice_call_incoming` frame.
+  - L19 `const IncomingCall({ required this.callId, required this.threadId, required this.agentId, required this.agentName, required this.reason, required this.urgency, required this.expiresAt, })`
+  - L30 `static const String defaultAgentName = 'Your coworker'`  — The name the host uses when the user gave the coworker none.
+  - L34 `static const int maxReasonChars = 1000`  — The host cuts `reason` at this many characters; a longer one is cut here
+  - L37 `static const int maxCallIdChars = 64`  — A `call_id` longer than this is not one the host minted (16 hex).
+  - L48 `static IncomingCall? fromFrame( Map<String, dynamic> frame, { required DateTime now, })`  — Parses a decoded frame received at [now]. Null when it is not a usable
+  - L81 `static DateTime? _expiry(Map<String, dynamic> frame, DateTime now)`
+  - L96 `static String? _id(Object? value)`
+  - L103 `final String callId`
+  - L106 `final String threadId`  — The thread's `session_key`: the Agents thread to open on accept.
+  - L107 `final String agentId`
+  - L110 `final String agentName`  — The name the user gave the coworker. Shown on the ring screen.
+  - L113 `final String reason`  — Why the agent calls. Content: the worker gets it, the UI does not.
+  - L114 `final IncomingCallUrgency urgency`
+  - L118 `final DateTime expiresAt`  — When the ring ends, on THIS device's clock (from `ring_seconds`), or on
+  - L120 `bool get isUrgent`
+  - L123 `Duration remainingAt(DateTime now)`  — How long the ring may still last at [now]. Zero or less: expired.
+  - L126 `String toString()`
+- L130 `class HostCallState`  — One `voice_call_state` frame from the host (the echo).
+  - L131 `const HostCallState({required this.callId, required this.state})`
+  - L135 `static HostCallState? fromFrame(Map<String, dynamic> frame)`  — Null unless the frame is a `voice_call_state` with a `call_id` and one of
+  - L144 `static const Set<String> _hostStates = <String>{ AgentsVoiceCallFrames.accepted, AgentsVoiceCallFrames.declined, AgentsVoiceCallFrames.missed, AgentsVoiceCallFrames.ended, }`
+  - L151 `final String callId`
+  - L154 `final String state`  — `accepted`, `declined`, `missed` or `ended`.
+
+## lib/voice/incoming/incoming_call_book.dart  (137 Z.)
+- L16 `enum IncomingCallStatus`  — Where one known call is on this device.
+  - L18 `ringing`
+  - L22 `accepting`
+  - L25 `accepted`
+  - L28 `declined`
+  - L31 `missed`
+  - L34 `ended`
+  - L37 `answeredElsewhere`
+  - L40 `expired`
+  - L43 `bool get isFinal`  — True for every status after which nothing rings or runs any more.
+- L47 `class IncomingCallEntry`  — One known call.
+  - L48 `IncomingCallEntry(this.call, this.status, {this.params})`
+  - L50 `final IncomingCall call`
+  - L51 `IncomingCallStatus status`
+  - L55 `CallKitParams? params`  — The ring this device showed (null when it never rang). Kept for the
+  - L60 `bool serviceDeferred = false`  — The ring was shown without callkit's own foreground service on accept
+  - L63 `final Set<String> sent = <String>{}`  — The state frames this device already sent for the call.
+  - L65 `String get callId`
+- L69 `enum IncomingAdmission`  — What [IncomingCallBook.admit] decided about a frame.
+  - L71 `ring`
+  - L74 `duplicate`
+  - L77 `expired`
+- L80 `class IncomingCallBook`
+  - L81 `IncomingCallBook({ this.keepAfterExpiry = const Duration(minutes: 30), this.maxEntries = 200, })`
+  - L89 `final Duration keepAfterExpiry`  — How long a finished call stays known after its `expires_at`. The host
+  - L92 `final int maxEntries`  — At most this many calls are remembered; the oldest go first.
+  - L94 `final Map<String, IncomingCallEntry> _entries = <String, IncomingCallEntry>{}`
+  - L96 `IncomingCallEntry? operator [](String callId)`
+  - L98 `int get length`
+  - L101 `IncomingAdmission admit(IncomingCall call, DateTime now)`  — Records [call] as seen at [now] and says what to do with it.
+  - L114 `Iterable<IncomingCallEntry> get ringing`  — The ringing calls, oldest first.
+  - L118 `void _put(IncomingCallEntry entry)`
+  - L129 `void _prune(DateTime now)`
+
+## lib/voice/incoming/incoming_call_bootstrap.dart  (70 Z.)
+- L34 `abstract final class IncomingCallBootstrap`  — Whether this build takes agent calls and shows the ongoing-call
+  - L35 `static IncomingCallService? _service`
+  - L38 `static IncomingCallService? get service`  — The running service, or null (flag off, not started).
+  - L42 `static const Duration _permissionDelay = Duration(seconds: 3)`  — How long after the first frame the permission questions come, so they
+  - L45 `static void start()`  — Starts the service once. Needs `WidgetsFlutterBinding` (main() has it).
+
+## lib/voice/incoming/incoming_call_mapping.dart  (158 Z.)
+- L25 `kIncomingRingMax = Duration(seconds: 120)`  — The host rings for 120 s (`expires_at = created_at + 120`). A phone clock
+- L28 `kIncomingRingMin = Duration(seconds: 2)`  — A ring shorter than this is not worth showing.
+- L31 `kIncomingHandleNormal = 'Voice call'`  — The neutral second line of the ring screen and its notification.
+- L32 `kIncomingHandleUrgent = 'Urgent call'`
+- L36 `kOngoingChatCallName = 'Chuk Chat'`  — The name an ongoing call shows for a normal chat. A chat title is content
+- L46 `CallKitParams? incomingCallkitParams( IncomingCall call, DateTime now, { bool startServiceOnAccept = true, })`  — The callkit ring for [call] at [now], or null when the ring is already
+- L97 `CallKitParams outgoingCallkitParams({ required String id, required String name, })`  — The callkit call for a call the user started: no ring, only the ongoing
+- L111 `_callingNotification = NotificationParams( showNotification: true, isShowCallback: true, subtitle: 'Voice call', callbac`
+- L119 `class VoiceStartRequest`  — What `VoiceCallController.start` gets for an accepted call.
+  - L120 `const VoiceStartRequest({ required this.chatId, required this.mode, required this.agentName, required this.context, required this.callId, required this.callReason, required this.initiatedByAgent, this.chatTitle, })`
+  - L131 `final String chatId`
+  - L132 `final VoiceCallMode mode`
+  - L133 `final String? chatTitle`
+  - L134 `final String agentName`
+  - L135 `final String context`
+  - L136 `final String callId`
+  - L137 `final String callReason`
+  - L138 `final bool initiatedByAgent`
+- L144 `VoiceStartRequest voiceStartRequestFor( IncomingCall call, { String? chatTitle, String context = '', })`  — The start of the voice session for an accepted [call]: its Agents thread,
+
+## lib/voice/incoming/incoming_call_ports.dart  (220 Z.)
+- L16 `enum CallkitSignalKind`  — What the callkit UI reports.
+  - L16 `accept`
+  - L16 `decline`
+  - L16 `ended`
+  - L16 `timeout`
+- L18 `@immutable class CallkitSignal`
+  - L20 `const CallkitSignal(this.kind, this.id)`
+  - L22 `final CallkitSignalKind kind`
+  - L26 `final String id`  — The callkit id: the host's `call_id` for an agent call, the service's own
+  - L29 `bool operator ==(Object other)`
+  - L33 `int get hashCode`
+  - L36 `String toString()`
+- L40 `abstract interface class CallkitPort`  — The ring screen and the self-managed "ongoing call" of the OS.
+  - L41 `Stream<CallkitSignal> get signals`
+  - L44 `Future<void> showIncoming(CallKitParams params)`  — Rings: the full screen over the lock screen, or a heads-up call.
+  - L47 `Future<void> showMissed(CallKitParams params)`  — The "missed call" notice (name only, never the reason).
+  - L51 `Future<void> startOutgoing(CallKitParams params)`  — An ongoing call with no ring (a call the user started). Starts the
+  - L54 `Future<void> setConnected(String id)`  — The call is connected (the agent can listen).
+  - L57 `Future<void> end(String id)`  — Stops the ring, or ends the ongoing call and its foreground service.
+- L62 `abstract interface class CallStateSender`  — Sends `voice_call_state` to the host. Never throws: a frame that cannot go
+  - L63 `Future<void> send(String callId, String state)`
+- L68 `enum OngoingCallAction`  — A button on the ongoing-call notification that needs the Dart side.
+  - L68 `hangUp`
+  - L68 `toggleMute`
+  - L68 `toggleSpeaker`
+  - L68 `open`
+- L71 `@immutable class OngoingCallSnapshot`  — What the ongoing-call notification shows.
+  - L73 `const OngoingCallSnapshot({ required this.callKey, required this.title, required this.status, required this.muted, required this.speakerOn, required this.canSwitchSpeaker, this.connectedAt, })`
+  - L85 `final String callKey`  — The callkit id. The notification takes its place (same notification id),
+  - L86 `final String title`
+  - L89 `final String status`  — "Connecting…", "On call", "Muted".
+  - L90 `final bool muted`
+  - L91 `final bool speakerOn`
+  - L92 `final bool canSwitchSpeaker`
+  - L95 `final DateTime? connectedAt`  — When the agent joined; the notification counts up from here.
+  - L98 `bool operator ==(Object other)`
+  - L109 `int get hashCode`
+- L124 `abstract interface class OngoingCallUi`  — The ongoing-call notification with its buttons, and the two small native
+  - L125 `Stream<OngoingCallAction> get actions`
+  - L126 `Future<void> show(OngoingCallSnapshot snapshot)`
+  - L127 `Future<void> cancel(String callKey)`
+  - L131 `Future<void> requestUnlock()`  — Asks the user to unlock (`KeyguardManager.requestDismissKeyguard`). Does
+  - L134 `Future<void> notice(String text)`  — A short system notice (a toast). Never content.
+- L140 `abstract interface class MicPermission`  — The microphone permission. A call accepted without it would run the
+  - L141 `Future<bool> isGranted()`
+  - L145 `Future<bool> request()`  — Asks for it. True when granted; false when refused (or refused for
+- L149 `typedef CallChatOpener = void Function(String chatId, VoiceCallMode? mode)`  — Opens the chat a call belongs to (the Agents thread for an agent call).
+- L152 `typedef IncomingCallStarter = Future<void> Function(IncomingCall call)`  — Opens the thread of an accepted [call] and starts its voice session.
+- L155 `abstract interface class VoiceCallView implements Listenable`  — The part of the app-wide call the service reads and drives.
+  - L156 `VoiceCallPhase get phase`
+  - L157 `bool get isActive`
+  - L158 `String? get callId`
+  - L159 `String? get chatId`
+  - L160 `VoiceCallMode? get mode`
+  - L161 `String? get agentName`
+  - L162 `bool get agentPresent`
+  - L163 `bool get micMuted`
+  - L164 `bool get speakerOn`
+  - L165 `bool get canSwitchSpeaker`
+  - L166 `DateTime? get startedAt`
+  - L168 `Future<void> end()`
+  - L169 `Future<void> setMicMuted(bool muted)`
+  - L170 `Future<void> setSpeakerOn(bool on)`
+- L174 `class ControllerVoiceCallView implements VoiceCallView`  — [VoiceCallView] over the real controller.
+  - L175 `ControllerVoiceCallView(this.controller)`
+  - L177 `final VoiceCallController controller`
+  - L180 `void addListener(VoidCallback listener)`
+  - L183 `void removeListener(VoidCallback listener)`
+  - L187 `VoiceCallPhase get phase`
+  - L189 `bool get isActive`
+  - L191 `String? get callId`
+  - L193 `String? get chatId`
+  - L195 `VoiceCallMode? get mode`
+  - L197 `String? get agentName`
+  - L199 `bool get agentPresent`
+  - L201 `bool get micMuted`
+  - L203 `bool get speakerOn`
+  - L205 `bool get canSwitchSpeaker`
+  - L207 `DateTime? get startedAt`
+  - L210 `Future<void> end()`
+  - L215 `Future<void> setMicMuted(bool muted)`
+  - L218 `Future<void> setSpeakerOn(bool on)`
+
+## lib/voice/incoming/incoming_call_service.dart  (513 Z.)
+- L45 `kMicNeededNotice = 'Calls need the microphone. Allow it in Settings, Voice calls.'`  — The notice when a call was refused for want of the microphone.
+- L48 `class IncomingCallService`
+  - L49 `IncomingCallService({ required this.hostFrames, required this.callkit, required this.sender, required this.ui, required this.call, required this.starter, required this.openChat, required this.mic, IncomingCallBook? book, DateTime Function()? now, String Function()? newCallKey, this.repostDelays = const <Duration>[ Duration(milliseconds: 600), Duration(seconds: 2), ], }) : book = book ?? IncomingCallBook(), _now = now ?? DateTime.now, _newCallKey = newCallKey ?? (() => const Uuid().v4())`
+  - L70 `final Stream<Map<String, dynamic>> hostFrames`  — The host's voice-call frames (`AgentsVoiceCallFrames.frames`).
+  - L71 `final CallkitPort callkit`
+  - L72 `final CallStateSender sender`
+  - L73 `final OngoingCallUi ui`
+  - L74 `final VoiceCallView call`
+  - L75 `final IncomingCallStarter starter`
+  - L76 `final CallChatOpener openChat`
+  - L77 `final MicPermission mic`
+  - L78 `final IncomingCallBook book`
+  - L79 `final DateTime Function() _now`
+  - L80 `final String Function() _newCallKey`
+  - L84 `final List<Duration> repostDelays`  — callkit posts its own ongoing-call notification when a call starts, is
+  - L86 `final List<StreamSubscription<Object?>> _subs = <StreamSubscription<Object?>>[]`
+  - L88 `final List<Timer> _reposts = <Timer>[]`
+  - L89 `_Session? _session`
+  - L90 `OngoingCallSnapshot? _shown`
+  - L91 `bool _started = false`
+  - L95 `String? get sessionKey`  — The voice call this service mirrors right now, if any (tests).
+  - L98 `void start()`  — Starts listening. Idempotent.
+  - L109 `Future<void> dispose()`
+  - L120 `static void _ignore(Object error)`
+  - L128 `void onHostFrame(Map<String, dynamic> frame)`
+  - L142 `void _onIncoming(IncomingCall incoming)`
+  - L158 `Future<void> _ring(IncomingCallEntry entry)`  — Shows the ring. callkit starts its ongoing-call foreground service on
+  - L183 `void _onHostState(HostCallState echo)`
+  - L235 `void onCallkitSignal(CallkitSignal signal)`
+  - L279 `Future<void> _accept(IncomingCallEntry entry)`
+  - L331 `void _send(IncomingCallEntry entry, String state)`
+  - L338 `void _onCall()`
+  - L388 `bool _stillRuns(_Session session)`  — The running call is still the one [session] mirrors.
+  - L396 `void _close(_Session session)`
+  - L412 `String _titleFor(_Session session)`
+  - L424 `OngoingCallSnapshot _snapshotFor(_Session session)`
+  - L440 `void _show(OngoingCallSnapshot snapshot)`
+  - L446 `void _scheduleReposts()`
+  - L459 `void _cancelReposts()`
+  - L468 `void onUiAction(OngoingCallAction action)`
+  - L487 `static Future<void> _quietly(Future<void> Function() op)`
+- L498 `class _Session`  — One voice call as the OS sees it: its callkit id, and the agent call it
+  - L499 `_Session({ required this.key, required this.chatId, required this.startedAt, this.entry, })`
+  - L506 `final String key`
+  - L507 `final IncomingCallEntry? entry`
+  - L508 `final String? chatId`
+  - L509 `final DateTime? startedAt`
+  - L510 `bool connected = false`
+  - L511 `DateTime? connectedAt`
+
+## lib/voice/incoming/incoming_call_starter.dart  (64 Z.)
+- L19 `kAcceptedCallThreadWait = Duration(seconds: 2)`  — How long an accepted call waits for its thread screen to open, so the
+- L25 `void openVoiceCallChat(String chatId, VoiceCallMode? mode)`  — Brings the chat of a call to the front: the Agents thread through the
+- L45 `Future<void> startAcceptedAgentCall( IncomingCall call, { VoiceCallController? controller, Duration waitForThread = kAcceptedCallThreadWait, bool? enabled, })`  — Opens the thread of an accepted [call] and starts its voice session:
+
+## lib/voice/incoming/ongoing_call_notification.dart  (104 Z.)
+- L26 `class OngoingCallNotification implements OngoingCallUi`
+  - L27 `OngoingCallNotification({ this.channel = const MethodChannel(channelName), this.events = const EventChannel(eventChannelName), })`
+  - L32 `static const String channelName = 'chuk/voice_call'`
+  - L33 `static const String eventChannelName = 'chuk/voice_call_actions'`
+  - L35 `final MethodChannel channel`
+  - L36 `final EventChannel events`
+  - L38 `static bool get _android`
+  - L41 `late final Stream<OngoingCallAction> _actions = _android ? events .receiveBroadcastStream() .map(actionFor) .where((OngoingCallAction? a) => a != null) .cast<OngoingCallAction>() .asBroadcastStream() : const Stream<OngoingCallAction>.empty()`
+  - L51 `Stream<OngoingCallAction> get actions`
+  - L55 `static OngoingCallAction? actionFor(Object? event)`  — The action a native event names, or null.
+  - L65 `static Map<String, Object?> argumentsFor(OngoingCallSnapshot snapshot)`  — The channel arguments of [snapshot].
+  - L77 `Future<void> show(OngoingCallSnapshot snapshot)`
+  - L83 `Future<void> cancel(String callKey)`
+  - L91 `Future<void> requestUnlock()`
+  - L97 `Future<void> notice(String text)`
+
+## lib/voice/incoming/relay_call_state_sender.dart  (135 Z.)
+- L19 `class RelayCallStateSender implements CallStateSender`
+  - L20 `RelayCallStateSender({ ValueListenable<AgentsRelayController?>? controller, this.maxQueued = 32, this.maxAge = const Duration(minutes: 10), this.retryAfter = const Duration(seconds: 3), DateTime Function()? now, }) : _controller = controller ?? AgentsRelayLink.instance.controller, _now = now ?? DateTime.now`
+  - L32 `final ValueListenable<AgentsRelayController?> _controller`
+  - L35 `final int maxQueued`  — At most this many states wait; the oldest go first.
+  - L39 `final Duration maxAge`  — A state older than this is dropped instead of sent: the host has long
+  - L43 `final Duration retryAfter`  — A send that failed while the host looked attached is tried again after
+  - L44 `final DateTime Function() _now`
+  - L46 `final List<_Queued> _queue = <_Queued>[]`
+  - L47 `AgentsRelayController? _bound`
+  - L48 `Timer? _retry`
+  - L49 `bool _flushing = false`
+  - L50 `bool _disposed = false`
+  - L54 `int get queued`  — States waiting for the host (tests).
+  - L57 `Future<void> send(String callId, String state)`
+  - L66 `void _rebind()`
+  - L75 `void _onState()`
+  - L77 `Future<void> _flush()`
+  - L118 `void dispose()`
+- L128 `class _Queued`
+  - L129 `_Queued(this.callId, this.state, this.at)`
+  - L131 `final String callId`
+  - L132 `final String state`
+  - L133 `final DateTime at`
+
+## lib/voice/incoming/voice_call_permissions.dart  (143 Z.)
+- L25 `enum VoiceCallGrant`  — One thing a voice call needs, in the order the settings show them.
+  - L25 `microphone`
+  - L25 `notifications`
+  - L25 `fullScreenIntent`
+  - L25 `background`
+- L27 `abstract final class VoiceCallPermissions`
+  - L30 `static const String _fullScreenAskedKey = 'voice_call_full_screen_asked'`  — Remembers that the full-screen settings page was opened once on its
+  - L32 `static bool get _android`
+  - L36 `static Future<Map<VoiceCallGrant, bool>> statuses()`  — Whether each grant is in place. Everything reads false off Android.
+  - L55 `static Future<bool> _granted(Permission permission)`
+  - L66 `static Future<void> request(VoiceCallGrant grant)`  — Asks for [grant]: the system dialog where there is one, else the system
+  - L86 `static Future<void> _ask(Permission permission)`
+  - L100 `static Future<void> requestUpFront()`  — The questions a voice-call build asks once at start: the microphone and
+- L126 `class PermissionHandlerMic implements MicPermission`  — [MicPermission] over permission_handler (the incoming-call service).
+  - L127 `const PermissionHandlerMic()`
+  - L130 `Future<bool> isGranted()`
+  - L136 `Future<bool> request()`  — A permission refused for good cannot be asked again from here: that is
+
+## lib/voice/incoming/voice_call_permissions_section.dart  (144 Z.)
+- L15 `class VoiceCallPermissionsSection extends StatefulWidget`
+  - L16 `const VoiceCallPermissionsSection({super.key, this.load, this.ask})`
+  - L19 `final Future<Map<VoiceCallGrant, bool>> Function()? load`  — Test seams: the status source and the request. Default: Android.
+  - L20 `final Future<void> Function(VoiceCallGrant grant)? ask`
+  - L23 `State<VoiceCallPermissionsSection> createState()`
+- L27 `class _GrantCopy`
+  - L28 `const _GrantCopy(this.icon, this.title, this.buys)`
+  - L30 `final IconData icon`
+  - L31 `final String title`
+  - L34 `final String buys`  — What stops working without it.
+- L37 `_copy = <VoiceCallGrant, _GrantCopy>{ VoiceCallGrant.microphone: _GrantCopy( Icons.mic_none_rounded, 'Microphone', 'Need`
+- L62 `class _VoiceCallPermissionsSectionState extends State<VoiceCallPermissionsSection> with WidgetsBindingObserver`
+  - L65 `Map<VoiceCallGrant, bool> _granted = const <VoiceCallGrant, bool>{}`
+  - L68 `void initState()`
+  - L75 `void dispose()`
+  - L81 `void didChangeAppLifecycleState(AppLifecycleState state)`
+  - L87 `Future<void> _refresh()`
+  - L98 `Future<void> _ask(VoiceCallGrant grant)`
+  - L104 `Widget build(BuildContext context)`
+  - L120 `Widget _row( VoiceCallGrant grant, _GrantCopy copy, bool granted, ColorScheme scheme, )`
