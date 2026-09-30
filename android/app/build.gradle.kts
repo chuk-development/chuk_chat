@@ -1,3 +1,4 @@
+import java.util.Base64
 import java.util.Properties
 import java.io.FileInputStream
 
@@ -33,6 +34,33 @@ val keystoreProperties = Properties()
 if (!useEnvVars && keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+// The Dart defines of this build (--dart-define and --dart-define-from-file).
+// Flutter hands them to Gradle as the project property `dart-defines`: a
+// comma-separated list of base64("KEY=value"). A later entry wins, as it does
+// for Dart's String.fromEnvironment.
+val dartDefines: Map<String, String> =
+    ((project.findProperty("dart-defines") as String?) ?: "")
+        .split(",")
+        .filter { it.isNotBlank() }
+        .mapNotNull { entry ->
+            runCatching {
+                String(Base64.getDecoder().decode(entry.trim()), Charsets.UTF_8)
+            }.getOrNull()
+        }
+        .mapNotNull { pair ->
+            val eq = pair.indexOf('=')
+            if (eq > 0) pair.substring(0, eq) to pair.substring(eq + 1) else null
+        }
+        .toMap()
+
+// Voice calls (FEATURE_VOICE_CALL, lib/voice/incoming/): flutter_callkit_incoming
+// is linked into every build, so its manifest is gated here instead. With the
+// flag, src/voiceCall/ is merged on top of the main manifest (singleTask, the
+// notification buttons, the call service without the camera type); without
+// it, src/voiceCallOff/ takes out every permission and component only the
+// plugin adds. A build without the flag has the manifest it had before.
+val voiceCall = dartDefines["FEATURE_VOICE_CALL"] == "true"
 
 // Kotlin 2.2 removed the `kotlinOptions` block inside `android {}`; the JVM
 // target now goes through the top-level Kotlin `compilerOptions` DSL.
@@ -141,6 +169,15 @@ android {
                 signingConfigs.getByName("debug")
             }
         }
+    }
+}
+
+androidComponents {
+    onVariants { variant ->
+        val overlay = if (voiceCall) "src/voiceCall" else "src/voiceCallOff"
+        variant.sources.manifests.addStaticManifestFile(
+            file("$overlay/AndroidManifest.xml").absolutePath,
+        )
     }
 }
 

@@ -42,6 +42,16 @@
 -keep class okio.** { *; }
 
 # ============================================
+# VOICE CALLS (flutter_callkit_incoming, FEATURE_VOICE_CALL)
+# ============================================
+# The plugin maps its call data with Jackson by field name; keep its classes
+# whole (its README asks for this rule; its consumer rules add the Jackson
+# part).
+-keep class com.hiennv.flutter_callkit_incoming.** { *; }
+# The ongoing-call notification's receiver and bridge (VoiceCallBridge.kt).
+-keep class dev.chuk.chat.voice.** { *; }
+
+# ============================================
 # CRYPTO / SECURITY
 # ============================================
 # Keep crypto classes for certificate pinning

@@ -38,6 +38,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <!-- Voice calls (flutter_callkit_incoming) are gated per build in Gradle:
+         src/voiceCall/ or src/voiceCallOff/ is merged on top of this file
+         (android/app/build.gradle.kts, FEATURE_VOICE_CALL). -->
     <application
         android:label="Chuk Chat"
         android:name="${applicationName}"

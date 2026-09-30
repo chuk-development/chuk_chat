@@ -14,11 +14,14 @@
 /// lists what the shell can actually do for the selected coworker.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
@@ -35,6 +38,7 @@ class MobileAgentSheet extends StatelessWidget {
     this.onCopyChat,
     this.onSettings,
     this.onSignOut,
+    this.onVoiceCall,
   });
 
   final AgentsAgent agent;
@@ -47,6 +51,11 @@ class MobileAgentSheet extends StatelessWidget {
   final VoidCallback? onCopyChat;
   final VoidCallback? onSettings;
   final VoidCallback? onSignOut;
+
+  /// Starts a voice call with the coworker. Null starts it directly (the
+  /// sheet mounted on its own); [show] passes one that closes the sheet
+  /// first. Only read in a build that offers calls.
+  final VoidCallback? onVoiceCall;
 
   /// Opens the sheet. Each row closes the sheet first, then runs its action,
   /// so an action that opens another page or drawer does not stack on top of
@@ -79,6 +88,9 @@ class MobileAgentSheet extends StatelessWidget {
       onCopyChat: closeThen(onCopyChat),
       onSettings: closeThen(onSettings),
       onSignOut: closeThen(onSignOut),
+      onVoiceCall: voiceCallUiEnabled
+          ? closeThen(() => unawaited(startAgentVoiceCall(agent)))
+          : null,
     );
     return showMenuSheet<void>(context, groups: sheet.menuGroups(context));
   }
@@ -109,6 +121,9 @@ class MobileAgentSheet extends StatelessWidget {
           MenuActionRow(
             icon: Icons.person_outline_rounded,
             label: 'Profile',
+            // The profile holds the sandbox permissions too
+            // (docs/WIRE_CONTRACT.md, "Agent permissions").
+            subtitle: 'Details and permissions',
             onTap: onProfile,
           ),
         if (onRename != null)
@@ -136,21 +151,28 @@ class MobileAgentSheet extends StatelessWidget {
             onTap: onCopyChat,
           ),
       ],
-      // Parked, like the header target: there is no voice channel to a
-      // coworker. The row stays live so a tap can say so; only its colour is
-      // dimmed.
+      // Parked, like the header target, unless the build offers calls. A
+      // parked row stays live so a tap can say so; only its colour is dimmed.
       <Widget>[
-        MenuActionRow(
-          icon: Icons.call_rounded,
-          label: 'Voice call',
-          subtitle: 'Not available yet',
-          tone: scheme.onSurface.withValues(alpha: 0.5),
-          onTap: () => pillToast(
-            context,
-            'Voice calls with a coworker are not available yet',
-            icon: Icons.call_end_rounded,
+        if (voiceCallUiEnabled && voiceThreadKeyFor(agent) != null)
+          MenuActionRow(
+            icon: Icons.call_rounded,
+            label: 'Voice call',
+            onTap:
+                onVoiceCall ?? () => unawaited(startAgentVoiceCall(agent)),
+          )
+        else
+          MenuActionRow(
+            icon: Icons.call_rounded,
+            label: 'Voice call',
+            subtitle: 'Not available yet',
+            tone: scheme.onSurface.withValues(alpha: 0.5),
+            onTap: () => pillToast(
+              context,
+              'Voice calls with a coworker are not available yet',
+              icon: Icons.call_end_rounded,
+            ),
           ),
-        ),
       ],
       <Widget>[
         if (onSettings != null)

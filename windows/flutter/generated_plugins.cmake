@@ -4,14 +4,17 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
+  connectivity_plus
   desktop_drop
   dynamic_color
   file_selector_windows
   firebase_core
   flutter_inappwebview_windows
   flutter_secure_storage_windows
+  flutter_webrtc
   geolocator_windows
   irondash_engine_context
+  livekit_client
   pasteboard
   pdfx
   permission_handler_windows

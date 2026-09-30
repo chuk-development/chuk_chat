@@ -69,6 +69,7 @@ import 'package:chuk_chat/services/window_close_service.dart';
 import 'package:chuk_chat/widgets/chat_maintenance_gate.dart';
 import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
+import 'package:chuk_chat/voice/incoming/incoming_call_bootstrap.dart';
 
 /// Collapse consecutive identical debug log lines into a single line with a
 /// `(×N)` count, so spammy repeats (e.g. "[Lifecycle] App resumed" firing
@@ -233,6 +234,10 @@ Future<void> main() async {
   // token row. Best-effort: without Firebase keys push stays off, the app is
   // unchanged.
   unawaited(AgentsNotifications.instance.initialize());
+
+  // The agent calls the user + the ongoing-call notification
+  // (FEATURE_VOICE_CALL, owner-only test). Returns at once with the flag off.
+  IncomingCallBootstrap.start();
 
   // Initialize core services (model capabilities, encryption preload, …) in
   // background.

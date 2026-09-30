@@ -39,6 +39,19 @@ const bool kFeatureVoiceMode = bool.fromEnvironment(
   defaultValue: false,
 );
 
+/// Voice call — a live, full-duplex call with a LiveKit voice worker
+/// (`lib/voice/`), in a normal chat and in an Agents thread. Owner-only test
+/// build (docs/PERSONAL_AGENT_SPEC.md §6.1, bead chuk_chat-lgq2.8): the call
+/// button shows only when this flag is on AND `VOICE_TOKEN_URL` is set in the
+/// gitignored `.env` (read through `--dart-define-from-file=.env`, see
+/// `VoiceCallService.isAvailable`). Never enable it in CI.
+/// Disabled by default; enable per run with
+/// `FEATURE_VOICE_CALL=true ./run-hot.sh linux`.
+const bool kFeatureVoiceCall = bool.fromEnvironment(
+  'FEATURE_VOICE_CALL',
+  defaultValue: false,
+);
+
 /// Workspaces — custom AI personas with system prompts, files, and memory
 /// settings. Off: the feature earned its place in nobody's day, so it is
 /// hidden rather than removed. Nothing is deleted in Supabase — flipping the

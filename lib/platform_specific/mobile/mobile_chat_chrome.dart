@@ -22,6 +22,8 @@ library;
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -163,6 +165,16 @@ class MobileChatChrome extends StatelessWidget {
                   SizedBox(
                     width: onOpenFiles != null ? 8 - 2 * _kReach : 8 - _kReach,
                   ),
+                  // The messenger's voice call, beside the video call's slot
+                  // (the screen). Only in a build that offers calls.
+                  if (voiceCallUiEnabled) ...<Widget>[
+                    ChatVoiceCallButton.agentsThread(
+                      style: ChatVoiceCallStyle.chip,
+                      agentName: agent.name,
+                      semanticsId: 'mobile_chat_call',
+                    ),
+                    const SizedBox(width: 8 - 2 * _kReach),
+                  ],
                   _ChromeChip(
                     icon: Icons.desktop_windows_rounded,
                     accent: browserAvailable,

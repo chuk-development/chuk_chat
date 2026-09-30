@@ -436,6 +436,11 @@ FEATURE_LINUX_KEYRING="${FEATURE_LINUX_KEYRING:-false}"
 # the Agents messenger. A build flag, not a runtime switch.
 FEATURE_AGENTS="${FEATURE_AGENTS:-false}"
 
+# Voice call (owner-only test, lib/voice/): off by default. On, the call button
+# shows once VOICE_TOKEN_URL (gitignored .env) names the token server:
+#   FEATURE_VOICE_CALL=true ./run-hot.sh linux
+FEATURE_VOICE_CALL="${FEATURE_VOICE_CALL:-false}"
+
 # Desktop-only; the tray plugin has nothing to attach to on Android/iOS.
 case "$TARGET" in
   android*|ios*)
@@ -452,12 +457,18 @@ ALL_FEATURE_FLAGS=(
   FEATURE_VOICE_MODE FEATURE_WORKSPACES FEATURE_ARTIFACTS
   FEATURE_SERVER_TOOLS FEATURE_SKILLS
   FEATURE_SYSTEM_TRAY FEATURE_PAYMENTS_DIRECT
-  FEATURE_LINUX_KEYRING FEATURE_AGENTS
+  FEATURE_LINUX_KEYRING FEATURE_AGENTS FEATURE_VOICE_CALL
 )
 
 for _flag in "${ALL_FEATURE_FLAGS[@]}"; do
   DART_DEFINES="$DART_DEFINES --dart-define=$_flag=${!_flag}"
 done
+
+# The voice token server comes from the gitignored .env (loaded above) or the
+# shell. It is a private URL: passed through, never echoed.
+if [ -n "$VOICE_TOKEN_URL" ]; then
+  DART_DEFINES="$DART_DEFINES --dart-define=VOICE_TOKEN_URL=$VOICE_TOKEN_URL"
+fi
 
 # PLATFORM_MOBILE / PLATFORM_DESKTOP are deliberately not set: with neither
 # defined, kAutoDetectPlatform picks the right layout from the runtime device.

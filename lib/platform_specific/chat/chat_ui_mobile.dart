@@ -96,6 +96,10 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_metrics_observer.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/voice_chat_widgets.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 
 /// What the plus menu can start.
 enum _AttachChoice { camera, photos, files, workspace }
@@ -266,6 +270,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       AppLocalizations.of(context)!.nothingToResend;
   late final StreamingMessageHandler _streamingHandler;
 
+  /// The voice call of this screen. Null unless the build offers calls
+  /// (`voiceCallUiEnabled`): with the flag off nothing is built or listened to.
+  ChatVoiceBinding? _voice;
+
   /// IDs of attachments restored into the composer when an edit started. These
   /// belong to the saved message, so removing them must NOT delete from storage
   /// (the original survives if the edit is cancelled); attachments uploaded
@@ -403,6 +411,19 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     if (!widget.messengerMode) ToolCallHandler.warmUp();
     _initializeHandlers();
     _initializeListeners();
+    if (voiceCallUiEnabled) {
+      _voice = ChatVoiceBinding(
+        currentChatId: () => _activeChatId,
+        isAgentsScreen: widget.messengerMode,
+        messages: () => _messages,
+        isBusy: () => _isSendingMessage || _isCurrentChatStreaming,
+        send: (String text, VoiceTurnStarted onStarted) =>
+            _sendComposerOrVoice(voiceText: text, onVoiceTurnStarted: onStarted),
+        onRecordsChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
     // The disclaimer under the composer steps aside while the field has the
@@ -659,6 +680,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// disposed mid-stream, user-cancel, etc). The UI uses this flag to show
   /// the "Continue generation" button.
   void _markAssistantMessageInterrupted(String chatId, int index) {
+    _voice?.failTurn(chatId, index);
     if (index < 0) return;
     if (_activeChatId == chatId && mounted && index < _messages.length) {
       setState(() {
@@ -1058,6 +1080,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     );
     _audioHandler.onLevelsChanged = null;
     _audioHandler.dispose();
+    _voice?.dispose();
     super.dispose();
   }
 
@@ -2032,6 +2055,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     String chatId,
     double? tps,
   ) async {
+    _voice?.completeTurn(chatId, index, content);
     if (kDebugMode) {
       debugPrint(
         '✅ [FinalizeMessage] chatId: $chatId, index: $index, _activeChatId: $_activeChatId',
@@ -2257,7 +2281,16 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   }
 
   @override
-  Future<void> sendMessage() async {
+  Future<void> sendMessage() => _sendComposerOrVoice();
+
+  /// The send. [voiceText] is a task a voice call hands to this chat: sent
+  /// as this user message, with no attachments and no reply quote, without
+  /// touching the composer; its turn is reported through
+  /// [onVoiceTurnStarted] (voice/voice_turn_queue.dart).
+  Future<void> _sendComposerOrVoice({
+    String? voiceText,
+    VoiceTurnStarted? onVoiceTurnStarted,
+  }) async {
     // Prevent double-send on slow network (user tapping send repeatedly)
     if (_isSendingMessage) return;
 
@@ -2269,6 +2302,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
 
     if (_isCurrentChatStreaming) {
+      // A voice task never queues here: the voice queue waits for the chat.
+      if (voiceText != null) return;
       // AI is still streaming — queue the message instead of cancelling.
       final text = composerController.text.trim();
       if (text.isNotEmpty) {
@@ -2300,7 +2335,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Offline check happens after the user message is added below so we can
     // enqueue + reflect "pending" in the UI.
 
-    if (_fileHandler.hasUploading) {
+    if (voiceText == null && _fileHandler.hasUploading) {
       showSnackBar('Upload in progress');
       ChatStorageService.isMessageOperationInProgress = false;
       if (kDebugMode) {
@@ -2342,9 +2377,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // Credit/free message checks are handled server-side (API returns 402)
 
-    final String typedInput = composerController.text.trim();
-    final bool hasAttachments = _fileHandler.getUploadedFiles().isNotEmpty;
-    final ChatReply? replyForSend = widget.messengerMode
+    final String typedInput = voiceText ?? composerController.text.trim();
+    final bool hasAttachments =
+        voiceText == null && _fileHandler.getUploadedFiles().isNotEmpty;
+    final ChatReply? replyForSend = widget.messengerMode && voiceText == null
         ? _replyDrafts[_messengerChatKey]
         : null;
     final String originalUserInput =
@@ -2366,7 +2402,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final MessageCompositionResult validationResult =
         await MessageCompositionService.prepareMessage(
           userInput: originalUserInput,
-          attachedFiles: _fileHandler.attachedFiles,
+          attachedFiles: voiceText == null
+              ? _fileHandler.attachedFiles
+              : const <AttachedFile>[],
           selectedModelId: selectedModelId,
           apiHistory: apiHistory,
           systemPrompt: _systemPrompt,
@@ -2418,9 +2456,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
 
     // CRITICAL: Capture attached files BEFORE clearing them
     // These need to be passed to the streaming handler for the API call
-    final List<AttachedFile> attachedFilesForApi = List.from(
-      _fileHandler.attachedFiles,
-    );
+    final List<AttachedFile> attachedFilesForApi = voiceText == null
+        ? List.from(_fileHandler.attachedFiles)
+        : <AttachedFile>[];
     if (kDebugMode) {
       debugPrint(
         '📎 [SendMessage] Captured ${attachedFilesForApi.length} attached files for API call',
@@ -2492,11 +2530,14 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
 
-      composerController.clear();
-      // Always clear attachments after sending (not just uploaded ones)
-      // Clear directly without relying on callback since we're already in setState
-      if (_fileHandler.attachedFiles.isNotEmpty) {
-        _fileHandler.attachedFiles.clear();
+      // A voice task leaves the reader's draft and attachments alone.
+      if (voiceText == null) {
+        composerController.clear();
+        // Always clear attachments after sending (not just uploaded ones)
+        // Clear directly without relying on callback since we're already in setState
+        if (_fileHandler.attachedFiles.isNotEmpty) {
+          _fileHandler.attachedFiles.clear();
+        }
       }
       _messages.add({
         'sender': 'ai',
@@ -2509,7 +2550,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     });
 
     final int placeholderIndex = _messages.length - 1;
-    composerFocusNode.requestFocus();
+    if (voiceText == null) composerFocusNode.requestFocus();
     pinMessageToTop();
 
     // ── Offline short-circuit ──────────────────────────────────────
@@ -2697,6 +2738,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         );
       }
     }
+    // The turn is under way: a voice task learns which row answers it.
+    onVoiceTurnStarted?.call(chatIdForThisMessage, placeholderIndex);
     // NOTE: _isSendingMessage is cleared in _finalizeAiMessage() when streaming completes,
     // NOT here. This prevents race conditions where didUpdateWidget fires while streaming.
     await _streamingHandler.sendMessage(
@@ -3318,7 +3361,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // viewport, and the viewport resizes while the keyboard animates.
     const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
     final int itemCount = _messages.length + (showHostTyping ? 1 : 0);
-    Widget itemBuilder(BuildContext _, int i) {
+    Widget rowBuilder(BuildContext _, int i) {
       if (i == _messages.length) {
         return const Padding(
           key: ValueKey<String>('host-run-typing'),
@@ -3405,6 +3448,21 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
             : null,
       );
     }
+
+    // Finished calls of this chat, drawn between its rows (display only).
+    final ChatVoiceBinding? voice = _voice;
+    final voicePlacement = voice == null
+        ? null
+        : placeVoiceRecords(_messages, voice.recordsFor(_activeChatId));
+    Widget itemBuilder(BuildContext context, int i) =>
+        voicePlacement == null || i >= _messages.length
+        ? rowBuilder(context, i)
+        : withVoiceRecords(
+            item: rowBuilder(context, i),
+            index: i,
+            messageCount: _messages.length,
+            placement: voicePlacement,
+          );
 
     if (widget.messengerMode) {
       // The pin room comes and goes; the bottom of the thread does not.
@@ -3655,6 +3713,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                // The live call of this chat, above the
+                                // composer; the composer stays usable.
+                                if (_voice != null)
+                                  VoiceCallPanelSlot(chatId: _activeChatId),
                                 _buildSearchBar(
                                   isCompactMode: isCompactModeForModelDropdown,
                                   theme: theme,
@@ -3978,6 +4040,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
                 Flexible(child: _buildWorkspaceChip(iconFg)),
               ],
               const Spacer(),
+              // The call target of a normal chat. The phone top bar belongs
+              // to the root wrapper, so it sits here, beside the mic; the
+              // Agents thread carries it in its own chrome.
+              if (_voice != null && !widget.messengerMode && !isRecording) ...[
+                ChatVoiceCallButton(
+                  binding: _voice!,
+                  style: ChatVoiceCallStyle.composer,
+                  size: ComposerMetrics.targetSize,
+                ),
+                const SizedBox(width: ComposerMetrics.targetGap),
+              ],
               if (isRecording) ...[
                 buildTinyIconButton(
                   icon: Icons.stop_rounded,
