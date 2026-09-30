@@ -49,6 +49,7 @@ abstract final class HugeIcons {
   static const HugeIconData arrowRight01 = HugeIconData('arrow-right01');
   static const HugeIconData arrowUpRight01 = HugeIconData('arrow-up-right01');
   static const HugeIconData arrowUp01 = HugeIconData('arrow-up01');
+  static const HugeIconData archive02 = HugeIconData('archive02');
   static const HugeIconData attachment01 = HugeIconData('attachment01');
   static const HugeIconData blockchain01 = HugeIconData('blockchain01');
   static const HugeIconData bookOpen01 = HugeIconData('book-open01');
@@ -94,6 +95,7 @@ abstract final class HugeIcons {
   static const HugeIconData home01 = HugeIconData('home01');
   static const HugeIconData imageNotFound01 = HugeIconData('image-not-found01');
   static const HugeIconData image01 = HugeIconData('image01');
+  static const HugeIconData inbox = HugeIconData('inbox');
   static const HugeIconData info = HugeIconData('info');
   static const HugeIconData informationCircle = HugeIconData(
     'information-circle',
@@ -108,6 +110,7 @@ abstract final class HugeIcons {
   static const HugeIconData location01 = HugeIconData('location01');
   static const HugeIconData logout01 = HugeIconData('logout01');
   static const HugeIconData mapPin = HugeIconData('map-pin');
+  static const HugeIconData mail01 = HugeIconData('mail01');
   static const HugeIconData menu01 = HugeIconData('menu01');
   static const HugeIconData message01 = HugeIconData('message01');
   static const HugeIconData mic01 = HugeIconData('mic01');
@@ -150,6 +153,8 @@ abstract final class HugeIcons {
   static const HugeIconData tick02 = HugeIconData('tick02');
   static const HugeIconData timer01 = HugeIconData('timer01');
   static const HugeIconData user = HugeIconData('user');
+  static const HugeIconData userBlock01 = HugeIconData('user-block01');
+  static const HugeIconData userCheck01 = HugeIconData('user-check01');
   static const HugeIconData userGroup = HugeIconData('user-group');
   static const HugeIconData user02 = HugeIconData('user02');
   static const HugeIconData video01 = HugeIconData('video01');

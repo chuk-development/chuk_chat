@@ -130,3 +130,14 @@ On the cloud relay these exact messages ride inside one `cowork_relay` frame
 each — `{"req_id":"<hex>","type":"cowork_relay","payload":"<the JSON above>"}` —
 and the relay never reads the payload. Nothing about the ceremony or the seal
 changes with the pipe; see `docs/PLAN_2026-09-09_CLOUD_PAIRING_TRANSPORT.md`.
+
+## Agent mail
+
+The agent has its own email address (`docs/AGENT_MAIL.md`). The host fetches
+new mail when it starts, when the relay connects, when the relay sends an
+`agent_mail` frame, and every 5 minutes (`chuk_agents_host/agent_mail.py`).
+Mail from the owner or a trusted contact starts one run of the host's own
+coworker. Mail from an unknown sender starts a restricted run that can only
+read that mail, write a note, write a reply draft and archive it (at most 20
+per day, counted in `agent_mail.json`). Mail is off when `AGENTS_AGENT_MAIL=0`
+is set, and also when the host has no account session.

@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/pages/about_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
+import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/pages/settings_page.dart';
@@ -107,6 +108,7 @@ void main() {
       'here.now',
       'Embedding',
       'API Keys',
+      'Mailbox',
       'Automations',
       'Host skills',
       'Appearance',
@@ -190,6 +192,18 @@ void main() {
     await open(find.text('About'), AboutPage);
   });
 
+  testWidgets('Mailbox opens the agent mailbox', (tester) async {
+    await pumpSettings(tester);
+    final Finder row = find.text('Mailbox');
+    await tester.scrollUntilVisible(row.first, 200);
+    await tester.tap(row.first);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    // Signed out in a unit test: the page shows why instead of a list.
+    expect(find.byType(AgentMailboxPage), findsOneWidget);
+    await closeSettings(tester);
+  });
+
   testWidgets('with Agents off the page is upstream chuk_chat, without the '
       'Agents section', (tester) async {
     debugAgentsChatCoreOverride = false;
@@ -198,6 +212,7 @@ void main() {
     expect(find.text('Agents'), findsNothing);
     expect(find.text('here.now'), findsNothing);
     expect(find.text('Host skills'), findsNothing);
+    expect(find.text('Mailbox'), findsNothing);
     for (final label in <String>[
       'Pricing Plans',
       'AI Identity & Memory',

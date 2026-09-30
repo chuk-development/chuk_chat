@@ -91,6 +91,7 @@ class TaskServer:
         skills_seed_root: str | None = None,
         calls=None,
         on_call_frame: Callable[[dict], Any] | None = None,
+        agent_mail=None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -161,6 +162,9 @@ class TaskServer:
                 # for the app's ``voice_call_state``.
                 calls=calls,
                 on_call_frame=on_call_frame,
+                # Agent mail (docs/AGENT_MAIL.md §5): the host's mail service,
+                # for the mail tools and the restricted mail run.
+                agent_mail=agent_mail,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)
