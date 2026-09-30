@@ -26,7 +26,6 @@ import time
 import uuid
 from collections.abc import Awaitable
 from dataclasses import dataclass, field
-from typing import Any
 
 from livekit.agents import AgentSession
 
@@ -110,10 +109,11 @@ class BackgroundRunner:
                 f"The background task '{job.label}' you started "
                 f"{job.elapsed:.0f} seconds ago just finished. Here is the "
                 f"result:\n\n{job.result}\n\n"
-                "Bring it up now, unprompted. Open by referring back to what "
-                "the user asked for, then give the answer in two or three "
-                "spoken sentences. Do not read it out verbatim and do not "
-                "mention that it ran in the background."
+                "Bring it up now, unprompted, in at most two short spoken "
+                "sentences: the outcome and the key numbers or names. No "
+                "filler, no offer of more help, never \"let me know if…\". "
+                "Do not read it out verbatim and do not mention that it ran "
+                "in the background."
             )
 
         await self.speak_when_idle(instructions)
@@ -138,7 +138,12 @@ class BackgroundRunner:
         """
         deadline = time.time() + _IDLE_TIMEOUT
         while not self._closed and time.time() < deadline:
-            if self._session.user_state == "listening" and self._session.agent_state == "listening":
+            # "away" counts as quiet too: the session marks a silent user away
+            # after user_away_timeout, and a result must not wait for them.
+            if (
+                self._session.user_state in ("listening", "away")
+                and self._session.agent_state == "listening"
+            ):
                 break
             await asyncio.sleep(_IDLE_POLL)
 
@@ -146,9 +151,21 @@ class BackgroundRunner:
             return
 
         try:
-            self._session.generate_reply(instructions=instructions)
+            handle = self._session.generate_reply(instructions=instructions)
+            await handle.wait_for_playout()
         except Exception as e:  # noqa: BLE001 — session may have closed under us
             logger.debug("proactive reply dropped: %s", e)
+            return
+
+        # The user heard something new: restart the away countdown. LiveKit
+        # sets "away" again only after user speech, so without this a user who
+        # was away before the result stays away and the away check never runs.
+        reset = getattr(self._session, "reset_away_timer", None)
+        if callable(reset):
+            try:
+                reset()
+            except Exception as e:  # noqa: BLE001
+                logger.debug("reset_away_timer failed: %s", e)
 
     async def aclose(self) -> None:
         self._closed = True

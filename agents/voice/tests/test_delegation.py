@@ -198,7 +198,11 @@ def test_announcement_for_done_task() -> None:
     assert "The task you handed off (summarize the PDF) is done." in text
     assert "It is about solar panels." in text
     assert "unprompted" in text
-    assert "two or three spoken sentences" in text
+    assert "at most two short spoken sentences" in text
+    assert "the outcome and the key numbers" in text
+    assert "No filler" in text
+    assert 'never "let me know if…"' in text
+    assert "two or three" not in text
 
 
 def test_announcement_for_failed_task() -> None:
@@ -208,7 +212,8 @@ def test_announcement_for_failed_task() -> None:
 
     assert "The task you handed off (open the browser) failed." in text
     assert "no browser" in text
-    assert "offer to try again" in text
+    assert "one short sentence" in text
+    assert "try again" in text
 
 
 def test_announcement_for_unknown_task() -> None:
