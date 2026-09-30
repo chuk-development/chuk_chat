@@ -243,6 +243,9 @@ def test_end_call_tool_texts() -> None:
     goodbye = call_config.END_CALL_GOODBYE_INSTRUCTIONS
     assert "one short goodbye" in goodbye
     assert "Alles klar, bis später!" in goodbye
+    # The goodbye follows the language of the call, not a fixed German line.
+    assert "language the user speaks" in goodbye
+    assert "Alright, talk soon!" in goodbye
 
 
 def test_prompt_asks_for_cards_when_visual_helps() -> None:
