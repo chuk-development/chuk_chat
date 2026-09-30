@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Callable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession
+from chuk_agents_runtime.agent_mail import ORIGIN_MAIL, ORIGIN_MAIL_UNTRUSTED
 from chuk_agents_runtime.hindsight_service import (
     configure_memory_service,
     shutdown_memory_service,
@@ -60,6 +61,7 @@ from chuk_agents_executor import (
 from chuk_agents_executor.protocol import USER_BROWSER, browser_target
 
 from .account_store import AccountStore
+from .agent_mail import STATE_FILE as AGENT_MAIL_STATE_FILE, AgentMailService
 from .agent_permissions import (
     CAPABILITY as AGENT_PERMISSIONS_CAPABILITY,
     FILE_NAME as AGENT_PERMISSIONS_FILE,
@@ -695,6 +697,28 @@ class LocalHost:
             desktop=self._desktop_notifier.notify,
             logger=self._log,
         )
+        # Agent mail (docs/AGENT_MAIL.md §5): fetch, claim and start the mail
+        # runs; the client for the mail tools. It fetches now, on every relay
+        # connect and ``agent_mail`` frame, and every 5 minutes. Off on the
+        # offline test seam (an injected model) and with AGENTS_AGENT_MAIL=0,
+        # so no test ever reaches the mail API.
+        self._agent_mail: AgentMailService | None = None
+        if (
+            self._model_factory_override is None
+            and os.environ.get("AGENTS_AGENT_MAIL", "1") != "0"
+        ):
+            self._agent_mail = AgentMailService(
+                # The provisioned session only: the dispatcher starts nothing
+                # before a task server exists, and that builds the session.
+                session_provider=lambda: self._session,
+                submit=self._submit_mail_run,
+                ready=lambda: self._mail_executor() is not None,
+                busy=self._mail_session_busy,
+                main_session=host_agent_id(self._device_id),
+                state_path=self._workspace / AGENT_MAIL_STATE_FILE,
+                logger=self._log,
+            )
+            self._agent_mail.start()
         transport, controller_token, reconnect_pipe = self._build_transport()
         party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
         extra = {"trust_provider": lambda: self._trust} if party_class is CloudHostParty else {}
@@ -735,6 +759,9 @@ class LocalHost:
                 heal_channel_provider=self._current_heal_channel,
                 on_controller_event=self._on_cloud_controller_event,
                 on_pairing_expired=self._on_pairing_channel_expired,
+                # docs/AGENT_MAIL.md §5.1: an ``agent_mail`` frame, or a fresh
+                # authenticated connect, means "fetch the mail now".
+                on_agent_mail=self._on_agent_mail_signal,
                 # With an install token the channel is fixed: nothing is
                 # scanned, and an expiry means "park on it again", not "print a
                 # fresh code".
@@ -816,6 +843,9 @@ class LocalHost:
         calls = getattr(self, "_calls", None)
         if calls is not None:
             calls.stop()
+        mail = getattr(self, "_agent_mail", None)
+        if mail is not None:
+            mail.stop()
         # Room members first: each is an executor thread of its own, and stopping
         # them unregisters their senders, so nothing is left registered as
         # reachable once this host is down.
@@ -1127,6 +1157,9 @@ class LocalHost:
         # ...and every call that still rings (docs/WIRE_CONTRACT.md, "The agent
         # calls the user"): the app may have reconnected after a network drop.
         self._resend_ringing_calls()
+        # The first moment a mail run can start (docs/AGENT_MAIL.md §5.1). The
+        # mail thread retries shortly until this task server is up.
+        self._on_agent_mail_signal("provisioned")
         environment = self._make_environment()
         # A fresh roster connection, opened in the party thread that will use it
         # (sqlite3 connections are single-thread). It reads the same roster file.
@@ -1208,6 +1241,9 @@ class LocalHost:
             # ``voice_call_state``.
             calls=getattr(self, "_calls", None),
             on_call_frame=self._on_call_frame,
+            # Agent mail (docs/AGENT_MAIL.md §5): the mail tools, and the
+            # restricted run of an unknown mail.
+            agent_mail=getattr(self, "_agent_mail", None),
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -1639,9 +1675,15 @@ class LocalHost:
         definition: the desktop toast fires even with a controller attached
         (its ``done`` says ``host_notified`` so the app draws no second one);
         the cloud push still only when nobody is attached."""
+        origin = summary.get("origin") if isinstance(summary, dict) else None
+        if origin == ORIGIN_MAIL_UNTRUSTED:
+            # The restricted run of an unknown mail (docs/AGENT_MAIL.md §5.3):
+            # its output is the note on the mail, which the app shows. No
+            # toast and no push.
+            return
         attached = self._controller_attached()
-        # ``automation`` and ``job`` runs are unattended by definition.
-        automation = isinstance(summary, dict) and summary.get("origin") in ("automation", "job")
+        # ``automation``, ``job`` and ``mail`` runs are unattended by definition.
+        automation = origin in ("automation", "job", ORIGIN_MAIL)
         if attached and not automation:
             # The user is (supposedly) watching. Hold the announcement until the
             # app confirms it rendered the ``done`` (``run_ack``); if that never
@@ -1746,6 +1788,34 @@ class LocalHost:
         if executor is None:
             return False
         return executor.has_live_run(session_key)
+
+    # -- agent mail (docs/AGENT_MAIL.md §5) --------------------------------
+
+    def _mail_executor(self):
+        """The executor a mail run goes to, or ``None`` before the host is
+        provisioned (restarted, no app since)."""
+        party = self._party
+        server = party.task_server if party is not None else None
+        if server is None:
+            return None
+        return server.supervisor.executor(self._agent.id)
+
+    def _submit_mail_run(self, session_key: str, prompt: str, meta: dict) -> str | None:
+        executor = self._mail_executor()
+        if executor is None:
+            return None
+        return executor.submit_task(session_key, prompt, meta)
+
+    def _mail_session_busy(self, session_key: str) -> bool:
+        executor = self._mail_executor()
+        return bool(executor is not None and executor.has_live_run(session_key))
+
+    def _on_agent_mail_signal(self, reason: str) -> None:
+        """The relay said "fetch the mail" (an ``agent_mail`` frame), or the
+        relay connected again. The fetch runs on the mail thread."""
+        mail = getattr(self, "_agent_mail", None)
+        if mail is not None:
+            mail.wake(reason)
 
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended

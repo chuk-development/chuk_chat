@@ -23,6 +23,9 @@ import 'package:chuk_chat/models/chat_model.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/about_page.dart';
+import 'package:chuk_chat/pages/agent_mail_contacts_page.dart';
+import 'package:chuk_chat/pages/agent_mail_detail_page.dart';
+import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/account_settings_page.dart';
 import 'package:chuk_chat/pages/assistant_settings_page.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
@@ -52,6 +55,7 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/account_session.dart';
@@ -75,6 +79,7 @@ import 'package:chuk_chat/widgets/room_create_sheet.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/widgets/room_members_sheet.dart';
 
+import '../support/agent_mail_fake.dart';
 import '../support/fake_relay_controller.dart';
 import '../support/shell_config.dart';
 import 'layout_harness.dart';
@@ -211,6 +216,17 @@ AgentsRoom _fullRoom() => AgentsRoom(
   ],
 );
 
+/// The mail page for one of the fake server's mails.
+Widget _mailDetail(String id) {
+  final FakeAgentMailServer server = FakeAgentMailServer();
+  return AgentMailDetailPage(
+    summary: MailSummary.fromJson(
+      server.mails.firstWhere((Map<String, dynamic> m) => m['id'] == id),
+    ),
+    service: server.service(),
+  );
+}
+
 /// Wraps a panel that has no scaffold of its own.
 Widget _hosted(Widget child) => Scaffold(body: SafeArea(child: child));
 
@@ -290,6 +306,25 @@ List<_Screen> _screens() => <_Screen>[
       (_) => const EmbeddingSettingsPage()),
   _Screen('settings/herenow_settings_page', (_) => const HereNowSettingsPage()),
   _Screen('mcp_connectors_page', (_) => const McpConnectorsPage()),
+  // Agent mail (docs/AGENT_MAIL.md §6), against the in-memory server: the
+  // list with every kind of row, the card without a subscription, a mail
+  // with a note and files, a mail from an unknown sender, a draft, and the
+  // contacts.
+  _Screen('agent_mailbox_page', (_) => AgentMailboxPage(
+        service: FakeAgentMailServer(frozen: true, sendSuspended: true)
+            .service(),
+        now: () => DateTime(2026, 9, 30, 12),
+      )),
+  _Screen('agent_mailbox_page (no subscription)', (_) => AgentMailboxPage(
+        service: FakeAgentMailServer(mailboxStatus: 402).service(),
+      )),
+  _Screen('agent_mail_detail_page', (_) => _mailDetail('m1')),
+  _Screen('agent_mail_detail_page (unknown sender)',
+      (_) => _mailDetail('m3')),
+  _Screen('agent_mail_detail_page (draft)', (_) => _mailDetail('d1')),
+  _Screen('agent_mail_contacts_page', (_) => AgentMailContactsPage(
+        service: FakeAgentMailServer().service(),
+      )),
   _Screen('agent_profile_page', (_Bag bag) {
     final LocalAgentRosterSource source = LocalAgentRosterSource(
       seed: _roster(),

@@ -1902,3 +1902,64 @@ Runtime: `build_runtime(policy=…)`, `HOST_NETWORK_TOOLS`. App:
 (real daemon), `agents/host/tests/test_agent_permissions.py`,
 `agents/executor/tests/test_agent_permissions.py`,
 `agents/runtime/tests/test_network_permission.py`, `test/agents_permissions/`.
+
+## Agent mail (bead chuk_chat-m0j3)
+
+Python side IMPLEMENTED 2026-09-30 (`chuk_agents_host.agent_mail`,
+`chuk_agents_runtime.agent_mail`, the executor's `mail_untrusted` profile).
+Additive: nothing above changes. Product spec and server API:
+`docs/AGENT_MAIL.md`.
+
+### Frame (relay → host)
+
+```json
+{"type": "agent_mail", "event": "new", "message_id": "<uuid>"}
+```
+
+- A relay control frame, like `cowork_pair_bound`. It is NOT inside a
+  `cowork_relay` payload and it is not sealed. The API server sends it to every
+  host of the user when a new mail is stored (`docs/AGENT_MAIL.md` §4.4, step
+  8). A mail that a `mail_wait` took gets no frame.
+- It carries no content. It only tells the host to fetch. The host lists the
+  undelivered mail itself (`GET /v1/agent-mail/messages?undelivered=true`).
+- `CloudRelayLink.handle_frame` records it in the frame ledger:
+  `relay_frame_in` with `decision: "mail_fetch"`, the `event` and the
+  `message_id`. A host without the mail service logs it as
+  `relay_frame_dropped` with `reason: "not_enabled"`. An older host logs it as
+  `unknown_type`. No frame leaves the dispatch silently.
+- The host also fetches when it starts, when the relay connects again with the
+  account token, when it is provisioned, and every 5 minutes. So a frame that is
+  lost while the host is away costs at most one poll interval.
+
+### Runs (host side, informative)
+
+| mail | run | `origin` | `session_key` |
+|---|---|---|---|
+| `is_bulk` | none (claimed only) | — | — |
+| `owner` / `trusted` | one full run for all waiting mails | `mail` | the host's own coworker, `host:<host device id>` |
+| `unknown`, 30 s old | one restricted run per mail, max 20 per day | `mail_untrusted` | `mail:<message_id>` |
+
+- The server claim (`POST /v1/agent-mail/messages/claim`) decides which host
+  runs a mail. A mail whose claim this host lost starts nothing. A mail this
+  host claimed but could not start is kept as pending (in memory and in
+  `agent_mail.json`) and is started before the next claim round.
+- `mail_send` attaches only files inside the agent's workspace: a relative
+  path, or an absolute path under the host workspace or `/workspace`. The
+  path is resolved on the host, symlinks included; anything outside is refused.
+- A `mail` run is a normal run of the host coworker's thread. It streams like
+  an automation run, and its `done` carries `host_notified: true`: the host
+  announces it (desktop toast, cloud push when no app is attached).
+- A `mail_untrusted` run sends NOTHING to the app: no `delta`, no `tool`, no
+  `done`. It is not in any chat thread, it gets no notification, and its
+  transcript is not exported. Its output is the `agent_note` / `importance` on
+  the mail, which the app reads from the mail API. The `runs` row exists, on
+  its own session key, without the model's last message. Its messages go to
+  `mail-untrusted.db` next to the executor store, so `search_chats` or a
+  replay of a full run cannot find the untrusted text.
+- `user_requested` on `POST /v1/agent-mail/send` is true only in a run with
+  `origin: "app"` (a `task` frame the user sent). The executor sets it; it is
+  not a tool argument. The reply of a `mail_untrusted` run is sent with
+  `force_draft: true`, so it is always a draft.
+- The full-run tools show text and snippet only for `sender_trust` `owner`,
+  `trusted` and `self` (the agent's own sent mail and drafts). Any other value
+  counts as `unknown`. A `self` mail starts no run.

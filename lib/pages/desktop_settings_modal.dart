@@ -58,6 +58,7 @@ import 'package:chuk_chat/services/developer_options_service.dart';
 import 'package:chuk_chat/services/onboarding_tour_controller.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
@@ -281,6 +282,15 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
             keywords: 'api keys key secret secrets token password credentials '
                 'env environment schlüssel geheimnis zugangsdaten',
             builder: (_) => const SecretsSettingsPage(),
+          ),
+          // The agent's own address (docs/AGENT_MAIL.md §6).
+          _SettingsDest(
+            id: 'agentmail',
+            icon: Icons.mail_outline,
+            label: l.agentMail,
+            keywords: 'mail email e-mail mailbox inbox address drafts contacts '
+                'postfach adresse entwürfe kontakte',
+            builder: (_) => const AgentMailboxPage(),
           ),
           _SettingsDest(
             id: 'automations',
