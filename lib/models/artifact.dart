@@ -75,9 +75,21 @@ class ArtifactDocument {
     this.messageId,
     this.language,
     this.attachmentPath,
-  });
+    this.updatedAtStamp,
+    String? rowId,
+  }) : rowId = rowId ?? id;
 
+  /// The handle: the slug the AI chose (`todo-app`). Everything outside
+  /// `ArtifactStorageService` addresses an artifact by it: UI, prompt
+  /// context, tool calls, `<artifact>` tags, pending flushers.
   final String id;
+
+  /// Primary key of the `artifacts` row. A random UUID for a sealed row;
+  /// equal to [id] for a legacy row that is not re-sealed yet, and for
+  /// documents that never came from the database. Only
+  /// `ArtifactStorageService` uses it — it never leaves the client in place
+  /// of the handle, and the handle never goes to the server.
+  final String rowId;
   final String chatId;
   final String userId;
   final String? messageId;
@@ -94,8 +106,15 @@ class ArtifactDocument {
   /// persisted; clients fall back to compiling/rendering from [content].
   final String? attachmentPath;
 
+  /// The row's `updated_at` exactly as the server returned it with the data
+  /// of this document. `ArtifactStorageService` uses it as an
+  /// optimistic-concurrency stamp, so a background write never overwrites a
+  /// newer edit. Null when unknown.
+  final String? updatedAtStamp;
+
   ArtifactDocument copyWith({
     String? id,
+    String? rowId,
     String? chatId,
     String? userId,
     String? messageId,
@@ -107,9 +126,11 @@ class ArtifactDocument {
     DateTime? createdAt,
     DateTime? updatedAt,
     String? attachmentPath,
+    String? updatedAtStamp,
   }) {
     return ArtifactDocument(
       id: id ?? this.id,
+      rowId: rowId ?? this.rowId,
       chatId: chatId ?? this.chatId,
       userId: userId ?? this.userId,
       messageId: messageId ?? this.messageId,
@@ -121,50 +142,7 @@ class ArtifactDocument {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       attachmentPath: attachmentPath ?? this.attachmentPath,
-    );
-  }
-
-  Map<String, dynamic> toMap({String? encryptedContent}) {
-    return {
-      'id': id,
-      'chat_id': chatId,
-      'user_id': userId,
-      'message_id': messageId,
-      'title': title,
-      'type': type.value,
-      'language': language,
-      'content': encryptedContent ?? content,
-      'version': version,
-      'attachment_path': attachmentPath,
-      'created_at': createdAt.toUtc().toIso8601String(),
-      'updated_at': updatedAt.toUtc().toIso8601String(),
-    };
-  }
-
-  static ArtifactDocument fromMap(
-    Map<String, dynamic> map, {
-    required String decryptedContent,
-  }) {
-    return ArtifactDocument(
-      id: map['id'] as String,
-      chatId: map['chat_id'] as String,
-      userId: map['user_id'] as String,
-      messageId: map['message_id'] as String?,
-      title: map['title'] as String,
-      type: ArtifactTypeX.fromValue(map['type'] as String? ?? 'markdown'),
-      language: map['language'] as String?,
-      content: decryptedContent,
-      version: (map['version'] as num?)?.toInt() ?? 1,
-      attachmentPath:
-          (map['attachment_path'] as String?)?.trim().isEmpty == true
-          ? null
-          : map['attachment_path'] as String?,
-      createdAt:
-          DateTime.tryParse((map['created_at'] as String?) ?? '') ??
-          DateTime.now().toUtc(),
-      updatedAt:
-          DateTime.tryParse((map['updated_at'] as String?) ?? '') ??
-          DateTime.now().toUtc(),
+      updatedAtStamp: updatedAtStamp ?? this.updatedAtStamp,
     );
   }
 }
@@ -178,18 +156,23 @@ class ArtifactVersionSnapshot {
     this.attachmentPath,
   });
 
+  /// The handle of the artifact (see [ArtifactDocument.id]), not the row id
+  /// the `artifact_versions.artifact_id` column holds.
   final String artifactId;
   final int version;
   final String content;
   final DateTime createdAt;
   final String? attachmentPath;
 
+  /// [artifactId] is the handle the caller resolved for the row; without it
+  /// the row's `artifact_id` (a row id) is used.
   static ArtifactVersionSnapshot fromMap(
     Map<String, dynamic> map, {
     required String decryptedContent,
+    String? artifactId,
   }) {
     return ArtifactVersionSnapshot(
-      artifactId: map['artifact_id'] as String,
+      artifactId: artifactId ?? (map['artifact_id'] as String? ?? ''),
       version: (map['version'] as num?)?.toInt() ?? 1,
       content: decryptedContent,
       attachmentPath:

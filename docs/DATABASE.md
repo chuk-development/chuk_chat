@@ -116,9 +116,10 @@ Project workspaces (requires `projects.sql` migration).
 ```sql
 id                   UUID PRIMARY KEY
 user_id              UUID REFERENCES auth.users
-name                 TEXT NOT NULL
-description          TEXT
-custom_system_prompt TEXT
+name                 TEXT NOT NULL  -- '🔒' placeholder; real name in encrypted_meta
+description          TEXT           -- NULL; real value in encrypted_meta
+custom_system_prompt TEXT           -- NULL; real value in encrypted_meta
+encrypted_meta       TEXT           -- AES-GCM envelope {v, tbl, row, name, description, custom_system_prompt}
 created_at           TIMESTAMPTZ
 updated_at           TIMESTAMPTZ
 is_archived          BOOLEAN DEFAULT false
@@ -150,12 +151,14 @@ Encrypted files attached to projects.
 ```sql
 id                UUID PRIMARY KEY
 project_id        UUID REFERENCES projects ON DELETE CASCADE
-file_name         TEXT NOT NULL
+file_name         TEXT NOT NULL  -- '🔒' placeholder; real name in encrypted_meta
 storage_path      TEXT NOT NULL  -- Path in Supabase storage bucket
 file_type         TEXT NOT NULL
 file_size         INTEGER (max 10MB)
 uploaded_at       TIMESTAMPTZ
-markdown_summary  TEXT  -- AI-generated markdown summary (optional)
+markdown_summary  TEXT  -- NULL; the file text lives in encrypted_meta
+encrypted_meta    TEXT  -- AES-GCM envelope {v, tbl, row, file_name, markdown_summary}
+updated_at        TIMESTAMPTZ  -- stamped by trigger; re-seal writes guard on it
 ```
 
 **RLS Policies:**
@@ -164,6 +167,27 @@ markdown_summary  TEXT  -- AI-generated markdown summary (optional)
 - DELETE: User owns the project
 
 Files stored encrypted in `project-files` bucket.
+
+### artifacts / artifact_versions
+Editable code/markdown/HTML/drawing panels and their version history.
+```sql
+-- artifacts
+id              TEXT PRIMARY KEY  -- random UUID; legacy rows: the AI slug
+chat_id         UUID REFERENCES encrypted_chats ON DELETE CASCADE
+user_id         UUID REFERENCES auth.users ON DELETE CASCADE
+title           TEXT NOT NULL     -- '🔒' placeholder; real title in encrypted_meta
+type            TEXT NOT NULL     -- code | markdown | html | ...
+language        TEXT              -- NULL; real value in encrypted_meta
+content         TEXT NOT NULL     -- AES-GCM envelope
+encrypted_meta  TEXT              -- AES-GCM envelope {v, tbl, row, handle, title, language}
+version, is_active, message_id, attachment_path, created_at, updated_at
+-- artifact_versions
+artifact_id     TEXT REFERENCES artifacts(id) ON DELETE CASCADE ON UPDATE CASCADE
+content         TEXT NOT NULL     -- AES-GCM envelope
+```
+
+The handle is the name the AI uses (`todo-app`). The app resolves it to the
+row id on the client and never sends it to the server as a filter.
 
 ## Storage RLS Policies
 
@@ -215,8 +239,29 @@ Located in `migrations/` folder:
 ## Encryption
 
 All sensitive data is encrypted client-side using AES-256-GCM before being stored:
-- Chat messages (`encrypted_payload`)
+- Chat messages (`encrypted_payload`) and titles (`encrypted_title`)
 - Images (stored as encrypted blobs in Storage)
 - Project files (stored as encrypted blobs in Storage)
+- Row metadata in `encrypted_meta` (`lib/services/encrypted_meta.dart`):
+  artifact handle/title/language, project name/description/system prompt,
+  project file name and text
+
+**`encrypted_meta` and old app builds.** The server cannot encrypt (zero
+knowledge), so the app seals rows itself: new rows are written sealed, and
+each app re-seals the signed-in user's legacy rows in the background when it
+loads them. The plaintext columns keep a `'🔒'` placeholder (they carry
+non-empty CHECK constraints, and old builds still read them). Old builds keep
+writing plaintext; on read, a real plaintext value (not empty, not `'🔒'`)
+wins over the sealed one, and the row is re-sealed on the next load.
+Every envelope names its row (`tbl` + `row` = table and row id), and the app
+refuses an envelope found on any other row: the server cannot move sealed
+metadata between rows of the same user. So a row id is chosen on the client
+before the insert, and an artifact that gets a new id is sealed again in the
+same write.
+Migration: `supabase/migrations/20260930000000_encrypted_meta_artifacts_projects.sql`
+(apply it before the app ships; it also contains the progress query) and
+`20260930010000_project_files_updated_at.sql`. Every re-seal write filters
+on the `updated_at` it read, so it never overwrites a newer edit made on
+another device in between.
 
 The encryption key is derived from the user's password using PBKDF2 with 600,000 iterations.

@@ -15,6 +15,7 @@ import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/password_revision_service.dart';
 import 'package:chuk_chat/services/workspace_storage_service.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
+import 'package:chuk_chat/services/session_recovery.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/user_model_prefs_realtime_service.dart';
 
@@ -59,10 +60,28 @@ class SessionManagerService extends ChangeNotifier {
   void _handleAuthStateChange(AuthState event) async {
     if (event.session != null) {
       await _handleSessionActive(event.session!.user);
-    } else {
+    } else if (isSignOutEvent(
+      event,
+      sessionStashed: SessionStash.pending != null,
+    )) {
       await _handleSessionInactive();
     }
   }
+
+  /// Whether an auth event without a session means the user is signed out.
+  ///
+  /// One exception: `initialSession` without a session while an expired
+  /// session is stashed ([sessionStashed], `SessionStash.pending`). The
+  /// Agents build sets that session aside before `Supabase.initialize` and
+  /// restores it right after, and gotrue replays the event to every late
+  /// listener. Treating it as a sign-out wiped the key and the caches on
+  /// every cold start with an expired token. Without a stash, a sessionless
+  /// `initialSession` still runs the cleanup (e.g. after a sign-out made
+  /// offline, whose cleanup was skipped).
+  @visibleForTesting
+  static bool isSignOutEvent(AuthState event, {bool sessionStashed = false}) =>
+      event.session == null &&
+      !(event.event == AuthChangeEvent.initialSession && sessionStashed);
 
   Future<void> _handleSessionActive(User user) async {
     if (kDebugMode) {

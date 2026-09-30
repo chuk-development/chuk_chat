@@ -1,0 +1,373 @@
+{
+  "ok": true,
+  "strict": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"reel\"> is a timeline element that contains nested <div>. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#reel",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"reel\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 5 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 2,
+    "findings": [
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "p.ub-b",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 688.08,
+          "right": 606.65,
+          "bottom": 834.55,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "containerSelector": "p.pg-to",
+        "text": "Invoice for the Berger bathroom: 9 hours at €62, tiles €310. PDF please.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 688.08,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "div.ans > span:nth-of-type(3)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 141.6,
+          "top": 975.5,
+          "right": 309.68,
+          "bottom": 1022.5,
+          "width": 168.08,
+          "height": 47
+        },
+        "containerSelector": "div.pg-rows > div:nth-of-type(2) > span:nth-of-type(1)",
+        "text": "invoice",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 141.6,
+          "y": 975.5,
+          "width": 168.08,
+          "height": 47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "span.ac-txt > em:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 1247.09,
+          "right": 329.88,
+          "bottom": 1286.09,
+          "width": 189.88,
+          "height": 39
+        },
+        "containerSelector": "p.pg-note",
+        "text": "Total €868.00",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 1247.09,
+          "width": 189.88,
+          "height": 39
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 10,
+        "selector": "div.pg-row.pg-tot",
+        "message": "Nowrap text is wider than its container.",
+        "rect": {
+          "left": 164.16,
+          "top": 1051.1,
+          "right": 915.8,
+          "bottom": 1195.62,
+          "width": 751.64,
+          "height": 144.51
+        },
+        "containerSelector": "div.pg-rows",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 207.7,
+          "top": 805.27,
+          "right": 872.26,
+          "bottom": 1191.76,
+          "width": 664.56,
+          "height": 386.49
+        },
+        "overflow": {
+          "left": 43.54,
+          "right": 43.54
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 164.16,
+          "y": 1051.1,
+          "width": 751.64,
+          "height": 144.51
+        },
+        "firstSeen": 10,
+        "lastSeen": 10,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "container_overflow",
+        "severity": "info",
+        "time": 11.333,
+        "selector": "div.pg-row.pg-tot",
+        "message": "Nowrap text is wider than its container.",
+        "rect": {
+          "left": 177.8,
+          "top": 1067.59,
+          "right": 902.17,
+          "bottom": 1206.86,
+          "width": 724.37,
+          "height": 139.27
+        },
+        "containerSelector": "div.pg-rows",
+        "fixHint": "Resize/reposition the child or container, or mark intentional overflow with data-layout-allow-overflow.",
+        "containerRect": {
+          "left": 201.73,
+          "top": 813.42,
+          "right": 878.24,
+          "bottom": 1206.86,
+          "width": 676.5,
+          "height": 393.44
+        },
+        "overflow": {
+          "left": 23.93,
+          "right": 23.93
+        },
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 177.8,
+          "y": 1067.59,
+          "width": 724.37,
+          "height": 139.27
+        },
+        "firstSeen": 11.333,
+        "lastSeen": 11.333,
+        "occurrences": 1,
+        "heldMs": 0
+      }
+    ],
+    "duration": 12,
+    "samples": [
+      0.667,
+      2,
+      3.333,
+      4.667,
+      6,
+      7.333,
+      8.667,
+      10,
+      11.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 5,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 3,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 4.13:1; WCAG AA requires 4.5:1.",
+        "text": "Brandt Tiling · Kiel",
+        "fg": "rgb(131,124,113)",
+        "bg": "rgb(255,255,255)",
+        "ratio": 4.13,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(124,118,107)",
+        "large": false,
+        "selector": "div > div > div:nth-of-type(3) > div > div:nth-of-type(3) > div:nth-of-type(3) > div > p:nth-of-type(1)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 201.73245239257812,
+          "y": 407.8734130859375,
+          "width": 676.50390625,
+          "height": 48.47271728515625
+        },
+        "time": 11.333
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 4.13:1; WCAG AA requires 4.5:1.",
+        "text": "Payable within 14 days.",
+        "fg": "rgb(131,124,113)",
+        "bg": "rgb(255,255,255)",
+        "ratio": 4.13,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(124,118,107)",
+        "large": false,
+        "selector": "div > div > div:nth-of-type(3) > div > div:nth-of-type(3) > div:nth-of-type(3) > div > p:nth-of-type(3)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 201.73245239257812,
+          "y": 1266.71875,
+          "width": 676.50390625,
+          "height": 48.47265625
+        },
+        "time": 11.333
+      },
+      {
+        "code": "contrast_aa_failure",
+        "severity": "warning",
+        "message": "Contrast is 3.12:1; WCAG AA requires 4.5:1.",
+        "text": "Download",
+        "fg": "rgb(255,255,255)",
+        "bg": "rgb(217,119,87)",
+        "ratio": 3.12,
+        "requiredRatio": 4.5,
+        "suggestedColor": "rgb(43,43,43)",
+        "large": false,
+        "selector": "div > div > div:nth-of-type(3) > div > div:nth-of-type(3) > div:nth-of-type(4) > span:nth-of-type(2)",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 621.53125,
+          "y": 1584.109375,
+          "width": 287.3125,
+          "height": 85.640625
+        },
+        "time": 11.333
+      }
+    ],
+    "enabled": true,
+    "samples": [
+      0.667,
+      3.333,
+      6,
+      8.667,
+      11.333
+    ],
+    "checked": 29,
+    "passed": 26
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.94",
+    "latestVersion": "0.8.94",
+    "updateAvailable": false
+  }
+}

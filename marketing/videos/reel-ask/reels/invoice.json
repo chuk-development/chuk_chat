@@ -1,0 +1,27 @@
+{
+  "slug": "invoice",
+  "title": "Ask Chuk Chat to|[turn your notes]|[into an invoice]",
+  "surface": "chat",
+  "clock": "12:00",
+  "chat_title": "Invoice Berger",
+  "prompt": "Invoice for the Berger bathroom: 9 hours at €62, tiles €310. PDF please.",
+  "running": "Compiling document",
+  "steps": [{"icon": "flash", "text": "Ran", "detail": "typst compile"}],
+  "worked": "Worked for 6s",
+  "answer": "Done. The invoice for the Berger bathroom comes to **€868.00**.",
+  "card": {
+    "type": "document",
+    "title": "Invoice Berger bathroom",
+    "meta": "Typst · PDF · v1",
+    "highlight": "Total €868.00",
+    "doc": {
+      "from": "Brandt Tiling · Kiel",
+      "heading": "Invoice",
+      "number": "No. 2026-047",
+      "to": "Mrs Berger · bathroom",
+      "rows": [["Labour 9 h × €62", "€558.00"], ["Tiles", "€310.00"]],
+      "total": ["Total", "€868.00"],
+      "note": "Payable within 14 days."
+    }
+  }
+}

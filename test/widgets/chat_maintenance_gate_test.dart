@@ -59,9 +59,11 @@ void main() {
     expect(find.byType(LinearProgressIndicator), findsNWidgets(2));
   });
 
-  testWidgets('a normal start never says it is syncing, however long', (
+  testWidgets('no start says it is syncing, however long the check runs', (
     tester,
   ) async {
+    // A normal start and the first sign-in on a new install alike: the chats
+    // sync behind the app, so the gate shows no text and no loader.
     controller.debugShow(ChatMaintenancePhase.checking);
     await tester.pumpWidget(
       _app(
@@ -69,46 +71,16 @@ void main() {
         locale: const Locale('de'),
       ),
     );
-    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(seconds: 5));
 
-    expect(find.text('Chats werden synchronisiert...'), findsNothing);
+    expect(find.byType(Text), findsNothing);
     expect(find.byType(ExpressiveLoader), findsNothing);
-    expect(find.text('SHELL'), findsNothing);
-  });
+    expect(find.byType(LinearProgressIndicator), findsNothing);
 
-  testWidgets('after a sign-in a quick check shows nothing, a slow one says '
-      'it is syncing', (tester) async {
-    controller.debugShow(ChatMaintenancePhase.checking, syncHint: true);
-    await tester.pumpWidget(
-      _app(
-        ChatMaintenanceGate(
-          controller: controller,
-          syncingHintDelay: const Duration(milliseconds: 400),
-          child: const Text('SHELL'),
-        ),
-        locale: const Locale('de'),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 300));
-
-    // A normal start is done before the delay: no text flashes.
-    expect(find.text('SHELL'), findsNothing);
-    expect(find.text('Chats werden synchronisiert...'), findsNothing);
-    expect(find.byType(ExpressiveLoader), findsNothing);
-
-    // A first start after an install is not: the screen says why it waits.
-    await tester.pump(const Duration(milliseconds: 200));
-    await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Chats werden synchronisiert...'), findsOneWidget);
-    expect(find.text('Das kann einen Moment dauern.'), findsOneWidget);
-    expect(find.byType(ExpressiveLoader), findsOneWidget);
-    expect(find.text('SHELL'), findsNothing);
-
-    // The check ends: the shell replaces the hint.
+    // The check ends: the shell comes.
     controller.debugShow(ChatMaintenancePhase.done);
     await tester.pump();
     expect(find.text('SHELL'), findsOneWidget);
-    expect(find.text('Chats werden synchronisiert...'), findsNothing);
   });
 
   testWidgets('a failure offers Retry and Continue; Continue opens the app', (
@@ -143,8 +115,6 @@ void main() {
       'maintenanceFailedTitle',
       'maintenanceFailedBody',
       'maintenanceContinue',
-      'maintenanceSyncing',
-      'maintenanceSyncingHint',
     ];
     for (final strings in [
       stringsEn,

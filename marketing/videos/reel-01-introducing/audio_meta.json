@@ -1,0 +1,9 @@
+{
+  "bgm": {
+    "path": "assets/bgm/track_edit.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 59.7,
+    "source": "marketing/_shared/music/05-announce-yourself.wav (MP3 data), transcoded, straight cut source 7.069-66.769 s (tools/make_music_edit.sh)"
+  }
+}

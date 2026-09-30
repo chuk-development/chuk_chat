@@ -1,5 +1,7 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/models/workspace_model.dart';
+import 'package:chuk_chat/services/encrypted_meta.dart';
 
 void main() {
   final testDate = DateTime(2025, 6, 15, 10, 30);
@@ -491,6 +493,42 @@ void main() {
       );
       // (20000 + 200) / 4 = 5050
       expect(file.estimatedTokensFormatted, equals('5.0k tokens'));
+    });
+  });
+
+  // A row sealed with another key reaches the model with the placeholder
+  // as its name (see WorkspaceStorageService.resolveSealedRow).
+  group('placeholder name of an unreadable sealed row', () {
+    test('Workspace renders without error', () {
+      final project = Workspace.fromJson({
+        'id': 'p',
+        'name': kEncryptedPlaceholder,
+        'created_at': testDate.toIso8601String(),
+        'updated_at': testDate.toIso8601String(),
+        'encrypted_meta': 'ignored by the model',
+      });
+      expect(project.name, kEncryptedPlaceholder);
+      expect(project.initials, kEncryptedPlaceholder);
+      expect(project.hasCustomPrompt, isFalse);
+      expect(project.toJson().containsKey('encrypted_meta'), isFalse);
+      expect(() => project.displayColor, returnsNormally);
+      expect(() => project.displayIcon, returnsNormally);
+    });
+
+    test('WorkspaceFile renders without error', () {
+      final file = WorkspaceFile.fromJson({
+        'id': 'f',
+        'project_id': 'p',
+        'file_name': kEncryptedPlaceholder,
+        'storage_path': 'user/f.enc',
+        'file_type': 'md',
+        'file_size': 10,
+        'uploaded_at': testDate.toIso8601String(),
+      });
+      expect(file.fileName, kEncryptedPlaceholder);
+      expect(file.hasMarkdownSummary, isFalse);
+      expect(file.fileIcon, Icons.insert_drive_file);
+      expect(file.toJson().containsKey('encrypted_meta'), isFalse);
     });
   });
 }

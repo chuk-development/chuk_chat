@@ -1,0 +1,13 @@
+{
+  "bgm": {
+    "path": "assets/bgm/bed-12.0s.wav",
+    "volume": 0.9,
+    "mode": "supplied",
+    "duration_s": 12.0,
+    "source": "marketing/_shared/music/01-introducing.wav (MP3 stream in a .wav name), transcoded to PCM as assets/bgm/track.wav. Bed = 38.43 s to 50.43 s (the drop into the loud part, about -12 dB RMS the whole way), 10 ms fade-in, 0.7 s fade-out. Cut per reel length by tools/make_bed.sh; muxed onto the rendered picture by render.sh.",
+    "bpm": 100,
+    "beats_s": "about 0.07 + 0.6 k; bars at 0.07 + 2.4 n"
+  },
+  "voices": [],
+  "sfx": []
+}

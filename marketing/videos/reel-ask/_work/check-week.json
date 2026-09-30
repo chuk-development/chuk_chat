@@ -1,0 +1,406 @@
+{
+  "ok": true,
+  "strict": false,
+  "lint": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 5,
+    "infoCount": 0,
+    "findings": [
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 5 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "nested_structure_needs_subcomposition",
+        "severity": "warning",
+        "message": "<div id=\"reel\"> is a timeline element that contains nested <div>. The timeline shows one row per top-level element, and the root composition is built only from sub-compositions.",
+        "selector": "#reel",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/index.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Move <div id=\"reel\"> and its contents into a sub-composition file and mount it with data-composition-src."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 5 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      },
+      {
+        "code": "duplicate_media_discovery_risk",
+        "severity": "warning",
+        "message": "Detected 3 matching img entries with the same source/start/duration.",
+        "selector": "[data-composition-id]",
+        "dataAttributes": {},
+        "sourceFile": "/home/user/git/chuk_chat/marketing/videos/reel-ask/compositions/ask-week.html",
+        "bbox": {
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0
+        },
+        "time": 0,
+        "fixHint": "Avoid duplicated media nodes that can be discovered twice during compilation."
+      }
+    ],
+    "filesScanned": 7
+  },
+  "runtime": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": []
+  },
+  "layout": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 4,
+    "infoCount": 4,
+    "findings": [
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "p.ub-b",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 403.75,
+          "right": 606.65,
+          "bottom": 550.22,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "containerSelector": "div.pv > div:nth-of-type(1) > span:nth-of-type(1)",
+        "text": "What is due this week? Check Linear, Todoist and Notion.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 403.75,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "p.ub-b",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 403.75,
+          "right": 606.65,
+          "bottom": 550.22,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "containerSelector": "div.pv > div:nth-of-type(1) > div:nth-of-type(1) > b:nth-of-type(1)",
+        "text": "What is due this week? Check Linear, Todoist and Notion.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 403.75,
+          "width": 466.65,
+          "height": 146.47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "div.col > div:nth-of-type(3) > div:nth-of-type(1) > span:nth-of-type(2) > b:nth-of-type(1)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 703.27,
+          "right": 333.24,
+          "bottom": 741.27,
+          "width": 193.24,
+          "height": 38
+        },
+        "containerSelector": "div.pv > div:nth-of-type(2) > span:nth-of-type(1)",
+        "text": "linear list issues",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 703.27,
+          "width": 193.24,
+          "height": 38
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "warning",
+        "time": 9.375,
+        "selector": "div.ans > span:nth-of-type(7)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 498.79,
+          "top": 936.38,
+          "right": 624.85,
+          "bottom": 983.38,
+          "width": 126.06,
+          "height": 47
+        },
+        "containerSelector": "div.pv > div:nth-of-type(3) > div:nth-of-type(1) > small:nth-of-type(1)",
+        "text": "first.",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 498.79,
+          "y": 936.38,
+          "width": 126.06,
+          "height": 47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.5,
+        "occurrences": 2,
+        "heldMs": 125
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.375,
+        "selector": "div.ans > span:nth-of-type(6)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 372.72,
+          "top": 936.38,
+          "right": 498.79,
+          "bottom": 983.38,
+          "width": 126.07,
+          "height": 47
+        },
+        "containerSelector": "div.pv > div:nth-of-type(3) > span:nth-of-type(1)",
+        "text": "comes",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 372.72,
+          "y": 936.38,
+          "width": 126.07,
+          "height": 47
+        },
+        "firstSeen": 9.375,
+        "lastSeen": 9.375,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.5,
+        "selector": "div.ans > span:nth-of-type(6)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 359.33,
+          "top": 936.38,
+          "right": 485.4,
+          "bottom": 983.38,
+          "width": 126.07,
+          "height": 47
+        },
+        "containerSelector": "div.pv > div:nth-of-type(3) > div:nth-of-type(1) > small:nth-of-type(1)",
+        "text": "comes",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 359.33,
+          "y": 936.38,
+          "width": 126.07,
+          "height": 47
+        },
+        "firstSeen": 9.5,
+        "lastSeen": 9.5,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.5,
+        "selector": "div.ac.pl > div:nth-of-type(2) > span:nth-of-type(2)",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 140,
+          "top": 1137.7,
+          "right": 317.18,
+          "bottom": 1176.7,
+          "width": 177.18,
+          "height": 39
+        },
+        "containerSelector": "div.pv > div:nth-of-type(4) > span:nth-of-type(1)",
+        "text": "Fix the login bug",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 140,
+          "y": 1137.7,
+          "width": 177.18,
+          "height": 39
+        },
+        "firstSeen": 9.5,
+        "lastSeen": 9.5,
+        "occurrences": 1,
+        "heldMs": 0
+      },
+      {
+        "code": "content_overlap",
+        "severity": "info",
+        "time": 9.5,
+        "selector": "span.ac-btn.pri",
+        "message": "Two text blocks overlap and may render unreadable.",
+        "rect": {
+          "left": 423.05,
+          "top": 1346.09,
+          "right": 589.52,
+          "bottom": 1384.09,
+          "width": 166.47,
+          "height": 38
+        },
+        "containerSelector": "div.pv > div:nth-of-type(5) > div:nth-of-type(1) > small:nth-of-type(1)",
+        "text": "Open plan",
+        "fixHint": "Give each block its own zone, or mark intentional layering with data-layout-allow-overlap.",
+        "dataAttributes": {},
+        "sourceFile": "index.html",
+        "bbox": {
+          "x": 423.05,
+          "y": 1346.09,
+          "width": 166.47,
+          "height": 38
+        },
+        "firstSeen": 9.5,
+        "lastSeen": 9.5,
+        "occurrences": 1,
+        "heldMs": 0
+      }
+    ],
+    "duration": 12,
+    "samples": [
+      0.667,
+      2,
+      3.333,
+      4.667,
+      6,
+      7.333,
+      8.667,
+      10,
+      11.333
+    ],
+    "transitionSamples": [],
+    "transitionSamplesDropped": 0,
+    "tolerance": 2,
+    "totalIssueCount": 8,
+    "truncated": false
+  },
+  "motion": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": false,
+    "samples": 0
+  },
+  "contrast": {
+    "ok": true,
+    "errorCount": 0,
+    "warningCount": 0,
+    "infoCount": 0,
+    "findings": [],
+    "enabled": true,
+    "samples": [
+      0.667,
+      3.333,
+      6,
+      8.667,
+      11.333
+    ],
+    "checked": 30,
+    "passed": 30
+  },
+  "hdr": {
+    "autoPromotion": null,
+    "inspection": "available"
+  },
+  "snapshots": {
+    "enabled": false,
+    "files": [],
+    "times": [],
+    "findingFiles": []
+  },
+  "_meta": {
+    "version": "0.8.94",
+    "latestVersion": "0.8.94",
+    "updateAvailable": false
+  }
+}
