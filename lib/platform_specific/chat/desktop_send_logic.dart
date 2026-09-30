@@ -919,6 +919,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     if (lastMessage['sender'] != 'ai' && lastMessage['sender'] != 'assistant') {
       return;
     }
+    // A voice task whose answer the reader stopped: report it as failed.
+    _voice?.failTurn(_activeChatId, _messages.length - 1);
 
     final updatedLastMessage = Map<String, String>.from(lastMessage);
     final currentText = updatedLastMessage['text'] ?? '';
@@ -1026,6 +1028,10 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     bool foldVariant = false,
     bool commit = true,
   }) {
+    final String? voiceText = updates['text'];
+    if (commit && voiceText != null) {
+      _voice?.completeTurn(chatId, placeholderIndex, voiceText);
+    }
     List<Map<String, dynamic>>? messages = _streamingManager
         .getBackgroundMessages(chatId);
     final bool fromSnapshot = messages != null;
@@ -1179,6 +1185,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     List<ContentBlock>? continuePriorContentBlocks,
     String? modelIdOverride,
     String? providerOverride,
+    // A task a voice call hands to this chat: sent as this user message,
+    // with no attachments and without touching the composer. Its turn is
+    // reported through [onVoiceTurnStarted] (voice/voice_turn_queue.dart).
+    String? voiceText,
+    VoiceTurnStarted? onVoiceTurnStarted,
   }) async {
     if (_activeSendOperationId != null) {
       showSnackBar('Please wait');
@@ -1197,6 +1208,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
       }
 
       if (_isStreaming) {
+        // A voice task never queues here: the voice queue waits for the chat.
+        if (voiceText != null) return;
         // AI is still streaming — queue the message instead of cancelling.
         final text = composerController.text.trim();
         if (text.isNotEmpty) {
@@ -1220,7 +1233,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         return;
       }
 
-      if (_fileHandler.attachedFiles.any((f) => f.isUploading)) {
+      if (voiceText == null &&
+          _fileHandler.attachedFiles.any((f) => f.isUploading)) {
         if (mounted) {
           AppNotifications.show(
             context,
@@ -1257,7 +1271,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       final String originalUserInput = isContinuation
           ? ChatUiHelpers.continueGenerationPrompt
-          : composerController.text.trim();
+          : (voiceText ?? composerController.text.trim());
 
       // Use MessageCompositionService to prepare the message
       final List<Map<String, dynamic>> apiHistory = isContinuation
@@ -1274,7 +1288,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       final result = await MessageCompositionService.prepareMessage(
         userInput: originalUserInput,
-        attachedFiles: isContinuation
+        attachedFiles: isContinuation || voiceText != null
             ? const <AttachedFile>[]
             : _fileHandler.attachedFiles,
         selectedModelId: modelIdForSend,
@@ -1329,6 +1343,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       final bool hasAttachments =
           !isContinuation &&
+          voiceText == null &&
           _fileHandler.attachedFiles.any(
             (f) => f.markdownContent != null || f.encryptedImagePath != null,
           );
@@ -1472,8 +1487,11 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
 
         // Store document attachments as JSON-encoded string if present
-        final documentAttachments = _fileHandler.attachedFiles
-            .where((f) => !f.isImage && f.markdownContent != null)
+        final documentAttachments =
+            (voiceText == null
+                    ? _fileHandler.attachedFiles
+                    : const <AttachedFile>[])
+                .where((f) => !f.isImage && f.markdownContent != null)
             .map(
               (f) => {
                 'fileName': f.fileName,
@@ -1492,7 +1510,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         }
 
         // Store original AttachedFile objects for resend functionality
-        if (_fileHandler.attachedFiles.isNotEmpty) {
+        if (voiceText == null && _fileHandler.attachedFiles.isNotEmpty) {
           userMessage['attachedFilesJson'] = jsonEncode(
             _fileHandler.attachedFiles.map((f) => f.toJson()).toList(),
           );
@@ -1512,7 +1530,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
           );
         }
 
-        composerController.clear();
+        if (voiceText == null) composerController.clear();
         _isSending = true;
         if (hasAttachments) {
           _fileHandler.attachedFiles.clear();
@@ -1581,7 +1599,9 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
 
       if (firstMessageInChat) _animCtrl.forward();
       scrollChatToBottom(force: true);
-      Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+      if (voiceText == null) {
+        Future.delayed(Duration.zero, () => composerFocusNode.requestFocus());
+      }
 
       // Capture chatId for this streaming operation - ensures correct persistence even if user switches chats
       final String chatIdForStream = _activeChatId!;
@@ -2178,6 +2198,8 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
         return;
       }
 
+      // The turn is under way: a voice task learns which row answers it.
+      onVoiceTurnStarted?.call(chatIdForStream, placeholderIndex);
       try {
         await startStreamPass(
           message: aiPromptContent,
@@ -2383,6 +2405,7 @@ extension DesktopSendLogic on ChukChatUIDesktopState {
     double? tps,
     bool commit = false,
   }) {
+    _voice?.completeTurn(_activeChatId, index, content);
     _autoSaveTimer?.cancel();
     // Streaming ended: drop the per-token live snapshot so the finalized
     // bubble renders from the persisted message text, not a stale live value.

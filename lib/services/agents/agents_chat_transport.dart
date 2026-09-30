@@ -405,6 +405,22 @@ class AgentsChatTransport {
           break;
 
         case AgentsRelayRunError(:final message):
+          // A host that names the thread (session_key) ends that thread's
+          // stream only; the other threads ignore it. An error that names no
+          // thread comes from a host that predates the field, and it ends the
+          // open stream as it always did: a real failure there must not spin
+          // forever. (The app no longer sends such a host the frames it would
+          // refuse; see AgentsPermissionsService.)
+          final String? owner = event.sessionKey;
+          if (owner != null && owner != sessionKey) {
+            if (kDebugMode) {
+              debugPrint(
+                '[agents-transport] ignored an error of another thread '
+                '(${message.length} chars)',
+              );
+            }
+            break;
+          }
           terminated = true;
           ledger.finish(sessionKey, reason: 'error');
           emit(ErrorEvent(message, code: StreamErrorCodes.streamFailure));

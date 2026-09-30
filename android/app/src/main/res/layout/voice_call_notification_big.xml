@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ongoing-call notification, expanded (VoiceCallBridge.kt): Mute, Speaker,
+     Volume down, Volume up, Hang up. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/voice_call_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification.Title" />
+
+    <TextView
+        android:id="@+id/voice_call_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textAppearance="@android:style/TextAppearance.Material.Notification" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <ImageButton
+                android:id="@+id/voice_call_mute"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/voice_call_button"
+                android:contentDescription="@string/voice_call_mute"
+                android:scaleType="center"
+                android:src="@drawable/ic_voice_call_mic" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:id="@+id/voice_call_speaker_slot"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <ImageButton
+                android:id="@+id/voice_call_speaker"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/voice_call_button"
+                android:contentDescription="@string/voice_call_speaker_on"
+                android:scaleType="center"
+                android:src="@drawable/ic_voice_call_speaker" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <ImageButton
+                android:id="@+id/voice_call_volume_down"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/voice_call_button"
+                android:contentDescription="@string/voice_call_volume_down"
+                android:scaleType="center"
+                android:src="@drawable/ic_voice_call_volume_down" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <ImageButton
+                android:id="@+id/voice_call_volume_up"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/voice_call_button"
+                android:contentDescription="@string/voice_call_volume_up"
+                android:scaleType="center"
+                android:src="@drawable/ic_voice_call_volume_up" />
+        </FrameLayout>
+
+        <FrameLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1">
+
+            <ImageButton
+                android:id="@+id/voice_call_hangup"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_gravity="center"
+                android:background="@drawable/voice_call_button_hangup"
+                android:contentDescription="@string/voice_call_hang_up"
+                android:scaleType="center"
+                android:src="@drawable/ic_voice_call_end" />
+        </FrameLayout>
+    </LinearLayout>
+</LinearLayout>

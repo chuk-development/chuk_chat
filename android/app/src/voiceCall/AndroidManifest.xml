@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged on top of src/main/AndroidManifest.xml when the build has
+     FEATURE_VOICE_CALL=true (android/app/build.gradle.kts). The voice-call
+     half of the manifest; a build without the flag never gets it. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Calls are audio only: flutter_callkit_incoming's camera foreground
+         service type (and its Play Console declaration) is dropped. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
+        tools:node="remove" />
+
+    <application>
+        <!-- singleTask, not singleTop: accepting a ring goes through the
+             callkit plugin's TransparentActivity, which starts the launch
+             intent from a task of its own. singleTop would put a SECOND
+             MainActivity (and a second Flutter engine) into that task;
+             singleTask routes it to this instance through onNewIntent.
+             singleInstance (the plugin's advice) is not used: every activity it
+             starts lands in another task and startActivityForResult answers
+             CANCELED at once, which breaks the assistant-role request and the
+             file/image pickers. No deep-link or share intent filter targets
+             this activity. -->
+        <activity
+            android:name="dev.chuk.chat.MainActivity"
+            android:launchMode="singleTask"
+            tools:replace="android:launchMode" />
+
+        <!-- The buttons of the ongoing-call notification (VoiceCallBridge.kt). -->
+        <receiver
+            android:name="dev.chuk.chat.voice.VoiceCallActionReceiver"
+            android:exported="false" />
+
+        <!-- The plugin's call service without the camera type. -->
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
+            android:foregroundServiceType="phoneCall|microphone"
+            tools:replace="android:foregroundServiceType" />
+    </application>
+</manifest>

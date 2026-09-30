@@ -128,6 +128,18 @@ These come from existing decisions. This spec does not change them unless it say
    text, never into FCM, never into logs (`kDebugMode` guard).
 8. **Design:** `ExpressiveScreen`, HugeIcons, one button family, no coloured
    `BoxShadow` (`docs/DESIGN.md`).
+9. **A voice call is not end-to-end encrypted.** Rule 7 does not cover it.
+   When a call starts, the app puts context into the LiveKit dispatch
+   metadata: the last text messages of the thread (at most 10 messages and
+   4000 characters) and, for a call that the agent starts, the reason for the
+   call. The app sends this metadata to the token endpoint `/v1/voice/token`.
+   LiveKit then gives it to the voice worker. The voice worker is a chuk
+   service, not the user's host. The worker also receives the audio and the
+   transcript of the call. It sends them to its speech and language models.
+   Transport encryption (TLS) protects these paths. Chuk's services and the
+   model providers can read the data. The token endpoint does not log the
+   metadata; it logs only its size. The model path of the worker is not
+   end-to-end encrypted. Do not describe it as end-to-end encrypted.
 
 ### 4.1 Decisions this spec changes
 

@@ -80,6 +80,10 @@ import 'package:chuk_chat/platform_specific/chat/handlers/desktop_file_handler.d
 import 'package:chuk_chat/platform_specific/chat/chat_debug_snapshot.dart';
 import 'package:chuk_chat/platform_specific/chat/widgets/chat_message_list_item.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/voice_chat_widgets.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/voice_turn_queue.dart';
 
 part 'desktop_send_logic.dart';
 
@@ -125,8 +129,8 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// its pane instead of the window.
   final bool agentsThread;
 
-  /// No longer read: the Agents thread uses chuk_chat's composer and its
-  /// hint. Kept so the caller (agents_thread_view) still compiles.
+  /// The coworker's name (agents_thread_view passes it). The composer no
+  /// longer reads it; the voice call uses it as the coworker's name.
   final String? agentsTitle;
 
   /// Room at the top of the message list for a bar that floats over it (the
@@ -326,6 +330,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
 
   late final DesktopFileHandler _fileHandler;
 
+  /// The voice call of this screen. Null unless the build offers calls
+  /// (`voiceCallUiEnabled`): with the flag off nothing is built or listened to.
+  ChatVoiceBinding? _voice;
+
   /// IDs of attachments restored into the composer when an edit started. These
   /// belong to the saved message, so removing them must NOT delete from storage
   /// (the original survives if the edit is cancelled); attachments uploaded
@@ -482,6 +490,22 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       onProcessFilePaths: _fileHandler.processFilePaths,
     );
     scrollController.addListener(onScrollChanged);
+    if (voiceCallUiEnabled) {
+      _voice = ChatVoiceBinding(
+        currentChatId: () => _activeChatId,
+        isAgentsScreen: widget.agentsThread,
+        // The coworker's name (agents_thread_view hands it in as the title).
+        agentName: () => widget.agentsThread ? widget.agentsTitle : null,
+        messages: () => _messages,
+        isBusy: () =>
+            _isSending || _isStreaming || _activeSendOperationId != null,
+        send: (String text, VoiceTurnStarted onStarted) =>
+            _sendMessage(voiceText: text, onVoiceTurnStarted: onStarted),
+        onRecordsChanged: () {
+          if (mounted) setState(() {});
+        },
+      );
+    }
     _selectedWorkspaceId = widget.workspaceId;
     _loadChatById(widget.selectedChatId);
     unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
@@ -670,6 +694,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     ModelSelectionDropdown.selectedModelListenable.removeListener(
       _modelSelectionListener,
     );
+    _voice?.dispose();
     super.dispose();
   }
 
@@ -1688,7 +1713,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(
       _isLinuxDesktop ? 360.0 : 600.0,
     );
-    Widget itemBuilder(BuildContext _, int i) {
+    Widget rowBuilder(BuildContext _, int i) {
       final data = _messageRenderCache.build(
         messages: _messages,
         index: i,
@@ -1721,6 +1746,20 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
             : null,
       );
     }
+
+    // Finished calls of this chat, drawn between its rows (display only).
+    final ChatVoiceBinding? voice = _voice;
+    final voicePlacement = voice == null
+        ? null
+        : placeVoiceRecords(_messages, voice.recordsFor(_activeChatId));
+    Widget itemBuilder(BuildContext context, int i) => voicePlacement == null
+        ? rowBuilder(context, i)
+        : withVoiceRecords(
+            item: rowBuilder(context, i),
+            index: i,
+            messageCount: _messages.length,
+            placement: voicePlacement,
+          );
 
     if (widget.agentsThread) {
       transcriptBottomInset = bottomPadding;
@@ -2042,6 +2081,19 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                             ),
                           ),
                         ),
+                      // The call target on the chrome line, left of the
+                      // root's "Copy full chat" (12 from the edge, 48 wide).
+                      // The Agents thread has its own header for it.
+                      if (_voice != null && !widget.agentsThread)
+                        Positioned(
+                          key: const ValueKey<String>('desktop-chat-voice-call'),
+                          top: kTopInitialSpacing,
+                          right: 12 + 48 + 4,
+                          child: ChatVoiceCallButton(
+                            binding: _voice!,
+                            size: 48,
+                          ),
+                        ),
                       Positioned(
                         key: const ValueKey<String>('desktop-chat-input-area'),
                         left: 0,
@@ -2060,6 +2112,10 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                               child: Column(
                                 mainAxisSize: MainAxisSize.min, // Crucial for column inside AnimatedPositioned/Center
                                 children: [
+                                  // The live call of this chat, above the
+                                  // composer; the composer stays usable.
+                                  if (_voice != null)
+                                    VoiceCallPanelSlot(chatId: _activeChatId),
                                   // Search Bar (attachment bar is now inside)
                                   _buildSearchBar(
                                     isCompactMode: widget.isCompactMode,

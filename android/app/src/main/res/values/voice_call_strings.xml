@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ongoing-call notification (FEATURE_VOICE_CALL, VoiceCallBridge.kt). -->
+<resources>
+    <string name="voice_call_channel_name">Ongoing voice calls</string>
+    <string name="voice_call_channel_description">The call with your agent and its controls.</string>
+    <string name="voice_call_default_title">Voice call</string>
+    <string name="voice_call_hang_up">Hang up</string>
+    <string name="voice_call_mute">Mute</string>
+    <string name="voice_call_unmute">Unmute</string>
+    <string name="voice_call_speaker_on">Speaker on</string>
+    <string name="voice_call_speaker_off">Speaker off</string>
+    <string name="voice_call_volume_up">Volume up</string>
+    <string name="voice_call_volume_down">Volume down</string>
+</resources>

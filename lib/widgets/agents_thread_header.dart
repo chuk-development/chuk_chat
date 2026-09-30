@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
@@ -62,7 +64,13 @@ class AgentsThreadHeader extends StatelessWidget {
     this.onOpenScreen,
     this.connection = AgentsThreadConnection.live,
     this.onReconnect,
+    this.agentName,
   });
+
+  /// The coworker's display name, for the voice call's greeting. Null lets
+  /// the thread screen supply it (the desktop thread is handed the
+  /// coworker's name); the thread title is only the last fallback.
+  final String? agentName;
 
   /// The relay. A live socket, and one on its way back, are not news: only a
   /// relay that is down shows, as "Offline · Reconnect", the words the phone's
@@ -116,7 +124,10 @@ class AgentsThreadHeader extends StatelessWidget {
         final double reserve =
             (automationLabel == null ? 0 : _automationReserve) +
             (down ? _automationReserve : 0);
-        final int fixed = showScreenTarget ? 1 : 0;
+        // The call target rides with the screen target: both only while a
+        // thread is open, and the call only when the build offers calls.
+        final bool showCall = showScreenTarget && voiceCallUiEnabled;
+        final int fixed = (showScreenTarget ? 1 : 0) + (showCall ? 1 : 0);
         final int room = math.max(
           0,
           ((maxWidth - reserve) / slot).floor() - fixed,
@@ -156,6 +167,12 @@ class AgentsThreadHeader extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
               ],
+              if (showCall)
+                ChatVoiceCallButton.agentsThread(
+                  size: AgentsThreadHeader.slot,
+                  agentName: agentName,
+                  semanticsId: 'thread_header_call',
+                ),
               if (showScreenTarget) _screenButton(context),
               for (final AgentsThreadAction action in actions.take(inline))
                 ChromeIconButton(

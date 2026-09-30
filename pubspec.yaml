@@ -162,6 +162,16 @@ dependencies:
   firebase_core: ^4.1.1
   firebase_messaging: ^16.0.3
 
+  # Voice call (FEATURE_VOICE_CALL, owner-only test, off by default): the
+  # LiveKit room the voice worker joins. lib/voice/ is the only user. Pulls in
+  # flutter_webrtc; builds on Linux and Android.
+  livekit_client: ^2.13.0
+  # The agent calls the user (FEATURE_VOICE_CALL, spec §6.3): the incoming-call
+  # screen over the lock screen, and the self-managed ConnectionService whose
+  # phoneCall + microphone foreground service keeps a call's microphone alive
+  # in the background. lib/voice/incoming/ is the only user.
+  flutter_callkit_incoming: ^3.1.6
+
 # super_native_extensions (via markdraw -> super_clipboard) caps device_info_plus
 # at <12.0.0, which pins win32 to 5.x and blocks file_picker 12, share_plus 13,
 # package_info_plus 10 and geolocator 14.0.3. It only reads

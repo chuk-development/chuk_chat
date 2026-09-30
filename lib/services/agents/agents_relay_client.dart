@@ -47,6 +47,7 @@ import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
     show AgentsCloudRelayAddress;
 import 'package:chuk_chat/services/agents/agents_heal_channel.dart';
 import 'package:chuk_chat/services/agents/agents_host_session.dart';
+import 'package:chuk_chat/services/agents/agents_voice_call_frames.dart';
 import 'package:chuk_chat/services/executor_provisioning.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_probe_control.dart';
@@ -1009,8 +1010,15 @@ class AgentsRelayRoomHistory extends AgentsRelayInbound {
 
 /// The executor reported an error.
 class AgentsRelayRunError extends AgentsRelayInbound {
-  const AgentsRelayRunError(this.message);
+  const AgentsRelayRunError(this.message, {this.sessionKey, this.runId});
   final String message;
+
+  /// The thread whose run this error ended. A host that names none (an old
+  /// one, or a refused control frame) ended no run the app can point at.
+  final String? sessionKey;
+
+  /// The run it ended, when the host said.
+  final String? runId;
 }
 
 /// The raw context the executor sent to the model for one round, echoed back
@@ -1475,7 +1483,8 @@ class AgentsRelayClient
         AgentsDocumentsControl,
         AgentsAgentStatusControl,
         AgentsSkillsControl,
-        McpProbeControl {
+        McpProbeControl,
+        AgentsVoiceCallControl {
   AgentsRelayClient({
     required String deviceId,
     required SimpleKeyPair signingKeyPair,
@@ -1542,6 +1551,24 @@ class AgentsRelayClient
   /// the app-wide store.
   static Future<int> Function(Map<String, dynamic> payload) mcpToolsSink =
       McpService.applyToolsFrame;
+
+  /// Where an `agent_permissions` reply goes (docs/WIRE_CONTRACT.md, "Agent
+  /// permissions"). `AgentsPermissionsService` sets it; null drops the frame.
+  /// A sink like [mcpToolsSink], not a case of the sealed [AgentsRelayInbound]:
+  /// only the permissions section reads this frame.
+  static void Function(Map<String, dynamic> payload)? agentPermissionsSink;
+
+  /// What the paired host said it can do beyond the base contract
+  /// (`host_route.capabilities`). Empty until it says; a host from before the
+  /// field never does, so a feature gated on it stays off there.
+  static final ValueNotifier<Set<String>> hostCapabilities =
+      ValueNotifier<Set<String>>(const <String>{});
+
+  /// Seals and sends one host control frame that has no typed method here
+  /// (`agent_permissions_get` / `agent_permissions_set`). Throws when not
+  /// paired, like every send.
+  Future<void> sendControlFrame(Map<String, dynamic> payload) =>
+      _sendFramePayload(payload);
 
   /// The user's here.now publishing setting. When the connector is enabled, each
   /// task frame carries `{enabled, approval}` under `herenow`, so the executor
@@ -1798,6 +1825,11 @@ class AgentsRelayClient
     _socket = socket;
     // A fresh socket is a fresh transcript budget: let auto-replay fire again.
     _autoReplayed.clear();
+    // And maybe a different host: forget what the last one said it can do
+    // until this one says so in its `host_route`.
+    if (hostCapabilities.value.isNotEmpty) {
+      hostCapabilities.value = const <String>{};
+    }
     _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint('[agents-relay] socket connected to ${_logSafe(hostUrl)}');
@@ -1945,6 +1977,11 @@ class AgentsRelayClient
     _socket = socket;
     // A fresh socket is a fresh transcript budget: let auto-replay fire again.
     _autoReplayed.clear();
+    // And maybe a different host: forget what the last one said it can do
+    // until this one says so in its `host_route`.
+    if (hostCapabilities.value.isNotEmpty) {
+      hostCapabilities.value = const <String>{};
+    }
     _provisionGate = Completer<void>();
     if (kDebugMode) {
       debugPrint(
@@ -2518,6 +2555,17 @@ class AgentsRelayClient
       });
 
   @override
+  Future<void> sendVoiceCallState({
+    required String callId,
+    required String state,
+  }) =>
+      // A sealed control frame like `approval_decision` (docs/WIRE_CONTRACT.md,
+      // "The agent calls the user"): no terminal, the host echoes the state.
+      _sendFramePayload(
+        AgentsVoiceCallFrames.stateFrame(callId: callId, state: state),
+      );
+
+  @override
   Future<void> sendAutomationControl({
     required String id,
     required String action,
@@ -2812,6 +2860,16 @@ class AgentsRelayClient
           final sink = onTrustUpdated;
           if (sink != null) unawaited(sink(migrated).catchError((Object _) {}));
         }
+        final capabilities = payload['capabilities'];
+        if (capabilities is List) {
+          final named = <String>{
+            for (final Object? c in capabilities)
+              if (c is String && c.isNotEmpty) c,
+          };
+          if (!setEquals(named, hostCapabilities.value)) {
+            hostCapabilities.value = named;
+          }
+        }
       case 'delta':
         final text =
             payload['text'] ?? payload['delta'] ?? payload['content'] ?? '';
@@ -2915,6 +2973,8 @@ class AgentsRelayClient
         }
       case 'agent_list':
         _inbound.add(AgentsRelayAgentList.fromPayload(payload));
+      case 'agent_permissions':
+        agentPermissionsSink?.call(payload);
       case 'run_state':
         final runState = AgentsRelayRunState.fromPayload(payload);
         if (runState != null) _inbound.add(runState);
@@ -2960,6 +3020,10 @@ class AgentsRelayClient
       case 'host_session_request':
         // The host wants a session of its own. Answered here, never surfaced.
         unawaited(_answerHostSessionRequest());
+      case AgentsVoiceCallFrames.incomingType:
+      case AgentsVoiceCallFrames.stateType:
+        // The agent calls the user: routed by type, never a run event.
+        AgentsVoiceCallFrames.instance.deliver(payload);
       case 'mcp_tools':
         // What the host's connectors answered with. Not surfaced either: the
         // list simply stops claiming a working server has no tools.
@@ -2971,8 +3035,16 @@ class AgentsRelayClient
         // killed.
         unawaited(mcpCredentialsSink(payload));
       case 'error':
+        final errorSession = payload['session_key'];
+        final errorRun = payload['run_id'];
         _inbound.add(
-          AgentsRelayRunError('${payload['message'] ?? 'Unknown error'}'),
+          AgentsRelayRunError(
+            '${payload['message'] ?? 'Unknown error'}',
+            sessionKey: errorSession is String && errorSession.isNotEmpty
+                ? errorSession
+                : null,
+            runId: errorRun is String && errorRun.isNotEmpty ? errorRun : null,
+          ),
         );
       case 'debug_context':
         final sessionKey = payload['session_key'];

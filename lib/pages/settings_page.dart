@@ -57,6 +57,8 @@ import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/voice/incoming/incoming_call_bootstrap.dart';
+import 'package:chuk_chat/voice/incoming/voice_call_permissions_section.dart';
 
 class SettingsPage extends StatefulWidget {
   final AppShellConfig config;
@@ -311,6 +313,10 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
             ],
           ),
+
+          // FEATURE_VOICE_CALL (owner-only test): what a call needs from
+          // Android, with a tap that asks for each.
+          if (voiceIncomingEnabled) const VoiceCallPermissionsSection(),
 
           // Agents only: about the host the coworkers run on, which a hosted
           // chat account has no equivalent for.

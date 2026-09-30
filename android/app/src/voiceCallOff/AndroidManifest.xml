@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Merged on top of src/main/AndroidManifest.xml when the build does NOT have
+     FEATURE_VOICE_CALL=true (android/app/build.gradle.kts): the default,
+     every release and every Play build.
+
+     flutter_callkit_incoming is linked into every build, and its library
+     manifest would add call permissions and components to all of them. This
+     overlay takes out everything that only the plugin adds, so a build
+     without voice calls has the manifest it had before the plugin. CAMERA,
+     RECORD_AUDIO, POST_NOTIFICATIONS, VIBRATE, WAKE_LOCK, FOREGROUND_SERVICE
+     and FOREGROUND_SERVICE_MICROPHONE stay: the app declares them itself.
+
+     The plugin still registers a self-managed PhoneAccount when it attaches
+     (InAppCallManager.registerPhoneAccount). Without MANAGE_OWN_CALLS and
+     without its ConnectionService, Telecom refuses that with a
+     SecurityException, which the plugin catches and logs: no account, no
+     crash. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.DISABLE_KEYGUARD"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NOTIFICATION_POLICY"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.MANAGE_OWN_CALLS"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_PHONE_CALL"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA"
+        tools:node="remove" />
+    <uses-permission android:name="android.permission.TURN_SCREEN_ON"
+        tools:node="remove" />
+    <uses-permission android:name="${applicationId}.PERMISSION_CALL"
+        tools:node="remove" />
+    <permission android:name="${applicationId}.PERMISSION_CALL"
+        tools:node="remove" />
+
+    <application>
+        <activity
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingActivity"
+            tools:node="remove" />
+        <activity
+            android:name="com.hiennv.flutter_callkit_incoming.TransparentActivity"
+            tools:node="remove" />
+        <receiver
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitIncomingBroadcastReceiver"
+            tools:node="remove" />
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitNotificationService"
+            tools:node="remove" />
+        <service
+            android:name="com.hiennv.flutter_callkit_incoming.CallkitConnectionService"
+            tools:node="remove" />
+    </application>
+</manifest>

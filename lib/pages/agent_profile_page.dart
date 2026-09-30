@@ -5,13 +5,16 @@
 /// The header is the blob face, the name, the role line and the live state; the
 /// action row is Message, the parked voice call, Controls and — only while it
 /// really has one open — the coworker's browser. Under that: the standing brief,
-/// the schedule, the one permanent session, and the manage block (edit, rename,
-/// hide, delete).
+/// the schedule, the one permanent session, what it may do in its sandbox (the
+/// permissions, kept by the host), and the manage block (edit, rename, hide,
+/// delete).
 ///
 /// The page never invents a fact. A field the app does not have (the host does
 /// not serve a brief, and no wire frame carries a picture) is either shown from
 /// the local profile store or left out.
 library;
+
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 
@@ -19,12 +22,14 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
+import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
+import 'package:chuk_chat/widgets/agents_permissions/agent_permissions_section.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 class AgentProfilePage extends StatelessWidget {
@@ -93,6 +98,16 @@ class AgentProfilePage extends StatelessWidget {
 
   AgentProfileStore get _store => profiles ?? AgentProfileStore.instance;
 
+  /// Back to the conversation, where the call panel and its transcript show,
+  /// then the call. The thread is given a moment to open, so the call gets
+  /// the task delegate of the thread screen.
+  void _startVoiceCall(BuildContext context, AgentsAgent agent) {
+    (onMessage ?? () => Navigator.of(context).maybePop())();
+    unawaited(
+      startAgentVoiceCall(agent, waitForThread: const Duration(seconds: 2)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AnimatedBuilder(
@@ -119,6 +134,12 @@ class AgentProfilePage extends StatelessWidget {
     final Color accent = agentAccent(context, agent.id, store: _store);
     final String? role = _roleOf(agent, profile);
     final String? brief = _briefOf(agent, profile);
+    // The voice call: live in a build that offers calls and for a coworker
+    // with a thread to call into; parked otherwise, as before.
+    final VoidCallback? onCall =
+        voiceCallUiEnabled && voiceThreadKeyFor(agent) != null
+        ? () => _startVoiceCall(context, agent)
+        : null;
 
     // chuk's page frame: the floating header over a page that runs on under
     // it.
@@ -187,6 +208,7 @@ class AgentProfilePage extends StatelessWidget {
                       onMessage: onMessage,
                       onOpenControls: onOpenControls,
                       onOpenBrowser: onOpenBrowser,
+                      onCall: onCall,
                     ),
                     const SizedBox(height: 22),
                   ],
@@ -241,7 +263,9 @@ class AgentProfilePage extends StatelessWidget {
                         value: agent.attachmentNames.join(', '),
                         note: 'Names only — no file was pushed to the host.',
                       ),
-                    const SizedBox(height: 8),
+                    // What the coworker may do in its sandbox. The host keeps
+                    // it; a change applies from the next task.
+                    AgentPermissionsSection(agentId: agent.id),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
                       child: Text(
@@ -286,9 +310,9 @@ class AgentProfilePage extends StatelessWidget {
                     SheetAction(
                       icon: Icons.call_rounded,
                       label: 'Voice call',
-                      subtitle: 'Not available yet',
-                      enabled: false,
-                      onTap: () {},
+                      subtitle: onCall == null ? 'Not available yet' : null,
+                      enabled: onCall != null,
+                      onTap: onCall ?? () {},
                     ),
                     const SizedBox(height: 8),
                     SheetAction(
@@ -434,11 +458,15 @@ class _ActionRow extends StatelessWidget {
     required this.onMessage,
     required this.onOpenControls,
     required this.onOpenBrowser,
+    this.onCall,
   });
 
   final VoidCallback? onMessage;
   final VoidCallback? onOpenControls;
   final VoidCallback? onOpenBrowser;
+
+  /// Starts a voice call. Null keeps the target parked.
+  final VoidCallback? onCall;
 
   @override
   Widget build(BuildContext context) {
@@ -459,17 +487,20 @@ class _ActionRow extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 14),
-        // Parked, exactly like the header target.
+        // Parked, exactly like the header target, unless the build offers
+        // calls.
         Expanded(
           child: _Action(
             icon: Icons.call_rounded,
             label: 'Call',
-            parked: true,
-            onTap: () => pillToast(
-              context,
-              'Voice calls with a coworker are not available yet',
-              icon: Icons.call_end_rounded,
-            ),
+            parked: onCall == null,
+            onTap:
+                onCall ??
+                () => pillToast(
+                  context,
+                  'Voice calls with a coworker are not available yet',
+                  icon: Icons.call_end_rounded,
+                ),
           ),
         ),
         if (onOpenControls != null) ...<Widget>[

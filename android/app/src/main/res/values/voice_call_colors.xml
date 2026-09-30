@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The ongoing-call notification, light system theme. Dark: values-night. -->
+<resources>
+    <color name="voice_call_accent">#285DA9</color>
+    <color name="voice_call_icon">#1F1F1F</color>
+    <color name="voice_call_button">#14000000</color>
+    <color name="voice_call_button_active">#D6E3FF</color>
+    <color name="voice_call_hangup">#D93025</color>
+    <color name="voice_call_on_hangup">#FFFFFF</color>
+</resources>
