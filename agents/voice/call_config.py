@@ -43,6 +43,16 @@ class CallConfig:
     initiated_by: str = INITIATED_BY_USER
     call_id: str | None = None
     call_reason: str | None = None
+    #: Opaque grant from /v1/voice/token. Every proxy request carries it.
+    #: Without it the worker does not start the pipeline.
+    voice_grant: str | None = None
+
+    def __repr__(self) -> str:  # keep the grant out of logs and tracebacks
+        return (
+            f"CallConfig(user_id={self.user_id!r}, mode={self.mode!r}, "
+            f"stt_language={self.stt_language!r}, delegate_available={self.delegate_available}, "
+            f"initiated_by={self.initiated_by!r}, voice_grant={'set' if self.voice_grant else None})"
+        )
 
     @property
     def agent_started(self) -> bool:
@@ -150,6 +160,7 @@ def parse_metadata(raw: str | None) -> CallConfig:
         initiated_by=initiated_by,
         call_id=_str_or_none(data.get("call_id")),
         call_reason=reason,
+        voice_grant=_str_or_none(data.get("voice_grant")),
     )
 
 
@@ -296,13 +307,13 @@ def _language_block(cfg: CallConfig) -> str:
     )
 
 
-def build_instructions(cfg: CallConfig, memory_preamble: str = "") -> str:
+def build_instructions(cfg: CallConfig) -> str:
     """System prompt for one call: chat context first, then role and rules."""
     parts = [_context_block(cfg), _role_block(cfg), BASE_RULES]
     if cfg.delegate_available:
         parts.append("\n" + _DELEGATION_RULES)
     parts.append(_language_block(cfg))
-    return "".join(parts) + memory_preamble
+    return "".join(parts)
 
 
 def greeting_instructions(cfg: CallConfig) -> str:
@@ -374,3 +385,21 @@ END_CALL_GOODBYE_INSTRUCTIONS = (
     "right now (German: \"Alles klar, bis später!\", English: \"Alright, talk "
     "soon!\"). One sentence, nothing else."
 )
+
+
+# ---------------------------------------------------------------------------
+# No voice grant
+# ---------------------------------------------------------------------------
+
+_NO_GRANT_TEXT = {
+    "de": "Sprachanrufe sind für dieses Konto nicht eingerichtet.",
+    "en": "Voice is not set up for this account.",
+}
+
+
+def no_grant_text(cfg: CallConfig) -> str:
+    """The one line the worker sends when the dispatch has no voice grant.
+
+    It goes out as text (no TTS: every TTS call needs the grant).
+    """
+    return _NO_GRANT_TEXT.get(cfg.stt_language, _NO_GRANT_TEXT["en"])

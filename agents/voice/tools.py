@@ -38,7 +38,6 @@ import delegation
 from background import BackgroundRunner
 from call_config import END_CALL_EXTRA_DESCRIPTION, END_CALL_GOODBYE_INSTRUCTIONS
 from delegation import TaskBook
-from memory import ConversationMemory
 from ui_bridge import UiBridge
 
 logger = logging.getLogger("voice-agent.tools")
@@ -55,12 +54,13 @@ class SessionData:
     """Per-session state handed to every tool through ``ctx.userdata``."""
 
     ui: UiBridge
-    #: Long-term store. Facts written here survive across sessions.
-    memory: ConversationMemory
     #: Detached work the agent reports back on by itself.
     runner: BackgroundRunner
     #: Tasks handed to the chuk_chat app with ``delegate_task``.
     tasks: TaskBook = field(default_factory=TaskBook)
+    #: OpenAI client for the chuk API proxy (worker JWT + voice grant). Used
+    #: by web search when VOICE_SEARCH_MODEL is set.
+    proxy: Any = None
 
 
 def _ui(ctx: RunContext) -> UiBridge:
@@ -313,12 +313,10 @@ def _strip_html(value: str) -> str:
     return unescape(_TAG_RE.sub("", value)).strip()
 
 
-#: Groq's agentic "compound" models run the search server-side and hand back
-#: both a written answer and the raw sources under ``executed_tools``. That
-#: beats scraping a search engine: no bot challenges, no HTML parsing, and the
-#: key is one we already hold for STT.
-_GROQ_SEARCH_MODEL = os.environ.get("GROQ_SEARCH_MODEL", "groq/compound-mini")
-_GROQ_CHAT_URL = "https://api.groq.com/openai/v1/chat/completions"
+#: A search-capable model behind the chuk API proxy (``/chat/completions``).
+#: Unset: web search uses Wikipedia only. The worker holds no provider keys,
+#: so search goes through the proxy like every other model call.
+_SEARCH_MODEL = os.environ.get("VOICE_SEARCH_MODEL", "").strip()
 
 _SOURCE_RE = re.compile(
     r"Title:\s*(?P<title>.*?)\nURL:\s*(?P<url>\S+)\nContent:\s*(?P<content>.*?)(?=\nTitle:\s|\Z)",
@@ -348,39 +346,33 @@ def _parse_sources(executed_tools: list[dict[str, Any]], limit: int = 6) -> list
     return results
 
 
-async def _groq_search(query: str) -> tuple[str, list[dict[str, str]]]:
-    """Run an agentic web search. Returns (answer, sources)."""
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is not set — web search is unavailable.")
+async def _proxy_search(proxy: Any, query: str) -> tuple[str, list[dict[str, str]]]:
+    """Web search through the chuk proxy. Returns (answer, sources).
 
-    session = utils.http_context.http_session()
-    async with session.post(
-        _GROQ_CHAT_URL,
-        json={
-            "model": _GROQ_SEARCH_MODEL,
-            "messages": [
-                {
-                    "role": "system",
-                    # Without an explicit order to search, compound happily
-                    # answers from its own (stale) weights and skips the tool.
-                    "content": (
-                        "Always use your web search tool before answering. Never "
-                        "answer from memory. Be factual and concise: three "
-                        "sentences at most, no markdown, no lists. Answer in the "
-                        "language of the query."
-                    ),
-                },
-                {"role": "user", "content": query},
-            ],
-        },
-        headers={"Authorization": f"Bearer {api_key}"},
+    Models that search server-side (for example Groq compound) may return the
+    raw hits under ``executed_tools``; the sources are parsed from there.
+    """
+    if proxy is None or not _SEARCH_MODEL:
+        return "", []
+    resp = await proxy.chat.completions.create(
+        model=_SEARCH_MODEL,
+        messages=[
+            {
+                "role": "system",
+                # Without an explicit order to search, a search model happily
+                # answers from its own (stale) weights and skips the tool.
+                "content": (
+                    "Always use your web search tool before answering. Never "
+                    "answer from memory. Be factual and concise: three "
+                    "sentences at most, no markdown, no lists. Answer in the "
+                    "language of the query."
+                ),
+            },
+            {"role": "user", "content": query},
+        ],
         timeout=25.0,
-    ) as resp:
-        resp.raise_for_status()
-        data = await resp.json(content_type=None)
-
-    message = (data.get("choices") or [{}])[0].get("message") or {}
+    )
+    message = resp.choices[0].message.model_dump() if resp.choices else {}
     answer = _strip_html(message.get("content") or "").replace("**", "")
     return answer, _parse_sources(message.get("executed_tools") or [])
 
@@ -427,7 +419,7 @@ async def search_web(ctx: RunContext, query: str) -> str:
     """
     async with ctx.with_filler("Moment, ich schaue nach.", delay=2.5, interval=8):
         search, wiki = await asyncio.gather(
-            _groq_search(query),
+            _proxy_search(getattr(ctx.userdata, "proxy", None), query),
             _wikipedia_summary(query),
             return_exceptions=True,
         )
@@ -888,129 +880,8 @@ async def show_list(ctx: RunContext, title: str, items: list[str], urls: list[st
 
 
 # ---------------------------------------------------------------------------
-# Session memory
-# ---------------------------------------------------------------------------
-
-
-@function_tool()
-async def remember(ctx: RunContext, fact: str) -> str:
-    """Store something permanently. It survives across sessions and restarts.
-
-    Use it whenever the user says "remember", "merk dir", states a preference,
-    or tells you something about themselves worth keeping.
-
-    Args:
-        fact: The fact to store, written so it still makes sense in a month,
-            e.g. "Trinkt Kaffee schwarz" or "Auto steht in Ebene 3, Platz 42".
-    """
-    memory: ConversationMemory = ctx.userdata.memory
-    memory.add_fact(fact)
-    memory.save()
-    await _ui(ctx).card(
-        "memory",
-        title="Gemerkt",
-        subtitle=fact,
-        data={"facts": list(memory.facts)},
-    )
-    return f"Gemerkt: {fact}"
-
-
-@function_tool()
-async def recall(ctx: RunContext) -> str:
-    """List everything you have permanently stored about the user."""
-    memory: ConversationMemory = ctx.userdata.memory
-    if not memory.facts:
-        return "Du hast mir bisher nichts zum Merken gegeben."
-    return "Ich habe gespeichert: " + " ".join(
-        f"{i + 1}. {f}." for i, f in enumerate(memory.facts)
-    )
-
-
-@function_tool()
-async def forget(ctx: RunContext, about: str) -> str:
-    """Delete a stored fact.
-
-    Args:
-        about: Words identifying the fact to drop, e.g. "Auto" or "Kaffee".
-    """
-    memory: ConversationMemory = ctx.userdata.memory
-    if memory.forget_fact(about):
-        memory.save()
-        return f"Vergessen: alles zu {about}."
-    return f"Zu {about} hatte ich nichts gespeichert."
-
-
-# ---------------------------------------------------------------------------
 # Background work & proactive speech
 # ---------------------------------------------------------------------------
-
-
-async def _deep_research(question: str) -> str:
-    """Multi-step agentic research. Slow on purpose — runs detached."""
-    api_key = os.environ.get("GROQ_API_KEY", "")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is not set.")
-
-    session = utils.http_context.http_session()
-    async with session.post(
-        _GROQ_CHAT_URL,
-        json={
-            # The full compound model (not -mini) does several search rounds.
-            "model": os.environ.get("GROQ_RESEARCH_MODEL", "groq/compound"),
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "Research the question thoroughly using your web search "
-                        "tool across several queries. Cross-check claims. Then "
-                        "write a briefing of at most 250 words: the answer "
-                        "first, then the two or three details that matter. No "
-                        "markdown, no lists, no URLs. Answer in the language of "
-                        "the question."
-                    ),
-                },
-                {"role": "user", "content": question},
-            ],
-        },
-        headers={"Authorization": f"Bearer {api_key}"},
-        # Deep research legitimately takes a while; nothing is blocked on it.
-        timeout=300.0,
-    ) as resp:
-        resp.raise_for_status()
-        data = await resp.json(content_type=None)
-
-    message = (data.get("choices") or [{}])[0].get("message") or {}
-    answer = _strip_html(message.get("content") or "").replace("**", "")
-    return answer or "Die Recherche hat kein Ergebnis geliefert."
-
-
-@function_tool()
-async def research_in_background(ctx: RunContext, question: str) -> str:
-    """Start deep research and keep talking — you report back on your own later.
-
-    Use for anything that needs real digging rather than one lookup: comparisons,
-    "find out everything about X", multi-part questions. Returns immediately;
-    when the research finishes you will be prompted to bring it up unprompted,
-    even if the user has gone quiet in the meantime. For a quick fact, use
-    search_web instead.
-
-    Args:
-        question: The full research question, self-contained — the background
-            worker never sees the conversation.
-    """
-    runner: BackgroundRunner = ctx.userdata.runner
-    job = runner.start(f"Recherche: {question}", _deep_research(question))
-
-    await _ui(ctx).card(
-        "task",
-        title="Recherche läuft",
-        subtitle=question,
-        data={"job_id": job.id, "label": job.label, "status": "running"},
-    )
-    return (
-        "Recherche läuft im Hintergrund. Sag dem Nutzer in einem kurzen Satz, "
-        "dass du dich meldest, sobald du fertig bist, und mach normal weiter."
-    )
 
 
 @function_tool()
@@ -1238,10 +1109,6 @@ ALL_TOOLS = [
     get_stock,
     show_place,
     show_list,
-    remember,
-    recall,
-    forget,
-    research_in_background,
     set_reminder,
     check_background_tasks,
     stay_silent,
@@ -1254,9 +1121,8 @@ def build_tools(*, mode: str, delegate_available: bool) -> list[Any]:
     """The toolset for one call.
 
     ``delegate_task`` exists only when the app can take tasks. Then
-    ``set_reminder`` (an in-call timer) is left out. In agents mode
-    with delegation, deep research goes to the agent, so the local research
-    tool is left out: two tools for one job make the model pick the wrong one.
+    ``set_reminder`` (an in-call timer) is left out. Deep research always goes
+    through ``delegate_task``; the worker has no research model of its own.
 
     ``end_call`` lets the agent hang up when the user says goodbye. It deletes
     the room, so the app sees the disconnect and saves the transcript. It is
@@ -1269,8 +1135,6 @@ def build_tools(*, mode: str, delegate_available: bool) -> list[Any]:
         # delegate, reminders go to the host agent, which schedules them and
         # can call back with call_user.
         selected.remove(set_reminder)
-        if mode == "agents":
-            selected.remove(research_in_background)
         selected.append(delegate_task)
     selected.append(check_tasks)
     selected.append(
