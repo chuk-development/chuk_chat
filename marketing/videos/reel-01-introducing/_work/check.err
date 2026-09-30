@@ -1,0 +1,2 @@
+npm warn Unknown user config "manage-package-manager-versions". This will stop working in the next major version of npm.
+[hyperframes] browserGpuMode probe → hardware (WebGL renderer vendor="Google Inc. (NVIDIA Corporation)" renderer="ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3060/PCIe/SSE2, OpenGL ES 3.2)")

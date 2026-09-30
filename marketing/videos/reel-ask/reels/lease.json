@@ -1,0 +1,35 @@
+{
+  "slug": "lease",
+  "title": "Ask Chuk Chat to|[explain your lease]",
+  "surface": "chat",
+  "clock": "12:00",
+  "chat_title": "Lease key points",
+  "attachment": {"name": "lease.pdf", "meta": "PDF · 12 pages"},
+  "prompt": "What are the 3 things I must know?",
+  "running": "Reading lease.pdf",
+  "steps": [{"icon": "file", "text": "Read", "detail": "lease.pdf · 12 pages"}],
+  "worked": "Worked for 8s",
+  "answer": "The 3 things to know:",
+  "card": {
+    "type": "highlights",
+    "points": [
+      {"text": "Rent: **€1,150** a month, warm.", "page": 2},
+      {"text": "Notice: **3 months**, in writing.", "page": 4},
+      {"text": "Dogs and cats need **written consent**.", "page": 4}
+    ],
+    "source": {"name": "lease.pdf", "open": "Open p. 4"},
+    "page_view": {
+      "chip": "p. 4 / 12",
+      "label": "4",
+      "markers": [2, 3],
+      "blocks": [
+        {"kind": "h", "text": "§ 7 Notice"},
+        {"kind": "p", "segs": ["Either party may end this lease. ", {"mark": 2, "text": "The notice period is three months. Notice must be given in writing."}, " It counts from the third working day of a month."]},
+        {"kind": "h", "text": "§ 8 Pets"},
+        {"kind": "p", "segs": ["Small animals such as fish or birds are allowed. ", {"mark": 3, "text": "Dogs and cats need the landlord's written consent."}]},
+        {"kind": "h", "text": "§ 9 Repairs"},
+        {"kind": "p", "segs": ["The tenant pays for small repairs up to €100 each."]}
+      ]
+    }
+  }
+}

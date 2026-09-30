@@ -1,0 +1,32 @@
+{
+  "slug": "chart",
+  "title": "Ask Chuk Chat to|[chart any number]",
+  "surface": "chat",
+  "clock": "12:00",
+  "chat_title": "Bitcoin 30 days",
+  "prompt": "Chart Bitcoin for the last 30 days.",
+  "running": "Searching the web",
+  "steps": [{"icon": "search", "text": "Searched", "detail": "bitcoin price, 30 days"}],
+  "worked": "Worked for 5s",
+  "answer": "Bitcoin is up **6.3%** in 30 days, close to its high.",
+  "card": {
+    "type": "chart",
+    "title": "Bitcoin · USD",
+    "full_title": "Bitcoin · 30 days",
+    "prefix": "$",
+    "suffix": "K",
+    "from_value": 76.4,
+    "to_value": "81.2",
+    "change": "+6.3%",
+    "change_label": "in 30 days",
+    "series": [76.4, 76.1, 75.8, 76.3, 75.6, 75.2, 74.9, 75.3, 75.9, 76.6, 77.2, 76.9, 77.6, 78.3, 78.0,
+               78.8, 79.2, 79.5, 79.1, 78.6, 78.1, 78.4, 79.0, 79.6, 79.3, 80.1, 80.6, 80.4, 80.9, 81.2],
+    "lo": 74, "hi": 82,
+    "y_ticks": [74, 76, 78, 80, 82],
+    "y_fmt": "{}K",
+    "x_labels": [[0, "Sep 1"], [14, "Sep 15"], [29, "Sep 30"]],
+    "ranges": ["7D", "30D", "1Y"],
+    "range_on": "30D",
+    "stats": [["High", "$81.2K"], ["Low", "$74.9K"]]
+  }
+}

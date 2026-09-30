@@ -1,0 +1,29 @@
+{
+  "slug": "week",
+  "title": "Ask Chuk Chat to|[plan your week]",
+  "surface": "chat",
+  "clock": "08:14",
+  "chat_title": "This week",
+  "prompt": "What is due this week? Check Linear, Todoist and Notion.",
+  "running": "Running todoist find-tasks",
+  "steps": [
+    {"logo": "linear", "text": "Ran", "detail": "linear list issues"},
+    {"logo": "todoist", "text": "Ran", "detail": "todoist find-tasks"},
+    {"logo": "notion", "text": "Searched", "detail": "launch plan"}
+  ],
+  "fold_steps": false,
+  "worked": "Worked for 9s",
+  "answer": "5 due. The login bug comes first.",
+  "card": {
+    "type": "plan",
+    "title": "Your week",
+    "chat_rows": 2,
+    "items": [
+      {"day": "Mon", "task": "Fix the login bug", "src": "linear", "src_label": "Linear · high priority", "tag": "High"},
+      {"day": "Tue", "task": "Send the Q3 report", "src": "todoist", "src_label": "Todoist"},
+      {"day": "Wed", "task": "Invoice Nordlicht", "src": "todoist", "src_label": "Todoist"},
+      {"day": "Thu", "task": "Review the launch plan", "src": "notion", "src_label": "Notion"},
+      {"day": "Fri", "task": "Ship release 2.4", "src": "linear", "src_label": "Linear"}
+    ]
+  }
+}
