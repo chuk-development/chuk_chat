@@ -787,9 +787,11 @@ const Map<String, String> stringsDe = {
   'agentMailContacts': 'Kontakte',
   'agentMailContactsSubtitle': 'Vertrauenswürdige und blockierte Absender',
   'agentMailFrozen':
-      'Dieses Postfach ist eingefroren, weil das Abo beendet ist. Der Agent kann nicht senden, und neue Mail wird verworfen. Mit einem neuen Abo gilt dieselbe Adresse wieder.',
+      'Dieses Postfach ist eingefroren, weil das Abo beendet ist. Der Agent kann nicht senden, und neue Mail wird abgewiesen. Mit einem neuen Abo gilt dieselbe Adresse wieder.',
   'agentMailSendSuspended':
-      'Das Senden ist nach mehreren Rückläufern oder Beschwerden pausiert. Eingehende Mail kommt weiter an.',
+      'Das Senden ist nach mehreren Rückläufern pausiert. Eingehende Mail kommt weiter an.',
+  'agentMailPrivacy':
+      'Agent-Mails sind normale E-Mails und nicht Ende-zu-Ende-verschlüsselt. Gespeichert werden sie verschlüsselt.',
   'agentMailFolderInbox': 'Eingang',
   'agentMailFolderUnknown': 'Unbekannt',
   'agentMailFolderDrafts': 'Entwürfe',
@@ -827,6 +829,8 @@ const Map<String, String> stringsDe = {
   'agentMailCc': 'Cc',
   'agentMailDate': 'Datum',
   'agentMailSenderCheck': 'Absenderprüfung',
+  'agentMailDkimAligned': 'Signiert von {domain}',
+  'agentMailDkimNotAligned': 'Nicht von der Domain des Absenders signiert',
   'agentMailAgentNote': 'Notiz des Agenten',
   'agentMailImportanceHigh': 'Hoch',
   'agentMailImportanceNormal': 'Normal',
@@ -837,7 +841,6 @@ const Map<String, String> stringsDe = {
   'agentMailNoText': 'Diese Mail hat keinen Text.',
   'agentMailAttachments': 'Anhänge',
   'agentMailAttachmentTooLarge': 'Zu groß, nicht gespeichert',
-  'agentMailAttachmentUnavailable': 'Nicht verfügbar',
   'agentMailDownload': 'Herunterladen',
   'agentMailSaved': 'Gespeichert unter {path}',
   'agentMailDownloadFailed': 'Der Anhang konnte nicht gespeichert werden',
@@ -888,6 +891,20 @@ const Map<String, String> stringsDe = {
   'agentMailErrNetwork': 'Keine Verbindung zum Server.',
   'agentMailErrNotFound': 'Diese Mail gibt es nicht mehr.',
   'agentMailErrGeneric': 'Etwas ist schiefgelaufen ({code}).',
+  'agentMailUnreadable': 'Diese Mail ließ sich nicht entschlüsseln.',
+  'agentMailContactUnreadable': 'Dieser Kontakt ließ sich nicht entschlüsseln.',
+  'agentMailErrUnseal': 'Das ließ sich nicht entschlüsseln.',
+  'agentMailErrKeyLocked':
+      'Dein Kontoschlüssel ist gesperrt. Melde dich erneut an, um das Postfach zu lesen.',
+  'agentMailErrKeyUnreadable':
+      'Der Mail-Schlüssel lässt sich mit deinem Kontoschlüssel nicht öffnen.',
+  'agentMailErrNoKey':
+      'Das Postfach ist noch nicht eingerichtet. Öffne das Postfach einmal.',
+  'agentMailErrKeyRefused': 'Der Server hat den Mail-Schlüssel abgelehnt.',
+  'agentMailErrAttachmentsTooLarge':
+      'Die Anhänge sind zu groß zum Senden (höchstens 3 MB).',
+  'agentMailErrRecipientSuppressed':
+      'Ein Empfänger kann keine Mail bekommen: Frühere Mail an diese Adresse kam zurück.',
   'agentMailContactsIntro':
       'Vertraute Absender starten normale Läufe, und der Agent darf ihnen ohne Rückfrage schreiben. Mail von blockierten Absendern wird verworfen. Ein Eintrag ist eine Adresse oder eine ganze Domain (@example.com).',
   'agentMailTrusted': 'Vertraut',

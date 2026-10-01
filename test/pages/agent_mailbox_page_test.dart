@@ -8,15 +8,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/pages/agent_mail_contacts_page.dart';
 import 'package:chuk_chat/pages/agent_mail_detail_page.dart';
 import 'package:chuk_chat/pages/agent_mailbox_page.dart';
+import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/widgets/agent_mail_widgets.dart';
 
 import '../support/agent_mail_fake.dart';
 import '../support/test_app.dart';
 import '../widgets/charts/chart_test_support.dart' show loadChartFonts;
 
-/// Settings > Agents > Mailbox (docs/AGENT_MAIL.md §6): the address with a
-/// copy action, the folder switch and the list, and the info card that
-/// stands in for all of it without a subscription.
+/// Settings > Agents > Mailbox (docs/AGENT_MAIL.md §8): the address with a
+/// copy action, the privacy note, the folder switch and the opened list, the
+/// mail key made on first open, and the info card that stands in for all of
+/// it without a subscription.
 void main() {
   final DateTime now = DateTime.utc(2026, 9, 30, 12).toLocal();
 
@@ -40,14 +43,57 @@ void main() {
     matching: find.text(label),
   );
 
+  testWidgets("the agent's own mail (sender_trust self) has no trust tag", (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      testApp(
+        const Column(
+          children: <Widget>[
+            MailTrustBadge(MailTrust.self),
+            MailTrustBadge(MailTrust.unknown),
+          ],
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(MailTag), findsOneWidget);
+    expect(find.text('Unknown'), findsOneWidget);
+  });
+
   testWidgets('shows the address and the known inbox', (tester) async {
     final FakeAgentMailServer fake = await pump(tester);
 
     expect(find.text('k7f3q9x2mh@chukagents.com'), findsOneWidget);
     expect(fake.calls, <String>[
       'GET /mailbox',
+      'GET /key',
       'GET /messages?folder=inbox&trust=known&limit=50',
     ]);
+    // §1: the privacy note, under the address.
+    expect(
+      find.text(
+        'Agent mail is normal email and not end-to-end encrypted. It is '
+        'stored encrypted.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .getTopLeft(find.byKey(const ValueKey<String>('agent-mail-privacy')))
+          .dy,
+      greaterThan(
+        tester
+            .getTopLeft(
+              find.byKey(const ValueKey<String>('agent-mail-address')),
+            )
+            .dy,
+      ),
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-unreadable')),
+      findsNothing,
+    );
     // Known senders only: Ada (trusted) and the owner, not the unknown ones.
     expect(
       find.byKey(const ValueKey<String>('agent-mail-row-m1')),
@@ -208,6 +254,87 @@ void main() {
 
     await pick('Inbox');
     expect(fake.calls.last, 'GET /messages?folder=inbox&trust=known&limit=50');
+  });
+
+  testWidgets('the privacy note in German', (tester) async {
+    tester.view.physicalSize = const Size(900, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    final FakeAgentMailServer fake = FakeAgentMailServer();
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('de'),
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: AgentMailboxPage(service: fake.service(), now: () => now),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'Agent-Mails sind normale E-Mails und nicht Ende-zu-Ende-'
+        'verschlüsselt. Gespeichert werden sie verschlüsselt.',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a mailbox without a key gets one, then the list', (
+    tester,
+  ) async {
+    final FakeAgentMailServer fake = await pump(
+      tester,
+      server: FakeAgentMailServer(hasKey: false),
+    );
+    expect(fake.calls, <String>[
+      'GET /mailbox',
+      'GET /key',
+      'PUT /key',
+      'GET /mailbox',
+      'GET /messages?folder=inbox&trust=known&limit=50',
+    ]);
+    // Sealed to the new key, opened with it.
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-unreadable')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('a locked account key says so, with a retry', (tester) async {
+    final FakeAgentMailServer server = FakeAgentMailServer();
+    server.secretBox.locked = true;
+    final FakeAgentMailServer fake = await pump(tester, server: server);
+    expect(
+      find.text(
+        'Could not load the mailbox. Your account key is locked. Sign in '
+        'again to read the mailbox.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(ConnectedGroup), findsNothing);
+    fake.secretBox.locked = false;
+    await tester.tap(find.text('Retry'));
+    await tester.pumpAndSettle();
+    expect(find.text('Ada Lovelace'), findsOneWidget);
+  });
+
+  testWidgets('a row that does not open says so, the rest stay readable', (
+    tester,
+  ) async {
+    final FakeAgentMailServer server = FakeAgentMailServer();
+    server.mails.insert(0, fakeMail(id: 'x1', broken: true));
+    await pump(tester, server: server);
+    final Finder row = find.byKey(const ValueKey<String>('agent-mail-row-x1'));
+    expect(row, findsOneWidget);
+    expect(
+      find.descendant(
+        of: row,
+        matching: find.text('This mail could not be decrypted.'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('Ada Lovelace'), findsOneWidget);
   });
 
   testWidgets('without a subscription: an info card and no list', (

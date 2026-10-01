@@ -1,16 +1,18 @@
-/// Small pieces the three agent mail pages share (docs/AGENT_MAIL.md §6):
+/// Small pieces the three agent mail pages share (docs/AGENT_MAIL.md §8):
 /// the trust badge, the tag pill, dates, sizes and the error line.
 library;
 
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
+import 'package:chuk_chat/services/agents/agent_mail_crypto.dart';
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 
 /// The text a user sees for a failed mail call. Never the raw body.
 String agentMailErrorText(AppLocalizations l, Object error) {
+  if (error is AgentMailSealException) return l.agentMailErrUnseal;
   if (error is! AgentMailException) return l.agentMailErrNetwork;
   if (error.noSubscription) return l.agentMailErrNoSubscription;
   return switch (error.code) {
@@ -19,9 +21,16 @@ String agentMailErrorText(AppLocalizations l, Object error) {
     'too_many_recipients' => l.agentMailErrTooManyRecipients,
     'rate_limited' => l.agentMailErrRateLimited,
     'quota_exhausted' => l.agentMailErrQuota,
+    'attachments_too_large' => l.agentMailErrAttachmentsTooLarge,
+    'recipient_suppressed' => l.agentMailErrRecipientSuppressed,
+    'needs_key' => l.agentMailErrNoKey,
+    'invalid_public_key' || 'invalid_private_key' => l.agentMailErrKeyRefused,
     'agent_mail_unavailable' => l.agentMailUnavailable,
     AgentMailException.notSignedIn => l.agentMailErrSignedOut,
     AgentMailException.network => l.agentMailErrNetwork,
+    AgentMailException.noKey => l.agentMailErrNoKey,
+    AgentMailException.keyLocked => l.agentMailErrKeyLocked,
+    AgentMailException.keyUnreadable => l.agentMailErrKeyUnreadable,
     _ => switch (error.statusCode) {
       401 => l.agentMailErrSignedOut,
       404 => l.agentMailErrNotFound,
@@ -78,10 +87,11 @@ String mailPartyLabel(AppLocalizations l, MailSummary mail) {
 }
 
 /// The sender's name line: "You" for the owner's own mail, else the display
-/// name, else the address.
+/// name, else the address, else a dash (a summary that did not open).
 String mailSenderName(AppLocalizations l, MailSummary mail) {
   if (mail.senderTrust == MailTrust.owner) return l.agentMailTrustOwner;
-  return mail.fromName ?? mail.fromAddress;
+  final String name = mail.fromName ?? mail.fromAddress;
+  return name.isEmpty ? '—' : name;
 }
 
 /// The address under the name line, or null when the name line already is
@@ -146,7 +156,8 @@ class MailTag extends StatelessWidget {
   }
 }
 
-/// The sender's trust (§2) as a tag: you, trusted, or unknown.
+/// The sender's trust (§2) as a tag: you, trusted, or unknown. The agent's
+/// own mail ([MailTrust.self]) has no tag.
 class MailTrustBadge extends StatelessWidget {
   const MailTrustBadge(this.trust, {super.key});
 
@@ -172,6 +183,8 @@ class MailTrustBadge extends StatelessWidget {
         background: cs.tertiaryContainer,
         foreground: cs.onTertiaryContainer,
       ),
+      // The agent's own mail: the page shows its recipients, not a sender.
+      MailTrust.self => const SizedBox.shrink(),
     };
   }
 }

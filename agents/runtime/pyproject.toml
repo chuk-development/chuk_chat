@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Agents Python agent runtime — loop, tools, state, model client."
 requires-python = ">=3.12"
 dependencies = [
+    # The agent mail seal (chuk_agents_runtime.mail_seal): X25519, HKDF, AES-GCM.
+    "cryptography>=44",
     "firecrawl-anydoc>=0.1.8",
     "httpx>=0.27",
     "mcp>=2.0.0",

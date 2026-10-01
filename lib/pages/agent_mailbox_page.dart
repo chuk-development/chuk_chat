@@ -1,9 +1,10 @@
 // lib/pages/agent_mailbox_page.dart
 //
-// Settings > Agents > Mailbox (docs/AGENT_MAIL.md §6): the agent's own
-// address with a copy action, the folder switch and the mail list. The
-// server is the source of truth for the subscription: a 402 from the mailbox
-// call shows an info card and no list.
+// Settings > Agents > Mailbox (docs/AGENT_MAIL.md §8): the agent's own
+// address with a copy action, the privacy note, the folder switch and the
+// mail list. The server is the source of truth for the subscription: a 402
+// from the mailbox call shows an info card and no list. Opening the page
+// also readies the mail key: a mailbox that `needs_key` gets one here.
 
 import 'dart:async';
 import 'dart:math' as math;
@@ -125,7 +126,11 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
       _mailboxError = null;
     });
     try {
-      final Mailbox mailbox = await _service.mailbox();
+      final Mailbox mailbox = await _service.openMailbox();
+      if (mailbox.needsKey) {
+        // The key went up, yet the server still has none: nothing to read.
+        throw const AgentMailException(0, AgentMailException.noKey);
+      }
       if (!mounted) return;
       setState(() {
         _mailbox = mailbox;
@@ -358,6 +363,12 @@ class _AgentMailboxPageState extends State<AgentMailboxPage> {
       _AddressTile(
         address: mailbox.address,
         onCopy: () => _copyAddress(mailbox.address),
+      ),
+      // §1: what the storage does and does not protect.
+      const SizedBox(height: 12),
+      ExpressiveInfoCard(
+        key: const ValueKey<String>('agent-mail-privacy'),
+        text: l.agentMailPrivacy,
       ),
       if (mailbox.frozen) ...<Widget>[
         const SizedBox(height: 12),
@@ -698,7 +709,7 @@ class AgentMailRow extends StatelessWidget {
     final AppLocalizations l = AppLocalizations.of(context)!;
     final bool unread = !mail.read && !mail.outgoing;
     final String? note = mail.agentNote;
-    final String? preview = note ?? mail.snippet;
+    final String? preview = mail.unreadable ? null : note ?? mail.snippet;
     final List<Widget> tags = <Widget>[
       // The owner's own mail says "You" in the name line already.
       if (!mail.outgoing && mail.senderTrust != MailTrust.owner)
@@ -782,6 +793,32 @@ class AgentMailRow extends StatelessWidget {
                       color: cs.onSurface,
                     ),
                   ),
+                  if (mail.unreadable) ...<Widget>[
+                    const SizedBox(height: 2),
+                    Row(
+                      key: const ValueKey<String>('agent-mail-unreadable'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Padding(
+                          padding: const EdgeInsets.only(top: 1),
+                          child: AppIcon(
+                            Icons.error_outline,
+                            size: 14,
+                            color: cs.error,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            l.agentMailUnreadable,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: cs.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   if (preview != null) ...<Widget>[
                     const SizedBox(height: 2),
                     Row(

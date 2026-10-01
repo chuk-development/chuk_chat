@@ -61,7 +61,12 @@ from chuk_agents_executor import (
 from chuk_agents_executor.protocol import USER_BROWSER, browser_target
 
 from .account_store import AccountStore
-from .agent_mail import STATE_FILE as AGENT_MAIL_STATE_FILE, AgentMailService
+from .agent_mail import (
+    KEY_FILE as AGENT_MAIL_KEY_FILE,
+    STATE_FILE as AGENT_MAIL_STATE_FILE,
+    AgentMailService,
+    MailKeyStore,
+)
 from .agent_permissions import (
     CAPABILITY as AGENT_PERMISSIONS_CAPABILITY,
     FILE_NAME as AGENT_PERMISSIONS_FILE,
@@ -101,7 +106,7 @@ from chuk_agents_config import resolve_state_home
 
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
-from .secrets_key import secrets_at_rest_key
+from .secrets_key import mail_key_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
@@ -697,9 +702,12 @@ class LocalHost:
             desktop=self._desktop_notifier.notify,
             logger=self._log,
         )
-        # Agent mail (docs/AGENT_MAIL.md §5): fetch, claim and start the mail
-        # runs; the client for the mail tools. It fetches now, on every relay
-        # connect and ``agent_mail`` frame, and every 5 minutes. Off on the
+        # Agent mail (docs/AGENT_MAIL.md §7): the mail key, fetch, claim and
+        # start the mail runs; the client for the mail tools. It fetches now,
+        # on every relay connect, ``agent_mail`` frame and new mail key, and
+        # every 5 minutes. The mail key (§6.1) is kept at rest in its own
+        # file under a key derived from the host identity, never in the
+        # secret vault (whose values reach every sandbox process). Off on the
         # offline test seam (an injected model) and with AGENTS_AGENT_MAIL=0,
         # so no test ever reaches the mail API.
         self._agent_mail: AgentMailService | None = None
@@ -717,11 +725,26 @@ class LocalHost:
                 main_session=host_agent_id(self._device_id),
                 state_path=self._workspace / AGENT_MAIL_STATE_FILE,
                 logger=self._log,
+                key_store=MailKeyStore(
+                    self._workspace / AGENT_MAIL_KEY_FILE,
+                    at_rest_key=mail_key_at_rest_key(self._identity),
+                    log=self._log,
+                ),
             )
             self._agent_mail.start()
         transport, controller_token, reconnect_pipe = self._build_transport()
         party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
-        extra = {"trust_provider": lambda: self._trust} if party_class is CloudHostParty else {}
+        extra = (
+            {
+                "trust_provider": lambda: self._trust,
+                # docs/AGENT_MAIL.md §6.1: the sealed ``agent_mail_key`` frame
+                # is taken at the party, before the provision gate, so the
+                # key never rides through the executor's ticket table.
+                "mail_key_handler": self._on_mail_key_frame,
+            }
+            if party_class is CloudHostParty
+            else {}
+        )
         self._party = party_class(
             **extra,
             transport=transport,
@@ -759,7 +782,7 @@ class LocalHost:
                 heal_channel_provider=self._current_heal_channel,
                 on_controller_event=self._on_cloud_controller_event,
                 on_pairing_expired=self._on_pairing_channel_expired,
-                # docs/AGENT_MAIL.md §5.1: an ``agent_mail`` frame, or a fresh
+                # docs/AGENT_MAIL.md §7: an ``agent_mail`` frame, or a fresh
                 # authenticated connect, means "fetch the mail now".
                 on_agent_mail=self._on_agent_mail_signal,
                 # With an install token the channel is fixed: nothing is
@@ -1157,7 +1180,7 @@ class LocalHost:
         # ...and every call that still rings (docs/WIRE_CONTRACT.md, "The agent
         # calls the user"): the app may have reconnected after a network drop.
         self._resend_ringing_calls()
-        # The first moment a mail run can start (docs/AGENT_MAIL.md §5.1). The
+        # The first moment a mail run can start (docs/AGENT_MAIL.md §7). The
         # mail thread retries shortly until this task server is up.
         self._on_agent_mail_signal("provisioned")
         environment = self._make_environment()
@@ -1241,7 +1264,7 @@ class LocalHost:
             # ``voice_call_state``.
             calls=getattr(self, "_calls", None),
             on_call_frame=self._on_call_frame,
-            # Agent mail (docs/AGENT_MAIL.md §5): the mail tools, and the
+            # Agent mail (docs/AGENT_MAIL.md §7): the mail tools, and the
             # restricted run of an unknown mail.
             agent_mail=getattr(self, "_agent_mail", None),
         )
@@ -1677,7 +1700,7 @@ class LocalHost:
         the cloud push still only when nobody is attached."""
         origin = summary.get("origin") if isinstance(summary, dict) else None
         if origin == ORIGIN_MAIL_UNTRUSTED:
-            # The restricted run of an unknown mail (docs/AGENT_MAIL.md §5.3):
+            # The restricted run of an unknown mail (docs/AGENT_MAIL.md §7):
             # its output is the note on the mail, which the app shows. No
             # toast and no push.
             return
@@ -1789,7 +1812,7 @@ class LocalHost:
             return False
         return executor.has_live_run(session_key)
 
-    # -- agent mail (docs/AGENT_MAIL.md §5) --------------------------------
+    # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
 
     def _mail_executor(self):
         """The executor a mail run goes to, or ``None`` before the host is
@@ -1816,6 +1839,16 @@ class LocalHost:
         mail = getattr(self, "_agent_mail", None)
         if mail is not None:
             mail.wake(reason)
+
+    def _on_mail_key_frame(self, payload: dict) -> str:
+        """The sealed ``agent_mail_key`` app frame (docs/AGENT_MAIL.md §6.1).
+        Returns what became of it for the frame ledger: ``stored``,
+        ``unchanged``, ``invalid``, or ``not_enabled`` without a mail service.
+        The frame gets no answer."""
+        mail = getattr(self, "_agent_mail", None)
+        if mail is None:
+            return "not_enabled"
+        return mail.accept_key_frame(payload)
 
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended

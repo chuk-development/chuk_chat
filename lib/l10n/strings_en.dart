@@ -776,9 +776,11 @@ const Map<String, String> stringsEn = {
   'agentMailContacts': 'Contacts',
   'agentMailContactsSubtitle': 'Trusted and blocked senders',
   'agentMailFrozen':
-      'This mailbox is frozen because the subscription ended. The agent cannot send, and new mail is dropped. A new subscription opens the same address again.',
+      'This mailbox is frozen because the subscription ended. The agent cannot send, and new mail is refused. A new subscription opens the same address again.',
   'agentMailSendSuspended':
-      'Sending is paused after several bounces or complaints. Incoming mail still arrives.',
+      'Sending is paused after several bounces. Incoming mail still arrives.',
+  'agentMailPrivacy':
+      'Agent mail is normal email and not end-to-end encrypted. It is stored encrypted.',
   'agentMailFolderInbox': 'Inbox',
   'agentMailFolderUnknown': 'Unknown',
   'agentMailFolderDrafts': 'Drafts',
@@ -815,6 +817,8 @@ const Map<String, String> stringsEn = {
   'agentMailCc': 'Cc',
   'agentMailDate': 'Date',
   'agentMailSenderCheck': 'Sender check',
+  'agentMailDkimAligned': 'Signed by {domain}',
+  'agentMailDkimNotAligned': 'Not signed by the sender\'s domain',
   'agentMailAgentNote': 'Agent note',
   'agentMailImportanceHigh': 'High',
   'agentMailImportanceNormal': 'Normal',
@@ -825,7 +829,6 @@ const Map<String, String> stringsEn = {
   'agentMailNoText': 'This mail has no text.',
   'agentMailAttachments': 'Attachments',
   'agentMailAttachmentTooLarge': 'Too large, not stored',
-  'agentMailAttachmentUnavailable': 'Not available',
   'agentMailDownload': 'Download',
   'agentMailSaved': 'Saved to {path}',
   'agentMailDownloadFailed': 'Could not save the attachment',
@@ -875,6 +878,19 @@ const Map<String, String> stringsEn = {
   'agentMailErrNetwork': 'No connection to the server.',
   'agentMailErrNotFound': 'This mail no longer exists.',
   'agentMailErrGeneric': 'Something went wrong ({code}).',
+  'agentMailUnreadable': 'This mail could not be decrypted.',
+  'agentMailContactUnreadable': 'This contact could not be decrypted.',
+  'agentMailErrUnseal': 'This could not be decrypted.',
+  'agentMailErrKeyLocked':
+      'Your account key is locked. Sign in again to read the mailbox.',
+  'agentMailErrKeyUnreadable':
+      'The mail key does not open with your account key.',
+  'agentMailErrNoKey': 'The mailbox is not set up yet. Open the mailbox once.',
+  'agentMailErrKeyRefused': 'The server refused the mail key.',
+  'agentMailErrAttachmentsTooLarge':
+      'The attachments are too large to send (3 MB at most).',
+  'agentMailErrRecipientSuppressed':
+      'A recipient cannot get mail: earlier mail to this address bounced.',
   'agentMailContactsIntro':
       'Trusted senders start normal runs, and the agent may write to them without asking. Mail from blocked senders is dropped. An entry can be one address or a whole domain (@example.com).',
   'agentMailTrusted': 'Trusted',

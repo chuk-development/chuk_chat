@@ -26,3 +26,16 @@ def secrets_at_rest_key(identity: DeviceIdentity) -> bytes:
     return HKDF(
         algorithm=hashes.SHA256(), length=KEY_LEN, salt=None, info=_LABEL
     ).derive(identity.export_private_seed())
+
+
+# The agent mail key (docs/AGENT_MAIL.md §3.1, §6.1) has its own at-rest key
+# and file: it is not a user secret, and it must never reach a sandbox env.
+_MAIL_KEY_LABEL = b"cowork/host/agent-mail-key-at-rest/v1"
+
+
+def mail_key_at_rest_key(identity: DeviceIdentity) -> bytes:
+    """32 bytes for AES-256-GCM over ``agent_mail_key.enc``, derived from the
+    identity's private seed under a label of its own."""
+    return HKDF(
+        algorithm=hashes.SHA256(), length=KEY_LEN, salt=None, info=_MAIL_KEY_LABEL
+    ).derive(identity.export_private_seed())

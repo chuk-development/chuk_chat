@@ -6,8 +6,9 @@ import 'package:chuk_chat/pages/agent_mail_contacts_page.dart';
 import '../support/agent_mail_fake.dart';
 import '../support/test_app.dart';
 
-/// Mailbox > Contacts (docs/AGENT_MAIL.md §2, §6): trusted and blocked
-/// addresses and domains, added and removed over `PUT` / `DELETE /contacts`.
+/// Mailbox > Contacts (docs/AGENT_MAIL.md §2, §8): trusted and blocked
+/// addresses and domains, their sealed labels opened, added over
+/// `PUT /contacts` and removed by id over `DELETE /contacts/{id}`.
 void main() {
   Future<FakeAgentMailServer> pump(
     WidgetTester tester, {
@@ -30,7 +31,7 @@ void main() {
   testWidgets('lists trusted and blocked contacts apart', (tester) async {
     final FakeAgentMailServer fake = await pump(tester);
 
-    expect(fake.calls, <String>['GET /contacts']);
+    expect(fake.calls, <String>['GET /key', 'GET /contacts']);
     expect(find.text('ada@example.com'), findsOneWidget);
     expect(find.text('@very-long-company-domain-name.example'), findsOneWidget);
     expect(find.text('spam@junk.example'), findsOneWidget);
@@ -51,15 +52,13 @@ void main() {
     expect(find.text('No blocked senders'), findsOneWidget);
   });
 
-  testWidgets('remove deletes the contact by address', (tester) async {
+  testWidgets('remove deletes the contact by id', (tester) async {
     final FakeAgentMailServer fake = await pump(tester);
     await tester.tap(
-      find.byKey(
-        const ValueKey<String>('agent-mail-contact-remove-spam@junk.example'),
-      ),
+      find.byKey(const ValueKey<String>('agent-mail-contact-remove-c3')),
     );
     await tester.pumpAndSettle();
-    expect(fake.calls.last, 'DELETE /contacts?address=spam%40junk.example');
+    expect(fake.calls.last, 'DELETE /contacts/c3');
     expect(find.text('spam@junk.example'), findsNothing);
     expect(find.text('No blocked senders'), findsOneWidget);
     await tester.pumpAndSettle(const Duration(seconds: 3));
@@ -69,9 +68,7 @@ void main() {
     final FakeAgentMailServer fake = await pump(tester);
     fake.failures['/contacts'] = FakeAgentMailServer.errorResponse(500, 'boom');
     await tester.tap(
-      find.byKey(
-        const ValueKey<String>('agent-mail-contact-remove-spam@junk.example'),
-      ),
+      find.byKey(const ValueKey<String>('agent-mail-contact-remove-c3')),
     );
     await tester.pumpAndSettle();
     expect(find.text('spam@junk.example'), findsOneWidget);
@@ -135,6 +132,39 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter an address or @domain.tld'), findsOneWidget);
     expect(fake.bodiesOf('PUT', '/contacts'), isEmpty);
+  });
+
+  testWidgets('a label that does not open says so and can be removed', (
+    tester,
+  ) async {
+    final FakeAgentMailServer server = FakeAgentMailServer();
+    server.contacts.add(<String, dynamic>{
+      'id': 'c9',
+      'address': 'lost@example.com',
+      'trusted_inbound': false,
+      'allowed_outbound': false,
+      'blocked': true,
+      'broken': true,
+    });
+    final FakeAgentMailServer fake = await pump(tester, server: server);
+    final Finder tile = find.byKey(
+      const ValueKey<String>('agent-mail-contact-c9'),
+    );
+    expect(
+      find.descendant(
+        of: tile,
+        matching: find.text('This contact could not be decrypted.'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('lost@example.com'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('agent-mail-contact-remove-c9')),
+    );
+    await tester.pumpAndSettle();
+    expect(fake.calls.last, 'DELETE /contacts/c9');
+    expect(tile, findsNothing);
+    await tester.pumpAndSettle(const Duration(seconds: 3));
   });
 
   testWidgets('a failed load says so, with a retry', (tester) async {

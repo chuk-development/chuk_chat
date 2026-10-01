@@ -55,7 +55,6 @@ import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/services/app_mode_service.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
-import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/account_session.dart';
@@ -220,9 +219,7 @@ AgentsRoom _fullRoom() => AgentsRoom(
 Widget _mailDetail(String id) {
   final FakeAgentMailServer server = FakeAgentMailServer();
   return AgentMailDetailPage(
-    summary: MailSummary.fromJson(
-      server.mails.firstWhere((Map<String, dynamic> m) => m['id'] == id),
-    ),
+    summary: server.summaryOf(id),
     service: server.service(),
   );
 }
@@ -306,7 +303,7 @@ List<_Screen> _screens() => <_Screen>[
       (_) => const EmbeddingSettingsPage()),
   _Screen('settings/herenow_settings_page', (_) => const HereNowSettingsPage()),
   _Screen('mcp_connectors_page', (_) => const McpConnectorsPage()),
-  // Agent mail (docs/AGENT_MAIL.md §6), against the in-memory server: the
+  // Agent mail (docs/AGENT_MAIL.md §8), against the in-memory server: the
   // list with every kind of row, the card without a subscription, a mail
   // with a note and files, a mail from an unknown sender, a draft, and the
   // contacts.
