@@ -141,3 +141,10 @@ coworker. Mail from an unknown sender starts a restricted run that can only
 read that mail, write a note, write a reply draft and archive it (at most 20
 per day, counted in `agent_mail.json`). Mail is off when `AGENTS_AGENT_MAIL=0`
 is set, and also when the host has no account session.
+
+The server stores every mail sealed to the user's mail key. The app hands the
+private key to the host in the sealed `agent_mail_key` frame; the host keeps
+it in `agent_mail_key.enc` (AES-256-GCM under a key derived from the host
+identity, mode 0600) and opens the mail itself. Until the key arrives the host
+claims no mail and the mail tools say "open the app once to set up the
+mailbox".

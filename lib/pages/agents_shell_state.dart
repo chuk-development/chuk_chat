@@ -45,6 +45,9 @@ Future<AgentsRelayController> _buildRelayController(
     // The user's secret set follows every provision (docs/WIRE_CONTRACT.md,
     // "Secrets"), so a restarted host holds what the device holds.
     secretsForwarder: SecretsService.instance.forwardToHost,
+    // So does the mail key (docs/AGENT_MAIL.md §6.1): the host opens the
+    // user's sealed mail with it.
+    mailKeyForwarder: AgentMailKeyHandover.instance.forwardTo,
   );
 }
 
@@ -274,6 +277,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     // inbound frame of the bound controller, so this sees each `agent_list`
     // without owning the socket.
     _hostInboundSub = AgentsRelayLink.instance.inbound.listen(_onHostInbound);
+    // A mail key made while the app runs goes to the host at once
+    // (docs/AGENT_MAIL.md §6.1); each provision sends it too.
+    AgentMailKeyHandover.instance.start();
   }
 
   StreamSubscription<AgentsRelayInbound>? _hostInboundSub;
@@ -484,6 +490,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();
+    AgentMailKeyHandover.instance.stop();
     _pairingStore.changes.removeListener(_onPairingStoreChanged);
     _restoreReason.removeListener(_resolveHasComputer);
     _restoreGraceTimer?.cancel();

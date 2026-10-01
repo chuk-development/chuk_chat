@@ -420,6 +420,7 @@ version = "0.1.0"
 source = { editable = "../runtime" }
 dependencies = [
     { name = "anyio" },
+    { name = "cryptography" },
     { name = "fastembed" },
     { name = "fastmcp-slim" },
     { name = "firecrawl-anydoc" },
@@ -437,6 +438,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = "==4.12.1" },
+    { name = "cryptography", specifier = ">=44" },
     { name = "fastembed", specifier = ">=0.3" },
     { name = "fastmcp-slim", specifier = "==4.0.10" },
     { name = "firecrawl-anydoc", specifier = ">=0.1.8" },

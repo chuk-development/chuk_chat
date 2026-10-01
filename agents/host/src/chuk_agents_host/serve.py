@@ -162,7 +162,7 @@ class TaskServer:
                 # for the app's ``voice_call_state``.
                 calls=calls,
                 on_call_frame=on_call_frame,
-                # Agent mail (docs/AGENT_MAIL.md §5): the host's mail service,
+                # Agent mail (docs/AGENT_MAIL.md §7): the host's mail service,
                 # for the mail tools and the restricted mail run.
                 agent_mail=agent_mail,
             )

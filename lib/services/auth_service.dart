@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/encryption_service.dart';
 import 'package:chuk_chat/services/local_chat_cache_service.dart';
@@ -167,6 +168,8 @@ class AuthService {
       // to the user who just left. Cleared first, so a failing teardown
       // below cannot leave them behind.
       MarkdownMessage.clearCaches();
+      // So is the opened mail key (docs/AGENT_MAIL.md §3.1).
+      AgentMailService.instance.forgetKey();
       // Tear down the multiplexed /v2/ws connection so the new user (or
       // re-auth) gets a fresh socket with their token. Best-effort —
       // never blocks signOut on a hung socket teardown.

@@ -375,7 +375,7 @@ def build_runtime(
     ``call_user`` / ``call_status``, bound to one session by the executor.
     Unset, neither tool exists.
 
-    ``agent_mail`` (docs/AGENT_MAIL.md §5) adds the mail tools: the full set,
+    ``agent_mail`` (docs/AGENT_MAIL.md §7) adds the mail tools: the full set,
     or the restricted set of one mail. Unset, no mail tool exists.
     ``tool_allowlist`` keeps only the named tools, after every tool is in; the
     restricted mail run uses it. ``base_instructions`` replaces the behaviour
@@ -495,7 +495,7 @@ def build_runtime(
 
     kill = kill_switch or KillSwitch(estop_path)
 
-    # Agent mail (docs/AGENT_MAIL.md §5): the full set for a normal run, or the
+    # Agent mail (docs/AGENT_MAIL.md §7): the full set for a normal run, or the
     # four tools of ONE mail for a restricted run, bound by the executor.
     # ``None`` (no account session, no mailbox) registers nothing. Stop reaches
     # into ``mail_wait``, which can park for minutes.
@@ -638,7 +638,7 @@ def build_runtime(
                 cancel=lambda: kill.interrupted() or kill.estop_engaged(),
             )
 
-    # An allowlist (the restricted mail run, docs/AGENT_MAIL.md §5.3) keeps
+    # An allowlist (the restricted mail run, docs/AGENT_MAIL.md §7) keeps
     # only the named tools. Applied last, so no tool registered above can slip
     # past it: not a shell, not a file tool, not memory, not an MCP tool.
     if tool_allowlist is not None:

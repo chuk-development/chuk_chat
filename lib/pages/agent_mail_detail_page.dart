@@ -1,10 +1,12 @@
 // lib/pages/agent_mail_detail_page.dart
 //
-// One mail of the agent mailbox (docs/AGENT_MAIL.md §6): sender, trust
+// One mail of the agent mailbox (docs/AGENT_MAIL.md §8): sender, trust
 // badge, date, the agent's note, the text and the attachments, with archive,
 // delete, trust sender and block sender. A draft the agent wrote can be
-// edited and sent, or discarded. The app never renders mail HTML: it shows
-// `text_body`, as selectable plain text.
+// edited and sent (the whole draft goes back), or discarded. Everything is
+// opened here with the mail key; a part that does not open says so. The app
+// never renders mail HTML: it shows the opened text, as selectable plain
+// text.
 
 import 'dart:async';
 
@@ -14,6 +16,7 @@ import 'package:flutter/services.dart';
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/agents/agent_file_saver.dart';
+import 'package:chuk_chat/services/agents/agent_mail_crypto.dart';
 import 'package:chuk_chat/services/agents/agent_mail_service.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
@@ -255,17 +258,18 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
 
   Future<void> _sendDraft() async {
     final MailMessage? message = _message;
-    if (message == null) return;
+    if (message == null || message.unreadable) return;
     final AppLocalizations l = AppLocalizations.of(context)!;
-    // Only what the user changed goes back; the rest stays the agent's.
+    // The whole draft goes back: the server holds it sealed and cannot read
+    // it, so the subject and text are sent as the user left them.
     final String subject = _subject.text;
     final String text = _text.text;
     MailSendResult? result;
     final bool ok = await _run(() async {
       result = await _service.sendDraft(
-        message.id,
-        subject: subject != message.summary.subject ? subject : null,
-        text: text != message.textBody ? text : null,
+        message,
+        subject: subject,
+        text: text,
       );
     });
     if (!ok || !mounted) return;
@@ -302,7 +306,7 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
     } catch (error) {
       AppNotifications.showOn(
         messenger,
-        error is AgentMailException
+        error is AgentMailException || error is AgentMailSealException
             ? agentMailErrorText(l, error)
             : l.agentMailDownloadFailed,
         kind: AppNotificationKind.error,
@@ -421,9 +425,18 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
           ],
         ),
       ] else if (message != null) ...<Widget>[
+        if (message.unreadable) ...<Widget>[
+          const SizedBox(height: 16),
+          ExpressiveInfoCard(
+            key: const ValueKey<String>('agent-mail-unreadable'),
+            icon: Icons.error_outline,
+            tone: Theme.of(context).colorScheme.errorContainer,
+            text: l.agentMailUnreadable,
+          ),
+        ],
         if (draft)
-          ..._draftEditor(context, l)
-        else
+          ..._draftEditor(context, l, message)
+        else if (!message.bodyUnreadable)
           ..._textSection(context, l, message),
         if (message.attachments.isNotEmpty) ...<Widget>[
           ExpressiveSectionHeader(l.agentMailAttachments),
@@ -474,11 +487,11 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
       if (!mail.outgoing && message != null && !message.auth.isEmpty)
         _FieldTile(
           label: l.agentMailSenderCheck,
-          value: <String>[
-            if (message.auth.spf != null) 'SPF ${message.auth.spf}',
-            if (message.auth.dkim != null) 'DKIM ${message.auth.dkim}',
-            if (message.auth.dmarc != null) 'DMARC ${message.auth.dmarc}',
-          ].join(' · '),
+          value: message.auth.dkimAligned == true
+              ? l.agentMailDkimAligned(
+                  message.auth.dkimDomain ?? _domainOf(mail.fromAddress),
+                )
+              : l.agentMailDkimNotAligned,
         ),
     ];
     return ExpressiveGroup(children: rows);
@@ -514,7 +527,30 @@ class _AgentMailDetailPageState extends State<AgentMailDetailPage> {
     ];
   }
 
-  List<Widget> _draftEditor(BuildContext context, AppLocalizations l) {
+  static String _domainOf(String address) {
+    final int at = address.lastIndexOf('@');
+    return at < 0 ? address : address.substring(at + 1);
+  }
+
+  List<Widget> _draftEditor(
+    BuildContext context,
+    AppLocalizations l,
+    MailMessage message,
+  ) {
+    // A draft that did not open cannot be sent: its text and recipients are
+    // not known. It can still be discarded.
+    if (message.unreadable) {
+      return <Widget>[
+        const SizedBox(height: 16),
+        ExpressiveButton(
+          key: const ValueKey<String>('agent-mail-draft-discard'),
+          icon: Icons.delete_outline,
+          label: l.agentMailDiscard,
+          tonal: true,
+          onTap: () => unawaited(_delete()),
+        ),
+      ];
+    }
     return <Widget>[
       ExpressiveSectionHeader(l.agentMailDraft),
       _DraftField(
@@ -784,9 +820,7 @@ class _AttachmentTile extends StatelessWidget {
             formatMailBytes(attachment.size),
             ?attachment.contentType,
           ].where((String s) => s.isNotEmpty).join(' · ')
-        : attachment.tooLarge
-        ? l.agentMailAttachmentTooLarge
-        : l.agentMailAttachmentUnavailable;
+        : l.agentMailAttachmentTooLarge;
     return ExpressiveTile(
       child: Row(
         children: <Widget>[

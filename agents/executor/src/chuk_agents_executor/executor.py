@@ -94,6 +94,7 @@ from chuk_agents_runtime import (
     skills_inventory,
 )
 from chuk_agents_runtime.agent_mail import (
+    KEY_FRAME_TYPE,
     ORIGIN_MAIL,
     ORIGIN_MAIL_UNTRUSTED,
     PROFILE_MAIL_UNTRUSTED,
@@ -377,7 +378,7 @@ class _Run:
     # automation run is notified on even with a controller attached.
     origin: str = "app"
     automation_id: str | None = None
-    # The run profile (docs/AGENT_MAIL.md §5.3). ``None`` is a normal run.
+    # The run profile (docs/AGENT_MAIL.md §2, §7). ``None`` is a normal run.
     # ``mail_untrusted`` is the restricted run of ONE mail from an unknown
     # sender: no shell, no files, no browser, no memory, no MCP, only the four
     # tools of that mail.
@@ -951,7 +952,7 @@ class Executor:
         # frame is unknown.
         self._calls = calls
         self._on_call_frame = on_call_frame
-        # Agent mail (docs/AGENT_MAIL.md §5): the host's mail service.
+        # Agent mail (docs/AGENT_MAIL.md §7): the host's mail service.
         # ``client()`` gives the REST client, or ``None`` when the host has no
         # account session or no mailbox; then no mail tool is registered.
         self._agent_mail = agent_mail
@@ -1499,6 +1500,13 @@ class Executor:
             # is a control frame like a stop.
             self._call_hook(self._on_account_frame, payload)
             return
+        if kind == KEY_FRAME_TYPE:
+            # The mail key from the app (docs/AGENT_MAIL.md §6.1). The cloud
+            # party takes it before it gets here; this is the local relay's
+            # path. Handed to the host's mail service; idempotent, and like a
+            # stop it gets no terminal.
+            self._handle_mail_key(request_id, payload)
+            return
         if kind == "task" or kind is None:
             # ``None`` keeps the original contract: the first frames of this
             # protocol carried a prompt and no type.
@@ -1703,7 +1711,7 @@ class Executor:
             model = last.get("model") or None
             provider = last.get("provider") or None
             effort = last.get("reasoning_effort") or None
-        # The restricted mail run (docs/AGENT_MAIL.md §5.3) runs on the host's
+        # The restricted mail run (docs/AGENT_MAIL.md §7) runs on the host's
         # default model: its session is new, and the user's mode belongs to
         # the user's own threads.
         profile = meta.get("profile") or None
@@ -3398,7 +3406,7 @@ class Executor:
                 if self._calls is not None
                 else None
             ),
-            # The mail tools (docs/AGENT_MAIL.md §5.4). ``user_requested`` is
+            # The mail tools (docs/AGENT_MAIL.md §7). ``user_requested`` is
             # decided here from the run's origin, never by the model.
             agent_mail=self._mail_binding(run),
             # The hero/aux client (§7.3): same model, reasoning off, cheap. Enables
@@ -3569,7 +3577,21 @@ class Executor:
             ),
         )
 
-    # -- agent mail (docs/AGENT_MAIL.md §5) --------------------------------
+    # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
+    def _handle_mail_key(self, request_id: str, payload: dict) -> None:
+        """Hand a sealed ``agent_mail_key`` frame to the host's mail service.
+        The log line names the outcome, never a key."""
+        accept = getattr(self._agent_mail, "accept_key_frame", None)
+        if accept is None:
+            logger.warning("agent_mail_key dropped request=%s: agent mail is not enabled", request_id)
+            return
+        try:
+            outcome = accept(payload)
+        except Exception as exc:  # noqa: BLE001 — a bad key frame must not kill the reader
+            logger.warning("agent_mail_key failed request=%s: %s", request_id, type(exc).__name__)
+            return
+        logger.info("agent_mail_key request=%s: %s", request_id, outcome)
+
     def _mail_binding(self, run: _Run) -> MailBinding | None:
         """The mail access of this run, or ``None`` for no mail tools.
 
@@ -3595,7 +3617,7 @@ class Executor:
 
     def _run_restricted_mail(self, run: _Run) -> None:
         """The restricted run of ONE mail from an unknown sender
-        (docs/AGENT_MAIL.md §5.3).
+        (docs/AGENT_MAIL.md §2, §7).
 
         No shell, no files, no browser, no memory, no MCP, no skills, no chat
         search and no workspace: the four tools of the mail, a short prompt of

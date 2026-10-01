@@ -1,24 +1,64 @@
-"""Agent mail on the host (docs/AGENT_MAIL.md §5.1-§5.2): the ``agent_mail``
-relay frame, and the dispatcher that claims mail and starts the runs.
+"""Agent mail on the host (docs/AGENT_MAIL.md §3.1, §6.1, §7): the mail key
+and its frame, the ``agent_mail`` relay frame, and the dispatcher that claims
+mail and starts the runs.
 
-The mail API is an ``httpx.MockTransport``; runs are recorded, not executed.
+The mail API is an ``httpx.MockTransport`` that stores every mail sealed to a
+test mail key, as the real server does; runs are recorded, not executed.
 """
 
 from __future__ import annotations
 
+import base64
 import json
+import os
+import stat
 from datetime import datetime, timezone
 
 import httpx
+from chuk_agents_crypto.device_keys import DeviceIdentity
+from cryptography.hazmat.primitives.asymmetric.x25519 import X25519PrivateKey
 
-from chuk_agents_host.agent_mail import AgentMailService, MailState
+from chuk_agents_host.agent_mail import (
+    KEY_INVALID,
+    KEY_STORED,
+    KEY_UNCHANGED,
+    AgentMailService,
+    MailKeyStore,
+    MailState,
+)
 from chuk_agents_host.cloud_relay import TYPE_AGENT_MAIL, CloudRelayLink, CloudRelayTransport
 from chuk_agents_host.host import LocalHost
-from chuk_agents_host.relay_ledger import DECISION_MAIL_FETCH, REASON_NOT_ENABLED
-from chuk_agents_runtime.agent_mail import MAIL_MARKER, PROFILE_MAIL_UNTRUSTED
+from chuk_agents_host.relay_ledger import (
+    DECISION_MAIL_FETCH,
+    DECISION_MAIL_KEY,
+    REASON_INVALID,
+    REASON_NOT_ENABLED,
+)
+from chuk_agents_host.secrets_key import mail_key_at_rest_key, secrets_at_rest_key
+from chuk_agents_runtime.agent_mail import KEY_FRAME_TYPE, MAIL_MARKER, PROFILE_MAIL_UNTRUSTED
+from chuk_agents_runtime.mail_seal import MailKey, seal_json
 
 NOW = datetime(2026, 9, 30, 12, 0, 0, tzinfo=timezone.utc).timestamp()
 MAIN = "host:cowork-host"
+
+
+def _new_key() -> MailKey:
+    private = X25519PrivateKey.generate()
+    return MailKey(private.public_key().public_bytes_raw(), private.private_bytes_raw())
+
+
+KEY = _new_key()
+
+
+def _frame(key: MailKey) -> dict:
+    return {"type": KEY_FRAME_TYPE, "public_key": key.public_b64(), "private_key": key.private_b64()}
+
+
+def _store(key: MailKey | None = KEY) -> MailKeyStore:
+    store = MailKeyStore()
+    if key is not None:
+        store.put(key.public_b64(), key.private_b64())
+    return store
 
 
 def _iso(ts: float) -> str:
@@ -137,6 +177,25 @@ class _Session:
         self.access_token = "jwt-2"
 
 
+_PLAIN = ("id", "direction", "sender_trust", "is_bulk", "created_at")
+
+
+def _sealed(row: dict, *, body: bool) -> dict:
+    """A plain test row as the server returns it: plain columns, the rest
+    sealed to :data:`KEY`."""
+    out = {k: row[k] for k in _PLAIN if k in row}
+    # The server sends each sealed field as a JSON string of the envelope.
+    out["sealed_summary"] = json.dumps(
+        seal_json(
+            {"subject": row.get("subject"), "from_address": row.get("from_address"), "to": []},
+            KEY.public_key,
+        )
+    )
+    if body:
+        out["sealed_body"] = json.dumps(seal_json({"text": f"text of {row['id']}"}, KEY.public_key))
+    return out
+
+
 class _Api:
     """``/v1/agent-mail`` with a mutable inbox. ``claim_only`` limits what a
     claim may take (another host took the rest)."""
@@ -148,6 +207,8 @@ class _Api:
         self.mailbox_status = 200
         #: Answers of the list, used up first: ``(status, detail)``.
         self.list_failures: list[tuple[int, str]] = []
+        #: Mail ids whose ``GET /messages/{id}`` fails.
+        self.message_failures: set[str] = set()
 
     def handle(self, request: httpx.Request) -> httpx.Response:
         self.calls.append(request)
@@ -161,7 +222,7 @@ class _Api:
             if self.list_failures:
                 status, detail = self.list_failures.pop(0)
                 return httpx.Response(status, json={"detail": detail})
-            rows = [r for r in self.rows if not r.get("_claimed")]
+            rows = [_sealed(r, body=False) for r in self.rows if not r.get("_claimed")]
             return httpx.Response(200, json={"messages": rows, "next_before": None})
         if path == "/messages/claim":
             ids = json.loads(request.content)["ids"]
@@ -174,9 +235,12 @@ class _Api:
             return httpx.Response(200, json={"claimed": taken})
         if path.startswith("/messages/") and request.method == "GET":
             ident = path.rsplit("/", 1)[1]
+            # The HostView is host code now: the server is never asked for one.
+            assert "view" not in request.url.params
+            if ident in self.message_failures:
+                return httpx.Response(500, json={"detail": "boom"})
             row = next(r for r in self.rows if r["id"] == ident)
-            assert request.url.params["view"] == "host"
-            return httpx.Response(200, json={**row, "text_body": f"text of {ident}"})
+            return httpx.Response(200, json=_sealed(row, body=True))
         return httpx.Response(404, json={"detail": "not_found"})
 
     def claims(self) -> list[list[str]]:
@@ -217,8 +281,11 @@ def _row(ident: str, trust: str, *, age: float = 120.0, bulk: bool = False) -> d
     }
 
 
-def _service(tmp_path, api: _Api, runs: _Runs, clock: _Clock, *, session=True, **kw) -> AgentMailService:
+def _service(
+    tmp_path, api: _Api, runs: _Runs, clock: _Clock, *, session=True, key: MailKey | None = KEY, **kw
+) -> AgentMailService:
     session_obj = _Session() if session else None
+    kw.setdefault("key_store", _store(key))
     return AgentMailService(
         session_provider=lambda: session_obj,
         submit=runs.submit,
@@ -254,7 +321,8 @@ def test_trusted_mail_is_batched_into_one_full_run_on_the_main_session(tmp_path)
     assert "[mail: 2 new messages" in header
     mails = json.loads(body)
     assert [m["id"] for m in mails] == ["t1", "t2"]
-    assert mails[0]["text"] == "text of t1"  # fetched with view=host
+    # Fetched and opened on the host; the subject came out of sealed_summary.
+    assert mails[0]["text"] == "text of t1" and mails[0]["subject"] == "subject t1"
 
 
 def test_unknown_mail_waits_30_seconds_then_gets_a_restricted_run(tmp_path):
@@ -306,7 +374,7 @@ def test_a_lost_claim_starts_no_run(tmp_path):
     runs = _Runs()
     report = _service(tmp_path, api, runs, _Clock()).dispatch_once()
     assert report.lost == 2 and runs.submitted == []
-    assert MailState(tmp_path / "agent_mail.json").used() == 0
+    assert MailState(tmp_path / "agent_mail.json", clock=_Clock()).used() == 0
 
 
 def test_claimed_mail_that_could_not_start_is_started_later(tmp_path):
@@ -336,7 +404,8 @@ def test_claimed_mail_that_could_not_start_is_started_later(tmp_path):
     assert api.claims() == [["t1", "u1"], ["t2"]]
     assert keys[2:] == [MAIN]
     assert json.loads((tmp_path / "agent_mail.json").read_text())["pending"] == {"full": [], "restricted": []}
-    assert MailState(tmp_path / "agent_mail.json").used() == 1
+    # The test's clock, not the real date: the day count is per UTC day.
+    assert MailState(tmp_path / "agent_mail.json", clock=clock).used() == 1
 
 
 def test_each_mail_is_handled_once(tmp_path):
@@ -521,5 +590,215 @@ def test_mail_runs_go_to_the_hosts_executor(tmp_path):
         host._on_agent_mail_signal("frame")
     finally:
         host._party = None
+        host._roster.close()
+        host._coworker_names.close()
+
+
+# -- the full run's prompt when a fetch fails --------------------------------------
+
+
+def test_a_failed_fetch_falls_back_to_the_opened_summary(tmp_path):
+    api = _Api([_row("t1", "trusted")])
+    api.message_failures.add("t1")
+    runs = _Runs()
+    _service(tmp_path, api, runs, _Clock()).dispatch_once()
+    mail = json.loads(runs.submitted[0][1].partition(MAIL_MARKER + "\n")[2])[0]
+    assert mail["subject"] == "subject t1" and mail["text_omitted"] is True
+    assert "text" not in mail
+
+
+# -- the mail key (docs/AGENT_MAIL.md §3.1, §6.1) ----------------------------------
+
+
+def test_the_key_frame_is_stored_once_and_wakes_the_fetch(tmp_path):
+    logged: list[str] = []
+    service = _service(tmp_path, _Api([]), _Runs(), _Clock(), key=None, logger=logged.append)
+    assert service.keys.get() is None
+    assert service.accept_key_frame(_frame(KEY)) == KEY_STORED
+    assert service.keys.get().same_as(KEY)
+    assert service._wake.is_set()
+    service._wake.clear()
+    # The app sends it on every connect: the same key changes nothing.
+    assert service.accept_key_frame(_frame(KEY)) == KEY_UNCHANGED
+    assert not service._wake.is_set()
+    # A new key (made again in the app) replaces the old one.
+    other = _new_key()
+    assert service.accept_key_frame(_frame(other)) == KEY_STORED
+    assert service.keys.get().same_as(other)
+    assert not any(KEY.private_b64() in line or other.private_b64() in line for line in logged)
+
+
+def test_a_key_frame_with_a_mismatched_pair_is_refused(tmp_path):
+    logged: list[str] = []
+    service = _service(tmp_path, _Api([]), _Runs(), _Clock(), key=None, logger=logged.append)
+    other = _new_key()
+    bad = {"type": KEY_FRAME_TYPE, "public_key": other.public_b64(), "private_key": KEY.private_b64()}
+    for frame in (
+        bad,
+        {"type": KEY_FRAME_TYPE, "public_key": KEY.public_b64()},
+        {"type": KEY_FRAME_TYPE, "public_key": "AAAA", "private_key": "AAAA"},
+        {"type": KEY_FRAME_TYPE, "public_key": 7, "private_key": ["x"]},
+    ):
+        assert service.accept_key_frame(frame) == KEY_INVALID
+    assert service.keys.get() is None
+    # A bad frame never replaces a good key either.
+    service.accept_key_frame(_frame(KEY))
+    assert service.accept_key_frame(bad) == KEY_INVALID
+    assert service.keys.get().same_as(KEY)
+    assert not any(KEY.private_b64() in line for line in logged)
+
+
+def test_the_key_is_kept_at_rest_encrypted_with_mode_600(tmp_path):
+    identity = DeviceIdentity.generate()
+    at_rest = mail_key_at_rest_key(identity)
+    # A label of its own: not the secret vault's key.
+    assert at_rest != secrets_at_rest_key(identity)
+    path = tmp_path / "agent_mail_key.enc"
+    store = MailKeyStore(path, at_rest_key=at_rest)
+    assert store.get() is None
+    assert store.put(KEY.public_b64(), KEY.private_b64()) is True
+    assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
+    text = path.read_text()
+    assert KEY.private_b64() not in text and KEY.public_b64() not in text
+    assert not list(tmp_path.glob("*.tmp"))
+    # A restart reads it back.
+    assert MailKeyStore(path, at_rest_key=at_rest).get().same_as(KEY)
+    # Another host identity cannot open it: no key, no crash.
+    logged: list[str] = []
+    other = MailKeyStore(path, at_rest_key=mail_key_at_rest_key(DeviceIdentity.generate()), log=logged.append)
+    assert other.get() is None and logged
+    # The same key again writes nothing.
+    before = path.stat().st_mtime_ns
+    assert store.put(KEY.public_b64(), KEY.private_b64()) is False
+    assert path.stat().st_mtime_ns == before
+
+
+def test_without_a_key_nothing_is_listed_or_claimed_until_the_key_frame(tmp_path):
+    api = _Api([_row("t1", "trusted"), _row("u1", "unknown")])
+    runs = _Runs()
+    logged: list[str] = []
+    service = _service(tmp_path, api, runs, _Clock(), key=None, logger=logged.append)
+    report = service.dispatch_once()
+    assert report.skipped == "needs_key" and report.retry_in is None
+    assert api.calls == [] and runs.submitted == []
+    service.dispatch_once()
+    assert sum("no mail key" in line for line in logged) == 1  # said once, not per poll
+    # The tools are still offered, and say what to do.
+    client = service.client()
+    assert client is not None and client.mail_key() is None
+    # The app connects and hands the key over: dispatch resumes.
+    assert service.accept_key_frame(_frame(KEY)) == KEY_STORED
+    report = service.dispatch_once()
+    assert report.skipped is None
+    assert [key for key, _p, _m in runs.submitted] == [MAIN, "mail:u1"]
+
+
+def test_claimed_mail_waits_for_the_key_too(tmp_path):
+    api = _Api([_row("t1", "trusted")])
+    runs = _Runs()
+    runs.gone = True
+    clock = _Clock()
+    store = _store()
+    _service(tmp_path, api, runs, clock, key_store=store).dispatch_once()
+    assert api.claims() == [["t1"]]
+    # A restart with no key yet (the file did not open): the pending mail
+    # starts nothing, and nothing new is claimed.
+    runs.gone = False
+    service = _service(tmp_path, api, runs, clock, key=None)
+    assert service.dispatch_once().skipped == "needs_key"
+    assert runs.submitted == []
+    service.accept_key_frame(_frame(KEY))
+    service.dispatch_once()
+    assert [key for key, _p, _m in runs.submitted] == [MAIN]
+
+
+# -- the key frame at the cloud party ----------------------------------------------
+
+
+def _party_with(handler):
+    import test_lost_task_frame as harness
+
+    from chuk_agents_crypto.device_keys import DeviceIdentity as Identity
+    from chuk_agents_host.cloud_party import CloudHostParty
+    from chuk_agents_host.pairing_store import HostTrust
+
+    identity = Identity.generate()
+    servers: list = []
+
+    def build(opener, sealer, token, host):
+        servers.append(harness.FakeTaskServer())
+        return servers[-1]
+
+    trust = HostTrust(harness.CHANNEL, harness.CHANNEL_KEY, harness.PHONE, Identity.generate().public_key)
+    lines: list[str] = []
+    party = CloudHostParty(
+        trust_provider=lambda: trust,
+        mail_key_handler=handler,
+        transport=object(),
+        channel_id=harness.CHANNEL,
+        pairing_factory=lambda: None,
+        device_id="host",
+        device_identity=identity,
+        key_version=1,
+        build_task_server=build,
+        logger=lines.append,
+    )
+    app = harness.Wire(party, identity)
+    app.resume()
+    return party, app, servers, lines
+
+
+def test_the_cloud_party_takes_the_key_frame_before_the_provision_gate():
+    from chuk_agents_runtime.telemetry import set_tracer
+
+    store = MailKeyStore()
+    service_calls: list[dict] = []
+
+    def handler(payload: dict) -> str:
+        service_calls.append(payload)
+        try:
+            return KEY_STORED if store.put(payload.get("public_key"), payload.get("private_key")) else KEY_UNCHANGED
+        except ValueError:
+            return KEY_INVALID
+
+    party, app, servers, lines = _party_with(handler)
+    recorder = _Recorder()
+    previous = set_tracer(recorder)
+    try:
+        # Not provisioned yet: the key still lands, and no task server sees it.
+        app.send(_frame(KEY))
+        app.send(_frame(KEY))
+        app.send({"type": KEY_FRAME_TYPE, "public_key": _new_key().public_b64(), "private_key": KEY.private_b64()})
+    finally:
+        set_tracer(previous)
+    assert store.get().same_as(KEY) and len(service_calls) == 3
+    assert servers == []
+    acted = [f for phase, f in recorder.lines if phase == "relay_frame_in"]
+    assert [(f["decision"], f.get("outcome")) for f in acted if f["frame_type"] == KEY_FRAME_TYPE] == [
+        (DECISION_MAIL_KEY, KEY_STORED),
+        (DECISION_MAIL_KEY, KEY_UNCHANGED),
+    ]
+    assert any(KEY_FRAME_TYPE in line and REASON_INVALID in line for line in lines)
+    # It is answered with nothing.
+    assert app.sent == []
+    assert not any(KEY.private_b64() in line for line in lines)
+    for _phase, fields in recorder.lines:
+        assert KEY.private_b64() not in json.dumps(fields)
+
+
+def test_a_cloud_party_without_agent_mail_logs_the_key_frame_as_dropped():
+    party, app, servers, lines = _party_with(None)
+    app.provision()
+    app.send(_frame(KEY))
+    assert any(KEY_FRAME_TYPE in line and REASON_NOT_ENABLED in line for line in lines)
+    # Not handed to the executor either.
+    assert len(servers) == 1 and servers[0].submitted == []
+
+
+def test_the_host_answers_not_enabled_without_a_mail_service(tmp_path):
+    host = _host(tmp_path)
+    try:
+        assert host._on_mail_key_frame(_frame(KEY)) == "not_enabled"
+    finally:
         host._roster.close()
         host._coworker_names.close()

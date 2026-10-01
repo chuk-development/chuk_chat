@@ -797,6 +797,7 @@ class AppLocalizations {
   String get agentMailContactsSubtitle => _get('agentMailContactsSubtitle');
   String get agentMailFrozen => _get('agentMailFrozen');
   String get agentMailSendSuspended => _get('agentMailSendSuspended');
+  String get agentMailPrivacy => _get('agentMailPrivacy');
   String get agentMailFolderInbox => _get('agentMailFolderInbox');
   String get agentMailFolderUnknown => _get('agentMailFolderUnknown');
   String get agentMailFolderDrafts => _get('agentMailFolderDrafts');
@@ -830,6 +831,8 @@ class AppLocalizations {
   String get agentMailCc => _get('agentMailCc');
   String get agentMailDate => _get('agentMailDate');
   String get agentMailSenderCheck => _get('agentMailSenderCheck');
+  String agentMailDkimAligned(String domain) => _get('agentMailDkimAligned').replaceAll('{domain}', domain);
+  String get agentMailDkimNotAligned => _get('agentMailDkimNotAligned');
   String get agentMailAgentNote => _get('agentMailAgentNote');
   String get agentMailImportanceHigh => _get('agentMailImportanceHigh');
   String get agentMailImportanceNormal => _get('agentMailImportanceNormal');
@@ -839,7 +842,6 @@ class AppLocalizations {
   String get agentMailNoText => _get('agentMailNoText');
   String get agentMailAttachments => _get('agentMailAttachments');
   String get agentMailAttachmentTooLarge => _get('agentMailAttachmentTooLarge');
-  String get agentMailAttachmentUnavailable => _get('agentMailAttachmentUnavailable');
   String get agentMailDownload => _get('agentMailDownload');
   String agentMailSaved(String path) => _get('agentMailSaved').replaceAll('{path}', path);
   String get agentMailDownloadFailed => _get('agentMailDownloadFailed');
@@ -886,6 +888,15 @@ class AppLocalizations {
   String get agentMailErrNetwork => _get('agentMailErrNetwork');
   String get agentMailErrNotFound => _get('agentMailErrNotFound');
   String agentMailErrGeneric(String code) => _get('agentMailErrGeneric').replaceAll('{code}', code);
+  String get agentMailUnreadable => _get('agentMailUnreadable');
+  String get agentMailContactUnreadable => _get('agentMailContactUnreadable');
+  String get agentMailErrUnseal => _get('agentMailErrUnseal');
+  String get agentMailErrKeyLocked => _get('agentMailErrKeyLocked');
+  String get agentMailErrKeyUnreadable => _get('agentMailErrKeyUnreadable');
+  String get agentMailErrNoKey => _get('agentMailErrNoKey');
+  String get agentMailErrKeyRefused => _get('agentMailErrKeyRefused');
+  String get agentMailErrAttachmentsTooLarge => _get('agentMailErrAttachmentsTooLarge');
+  String get agentMailErrRecipientSuppressed => _get('agentMailErrRecipientSuppressed');
   String get agentMailContactsIntro => _get('agentMailContactsIntro');
   String get agentMailTrusted => _get('agentMailTrusted');
   String get agentMailBlocked => _get('agentMailBlocked');

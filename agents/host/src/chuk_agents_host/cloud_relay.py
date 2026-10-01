@@ -114,7 +114,7 @@ TYPE_EXECUTOR_STATUS = "executor_status"
 TYPE_PAIR_BOUND = "cowork_pair_bound"
 #: Nobody claimed the channel in time. Followed by close(1008).
 TYPE_PAIR_EXPIRED = "cowork_pair_expired"
-#: New mail for the agent (docs/AGENT_MAIL.md §4.4 step 8, §5.1):
+#: New mail for the agent (docs/AGENT_MAIL.md §5.2, §6.1, §7):
 #: ``{"type": "agent_mail", "event": "new", "message_id": "<uuid>"}``. It
 #: carries no content; it only tells the host to fetch.
 TYPE_AGENT_MAIL = "agent_mail"
@@ -279,7 +279,7 @@ class CloudRelayTransport:
         # True for an install token from the app: the pairing channel does not
         # change when the relay drops it, and no code is shown to scan.
         self._fixed_pairing_channel = fixed_pairing_channel
-        # "Fetch the mail now" (docs/AGENT_MAIL.md §5.1): called with
+        # "Fetch the mail now" (docs/AGENT_MAIL.md §7): called with
         # ``"frame"`` for an ``agent_mail`` frame and with ``"connected"`` for
         # every authenticated connect, because a frame sent while the host was
         # away is lost.
@@ -646,7 +646,7 @@ class CloudRelayLink:
         return []
 
     def _on_agent_mail_frame(self, frame: dict[str, Any]) -> None:
-        """New mail (docs/AGENT_MAIL.md §5.1). Recorded in the ledger, then
+        """New mail (docs/AGENT_MAIL.md §6.1). Recorded in the ledger, then
         handed up as "fetch now". The frame has no content, and the id is the
         only field of it that is logged."""
         req_id = frame.get("req_id")

@@ -17,6 +17,7 @@ from collections import OrderedDict
 
 from chuk_agents_crypto.frame import AgentsFrame
 from chuk_agents_crypto.frame import AgentsFrameRejected, AgentsFrameRejection
+from chuk_agents_runtime.agent_mail import KEY_FRAME_TYPE
 from .controller_sessions import ControllerSessions
 from .party import HostParty
 from .relay_ledger import (
@@ -25,11 +26,14 @@ from .relay_ledger import (
     DECISION_DISPATCHED_RUN,
     DECISION_DUPLICATE,
     DECISION_HANDSHAKE,
+    DECISION_MAIL_KEY,
     DECISION_PROVISIONED,
     DECISION_REPAIRED,
     InboundFrameLog,
+    REASON_INVALID,
     REASON_LEGACY_SUPERSEDED,
     REASON_MALFORMED,
+    REASON_NOT_ENABLED,
     REASON_NOT_PROVISIONED,
     REASON_QUEUE_FULL,
     REASON_REJECTED,
@@ -54,9 +58,13 @@ MAX_REMEMBERED_TASKS = 256
 
 
 class CloudHostParty(HostParty):
-    def __init__(self, *, trust_provider, **kwargs):
+    def __init__(self, *, trust_provider, mail_key_handler=None, **kwargs):
         super().__init__(**kwargs)
         self._trust_provider = trust_provider
+        # The sealed ``agent_mail_key`` frame (docs/AGENT_MAIL.md §6.1): the
+        # host's handler returns ``stored`` / ``unchanged`` / ``invalid`` /
+        # ``not_enabled``. ``None``: this host has no agent mail.
+        self._mail_key_handler = mail_key_handler
         self._controllers: ControllerSessions | None = None
         self._frames = InboundFrameLog(self._log)
         # task_id -> the executor request id it became. Ordered so the oldest
@@ -173,6 +181,10 @@ class CloudHostParty(HostParty):
             self._frames.acted(kind, DECISION_PROVISIONED, device=device)
             return
 
+        if kind == KEY_FRAME_TYPE:
+            self._accept_mail_key(payload, device)
+            return
+
         task_id = payload.get("task_id")
         task_id = task_id if isinstance(task_id, str) and task_id else None
 
@@ -235,6 +247,24 @@ class CloudHostParty(HostParty):
         )
         self._ack_task(sessions, device, task_id, session_key, ACK_ACCEPTED,
                        request_id=request_id)
+
+    def _accept_mail_key(self, payload: dict, device: str) -> None:
+        """The mail key from the app (docs/AGENT_MAIL.md §6.1). Taken here,
+        before the provision gate: the app sends it each time its channel
+        comes up, and the key must not wait for a task server or pass through
+        the executor's ticket table. It gets no answer. The ledger line names
+        the outcome, never a key."""
+        handler = self._mail_key_handler
+        if handler is None:
+            self._frames.dropped(KEY_FRAME_TYPE, REASON_NOT_ENABLED, device=device)
+            return
+        outcome = handler(payload)
+        if outcome == REASON_NOT_ENABLED:
+            self._frames.dropped(KEY_FRAME_TYPE, REASON_NOT_ENABLED, device=device)
+        elif outcome in ("stored", "unchanged"):
+            self._frames.acted(KEY_FRAME_TYPE, DECISION_MAIL_KEY, device=device, outcome=outcome)
+        else:
+            self._frames.dropped(KEY_FRAME_TYPE, REASON_INVALID, device=device)
 
     # -- provisioning -----------------------------------------------------
 

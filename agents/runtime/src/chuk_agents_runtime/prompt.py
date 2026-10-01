@@ -265,7 +265,7 @@ def build_system_prompt(
     Both are sanitized by their own module before they arrive here.
 
     ``instructions`` replaces :data:`BASE_INSTRUCTIONS`. The restricted mail
-    run (docs/AGENT_MAIL.md §5.3) has no file or shell tools, so the default
+    run (docs/AGENT_MAIL.md §2, §7) has no file or shell tools, so the default
     contract, which tells the model to use them, would be wrong there.
     """
     parts = [instructions if instructions and instructions.strip() else BASE_INSTRUCTIONS]

@@ -1,8 +1,10 @@
 // lib/pages/agent_mail_contacts_page.dart
 //
-// Mailbox > Contacts (docs/AGENT_MAIL.md §2, §6): the addresses and domains
+// Mailbox > Contacts (docs/AGENT_MAIL.md §2, §8): the addresses and domains
 // the mailbox trusts or blocks. A trusted sender starts normal runs and the
 // agent may write to it without a draft; mail from a blocked one is dropped.
+// The server keeps each label sealed; it is opened here, and a contact is
+// removed by its id.
 
 import 'dart:async';
 
@@ -36,7 +38,7 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
   Object? _error;
   List<MailContact> _contacts = const <MailContact>[];
 
-  /// Addresses with a change on its way, so a second tap waits.
+  /// Contact ids with a change on its way, so a second tap waits.
   final Set<String> _pending = <String>{};
 
   @override
@@ -68,17 +70,17 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
   }
 
   Future<void> _remove(MailContact contact) async {
-    if (_pending.contains(contact.address)) return;
+    if (_pending.contains(contact.id)) return;
     final ScaffoldMessengerState messenger = ScaffoldMessenger.of(context);
     final AppLocalizations l = AppLocalizations.of(context)!;
-    setState(() => _pending.add(contact.address));
+    setState(() => _pending.add(contact.id));
     try {
-      await _service.deleteContact(contact.address);
+      await _service.deleteContact(contact.id);
       if (!mounted) return;
       setState(() {
         _contacts = <MailContact>[
           for (final MailContact c in _contacts)
-            if (c.address != contact.address) c,
+            if (c.id != contact.id) c,
         ];
       });
       AppNotifications.showOn(
@@ -94,7 +96,7 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
         duration: const Duration(seconds: 4),
       );
     } finally {
-      if (mounted) setState(() => _pending.remove(contact.address));
+      if (mounted) setState(() => _pending.remove(contact.id));
     }
   }
 
@@ -204,10 +206,10 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
             ),
           for (final MailContact c in trusted)
             _ContactTile(
-              key: ValueKey<String>('agent-mail-contact-${c.address}'),
+              key: ValueKey<String>('agent-mail-contact-${c.id}'),
               contact: c,
               icon: Icons.how_to_reg_outlined,
-              busy: _pending.contains(c.address),
+              busy: _pending.contains(c.id),
               onRemove: () => unawaited(_remove(c)),
             ),
         ],
@@ -222,10 +224,10 @@ class _AgentMailContactsPageState extends State<AgentMailContactsPage> {
             ),
           for (final MailContact c in blocked)
             _ContactTile(
-              key: ValueKey<String>('agent-mail-contact-${c.address}'),
+              key: ValueKey<String>('agent-mail-contact-${c.id}'),
               contact: c,
               icon: Icons.person_off_outlined,
-              busy: _pending.contains(c.address),
+              busy: _pending.contains(c.id),
               onRemove: () => unawaited(_remove(c)),
             ),
         ],
@@ -281,11 +283,17 @@ class _ContactTile extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Text(
-                  contact.address,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: theme.colorScheme.onSurface,
-                  ),
+                  contact.unreadable
+                      ? l.agentMailContactUnreadable
+                      : contact.address,
+                  style: contact.unreadable
+                      ? theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.error,
+                        )
+                      : theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: theme.colorScheme.onSurface,
+                        ),
                 ),
                 if (detail.isNotEmpty) ...<Widget>[
                   const SizedBox(height: 2),
@@ -314,7 +322,7 @@ class _ContactTile extends StatelessWidget {
                 )
               : ExpressiveIconButton(
                   key: ValueKey<String>(
-                    'agent-mail-contact-remove-${contact.address}',
+                    'agent-mail-contact-remove-${contact.id}',
                   ),
                   hugeIcon: HugeIcons.delete02,
                   tooltip: l.agentMailRemoveContact,

@@ -1,11 +1,21 @@
-"""Agent mail on the host: fetch, claim, and start the mail runs.
+"""Agent mail on the host: the mail key, the fetch, the claim and the runs.
 
-The host half of docs/AGENT_MAIL.md, sections 5.1 and 5.2. The runtime half
-(the REST client, the tools, the prompts) is ``chuk_agents_runtime.agent_mail``.
+The host half of docs/AGENT_MAIL.md, sections 3.1, 6.1 and 7. The runtime
+half (the REST client, the unsealing, the HostView, the tools, the prompts) is
+``chuk_agents_runtime.agent_mail``.
+
+The mail key. The server stores every mail sealed to the user's mail key and
+cannot read it. The app hands the private key to the host in the sealed app
+frame ``agent_mail_key`` (§6.1). :class:`MailKeyStore` keeps it in
+``agent_mail_key.enc`` next to the other host state: AES-256-GCM under a key
+derived from the host identity, file mode 0600. It is not in the user's secret
+vault, because the vault's values go into every sandbox process. Without a
+key the mail tools say "open the Mailbox page in the app once" and the
+dispatcher claims nothing; the key frame wakes it.
 
 When the host fetches: when it starts, when the relay connects again, when an
 ``agent_mail`` relay frame arrives (it carries no content, only "fetch now"),
-and every 5 minutes.
+when the mail key arrives, and every 5 minutes.
 
 What it does with each mail that is not delivered yet:
 
@@ -22,12 +32,13 @@ mail this host claimed but could not start (the executor went away between the
 check and the start) is kept as pending, in memory and in the state file, and
 is started before the next claim round.
 
-Nothing here logs content, subjects or addresses. Log lines carry counts and
-ids only.
+Nothing here logs content, subjects, addresses or keys. Log lines carry counts
+and ids only.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import os
 import threading
@@ -38,6 +49,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 import httpx
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from chuk_agents_runtime.agent_mail import (
     KNOWN_TRUST,
@@ -47,7 +59,9 @@ from chuk_agents_runtime.agent_mail import (
     TRUST_SELF,
     AgentMailClient,
     AgentMailError,
+    MailKey,
     mail_prompt,
+    open_row,
     parse_time,
     restricted_prompt,
     restricted_session_key,
@@ -57,6 +71,16 @@ from chuk_agents_runtime.web_search import DEFAULT_BASE_URL
 
 #: The host state file (next to ``agent_permissions.json``).
 STATE_FILE = "agent_mail.json"
+#: The mail key at rest (next to ``secrets.enc``).
+KEY_FILE = "agent_mail_key.enc"
+#: Binds the at-rest ciphertext to this file format.
+_KEY_FILE_AAD = b"cowork/host/agent-mail-key-at-rest/v1"
+_KEY_FILE_VERSION = 1
+
+#: What :meth:`AgentMailService.accept_key_frame` did with a key frame.
+KEY_STORED = "stored"
+KEY_UNCHANGED = "unchanged"
+KEY_INVALID = "invalid"
 
 POLL_SECONDS = 300.0
 #: An unknown mail waits this long before a restricted run takes it, so a
@@ -193,13 +217,102 @@ class MailState:
             self._save(data)
 
 
+class MailKeyStore:
+    """The user's mail key on this host (docs/AGENT_MAIL.md §3.1, §6.1).
+
+    In memory, and at rest in ``path``: AES-256-GCM under ``at_rest_key``
+    (:func:`chuk_agents_host.secrets_key.mail_key_at_rest_key`), written with
+    mode 0600 through a temp file. Without a path or a key the store lives in
+    memory only (tests). The file is read once, when the store is made.
+
+    Nothing here logs a key, not even the public one.
+    """
+
+    def __init__(
+        self,
+        path: Path | None = None,
+        *,
+        at_rest_key: bytes | None = None,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        if at_rest_key is not None and len(at_rest_key) != 32:
+            raise ValueError("the at-rest key is 32 bytes")
+        self._path = Path(path) if path is not None else None
+        self._at_rest = at_rest_key
+        self._log = log or (lambda _m: None)
+        self._lock = threading.Lock()
+        self._key: MailKey | None = None
+        self._load()
+
+    def get(self) -> MailKey | None:
+        with self._lock:
+            return self._key
+
+    def put(self, public_b64: Any, private_b64: Any) -> bool:
+        """Keep this pair. True when it is new, False when it is the key the
+        store already holds (nothing is written then). Raises ``ValueError``
+        for a pair that is not two matching 32-byte X25519 keys."""
+        key = MailKey.from_b64(public_b64, private_b64)
+        with self._lock:
+            if key.same_as(self._key):
+                return False
+            self._key = key
+        self._save(key)
+        return True
+
+    def _save(self, key: MailKey) -> None:
+        path, secret = self._path, self._at_rest
+        if path is None or secret is None:
+            return
+        plain = json.dumps(
+            {"public_key": key.public_b64(), "private_key": key.private_b64()},
+            separators=(",", ":"),
+        ).encode("utf-8")
+        try:
+            nonce = os.urandom(12)
+            record = {
+                "version": _KEY_FILE_VERSION,
+                "nonce": base64.b64encode(nonce).decode("ascii"),
+                "ciphertext": base64.b64encode(
+                    AESGCM(secret).encrypt(nonce, plain, _KEY_FILE_AAD)
+                ).decode("ascii"),
+            }
+            path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = path.with_suffix(path.suffix + ".tmp")
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(record, handle, separators=(",", ":"))
+            os.replace(tmp, path)
+        except Exception as exc:  # noqa: BLE001 — the key stays in memory
+            self._log(f"[mail] could not write the mail key at rest: {type(exc).__name__}")
+
+    def _load(self) -> None:
+        path, secret = self._path, self._at_rest
+        if path is None or secret is None or not path.exists():
+            return
+        try:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            if not isinstance(record, dict) or record.get("version") != _KEY_FILE_VERSION:
+                raise ValueError("unknown format")
+            nonce = base64.b64decode(record["nonce"], validate=True)
+            sealed = base64.b64decode(record["ciphertext"], validate=True)
+            data = json.loads(AESGCM(secret).decrypt(nonce, sealed, _KEY_FILE_AAD))
+            key = MailKey.from_b64(data.get("public_key"), data.get("private_key"))
+        except Exception as exc:  # noqa: BLE001 — a bad file is no key; the next frame replaces it
+            self._log(f"[mail] the mail key at rest does not open: {type(exc).__name__}")
+            return
+        with self._lock:
+            self._key = key
+
+
 class AgentMailService:
     """The host's mail service: the client for the tools, and the dispatcher.
 
     ``submit(session_key, prompt, meta)`` starts a run and returns its id, or
     ``None`` when no executor can take it. ``ready()`` says whether a run can
     start at all; nothing is claimed while it is False. ``busy(session_key)``
-    says whether that session has a run queued or in flight.
+    says whether that session has a run queued or in flight. ``key_store``
+    holds the mail key; without a key nothing is claimed either.
     """
 
     def __init__(
@@ -218,8 +331,15 @@ class AgentMailService:
         poll_seconds: float = POLL_SECONDS,
         unknown_delay: float = UNKNOWN_DELAY_SECONDS,
         daily_cap: int = RESTRICTED_DAILY_CAP,
+        key_store: MailKeyStore | None = None,
     ) -> None:
-        self._client = AgentMailClient(session_provider, base_url=base_url, http_client=http_client)
+        self.keys = key_store if key_store is not None else MailKeyStore()
+        self._client = AgentMailClient(
+            session_provider,
+            key_provider=self.keys.get,
+            base_url=base_url,
+            http_client=http_client,
+        )
         self._submit = submit
         self._ready = ready
         self._busy = busy
@@ -236,6 +356,8 @@ class AgentMailService:
         self._available: bool | None = None
         self._checked_at: float | None = None
         self._capped_day: str | None = None
+        #: Logged once per "no key" stretch, not on every poll.
+        self._said_needs_key = False
         self._dispatch_lock = threading.Lock()
         self._wake = threading.Event()
         self._stop = threading.Event()
@@ -245,10 +367,31 @@ class AgentMailService:
 
     def client(self) -> AgentMailClient | None:
         """The REST client for the mail tools, or ``None``: no account
-        session, or the server said this account has no mailbox."""
+        session, or the server said this account has no mailbox. Without a
+        mail key the client is still handed out: its tools then tell the
+        model to have the user open the app."""
         if not self._client.has_session() or self._available is False:
             return None
         return self._client
+
+    # -- the key frame (docs/AGENT_MAIL.md §6.1) ----------------------------
+
+    def accept_key_frame(self, payload: dict) -> str:
+        """A sealed ``agent_mail_key`` app frame. It is idempotent and gets
+        no answer: the key is kept when it differs from the stored one, and
+        a new key wakes the dispatcher. Returns :data:`KEY_STORED`,
+        :data:`KEY_UNCHANGED` or :data:`KEY_INVALID` (for the frame ledger).
+        """
+        try:
+            changed = self.keys.put(payload.get("public_key"), payload.get("private_key"))
+        except (ValueError, AttributeError):
+            self._log("[mail] refused an agent_mail_key frame: not a matching X25519 pair")
+            return KEY_INVALID
+        if not changed:
+            return KEY_UNCHANGED
+        self._log("[mail] mail key stored")
+        self.wake("mail_key")
+        return KEY_STORED
 
     # -- lifecycle --------------------------------------------------------
 
@@ -267,8 +410,8 @@ class AgentMailService:
             thread.join(timeout=5.0)
 
     def wake(self, reason: str = "frame") -> None:
-        """Fetch now: an ``agent_mail`` frame came in, or the relay connected
-        again, or the host was provisioned."""
+        """Fetch now: an ``agent_mail`` frame came in, the relay connected
+        again, the host was provisioned, or the mail key arrived."""
         self._wake.set()
 
     def _loop(self) -> None:
@@ -289,7 +432,7 @@ class AgentMailService:
     # -- one fetch --------------------------------------------------------
 
     def dispatch_once(self) -> DispatchReport:
-        """List the undelivered mail and handle each one once (§5.2)."""
+        """List the undelivered mail and handle each one once (§7)."""
         with self._dispatch_lock:
             return self._dispatch()
 
@@ -298,6 +441,15 @@ class AgentMailService:
         if not self._client.has_session():
             report.skipped = "no_account"
             return report
+        # No mail key, no dispatch: a run could open no mail. Nothing is
+        # claimed, so the mail waits on the server; the key frame wakes this.
+        if self.keys.get() is None:
+            report.skipped = "needs_key"
+            if not self._said_needs_key:
+                self._said_needs_key = True
+                self._log("[mail] no mail key on this host yet; mail dispatch paused until the app connects")
+            return report
+        self._said_needs_key = False
         if not self._ready():
             report.skipped = "not_ready"
             report.soon(NOT_READY_RETRY_SECONDS)
@@ -437,6 +589,12 @@ class AgentMailService:
             self._checked_at = self._clock()
             report.skipped = "unavailable"
             return
+        if exc.detail == "needs_key":
+            # ``409 needs_key``: the server holds no public mail key yet (the
+            # app has not made one). Nothing can arrive; the app fixes it.
+            report.skipped = "needs_key"
+            self._log("[mail] the server has no mail key for this account yet")
+            return
         report.skipped = "error"
         self._log(f"[mail] request failed: {exc.status} {exc.detail}")
 
@@ -480,15 +638,19 @@ class AgentMailService:
         return report.pending == 0
 
     def _start_full_run(self, rows: list[dict], report: DispatchReport) -> bool:
-        views: list[dict] = []
+        """One full run for these claimed mails. Each mail is fetched and
+        opened here; ``mail_prompt`` applies the HostView."""
+        mails: list[dict] = []
+        key = self.keys.get()
         for row in rows:
             try:
-                views.append(self._client.host_view(str(row["id"]).strip()))
+                mails.append(self._client.read_message(str(row["id"]).strip()))
             except AgentMailError:
-                # The summary still names sender and subject; the model reads
-                # the text with mail_read.
-                views.append({k: v for k, v in row.items() if k != "text_body"})
-        prompt = mail_prompt(views)
+                # The listed summary (a pending row has only id and trust)
+                # still names sender and subject; the model reads the text
+                # with mail_read.
+                mails.append(open_row(row, key) if key is not None else _pending_row(row))
+        prompt = mail_prompt(mails)
         ids = [str(r["id"]).strip() for r in rows]
         meta = {"origin": ORIGIN_MAIL, "name": "mail", "message_ids": ids}
         run_id = self._run(self._main_session, prompt, meta)
@@ -523,13 +685,18 @@ class AgentMailService:
 
 def _pending_row(row: dict) -> dict:
     """What a pending full-run mail keeps: its id and its sender trust. The
-    run fetches the HostView again when it starts."""
+    run fetches and opens the mail again when it starts."""
     return {"id": str(row["id"]).strip(), "sender_trust": row.get("sender_trust")}
 
 
 __all__ = [
     "AgentMailService",
     "DispatchReport",
+    "KEY_FILE",
+    "KEY_INVALID",
+    "KEY_STORED",
+    "KEY_UNCHANGED",
+    "MailKeyStore",
     "MailState",
     "STATE_FILE",
 ]

@@ -20,18 +20,14 @@ class _RecordingSaver implements AgentFileSaver {
   }
 }
 
-/// One mail (docs/AGENT_MAIL.md §6): what it shows, and which endpoint each
-/// action calls. Every page is opened from a host route, so the result it
-/// pops with is checked too.
+/// One mail (docs/AGENT_MAIL.md §8): what it shows once opened with the mail
+/// key, and which endpoint each action calls. Every page is opened from a
+/// host route, so the result it pops with is checked too.
 void main() {
   late FakeAgentMailServer fake;
   late _RecordingSaver saver;
   AgentMailOutcome? popped;
   bool poppedAtAll = false;
-
-  MailSummary summaryOf(String id) => MailSummary.fromJson(
-    fake.mails.firstWhere((Map<String, dynamic> m) => m['id'] == id),
-  );
 
   Future<void> open(WidgetTester tester, String id) async {
     tester.view.physicalSize = const Size(900, 2400);
@@ -39,7 +35,7 @@ void main() {
     addTearDown(tester.view.reset);
     popped = null;
     poppedAtAll = false;
-    final MailSummary summary = summaryOf(id);
+    final MailSummary summary = fake.summaryOf(id);
     await tester.pumpWidget(
       testApp(
         Builder(
@@ -90,7 +86,8 @@ void main() {
   ) async {
     await open(tester, 'm1');
 
-    expect(fake.calls.take(2), <String>[
+    expect(fake.calls.take(3), <String>[
+      'GET /key',
       'GET /messages/m1',
       'PATCH /messages/m1',
     ]);
@@ -105,7 +102,11 @@ void main() {
     expect(find.text('ada@example.com'), findsOneWidget);
     expect(find.text('Trusted'), findsOneWidget);
     expect(find.text('k7f3q9x2mh@chukagents.com'), findsOneWidget);
-    expect(find.text('SPF pass · DKIM pass · DMARC pass'), findsOneWidget);
+    expect(find.text('Signed by example.com'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-unreadable')),
+      findsNothing,
+    );
     expect(find.text('Agent note'), findsOneWidget);
     expect(find.text('High'), findsOneWidget);
     expect(
@@ -142,7 +143,7 @@ void main() {
 
   testWidgets('a mail already read is not marked again', (tester) async {
     await open(tester, 'm2');
-    expect(fake.calls, <String>['GET /messages/m2']);
+    expect(fake.calls, <String>['GET /key', 'GET /messages/m2']);
     // The owner's own mail: "You" as the name, the address under it, no
     // tag saying it twice, and nothing to trust or block.
     expect(find.text('You'), findsOneWidget);
@@ -222,7 +223,7 @@ void main() {
     await tester.pumpAndSettle(const Duration(seconds: 3));
   });
 
-  testWidgets('a file that failed to download is not called too large', (
+  testWidgets('a file that does not open is not saved, and says so', (
     tester,
   ) async {
     fake.mails.add(
@@ -233,19 +234,76 @@ void main() {
             'id': 'a9',
             'filename': 'scan.pdf',
             'size': 1200,
-            'available': false,
-            'too_large': false,
+            'broken': true,
           },
         ],
       ),
     );
     await open(tester, 'm9');
-    expect(find.text('Not available'), findsOneWidget);
-    expect(find.text('Too large, not stored'), findsNothing);
-    expect(
+    await tester.tap(
       find.byKey(const ValueKey<String>('agent-mail-attachment-save-a9')),
+    );
+    await tester.pumpAndSettle();
+    expect(saver.saved, isEmpty);
+    expect(find.text('This could not be decrypted.'), findsOneWidget);
+    await tester.pumpAndSettle(const Duration(seconds: 5));
+  });
+
+  testWidgets('a mail that does not open says so; it can still go', (
+    tester,
+  ) async {
+    fake.mails.add(fakeMail(id: 'x1', broken: true));
+    await open(tester, 'x1');
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-unreadable')),
+      findsOneWidget,
+    );
+    expect(find.text('This mail could not be decrypted.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-text')),
       findsNothing,
     );
+    // No address to judge; the mail can be archived or deleted.
+    expect(find.text('Trust sender'), findsNothing);
+    expect(find.text('Block sender'), findsNothing);
+    await tapText(tester, 'Delete');
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('DELETE /messages/x1'));
+    await tester.pumpAndSettle(const Duration(seconds: 3));
+  });
+
+  testWidgets('a draft that does not open cannot be sent, only discarded', (
+    tester,
+  ) async {
+    fake.mails.add(
+      fakeMail(
+        id: 'd9',
+        direction: 'outbound',
+        folder: 'drafts',
+        status: 'draft',
+        broken: true,
+      ),
+    );
+    await open(tester, 'd9');
+    expect(find.text('This mail could not be decrypted.'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-draft-send')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('agent-mail-draft-text')),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('agent-mail-draft-discard')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Discard'));
+    await tester.pumpAndSettle();
+    expect(fake.calls, contains('DELETE /messages/d9'));
+    expect(fake.bodiesOf('POST', '/drafts/d9/send'), isEmpty);
+    await tester.pumpAndSettle(const Duration(seconds: 3));
   });
 
   testWidgets('delete asks first, then deletes', (tester) async {
@@ -270,6 +328,7 @@ void main() {
     await open(tester, 'm3');
     expect(find.text('Unknown'), findsOneWidget);
     expect(find.textContaining('This sender is not trusted'), findsOneWidget);
+    expect(find.text("Not signed by the sender's domain"), findsOneWidget);
 
     await tapText(tester, 'Trust sender');
     expect(fake.bodiesOf('PUT', '/contacts').single, <String, dynamic>{
@@ -320,9 +379,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Only the edited text goes back; the subject stays the agent's.
+    // The whole draft goes back: the agent's subject, recipients and
+    // threading headers, and the text as the user left it.
     expect(fake.bodiesOf('POST', '/drafts/d1/send').single, <String, dynamic>{
+      'to': <String>['ada@example.com'],
+      'cc': <String>['bob@example.com'],
+      'subject': 'Re: Quarterly numbers',
       'text': 'Thanks Ada, see you Thursday.',
+      'in_reply_to': '<m1@example.com>',
+      'references': '<m0@example.com> <m1@example.com>',
     });
     expect(popped, AgentMailOutcome.removed);
     await tester.pumpAndSettle(const Duration(seconds: 3));
@@ -379,7 +444,12 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(fake.bodiesOf('POST', '/drafts/d1/send').single, <String, dynamic>{
+      'to': <String>['ada@example.com'],
+      'cc': <String>['bob@example.com'],
       'subject': 'Re: Q3',
+      'text': 'Thanks Ada, the numbers look good.',
+      'in_reply_to': '<m1@example.com>',
+      'references': '<m0@example.com> <m1@example.com>',
     });
     await tester.pumpAndSettle(const Duration(seconds: 3));
   });
@@ -396,6 +466,29 @@ void main() {
     expect(find.byType(AgentMailDetailPage), findsOneWidget);
     await tester.pumpAndSettle(const Duration(seconds: 5));
   });
+
+  for (final (String, String) c in <(String, String)>[
+    (
+      'recipient_suppressed',
+      'A recipient cannot get mail: earlier mail to this address bounced.',
+    ),
+    (
+      'attachments_too_large',
+      'The attachments are too large to send (3 MB at most).',
+    ),
+  ]) {
+    testWidgets('a send refused with ${c.$1} says so', (tester) async {
+      fake.sendResponse = FakeAgentMailServer.errorResponse(422, c.$1);
+      await open(tester, 'd1');
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agent-mail-draft-send')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text(c.$2), findsOneWidget);
+      expect(poppedAtAll, isFalse);
+      await tester.pumpAndSettle(const Duration(seconds: 5));
+    });
+  }
 
   testWidgets('a draft is discarded after asking', (tester) async {
     await open(tester, 'd1');
