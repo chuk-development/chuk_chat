@@ -2232,6 +2232,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       visited: _takeoverVisited,
       onOpenBrowser: canOpen ? () => unawaited(_openTakeoverBrowser()) : null,
       onDone: () => _decideApproval(true),
+      onSkip: () => _decideApproval(false),
       dense: dense,
     );
   }

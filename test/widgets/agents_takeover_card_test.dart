@@ -59,6 +59,7 @@ AgentsRelayApprovalRequest _takeover({
   String? decision,
   bool replay = false,
   String? sessionKey = 'thread-1',
+  String? url,
 }) => AgentsRelayApprovalRequest(
   approvalId: id,
   action: AgentsRelayApprovalRequest.takeoverAction,
@@ -74,6 +75,7 @@ AgentsRelayApprovalRequest _takeover({
   decision: decision,
   replay: replay,
   sessionKey: sessionKey,
+  url: url,
 );
 
 /// The takeover card (research item 6): a login, 2FA code or CAPTCHA in the
@@ -100,6 +102,21 @@ void main() {
       expect(request.url, 'https://github.com/sessions/two-factor');
     });
 
+    test('the page URL never reaches the stored transcript line', () {
+      // An OAuth callback or a magic link carries a secret in the query.
+      const url =
+          'https://accounts.google.com/o/oauth2/callback?code=SECRET-CODE#t=1';
+      for (final call in [
+        approvalCallFromRelay(_takeover(url: url)),
+        approvalCallFromRelay(_takeover(url: url, decision: 'approved')),
+      ]) {
+        final encoded = jsonEncode(call.arguments) + (call.result ?? '');
+        expect(encoded.contains('SECRET-CODE'), isFalse);
+        expect(encoded.contains('oauth2/callback'), isFalse);
+        expect(call.arguments['site'], 'accounts.google.com');
+      }
+    });
+
     test('a publish is not a takeover', () {
       final request = AgentsRelayApprovalRequest.fromPayload(<String, dynamic>{
         'approval_id': 'ap-1',
@@ -119,6 +136,7 @@ void main() {
         'Needs you in the browser on accounts.google.com',
       );
       final done = approvalCallFromRelay(_takeover(decision: 'approved'));
+      expect(open.arguments.containsKey('url'), isFalse);
       expect(
         (jsonDecode(done.result!) as Map<String, dynamic>)['decision'],
         'Done',
@@ -134,6 +152,7 @@ void main() {
       bool visited = false,
       VoidCallback? onOpen,
       VoidCallback? onDone,
+      VoidCallback? onSkip,
       Locale locale = const Locale('en'),
       double width = 400,
     }) async {
@@ -149,6 +168,7 @@ void main() {
                 visited: visited,
                 onOpenBrowser: onOpen ?? () {},
                 onDone: onDone ?? () {},
+                onSkip: onSkip ?? () {},
               ),
             ),
           ),
@@ -168,6 +188,49 @@ void main() {
       expect(find.text('Open browser'), findsOneWidget);
       // Before the view was opened there is one way forward, not two.
       expect(find.text('Done'), findsNothing);
+      // Skip is always there: the user can always end the wait.
+      expect(
+        find.byKey(const ValueKey<String>('agents-takeover-skip')),
+        findsOneWidget,
+      );
+      expect(find.text('Skip'), findsOneWidget);
+    });
+
+    testWidgets('Skip answers before and after a visit', (tester) async {
+      var skipped = 0;
+      await pumpCard(tester, onSkip: () => skipped++);
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-takeover-skip')),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(skipped, 1);
+      await pumpCard(tester, visited: true, onSkip: () => skipped++);
+      await tester.tap(find.text('Skip'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(skipped, 2);
+    });
+
+    testWidgets('Skip stays when no transport can open the view', (
+      tester,
+    ) async {
+      var skipped = 0;
+      await tester.pumpWidget(
+        _app(
+          AgentsTakeoverCard(
+            request: _takeover(),
+            coworkerName: 'Ada',
+            stage: AgentsTakeoverStage.waiting,
+            visited: false,
+            onOpenBrowser: null,
+            onDone: () {},
+            onSkip: () => skipped++,
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('Skip'));
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(skipped, 1);
     });
 
     testWidgets('each kind says its own step', (tester) async {
@@ -190,6 +253,7 @@ void main() {
       expect(find.text('Ada braucht dich im Browser'), findsOneWidget);
       expect(find.text('Browser öffnen'), findsOneWidget);
       expect(find.text('Fertig'), findsOneWidget);
+      expect(find.text('Überspringen'), findsOneWidget);
     });
 
     testWidgets('after a visit it offers Done as well', (tester) async {
@@ -231,6 +295,7 @@ void main() {
                 visited: true,
                 onOpenBrowser: () {},
                 onDone: () {},
+                onSkip: () {},
               ),
             ),
           ),
@@ -342,6 +407,29 @@ void main() {
         await tester.pumpWidget(const SizedBox.shrink());
       });
     }
+
+    testWidgets('Skip tells the host no and the card goes', (tester) async {
+      final controller = await pumpPaired(tester, opened: <String>[]);
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      controller.emit(_takeover());
+      await tester.pump();
+      expect(find.text('Ada needs you in the browser'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+
+      // No visit needed: Skip is there from the start.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-takeover-skip')),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(controller.approvalDecisions, <(String, bool)>[('tk-1', false)]);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isFalse);
+      expect(
+        find.byKey(const ValueKey<String>('agents-takeover-card')),
+        findsNothing,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
 
     testWidgets('the host resolving it by itself closes the wait', (
       tester,
