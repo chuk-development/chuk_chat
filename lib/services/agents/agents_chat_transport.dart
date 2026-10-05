@@ -182,7 +182,19 @@ class AgentsChatTransport {
       if (!out.isClosed) out.add(event);
     }
 
+    /// Watches the ledger while the stream is open, for a run the ledger
+    /// ends on its own (see [out.onListen]). Null once removed.
+    VoidCallback? ledgerWatch;
+
+    void stopWatchingLedger() {
+      final VoidCallback? watch = ledgerWatch;
+      if (watch == null) return;
+      ledgerWatch = null;
+      ledger.removeListener(watch);
+    }
+
     void closeOut() {
+      stopWatchingLedger();
       if (!out.isClosed) unawaited(out.close());
     }
 
@@ -530,7 +542,34 @@ class AgentsChatTransport {
     }
 
     out.onListen = () {
-      ledger.begin(sessionKey);
+      final AgentsRun thisRun = ledger.begin(sessionKey);
+      // The ledger can end this run with no frame from the host: the task got
+      // no `task_ack` in three ack windows, so it never arrived
+      // ([AgentsRunOutcome.notDelivered]). Nothing then reaches [handle], and
+      // without this the stream stayed open and the bubble counted "Did not
+      // reach your computer" for ever. The stream ends the way every other
+      // undelivered send ends: an error, then done.
+      void onLedger() {
+        if (terminated || out.isClosed) return;
+        final AgentsRun? run = ledger.runFor(sessionKey);
+        if (!identical(run, thisRun)) return;
+        if (thisRun.running ||
+            thisRun.outcome != AgentsRunOutcome.notDelivered) {
+          return;
+        }
+        terminated = true;
+        emit(
+          ErrorEvent(
+            agentsRunEndNotice(AgentsRunOutcome.notDelivered)!,
+            code: StreamErrorCodes.connectionLost,
+          ),
+        );
+        emit(const DoneEvent());
+        closeOut();
+      }
+
+      ledgerWatch = onLedger;
+      ledger.addListener(onLedger);
       sub = link.inbound.listen(
         (event) {
           if (event is AgentsRelayDone && !_isReplay(event)) {
@@ -677,6 +716,7 @@ class AgentsChatTransport {
     };
 
     out.onCancel = () async {
+      stopWatchingLedger();
       await sub?.cancel();
       sub = null;
       if (terminated || stopRequested) return;

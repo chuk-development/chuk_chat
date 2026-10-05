@@ -58,6 +58,7 @@ import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/account_session.dart';
+import 'package:chuk_chat/services/agents/agents_channels_service.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart';
 import 'package:chuk_chat/services/agents/agents_install_ticket.dart';
@@ -67,6 +68,7 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/room_source.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/widgets/agent_control_panel.dart';
+import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
 import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/attachment_preview_bar.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
@@ -226,6 +228,30 @@ Widget _mailDetail(String id) {
 
 /// Wraps a panel that has no scaffold of its own.
 Widget _hosted(Widget child) => Scaffold(body: SafeArea(child: child));
+
+/// The Telegram section with the host's [state] already in, on a host that
+/// runs channels.
+Widget _telegram(Map<String, dynamic> state) {
+  final AgentsChannelsService service = AgentsChannelsService(
+    send: (Map<String, dynamic> _) async {},
+    connection: ValueNotifier<Object?>(Object()),
+    capabilities: ValueNotifier<Set<String>>(<String>{
+      kAgentChannelsCapability,
+    }),
+  );
+  service.handleFrame(<String, dynamic>{
+    'type': 'agent_channel',
+    'agent_id': 'amber',
+    'channel': 'telegram',
+    ...state,
+  });
+  return _hosted(
+    SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: AgentTelegramSection(agentId: 'amber', service: service),
+    ),
+  );
+}
 
 /// Presents [builder] the way `agents_shell_state` presents it: a scroll
 /// controlled modal bottom sheet. The sheet's own constraints are what the
@@ -553,6 +579,37 @@ List<_Screen> _screens() => <_Screen>[
       AgentControlPanel(agent: _agent(id: 'host:amber'), source: source),
     );
   }),
+  _Screen(
+    'widgets/agent_telegram_section (token refused, error)',
+    (_) => _telegram(<String, dynamic>{
+      'enabled': true,
+      'has_token': true,
+      'state': 'unauthorized',
+      'bot_username': 'wahlradar_research_assistant_bot',
+      'error': 'too_many_attempts',
+    }),
+  ),
+  _Screen(
+    'widgets/agent_telegram_section (waiting for the code)',
+    (_) => _telegram(<String, dynamic>{
+      'enabled': true,
+      'has_token': true,
+      'state': 'polling',
+      'bot_username': 'wahlradar_research_assistant_bot',
+      'pending_link': true,
+    }),
+  ),
+  _Screen(
+    'widgets/agent_telegram_section (linked)',
+    (_) => _telegram(<String, dynamic>{
+      'enabled': true,
+      'has_token': true,
+      'state': 'polling',
+      'bot_username': 'wahlradar_research_assistant_bot',
+      'linked': true,
+      'linked_name': 'Christopher Fitzgerald-Okonkwo',
+    }),
+  ),
   _Screen(
     'widgets/room_members_sheet (full room)',
     (_) => _sheetHost(

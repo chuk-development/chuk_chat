@@ -59,6 +59,7 @@ class AgentsAgent {
     this.schedule,
     this.attachmentNames = const <String>[],
     this.onHost = false,
+    this.knownToHost = false,
     this.running = false,
     this.lastActivity,
   });
@@ -89,6 +90,17 @@ class AgentsAgent {
   /// agent the user created in the app, because nothing installs it yet.
   final bool onHost;
 
+  /// True once the paired host listed this coworker in its `agent_list`: the
+  /// host keeps it (WIRE_CONTRACT "Coworker names") and runs its turns. An
+  /// app-created coworker gets this the first time the host answers with it.
+  /// Separate from [onHost], which stays "the host's own coworker" (the one
+  /// that cannot be deleted).
+  final bool knownToHost;
+
+  /// The coworker runs on the host: it is the host's own, or the host listed
+  /// it.
+  bool get runsOnHost => onHost || knownToHost;
+
   /// A run is in flight for this agent right now.
   final bool running;
 
@@ -111,6 +123,7 @@ class AgentsAgent {
     ScheduleSpec? schedule,
     List<String>? attachmentNames,
     bool? onHost,
+    bool? knownToHost,
     bool? running,
     DateTime? lastActivity,
     List<AgentsThreadInfo>? threads,
@@ -122,6 +135,7 @@ class AgentsAgent {
     schedule: schedule ?? this.schedule,
     attachmentNames: attachmentNames ?? this.attachmentNames,
     onHost: onHost ?? this.onHost,
+    knownToHost: knownToHost ?? this.knownToHost,
     running: running ?? this.running,
     lastActivity: lastActivity ?? this.lastActivity,
     threads: threads ?? this.threads,

@@ -878,6 +878,28 @@ void main() {
     expect(find.text('From Phone'), findsWidgets);
   });
 
+  testWidgets('a host run of an app-made coworker marks it as running on '
+      'the host (bead chuk_chat-89vl)', (tester) async {
+    final (controller, roster) = await pumpShell(tester);
+    controller.pair();
+    await tester.pumpAndSettle();
+    final made = roster.addAgent(name: 'Wahlradar');
+    await tester.pumpAndSettle();
+    expect(roster.byId(made.id)!.runsOnHost, isFalse);
+
+    // A replayed terminal is a run the host has stored for this thread.
+    controller.emit(
+      AgentsRelayDone(
+        sessionKey: made.threads.single.key,
+        finalAnswer: 'ok',
+        replay: true,
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(roster.byId(made.id)!.runsOnHost, isTrue);
+    expect(roster.byId(made.id)!.onHost, isFalse);
+  });
+
   testWidgets(
     'a screen nobody confirms goes back to parked before the user taps it',
     (tester) async {

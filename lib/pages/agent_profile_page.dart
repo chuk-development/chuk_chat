@@ -27,6 +27,9 @@ import 'package:chuk_chat/pages/agent_profile_edit_page.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/agents_relay_client.dart'
+    show AgentsRelayController, AgentsRelayState;
+import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
@@ -46,6 +49,7 @@ class AgentProfilePage extends StatelessWidget {
     this.onOpenBrowser,
     this.onMessage,
     this.profiles,
+    this.link,
   });
 
   /// The coworker is read from the roster by id on every build, so a rename or a
@@ -70,6 +74,10 @@ class AgentProfilePage extends StatelessWidget {
   final VoidCallback? onMessage;
 
   final AgentProfileStore? profiles;
+
+  /// The host link, for the "Runs on the host" row: whether the host is
+  /// reachable right now. Defaults to [AgentsRelayLink.instance].
+  final AgentsRelayLink? link;
 
   /// Pushes the page as a route.
   static Future<void> open(
@@ -249,7 +257,7 @@ class AgentProfilePage extends StatelessWidget {
                         icon: Icons.schedule_rounded,
                         label: 'Schedule',
                         value: agent.schedule!.source,
-                        note: agent.onHost
+                        note: agent.runsOnHost
                             ? null
                             : 'Set in this app; the host does not run it yet.',
                       ),
@@ -263,14 +271,9 @@ class AgentProfilePage extends StatelessWidget {
                           ? null
                           : 'One permanent session · ${agent.threads.first.key}',
                     ),
-                    _InfoCard(
-                      icon: agent.onHost
-                          ? Icons.verified_rounded
-                          : Icons.phonelink_off_rounded,
-                      label: 'Runs on the host',
-                      value: agent.onHost
-                          ? 'Yes — this coworker runs on the paired host'
-                          : 'Not yet — it lives in this app only',
+                    _HostRow(
+                      agent: agent,
+                      link: link ?? AgentsRelayLink.instance,
                     ),
                     if (agent.attachmentNames.isNotEmpty)
                       _InfoCard(
@@ -617,9 +620,73 @@ class _Action extends StatelessWidget {
   }
 }
 
+/// Where the coworker runs, told from what the app knows (bead
+/// chuk_chat-89vl): on the host when the host keeps it (its own coworker, one
+/// it listed, or one it ran a turn of); and whether that host is reachable now.
+/// "This app only" is said only while the host is reachable and does not know
+/// the coworker. With the host offline and no proof either way, it says that.
+class _HostRow extends StatelessWidget {
+  const _HostRow({required this.agent, required this.link});
+
+  final AgentsAgent agent;
+  final AgentsRelayLink link;
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<AgentsRelayController?>(
+      valueListenable: link.controller,
+      builder: (BuildContext context, AgentsRelayController? controller, _) {
+        if (controller == null) return _card(paired: false);
+        return ValueListenableBuilder<AgentsRelayState>(
+          valueListenable: controller.state,
+          builder: (BuildContext context, AgentsRelayState state, _) =>
+              _card(paired: state.isPaired),
+        );
+      },
+    );
+  }
+
+  Widget _card({required bool paired}) {
+    final bool onHost = agent.runsOnHost;
+    final (IconData icon, String value, String? note) = switch ((
+      onHost,
+      paired,
+    )) {
+      (true, true) => (
+        Icons.verified_rounded,
+        'Yes — this coworker runs on the paired host',
+        null,
+      ),
+      (true, false) => (
+        Icons.cloud_off_rounded,
+        'Yes — on your host, which is offline right now',
+        'Messages wait and go out when it is back.',
+      ),
+      (false, true) => (
+        Icons.phonelink_off_rounded,
+        'Not yet — it lives in this app only',
+        null,
+      ),
+      (false, false) => (
+        Icons.cloud_off_rounded,
+        'Not confirmed — your host is offline',
+        'The host says which coworkers it keeps when it is back.',
+      ),
+    };
+    return _InfoCard(
+      key: const ValueKey<String>('agent_profile_host'),
+      icon: icon,
+      label: 'Runs on the host',
+      value: value,
+      note: note,
+    );
+  }
+}
+
 /// One labelled card in the profile body.
 class _InfoCard extends StatelessWidget {
   const _InfoCard({
+    super.key,
     required this.icon,
     required this.label,
     required this.value,

@@ -13,11 +13,14 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
+import 'package:chuk_chat/services/agents/agents_channels_service.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 import 'package:chuk_chat/services/agents/coworker_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
 import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 
 class AgentControlPanel extends StatefulWidget {
@@ -28,7 +31,13 @@ class AgentControlPanel extends StatefulWidget {
     this.onScheduleSubmitted,
     this.showHeader = true,
     this.showRefresh = true,
+    this.channels,
   });
+
+  /// The coworker's messenger channels. Defaults to
+  /// [AgentsChannelsService.instance]; the section shows only for a host
+  /// that runs channels.
+  final AgentsChannelsService? channels;
 
   /// The name row at the top. The desktop details pane keeps it; the pane
   /// header above it already carries Refresh, so it turns [showRefresh] off.
@@ -112,7 +121,7 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
             // "Not installed" only while the host reports nothing for this
             // coworker. A sandbox the host measured is proof it runs there:
             // the note used to sit next to 44 runs in its own container.
-            if (!widget.agent.onHost &&
+            if (!widget.agent.runsOnHost &&
                 snapshot.sandbox is! ControlAvailable<AgentSandbox>)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -174,6 +183,7 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
               _buildSandbox(context, snapshot.sandbox),
             ),
             _section(context, 'Skills', _buildSkills(context, snapshot.skills)),
+            _buildChannels(context),
           ],
         );
       },
@@ -350,6 +360,24 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                 ],
               ),
     };
+  }
+
+  /// Telegram, under its own label, only while the host runs channels
+  /// (`host_route.capabilities` has `agent_channels`).
+  Widget _buildChannels(BuildContext context) {
+    final AgentsChannelsService channels =
+        widget.channels ?? AgentsChannelsService.instance;
+    return ListenableBuilder(
+      listenable: channels,
+      builder: (BuildContext context, Widget? _) {
+        if (!channels.supported) return const SizedBox.shrink();
+        return _section(
+          context,
+          AppLocalizations.of(context)?.agentsChannels ?? 'Channels',
+          AgentTelegramSection(agentId: widget.agent.id, service: channels),
+        );
+      },
+    );
   }
 
   // --- helpers ---------------------------------------------------------------

@@ -103,6 +103,10 @@ abstract class AgentRosterSource extends ChangeNotifier {
   /// Marks a run as in flight (or finished) for [agentId].
   void markRunning(String agentId, bool running);
 
+  /// Records that the host ran a turn of [agentId] ([AgentsAgent.knownToHost]).
+  /// A no-op for an unknown id or one the host already knows.
+  void markKnownToHost(String agentId);
+
   /// Records that something happened in a thread at [when].
   void markActivity(String agentId, String threadKey, DateTime when);
 
@@ -328,8 +332,11 @@ class LocalAgentRosterSource extends AgentRosterSource {
       if (id == null || ignore.contains(id)) continue;
       final index = _indexOf(id, orNull: true);
       if (index >= 0) {
-        if (_agents[index].name == entry.name) continue;
-        _agents[index] = _agents[index].copyWith(name: entry.name);
+        // Listed by the host means kept by the host: it runs there now, even
+        // when the app created it.
+        final AgentsAgent known = _agents[index];
+        if (known.name == entry.name && known.knownToHost) continue;
+        _agents[index] = known.copyWith(name: entry.name, knownToHost: true);
         changed = true;
         continue;
       }
@@ -340,6 +347,7 @@ class LocalAgentRosterSource extends AgentRosterSource {
         AgentsAgent(
           id: id,
           name: entry.name,
+          knownToHost: true,
           threads: <AgentsThreadInfo>[
             AgentsThreadInfo(key: id, title: 'General'),
           ],
@@ -359,6 +367,15 @@ class LocalAgentRosterSource extends AgentRosterSource {
     final index = _indexOf(agentId, orNull: true);
     if (index < 0 || _agents[index].running == running) return;
     _agents[index] = _agents[index].copyWith(running: running);
+    notifyListeners();
+  }
+
+  @override
+  void markKnownToHost(String agentId) {
+    final index = _indexOf(agentId, orNull: true);
+    if (index < 0 || _agents[index].runsOnHost) return;
+    _agents[index] = _agents[index].copyWith(knownToHost: true);
+    _persist();
     notifyListeners();
   }
 

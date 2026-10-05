@@ -1604,6 +1604,12 @@ class AgentsRelayClient
   /// only the permissions section reads this frame.
   static void Function(Map<String, dynamic> payload)? agentPermissionsSink;
 
+  /// Where an `agent_channel` frame goes (a coworker's messenger channel,
+  /// bead chuk_chat-02s5): the answer to `agent_channel_get` / `_set` and the
+  /// host's unprompted pushes. `AgentsChannelsService` sets it; null drops the
+  /// frame. A sink like [agentPermissionsSink], for the same reason.
+  static void Function(Map<String, dynamic> payload)? agentChannelSink;
+
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
   /// field never does, so a feature gated on it stays off there.
@@ -1611,7 +1617,8 @@ class AgentsRelayClient
       ValueNotifier<Set<String>>(const <String>{});
 
   /// Seals and sends one host control frame that has no typed method here
-  /// (`agent_permissions_get` / `agent_permissions_set`). Throws when not
+  /// (`agent_permissions_get` / `agent_permissions_set`, `agent_channel_get` /
+  /// `agent_channel_set`). Throws when not
   /// paired, like every send.
   Future<void> sendControlFrame(Map<String, dynamic> payload) =>
       _sendFramePayload(payload);
@@ -3039,6 +3046,8 @@ class AgentsRelayClient
         _inbound.add(AgentsRelayAgentList.fromPayload(payload));
       case 'agent_permissions':
         agentPermissionsSink?.call(payload);
+      case 'agent_channel':
+        agentChannelSink?.call(payload);
       case 'run_state':
         final runState = AgentsRelayRunState.fromPayload(payload);
         if (runState != null) _inbound.add(runState);
