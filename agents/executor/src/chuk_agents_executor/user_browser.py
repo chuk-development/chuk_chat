@@ -108,6 +108,10 @@ MAX_PANEL_SELECTION = 2000
 MAX_PANEL_PAGE_TEXT = 6000
 MAX_PANEL_URL = 500
 NO_PANEL_HANDLER_ERROR = "this Agents host does not take messages from the browser panel yet."
+#: The app's frame that lifts a Stop (docs/WIRE_CONTRACT.md, "The user's own
+#: browser"), and the ``host_route`` capability that names it.
+RESUME_FRAME = "user_browser_resume"
+RESUME_CAPABILITY = "user_browser_resume"
 
 
 def socket_dir() -> Path:
@@ -438,17 +442,24 @@ class BrowserBroker:
         """A run of ``session`` with the user's browser starts. A task the user
         sent clears an earlier Stop (the user asked again); an automation or a
         mail does not."""
-        if not by_user:
-            return
+        if by_user:
+            self.resume_by_user()
+
+    def resume_by_user(self) -> bool:
+        """The user tapped "Allow again" in the app: lift the Stop exactly
+        like the add-on's own ``browser_resume``, and tell the add-on, so its
+        strip and panel stop saying "Stopped". Returns whether a Stop was
+        lifted. Without a Stop it changes nothing and sends nothing."""
         with self._lock:
             if not self.stopped:
-                return
+                return False
             self.stopped = False
             self.stopped_session = None
             ext = self._ext
         if ext is not None:
             ext.send({"type": "browser_resume"})
         self._notify_change()
+        return True
 
     # -- the add-on side -------------------------------------------------------
 

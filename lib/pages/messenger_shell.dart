@@ -604,6 +604,19 @@ class _MessengerShellState extends State<MessengerShell>
     // cowork-qp5i), and the app parks the target itself when the host falls
     // silent (bead cowork-8ptj). Both beat "no screen yet", which is only the
     // answer when nobody ever said anything about a screen.
+    // ── own browser ──
+    // A coworker in the user's own browser never has a screen here.
+    if (_browserPresence?.usesUserBrowser ?? false) {
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.ubScreenExplain ??
+            'This coworker works in your own browser. There is no screen '
+                'to show here.',
+        duration: const Duration(seconds: 4),
+      );
+      return;
+    }
+    // ── end own browser ──
     final String text = switch (_browserPresence?.parkedBecause ?? '') {
       'no_browser' => 'The coworker has no page open right now.',
       'no_sandbox' =>
@@ -1003,6 +1016,8 @@ class _MessengerShellState extends State<MessengerShell>
                       ? _openBrowserView
                       : _explainNoScreen,
                   browserAvailable: _browserOpen,
+                  // own browser: "Works in your browser", like the desktop.
+                  usesUserBrowser: _browserPresence?.usesUserBrowser ?? false,
                   onReconnect: () {
                     final view = _threadViewKey.currentState;
                     if (view is AgentsThreadViewState) {

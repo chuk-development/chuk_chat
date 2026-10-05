@@ -1923,6 +1923,13 @@ class Executor:
             # terminal ``agent_permissions`` frame.
             self._handle_permissions_frame(request_id, payload)
             return
+        if kind == "user_browser_resume":
+            # "Allow again" in the app (docs/WIRE_CONTRACT.md, "The user's own
+            # browser"): the host lifts the Stop and answers with one terminal
+            # ``user_browser_status``. Only a sealed frame of the paired app
+            # gets this far.
+            self._handle_user_browser_resume(request_id, payload)
+            return
         if kind in ("agent_channel_get", "agent_channel_set"):
             # Messenger channels of one coworker (host channels/). The host
             # keeps them; answered with one terminal ``agent_channel`` frame.
@@ -2293,6 +2300,27 @@ class Executor:
             return
         if not isinstance(answer, dict) or answer.get("type") != "agent_permissions":
             answer = {**failure, "error": "agent permissions not enabled"}
+        self._terminal(request_id, answer)
+
+    def _handle_user_browser_resume(self, request_id: str, payload: dict) -> None:
+        """Hand ``user_browser_resume`` to the host's agent hook (the host
+        runs the browser broker) and send its ``user_browser_status`` as the
+        terminal. Never a bare ``error``: the app reads that as a run's end."""
+        failure = {"type": "user_browser_status", "error": "user browser not enabled"}
+        hook = self._on_agent_frame
+        if hook is None:
+            self._terminal(request_id, failure)
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(
+                request_id,
+                {**failure, "error": f"user browser resume failed: {type(exc).__name__}"},
+            )
+            return
+        if not isinstance(answer, dict) or answer.get("type") != "user_browser_status":
+            answer = failure
         self._terminal(request_id, answer)
 
     def _handle_channel_frame(self, request_id: str, payload: dict) -> None:

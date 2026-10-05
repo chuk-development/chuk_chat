@@ -1345,4 +1345,10 @@ const Map<String, String> stringsEn = {
   'ubApprovalAddress': 'Address',
   'ubApprovalTab': 'Tab',
   // ── end own browser ──
+  // ── browser resume ──
+  'ubAllowAgain': 'Allow again',
+  'ubNoticeStoppedApp':
+      'You stopped this in your browser. Tap Allow again, or send a new task.',
+  'ubAllowAgainFailed': 'Could not reach your computer. Try again.',
+  // ── end browser resume ──
 };

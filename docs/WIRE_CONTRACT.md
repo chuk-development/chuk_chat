@@ -2854,9 +2854,11 @@ Status 2026-10-05: host, bridge and add-on side implemented and tested without a
 browser. App side implemented 2026-10-05 (beads chuk_chat-z5jk, chuk_chat-wvhq),
 items 1-6 of the "App work list" at the end of this section:
 `lib/widgets/agents_user_browser.dart`, `UserBrowserStatus` in
-`lib/services/agents/agents_permissions_service.dart`. Item 7 (the optional
-"From your browser" label) is not done. All changes are additive. An old app
-and an old host keep working.
+`lib/services/agents/agents_permissions_service.dart`. Bead chuk_chat-atm2
+(2026-10-05) adds the app frame `user_browser_resume` ("Allow again" in the
+app) and the phone's screen chip. Item 7 (the optional "From your browser"
+label) is not done: the app does not see a run's origin (see item 7). All
+changes are additive. An old app and an old host keep working.
 
 ### The idea
 
@@ -2900,7 +2902,7 @@ agent (executor) ── stdio MCP ── agents-extension-mcp
 |---|---|
 | one holder | The first coworker that acts holds the browser. Another coworker gets "in use by another coworker" until the holder sends `browser_close` / `browser_handoff`, its MCP server goes away, or it is idle for 300 s (then the add-on lets go of its tab). |
 | reads take nothing | `browser_tabs` with `action: "list"` works for every coworker and takes no hold. |
-| Stop wins | The user's Stop fails every command, stops the run of the holder (same as the app's Stop) and lasts until the user allows the browser again in the add-on, or sends a new task to a coworker with the user browser. An automation, a mail or a Telegram run does not lift it. |
+| Stop wins | The user's Stop fails every command, stops the run of the holder (same as the app's Stop) and lasts until the user allows the browser again (in the add-on, or with "Allow again" in the app: `user_browser_resume`), or sends a new task to a coworker with the user browser. An automation, a mail or a Telegram run does not lift it. |
 | no secrets | The add-on has no `cookies`, `history`, `webRequest` or `privacy` permission, and no command returns cookies or saved passwords. The snapshot shows `[hidden]` for password, card and one-time-code fields. A tab the coworker does not hold shows its URL without query and fragment in the tab list. |
 
 ### Frames: host ↔ add-on (local, over the bridge)
@@ -2929,7 +2931,8 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
 - `browser_stop` (new): the user pressed Stop on the strip on the page, in the
   panel, or "Cancel" on Chrome's debugging bar.
 - `browser_resume` (new): add-on -> host when the user taps "Allow again";
-  host -> add-on when the user sends a new task.
+  host -> add-on when the user sends a new task, or taps "Allow again" in
+  the app (`user_browser_resume`).
 - `browser_holder` (new, bead chuk_chat-8xsn): the broker sends it when a
   coworker takes the browser, right before that coworker's first command, on
   the same line. `name` is the name the user gave the coworker (the host's
@@ -3054,6 +3057,31 @@ fresh value with every `agent_permissions_get`, and a push on every change
   would have to send one per coworker, and the app would read it as a change
   of the settings. An old app ignores the unknown type.
 
+### Outbound: `user_browser_resume` ("Allow again" in the app, bead chuk_chat-atm2)
+
+```json
+{"type": "user_browser_resume"}
+```
+
+- App -> host, sealed like every control frame. The host lifts the broker's
+  Stop exactly like the add-on's `browser_resume`, and sends
+  `browser_resume` to the add-on, so its strip and panel stop saying
+  "Stopped".
+- Answer: one terminal `user_browser_status` with the fresh block (the push
+  shape above). The lift also pushes `user_browser_status` to every attached
+  app, so a second phone repaints too. Without a Stop it changes nothing and
+  still answers with the status. A host with no broker answers with
+  `host_listening: false`. A failure is `{"type": "user_browser_status",
+  "error": "<text>"}` and never a bare `error` (the app reads that as the end
+  of a run).
+- **Only the paired app can send it.** It travels only on the sealed
+  controller channel; the executor opens every frame with the paired
+  device's key, and a frame from any other device is rejected before the
+  host sees it (default deny). No page, no add-on and no sandbox can send it.
+- **Capability:** the host names `user_browser_resume` in
+  `host_route.capabilities`. The app shows "Allow again" only for such a
+  host. An old host never names it, so the app sends it to no old host.
+
 ### The browser panel (`page_message`, bead chuk_chat-8xsn)
 
 Decided from `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md` §3a: the user's own
@@ -3114,14 +3142,31 @@ agent tool.
 5. **In use / stopped.** With `in_use` and not `in_use_by_this_agent`:
    "<in_use_by.name> is using your browser". With `stopped`: "You stopped
    this in your browser. Send a new task, or tap Allow again in the add-on."
-   There is no app frame that lifts a Stop, so the app shows no "Allow
-   again" button of its own.
+   Done 2026-10-05 (bead chuk_chat-atm2): for a host that names
+   `user_browser_resume`, the Stop notice and the "Your browser" switch get
+   an "Allow again" button that sends `user_browser_resume`, and the notice
+   says "Tap Allow again, or send a new task." The button does nothing while
+   the host has not answered (at most 10 s). A host without the capability
+   keeps the old sentence and no button.
 6. **Live status.** Handle `user_browser_status` (push): replace the stored
    status and repaint the subtitle, the setup card and the in-use line.
    No polling of `agent_permissions_get` for it.
 7. **Panel runs.** A run with origin `browser_panel` shows in the thread like
    any other; its first line is `[from your browser panel]`. Optional: draw
-   that line as a small "From your browser" label.
+   that line as a small "From your browser" label. **Not done** (bead
+   chuk_chat-atm2, follow-up chuk_chat-wuci): the app does not see the
+   origin. The replayed `user` frame carries only text, `run_state` has no
+   origin, and the run summary with `origin` stays in the host. The only
+   sign is the host's text prefix, and the user (or a Telegram or mail
+   sender) can type the same words. A label drawn from it would classify by
+   a text pattern. The fix is an additive `origin` on the replayed `user`
+   frame from the host; then the app draws the label from that field.
+8. **Screen target.** Done (bead chuk_chat-atm2): for a coworker whose
+   `run_state.browser_target` is `user_browser`, the parked screen target on
+   the phone's top bar says "Works in your browser" and its tap explains that
+   there is no screen to show, like the desktop header. Before, the phone
+   said "No screen open yet". The app reads the target from the last
+   `run_state` (`BrowserPresence.usesUserBrowser`).
 
 ## Cost per run and weekly budget (bead chuk_chat-qcbv)
 

@@ -21,6 +21,7 @@ library;
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
@@ -64,6 +65,7 @@ class MobileChatChrome extends StatelessWidget {
     this.onOpenProfile,
     this.onOpenBrowser,
     this.browserAvailable = false,
+    this.usesUserBrowser = false, // own browser
     this.onOpenFiles,
     this.onReconnect,
     this.onMore,
@@ -77,6 +79,13 @@ class MobileChatChrome extends StatelessWidget {
 
   /// Tap on the coworker pill — its profile page. Null renders the pill flat.
   final VoidCallback? onOpenProfile;
+
+  // ── own browser ──
+  /// The coworker works in the user's own browser (`run_state.browser_target`).
+  /// With no screen open, the parked screen target says "Works in your
+  /// browser", like the desktop header, not "No screen open yet".
+  final bool usesUserBrowser;
+  // ── end own browser ──
 
   /// The "computer" chip: the coworker's screen. Called whether or not a
   /// screen is open — when none is, it is expected to say so, which is why the
@@ -181,6 +190,9 @@ class MobileChatChrome extends StatelessWidget {
                     parked: !browserAvailable,
                     tooltip: browserAvailable
                         ? 'Take over the screen'
+                        : usesUserBrowser // own browser
+                        ? (AppLocalizations.of(context)?.ubScreenTooltip ??
+                              'Works in your browser')
                         : 'No screen open yet',
                     semanticsId: 'mobile_chat_browser',
                     onTap: onOpenBrowser,
