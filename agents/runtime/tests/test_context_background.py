@@ -745,21 +745,40 @@ def test_history_after_the_ladder_does_not_grow_when_the_idle_rule_fires():
     assert ladder._measure(with_idle) <= plain._measure(without)
 
 
-def test_recall_rows_of_earlier_tasks_are_dropped_and_the_current_one_stays():
-    messages = _sysuser() + [
+def _recall_session() -> list[dict]:
+    return _sysuser() + [
         {"role": "user", "content": "[memory recall — notes]\n- old note"},
         {"role": "assistant", "content": "first answer"},
         {"role": "user", "content": "second task"},
         {"role": "user", "content": "[memory recall — notes]\n- current note"},
     ]
+
+
+def test_recall_rows_of_earlier_tasks_are_dropped_after_a_long_pause():
+    messages = _recall_session()
+    stamps = [0.0, 1.0, 2.0, 3.0, 3.0 + 7_200, 7_204.0]  # "second task" after 2 h
     ladder = ContextLadder(config=LadderConfig())
-    out = ladder.prepare(messages, turn_start=4)
+    out = ladder.prepare(messages, timestamps=stamps, turn_start=4)
     texts = [m["content"] for m in out]
     assert not any("old note" in t for t in texts)
     assert any("current note" in t for t in texts)
     assert ladder.last_stats.idle_dropped == 1
     # Without a turn start nothing is dropped.
     assert ContextLadder(config=LadderConfig()).prepare(messages) == messages
+
+
+def test_recall_rows_of_earlier_tasks_stay_while_the_user_keeps_talking():
+    """Bead cowork-g85d: the recall row of the previous task sits right after
+    its prompt. Dropping it on the next task changed the payload there, and
+    the provider's prefix cache lost everything that task did after it. With
+    no long pause the row stays, so the previous request is a prefix of this
+    one."""
+    messages = _recall_session()
+    stamps = [0.0, 1.0, 2.0, 3.0, 60.0, 61.0]
+    ladder = ContextLadder(config=LadderConfig())
+    out = ladder.prepare(messages, timestamps=stamps, turn_start=4)
+    assert out == messages
+    assert ladder.last_stats.idle_dropped == 0
 
 
 def test_an_earlier_automation_payload_is_collapsed():

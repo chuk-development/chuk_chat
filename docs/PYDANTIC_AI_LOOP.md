@@ -218,6 +218,21 @@ tool search apply to them.
   request and is called by its own name.
 * `OpenAIChatModel` has no native deferral: this is the local fallback, and a
   discovery changes the tools array once (one prompt-cache miss).
+* A found tool stays declared for the rest of the conversation (bead
+  cowork-g85d). The loop reads the found set from the stored rows
+  (`pai.convert.found_tools`), from the idle cut on, and `RegistryToolset`
+  declares those tools outright, after the core tools, in the order they were
+  found. Every chat template renders the `tools` array before the system
+  prompt and the history, so a tools array that changes costs the provider's
+  prefix cache the whole prompt. Before this, a found tool left the array
+  again when the context ladder summarized or idle-dropped the search that
+  found it, and the next search put it back: two full misses each time.
+* Prompt-cache rule for everything in this loop: the request must be the
+  previous request plus new rows at the end. Test:
+  `agents/runtime/tests/test_prompt_cache_prefix.py`. The old recall rows of
+  earlier tasks therefore stay until the next long pause (`_stale_marks`,
+  `recall_end`); they used to be dropped on the next task, which changed the
+  payload right after the previous prompt.
 
 ## 15. Memory hooks
 

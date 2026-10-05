@@ -412,6 +412,52 @@ def _flatten_user(content: Sequence[Any]) -> str:
     return "\n".join(item if isinstance(item, str) else str(item) for item in content)
 
 
+def found_tools(
+    rows: Iterable[dict], *, deferred: Iterable[str], order: Sequence[str] = ()
+) -> list[str]:
+    """The deferred tools ``rows`` already found, in the order they were
+    first found (bead cowork-g85d).
+
+    A tool counts as found when a ``search_tools`` result names it, or when
+    an assistant row calls it without a search (the loop runs such a call).
+    One event that finds several tools (one search) lists them in ``order``
+    (the registry order), so the result is the same for the same rows on
+    every read. Names outside ``deferred`` are left out."""
+    hidden = set(deferred)
+    if not hidden:
+        return []
+    rank = {name: index for index, name in enumerate(order)}
+    found: dict[str, None] = {}
+
+    def add(names: Iterable[str]) -> None:
+        fresh = {n for n in names if n in hidden and n not in found}
+        for name in sorted(fresh, key=lambda n: (rank.get(n, len(rank)), n)):
+            found[name] = None
+
+    for row in _rewrite_bridge(rows):
+        role = row.get("role")
+        if role == "tool" and row.get("name") == SEARCH_TOOLS_NAME:
+            content = row.get("content")
+            if isinstance(content, str):
+                try:
+                    content = json.loads(content)
+                except ValueError:
+                    content = None
+            if isinstance(content, dict):
+                add(
+                    str(m.get("name"))
+                    for m in content.get("discovered_tools") or []
+                    if isinstance(m, dict) and m.get("name")
+                )
+        elif role == "assistant":
+            add(
+                str((call.get("function") or {}).get("name") or "")
+                for call in row.get("tool_calls") or []
+                if isinstance(call, dict)
+            )
+    return list(found)
+
+
 def messages_to_rows(messages: Iterable[ModelMessage]) -> list[dict]:
     """Pydantic AI messages as stored rows (the inverse of
     :func:`rows_to_messages`)."""
@@ -427,6 +473,7 @@ def messages_to_rows(messages: Iterable[ModelMessage]) -> list[dict]:
 __all__ = [
     "SEARCH_TOOLS_NAME",
     "content_text",
+    "found_tools",
     "messages_to_rows",
     "request_to_rows",
     "response_to_row",
