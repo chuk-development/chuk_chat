@@ -167,6 +167,22 @@ class ApprovalPolicy:
             return None
         return requests.build_results(approvals=approvals)
 
+    async def ask_for(self, call_id: str, name: str, args: Any) -> bool | None:
+        """Decide one call outside Pydantic AI's deferral, the same way the
+        handler does: policy first, then the card.
+
+        For a deferred tool the model called before it searched for it.
+        Pydantic AI refuses such a call ("not available yet") before it gets
+        to the approval step, so the loop asks here and runs the call itself
+        (chuk_chat-3oh6). ``True`` = run it; ``False`` = do not (the result
+        the model gets is already recorded in the toolset); ``None`` = no rule
+        for this tool."""
+        rule = self.rules.get(name)
+        if rule is None:
+            return None
+        decided = await self._decide(call_id, rule, args if isinstance(args, dict) else {})
+        return isinstance(decided, ToolApproved)
+
     async def _decide(
         self, call_id: str, rule: ApprovalRule, args: dict
     ) -> ToolApproved | ToolDenied:

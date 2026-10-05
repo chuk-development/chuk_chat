@@ -1275,8 +1275,22 @@ def browser_servers(manager: MCPManager | None) -> list[str]:
     return names
 
 
-def open_browser_gui(manager: MCPManager | None, *, url: str | None = None) -> list[str]:
-    """Make every connected browser server put a window on its display.
+def launched(connection: Any) -> bool:
+    """Whether the server behind ``connection`` runs now. ``False`` only for a
+    shared connection that starts its server on the first call and has not
+    done so yet (the executor's per-box browser, bead chuk_chat-wrdv); every
+    plain :class:`MCPConnection` is started when it is registered."""
+    return bool(getattr(connection, "launched", True))
+
+
+def open_browser_gui(
+    manager: MCPManager | None,
+    *,
+    url: str | None = None,
+    servers: Sequence[str] | None = None,
+) -> list[str]:
+    """Make every connected browser server put a window on its display
+    (only ``servers`` when given).
 
     Blocking, and never raises: :meth:`MCPManager.call` reports a failure as a
     result, and a browser that refuses to open must not take the run down with
@@ -1284,6 +1298,8 @@ def open_browser_gui(manager: MCPManager | None, *, url: str | None = None) -> l
     """
     opened: list[str] = []
     for name in browser_servers(manager):
+        if servers is not None and name not in servers:
+            continue
         connection = manager.connections[name]
         call = open_call([info.name for info in connection.tools], url=url)
         if call is None:  # pragma: no cover - browser_servers just said it has one
@@ -1304,10 +1320,19 @@ def open_browser_gui_async(
     and the first model round must not wait for it. The window appears while the
     agent is still reading its prompt.
     """
-    if not auto_open_enabled() or not browser_servers(manager):
+    if not auto_open_enabled():
+        return None
+    # A browser whose server is not started yet stays that way: it starts on
+    # the agent's first browser call or when the user opens the live view, not
+    # because a task began (bead chuk_chat-wrdv).
+    running = [
+        name for name in browser_servers(manager)
+        if launched(manager.connections.get(name))
+    ]
+    if not running:
         return None
     thread = threading.Thread(
-        target=lambda: open_browser_gui(manager, url=url),
+        target=lambda: open_browser_gui(manager, url=url, servers=running),
         name="browser-gui-open",
         daemon=True,
     )

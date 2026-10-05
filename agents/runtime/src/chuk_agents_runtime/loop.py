@@ -352,7 +352,7 @@ from .pai.approvals import ApprovalPolicy  # noqa: E402
 from .pai.convert import found_tools, response_to_row, rows_to_messages, tool_call_args  # noqa: E402
 from .pai.events import StreamMapper  # noqa: E402
 from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
-from .pai.tools import TOOL_RETRIES, UNSET, RegistryToolset  # noqa: E402
+from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset  # noqa: E402
 
 disable_banner()
 
@@ -957,6 +957,7 @@ class AgentLoop:
                             try:
                                 async with node.stream(run.ctx) as stream:
                                     async for event in stream:
+                                        await self._ask_unsearched(active, calls, event)
                                         self._on_tool_event_part(active, calls, event, tools_used)
                             finally:
                                 timings.tool_ms += (time.monotonic() - tool_started) * 1000
@@ -1200,6 +1201,63 @@ class AgentLoop:
         if call is None:
             return
         self._write_tool_row(active, call, part, tools_used)
+
+    async def _ask_unsearched(
+        self, active: _ActiveRun, calls: list[ToolCallPart], event: Any
+    ) -> None:
+        """Ask for, and run, a call Pydantic AI refused only because the model
+        had not searched for its deferred tool, when that tool is behind an
+        approval (chuk_chat-3oh6).
+
+        Pydantic AI checks availability before it defers a call for approval,
+        so such a call never reached the card. The loop runs an unsearched
+        call itself (``_write_tool_row``), but never one behind an approval
+        unasked: so it asks here, through the same policy and gate, and on a
+        yes runs the call once. The result lands in the toolset's record, which
+        ``_write_tool_row`` stores; a no records the declined result the same
+        way. One call, one card."""
+        part = getattr(event, "part", None)
+        if not isinstance(part, RetryPromptPart):
+            return
+        if getattr(event, "event_kind", "") != "function_tool_result":
+            return
+        call = next((c for c in calls if c.tool_call_id == part.tool_call_id), None)
+        if call is None or call.tool_call_id in active.written_calls:
+            return
+        name = call.tool_name
+        if self._toolset.calls.get(call.tool_call_id) is not None:
+            return  # it ran (or was decided) already
+        registry = self._registry
+        if not (
+            registry.has(name)
+            and registry.is_deferred(name)
+            and registry.available(name)
+            and self._policy.requires_approval(name)
+        ):
+            return
+        args = tool_call_args(call)
+        approved = await self._policy.ask_for(call.tool_call_id, name, args)
+        if not approved:
+            return  # no rule: refused as before; a no: its result is recorded
+        record = CallRecord(started_at=time.time())
+        self._toolset.calls[call.tool_call_id] = record
+        if self._kill.interrupted() or not record.begin():
+            record.raised = True
+            record.result = INTERRUPTED_TOOL_RESULT
+            record.completed_at = time.time()
+            return
+        self._phase(PHASE_TOOL, name)
+
+        def work() -> Any:
+            try:
+                result = registry.dispatch(name, args if isinstance(args, dict) else {})
+                record.result = result
+                return result
+            finally:
+                record.completed_at = time.time()
+                record.done.set()
+
+        await asyncio.to_thread(work)
 
     def _write_tool_row(
         self,

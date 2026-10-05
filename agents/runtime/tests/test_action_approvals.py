@@ -482,3 +482,101 @@ def test_a_deferred_destructive_tool_asks_after_tool_search(tmp_path):
     assert loop.run("s", "delete ACME").final_answer == "gone"
     assert [r.action_class for r in asked] == [MCP_DESTRUCTIVE]
     assert deleted == ["ACME"]
+
+
+def _unsearched_loop(tmp_path, reg, manager, binding, turns):
+    """A Pydantic AI loop whose model calls deferred tools without a search."""
+    import httpx2
+
+    from chuk_agents_runtime.pai.model import ChukModelSpec, chuk_chat_model
+    from pai_fakes import FakeChatEndpoint, FakeSession
+
+    endpoint = FakeChatEndpoint(turns)
+    model, settings = chuk_chat_model(
+        FakeSession(), ChukModelSpec(model_id="m"), base_url="https://api.test",
+        transport=httpx2.MockTransport(endpoint.handler),
+    )
+    _, extra = loop_setup(
+        model, env=LocalEnvironment(), herenow_config=None, herenow_gate=None,
+        registry=reg, mcp=manager, action_approvals=binding,
+    )
+    store = StateStore(str(tmp_path / "s.db"))
+    loop = AgentLoop(
+        model, reg, store, model_settings=settings,
+        deferred_mode="pai", approval_policy=extra["approval_policy"],
+    )
+    return loop, store, extra["approval_policy"]
+
+
+@pytest.mark.parametrize("approved", [True, False])
+def test_an_unsearched_deferred_call_behind_a_card_runs_once_when_approved(tmp_path, approved):
+    """chuk_chat-3oh6: the model calls a deferred tool it never searched for,
+    and the tool asks. Pydantic AI refuses the call ("not available yet")
+    before its approval step; the loop shows the one card and, on a yes, runs
+    the call itself, exactly once. A no runs nothing."""
+    from pai_fakes import text_turn, tool_turn
+
+    deleted: list = []
+    conn = _Conn([MCPToolInfo("delete_customer", "", {"type": "object"}, annotations={"destructiveHint": True})])
+    manager = SimpleNamespace(connections={"crm": conn})
+    reg = ToolRegistry()
+    reg.register(
+        "mcp__crm__delete_customer",
+        {"description": "Delete a customer record.", "type": "object", "properties": {"customer": {"type": "string"}}},
+        lambda customer="": deleted.append(customer) or {"ok": True, "deleted": customer},
+        deferrable=True,
+    )
+    reg.defer("mcp__crm__delete_customer")
+    binding, asked = _binding(_Store(), [ActionDecision(approved, SCOPE_ONCE)])
+    loop, store, _ = _unsearched_loop(
+        tmp_path, reg, manager, binding,
+        [tool_turn([("c1", "mcp__crm__delete_customer", {"customer": "ACME"})]), text_turn(["ok"])],
+    )
+    result = loop.run("s", "delete ACME")
+    assert result.final_answer == "ok"
+    assert [r.action_class for r in asked] == [MCP_DESTRUCTIVE]
+    rows = [m.content for m in store.get_conversation(result.session_id) if m.role == "tool"]
+    assert len(rows) == 1
+    assert "not available yet" not in str(rows)
+    if approved:
+        assert deleted == ["ACME"]
+        assert rows[0]["content"] == {"ok": True, "deleted": "ACME"}
+    else:
+        assert deleted == []
+        assert rows[0]["content"]["declined"] is True
+
+
+def test_an_unsearched_browser_act_approved_for_the_site_runs_both_presses(tmp_path):
+    """The flow of chuk_chat-3oh6 in one run: two unsearched page-changing
+    calls, one card answered "always this site". Both run, one card."""
+    from pai_fakes import text_turn, tool_turn
+
+    clicked: list = []
+    manager = SimpleNamespace(connections={"pw": _Conn([
+        MCPToolInfo("browser_navigate", "", {"type": "object"}),
+        MCPToolInfo("browser_click", "", {"type": "object"}),
+    ])})
+    reg = ToolRegistry()
+    for info in manager.connections["pw"].tools:
+        full = tool_name("pw", info.name)
+        reg.register(
+            full, {"description": "x", "type": "object", "properties": {"ref": {"type": "string"}}},
+            lambda _f=full, **kw: clicked.append(_f) or {"ok": True}, deferrable=True,
+        )
+        reg.defer(full)
+    store_ = _Store(ActionPolicy(modes={BROWSER_ACT: "ask"}))
+    binding, asked = _binding(store_, [ActionDecision(True, SCOPE_SITE)], site="https://shop.example/cart")
+    loop, store, _ = _unsearched_loop(
+        tmp_path, reg, manager, binding,
+        [
+            tool_turn([("c1", "mcp__pw__browser_click", {"ref": "e1"})]),
+            tool_turn([("c2", "mcp__pw__browser_click", {"ref": "e2"})]),
+            text_turn(["clicked twice"]),
+        ],
+    )
+    result = loop.run("s", "click twice")
+    assert result.final_answer == "clicked twice"
+    assert [r.action_class for r in asked] == [BROWSER_ACT]
+    assert clicked == ["mcp__pw__browser_click", "mcp__pw__browser_click"]
+    rows = [m.content for m in store.get_conversation(result.session_id) if m.role == "tool"]
+    assert "not available yet" not in str(rows)
