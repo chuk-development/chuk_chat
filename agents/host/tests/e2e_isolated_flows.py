@@ -72,10 +72,9 @@ PRICES = [
 ]
 USAGE = {"prompt_tokens": 1000, "completion_tokens": 100, "total_tokens": 1100}
 PW = "mcp__playwright__"
-#: One thread for flow 1 and every browser flow. Every task connects the box's
-#: Playwright server for its own thread, and the box has one browser profile:
-#: a second thread of the same coworker gets no browser while the first one's
-#: server lives (bead chuk_chat-wrdv). These flows test the browser, not that.
+#: One thread for flow 1 and most browser flows. The box's one browser server
+#: is shared by all threads of the coworker (bead chuk_chat-wrdv); flow 2b
+#: checks that with a second thread.
 BROWSER_KEY = "e2e-browser"
 
 
@@ -658,6 +657,30 @@ def test_flow2_browser_screenshot_fills_the_display(rig: Rig):
     assert root_px["black_rows"] == 0 and root_px["black_cols"] == 0, root_px
 
 
+def test_flow2b_a_second_thread_of_the_coworker_browses_too(rig: Rig):
+    """chuk_chat-wrdv: a second thread of the same coworker (same box, same
+    browser profile) gets the browser too; the box runs one browser server."""
+    url = rig.site.page("/second.html", PAGE_HTML)
+    rig.router.route(
+        "flow2b",
+        lambda: [
+            call((PW + "browser_navigate", {"url": url})),
+            answer("second thread browsed"),
+        ],
+    )
+    key = "e2e-thread2"
+    frames = rig.app.task("flow2b: open the page from another thread", key, timeout=180)
+    tools = [f for f in frames if f["type"] == "tool"]
+    ps = subprocess.run(["docker", "exec", rig.container(), "ps", "-eo", "pid,args"],
+                        capture_output=True, text=True, timeout=30).stdout
+    owners = [ln for ln in ps.splitlines() if "browser-mcp-owner" in ln]
+    evidence("2b", tools=_strip(tools), owners=owners)
+    assert [t.get("status") for t in tools] == ["completed"], tools
+    assert "/second.html" in rig.site.hits
+    assert frames[-1]["final_answer"] == "second thread browsed"
+    assert len(owners) <= 1, owners
+
+
 # -- flow 3: browser takeover, decided by the user and resolved by the host ---------------
 
 LOGIN_HTML = """<!doctype html><html><head><title>Sign in</title></head>
@@ -703,8 +726,8 @@ def test_flow3a_takeover_blocks_until_the_user_decides(rig: Rig):
         ps = subprocess.run(["docker", "exec", rig.container(), "ps", "-eo", "pid,etimes,args"],
                             capture_output=True, text=True, timeout=30).stdout
         evidence("3a-fail", frames=_strip(frames),
-                 browser_procs=[l for l in ps.splitlines() if "browser-mcp" in l or "playwright" in l][:10],
-                 log=[l for l in rig.log_lines if "mcp" in l.lower() or "browser" in l.lower()][-20:])
+                 browser_procs=[ln for ln in ps.splitlines() if "browser-mcp" in ln or "playwright" in ln][:10],
+                 log=[ln for ln in rig.log_lines if "mcp" in ln.lower() or "browser" in ln.lower()][-20:])
         raise AssertionError(f"no takeover card; tool said {_tool_result(frames, 'request_takeover')}")
     # The run waits: no done while the card is open.
     time.sleep(3)
@@ -801,13 +824,9 @@ def test_flow4_browser_act_asks_once_then_always_this_site(rig: Rig):
                   "approvals": {"classes": {"browser_act": "allow"}, "sites": {"browser_act": []}}})
     assert len(cards) == 1, cards
     assert broadcast and card.get("site") in broadcast[-1]["approvals"]["sites"].get("browser_act", [])
-    # The second press asked nothing and ran.
-    assert presses[1].get("status") == "completed", presses
-    if presses[0].get("status") != "completed":
-        pytest.xfail(
-            "chuk_chat-3oh6: the approved first press was refused by Pydantic AI "
-            "('not available yet: search for it first'); the card asked for nothing"
-        )
+    # The card was for the first (unsearched) press, and it ran
+    # (chuk_chat-3oh6); the second press asked nothing and ran.
+    assert [p.get("status") for p in presses] == ["completed", "completed"], presses
 
 
 def test_flow4s_browser_act_after_search_tools_runs_the_approved_call(rig: Rig):

@@ -242,6 +242,25 @@ def test_crossing_80_percent_warns_once(tmp_path):
     assert [p["level"] for p in bridge.sent] == ["warning", "exceeded"]
 
 
+def test_a_side_thread_warns_with_the_coworker_as_agent_id(tmp_path):
+    # chuk_chat-0b7i: the frame named the thread ("amber/side") as agent_id,
+    # but the budget and the spend belong to the coworker ("amber").
+    bridge = _Bridge(budget=0.01)
+    _spend(tmp_path, "amber", 0.0075)
+    executor, controller, _ = _build(tmp_path, budget=bridge)
+    executor.start()
+    try:
+        events = controller.collect(
+            controller.send_task("one", session_key="amber/side"), timeout=20.0)
+    finally:
+        executor.stop()
+    warnings = [e for e in events if e.get("type") == "budget_warning"]
+    assert len(warnings) == 1
+    assert warnings[0]["agent_id"] == "amber"
+    assert warnings[0]["session_key"] == "amber/side"
+    assert [p["agent_id"] for p in bridge.sent] == ["amber"]
+
+
 def test_over_budget_an_app_task_is_refused_before_it_spends(tmp_path):
     bridge = _Bridge(budget=1.0)
     _spend(tmp_path, "amber", 1.5)
