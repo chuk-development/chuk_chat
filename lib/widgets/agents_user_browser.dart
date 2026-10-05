@@ -591,15 +591,23 @@ class AgentsUserBrowserAllowAgainButton extends StatelessWidget {
 }
 
 /// Sends "Allow again" through [service] and says so when it could not go
-/// out. The host's `user_browser_status` answer repaints the views.
+/// out, or when the host said no (its reason). The host's
+/// `user_browser_status` answer repaints the views.
 Future<void> allowUserBrowserAgain(
   BuildContext context,
   AgentsPermissionsService service,
 ) async {
   final AppLocalizations l = _l(context);
   final bool sent = await service.resumeUserBrowser();
-  if (!sent && !service.resumingUserBrowser && context.mounted) {
-    pillToast(context, l.ubAllowAgainFailed);
+  if (!sent) {
+    if (!service.resumingUserBrowser && context.mounted) {
+      pillToast(context, l.ubAllowAgainFailed);
+    }
+    return;
+  }
+  final String? refused = await service.resumeAnswer;
+  if (refused != null && context.mounted) {
+    pillToast(context, l.ubAllowAgainRefused(refused));
   }
 }
 // ── end browser resume ──

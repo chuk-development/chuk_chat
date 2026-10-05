@@ -189,7 +189,7 @@ void main() {
   test('the run state says whether the coworker works in the user browser', () {
     int changes = 0;
     presence.addListener(() => changes++);
-    expect(presence.usesUserBrowser, isFalse);
+    expect(presence.usesUserBrowserIn('t'), isFalse);
     controller.emit(
       const AgentsRelayRunState(
         sessionKey: 't',
@@ -197,7 +197,7 @@ void main() {
         browserTarget: kBrowserTargetUserBrowser,
       ),
     );
-    expect(presence.usesUserBrowser, isTrue);
+    expect(presence.usesUserBrowserIn('t'), isTrue);
     expect(presence.value, isFalse, reason: 'never a screen to show');
     expect(changes, 1);
     // A sandbox header flips it back; a new pairing forgets it.
@@ -208,7 +208,7 @@ void main() {
         browserTarget: kBrowserTargetSandbox,
       ),
     );
-    expect(presence.usesUserBrowser, isFalse);
+    expect(presence.usesUserBrowserIn('t'), isFalse);
     controller.emit(
       const AgentsRelayRunState(
         sessionKey: 't',
@@ -222,7 +222,48 @@ void main() {
         peerDeviceId: 'host-b',
       ),
     );
-    expect(presence.usesUserBrowser, isFalse);
+    expect(presence.usesUserBrowserIn('t'), isFalse);
+  });
+
+  test('the browser target is per thread: another thread leaves it alone', () {
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 't',
+        state: 'running',
+        browserTarget: kBrowserTargetUserBrowser,
+      ),
+    );
+    expect(presence.usesUserBrowserIn('t'), isTrue);
+    // Another coworker's header, on the sandbox, says nothing about 't'.
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 'u',
+        state: 'running',
+        browserTarget: kBrowserTargetSandbox,
+      ),
+    );
+    expect(presence.usesUserBrowserIn('t'), isTrue);
+    expect(presence.usesUserBrowserIn('u'), isFalse);
+    // And the other way round: 'u' in the user browser leaves a sandbox 't'.
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 't',
+        state: 'idle',
+        browserTarget: kBrowserTargetSandbox,
+      ),
+    );
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 'u',
+        state: 'running',
+        browserTarget: kBrowserTargetUserBrowser,
+      ),
+    );
+    expect(presence.usesUserBrowserIn('t'), isFalse);
+    expect(presence.usesUserBrowserIn('u'), isTrue);
+    // A header without the field (an old host) keeps the last word.
+    controller.emit(const AgentsRelayRunState(sessionKey: 'u', state: 'idle'));
+    expect(presence.usesUserBrowserIn('u'), isTrue);
   });
 
   test('a fresh connection never inherits the last one\'s screen', () {

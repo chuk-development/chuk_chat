@@ -606,7 +606,7 @@ class _MessengerShellState extends State<MessengerShell>
     // answer when nobody ever said anything about a screen.
     // ── own browser ──
     // A coworker in the user's own browser never has a screen here.
-    if (_browserPresence?.usesUserBrowser ?? false) {
+    if (_browserPresence?.usesUserBrowserIn(_selectedThreadKey) ?? false) {
       AppNotifications.show(
         context,
         AppLocalizations.of(context)?.ubScreenExplain ??
@@ -1017,7 +1017,9 @@ class _MessengerShellState extends State<MessengerShell>
                       : _explainNoScreen,
                   browserAvailable: _browserOpen,
                   // own browser: "Works in your browser", like the desktop.
-                  usesUserBrowser: _browserPresence?.usesUserBrowser ?? false,
+                  usesUserBrowser:
+                      _browserPresence?.usesUserBrowserIn(_selectedThreadKey) ??
+                      false,
                   onReconnect: () {
                     final view = _threadViewKey.currentState;
                     if (view is AgentsThreadViewState) {
