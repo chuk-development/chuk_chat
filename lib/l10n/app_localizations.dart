@@ -1315,6 +1315,43 @@ class AppLocalizations {
   String get runChangesErrAllConflict => _get('runChangesErrAllConflict');
   String get runChangesErrFailed => _get('runChangesErrFailed');
   // ── end run changes ──
+  // ── own browser ──
+  String ubSubtitlePaired(String browser) =>
+      _get('ubSubtitlePaired').replaceAll('{browser}', browser);
+  String get ubSubtitlePairedGeneric => _get('ubSubtitlePairedGeneric');
+  String ubSubtitleInUseHere(String browser) =>
+      _get('ubSubtitleInUseHere').replaceAll('{browser}', browser);
+  String ubInUseBy(String name) =>
+      _get('ubInUseBy').replaceAll('{name}', name);
+  String get ubAnotherCoworker => _get('ubAnotherCoworker');
+  String get ubSubtitleNotConnected => _get('ubSubtitleNotConnected');
+  String get ubSubtitleNotSetUp => _get('ubSubtitleNotSetUp');
+  String get ubSubtitleStopped => _get('ubSubtitleStopped');
+  String get ubSubtitleNoBroker => _get('ubSubtitleNoBroker');
+  String get ubSetupTitleNotSetUp => _get('ubSetupTitleNotSetUp');
+  String get ubSetupTitleNotConnected => _get('ubSetupTitleNotConnected');
+  String get ubSetupIntro => _get('ubSetupIntro');
+  String get ubSetupIntroNotConnected => _get('ubSetupIntroNotConnected');
+  String get ubSetupStep1 => _get('ubSetupStep1');
+  String get ubSetupStep2 => _get('ubSetupStep2');
+  String get ubSetupStep3 => _get('ubSetupStep3');
+  String get ubSetupCopy => _get('ubSetupCopy');
+  String get ubSetupCopied => _get('ubSetupCopied');
+  String get ubSetupCheckAgain => _get('ubSetupCheckAgain');
+  String get ubSetupNotConnectedHost => _get('ubSetupNotConnectedHost');
+  String get ubSetupHowTo => _get('ubSetupHowTo');
+  String get ubNoticeStopped => _get('ubNoticeStopped');
+  String get ubNoticeNotSetUp => _get('ubNoticeNotSetUp');
+  String get ubLabelUserBrowser => _get('ubLabelUserBrowser');
+  String ubLabelUserBrowserNamed(String browser) =>
+      _get('ubLabelUserBrowserNamed').replaceAll('{browser}', browser);
+  String get ubLabelSandbox => _get('ubLabelSandbox');
+  String get ubScreenTooltip => _get('ubScreenTooltip');
+  String get ubScreenExplain => _get('ubScreenExplain');
+  String get ubApprovalInOwnBrowser => _get('ubApprovalInOwnBrowser');
+  String get ubApprovalAddress => _get('ubApprovalAddress');
+  String get ubApprovalTab => _get('ubApprovalTab');
+  // ── end own browser ──
 }
 
 class _AppLocalizationsDelegate

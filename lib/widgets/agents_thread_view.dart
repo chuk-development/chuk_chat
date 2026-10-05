@@ -57,6 +57,7 @@ import 'package:chuk_chat/widgets/agents_budget_notice.dart'; // F1
 import 'package:chuk_chat/widgets/agent_control_panel.dart' // F1
     show WeeklyBudgetField;
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // F1
+import 'package:chuk_chat/widgets/agents_user_browser.dart'; // own browser
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 
@@ -322,6 +323,21 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   ({String message, String? prompt})? _budgetRefusal;
   // ── end F1 ──
 
+  // ── own browser ──
+  /// Which browser this thread's coworker drives, from its last `run_state`
+  /// (`browser_target`): `user_browser`, `sandbox`, or null before a host
+  /// said (or an old host). Reset on a thread switch.
+  String? _browserTarget;
+
+  /// The host's status of the user's browser lives here (host-wide, with
+  /// the `user_browser_status` push). Captured once, so dispose removes the
+  /// listener from the same instance it was added to.
+  late final AgentsPermissionsService _userBrowserService;
+
+  /// A `get` for the user-browser status went out for this thread.
+  bool _askedUserBrowser = false;
+  // ── end own browser ──
+
   /// Guards against opening the browser view twice from one card.
   bool _browserViewOpen = false;
 
@@ -448,6 +464,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.addListener(_onBudgetNotices); // F1
+    // ── own browser ──
+    _userBrowserService = AgentsPermissionsService.instance..attach();
+    _userBrowserService.addListener(_onUserBrowserChanged);
+    // ── end own browser ──
     _revision = _loader.revisionFor(widget.threadKey);
     _revisionAtMount = _revision;
     _storeSub = ChatStorageService.changes.listen(_onChatStoreChanged);
@@ -497,6 +517,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _takeoverContinuing = false;
       _approvalScope = null; // F1
       _budgetRefusal = null; // F1
+      _browserTarget = null; // own browser
+      _askedUserBrowser = false; // own browser
       _clearSecretRequest();
       // The old thread no longer shows the card its run waits on. After the
       // frame: this runs during a build, and the ledger's listeners rebuild.
@@ -548,6 +570,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
     AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
+    _userBrowserService.removeListener(_onUserBrowserChanged); // own browser
     _controller?.state.removeListener(_onStateChanged);
     _startupState.dispose();
     _inboundSub?.cancel();
@@ -1423,8 +1446,11 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         if (event.sessionKey == null || event.sessionKey == widget.threadKey) {
           _clearTakeover();
         }
-      case AgentsRelayUser():
+      // ── own browser ──
       case AgentsRelayRunState():
+        _onBrowserTarget(event);
+      // ── end own browser ──
+      case AgentsRelayUser():
       case AgentsRelayDebugContext():
       case AgentsRelayRoomTurn():
       case AgentsRelayRoomDone():
@@ -1891,6 +1917,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       agentName: widget.title,
       showScreenTarget: threadOpen,
       onOpenScreen: widget.onOpenAgentScreen,
+      // own browser: that browser has no screen here.
+      usesUserBrowser: _browserTarget == kBrowserTargetUserBrowser,
       connection: switch (state.phase) {
         AgentsRelayPhase.paired => AgentsThreadConnection.live,
         AgentsRelayPhase.connecting ||
@@ -2324,7 +2352,23 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       widget.threadKey,
     );
     final refusal = _budgetRefusal;
+    // own browser
+    final UserBrowserNotice? browserNotice = _userBrowserNotice();
     final List<Widget> cards = <Widget>[
+      // ── own browser ──
+      if (browserNotice != null)
+        AgentsUserBrowserNoticeView(
+          notice: browserNotice,
+          dense: dense,
+          onSetUp: () => unawaited(
+            showUserBrowserSetupSheet(
+              context,
+              agentId: _userBrowserAgentId,
+              service: _userBrowserService,
+            ),
+          ),
+        ),
+      // ── end own browser ──
       if (warning != null)
         AgentsBudgetWarningNotice(
           warning: warning,
@@ -2489,6 +2533,46 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   void _onBudgetNotices() {
     if (mounted) setState(() {});
   }
+
+  // ── own browser ──
+  /// The coworker the user-browser status is about: its agent id, which is
+  /// also its thread key.
+  String get _userBrowserAgentId => widget.agent?.id ?? widget.threadKey;
+
+  void _onUserBrowserChanged() {
+    if (mounted) setState(() {});
+  }
+
+  /// A `run_state` for this thread says which browser the coworker drives.
+  /// When it is the user's own and the app has no status yet, it asks the
+  /// host once (the push keeps it fresh after that).
+  void _onBrowserTarget(AgentsRelayRunState event) {
+    if (event.sessionKey != widget.threadKey) return;
+    final String? target = event.browserTarget;
+    if (target == null) return;
+    if (target != _browserTarget && mounted) {
+      setState(() => _browserTarget = target);
+    }
+    if (target == kBrowserTargetUserBrowser &&
+        _userBrowserService.userBrowserStatus == null &&
+        !_askedUserBrowser) {
+      _askedUserBrowser = true;
+      unawaited(_userBrowserService.refresh(_userBrowserAgentId));
+    }
+  }
+
+  /// What the end of the thread says about the user's browser, or null.
+  UserBrowserNotice? _userBrowserNotice() {
+    final String agentId = _userBrowserAgentId;
+    return userBrowserNoticeFor(
+      status: _userBrowserService.userBrowserStatus,
+      heldByOther: _userBrowserService.userBrowserHeldByOther(agentId),
+      browserTarget: _browserTarget,
+      permissionOn: _userBrowserService.confirmedOf(agentId)?.userBrowser,
+      running: _running,
+    );
+  }
+  // ── end own browser ──
 
   /// "Change budget": the coworker's weekly budget field in a sheet, the same
   /// field the details pane shows. The host's answer fills it; a new value

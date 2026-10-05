@@ -2851,8 +2851,12 @@ A bad entry is dropped on load (logged) and that coworker gets the defaults.
 ## The user's own browser (bead chuk_chat-rixw)
 
 Status 2026-10-05: host, bridge and add-on side implemented and tested without a
-browser. App side: see "App work list" at the end of this section. All changes
-are additive. An old app and an old host keep working.
+browser. App side implemented 2026-10-05 (beads chuk_chat-z5jk, chuk_chat-wvhq),
+items 1-6 of the "App work list" at the end of this section:
+`lib/widgets/agents_user_browser.dart`, `UserBrowserStatus` in
+`lib/services/agents/agents_permissions_service.dart`. Item 7 (the optional
+"From your browser" label) is not done. All changes are additive. An old app
+and an old host keep working.
 
 ### The idea
 
@@ -3110,6 +3114,8 @@ agent tool.
 5. **In use / stopped.** With `in_use` and not `in_use_by_this_agent`:
    "<in_use_by.name> is using your browser". With `stopped`: "You stopped
    this in your browser. Send a new task, or tap Allow again in the add-on."
+   There is no app frame that lifts a Stop, so the app shows no "Allow
+   again" button of its own.
 6. **Live status.** Handle `user_browser_status` (push): replace the stored
    status and repaint the subtitle, the setup card and the in-use line.
    No polling of `agent_permissions_get` for it.
