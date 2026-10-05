@@ -94,6 +94,20 @@ def _wait(predicate, timeout: float = 8.0) -> bool:
     return predicate()
 
 
+def _gone_or_zombie(pid: int) -> bool:
+    """True once ``pid`` has exited. The process can exit between the
+    ``exists`` check and the read of its status file (bead chuk_chat-cfsd),
+    so a missing file counts as gone."""
+    try:
+        status = Path(f"/proc/{pid}/status").read_text()
+    except (FileNotFoundError, ProcessLookupError):
+        return True
+    for line in status.splitlines():
+        if line.startswith("State:"):
+            return "zombie" in line.lower() or line.split()[1:2] == ["Z"]
+    return False
+
+
 # -- store ---------------------------------------------------------------------
 
 
@@ -499,7 +513,7 @@ def test_watchers_get_the_secrets_env_and_the_hook_env(tmp_path):
         out = manager.start_watcher("s1", "env.py", None, False)
         log = tmp_path / "ws" / out["log_path"]
         assert _wait(lambda: log.exists() and "MY_KEY" in log.read_text())
-        line = [l for l in log.read_text().splitlines() if l.startswith("{")][0]
+        line = [ln for ln in log.read_text().splitlines() if ln.startswith("{")][0]
         seen = json.loads(line)
         assert seen["MY_KEY"] == "sekret" and seen["AGENTS_AUTOMATION_ID"] == out["id"]
         assert seen["AGENTS_TRIGGERS_PATH"] == ".agents/automations/triggers.jsonl"
@@ -605,9 +619,9 @@ def test_stop_kills_the_watcher_process_group(tmp_path):
     out = manager.start_watcher("s1", "spawn.py", None, True)
     log = tmp_path / "ws" / out["log_path"]
     assert _wait(lambda: log.exists() and "child" in log.read_text())
-    child_pid = int([l for l in log.read_text().splitlines() if l.startswith("child")][0].split()[1])
+    child_pid = int([ln for ln in log.read_text().splitlines() if ln.startswith("child")][0].split()[1])
     manager.stop()
-    assert _wait(lambda: not Path(f"/proc/{child_pid}").exists() or "zombie" in Path(f"/proc/{child_pid}/status").read_text().lower())
+    assert _wait(lambda: _gone_or_zombie(child_pid))
 
 
 def test_pending_callback_survives_offline_host_restart(tmp_path):
@@ -679,7 +693,7 @@ def test_an_exited_runner_never_leaves_the_monitor_running(tmp_path):
     out = manager.start_watcher("s1", "runner.py", None, True)
     log = tmp_path / "ws" / out["log_path"]
     assert _wait(lambda: log.exists() and "monitor" in log.read_text())
-    pid = int([l for l in log.read_text().splitlines() if l.startswith("monitor")][0].split()[1])
+    pid = int([ln for ln in log.read_text().splitlines() if ln.startswith("monitor")][0].split()[1])
     try:
         assert _wait(lambda: (manager.run_watchdog_once(), manager.store.get(out["id"])["state"] == "done")[1])
         assert _wait(lambda: not Path(f"/proc/{pid}").exists())

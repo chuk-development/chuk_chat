@@ -26,9 +26,9 @@ from chuk_agents_runtime import (
     supported_efforts,
 )
 
-logger = logging.getLogger(__name__)
-
 from .executor import ModelFactory, ModelSelect
+
+logger = logging.getLogger(__name__)
 
 
 def make_backend_model_factory(

@@ -951,7 +951,7 @@ def _tool_infos(listed: Any) -> list[MCPToolInfo]:
         name = getattr(tool, "name", "") or ""
         if not name:
             continue
-        schema = getattr(tool, "input_schema", None) or getattr(tool, "inputSchema", None)
+        schema = _field(tool, "input_schema", "inputSchema")
         if not isinstance(schema, dict):
             schema = {"type": "object", "properties": {}}
         infos.append(
@@ -965,7 +965,32 @@ def _tool_infos(listed: Any) -> list[MCPToolInfo]:
     return infos
 
 
-_HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+#: The hints this runtime keeps, as (wire name, MCP SDK v2 attribute name).
+#: The output dict keeps the wire (camelCase) names: the approvals and the
+#: cached tool list read them.
+_HINTS = (
+    ("readOnlyHint", "read_only_hint"),
+    ("destructiveHint", "destructive_hint"),
+    ("idempotentHint", "idempotent_hint"),
+    ("openWorldHint", "open_world_hint"),
+)
+
+
+def _field(raw: Any, snake: str, camel: str) -> Any:
+    """One field of an MCP SDK model or a plain dict. SDK v2 models carry the
+    snake_case name, and FastMCP warns (once per tool, on every connect) when
+    code reads the old camelCase alias, so the camelCase name is read only
+    when the object has no snake_case field: a dict from the wire or an
+    older SDK."""
+    if isinstance(raw, dict):
+        value = raw.get(snake)
+        return raw.get(camel) if value is None else value
+    model_fields = getattr(type(raw), "model_fields", None)
+    if isinstance(model_fields, dict) and snake in model_fields:
+        return getattr(raw, snake, None)
+    if hasattr(raw, snake):
+        return getattr(raw, snake, None)
+    return getattr(raw, camel, None)
 
 
 def _annotations(raw: Any) -> dict:
@@ -974,10 +999,10 @@ def _annotations(raw: Any) -> dict:
     if raw is None:
         return {}
     out: dict = {}
-    for key in _HINTS:
-        value = raw.get(key) if isinstance(raw, dict) else getattr(raw, key, None)
+    for camel, snake in _HINTS:
+        value = _field(raw, snake, camel)
         if isinstance(value, bool):
-            out[key] = value
+            out[camel] = value
     return out
 
 

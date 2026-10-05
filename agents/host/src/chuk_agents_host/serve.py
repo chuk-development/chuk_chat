@@ -227,6 +227,16 @@ class TaskServer:
         if executor is not None:
             executor.rebind_codec(opener, sealer)
 
+    def send_host_payload(self, payload: dict, sealer: AgentsFrameSealer) -> bool:
+        """Seal and send a host-originated payload on the executor's ordered
+        path, so it cannot overtake an executor frame sealed before it (bead
+        chuk_chat-9i41). False when there is no live executor or it seals
+        with another codec; the caller then sends directly."""
+        executor = self._supervisor.executor(self._agent_id)
+        if executor is None:
+            return False
+        return executor.emit_host_payload(payload, sealer)
+
     def stop(self) -> None:
         self._stop.set()
         self._supervisor.stop(self._agent_id)

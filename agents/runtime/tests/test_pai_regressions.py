@@ -36,7 +36,7 @@ from chuk_agents_runtime.pai.model import ChukModelSpec, chuk_chat_model
 from chuk_agents_runtime.registry import ToolRegistry
 from chuk_agents_runtime.state import StateStore
 
-from pai_fakes import FakeChatEndpoint, FakeSession, chunk, sse, text_turn, tool_turn
+from pai_fakes import FakeChatEndpoint, FakeSession, chunk, sse, text_turn
 
 
 def _store(tmp_path: Path) -> StateStore:
