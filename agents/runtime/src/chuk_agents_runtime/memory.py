@@ -124,6 +124,20 @@ _OP_LOCK = threading.RLock()
 # so repeated sends cannot accumulate blocked threads while the backend warms.
 _AUTO_RECALL_SLOT = threading.BoundedSemaphore(1)
 AUTO_RECALL_TIMEOUT = 0.25
+#: How long the first model call of a run waits for the automatic recall
+#: that runs beside it (``AgentLoop(recall_wait=...)``), in milliseconds.
+#: 0 = never: a recall that is not back goes to a later round of the run.
+RECALL_WAIT_ENV = "AGENTS_RECALL_WAIT_MS"
+
+
+def automatic_recall_wait(environ: dict | None = None) -> float:
+    """The first round's wait for the background recall, in seconds."""
+    raw = (os.environ if environ is None else environ).get(RECALL_WAIT_ENV, "")
+    try:
+        value = float(str(raw).strip() or 0)
+    except ValueError:
+        value = 0.0
+    return max(0.0, min(value, 10_000.0)) / 1000.0
 
 # The background turn extractions in flight (:meth:`MemoryStore.observe_turn`).
 # ``close_cached_memories`` waits for them before it closes the Qdrant handles:
@@ -649,6 +663,27 @@ class MemoryStore:
             logger.info("automatic memory recall exceeded %.0fms; proceeding without it", timeout * 1000)
             return []
         return result
+
+    def recall_messages_background(
+        self, query: str, *, limit: int = RECALL_LIMIT
+    ) -> list[dict]:
+        """The automatic recall when the loop does not wait for it
+        (``AgentLoop(recall_wait=...)``, bead chuk_chat-4xc5): called on the
+        loop's own recall thread, so it runs to its end instead of being cut
+        at the foreground budget. One at a time process-wide, like the bounded
+        form: a second recall while one still runs gets nothing at once."""
+        if not query.strip() or not _AUTO_RECALL_SLOT.acquire(blocking=False):
+            return []
+        try:
+            return self._background_recall(query, limit=limit)
+        except Exception:  # best-effort context must never break a turn
+            logger.warning("automatic memory recall failed", exc_info=True)
+            return []
+        finally:
+            _AUTO_RECALL_SLOT.release()
+
+    def _background_recall(self, query: str, *, limit: int) -> list[dict]:
+        return self.recall_messages(query, limit=limit)
 
     def remember_turn(
         self,

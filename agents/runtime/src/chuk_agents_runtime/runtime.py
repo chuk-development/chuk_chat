@@ -33,7 +33,12 @@ from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .mcp_client import MCPManager, open_browser_gui_async, register_mcp_tools
 from .media import WorkspaceMount
-from .memory import MemoryStore, make_memory_store, register_memory_tool
+from .memory import (
+    MemoryStore,
+    automatic_recall_wait,
+    make_memory_store,
+    register_memory_tool,
+)
 from .model import ModelClient, ModelResponse
 from .oauth_bridge import (
     BackendOAuthClient,
@@ -804,11 +809,16 @@ def build_runtime(
         # and no per-turn extraction. A fixed automation prompt recalls the
         # same memories every time and its answer is rarely a new fact; the
         # memory tools stay, so the run can still read or write on purpose.
+        # The recall runs beside the run, not in front of it (bead
+        # chuk_chat-4xc5): the first model call waits at most
+        # ``AGENTS_RECALL_WAIT_MS`` (default 0) for it, and a later round of
+        # the same run takes a late answer.
         recall_provider=(
-            memory.recall_messages_bounded
+            memory.recall_messages_background
             if memory is not None and memory.automatic and not light_context
             else None
         ),
+        recall_wait=automatic_recall_wait(),
         turn_observer=(
             (
                 lambda record: memory.observe_turn(

@@ -618,6 +618,14 @@ class MCPConnection:
         #: unreachable" from "this session dropped": the second is worth
         #: redialing on the next task, the first only wastes a connect timeout.
         self._connected_once = False
+        #: The tool list of an earlier connection to the same server
+        #: (:class:`MCPToolCache`). While the handshake is still running, these
+        #: tools are offered in its place, so a task does not wait for a remote
+        #: server before its first model call (:meth:`MCPManager.start`).
+        self._known: list[MCPToolInfo] = []
+        #: Called on the transport thread once the server listed its tools.
+        #: The manager uses it to keep :class:`MCPToolCache` current.
+        self.on_listed: Callable[["MCPConnection"], None] | None = None
 
     # -- lifecycle --------------------------------------------------------
 
@@ -631,12 +639,35 @@ class MCPConnection:
 
     @property
     def tools(self) -> list[MCPToolInfo]:
+        if not self._tools and self.pending:
+            return list(self._known)
         return list(self._tools)
 
     @property
     def connected_once(self) -> bool:
         """Whether this server ever completed a handshake."""
         return self._connected_once
+
+    @property
+    def pending(self) -> bool:
+        """The handshake runs on the transport thread and has not ended yet."""
+        return (
+            self._thread is not None
+            and not self._ready.is_set()
+            and not self._closed
+        )
+
+    def seed_tools(self, tools: Sequence[MCPToolInfo]) -> None:
+        """Offer ``tools`` (a cached list) while the handshake runs."""
+        self._known = list(tools)
+
+    def usable(self) -> bool:
+        """The tools can be offered: the session is up, or it is still
+        connecting and an earlier tool list is known. A call to a tool of a
+        connecting server waits for the handshake (:meth:`call`)."""
+        if self.alive():
+            return True
+        return bool(self._known) and self.pending and self._error is None
 
     def alive(self) -> bool:
         """The ``check_fn`` behind every tool of this server."""
@@ -656,6 +687,16 @@ class MCPConnection:
         the agent from starting."""
         if self._thread is not None:
             return self.alive()
+        if not self.begin():
+            return False
+        return self.await_start()
+
+    def begin(self) -> bool:
+        """Start the handshake on the transport thread and return at once.
+        ``False`` (and :attr:`error` set) when the config cannot be started.
+        :meth:`await_start` waits for the result."""
+        if self._thread is not None:
+            return True
         problem = self.config.validate()
         if problem:
             self._error = problem
@@ -666,8 +707,18 @@ class MCPConnection:
             daemon=True,
         )
         self._thread.start()
-        if not self._ready.wait(self.config.connect_timeout + 5.0):
-            self._error = self._error or "connect timed out"
+        return True
+
+    def await_start(self, timeout: float | None = None) -> bool:
+        """Wait for the handshake that :meth:`begin` started. Without a
+        ``timeout`` it waits the full connect budget and records a timeout as
+        the error, exactly like :meth:`start`."""
+        if self._thread is None:
+            return self.alive()
+        limit = self.config.connect_timeout + 5.0 if timeout is None else max(0.0, timeout)
+        if not self._ready.wait(limit):
+            if timeout is None:
+                self._error = self._error or "connect timed out"
             return False
         return self.alive()
 
@@ -725,6 +776,12 @@ class MCPConnection:
             self._error = None
             self._connected_once = True
             self._ready.set()
+            listed_hook = self.on_listed
+            if listed_hook is not None:
+                try:
+                    listed_hook(self)
+                except Exception:  # noqa: BLE001 — a cache write must not end the session
+                    pass
             # Park. The toolset stays entered until close() sets the stop
             # event, so every tool call reuses this handshake.
             await self._stop.wait()
@@ -831,7 +888,11 @@ class MCPConnection:
     # -- calls ------------------------------------------------------------
 
     def call(self, tool: str, arguments: dict | None = None) -> dict:
-        """Call one tool on the live session. Never raises."""
+        """Call one tool on the live session. Never raises. A call that comes
+        while the handshake still runs (a tool offered from the cached list)
+        waits for it first."""
+        if self.pending:
+            self.await_start()
         session, loop = self._session, self._loop
         if not self.alive() or session is None or loop is None:
             return {
@@ -969,6 +1030,105 @@ def _tool_schema(server: str, info: MCPToolInfo) -> dict:
     }
 
 
+class MCPToolCache:
+    """The last tool list of each server, kept across tasks, sessions and host
+    restarts in one small JSON file.
+
+    Why: a session's :class:`MCPManager` used to dial every forwarded server and
+    wait for its tool list before the first model call. With five connectors
+    that cost ~8.5 s on the first task of every session. With a known list the
+    tools are registered at once and the handshake runs in the background; a
+    call waits for it only when the model really uses such a tool (and MCP tools
+    are deferred behind tool search, so a first round never does).
+
+    The key is a hash of what identifies the server (name, transport, url,
+    command, args). Credentials, headers and env are never part of it and never
+    stored. Tool names, descriptions and schemas are what the server publishes
+    to every client. Thread-safe; every failure is silent (a cold cache costs
+    one waited handshake, nothing else).
+    """
+
+    def __init__(self, path: str | os.PathLike | None) -> None:
+        self._path = Path(path) if path else None
+        self._lock = threading.Lock()
+        self._data: dict[str, list[dict]] | None = None
+
+    @staticmethod
+    def key(config: MCPServerConfig) -> str:
+        ident = {
+            "name": config.name,
+            "transport": config.transport,
+            "url": config.url or "",
+            "command": config.command or "",
+            "args": list(config.args or []),
+        }
+        raw = json.dumps(ident, sort_keys=True, ensure_ascii=False)
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def _load(self) -> dict[str, list[dict]]:
+        if self._data is not None:
+            return self._data
+        data: dict[str, list[dict]] = {}
+        if self._path is not None:
+            try:
+                raw = json.loads(self._path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raw = {}
+            if isinstance(raw, dict):
+                data = {k: v for k, v in raw.items() if isinstance(v, list)}
+        self._data = data
+        return data
+
+    def get(self, config: MCPServerConfig) -> list[MCPToolInfo]:
+        with self._lock:
+            items = list(self._load().get(self.key(config)) or [])
+        tools: list[MCPToolInfo] = []
+        for item in items:
+            if not isinstance(item, dict) or not isinstance(item.get("name"), str):
+                continue
+            schema = item.get("schema")
+            annotations = item.get("annotations")
+            tools.append(
+                MCPToolInfo(
+                    name=item["name"],
+                    description=str(item.get("description") or ""),
+                    schema=schema if isinstance(schema, dict) else {"type": "object", "properties": {}},
+                    annotations=annotations if isinstance(annotations, dict) else {},
+                )
+            )
+        return tools
+
+    def put(self, config: MCPServerConfig, tools: Sequence[MCPToolInfo]) -> None:
+        if not tools:
+            return
+        rows = [
+            {
+                "name": t.name,
+                "description": t.description,
+                "schema": t.schema,
+                "annotations": t.annotations,
+            }
+            for t in tools
+        ]
+        key = self.key(config)
+        with self._lock:
+            data = self._load()
+            if data.get(key) == rows:
+                return
+            data[key] = rows
+            if self._path is None:
+                return
+            tmp = self._path.with_name(self._path.name + ".tmp")
+            try:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(data, handle)
+                os.replace(tmp, self._path)
+            except (OSError, TypeError, ValueError):
+                pass
+
+
 class MCPManager:
     """Owns every configured connection and puts their tools in the registry."""
 
@@ -980,8 +1140,12 @@ class MCPManager:
         token_provider: TokenProvider | None = None,
         on_credentials_rotated: RotationListener | None = None,
         connection_factory: Callable[[MCPServerConfig], MCPConnection] | None = None,
+        tool_cache: MCPToolCache | None = None,
     ) -> None:
         self.configs = list(configs or [])
+        #: Known tool lists (see :class:`MCPToolCache`). ``None``: every new
+        #: server is waited for, as before.
+        self.tool_cache = tool_cache
         self.errors: list[str] = list(errors or [])
         self.connections: dict[str, MCPConnection] = {}
         self._token_provider = token_provider
@@ -1013,18 +1177,34 @@ class MCPManager:
             connection_factory=connection_factory,
         )
 
-    def start(self) -> dict[str, bool]:
-        """Connect every enabled server. Returns ``{name: connected}``.
+    def start(self, *, lazy: bool = True) -> dict[str, bool]:
+        """Connect every enabled server. Returns ``{name: usable}``.
 
         A failure is recorded and skipped. This function does not raise, because
         the alternative is an agent that will not start because a side-quest MCP
         server is down.
+
+        The handshakes run in parallel: every new server is dialed first, then
+        waited for, so the cost is the slowest server, not the sum. With
+        ``lazy`` and a :attr:`tool_cache` that knows a server's tools, that
+        server is not waited for at all: its cached tools are offered and the
+        handshake finishes in the background. ``lazy=False`` (the app's probe)
+        waits for every server, also one an earlier lazy start left running.
         """
         status: dict[str, bool] = {}
+        waiting: list[tuple[str, Any]] = []
+        blocking: list[tuple[str, Any]] = []
         for config in self.configs:
             if not config.enabled:
                 continue
             if config.name in self.connections:
+                existing = self.connections[config.name]
+                if getattr(existing, "pending", False):
+                    if lazy and existing.usable():
+                        status[config.name] = True
+                    else:
+                        waiting.append((config.name, existing))
+                    continue
                 # A manager is cached per session and started again for every
                 # task. A server that died during the last task must get a
                 # chance to come back, or its tools are simply absent from the
@@ -1033,18 +1213,74 @@ class MCPManager:
                 continue
             connection = self._factory(config)
             self.connections[config.name] = connection
+            begin = getattr(connection, "begin", None)
+            if not callable(begin) or type(connection).start is not MCPConnection.start:
+                # A connection of another kind (the box's shared browser, a
+                # test double with its own start()): that start() decides
+                # whether it blocks.
+                blocking.append((config.name, connection))
+                continue
+            cached = self.tool_cache.get(config) if self.tool_cache is not None else []
+            if cached:
+                connection.seed_tools(cached)
+            if self.tool_cache is not None:
+                connection.on_listed = self._cache_listed(config)
             try:
-                ok = connection.start()
+                begun = bool(begin())
+            except Exception as exc:  # noqa: BLE001
+                begun = False
+                connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
+            if not begun:
+                status[config.name] = False
+                self._record_failure(config.name)
+                continue
+            if lazy and cached:
+                status[config.name] = True
+                continue
+            waiting.append((config.name, connection))
+        for name, connection in blocking:
+            try:
+                ok = bool(connection.start())
             except Exception as exc:  # noqa: BLE001
                 ok = False
                 connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
-            status[config.name] = ok
+            status[name] = ok
             if not ok:
-                connection = self.connections[config.name]
-                self.errors.append(
-                    f"{config.name}: not available ({connection.error or 'unknown error'})"
-                )
+                self._record_failure(name)
+        # Every handshake is already running on its own thread, so waiting for
+        # them one after the other takes as long as the slowest one.
+        for name, connection in waiting:
+            try:
+                ok = bool(connection.await_start())
+            except Exception as exc:  # noqa: BLE001
+                ok = False
+                connection._error = _redact(f"{type(exc).__name__}: {exc}")  # noqa: SLF001
+            status[name] = ok
+            if not ok:
+                self._record_failure(name)
         return status
+
+    def _record_failure(self, name: str) -> None:
+        connection = self.connections.get(name)
+        error = getattr(connection, "error", None) if connection is not None else None
+        self.errors.append(f"{name}: not available ({error or 'unknown error'})")
+
+    def _cache_listed(self, config: MCPServerConfig) -> Callable[[Any], None]:
+        cache = self.tool_cache
+
+        def listed(connection: Any) -> None:
+            if cache is not None:
+                cache.put(config, list(getattr(connection, "_tools", []) or []))
+
+        return listed
+
+    def pending(self) -> list[str]:
+        """The servers whose handshake still runs in the background."""
+        return [
+            name
+            for name, connection in self.connections.items()
+            if getattr(connection, "pending", False)
+        ]
 
     def _revive(self, server: str) -> bool:
         """Whether [server] is usable, redialing it once if it is not.
@@ -1075,7 +1311,7 @@ class MCPManager:
         """
         registered: list[str] = []
         for name, connection in self.connections.items():
-            if not connection.alive():
+            if not _usable(connection):
                 continue
             for info in connection.tools:
                 full = tool_name(name, info.name)
@@ -1108,8 +1344,10 @@ class MCPManager:
     # -- call routing -----------------------------------------------------
 
     def is_alive(self, server: str) -> bool:
+        """Whether [server]'s tools can be offered: connected, or still
+        connecting with a known tool list (a call then waits for it)."""
         connection = self.connections.get(server)
-        return bool(connection and connection.alive())
+        return bool(connection and _usable(connection))
 
     def call(self, server: str, tool: str, arguments: dict | None = None) -> dict:
         connection = self.connections.get(server)
@@ -1120,6 +1358,11 @@ class MCPManager:
                 "tool": tool,
                 "error": f"mcp server not configured: {server}",
             }
+        # A handshake still running in the background is waited for.
+        if getattr(connection, "pending", False):
+            await_start = getattr(connection, "await_start", None)
+            if callable(await_start):
+                await_start()
         # A session that dropped is redialed once before the model is told the
         # tool is gone.
         if not connection.alive() and self._revive(server):
@@ -1184,6 +1427,13 @@ class MCPManager:
                 connection.close()
             except Exception:  # noqa: BLE001 — shutdown must not raise
                 pass
+
+
+def _usable(connection: Any) -> bool:
+    usable = getattr(connection, "usable", None)
+    if callable(usable):
+        return bool(usable())
+    return bool(connection.alive())
 
 
 def _make_handler(manager: "MCPManager", server: str, tool: str):

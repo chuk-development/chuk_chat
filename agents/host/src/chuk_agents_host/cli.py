@@ -516,6 +516,9 @@ def _build_host(args: argparse.Namespace) -> LocalHost:
         model_factory_override=_mock_model_factory if args.mock_model else None,
         logger=_log,
     )
+    # Start the memory sidecar as soon as the account session exists, not on
+    # the first task's recall (bead chuk_chat-4xc5).
+    host.warm_memory = not args.mock_model
     # A pairing code that expires unused is replaced by a fresh one, and the
     # replacement is printed the same way the first one was.
     qr = not getattr(args, "no_qr", False)

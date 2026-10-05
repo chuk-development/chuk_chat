@@ -16,7 +16,7 @@ here with the commit.
 | 2 | Desktop Agents header like mobile, rail "+" menu, Chat-half chips | chuk_chat-98iq | done, not committed yet |
 | 3 | VNC / browser fills the virtual display, no black area | chuk_chat-elw7 | done, image rebuilt, host rollout open |
 | 4 | Agents turn: 100-180 s in `prepare` before a 3 s model call | chuk_chat-p5xm | fixed (summary cached per session), not committed yet |
-| 4b | Compact after the run in the background, cheap aux model, cached_tokens/TTFT columns | cowork-z9mo, chuk_chat-sa7r | in progress |
+| 4b | Compact after the run in the background, cheap aux model, cached_tokens/TTFT columns | cowork-z9mo, chuk_chat-sa7r | done, committing |
 | 5 | Model/provider/effort settings in one place, clean UI | chuk_chat-2wuc | in progress |
 | 6 | Plan vs code gap analysis (speed, context, cost) | — | done (see below) |
 | 7 | Competitor research (OpenClaw/Clawdbot, Grok, Manus, Claude Cowork, ChatGPT agent, …) and feature gaps | — | in progress |
@@ -35,6 +35,24 @@ Baseline, session `local:brisk-heron:2:116636868`, prompt "hi" (runs table):
 | fdc9da0e | runanywhere/serverless | 105 919 | 3 448 | 33 066 |
 | 30000720 | runanywhere/serverless | 177 007 | 3 400 | 33 067 |
 | 7b230b50 | fireworks/serverless | 143 354 | 6 013 | 32 718 |
+
+After the rollout (08:36, real host, same session, prompt "hi"):
+
+| run | provider | prepare_ms | model_wait_ms | first_token_ms | tokens | cost | wall |
+|-----|----------|-----------:|--------------:|---------------:|-------:|-----:|-----:|
+| first after host restart | runanywhere/serverless | 31 | 2 689 | 2 501 | 26 373 | €0.0027 | 13.6 s |
+| warm | runanywhere/serverless | 41 | 2 029 | 1 695 | 20 076 | €0.0020 | 3.6 s |
+
+After the caching fix, the lazy box browser and a host restart (09:36,
+AGENTS_TRACE=1 in ~/.config/chuk-agents/host.env):
+
+| run | prepare_ms | model_wait_ms | first_token_ms | tokens | cached | cost | wall |
+|-----|-----------:|--------------:|---------------:|-------:|-------:|-----:|-----:|
+| first after restart | 33 | 1 962 | 1 835 | 20 267 | 20 224 | €0.00041 | 11.4 s |
+| warm | 29 | 1 735 | 1 648 | 20 275 | 20 224 | €0.00041 | 3.7 s |
+
+A "hi" went from ~110-185 s to 3.7 s and from ~€0.0020 to €0.0004. cached_tokens is still 0: the
+provider does not cache the prompt yet (cowork-g85d is the next lever).
 
 ## Plan status (gap analysis, 03:55)
 
@@ -77,3 +95,126 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   `/home/user/git/chuk_chat/agents/host/.venv` (imports this checkout), set
   `AGENTS_SANDBOX_IMAGE=agents-browser:latest` in the unit (it was
   agents-base, so the agent had no browser tools), restart `agents-manager`.
+- 04:25 local commits 060a5633 (header + voice), 49b9a303 (VNC), ddbcd477
+  (summary per session), 727c5bd3 (docs), 79444b56 (speed bench). Full
+  flutter test: all green; the only failures were the flutter_tester load
+  flake ("Invalid WebSocket upgrade request"), every such file passes alone.
+  Push waits for the merge with origin/master (agent mail commits overlap the
+  settings agent's files) and for CodeRabbit (free quota resets ~04:45).
+- 04:25 research done: "Grogbot" = Grok Bot (xAI). Started: baseline prompt
+  cut (item 2), instant status line + takeover card (items 4, 6).
+- 04:30 baseline prompt cut (chuk_chat-b3g4): fresh coworker 12.7k -> 6.6k
+  est. tokens (tools 64 -> 27 declared, Playwright and other non-core tools
+  behind search_tools, persona/recall/skills catalogue capped). Long session
+  43.7k -> 37.6k; the rest is the ladder tail (~31k). Warning forwarded to the
+  z9mo agent: its idle-drop rule raised that history to 48.7k (tier 2 stops);
+  it now also drops old recall/automation rows, caps the tail and dispatches
+  deferred tools. Commit waits for z9mo (shared memory.py).
+- 04:30 started: opt-in Telegram channel per coworker (research item 11).
+- 04:50 Telegram channel host side done (chuk_chat-02s5): channels/ subpackage,
+  token in its own AES-GCM file (not the sandbox-visible vault), long polling,
+  6-digit pairing code, strangers refused, runs in the coworker's one session,
+  HTML replies with scrubbing, files as photo/document. Host suite 520 green.
+  Pending: executor.py dispatch patch (agent_channel_get/set, MCP for telegram
+  origin) after the z9mo agent; app toggle in agent_control_panel.dart after
+  the settings agent. Frames are in the bead notes.
+- 05:05 z9mo/sa7r done. The turn never waits for a summary (background job
+  per session, plan_ahead after each run, one blocking call only above 90 % of
+  the budget). Idle rule (30 min) drops old tool rows; old recall/automation
+  rows dropped; tail capped at 10k tokens; deferred tools dispatch when the
+  model calls them unsearched. Aux model: deepseek-v4-flash, reasoning off
+  (`AGENTS_MODEL_AUX*`). runs table: cached_tokens, first_token_ms.
+  Stub e2e prepare_ms: old blocking 5188 -> 76 (first turn), 94 (job running),
+  56 (after job), 139 (after plan_ahead). Long session input ~54.5k -> 15.2k.
+  Executor patch for Telegram frames applied by the coordinator.
+- 05:50 local commits since 04:25: e061cab7 (background summaries + half
+  prompt), 5fbfa300 (Telegram host side), c127c13e (coworker model page),
+  3ce04fab (live status + takeover card, app side), 5a3fa294 (merge
+  origin/master: agent mail; conflicts in executor.py/host.py resolved,
+  both Telegram and mail kept). Python suites: runtime, executor 278,
+  host 550, config 84, sandbox 159, bench green. Verified on screen (Xvfb :77,
+  the real screen is locked): desktop header, "+" menu, Chat-half chips,
+  profile Model row, coworker model page with provider list.
+- 05:50 the screen is locked, so the app now runs on a private Xvfb display
+  (:77, same single instance and login). A post-merge test run was killed by
+  the low-memory reaper (another session's chukphoto worker at 11.5 GB).
+- 05:50 started: host side of takeover + heartbeat.phase. New bug
+  chuk_chat-89vl (profile says the coworker does not run on the host).
+- 06:40 full flutter test on the committed state: green (78 files hit the
+  load flake, all 78 pass alone). d0c28ec3 host side of takeover + phases.
+  CodeRabbit on the 11 local commits: 10 findings (1 major: Telegram store
+  save race could wipe tokens; takeover URL persisted; no Skip on the card;
+  summary CAS; bench copy perms; http for Telegram base; l10n; docs). A fix
+  agent works on all 10; push after that. Started: per-action approvals
+  (host side).
+- 07:20 committed: c54fc394 per-action approvals (host), 720a9e7b takeover
+  Skip + no URL in transcript, b6e42e8a Telegram switch + truthful host
+  status + stuck-stream fix. CodeRabbit round 2 on the new commits: 7
+  findings (major: push text named the browsing site; approved+deny scope
+  still approved). Fix agent running.
+- 07:20 UI audit done: docs/UI_AUDIT_2026-10-05.md, 62 shots in
+  _scratch/ui-audit/shots. Top issues: text on accent fills unreadable in the
+  default (pastel) theme, takeover card covers messages on desktop, empty room
+  hint looks like a sent message, model page can spin forever, German missing
+  on Agents surfaces, truncation at 360 px / 1.3, mixed icon styles, DESIGN.md
+  vs AGENTS_UI_UNIFY.md conflicts. Contrast fix uses a < 2:1 threshold so the
+  owner's orange theme with white text stays as it is.
+- 07:50 committed: db41ad96 (Telegram/takeover review fixes), b5d94164 (cost
+  per run + weekly budgets + push texts without site + deny scope never
+  approves). Python: executor 319, host 585, config 84, runtime green.
+  Flutter full suite on b6e42e8a green (120 load-flake files pass alone).
+  CodeRabbit round 3 on the last two commits: 4 minor/trivial (budget check
+  before restricted mail, roster reads per budget check, replay N+1 query,
+  takeover decision with an unpaired controller) -> fixes running. UI fix
+  agents A (contrast, icons, German, DESIGN.md) and B (takeover placement,
+  empty room, model page timeout, truncation) running.
+- 08:30 committed: 2313f773 (budget review fixes), 299e6893 (UI audit fixes
+  A+B), a5e4d232 (automation triggers: watch_url, mail filter, notify
+  on_change), 865b3e7d (inbox goldens), f0d70b77 (test fake). Verified in the
+  real app on Xvfb: the owner's orange theme keeps white text; host row reads
+  "Your computer". Flutter full suite green after the golden update and the
+  fake fix. CodeRabbit: rounds 1-4 clean; automations commit had 2 findings
+  (SSRF via DNS rebinding in url_watch, automation finish on failure paths)
+  -> fix agent. Push waits for that fix.
+- 08:30 started: app side F1 (approval card + settings, cost meta line,
+  budget notices) and F2 (automations UI, cost totals + weekly budget).
+- 08:40 pushed 24 commits (122d5040..f63dd295). Host rollout done:
+  ~/.local/bin/agents-host now runs /home/user/git/chuk_chat/agents/host/.venv
+  (this checkout), the unit uses AGENTS_SANDBOX_IMAGE=agents-browser:latest
+  ("browser ready"). Backups of the old wrapper and unit:
+  _scratch/host-rollout/. Measured on the real host (table above).
+  Beads closed: p5xm z9mo sa7r b3g4 elw7 oohr bebl 98iq 2wuc 89vl nof4 au9j
+  yir9 rx6i 2ucn.
+- 09:00 prompt caching (cowork-g85d): the API passes cached_tokens through
+  (PostHog shows hits); the breaks were ours: the tool list changed when a
+  found tool fell out with the compacted search, and old recall rows were
+  dropped mid-conversation. Fixed in 00fba461; expected 60-80 % cache hits
+  (was 13 %), ~75 % less prompt cost, 0.6-1 s faster first token. Needs a
+  host restart to measure live; waits for the templates agent (host.py is
+  mid-edit in the working tree). Unexplained: run 2 at 08:37 had 0 hits
+  (bead chuk_chat-h7w6). F2 (automations UI, cost totals, weekly budget)
+  done, commits with F1. Running: F1, E2E on an isolated host, coworker
+  templates.
+- Side note: chukdoo-web.service (another project) restarts every 3 s,
+  35,900+ restarts, CHDIR: working directory missing. Not touched.
+- 09:45 committed: 12e25478 (isolated e2e flows: 9/9 flows pass, 3 bugs
+  filed: wrdv second thread gets no browser, 3oh6 approved unsearched
+  deferred tool refused, 0b7i budget_warning agent_id), 85ea8104 (templates
+  host), 1578fc49 (app side: approval card + settings, cost line + sheet,
+  budget notices, automations editor, cost totals + weekly budget, 15
+  coworker templates). Pushed 00fba461/efdb3078 earlier (caching, audit doc).
+- 09:45 live (host still on 08:35 code): "hi" 25.9 s wall = prepare 0.8 +
+  recall 1.6 + model 4.4 + ~19 s unattributed. The 19 s are the eager
+  Playwright connect per task (bug wrdv, fix running: one lazy browser per
+  box). Cost line shows live ("< €0.01 · 20.1k tokens").
+- Xvfb note: :77 got taken over by another session's Xvfb; a plain Xvfb hung
+  in the NVIDIA driver (os_acquire_rwlock_write, GPU busy with other
+  sessions' ML workers). Working setup: Xvfb :82 and the app with
+  __GLX_VENDOR_LIBRARY_NAME=mesa, __EGL_VENDOR_LIBRARY_FILENAMES=.../50_mesa.json,
+  LIBGL_ALWAYS_SOFTWARE=1. A hung Xvfb :78 (state D) is left; it cannot be
+  killed until the driver lock frees.
+- 09:40 committed 19de324b (one lazy browser per box, approved unsearched
+  calls run, budget agent id; e2e 13/13) and ca194d32 (save a task as a
+  skill, host side). Host restarted twice; cache hits now 99.8 % of the
+  prompt. Trace: warm run spends 1.5 s in memory recall (timeout), cold run
+  ~9 s before agent_run in the executor -> profiling agent started.

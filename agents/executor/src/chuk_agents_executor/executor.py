@@ -74,6 +74,7 @@ from chuk_agents_runtime import (
     KillSwitch,
     StopReason,
     MCPManager,
+    MCPToolCache,
     browser_servers,
     ModelClient,
     ModelResponse,
@@ -278,6 +279,10 @@ ModelFactory = Callable[[], ModelClient]
 # injected factory and spends no credits, and an old client that sends no model
 # keeps working.
 ModelSelect = Callable[[str | None, str | None, str | None], ModelClient]
+
+#: The file next to the executor's state database that keeps the last tool
+#: list of every forwarded MCP server (:class:`MCPToolCache`).
+MCP_TOOLS_CACHE_FILE = "mcp-tools-cache.json"
 
 # Fields of a forwarded ``mcp_servers`` entry that ROTATE without the connector
 # changing (docs/WIRE_CONTRACT.md, "A rotated token is not a changed connector"):
@@ -489,6 +494,13 @@ class _Run:
     # across a reconnect; this id can.
     run_id: str = ""
     started_at: float = 0.0
+    # When the worker took the run off the queue (wall clock). With
+    # ``started_at`` it splits the wait before preparation into queue time and
+    # the sandbox lease (the pre-run trace, bead chuk_chat-4xc5).
+    dequeued_at: float = 0.0
+    # The run's one-line timing summary (``_PreRunClock.summary``), handed to
+    # the host's ``on_run_finished`` so it reaches the host log.
+    timing: str | None = None
     # Who started this run (docs/WIRE_CONTRACT.md, "Automations"): ``app`` for
     # a task frame, ``automation`` for a fired schedule / watcher trigger. An
     # automation run is notified on even with a controller attached.
@@ -512,6 +524,94 @@ class _Run:
     # Set once ``_finish_automation`` asked the host. A run ends once, so the
     # host hears it once even when a later step of the run fails.
     automation_finished: bool = False
+
+
+class _PreRunClock:
+    """Times the executor's preparation of one run (bead chuk_chat-4xc5).
+
+    A first task after a host restart once spent ~9 s between the task frame
+    and the loop's ``task_received`` with nothing in the trace to say where.
+    Each step from the accepted frame to ``loop.run`` is now a trace phase with
+    its duration (``task_accepted`` = queue + sandbox lease, ``model_ready``,
+    ``mcp_ready``, ``runtime_built``), and :meth:`summary` is the one log line
+    per run that adds the loop's own timings. Created inside the run's trace
+    scope, so every phase carries the run id.
+    """
+
+    def __init__(self, run: "_Run") -> None:
+        now = time.time()
+        dequeued = run.dequeued_at or now
+        self.laps: dict[str, float] = {
+            "queue": max(0.0, (dequeued - run.started_at) * 1000) if run.started_at else 0.0,
+            "lease": max(0.0, (now - run.dequeued_at) * 1000) if run.dequeued_at else 0.0,
+        }
+        self._run = run
+        self._mark = time.monotonic()
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(
+                "task_accepted",
+                ms=round(self.laps["queue"] + self.laps["lease"], 3),
+                queue_ms=round(self.laps["queue"], 3),
+                lease_ms=round(self.laps["lease"], 3),
+                origin=run.origin,
+            )
+
+    def lap(self, phase: str, **fields: Any) -> float:
+        """Close the step that ends now; returns its milliseconds."""
+        now = time.monotonic()
+        ms = (now - self._mark) * 1000
+        self._mark = now
+        self.laps[phase] = ms
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(phase, ms=round(ms, 3), **fields)
+        return ms
+
+    @property
+    def pre_run_ms(self) -> float:
+        return sum(self.laps.values())
+
+    def summary(self, timings: Any = None, *, reason: str | None = None) -> str:
+        laps = self.laps
+        line = (
+            f"run {self._run.run_id or self._run.request_id} timing: "
+            f"pre-run {self.pre_run_ms:.0f} ms (queue {laps.get('queue', 0.0):.0f}, "
+            f"lease {laps.get('lease', 0.0):.0f}, model {laps.get('model_ready', 0.0):.0f}, "
+            f"mcp {laps.get('mcp_ready', 0.0):.0f}, build {laps.get('runtime_built', 0.0):.0f})"
+        )
+        if timings is not None:
+            first = getattr(timings, "first_token_ms", None)
+            line += (
+                f" | loop: recall {getattr(timings, 'recall_ms', 0.0):.0f}, "
+                f"prepare {getattr(timings, 'prepare_ms', 0.0):.0f}, "
+                f"model {getattr(timings, 'model_wait_ms', 0.0):.0f} "
+                f"({getattr(timings, 'model_calls', 0)} calls, first token "
+                f"{'-' if first is None else f'{first:.0f}'}), "
+                f"tools {getattr(timings, 'tool_ms', 0.0):.0f}"
+            )
+        if reason:
+            line += f" | {reason}"
+        return line
+
+
+def _mcp_trace_fields(manager: Any) -> dict[str, Any]:
+    """What the ``mcp_ready`` phase says about a session's connectors."""
+    if manager is None:
+        return {"servers": 0}
+    try:
+        connections = dict(getattr(manager, "connections", {}) or {})
+        pending = manager.pending() if callable(getattr(manager, "pending", None)) else []
+        usable = [n for n in connections if manager.is_alive(n)]
+        tools = sum(len(getattr(connections[n], "tools", []) or []) for n in usable)
+    except Exception:  # noqa: BLE001 — a trace field must never break a run
+        return {}
+    return {
+        "servers": len(connections),
+        "usable": len(usable),
+        "pending": len(pending),
+        "tools": tools,
+    }
 
 
 class _Heartbeat:
@@ -1282,6 +1382,15 @@ class Executor:
         # worker builds it while ``stop`` closes it.
         self._mcp_managers: dict[str, MCPManager] = {}
         self._mcp_signatures: dict[str, str] = {}
+        # The last tool list of every forwarded server, next to the state db
+        # (bead chuk_chat-4xc5): a new session's manager offers those tools at
+        # once and dials in the background, instead of holding the first model
+        # call until every connector answered (~8.5 s with five connectors).
+        self._mcp_tool_cache = MCPToolCache(
+            os.path.join(os.path.dirname(os.path.abspath(db_path)), MCP_TOOLS_CACHE_FILE)
+            if db_path and db_path != ":memory:"
+            else None
+        )
         # Per session, per connector: the refresh token the connector was
         # STARTED with (the device's forward at build time). It is the reference
         # that tells a device re-sign-in (new token ≠ baseline → adopt) apart
@@ -1556,6 +1665,7 @@ class Executor:
             except queue.Empty:
                 continue
             # Off the queue: the run builds its context from here on.
+            run.dequeued_at = time.time()
             self._set_phase(run.request_id, PHASE_PREPARING)
             # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
             # permissions"): the policy is snapshot here, and the box cannot
@@ -4203,7 +4313,21 @@ class Executor:
         if over is not None:
             self._refuse_for_budget(run, over)
             return
+        # One trace scope for the whole run, preparation included (bead
+        # chuk_chat-4xc5): the model clients, the MCP connectors and the
+        # runtime build are phases of the run's waterfall, not a gap before
+        # ``task_received``. Every line the loop and the model client write
+        # inside carries this run id and session key, so `agents-host trace
+        # <run id>` rebuilds the whole run. A fresh thread starts with a fresh
+        # context, so two concurrent runs never see each other's scope. Costs
+        # nothing when tracing is off — it sets one ContextVar.
+        self._bind_trace_scrubber()
+        with trace_run_scope(run.run_id or run.request_id, run.session_key):
+            self._run_task_scoped(run)
+
+    def _run_task_scoped(self, run: _Run) -> None:
         request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
+        clock = _PreRunClock(run)
         # A credential rotation that happens mid-task rides this task's stream.
         with self._mcp_lock:
             self._mcp_active_request[session_key] = request_id
@@ -4291,6 +4415,7 @@ class Executor:
         usage_sink = self._usage_sink(run)
         hero_model = metered(hero_model, usage_sink, kind=LINE_AUX)
         browser_client = metered(browser_client, usage_sink, kind=LINE_BROWSER)
+        clock.lap("model_ready", model=run.priced_model)
 
         # "Cancels in-flight" (§7.1): a Stop kills the command the sandbox is
         # blocked on and the model turn in flight, instead of ending the run only
@@ -4329,12 +4454,22 @@ class Executor:
             # exactly as the last task of that session did.
             with self._mcp_lock:
                 mcp_manager = self._mcp_managers.get(session_key)
+        # Dial now, inside the ``mcp_ready`` phase: in parallel, and without
+        # waiting for a server whose tool list is known from an earlier
+        # connection (bead chuk_chat-4xc5). ``build_runtime`` starts it again,
+        # which is a no-op for what is up or still dialing.
+        if mcp_manager is not None:
+            try:
+                mcp_manager.start()
+            except Exception:  # noqa: BLE001 — build_runtime records what failed
+                pass
         # Anything the device has not acknowledged yet (a rotated refresh token
         # from an earlier task) goes out again on this task's stream.
         self._flush_pending_mcp_credentials(session_key, request_id)
         # What those connectors answered with, so the app's list can stop saying
         # "0 tools" about servers that are up (docs/WIRE_CONTRACT.md mcp_tools).
         self._send_mcp_tools(session_key, request_id, mcp_manager)
+        clock.lap("mcp_ready", **_mcp_trace_fields(mcp_manager))
 
         # here.now publish connector (§10-style consent): off unless the app
         # forwarded an enabled setting. ``ask`` mode binds the approval gate so a
@@ -4474,6 +4609,7 @@ class Executor:
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
         )
 
+        clock.lap("runtime_built")
         # The wall-clock guard (Bead cowork-qxa): armed for the loop's lifetime
         # only; cancelled in the ``finally`` below whatever way the run ends.
         guard = self._arm_run_guard(run)
@@ -4481,19 +4617,14 @@ class Executor:
         # and has said ``queued`` / ``preparing`` since; the loop's phases
         # reach it through ``phase_observer`` above.
         try:
-            # The run trace's identity (chuk_agents_runtime.telemetry): every line the
-            # loop and the model client write inside this block carries this run
-            # id and session key, so `cowork-host trace <run id>` can rebuild the
-            # whole waterfall. A fresh thread starts with a fresh context, so two
-            # concurrent runs never see each other's scope. Costs nothing when
-            # tracing is off — it sets one ContextVar.
-            self._bind_trace_scrubber()
-            with trace_run_scope(run.run_id or run.request_id, session_key):
-                result = loop.run(session_key, prompt, regenerate=run.regenerate)
+            # Inside the run's trace scope (``_run_task``).
+            result = loop.run(session_key, prompt, regenerate=run.regenerate)
         except Exception as exc:  # a crashing loop must not kill the serve thread
             # A model failure the user can act on (no credits, rate limited, a
             # stalled model) carries its own message (loop.ModelServiceError).
             message = getattr(exc, "user_message", None) or f"loop failed: {type(exc).__name__}"
+            run.timing = clock.summary(reason=f"failed: {type(exc).__name__}")
+            logger.info("%s", run.timing)
             # The durable record closes BEFORE the stream: it must exist even if
             # nobody is listening (docs/WIRE_CONTRACT.md).
             self._record_run(run, failed=message)
@@ -4555,6 +4686,10 @@ class Executor:
             if run.timed_out and result.reason is StopReason.INTERRUPTED
             else result.reason.value
         )
+        # One line per run: where the time between the task frame and the
+        # answer went (bead chuk_chat-4xc5).
+        run.timing = clock.summary(getattr(result, "timings", None), reason=reason)
+        logger.info("%s", run.timing)
         # The durable record closes BEFORE the stream, so the run's end exists on
         # the host even when the app is gone and the frame is dropped. The
         # closed row also stamps the done (clock + message rows).
@@ -5025,6 +5160,8 @@ class Executor:
             # docs/WIRE_CONTRACT.md, "Event triggers": ``{"changed": false}``
             # = an on_change run with nothing new; the host stays quiet.
             "automation_result": automation_result,
+            # Where the run's time went, one line (bead chuk_chat-4xc5).
+            "timing": run.timing,
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
@@ -5122,6 +5259,7 @@ class Executor:
                 # The sandbox browser is the box's, not the session's: every
                 # session of the box gets the same shared connection.
                 connection_factory=self._mcp_connection_factory(session_key),
+                tool_cache=self._mcp_tool_cache,
             )
             with self._mcp_lock:
                 self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
@@ -5423,7 +5561,9 @@ class Executor:
                     )
                     return
                 try:
-                    manager.start()
+                    # The probe reports what the servers answer NOW, so it
+                    # waits for every handshake (no cached tool lists).
+                    manager.start(lazy=False)
                 except Exception:  # noqa: BLE001 — report what did answer
                     pass
                 self._terminal(

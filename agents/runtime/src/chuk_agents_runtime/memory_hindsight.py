@@ -70,6 +70,10 @@ BANK_MISSION = (
 #: How long the explicit tools wait for a cold sidecar before answering
 #: ``memory_unavailable``.
 TOOL_READY_WAIT = 30.0
+#: The HTTP bound of an automatic recall that runs beside the run instead of
+#: in front of it (``recall_messages_background``): the late answer still
+#: reaches a later round of a run that uses tools.
+BACKGROUND_RECALL_TIMEOUT = 6.0
 #: A sync retain runs the extraction LLM; give it room.
 SYNC_RETAIN_TIMEOUT = 120.0
 #: Background retains waiting for the sidecar. Beyond this the oldest is dropped.
@@ -365,7 +369,9 @@ class HindsightMemoryStore(MemoryStore):
 
     # -- automatic memory -------------------------------------------------------
 
-    def recall_messages(self, query: str, *, limit: int = RECALL_LIMIT) -> list[dict]:
+    def recall_messages(
+        self, query: str, *, limit: int = RECALL_LIMIT, timeout: float | None = None
+    ) -> list[dict]:
         needle = " ".join((query or "").split())
         if not needle:
             return []
@@ -376,7 +382,7 @@ class HindsightMemoryStore(MemoryStore):
         result = self.search(
             needle, limit=limit, _wait=0.0,
             _budget=self._recall_budget, _max_tokens=self._recall_max_tokens,
-            _timeout=self._recall_timeout,
+            _timeout=self._recall_timeout if timeout is None else timeout,
         )
         from .memory import neutralize, recall_block
 
@@ -390,6 +396,14 @@ class HindsightMemoryStore(MemoryStore):
         # the configured one (1.5 s by default), not the Mem0 store's 250 ms.
         return super().recall_messages_bounded(
             query, limit=limit, timeout=self._recall_timeout if timeout is None else timeout
+        )
+
+    def _background_recall(self, query: str, *, limit: int) -> list[dict]:
+        # Off the run's critical path the lookup may take longer than the
+        # foreground budget; it is still bounded, because it holds the
+        # process-wide recall slot.
+        return self.recall_messages(
+            query, limit=limit, timeout=max(self._recall_timeout, BACKGROUND_RECALL_TIMEOUT)
         )
 
     def _retain_async(self, item: dict, label: str, *, automatic: bool = True) -> None:

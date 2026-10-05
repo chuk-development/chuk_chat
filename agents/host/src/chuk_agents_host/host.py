@@ -31,6 +31,7 @@ from chuk_agents_runtime.cost import PriceBook
 from chuk_agents_runtime.agent_mail import ORIGIN_MAIL, ORIGIN_MAIL_UNTRUSTED
 from chuk_agents_runtime.hindsight_service import (
     configure_memory_service,
+    shared_memory_service,
     shutdown_memory_service,
 )
 from chuk_agents_crypto import (
@@ -231,6 +232,9 @@ class LocalHost:
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self._log = logger or (lambda _msg: None)
+        # Start the memory sidecar once a session exists (``agents-host run``
+        # turns it on; see ``_warm_memory_service``).
+        self.warm_memory = False
         # With an install token the app already knows the channel and the code.
         # The host must use exactly those values, and it must keep them when the
         # relay drops the parked channel: the app claims the same channel again.
@@ -1231,6 +1235,10 @@ class LocalHost:
         self._session = session
         # Who may refresh depends on whose session this is (_wire_session).
         self._wire_session(session)
+        # The memory sidecar needs the session; start it now, not on the
+        # first task's recall (bead chuk_chat-4xc5): it takes ~6 s to come
+        # up, and the first task after a restart recalled nothing.
+        self._warm_memory_service()
         # A (re)connecting app that already adopted a rotated pair acks it here.
         self._note_incoming_token(token)
         # The account owner, for the notification rows (owner-only RLS).
@@ -1488,8 +1496,23 @@ class LocalHost:
         self._credential_kind = stored_kind(token)
         self._wire_session(session)
         self._session = session
+        self._warm_memory_service()
         self._user_id = str(token.get("user_id") or getattr(self, "_user_id", "") or "")
         return session
+
+    def _warm_memory_service(self) -> None:
+        """Start the Hindsight sidecar in the background once a session
+        exists. Non-blocking, idempotent, and a no-op for another backend.
+        Only the real host (``agents-host run``) sets :attr:`warm_memory`; a
+        host built in a test never spawns the sidecar this way."""
+        if not getattr(self, "warm_memory", False):
+            return
+        try:
+            service = shared_memory_service()
+            if service is not None:
+                service.wait_ready(0)
+        except Exception:  # noqa: BLE001 — memory is optional; never fail provisioning
+            pass
 
     def _refresh_rejected_token(self, token: str) -> bool:
         """The relay refused this access token. Refresh that exact token once and
@@ -1799,6 +1822,11 @@ class LocalHost:
         definition: the desktop toast fires even with a controller attached
         (its ``done`` says ``host_notified`` so the app draws no second one);
         the cloud push still only when nobody is attached."""
+        # One line per run in the host log: where the time went between the
+        # task frame and the answer (bead chuk_chat-4xc5).
+        timing = summary.get("timing") if isinstance(summary, dict) else None
+        if isinstance(timing, str) and timing:
+            self._log(timing)
         # A run a messenger channel started is answered in that messenger.
         # The reply is the notification there, so no toast and no push here.
         channels = getattr(self, "_channels", None)
@@ -2004,14 +2032,8 @@ class LocalHost:
         if manager is None or not isinstance(payload, dict):
             return None
         kind = payload.get("type")
-        if kind == "automation_create":
-            return manager.create(payload)
-        if kind == "automation_update":
-            automation_id = payload.get("id")
-            if not isinstance(automation_id, str) or not automation_id:
-                return {"ok": False, "error": "id is required"}
-            changes = {k: payload[k] for k in ("name", "prompt", "spec", "notify") if k in payload}
-            return manager.update(None, automation_id, changes)
+        if kind in ("automation_create", "automation_update"):
+            return _echo_request_id(payload, self._save_automation(manager, kind, payload))
         if payload.get("type") == "automation_list":
             key = payload.get("session_key")
             return manager.list(key if isinstance(key, str) and key else None)
@@ -2022,6 +2044,16 @@ class LocalHost:
             if not result.get("ok"):
                 self._log(f"automation {action} {automation_id}: {result.get('error')}")
         return None
+
+    @staticmethod
+    def _save_automation(manager: AutomationManager, kind: str, payload: dict) -> dict:
+        if kind == "automation_create":
+            return manager.create(payload)
+        automation_id = payload.get("id")
+        if not isinstance(automation_id, str) or not automation_id:
+            return {"ok": False, "error": "id is required"}
+        changes = {k: payload[k] for k in ("name", "prompt", "spec", "notify") if k in payload}
+        return manager.update(None, automation_id, changes)
 
     def _on_agent_frame(self, payload: dict) -> list[dict] | dict:
         """The app's ``agent_create`` / ``agent_rename`` / ``agent_list``: keep
@@ -2272,6 +2304,18 @@ class LocalHost:
         fallback when the app is the thing that is broken.
         """
         return self._estop_path
+
+
+def _echo_request_id(payload: dict, result: dict) -> dict:
+    """Copy the app's ``request_id`` of an ``automation_create`` /
+    ``automation_update`` into the answer, so ``automation_saved`` carries it
+    back and the app matches the answer to its request (an answer that comes
+    after the app gave up must not complete the next request). Additive: an
+    app that sends none gets an answer without one."""
+    request_id = payload.get("request_id")
+    if not isinstance(request_id, str) or not request_id or not isinstance(result, dict):
+        return result
+    return {**result, "request_id": request_id[:128]}
 
 
 def _jwt_session_id(token: str | None) -> str | None:

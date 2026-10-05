@@ -26,13 +26,13 @@ from chuk_agents_runtime.state import StateStore
 SYSTEM = "You are a test agent. " * 20
 
 
-def _registry() -> ToolRegistry:
+def _registry(run_command=None) -> ToolRegistry:
     reg = ToolRegistry()
     for name in ("run_command", "read_file", "write_file"):
         reg.register(
             name,
             {"description": f"core {name}", "type": "object", "properties": {"x": {"type": "string"}}},
-            lambda x="": {"ok": True},
+            (run_command if name == "run_command" and run_command else lambda x="": {"ok": True}),
         )
     for name in ("shell_start", "shell_list", "shell_kill", "job_status"):
         reg.register(
@@ -45,7 +45,7 @@ def _registry() -> ToolRegistry:
     return reg
 
 
-def _loop(tmp_path, endpoint: FakeChatEndpoint, **kwargs) -> AgentLoop:
+def _loop(tmp_path, endpoint: FakeChatEndpoint, registry=None, **kwargs) -> AgentLoop:
     model, settings = chuk_chat_model(
         FakeSession(),
         ChukModelSpec(model_id="m"),
@@ -54,7 +54,7 @@ def _loop(tmp_path, endpoint: FakeChatEndpoint, **kwargs) -> AgentLoop:
     )
     return AgentLoop(
         model,
-        _registry(),
+        registry or _registry(),
         StateStore(str(tmp_path / "s.db")),
         model_settings=settings,
         deferred_mode="pai",
@@ -251,3 +251,105 @@ def test_the_previous_task_with_its_recall_row_is_a_prefix_of_the_next(tmp_path)
     shared = len(last_of_first["messages"])
     assert _canon(second["messages"][:shared]) == _canon(last_of_first["messages"])
     assert any("about first task" in str(m.get("content")) for m in second["messages"])
+
+
+# -- the recall that runs beside the run (bead chuk_chat-4xc5) ------------------
+
+
+def _join_recall_threads() -> None:
+    import threading
+
+    for thread in threading.enumerate():
+        if thread.name == "memory-recall":
+            thread.join(5)
+
+
+def _late_recall_loop(tmp_path, endpoint: FakeChatEndpoint, **kwargs) -> AgentLoop:
+    """A loop whose recall answers only after the first request went out, and
+    whose ``run_command`` waits for that answer (so the second round is the
+    first one that can take it, deterministically)."""
+    import time
+
+    def recall(prompt: str) -> list[dict]:
+        deadline = time.monotonic() + 5
+        while not endpoint.requests and time.monotonic() < deadline:
+            time.sleep(0.005)
+        return [{"role_tag": "memory", "role": "user", "content": f"[memory recall]\n- about {prompt}"}]
+
+    def run_command(x: str = "") -> dict:
+        _join_recall_threads()
+        return {"ok": True}
+
+    return _loop(
+        tmp_path,
+        endpoint,
+        registry=_registry(run_command),
+        recall_provider=recall,
+        recall_wait=0.0,
+        **kwargs,
+    )
+
+
+def test_a_late_recall_does_not_hold_the_first_request_and_lands_at_the_tail(tmp_path):
+    endpoint = FakeChatEndpoint(
+        [
+            tool_turn([("c1", "run_command", {"x": "ls"})]),
+            text_turn(["listed"]),
+            text_turn(["two"]),
+        ]
+    )
+    loop = _late_recall_loop(tmp_path, endpoint, context_ladder=ContextLadder())
+    result = loop.run("s", "first task")
+    first, second = endpoint.requests[0]["body"], endpoint.requests[1]["body"]
+    # The first request went out without the recall...
+    assert not any("[memory recall" in str(m.get("content")) for m in first["messages"])
+    # ...the second carries it, after everything the first request held.
+    assert _canon(second["messages"][: len(first["messages"])]) == _canon(first["messages"])
+    assert "about first task" in str(second["messages"][-1].get("content"))
+    assert result.timings.recall_ms < 100
+    # The next task: the late row stays where it landed, byte for byte.
+    loop.run("s", "second task")
+    _join_recall_threads()
+    third = endpoint.requests[2]["body"]
+    assert _canon(third["messages"][: len(second["messages"])]) == _canon(second["messages"])
+
+
+def test_a_recall_that_misses_a_one_round_run_is_dropped(tmp_path):
+    import threading
+
+    release = threading.Event()
+
+    def recall(prompt: str) -> list[dict]:
+        release.wait(5)
+        return [{"role_tag": "memory", "role": "user", "content": "[memory recall]\n- late"}]
+
+    endpoint = FakeChatEndpoint([text_turn(["hello"]), text_turn(["again"])])
+    loop = _loop(tmp_path, endpoint, recall_provider=recall, recall_wait=0.0)
+    try:
+        result = loop.run("s", "hi")
+        assert result.final_answer == "hello"
+        assert result.timings.recall_ms < 100
+    finally:
+        release.set()
+        _join_recall_threads()
+    # The late answer is not written into the finished run.
+    assert all(m.role != "memory" for m in loop.store.get_conversation(result.session_id))
+    loop.run("s", "hi")
+    first, second = (r["body"] for r in endpoint.requests)
+    assert _canon(second["messages"][: len(first["messages"])]) == _canon(first["messages"])
+
+
+def test_a_recall_back_within_the_wait_sits_right_after_the_prompt(tmp_path):
+    endpoint = FakeChatEndpoint([text_turn(["ok"])])
+    loop = _loop(
+        tmp_path,
+        endpoint,
+        recall_provider=lambda prompt: [
+            {"role_tag": "memory", "role": "user", "content": "[memory recall]\n- fast"}
+        ],
+        recall_wait=2.0,
+    )
+    loop.run("s", "question")
+    messages = endpoint.requests[0]["body"]["messages"]
+    assert messages[-2]["content"] == "question"
+    assert messages[-1]["content"] == "[memory recall]\n- fast"

@@ -200,6 +200,22 @@ def test_memory_recall_is_its_own_bucket():
     assert attribution(rows)["memory_recall"] == 2000.0
 
 
+def test_the_executor_setup_is_its_own_bucket():
+    """Bead chuk_chat-4xc5: ~9 s between the task frame and ``task_received``
+    were 'unattributed'. The executor's phases now claim them."""
+    rows = [
+        line("task_accepted", t=0.0, ms=5.0, queue_ms=4.0, lease_ms=1.0),
+        line("model_ready", t=0.3, dt_ms=300.0, ms=300.0),
+        line("mcp_ready", t=8.8, dt_ms=8500.0, ms=8500.0, servers=5, pending=0),
+        line("runtime_built", t=9.0, dt_ms=200.0, ms=200.0),
+        line("task_received", t=9.0),
+        line("run_finished", t=11.0, dt_ms=2000.0, reason="final_answer"),
+    ]
+    shares = attribution(rows)
+    assert shares["setup"] == 9000.0
+    assert shares["unattributed"] == 2000.0
+
+
 def test_server_blocks_of_several_calls_are_merged():
     rows = [
         line("model_call", t=1.0, server={"queue_ms": 100.0}),
