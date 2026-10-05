@@ -256,7 +256,7 @@ def test_build_runtime_wires_hindsight_and_children_share_the_bank(tmp_path, mon
         memory_service=service,
         subagents=sub,
     )
-    assert loop._recall_provider.__name__ == "recall_messages_bounded"  # noqa: SLF001
+    assert loop._recall_provider.__name__ == "recall_messages_background"  # noqa: SLF001
     assert loop._turn_observer is not None  # noqa: SLF001
     assert sub.runtime_kwargs["memory_bank_id"] == "agent-bank"
     result = loop.run("thread-9", "remember: deploys go out on Fridays")

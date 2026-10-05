@@ -64,7 +64,7 @@ def test_runtime_foreground_uses_bounded_recall(tmp_path):
                          db_path=str(tmp_path / 'state.db'),
                          workspace=str(tmp_path), environment=LocalEnvironment(),
                          aux_model=Writer(['{}']))
-    assert loop._recall_provider.__name__ == 'recall_messages_bounded'
+    assert loop._recall_provider.__name__ == 'recall_messages_background'
 
 
 def test_chat_reaches_model_while_memory_service_is_still_blocked(tmp_path, monkeypatch):

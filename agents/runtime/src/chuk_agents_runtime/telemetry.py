@@ -75,9 +75,17 @@ PHASES: tuple[str, ...] = (
     # :mod:`chuk_agents_host.relay_ledger`).
     "relay_frame_in",
     "relay_frame_dropped",
+    # The executor's own preparation (bead chuk_chat-4xc5): queue + sandbox
+    # lease, the model clients, the MCP connectors, the runtime build.
+    "task_accepted",
+    "model_ready",
+    "mcp_ready",
+    "runtime_built",
     "task_received",
     "memory_recall_start",
     "memory_recall_end",
+    # The recall's real latency, when it ends (it no longer blocks the run).
+    "memory_recall_done",
     "round_start",
     "history_loaded",
     "ladder_pass",

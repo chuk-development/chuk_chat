@@ -47,6 +47,7 @@ STRUCTURAL_FIELDS = ("t", "wall", "run_id", "session_key", "round", "phase", "dt
 #: compared column by column. ``unattributed`` is last because it is the
 #: remainder, not a measurement.
 BUCKETS = (
+    "setup",
     "prepare",
     "connect",
     "provider_wait",
@@ -57,8 +58,14 @@ BUCKETS = (
     "unattributed",
 )
 
+#: The executor's phases between ``task_accepted`` and the loop's
+#: ``task_received`` (bead chuk_chat-4xc5). ``task_accepted`` itself (queue
+#: and sandbox lease) ends where the run's span starts, so it is not a bucket.
+SETUP_PHASES = ("model_ready", "mcp_ready", "runtime_built")
+
 #: One line of explanation per bucket, printed under the attribution block.
 BUCKET_HELP = {
+    "setup": "the executor before the loop (model clients, MCP connectors, runtime build)",
     "prepare": "our own work before the request (ladder, payload build)",
     "connect": "opening the transport + auth",
     "provider_wait": "request sent -> first byte back (provider queue + prefill)",
@@ -264,6 +271,7 @@ def attribution(lines: list[dict]) -> dict:
     overlapping measurements (a tool that ran while a stream was open) must not
     produce a negative number that reads like a bug in the trace.
     """
+    setup = 0.0
     prepare_direct = 0.0
     prepare_direct_seen = False
     prepare_fallback = 0.0
@@ -282,7 +290,9 @@ def attribution(lines: list[dict]) -> dict:
 
     for line in lines:
         phase = line.get("phase")
-        if phase in ("ladder_pass", "payload_prepared"):
+        if phase in SETUP_PHASES:
+            setup += _number(line.get("ms"))
+        elif phase in ("ladder_pass", "payload_prepared"):
             if line.get("ms") is not None:
                 prepare_direct += _number(line.get("ms"))
                 prepare_direct_seen = True
@@ -308,6 +318,7 @@ def attribution(lines: list[dict]) -> dict:
     prepare = prepare_direct if prepare_direct_seen else prepare_fallback
     total = span_ms(lines)
     buckets = {
+        "setup": round(setup, 3),
         "prepare": round(prepare, 3),
         "connect": round(connect, 3),
         "provider_wait": round(provider_wait, 3),

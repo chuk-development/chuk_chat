@@ -36,6 +36,7 @@ node by node:
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import logging
 import os
@@ -447,6 +448,68 @@ class _ActiveRun:
     #: declared outright on every request (bead cowork-g85d, see
     #: :attr:`~chuk_agents_runtime.pai.tools.RegistryToolset.found`).
     found_tools: list[str] = field(default_factory=list)
+    #: The memory recall of this run while it runs in the background
+    #: (``recall_wait`` set): injected at the first payload build it is ready
+    #: for, never after the run.
+    recall: "_PendingRecall | None" = None
+    #: Milliseconds the run waited for that recall (``recall_wait``).
+    recall_waited_ms: float = 0.0
+
+
+class _PendingRecall:
+    """One memory recall on its own thread (bead chuk_chat-4xc5).
+
+    The recall used to block the run before its first model call: the
+    Hindsight lookup (one embedding round trip plus the search) hit its 1.5 s
+    budget on a plain "hi". Now it starts with the run and the first model call
+    goes out without it when it is not back yet; a later round of the same run
+    takes it (appended at the tail, so the cached prompt prefix is untouched).
+    The thread runs in a copy of the run's context, so its
+    ``memory_recall_done`` trace line names the run and says what the lookup
+    really cost.
+    """
+
+    def __init__(self, provider: Callable[[str], list[dict]], query: str) -> None:
+        self.started = time.monotonic()
+        self.rows: list[dict] = []
+        self.failed: str | None = None
+        self.ms: float | None = None
+        #: Set once the loop injected or discarded the rows.
+        self.consumed = False
+        #: Set at the first payload build that looked for the rows.
+        self.checked = False
+        self._done = threading.Event()
+        context = contextvars.copy_context()
+        self._thread = threading.Thread(
+            target=context.run,
+            args=(self._work, provider, query),
+            name="memory-recall",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def _work(self, provider: Callable[[str], list[dict]], query: str) -> None:
+        try:
+            self.rows = list(provider(query) or [])
+        except Exception as exc:  # noqa: BLE001 — recall must never break a run
+            self.failed = type(exc).__name__
+        finally:
+            self.ms = (time.monotonic() - self.started) * 1000
+            self._done.set()
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(
+                "memory_recall_done",
+                ms=round(self.ms, 3),
+                messages=len(self.rows),
+                failed=self.failed,
+            )
+
+    def done(self) -> bool:
+        return self._done.is_set()
+
+    def wait(self, timeout: float) -> bool:
+        return self._done.wait(max(0.0, timeout))
 
 
 def _run_blocking(coro: Coroutine[Any, Any, Any]) -> Any:
@@ -494,6 +557,7 @@ class AgentLoop:
         tool_event_observer: Callable[[dict], None] | None = None,
         persist_filter: Callable[[dict], dict] | None = None,
         recall_provider: Callable[[str], list[dict]] | None = None,
+        recall_wait: float | None = None,
         turn_observer: Callable[[TurnRecord], None] | None = None,
         phase_observer: Callable[[str, str | None], None] | None = None,
         # -- Pydantic AI only -------------------------------------------
@@ -531,6 +595,12 @@ class AgentLoop:
         self._tool_event_observer = tool_event_observer
         self._persist_filter = persist_filter
         self._recall_provider = recall_provider
+        #: ``None``: the recall runs before the first round and the run waits
+        #: for it (the provider bounds itself). A number: the recall runs in
+        #: the background and the first payload build waits at most this many
+        #: seconds (from the run's start) for it; a later round takes it when
+        #: it is late (bead chuk_chat-4xc5).
+        self._recall_wait = None if recall_wait is None else max(0.0, float(recall_wait))
         self._turn_observer = turn_observer
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
@@ -725,6 +795,8 @@ class AgentLoop:
         if active is None:  # pragma: no cover — only called inside a run
             return messages
         self._phase(PHASE_PREPARING)
+        if active.recall is not None and not active.recall.consumed:
+            self._take_recall(active)
         started = time.monotonic()
         outbound = self._outbound_messages(active.session_id)
         elapsed = time.monotonic() - started
@@ -775,9 +847,14 @@ class AgentLoop:
             if resolved:
                 self._append(session_id, "system", {"role": "system", "content": resolved})
         self._append(session_id, "user", {"role": "user", "content": user_message})
-        timings.recall_ms = self._inject_recall(session_id, user_message)
+        pending_recall: _PendingRecall | None = None
+        if self._recall_provider is not None and self._recall_wait is not None:
+            pending_recall = self._start_recall(user_message)
+        else:
+            timings.recall_ms = self._inject_recall(session_id, user_message)
 
         active = _ActiveRun(session_key=session_key, session_id=session_id)
+        active.recall = pending_recall
         # The first request's tools are built before its history (Pydantic AI
         # prepares the tools first), so the found set is read once here.
         if self._registry.deferred_names():
@@ -793,6 +870,11 @@ class AgentLoop:
             )
         finally:
             self._active = None
+            if pending_recall is not None:
+                # Late: the rows belong to this prompt and this run is over.
+                # The lookup still warmed the store for the next one.
+                pending_recall.consumed = True
+                timings.recall_ms = active.recall_waited_ms
 
         outcome = LoopResult(
             reason=reason,
@@ -1411,6 +1493,77 @@ class AgentLoop:
 
     # -- memory ----------------------------------------------------------
 
+    def _start_recall(self, user_message: str) -> _PendingRecall | None:
+        provider = self._recall_provider
+        if provider is None or not (user_message or "").strip():
+            return None
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(
+                "memory_recall_start",
+                prompt_chars=len(user_message or ""),
+                background=True,
+            )
+        try:
+            return _PendingRecall(provider, user_message)
+        except Exception:  # noqa: BLE001 — no thread, no recall; never a failed run
+            return None
+
+    def _take_recall(self, active: _ActiveRun) -> None:
+        """Before a payload build: inject the background recall when it is
+        back. The first build waits up to ``recall_wait`` (from the recall's
+        start); a later one never waits."""
+        pending = active.recall
+        if pending is None or pending.consumed:
+            return
+        first = not pending.checked
+        pending.checked = True
+        waited = 0.0
+        if first and not pending.done() and self._recall_wait:
+            remaining = self._recall_wait - (time.monotonic() - pending.started)
+            if remaining > 0:
+                began = time.monotonic()
+                pending.wait(remaining)
+                waited = (time.monotonic() - began) * 1000
+        active.recall_waited_ms += waited
+        tracer = get_tracer()
+        if not pending.done():
+            if first and tracer.enabled:
+                tracer.emit(
+                    "memory_recall_end",
+                    ms=round(waited, 3),
+                    messages=0,
+                    chars=0,
+                    late=True,
+                )
+            return
+        pending.consumed = True
+        written, chars = self._append_recall(active.session_id, pending.rows)
+        if tracer.enabled:
+            tracer.emit(
+                "memory_recall_end",
+                ms=round(waited, 3),
+                messages=written,
+                chars=chars,
+                failed=pending.failed,
+                recall_ms=round(pending.ms or 0.0, 3),
+            )
+
+    def _append_recall(self, session_id: int, messages: list[dict]) -> tuple[int, int]:
+        written = 0
+        chars = 0
+        for message in messages:
+            if not isinstance(message, dict) or not message.get("content"):
+                continue
+            written += 1
+            chars += len(str(message.get("content")))
+            self._append(
+                session_id,
+                str(message.get("role_tag") or "memory"),
+                {k: v for k, v in message.items() if k != "role_tag"},
+            )
+        return written, chars
+
     def _inject_recall(self, session_id: int, user_message: str) -> float:
         if self._recall_provider is None:
             return 0.0
@@ -1424,18 +1577,7 @@ class AgentLoop:
             messages = self._recall_provider(user_message) or []
         except Exception as exc:  # noqa: BLE001 — recall must never break a run
             failed = type(exc).__name__
-        written = 0
-        chars = 0
-        for message in messages:
-            if not isinstance(message, dict) or not message.get("content"):
-                continue
-            written += 1
-            chars += len(str(message.get("content")))
-            self._append(
-                session_id,
-                str(message.get("role_tag") or "memory"),
-                {k: v for k, v in message.items() if k != "role_tag"},
-            )
+        written, chars = self._append_recall(session_id, messages)
         elapsed_ms = (time.monotonic() - started) * 1000
         if tracer.enabled:
             tracer.emit(
