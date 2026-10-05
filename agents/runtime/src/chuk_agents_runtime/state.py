@@ -64,6 +64,18 @@ CREATE TABLE IF NOT EXISTS event_blobs (
     data BLOB NOT NULL
 );
 
+-- The context ladder's last compaction summary per session (§7.3, bead
+-- chuk_chat-p5xm). A cache, never the truth: the ladder uses it only while
+-- ``prefix_digest`` still matches the stored rows it summarized, so a new
+-- run does not block on the aux model to fold the same middle again.
+CREATE TABLE IF NOT EXISTS context_summaries (
+    session_id      INTEGER PRIMARY KEY REFERENCES sessions(session_id) ON DELETE CASCADE,
+    summary         TEXT NOT NULL,
+    summarized_upto INTEGER NOT NULL,
+    prefix_digest   TEXT NOT NULL,
+    updated_at      REAL NOT NULL
+);
+
 -- Subagent handles (§7.6). One row per child, the whole handle as JSON: the app
 -- lists subagents from here, and a relaunch reconstructs every handle with no
 -- in-process state. Keyed by the parent's session key so one store can hold the
@@ -501,6 +513,40 @@ class StateStore:
             return int(cur.rowcount)
 
         return self._write(op)
+
+    # -- context ladder summary (chuk_agents_runtime.context.SummaryStore) -------
+
+    def load_context_summary(self, session_id: int) -> dict | None:
+        """The session's last compaction summary, or ``None``. The ladder
+        checks ``prefix_digest`` before it trusts the row."""
+        row = self._conn().execute(
+            "SELECT summary, summarized_upto, prefix_digest FROM context_summaries "
+            "WHERE session_id=?",
+            (session_id,),
+        ).fetchone()
+        if row is None:
+            return None
+        return {
+            "summary": row["summary"],
+            "summarized_upto": int(row["summarized_upto"]),
+            "prefix_digest": row["prefix_digest"],
+        }
+
+    def save_context_summary(
+        self, session_id: int, *, summary: str, summarized_upto: int, prefix_digest: str
+    ) -> None:
+        def op(cur: sqlite3.Cursor) -> None:
+            cur.execute(
+                "INSERT INTO context_summaries"
+                "(session_id, summary, summarized_upto, prefix_digest, updated_at) "
+                "VALUES (?, ?, ?, ?, ?) "
+                "ON CONFLICT(session_id) DO UPDATE SET summary=excluded.summary, "
+                "summarized_upto=excluded.summarized_upto, "
+                "prefix_digest=excluded.prefix_digest, updated_at=excluded.updated_at",
+                (session_id, summary, int(summarized_upto), prefix_digest, time.time()),
+            )
+
+        self._write(op)
 
     def get_conversation(
         self, session_id: int, *, include_events: bool = False
