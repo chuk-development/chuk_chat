@@ -867,24 +867,90 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// a desktop window, chuk's `ModelSelectorPage` as a route on a phone.
   void _openModelScreen();
 
-  /// New coworker (bead cowork-817): chuk's rename dialog shape — one
-  /// `TextField` in an `AlertDialog` — pre-filled with a suggested name. The
-  /// coworker is created with that name and its thread opens; the host is told
-  /// so the name outlives this install (`agent_create`, WIRE_CONTRACT).
+  // ── templates ──
+  /// New coworker (bead cowork-817, templates chuk_chat-dsh0): the template
+  /// picker first ("Blank coworker" or one of [kCoworkerTemplates]), then the
+  /// name. The coworker is created with that name and its thread opens; the
+  /// host is told so the name outlives this install, and a template's persona
+  /// rides along for its soul.md (`agent_create`, WIRE_CONTRACT "Coworker
+  /// templates"). A template's face and role land in this device's profile
+  /// store. The starter automation is sent only when the user switched it on.
   Future<void> _openOnboarding() async {
     final taken = _roster.agents.map((agent) => agent.name);
     final suggested = const AgentNameGenerator().next(taken: taken);
-    final name = await showCoworkerNameDialog(
+    final request = await showCoworkerTemplatePicker(
       context,
-      title: 'New agent',
-      initialName: suggested,
-      submitLabel: 'Create',
+      suggestedName: suggested,
     );
-    if (!mounted || name == null || name.isEmpty) return;
-    final agent = _roster.addAgent(name: name);
-    unawaited(_controller.value?.createAgent(agent.id, agent.name));
+    if (!mounted || request == null || request.name.isEmpty) return;
+    final template = request.template;
+    final l = _l10n;
+    final templateName = template == null ? null : l.tpl(template.nameKey);
+    final agent = _roster.addAgent(
+      name: request.name,
+      // The role line names the template, unless the name already says it.
+      role: templateName == request.name ? null : templateName,
+      brief: template == null ? null : l.tpl(template.descriptionKey),
+    );
+    if (template != null) {
+      unawaited(
+        _agentProfiles.update(
+          agent.id,
+          colorValue: template.accent,
+          shape: template.shape,
+        ),
+      );
+    }
+    unawaited(
+      _createOnHost(
+        agent,
+        template,
+        startAutomation: request.startAutomation,
+      ),
+    );
     _select(agent.id, agent.threads.first.key);
   }
+
+  /// Tells the host about a new coworker, then — only when the user turned
+  /// it on — creates the template's starter automation for it. The two go
+  /// in this order on one socket, so the host knows the coworker before the
+  /// automation names its session key. A failed automation is said, not
+  /// swallowed: the coworker exists, the schedule does not.
+  Future<void> _createOnHost(
+    AgentsAgent agent,
+    CoworkerTemplate? template, {
+    required bool startAutomation,
+  }) async {
+    final controller = _controller.value;
+    try {
+      await controller?.createAgent(
+        agent.id,
+        agent.name,
+        template: template?.toWire(),
+      );
+    } catch (error) {
+      if (kDebugMode) debugPrint('agent_create failed: $error');
+    }
+    final starter = template?.starter;
+    if (!startAutomation || starter == null) return;
+    final l = _l10n;
+    final result = await AutomationsSource.instance.create(
+      sessionKey: agent.id,
+      kind: 'schedule',
+      spec: starter.cron,
+      prompt: starter.prompt,
+      name: l.tpl(starter.nameKey),
+    );
+    if (result.ok || !mounted) return;
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        content: Text(
+          l.tplStarterFailed(agent.name, result.error ?? ''),
+        ),
+      ),
+    );
+  }
+  // ── end templates ──
 
   /// Rename (bead cowork-817): the roster row's menu → chuk's dialog → here.
   /// Local first, then the host, like [_renameRoom].

@@ -22,6 +22,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/chat_history_builder.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/network_status_service.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
@@ -508,6 +509,9 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         discardChat: _discardVoiceChat,
       );
     }
+    // AGENTS: "Run anyway" on a budget refusal sends the refused prompt
+    // through this screen's own send path, as a normal turn of the thread.
+    if (widget.agentsThread) AgentsThreadComposer.attach(_agentsThreadSend);
     _selectedWorkspaceId = widget.workspaceId;
     _loadChatById(widget.selectedChatId);
     unawaited(_clipboardHandler.cleanupOldPasteTempDirectories());
@@ -673,8 +677,23 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     _flyInKey = null;
   }
 
+  /// AGENTS: sends [text] into [chatId] when this screen shows it and is
+  /// free ([AgentsThreadComposer]).
+  bool _agentsThreadSend(String chatId, String text) {
+    if (!mounted ||
+        _isSending ||
+        _isStreaming ||
+        _activeSendOperationId != null) {
+      return false;
+    }
+    if ((_activeChatId ?? widget.selectedChatId) != chatId) return false;
+    unawaited(_sendMessage(voiceText: text));
+    return true;
+  }
+
   @override
   void dispose() {
+    AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     // CRITICAL: Clear loading lock if we're disposed while loading
     // This prevents the flag from getting stuck
     if (_isLoadingChat) {

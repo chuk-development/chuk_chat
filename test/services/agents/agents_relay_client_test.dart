@@ -16,6 +16,7 @@ import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_host_session.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/herenow/herenow_store.dart';
 import 'package:chuk_chat/services/mcp/mcp_store.dart';
 
@@ -848,6 +849,24 @@ void main() {
     final rename = host.received.firstWhere((m) => m['type'] == 'agent_rename');
     expect(rename['agent_id'], 'host:cowork-host');
     expect(rename['name'], 'Laptop Bot');
+
+    // ── templates ──
+    // A coworker made from a template carries its persona, additively.
+    await client.createAgent(
+      'local:Researcher:2:9',
+      'Researcher',
+      template: <String, Object?>{'id': 'research', 'persona': 'You research.'},
+    );
+    await settle();
+    final templated = host.received.lastWhere(
+      (m) => m['type'] == 'agent_create',
+    );
+    expect(templated['agent_id'], 'local:Researcher:2:9');
+    expect(templated['template'], <String, Object?>{
+      'id': 'research',
+      'persona': 'You research.',
+    });
+    // ── end templates ──
 
     await client.dispose();
   });
@@ -2136,4 +2155,128 @@ void main() {
 
     await client.dispose();
   });
+
+  // ── F1: approvals + cost ──
+  group('per-action approvals and cost on the wire', () {
+    tearDown(() {
+      AgentsRelayClient.hostCapabilities.value = const <String>{};
+      AgentsBudgetNotices.instance.reset();
+    });
+
+    test('an action_approval request carries class, options, summary, '
+        'details and the replayed scope', () {
+      final request = AgentsRelayApprovalRequest.fromPayload(<String, dynamic>{
+        'type': 'approval_request',
+        'approval_id': 'ap-9',
+        'session_key': 'thread-1',
+        'action': 'action_approval',
+        'action_class': 'browser_act',
+        'options': <String>['once', 'always_this_agent', 'always_this_site', 'deny'],
+        'summary': 'Click "Buy now" on shop.example',
+        'tool': 'mcp_browser_click',
+        'site': 'shop.example',
+        'details': <String, dynamic>{'browser_tool': 'browser_click', 'element': 'Buy now'},
+        'decision': 'approved',
+        'decision_scope': 'always_this_site',
+        'replay': true,
+      })!;
+      expect(request.isActionApproval, isTrue);
+      expect(request.hasOptions, isTrue);
+      expect(request.actionClass, 'browser_act');
+      expect(request.options, <String>['once', 'always_this_agent', 'always_this_site', 'deny']);
+      expect(request.summary, 'Click "Buy now" on shop.example');
+      expect(request.tool, 'mcp_browser_click');
+      expect(request.site, 'shop.example');
+      expect(request.details!['element'], 'Buy now');
+      expect(request.decisionScope, 'always_this_site');
+    });
+
+    test('an old publish has no options and is not an action approval', () {
+      final request = AgentsRelayApprovalRequest.fromPayload(<String, dynamic>{
+        'approval_id': 'ap-1',
+        'action': 'herenow_publish',
+      })!;
+      expect(request.isActionApproval, isFalse);
+      expect(request.hasOptions, isFalse);
+      expect(request.options, isEmpty);
+    });
+
+    test('a decision carries scope only when one is given', () async {
+      final (client, host, _) = await paired();
+      await client.sendApprovalDecision(approvalId: 'ap-1', approved: true);
+      await client.sendApprovalDecision(
+        approvalId: 'ap-2',
+        approved: false,
+        scope: 'deny',
+      );
+      await Future<void>.delayed(Duration.zero);
+      final decisions = host.received
+          .where((m) => m['type'] == 'approval_decision')
+          .toList();
+      expect(decisions.first.containsKey('scope'), isFalse);
+      expect(decisions.last['scope'], 'deny');
+      expect(decisions.last['approved'], false);
+      await client.dispose();
+    });
+
+    test('budget_override rides only when asked and the host keeps budgets',
+        () async {
+      final (client, host, _) = await paired();
+      await client.sendTask('again', budgetOverride: true);
+      AgentsRelayClient.hostCapabilities.value = const <String>{'cost_budget'};
+      await client.sendTask('again', budgetOverride: true);
+      await Future<void>.delayed(Duration.zero);
+      final tasks = host.received.where((m) => m['type'] == 'task').toList();
+      expect(tasks, hasLength(2));
+      expect(tasks[0].containsKey('budget_override'), isFalse);
+      expect(tasks[1]['budget_override'], isTrue);
+      await client.dispose();
+    }, timeout: const Timeout(Duration(minutes: 1)));
+
+    test('done.cost is parsed; budget_warning becomes one notice', () async {
+      final (client, host, _) = await paired();
+      final events = <AgentsRelayInbound>[];
+      final sub = client.inbound.listen(events.add);
+      final warning = <String, dynamic>{
+        'type': 'budget_warning',
+        'agent_id': 'host:pc',
+        'session_key': 'thread-1',
+        'level': 'warning',
+        'currency': 'EUR',
+        'spent_eur': 4.02,
+        'budget_eur': 5.0,
+        'week_starts_at': 1759701600.0,
+      };
+      await host.emit(warning);
+      await host.emit(warning);
+      await host.emit(<String, dynamic>{
+        'type': 'done',
+        'reason': 'budget_exceeded',
+        'final_answer': 'The weekly budget is used up.',
+        'cost': <String, dynamic>{
+          'currency': 'EUR',
+          'eur': 0.002345,
+          'input_tokens': 5000,
+          'output_tokens': 150,
+          'cached_tokens': 3000,
+          'lines': <Map<String, dynamic>>[
+            <String, dynamic>{'kind': 'run', 'model': 'z-ai/glm-5.3-flash', 'input_tokens': 1000, 'output_tokens': 100, 'eur': 0.002},
+          ],
+        },
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final done = events.whereType<AgentsRelayDone>().single;
+      expect(done.isBudgetExceeded, isTrue);
+      expect(done.wasStopped, isFalse);
+      expect(done.cost!.eur, closeTo(0.002345, 1e-9));
+      expect(done.cost!.totalTokens, 5150);
+      expect(done.cost!.lines.single.model, 'z-ai/glm-5.3-flash');
+      final notice = AgentsBudgetNotices.instance.forThread('thread-1')!;
+      expect(notice.spentEur, 4.02);
+      expect(notice.isExceeded, isFalse);
+      await sub.cancel();
+      await client.dispose();
+    });
+  });
+  // ── end F1 ──
 }

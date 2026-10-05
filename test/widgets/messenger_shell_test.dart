@@ -20,6 +20,9 @@ import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/models/stored_chat.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/widgets/coworker_template_picker.dart';
 import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
@@ -110,6 +113,7 @@ class _FakeRelayController implements AgentsRelayController {
     bool debug = false,
     bool regenerate = false,
     String? taskId,
+    bool budgetOverride = false,
   }) async => sessionKeys.add(sessionKey);
 
   final List<(String, String)> roomTasks = <(String, String)>[];
@@ -155,9 +159,19 @@ class _FakeRelayController implements AgentsRelayController {
   final List<(String, String)> createdAgents = <(String, String)>[];
   final List<(String, String)> renamedAgents = <(String, String)>[];
 
+  /// The `template` object of each `agent_create`, by agent id.
+  final Map<String, Map<String, Object?>> createdTemplates =
+      <String, Map<String, Object?>>{};
+
   @override
-  Future<void> createAgent(String agentId, String name) async =>
-      createdAgents.add((agentId, name));
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  }) async {
+    createdAgents.add((agentId, name));
+    if (template != null) createdTemplates[agentId] = template;
+  }
 
   @override
   Future<void> renameAgent(String agentId, String name) async =>
@@ -208,6 +222,7 @@ class _FakeRelayController implements AgentsRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+    String? scope,
   }) async {}
 
   @override
@@ -716,34 +731,37 @@ void main() {
     expect(roster.agents.single.threads.single.key, roster.agents.single.id);
   });
 
-  testWidgets('New agent is chuk\'s name dialog: it adds the coworker, '
-      'tells the host and opens the thread', (tester) async {
+  // ── templates ──
+  testWidgets('New agent opens the template picker; Blank coworker adds the '
+      'coworker, tells the host and opens the thread', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
     await sendShortcut(tester, LogicalKeyboardKey.keyN);
-    // The app's own name dialog: one filled TextField, Cancel and Create.
-    expect(find.byType(CoworkerNameDialog), findsOneWidget);
-    final nameField = find.descendant(
-      of: find.byType(CoworkerNameDialog),
-      matching: find.byType(TextField),
-    );
+    // First the templates, with the blank coworker on top.
+    expect(find.byType(CoworkerTemplatePicker), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('tpl-blank')), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey<String>('tpl-blank')));
+    await tester.pumpAndSettle();
+
+    final nameField = find.byKey(const ValueKey<String>('tpl-name'));
     expect(nameField, findsOneWidget);
-    // The field is pre-filled with a suggested adjective-noun name.
+    // The blank coworker is pre-filled with a suggested adjective-noun name.
     expect(tester.widget<TextField>(nameField).controller!.text, isNotEmpty);
 
     await tester.enterText(nameField, '  Crypto Desk ');
-    await tester.tap(find.widgetWithText(ExpressiveButton, 'Create'));
+    await tester.tap(find.byKey(const ValueKey<String>('tpl-create')));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CoworkerNameDialog), findsNothing);
+    expect(find.byType(CoworkerTemplatePicker), findsNothing);
     expect(roster.agents, hasLength(1));
     expect(roster.agents.single.name, 'Crypto Desk');
     // An app-created agent is never claimed to be installed on the host.
     expect(roster.agents.single.onHost, isFalse);
-    // The host was told, so the name outlives this install.
+    // The host was told, so the name outlives this install; no template.
     expect(controller.createdAgents, [
       (roster.agents.single.id, 'Crypto Desk'),
     ]);
+    expect(controller.createdTemplates, isEmpty);
     // Its thread is selected: the one thread view points at it, and the
     // roster lists it by name.
     final view = tester.widget<AgentsThreadView>(find.byType(AgentsThreadView));
@@ -752,17 +770,50 @@ void main() {
     expect(controller.sessionKeys, isEmpty);
   });
 
-  testWidgets('Cancel in the New agent dialog adds nothing', (tester) async {
+  testWidgets('A template creates its coworker with the persona on the wire, '
+      'its face in the profile store and its name as the default', (
+    tester,
+  ) async {
+    final (controller, roster) = await pumpShell(tester);
+
+    await sendShortcut(tester, LogicalKeyboardKey.keyN);
+    await tester.tap(find.byKey(const ValueKey<String>('tpl-research')));
+    await tester.pumpAndSettle();
+    final nameField = find.byKey(const ValueKey<String>('tpl-name'));
+    expect(
+      tester.widget<TextField>(nameField).controller!.text,
+      'Research assistant',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('tpl-create')));
+    await tester.pumpAndSettle();
+
+    final agent = roster.agents.single;
+    expect(agent.name, 'Research assistant');
+    // The name says the job already, so no role line repeats it.
+    expect(agent.role, isNull);
+    expect(controller.createdAgents, [(agent.id, 'Research assistant')]);
+    final template = coworkerTemplateById('research')!;
+    expect(controller.createdTemplates[agent.id], <String, Object?>{
+      'id': 'research',
+      'persona': template.persona,
+    });
+    final profile = AgentProfileStore.instance.profileOf(agent.id);
+    expect(profile.colorValue, template.accent);
+    expect(profile.shape, template.shape);
+  });
+
+  testWidgets('Cancel in the template picker adds nothing', (tester) async {
     final (controller, roster) = await pumpShell(tester);
 
     await sendShortcut(tester, LogicalKeyboardKey.keyN);
     await tester.tap(find.widgetWithText(ExpressiveButton, 'Cancel'));
     await tester.pumpAndSettle();
 
-    expect(find.byType(CoworkerNameDialog), findsNothing);
+    expect(find.byType(CoworkerTemplatePicker), findsNothing);
     expect(roster.agents, isEmpty);
     expect(controller.createdAgents, isEmpty);
   });
+  // ── end templates ──
 
   testWidgets('Rename from the row menu renames locally and on the host', (
     tester,

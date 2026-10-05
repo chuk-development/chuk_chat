@@ -1057,6 +1057,174 @@ class AppLocalizations {
   String get agentsTelegramLinkedHeading => _get('agentsTelegramLinkedHeading');
   String get agentsTelegramLinkedChatShort =>
       _get('agentsTelegramLinkedChatShort');
+  // ── F2: automations + cost totals ──
+  String get automationsTitle => _get('automationsTitle');
+  String get automationNew => _get('automationNew');
+  String get automationEdit => _get('automationEdit');
+  String get automationEditTooltip => _get('automationEditTooltip');
+  String get automationKindSchedule => _get('automationKindSchedule');
+  String get automationKindPage => _get('automationKindPage');
+  String get automationKindMail => _get('automationKindMail');
+  String get automationTriggerClock => _get('automationTriggerClock');
+  String get automationTriggerPage => _get('automationTriggerPage');
+  String get automationTriggerMail => _get('automationTriggerMail');
+  String get automationTriggerScript => _get('automationTriggerScript');
+  String get automationScheduleLabel => _get('automationScheduleLabel');
+  String get automationScheduleHelp => _get('automationScheduleHelp');
+  String get automationUrlLabel => _get('automationUrlLabel');
+  String get automationIntervalLabel => _get('automationIntervalLabel');
+  String get automationIntervalHelp => _get('automationIntervalHelp');
+  String get automationMailFromLabel => _get('automationMailFromLabel');
+  String get automationMailSubjectLabel => _get('automationMailSubjectLabel');
+  String get automationMailHelp => _get('automationMailHelp');
+  String get automationPromptLabel => _get('automationPromptLabel');
+  String get automationNameLabel => _get('automationNameLabel');
+  String get automationCoworkerLabel => _get('automationCoworkerLabel');
+  String get automationNotifyOnChange => _get('automationNotifyOnChange');
+  String get automationNotifyOnChangeHelp => _get('automationNotifyOnChangeHelp');
+  String get automationCreate => _get('automationCreate');
+  String get automationErrPrompt => _get('automationErrPrompt');
+  String get automationErrSchedule => _get('automationErrSchedule');
+  String get automationErrUrl => _get('automationErrUrl');
+  String get automationErrInterval => _get('automationErrInterval');
+  String get automationErrMail => _get('automationErrMail');
+  String get automationErrTooLong => _get('automationErrTooLong');
+  String get automationErrCoworker => _get('automationErrCoworker');
+  String get automationNothingChanged => _get('automationNothingChanged');
+  String get automationSaved => _get('automationSaved');
+  String get automationNotConnected => _get('automationNotConnected');
+  String get automationNotifyAlwaysShort => _get('automationNotifyAlwaysShort');
+  String get automationNotifyChangeShort => _get('automationNotifyChangeShort');
+  String get automationQuietOne => _get('automationQuietOne');
+  String automationQuietMany(String count) =>
+      _get('automationQuietMany').replaceAll('{count}', count);
+  String automationNextCheck(String when) =>
+      _get('automationNextCheck').replaceAll('{when}', when);
+  String get automationNoChange => _get('automationNoChange');
+  String get automationLastResult => _get('automationLastResult');
+  String get costHeading => _get('costHeading');
+  String get costThisThread => _get('costThisThread');
+  String get costToday => _get('costToday');
+  String get costThisWeek => _get('costThisWeek');
+  String get costLastRun => _get('costLastRun');
+  String costWeekOfBudget(String spent, String budget) =>
+      _get('costWeekOfBudget').replaceAll('{spent}', spent).replaceAll('{budget}', budget);
+  String get costBudgetWarning => _get('costBudgetWarning');
+  String get costBudgetExceeded => _get('costBudgetExceeded');
+  String get budgetWeeklyLabel => _get('budgetWeeklyLabel');
+  String get budgetNoLimit => _get('budgetNoLimit');
+  String get budgetHelp => _get('budgetHelp');
+  String get budgetInvalid => _get('budgetInvalid');
+  String get budgetSendFailed => _get('budgetSendFailed');
+  // ── end F2 ──
+  // ── F1: approvals + cost ──
+  String get approvalTitleFallback => _get('approvalTitleFallback');
+  String get approvalAllowOnce => _get('approvalAllowOnce');
+  String approvalAlwaysAgent(String name) =>
+      _get('approvalAlwaysAgent').replaceAll('{name}', name);
+  String approvalAlwaysConnector(String name) =>
+      _get('approvalAlwaysConnector').replaceAll('{name}', name);
+  String approvalAlwaysSite(String site) =>
+      _get('approvalAlwaysSite').replaceAll('{site}', site);
+  String get approvalDeny => _get('approvalDeny');
+  String get approvalThisCoworker => _get('approvalThisCoworker');
+  String get approvalThisSite => _get('approvalThisSite');
+  String get approvalMailTo => _get('approvalMailTo');
+  String get approvalMailCc => _get('approvalMailCc');
+  String get approvalMailSubject => _get('approvalMailSubject');
+  String get approvalMailReply => _get('approvalMailReply');
+  String get approvalMailAttachments => _get('approvalMailAttachments');
+  String get approvalConnector => _get('approvalConnector');
+  String get approvalConnectorTool => _get('approvalConnectorTool');
+  String get approvalBrowserSite => _get('approvalBrowserSite');
+  String get approvalBrowserTarget => _get('approvalBrowserTarget');
+  String approvalBrowserTargetSubmit(String target) =>
+      _get('approvalBrowserTargetSubmit').replaceAll('{target}', target);
+  String get approvalBrowserKey => _get('approvalBrowserKey');
+  String get approvalBrowserFields => _get('approvalBrowserFields');
+  String get approvalBrowserFiles => _get('approvalBrowserFiles');
+  String get approvalPublicSite => _get('approvalPublicSite');
+  String get approvalDecidedOnce => _get('approvalDecidedOnce');
+  String approvalDecidedAlwaysAgent(String name) =>
+      _get('approvalDecidedAlwaysAgent').replaceAll('{name}', name);
+  String approvalDecidedAlwaysSite(String site) =>
+      _get('approvalDecidedAlwaysSite').replaceAll('{site}', site);
+  String get approvalDecidedDenied => _get('approvalDecidedDenied');
+  String get approvalNotConnected => _get('approvalNotConnected');
+  String get approvalsHeading => _get('approvalsHeading');
+  String get approvalsSendExternal => _get('approvalsSendExternal');
+  String get approvalsSendExternalHelp => _get('approvalsSendExternalHelp');
+  String get approvalsMcpDestructive => _get('approvalsMcpDestructive');
+  String get approvalsMcpDestructiveHelp => _get('approvalsMcpDestructiveHelp');
+  String get approvalsBrowserAct => _get('approvalsBrowserAct');
+  String get approvalsBrowserActHelp => _get('approvalsBrowserActHelp');
+  String get approvalsPublish => _get('approvalsPublish');
+  String get approvalsPublishHelp => _get('approvalsPublishHelp');
+  String get approvalsModeAsk => _get('approvalsModeAsk');
+  String get approvalsModeAllow => _get('approvalsModeAllow');
+  String get approvalsModeDeny => _get('approvalsModeDeny');
+  String approvalsDefault(String mode) =>
+      _get('approvalsDefault').replaceAll('{mode}', mode);
+  String get approvalsSites => _get('approvalsSites');
+  String get approvalsNoSites => _get('approvalsNoSites');
+  String approvalsRemoveSite(String site) =>
+      _get('approvalsRemoveSite').replaceAll('{site}', site);
+  String get approvalsApplies => _get('approvalsApplies');
+  String get approvalsNotConnected => _get('approvalsNotConnected');
+  String runCostTokens(String count) =>
+      _get('runCostTokens').replaceAll('{count}', count);
+  String get runCostSheetTitle => _get('runCostSheetTitle');
+  String get runCostTotal => _get('runCostTotal');
+  String get runCostLineRun => _get('runCostLineRun');
+  String get runCostLineAux => _get('runCostLineAux');
+  String get runCostLineBrowser => _get('runCostLineBrowser');
+  String get runCostNoPrice => _get('runCostNoPrice');
+  String runCostCached(String count) =>
+      _get('runCostCached').replaceAll('{count}', count);
+  String get runCostDetails => _get('runCostDetails');
+  String budgetNoticeWarning(String spent, String budget) =>
+      _get('budgetNoticeWarning').replaceAll('{spent}', spent).replaceAll('{budget}', budget);
+  String budgetNoticeExceeded(String spent, String budget) =>
+      _get('budgetNoticeExceeded').replaceAll('{spent}', spent).replaceAll('{budget}', budget);
+  String get budgetNoticeWarningPlain => _get('budgetNoticeWarningPlain');
+  String get budgetNoticeExceededPlain => _get('budgetNoticeExceededPlain');
+  String get budgetRefusedTitle => _get('budgetRefusedTitle');
+  String get budgetRunAnyway => _get('budgetRunAnyway');
+  String get budgetChange => _get('budgetChange');
+  String get budgetDismiss => _get('budgetDismiss');
+  String get budgetRunAnywayFailed => _get('budgetRunAnywayFailed');
+  // ── end F1 ──
+  // ── templates ──
+  String get tplPickerTitle => _get('tplPickerTitle');
+  String get tplPickerSubtitle => _get('tplPickerSubtitle');
+  String get tplSearchHint => _get('tplSearchHint');
+  String get tplCategoryAll => _get('tplCategoryAll');
+  String get tplCategoryWork => _get('tplCategoryWork');
+  String get tplCategoryWatch => _get('tplCategoryWatch');
+  String get tplCategoryPersonal => _get('tplCategoryPersonal');
+  String get tplBlankName => _get('tplBlankName');
+  String get tplBlankDesc => _get('tplBlankDesc');
+  String get tplNoMatch => _get('tplNoMatch');
+  String get tplNameLabel => _get('tplNameLabel');
+  String get tplNameHint => _get('tplNameHint');
+  String get tplNameLater => _get('tplNameLater');
+  String get tplNameEmpty => _get('tplNameEmpty');
+  String get tplUses => _get('tplUses');
+  String get tplPersonaTitle => _get('tplPersonaTitle');
+  String get tplPersonaNote => _get('tplPersonaNote');
+  String get tplStarterTitle => _get('tplStarterTitle');
+  String get tplBack => _get('tplBack');
+  String get tplCancel => _get('tplCancel');
+  String get tplCreate => _get('tplCreate');
+  String tplStarterFailed(String name, String error) => _get(
+    'tplStarterFailed',
+  ).replaceAll('{name}', name).replaceAll('{error}', error);
+
+  /// A coworker template's string by its catalogue key: `tpl.<id>.name`,
+  /// `tpl.<id>.desc`, `tpl.<id>.starter`, `tpl.<id>.starterWhen`,
+  /// `tpl.tool.<tool>` (lib/services/agents/coworker_templates.dart).
+  String tpl(String key) => _get(key);
+  // ── end templates ──
 }
 
 class _AppLocalizationsDelegate

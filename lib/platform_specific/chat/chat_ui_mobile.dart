@@ -43,6 +43,7 @@ import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
+import 'package:chuk_chat/services/agents/agents_thread_composer.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_state.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -438,6 +439,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         discardChat: _discardVoiceChat,
       );
     }
+    // AGENTS: "Run anyway" on a budget refusal sends the refused prompt
+    // through this screen's own send path, as a normal turn of the thread.
+    if (widget.messengerMode) AgentsThreadComposer.attach(_agentsThreadSend);
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.addOnPauseCallback(_handleAppPaused);
     // The disclaimer under the composer steps aside while the field has the
@@ -1062,8 +1066,18 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     }
   }
 
+  /// AGENTS: sends [text] into [chatId] when this screen shows it and is
+  /// free ([AgentsThreadComposer]).
+  bool _agentsThreadSend(String chatId, String text) {
+    if (!mounted || _isSendingMessage || _isCurrentChatStreaming) return false;
+    if ((_activeChatId ?? widget.selectedChatId) != chatId) return false;
+    unawaited(_sendComposerOrVoice(voiceText: text));
+    return true;
+  }
+
   @override
   void dispose() {
+    AgentsThreadComposer.detach(_agentsThreadSend); // AGENTS
     WidgetsBinding.instance.removeObserver(_viewInsetRepin);
     AppLifecycleService.instance.removeOnResumeCallback(_handleAppResumed);
     AppLifecycleService.instance.removeOnPauseCallback(_handleAppPaused);

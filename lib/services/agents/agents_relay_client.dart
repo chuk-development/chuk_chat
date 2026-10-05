@@ -42,6 +42,7 @@ import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
     show AgentsCloudRelayAddress;
@@ -558,7 +559,21 @@ class AgentsRelayDone extends AgentsRelayInbound {
     this.hasMore = false,
     this.oldestMid,
     this.pageBeforeId,
+    // ── F1: approvals + cost ──
+    this.cost,
+    // ── end F1 ──
   });
+
+  // ── F1: approvals + cost ──
+  /// What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and weekly
+  /// budget"), live and replayed. Null on an old host and for a run that
+  /// spent no tokens.
+  final AgentsRunCost? cost;
+
+  /// The coworker's weekly budget refused the run before it started. Neither
+  /// a stop nor a failure: [wasStopped] stays false.
+  bool get isBudgetExceeded => reason == 'budget_exceeded';
+  // ── end F1 ──
 
   /// The loop's own final answer, when it sent one.
   final String? finalAnswer;
@@ -763,10 +778,30 @@ class AgentsRelayAutomation extends AgentsRelayInbound {
     this.at,
     this.replay = false,
     this.mid,
+    // ── F2: automations + cost totals ──
+    this.changed,
+    this.summary,
+    this.reported,
+    // ── end F2 ──
   });
 
   /// Which change this is.
   final String event;
+
+  // ── F2: automations + cost totals ──
+  /// On `result` (an `on_change` run ended): whether it reported a change.
+  final bool? changed;
+
+  /// On `result`: the facts the run reported, when it reported.
+  final String? summary;
+
+  /// On `result`: false when the run failed or never reported (then
+  /// [changed] is true and there is no [summary]).
+  final bool? reported;
+
+  /// A finished `on_change` run that found nothing new.
+  bool get isQuietResult => event == 'result' && changed == false;
+  // ── end F2 ──
 
   /// The automation's whole state after the change.
   final AgentsAutomation automation;
@@ -799,6 +834,17 @@ class AgentsRelayAutomation extends AgentsRelayInbound {
       at: epochSecondsToDateTime(payload['at']),
       replay: payload['replay'] == true,
       mid: AgentsRelayTool._asInt(payload['mid']),
+      // ── F2: automations + cost totals ──
+      changed: payload['changed'] is bool ? payload['changed'] as bool : null,
+      summary:
+          payload['summary'] is String &&
+              (payload['summary'] as String).trim().isNotEmpty
+          ? payload['summary'] as String
+          : null,
+      reported: payload['reported'] is bool
+          ? payload['reported'] as bool
+          : null,
+      // ── end F2 ──
     );
   }
 }
@@ -881,9 +927,19 @@ class AgentsRelayAgentStatus {
     this.tokens,
     this.runtime,
     this.sandbox,
+    // ── F2: automations + cost totals ──
+    this.cost,
+    // ── end F2 ──
   });
 
   final String sessionKey;
+
+  // ── F2: automations + cost totals ──
+  /// `{currency, session_total, last_run?, today, week, week_starts_at,
+  /// budget_weekly?, budget_state?}` (docs/WIRE_CONTRACT.md, "Cost per run
+  /// and weekly budget"). Absent when nothing was ever priced.
+  final Map<String, dynamic>? cost;
+  // ── end F2 ──
 
   /// `{id, provider?, reasoning_effort?, source}`.
   final Map<String, dynamic>? model;
@@ -910,6 +966,9 @@ class AgentsRelayAgentStatus {
       tokens: _block(payload['tokens']),
       runtime: _block(payload['runtime']),
       sandbox: _block(payload['sandbox']),
+      // ── F2: automations + cost totals ──
+      cost: _block(payload['cost']),
+      // ── end F2 ──
     );
   }
 }
@@ -1113,7 +1172,56 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
     this.site,
     this.reason,
     this.url,
+    // ── F1: approvals + cost ──
+    this.actionClass,
+    this.options = const <String>[],
+    this.summary,
+    this.tool,
+    this.details,
+    this.decisionScope,
+    // ── end F1 ──
   });
+
+  // ── F1: approvals + cost ──
+  /// The [action] of a per-action approval (docs/WIRE_CONTRACT.md,
+  /// "Per-action approvals"): a mail, a destructive connector tool or a
+  /// page-changing browser step that the coworker's policy says to ask about.
+  static const String actionApprovalAction = 'action_approval';
+
+  /// The answers a card may offer, as the host names them in [options].
+  static const String scopeOnce = 'once';
+  static const String scopeAlwaysAgent = 'always_this_agent';
+  static const String scopeAlwaysSite = 'always_this_site';
+  static const String scopeDeny = 'deny';
+
+  /// True for a per-action approval rather than a publish or a takeover.
+  bool get isActionApproval => action == actionApprovalAction;
+
+  /// The host named the answers this card offers. A request without them is
+  /// an old host's publish (two buttons, no scope on the decision).
+  bool get hasOptions => options.isNotEmpty;
+
+  /// `publish`, `send_external`, `mcp_destructive` or `browser_act`. Null on
+  /// an old host and for a takeover.
+  final String? actionClass;
+
+  /// The answers to offer, in order (`once`, `always_this_agent`,
+  /// `always_this_site`, `deny`). Empty on an old host.
+  final List<String> options;
+
+  /// The host's one line for the card.
+  final String? summary;
+
+  /// The registry tool the coworker wants to call.
+  final String? tool;
+
+  /// What the card shows per class (recipients, connector arguments, the
+  /// browser target). Never a typed text, a form value or a password.
+  final Map<String, dynamic>? details;
+
+  /// What the user's answer covered, on a replayed decided row.
+  final String? decisionScope;
+  // ── end F1 ──
 
   /// The [action] of a takeover request: the agent's browser reached a step
   /// only the user can do (a login, a 2FA code, a CAPTCHA) and the run waits
@@ -1198,6 +1306,22 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
       site: _nonEmpty(payload['site']),
       reason: _nonEmpty(payload['reason']),
       url: _nonEmpty(payload['url']),
+      // ── F1: approvals + cost ──
+      actionClass: _nonEmpty(payload['action_class']),
+      options: <String>[
+        if (payload['options'] is List)
+          for (final Object? option in payload['options'] as List)
+            if (option is String && option.trim().isNotEmpty) option.trim(),
+      ],
+      summary: _nonEmpty(payload['summary']),
+      tool: _nonEmpty(payload['tool']),
+      details: payload['details'] is Map
+          ? (payload['details'] as Map).map(
+              (Object? k, Object? v) => MapEntry('$k', v),
+            )
+          : null,
+      decisionScope: _nonEmpty(payload['decision_scope']),
+      // ── end F1 ──
     );
   }
 
@@ -1353,6 +1477,12 @@ abstract interface class AgentsRelayController {
     bool debug,
     bool regenerate,
     String? taskId,
+    // ── F1: approvals + cost ──
+    /// "Run anyway": this one task may go over the coworker's weekly budget
+    /// (docs/WIRE_CONTRACT.md, "The stop at 100 %"). Sent only when true and
+    /// only to a host that names `cost_budget`.
+    bool budgetOverride,
+    // ── end F1 ──
   });
 
   /// Creates the room on the host so a later [sendRoomTask] can find it (§16.1).
@@ -1385,7 +1515,16 @@ abstract interface class AgentsRelayController {
   /// Registers a coworker the app created on the host's roster, so its name
   /// outlives this install (bead cowork-817; `agent_create`, WIRE_CONTRACT
   /// "Coworker names").
-  Future<void> createAgent(String agentId, String name);
+  // ── templates ──
+  /// [template] is the optional `template` object of a coworker made from a
+  /// template (`{"id", "persona"}`, WIRE_CONTRACT "Coworker templates"): the
+  /// host writes the persona into the new coworker's soul.md.
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  });
+  // ── end templates ──
 
   /// Renames a coworker on the host's roster (bead cowork-817; `agent_rename`).
   Future<void> renameAgent(String agentId, String name);
@@ -1478,6 +1617,12 @@ abstract interface class AgentsRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+    // ── F1: approvals + cost ──
+    /// What the answer covers (`once`, `always_this_agent`,
+    /// `always_this_site`, `deny`). Only for a request that named `options`;
+    /// left off for an old host's publish and a takeover.
+    String? scope,
+    // ── end F1 ──
   });
 
   /// Hand the host the user's WHOLE secret set (docs/WIRE_CONTRACT.md,
@@ -1524,6 +1669,9 @@ class AgentsRelayClient
         AgentsRelayController,
         ExecutorTransport,
         AgentsAutomationControl,
+        // ── F2: automations + cost totals ──
+        AgentsAutomationEditControl,
+        // ── end F2 ──
         AgentsDocumentsControl,
         AgentsAgentStatusControl,
         AgentsSkillsControl,
@@ -1609,6 +1757,19 @@ class AgentsRelayClient
   /// host's unprompted pushes. `AgentsChannelsService` sets it; null drops the
   /// frame. A sink like [agentPermissionsSink], for the same reason.
   static void Function(Map<String, dynamic> payload)? agentChannelSink;
+
+  // ── F2: automations + cost totals ──
+  /// Where the host's `automation_saved` answer goes (the reply to an
+  /// `automation_create` / `automation_update`). `AutomationsSource` sets it;
+  /// null drops the frame. A sink like [agentPermissionsSink]: only the
+  /// automations source reads it.
+  static void Function(Map<String, dynamic> payload)? automationSavedSink;
+
+  /// Sees every `done` frame, so `AutomationsSource` can read
+  /// `automation_result` (a fired `on_change` run's verdict) before the
+  /// `result` event arrives. Null drops it.
+  static void Function(Map<String, dynamic> payload)? automationDoneSink;
+  // ── end F2 ──
 
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
@@ -2375,6 +2536,7 @@ class AgentsRelayClient
     bool debug = false,
     bool regenerate = false,
     String? taskId,
+    bool budgetOverride = false, // F1: approvals + cost
   }) async {
     // Auth first, then the work — the same gate as a replay and an agent list,
     // and for a worse reason. Right after a reconnect this frame could overtake
@@ -2416,6 +2578,9 @@ class AgentsRelayClient
       if (debug) 'debug': true,
       // Same rule: a retry says so, everything else leaves the key off.
       if (regenerate) 'regenerate': true,
+      // F1: "Run anyway" after a budget refusal, to a host that keeps budgets.
+      if (budgetOverride && hostCapabilities.value.contains('cost_budget'))
+        'budget_override': true,
     });
   }
 
@@ -2462,13 +2627,20 @@ class AgentsRelayClient
     <String, dynamic>{'type': 'room_rename', 'room_id': roomId, 'name': name},
   );
 
+  // ── templates ──
   @override
-  Future<void> createAgent(String agentId, String name) =>
-      _sendFramePayload(<String, dynamic>{
-        'type': 'agent_create',
-        'agent_id': agentId,
-        'name': name,
-      });
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  }) => _sendFramePayload(<String, dynamic>{
+    'type': 'agent_create',
+    'agent_id': agentId,
+    'name': name,
+    // Additive: an older host ignores the key and creates a plain coworker.
+    if (template != null && template.isNotEmpty) 'template': template,
+  });
+  // ── end templates ──
 
   @override
   Future<void> renameAgent(String agentId, String name) =>
@@ -2610,6 +2782,7 @@ class AgentsRelayClient
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+    String? scope, // F1: approvals + cost
   }) =>
       // A sealed control frame, sent the same way as a stop: the executor
       // correlates it by `approval_id` and resolves the blocked publish.
@@ -2617,6 +2790,9 @@ class AgentsRelayClient
         'type': 'approval_decision',
         'approval_id': approvalId,
         'approved': approved,
+        // F1: only an answer to a card with options says what it covers, so
+        // an old host and a takeover see the frame they always saw.
+        if (scope != null && scope.isNotEmpty) 'scope': scope,
       });
 
   @override
@@ -2642,6 +2818,24 @@ class AgentsRelayClient
         'id': id,
         'action': action,
       });
+
+  // ── F2: automations + cost totals ──
+  @override
+  Future<void> sendAutomationCreate(Map<String, dynamic> frame) =>
+      // Answered with ONE terminal `automation_saved` (docs/WIRE_CONTRACT.md,
+      // "Event triggers"), like an `automation_list`.
+      _sendFramePayload(<String, dynamic>{
+        ...frame,
+        'type': 'automation_create',
+      });
+
+  @override
+  Future<void> sendAutomationUpdate(Map<String, dynamic> frame) =>
+      _sendFramePayload(<String, dynamic>{
+        ...frame,
+        'type': 'automation_update',
+      });
+  // ── end F2 ──
 
   @override
   Future<void> requestAutomationList({String? sessionKey}) =>
@@ -3034,6 +3228,10 @@ class AgentsRelayClient
         if (automation != null) _inbound.add(automation);
       case 'automation_list':
         _inbound.add(AgentsRelayAutomationList.fromPayload(payload));
+      // ── F2: automations + cost totals ──
+      case 'automation_saved':
+        automationSavedSink?.call(payload);
+      // ── end F2 ──
       case 'documents':
         _inbound.add(AgentsRelayDocuments(payload));
       case 'skills_list':
@@ -3052,6 +3250,9 @@ class AgentsRelayClient
         final runState = AgentsRelayRunState.fromPayload(payload);
         if (runState != null) _inbound.add(runState);
       case 'done':
+        automationDoneSink?.call(
+          payload,
+        ); // F2: automations (on_change verdict)
         final iterations = payload['iterations'];
         final finalAnswer = payload['final_answer'];
         final reason = payload['reason'];
@@ -3081,8 +3282,17 @@ class AgentsRelayClient
             hasMore: payload['has_more'] == true,
             oldestMid: AgentsRelayTool._asInt(payload['oldest_mid']),
             pageBeforeId: AgentsRelayTool._asInt(payload['before_id']),
+            cost: AgentsRunCost.fromJson(payload['cost']), // F1: cost
           ),
         );
+      // ── F1: approvals + cost ──
+      case 'budget_warning':
+        // A notice, not a transcript event: [AgentsRelayInbound] is sealed,
+        // and the threads read the notices from one place, deduplicated per
+        // coworker, week and level.
+        final warning = AgentsBudgetWarning.fromPayload(payload);
+        if (warning != null) AgentsBudgetNotices.instance.add(warning);
+      // ── end F1 ──
       case 'reprovision_request':
         // The host wants a fresh account token. Answered here, never surfaced:
         // there is nothing for the user to see or decide.

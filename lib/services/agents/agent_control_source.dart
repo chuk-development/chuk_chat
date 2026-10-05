@@ -232,6 +232,85 @@ class AgentSandbox {
   }
 }
 
+// ── F2: automations + cost totals ──
+/// What this coworker has cost in euro, as the host priced it
+/// (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
+///
+/// [sessionTotal] and [lastRun] are this thread; [today] and [week] are the
+/// whole coworker. The host's figure is what leaves the balance.
+@immutable
+class AgentCostTotals {
+  const AgentCostTotals({
+    required this.sessionTotal,
+    required this.today,
+    required this.week,
+    this.currency = 'EUR',
+    this.lastRun,
+    this.weekStartsAt,
+    this.budgetWeekly,
+    this.budgetState,
+  });
+
+  final String currency;
+  final double sessionTotal;
+
+  /// Absent when the last run had no complete price.
+  final double? lastRun;
+  final double today;
+  final double week;
+
+  /// Monday 00:00 on the host's clock.
+  final DateTime? weekStartsAt;
+
+  /// Euro per week; present only when a budget is set.
+  final double? budgetWeekly;
+
+  /// `ok`, `warning` (80 %) or `exceeded` (100 %); present only with a budget.
+  final String? budgetState;
+
+  bool get hasBudget => budgetWeekly != null && budgetWeekly! > 0;
+
+  /// The share of the week's budget spent, 0..1 (capped), or null without a
+  /// budget.
+  double? get weekShare {
+    final double? budget = budgetWeekly;
+    if (budget == null || budget <= 0) return null;
+    return (week / budget).clamp(0.0, 1.0);
+  }
+
+  static AgentCostTotals? fromPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    double? number(Object? value) =>
+        value is num && value.isFinite ? value.toDouble() : null;
+    final currency = payload['currency'];
+    final weekStart = number(payload['week_starts_at']);
+    final state = payload['budget_state'];
+    return AgentCostTotals(
+      currency: currency is String && currency.isNotEmpty ? currency : 'EUR',
+      sessionTotal: number(payload['session_total']) ?? 0,
+      lastRun: number(payload['last_run']),
+      today: number(payload['today']) ?? 0,
+      week: number(payload['week']) ?? 0,
+      weekStartsAt: weekStart == null
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(
+              (weekStart * 1000).round(),
+              isUtc: true,
+            ).toLocal(),
+      budgetWeekly: number(payload['budget_weekly']),
+      budgetState: state is String && state.isNotEmpty ? state : null,
+    );
+  }
+}
+
+/// `€0.41` for an amount of at least a cent, `< €0.01` below that, `€0.00`
+/// for zero. Two decimals, the way the app shows the balance.
+String formatEuro(double amount) {
+  if (amount > 0 && amount < 0.005) return '< €0.01';
+  return '€${amount.toStringAsFixed(2)}';
+}
+// ── end F2 ──
+
 /// Everything the control surface shows, one [ControlValue] per block.
 @immutable
 class AgentControlSnapshot {
@@ -241,6 +320,7 @@ class AgentControlSnapshot {
     this.runtime = const ControlUnavailable<AgentSessionRuntime>(),
     this.sandbox = const ControlUnavailable<AgentSandbox>(),
     this.skills = const ControlUnavailable<List<AgentSkill>>(),
+    this.cost = const ControlUnavailable<AgentCostTotals>(),
   });
 
   final ControlValue<AgentModelChoice> model;
@@ -249,18 +329,24 @@ class AgentControlSnapshot {
   final ControlValue<AgentSandbox> sandbox;
   final ControlValue<List<AgentSkill>> skills;
 
+  /// Euro totals (F2). Unavailable when the host priced nothing: the panel
+  /// then keeps the token figures only.
+  final ControlValue<AgentCostTotals> cost;
+
   AgentControlSnapshot copyWith({
     ControlValue<AgentModelChoice>? model,
     ControlValue<AgentTokenUsage>? tokens,
     ControlValue<AgentSessionRuntime>? runtime,
     ControlValue<AgentSandbox>? sandbox,
     ControlValue<List<AgentSkill>>? skills,
+    ControlValue<AgentCostTotals>? cost,
   }) => AgentControlSnapshot(
     model: model ?? this.model,
     tokens: tokens ?? this.tokens,
     runtime: runtime ?? this.runtime,
     sandbox: sandbox ?? this.sandbox,
     skills: skills ?? this.skills,
+    cost: cost ?? this.cost,
   );
 }
 
@@ -392,7 +478,12 @@ class RelayAgentControlSource implements AgentControlSource {
     final tokens = AgentTokenUsage.fromPayload(event.tokens);
     final runtime = AgentSessionRuntime.fromPayload(event.runtime);
     final sandbox = AgentSandbox.fromPayload(event.sandbox);
+    final cost = AgentCostTotals.fromPayload(event.cost); // F2: cost totals
     notifier.value = notifier.value.copyWith(
+      // F2: cost totals. No block = nothing priced; never a made-up zero.
+      cost: cost == null
+          ? const ControlUnavailable<AgentCostTotals>(nothingYet)
+          : ControlAvailable<AgentCostTotals>(cost),
       model: model == null
           ? const ControlUnavailable<AgentModelChoice>(nothingYet)
           : ControlAvailable<AgentModelChoice>(model),

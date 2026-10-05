@@ -48,6 +48,9 @@ class FakeRelayController implements AgentsRelayController {
   /// send leaves it false.
   final List<bool> taskRegenerateFlags = <bool>[];
 
+  /// The `budgetOverride` flag of each task, in order.
+  final List<bool> taskBudgetOverrides = <bool>[];
+
   /// The `task_id` of every send, in order. Null for a caller that sent none.
   final List<String?> taskIds = <String?>[];
 
@@ -62,6 +65,9 @@ class FakeRelayController implements AgentsRelayController {
 
   /// Every here.now publish decision, as `(approvalId, approved)`.
   final List<(String, bool)> approvalDecisions = <(String, bool)>[];
+
+  /// The `scope` of each decision, in order (null when none was sent).
+  final List<String?> approvalScopes = <String?>[];
 
   /// Every `secrets` frame, as `(values, revision, requestId)`.
   final List<(Map<String, String>, int, String?)> secretsSent =
@@ -154,7 +160,11 @@ class FakeRelayController implements AgentsRelayController {
   Future<void> renameRoom(String roomId, String name) async {}
 
   @override
-  Future<void> createAgent(String agentId, String name) async {}
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  }) async {}
 
   @override
   Future<void> renameAgent(String agentId, String name) async {}
@@ -182,6 +192,7 @@ class FakeRelayController implements AgentsRelayController {
     bool debug = false,
     bool regenerate = false,
     String? taskId,
+    bool budgetOverride = false,
   }) async {
     tasks.add(prompt);
     taskSessionKeys.add(sessionKey);
@@ -190,6 +201,7 @@ class FakeRelayController implements AgentsRelayController {
     taskReasoning.add(reasoningEffort);
     taskDebugFlags.add(debug);
     taskRegenerateFlags.add(regenerate);
+    taskBudgetOverrides.add(budgetOverride);
     taskIds.add(taskId);
     final error = taskError;
     if (error != null) throw error;
@@ -237,8 +249,10 @@ class FakeRelayController implements AgentsRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+    String? scope,
   }) async {
     approvalDecisions.add((approvalId, approved));
+    approvalScopes.add(scope);
   }
 
   @override

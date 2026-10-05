@@ -3,9 +3,12 @@ import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
+import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
+import 'package:chuk_chat/widgets/agents_run_cost_meta.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -101,6 +104,18 @@ class ChatMessageListItem extends StatelessWidget {
     final bool forceLive =
         isLastAiMessage && (liveRuntime?.isSending.value ?? false);
 
+    // AGENTS: what a coworker's run cost, and its run id, ride on its answer
+    // as one synthetic call (docs/WIRE_CONTRACT.md, "Cost per run and weekly
+    // budget"). It is lifted off here, so the bubble never draws it as a tool
+    // line: the cost becomes the answer's meta line, and the run id folds a
+    // quiet automation run to one line. Rows without it pass through
+    // unchanged (the same lists).
+    final costSplit = data.isUser
+        ? null
+        : splitRunMeta(data.toolCalls, data.contentBlocks);
+    final AgentsRunCost? runCost = costSplit?.cost;
+    final String? runId = costSplit?.runId;
+
     MessageBubble buildBubble(String text, String? reasoning) => MessageBubble(
       key: ValueKey<String>(uiKey),
       message: text,
@@ -113,9 +128,11 @@ class ChatMessageListItem extends StatelessWidget {
       modelLabel: data.modelLabel,
       modelProvider: data.modelProvider,
       tps: data.tps,
-      toolCalls: data.toolCalls,
+      toolCalls: costSplit == null ? data.toolCalls : costSplit.toolCalls,
       showToolCalls: showToolCalls,
-      contentBlocks: data.contentBlocks,
+      contentBlocks: costSplit == null
+          ? data.contentBlocks
+          : costSplit.contentBlocks,
       isStreamingMessage: data.isStreamingMessage || forceLive,
       chatId: activeChatId,
       turnStartedAt: data.turnStartedAt,
@@ -187,7 +204,20 @@ class ChatMessageListItem extends StatelessWidget {
     final String? reasoning = data.reasoning.trim().isEmpty
         ? null
         : data.reasoning;
-    final Widget bubble = buildBubble(data.displayText, reasoning);
+    final Widget answer = buildBubble(data.displayText, reasoning);
+    final Widget withCost = runCost == null || data.isStreamingMessage
+        ? answer
+        : Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              answer,
+              AgentsRunCostMeta(cost: runCost),
+            ],
+          );
+    final Widget bubble = runId == null || data.isStreamingMessage
+        ? withCost
+        : AgentsQuietRunFold(runId: runId, child: withCost);
     return RepaintBoundary(
       child: data.isUser && uiKey == flyInKey
           ? MessageFlyIn(key: ValueKey<String>('flyin_$uiKey'), child: bubble)

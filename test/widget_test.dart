@@ -113,6 +113,7 @@ class _IdleRelayController implements AgentsRelayController {
     bool debug = false,
     bool regenerate = false,
     String? taskId,
+    bool budgetOverride = false,
   }) async {}
 
   @override
@@ -139,7 +140,11 @@ class _IdleRelayController implements AgentsRelayController {
   Future<void> renameRoom(String roomId, String name) async {}
 
   @override
-  Future<void> createAgent(String agentId, String name) async {}
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  }) async {}
 
   @override
   Future<void> renameAgent(String agentId, String name) async {}
@@ -180,6 +185,7 @@ class _IdleRelayController implements AgentsRelayController {
   Future<void> sendApprovalDecision({
     required String approvalId,
     required bool approved,
+    String? scope,
   }) async {}
 
   @override

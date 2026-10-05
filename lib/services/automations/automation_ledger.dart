@@ -32,6 +32,22 @@ ToolCall automationCallFromRelay(
   call.arguments['fire_count'] = automation.fireCount;
   if (event.runId != null) call.arguments['run_id'] = event.runId;
   if (event.reason != null) call.arguments['reason'] = event.reason;
+  // `result` tags the run it closes: the thread can fold a quiet run to one
+  // line (docs/WIRE_CONTRACT.md, "Notify only on change").
+  if (event.event == 'result') {
+    call.arguments['changed'] = event.changed ?? true;
+    if (event.summary != null) {
+      call.arguments['summary'] = event.summary;
+    } else {
+      call.arguments.remove('summary');
+    }
+  }
+  call.arguments['notify'] = automation.notify;
+  if (automation.unchangedCount > 0) {
+    call.arguments['unchanged_count'] = automation.unchangedCount;
+  } else {
+    call.arguments.remove('unchanged_count');
+  }
   call.result = automationEventText(event);
   if (automation.isOver) {
     call.status = automation.state == 'failed'
@@ -50,7 +66,12 @@ String automationEventText(AgentsRelayAutomation event) {
   final what = '${a.name} (${a.specLabel})';
   switch (event.event) {
     case 'created':
-      return a.isWatcher ? 'Watcher started: $what' : 'Scheduled: $what';
+      return switch (a.kind) {
+        'watcher' => 'Watcher started: $what',
+        'watch_url' => 'Watching a page: $what',
+        'mail' => 'Watching mail: $what',
+        _ => 'Scheduled: $what',
+      };
     case 'fired':
       final reason = event.reason;
       return reason == null || reason.isEmpty
@@ -67,6 +88,17 @@ String automationEventText(AgentsRelayAutomation event) {
       return error == null ? 'Failed: $what' : 'Failed: $what — $error';
     case 'done':
       return 'Finished: $what';
+    case 'updated':
+      return 'Edited: $what';
+    case 'result':
+      final summary = event.summary;
+      if (event.changed == false) {
+        return summary == null
+            ? 'No change: $what'
+            : 'No change: $what — $summary';
+      }
+      if (event.reported == false) return 'Ran, no report: $what';
+      return summary == null ? 'Changed: $what' : 'Changed: $what — $summary';
     default:
       return '${event.event}: $what';
   }

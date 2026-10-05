@@ -152,6 +152,11 @@ import 'package:chuk_chat/widgets/room_list_view.dart';
 import 'package:chuk_chat/widgets/room_members_sheet.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
 import 'package:chuk_chat/widgets/room_thread_view.dart';
+// ── templates ──
+import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/automations/automations_source.dart';
+import 'package:chuk_chat/widgets/coworker_template_picker.dart';
+// ── end templates ──
 
 part 'agents_shell_state.dart';
 part 'agents_desktop_layout.dart';

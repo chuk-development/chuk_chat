@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/automations/automations_source.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
+import 'package:chuk_chat/widgets/automation_editor_sheet.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
@@ -77,9 +79,54 @@ class _AutomationsPageState extends State<AutomationsPage> {
     AppNotifications.show(context, 'Not connected to the host');
   }
 
+  // ── F2: automations + cost totals ──
+  /// The coworkers a new automation can belong to on the global page: every
+  /// name the host sent, plus every session that already has a row.
+  Map<String, String> _coworkerChoices() {
+    final choices = <String, String>{..._source.coworkerNames};
+    for (final a in _source.all) {
+      choices.putIfAbsent(
+        a.sessionKey,
+        () => _source.coworkerName(a.sessionKey),
+      );
+    }
+    return choices;
+  }
+
+  Future<void> _create() async {
+    final saved = await showAutomationEditor(
+      context,
+      sessionKey: widget.sessionKey,
+      coworkers: widget.sessionKey == null
+          ? _coworkerChoices()
+          : const <String, String>{},
+      source: _source,
+    );
+    if (!mounted || saved == null) return;
+    AppNotifications.show(
+      context,
+      AppLocalizations.of(context)?.automationSaved ?? 'Saved',
+    );
+  }
+
+  Future<void> _edit(AgentsAutomation a) async {
+    final saved = await showAutomationEditor(
+      context,
+      existing: a,
+      source: _source,
+    );
+    if (!mounted || saved == null) return;
+    AppNotifications.show(
+      context,
+      AppLocalizations.of(context)?.automationSaved ?? 'Saved',
+    );
+  }
+  // ── end F2 ──
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     // One row per automation. A restarted watcher leaves its old row behind,
     // and showing both is what made the same automation read as two.
     final all = _source.distinct
@@ -101,6 +148,12 @@ class _AutomationsPageState extends State<AutomationsPage> {
         // the body says the same thing twice.
         title: const Text('Automations'),
         actions: <Widget>[
+          FloatingHeaderButton(
+            key: const ValueKey<String>('automations-new'),
+            icon: Icons.add,
+            tooltip: l10n?.automationNew ?? 'New automation',
+            onPressed: _create,
+          ),
           FloatingHeaderButton(
             icon: Icons.refresh,
             tooltip: 'Refresh',
@@ -162,6 +215,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
                       onPause: () => _control(a, 'pause'),
                       onResume: () => _control(a, 'resume'),
                       onCancel: () => _control(a, 'cancel'),
+                      onEdit: a.isOver || a.isWatcher ? null : () => _edit(a),
                     ),
                 ],
               ),

@@ -46,6 +46,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 
 /// Prefix of the per-session replay cursor key in SharedPreferences.
 const String kReplayCursorPrefix = 'cowork.replay_cursor.';
@@ -454,6 +455,20 @@ class AgentsReplayLoader extends ChangeNotifier {
         final aiRow = draft.aiRow;
         if (worked != null && aiRow != null) {
           aiRow['generationMs'] = '${worked.inMilliseconds}';
+        }
+        // F1: what the run cost and its run id ride on its answer as one
+        // call, the same mapping the live ledger uses, so the meta line under
+        // the answer (and the fold of a quiet automation run) is the same
+        // after a replay.
+        if (aiRow != null) {
+          putRunMeta(
+            draft.aiToolCalls,
+            runMetaCall(
+              cost: event.cost,
+              runId: event.runId,
+              now: event.finishedAt,
+            ),
+          );
         }
         // A run that was stopped or that failed wrote nothing, so without this
         // it comes back from the host as an empty gap in the thread — the
