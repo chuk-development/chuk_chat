@@ -24,8 +24,8 @@ Agent ── agents-extension-mcp ── Broker im Host ── agents-browser-br
   `allow` gestellt.
 * Stop im Browser (Leiste oben auf der Seite, Panel, oder "Abbrechen" in
   Chromes gelber Debug-Leiste) haelt den Lauf des Coworkers an und sperrt den
-  Browser, bis der Nutzer im Panel "Allow again" drueckt oder eine neue
-  Aufgabe schickt.
+  Browser, bis der Nutzer im Panel oder in der App "Allow again" drueckt
+  oder eine neue Aufgabe schickt.
 
 ## Was getestet ist (ohne Browser)
 
@@ -35,8 +35,8 @@ node extension/test/stop_and_secrets_test.mjs         # 38: Stop, Passwort-/Kart
 node extension/test/strip_test.mjs                    # 11: Name in der Leiste, Panel, Timeout, Stop leert die Schlange
 python3 tools/agents-extension-mcp/test_agents_extension_mcp.py   # 6
 python3 tools/agents-browser-bridge/test_bridge_roundtrip.py      # 4
-cd agents/executor && .venv/bin/python -m pytest -q tests/test_user_browser.py           # 35
-cd agents/host     && .venv/bin/python -m pytest -q tests/test_user_browser_host.py      # 7
+cd agents/executor && .venv/bin/python -m pytest -q tests/test_user_browser.py           # 39
+cd agents/host     && .venv/bin/python -m pytest -q tests/test_user_browser_host.py      # 11
 cd agents/runtime  && .venv/bin/python -m pytest -q tests/test_user_browser_approvals.py # 9
 ```
 
@@ -111,7 +111,11 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
    der App endet als gestoppt, das Panel zeigt "Stopped" und "Allow again".
    Ein neuer Versuch des Coworkers bekommt "the user pressed Stop".
 8. **Stop aufheben.** Neue Aufgabe in der App schicken -> geht wieder. Oder im
-   Panel "Allow again".
+   Panel "Allow again". Oder in der App: der Stop-Hinweis am Ende des Threads
+   und der Schalter "Your browser" zeigen "Allow again" (Rahmen
+   `user_browser_resume`, nur bei einem Host, der die Faehigkeit nennt).
+   Erwartet: Panel und Leiste sagen nicht mehr "Stopped", der Schalter sagt
+   wieder "Paired with Chrome", der Knopf verschwindet.
 9. **Chromes eigene Leiste.** Waehrend er klickt, in Chromes gelber Leiste
    "... debuggt diesen Browser" auf "Abbrechen". Erwartet: wie Stop.
 10. **Zwei Coworker.** Zwei Coworker mit "Your browser" gleichzeitig etwas
@@ -124,7 +128,11 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
 12. **Status live.** App mit offenem "Your browser"-Schalter, dann Chrome
     schliessen und wieder oeffnen. Erwartet: der Status wechselt ohne Neuladen
     (`user_browser_status`).
-13. **Zurueck auf Sandbox.** "Your browser" ausschalten, neue Aufgabe:
+13. **Bildschirm-Knopf am Telefon.** Coworker mit "Your browser" im Thread
+    auf dem Telefon: der Bildschirm-Knopf oben rechts sagt "Works in your
+    browser", nicht "No screen open yet"; Tippen erklaert, dass es hier
+    keinen Bildschirm gibt.
+14. **Zurueck auf Sandbox.** "Your browser" ausschalten, neue Aufgabe:
     Sandbox-Browser mit VNC wie vorher.
 
 ## Wenn nichts passiert
@@ -162,6 +170,9 @@ Geht, aber schwaecher, und das liegt nicht an uns:
   Broker ist nur fuer die Docker-Sandbox eine Grenze.
 * Die App zeigt den Status unter dem Schalter "Your browser" und am Ende
   des Threads und folgt dem Push `user_browser_status`. "Allow again" gibt es
-  nur im Add-on: die App hat keinen Rahmen, der einen Stop aufhebt.
+  im Add-on und in der App (`user_browser_resume`, bead chuk_chat-atm2).
+* Ein Panel-Lauf traegt in der App kein Etikett "From your browser": die App
+  sieht die Herkunft des Laufs nicht, nur die Textzeile
+  `[from your browser panel]` (Nachzug: bead chuk_chat-wuci).
 * Ein Panel-Lauf ist kein `origin: "app"`: ist das Wochenbudget des
   Coworkers aufgebraucht, wird er abgelehnt wie eine Automation.

@@ -548,4 +548,167 @@ void main() {
       }
     });
   });
+
+  // ── browser resume ──
+  group('"Allow again" from the app', () {
+    Future<(FakeHost, AgentsPermissionsService)> resumable(
+      WidgetTester tester, {
+      bool capability = true,
+    }) async {
+      final (FakeHost host, AgentsPermissionsService service) = await _section(
+        tester,
+      );
+      if (capability) {
+        host.capabilities.value = const <String>{
+          kAgentPermissionsCapability,
+          kUserBrowserResumeCapability,
+        };
+      }
+      service.handleFrame(_reply('a', _block(stopped: true), userBrowser: true));
+      await tester.pump();
+      return (host, service);
+    }
+
+    const Key button = ValueKey<String>('agents-user-browser-allow-again');
+
+    test('the service sends the frame only to a host that names it', () async {
+      final FakeHost host = FakeHost();
+      final AgentsPermissionsService service = host.service();
+      addTearDown(service.dispose);
+      expect(service.userBrowserResumeSupported, isFalse);
+      expect(await service.resumeUserBrowser(), isFalse);
+      expect(host.sent, isEmpty);
+
+      host.capabilities.value = const <String>{kUserBrowserResumeCapability};
+      expect(await service.resumeUserBrowser(), isTrue);
+      expect(host.sent.last, <String, dynamic>{'type': 'user_browser_resume'});
+      expect(service.resumingUserBrowser, isTrue);
+      // A second tap while the host has not answered sends nothing.
+      expect(await service.resumeUserBrowser(), isFalse);
+      expect(host.sent, hasLength(1));
+      // The host's answer ends the wait and replaces the status.
+      service.handleUserBrowserStatus(_push(_block()));
+      expect(service.resumingUserBrowser, isFalse);
+      expect(service.userBrowserStatus!.stopped, isFalse);
+      // An answer with an error (no block) ends the wait too.
+      expect(await service.resumeUserBrowser(), isTrue);
+      service.handleUserBrowserStatus(<String, dynamic>{
+        'type': 'user_browser_status',
+        'error': 'user browser not enabled',
+      });
+      expect(service.resumingUserBrowser, isFalse);
+      // A send that fails is no wait.
+      host.fail = true;
+      expect(await service.resumeUserBrowser(), isFalse);
+      expect(service.resumingUserBrowser, isFalse);
+    });
+
+    testWidgets('under the switch: shown while stopped, sends the frame', (
+      tester,
+    ) async {
+      final (FakeHost host, AgentsPermissionsService service) =
+          await resumable(tester);
+      expect(_subtitleOf('Stopped in the browser'), findsOneWidget);
+      expect(find.byKey(button), findsOneWidget);
+      await tester.tap(find.byKey(button));
+      await tester.pump();
+      expect(
+        host.sent.where((p) => p['type'] == 'user_browser_resume'),
+        hasLength(1),
+      );
+      service.handleUserBrowserStatus(_push(_block()));
+      await tester.pump();
+      expect(find.byKey(button), findsNothing);
+      expect(_subtitleOf('Paired with Chrome'), findsOneWidget);
+    });
+
+    testWidgets('no button for a host that does not name the capability', (
+      tester,
+    ) async {
+      await resumable(tester, capability: false);
+      expect(_subtitleOf('Stopped in the browser'), findsOneWidget);
+      expect(find.byKey(button), findsNothing);
+    });
+
+    testWidgets('a failed send says so', (tester) async {
+      final (FakeHost host, _) = await resumable(tester);
+      host.fail = true;
+      await tester.tap(find.byKey(button));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.text('Could not reach your computer. Try again.'),
+        findsOneWidget,
+      );
+      await tester.pump(const Duration(seconds: 5));
+    });
+
+    testWidgets('the Stop notice: button and sentence only with a callback', (
+      tester,
+    ) async {
+      int taps = 0;
+      await tester.pumpL(
+        _localized(
+          AgentsUserBrowserNoticeView(
+            notice: const UserBrowserNotice(UserBrowserNoticeKind.stopped),
+            onAllowAgain: () => taps++,
+          ),
+        ),
+      );
+      expect(
+        find.text(
+          'You stopped this in your browser. Tap Allow again, or send a new '
+          'task.',
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byKey(button));
+      expect(taps, 1);
+
+      // Busy: the tap does nothing.
+      await tester.pumpL(
+        _localized(
+          AgentsUserBrowserNoticeView(
+            notice: const UserBrowserNotice(UserBrowserNoticeKind.stopped),
+            onAllowAgain: () => taps++,
+            allowAgainBusy: true,
+          ),
+        ),
+      );
+      await tester.tap(find.byKey(button));
+      expect(taps, 1);
+
+      // Another kind never shows it.
+      await tester.pumpL(
+        _localized(
+          AgentsUserBrowserNoticeView(
+            notice: const UserBrowserNotice(UserBrowserNoticeKind.notSetUp),
+            onAllowAgain: () => taps++,
+          ),
+        ),
+      );
+      expect(find.byKey(button), findsNothing);
+    });
+
+    testWidgets('360 px at 1.3, German', (tester) async {
+      tester.view.physicalSize = const Size(360, 1400);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpL(
+        _localized(
+          AgentsUserBrowserNoticeView(
+            notice: const UserBrowserNotice(UserBrowserNoticeKind.stopped),
+            onAllowAgain: () {},
+          ),
+          locale: const Locale('de'),
+          width: 360,
+          textScale: 1.3,
+        ),
+      );
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+      expect(find.text('Wieder erlauben'), findsOneWidget);
+    });
+  });
+  // ── end browser resume ──
 }

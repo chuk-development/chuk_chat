@@ -268,6 +268,22 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
           const SizedBox(height: 8),
         ],
         // ── end own browser ──
+        // ── browser resume ──
+        // "Stopped in the browser" under the switch: lift it from here, when
+        // the host takes the app's word for it.
+        if (_service.userBrowserResumeSupported &&
+            (_service.userBrowserStatus?.hostListening ?? false) &&
+            (_service.userBrowserStatus?.stopped ?? false)) ...<Widget>[
+          Padding(
+            padding: const EdgeInsets.only(left: 16),
+            child: AgentsUserBrowserAllowAgainButton(
+              busy: _service.resumingUserBrowser,
+              onTap: () => unawaited(allowUserBrowserAgain(context, _service)),
+            ),
+          ),
+          const SizedBox(height: 8),
+        ],
+        // ── end browser resume ──
         if (error != null) ...<Widget>[
           ExpressiveInfoCard(
             key: const ValueKey<String>('agent-permissions-error'),

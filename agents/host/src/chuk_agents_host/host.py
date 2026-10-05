@@ -63,6 +63,8 @@ from chuk_agents_executor import (
 from chuk_agents_executor.protocol import USER_BROWSER, browser_target
 from chuk_agents_executor.user_browser import (
     PANEL_ORIGIN,
+    RESUME_CAPABILITY as USER_BROWSER_RESUME_CAPABILITY,
+    RESUME_FRAME as USER_BROWSER_RESUME_FRAME,
     panel_prompt,
     shared_broker,
     shared_status,
@@ -2109,6 +2111,8 @@ class LocalHost:
             return self._on_permissions_frame(payload)
         if isinstance(payload, dict) and payload.get("type") in CHANNEL_FRAMES:
             return self._on_channel_frame(payload)
+        if isinstance(payload, dict) and payload.get("type") == USER_BROWSER_RESUME_FRAME:
+            return self._on_user_browser_resume()
         # Announce the actual API routing UUID through the authenticated
         # channel. It is NOT the crypto identity (usually "cowork-host").
         self._send_host_payload({
@@ -2121,6 +2125,7 @@ class LocalHost:
                 APPROVALS_CAPABILITY,
                 BUDGET_CAPABILITY,
                 CHANNELS_CAPABILITY,
+                USER_BROWSER_RESUME_CAPABILITY,
             ],
         })
         names = handle_agent_frame(self._coworker_names, payload, log=self._log)
@@ -2318,6 +2323,24 @@ class LocalHost:
         broker.add_change_listener(self._on_user_browser_change)
         broker.set_name_resolver(self._browser_coworker_name)
         broker.set_page_message_handler(self._on_browser_page_message)
+
+    def _on_user_browser_resume(self) -> dict:
+        """``user_browser_resume``: the user tapped "Allow again" in the app.
+        Lift the broker's Stop like the add-on's ``browser_resume`` does and
+        answer with the fresh status. The lift also pushes
+        ``user_browser_status`` to every attached app (a second phone). With
+        no broker in this process there is nothing to lift; the answer still
+        says how things are."""
+        broker = shared_broker(start=False)
+        if broker is not None and broker.running:
+            if broker.resume_by_user():
+                self._log("user browser: Stop lifted from the app")
+        try:
+            block = self._user_browser_block(shared_status())
+        except Exception as exc:  # noqa: BLE001 — a status never breaks the reply
+            self._log(f"user browser status failed: {type(exc).__name__}")
+            return {"type": "user_browser_status", "error": "user browser status failed"}
+        return {"type": "user_browser_status", "user_browser": block}
 
     def _browser_coworker_name(self, session_key: str) -> str:
         return self._call_agent(session_key)[1]

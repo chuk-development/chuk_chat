@@ -9,8 +9,9 @@
 // (`agent_permissions.user_browser` or the `user_browser_status` push) and
 // `run_state.browser_target`. Nothing is disabled on the app's side.
 //
-// There is no "Allow again" button here: the app has no frame that lifts a
-// Stop. The user lifts it in the add-on, or by sending a new task.
+// "Allow again" lifts a Stop from the app (`user_browser_resume`), but only
+// for a host that names the capability. Otherwise the user lifts it in the
+// add-on, or by sending a new task.
 
 import 'dart:async';
 
@@ -170,6 +171,8 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
     super.key,
     required this.notice,
     this.onSetUp,
+    this.onAllowAgain,
+    this.allowAgainBusy = false,
     this.dense = false,
   });
 
@@ -177,6 +180,16 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
 
   /// "How to set up": opens the setup card. Null hides the button.
   final VoidCallback? onSetUp;
+
+  // ── browser resume ──
+  /// "Allow again" on the Stop notice: sends `user_browser_resume`. Null
+  /// hides the button (a host that does not name the capability), and the
+  /// notice points to the add-on instead.
+  final VoidCallback? onAllowAgain;
+
+  /// The host has not answered "Allow again" yet: the tap does nothing.
+  final bool allowAgainBusy;
+  // ── end browser resume ──
 
   /// Desktop size (docs/DESIGN.md §14.8).
   final bool dense;
@@ -227,7 +240,7 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
     final (HugeIconData icon, String text) = switch (notice.kind) {
       UserBrowserNoticeKind.stopped => (
         HugeIcons.stopCircle,
-        l.ubNoticeStopped,
+        onAllowAgain != null ? l.ubNoticeStoppedApp : l.ubNoticeStopped,
       ),
       UserBrowserNoticeKind.inUseByOther => (
         HugeIcons.userGroup,
@@ -239,6 +252,8 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
     final bool setup =
         notice.kind == UserBrowserNoticeKind.notSetUp ||
         notice.kind == UserBrowserNoticeKind.notConnected;
+    final bool allowAgain =
+        notice.kind == UserBrowserNoticeKind.stopped && onAllowAgain != null;
     return Semantics(
       container: true,
       liveRegion: true,
@@ -303,6 +318,19 @@ class AgentsUserBrowserNoticeView extends StatelessWidget {
                 ),
               ),
             ],
+            // ── browser resume ──
+            if (allowAgain) ...<Widget>[
+              const SizedBox(height: 10),
+              Padding(
+                padding: const EdgeInsets.only(left: 48),
+                child: AgentsUserBrowserAllowAgainButton(
+                  onTap: onAllowAgain!,
+                  busy: allowAgainBusy,
+                  dense: dense,
+                ),
+              ),
+            ],
+            // ── end browser resume ──
           ],
         ),
       ),
@@ -526,3 +554,52 @@ Future<void> showUserBrowserSetupSheet(
     ),
   );
 }
+
+// ── browser resume ──
+/// "Allow again": lifts the user's Stop from the app. The thread's Stop
+/// notice and the "Your browser" switch draw the same button.
+class AgentsUserBrowserAllowAgainButton extends StatelessWidget {
+  const AgentsUserBrowserAllowAgainButton({
+    super.key,
+    required this.onTap,
+    this.busy = false,
+    this.dense = false,
+  });
+
+  final VoidCallback onTap;
+
+  /// Sent, no answer yet: the tap does nothing.
+  final bool busy;
+
+  /// Desktop size (docs/DESIGN.md §14.8).
+  final bool dense;
+
+  @override
+  Widget build(BuildContext context) {
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: ExpressiveButton(
+        key: const ValueKey<String>('agents-user-browser-allow-again'),
+        icon: Icons.play_arrow_rounded,
+        label: _l(context).ubAllowAgain,
+        dense: dense,
+        onTap: busy ? () {} : onTap,
+      ),
+    );
+  }
+}
+
+/// Sends "Allow again" through [service] and says so when it could not go
+/// out. The host's `user_browser_status` answer repaints the views.
+Future<void> allowUserBrowserAgain(
+  BuildContext context,
+  AgentsPermissionsService service,
+) async {
+  final AppLocalizations l = _l(context);
+  final bool sent = await service.resumeUserBrowser();
+  if (!sent && !service.resumingUserBrowser && context.mounted) {
+    pillToast(context, l.ubAllowAgainFailed);
+  }
+}
+// ── end browser resume ──

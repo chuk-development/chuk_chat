@@ -1365,4 +1365,10 @@ const Map<String, String> stringsDe = {
   'ubApprovalAddress': 'Adresse',
   'ubApprovalTab': 'Tab',
   // ── end own browser ──
+  // ── browser resume ──
+  'ubAllowAgain': 'Wieder erlauben',
+  'ubNoticeStoppedApp':
+      'Du hast das in deinem Browser gestoppt. Tippe auf Wieder erlauben oder schick eine neue Aufgabe.',
+  'ubAllowAgainFailed': 'Dein Computer ist nicht erreichbar. Versuch es noch einmal.',
+  // ── end browser resume ──
 };

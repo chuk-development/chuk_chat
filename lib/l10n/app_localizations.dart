@@ -1352,6 +1352,11 @@ class AppLocalizations {
   String get ubApprovalAddress => _get('ubApprovalAddress');
   String get ubApprovalTab => _get('ubApprovalTab');
   // ── end own browser ──
+  // ── browser resume ──
+  String get ubAllowAgain => _get('ubAllowAgain');
+  String get ubNoticeStoppedApp => _get('ubNoticeStoppedApp');
+  String get ubAllowAgainFailed => _get('ubAllowAgainFailed');
+  // ── end browser resume ──
 }
 
 class _AppLocalizationsDelegate

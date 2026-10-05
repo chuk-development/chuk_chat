@@ -186,6 +186,45 @@ void main() {
     controller.emit(opening);
     expect(presence.value, isTrue);
   });
+  test('the run state says whether the coworker works in the user browser', () {
+    int changes = 0;
+    presence.addListener(() => changes++);
+    expect(presence.usesUserBrowser, isFalse);
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 't',
+        state: 'running',
+        browserTarget: kBrowserTargetUserBrowser,
+      ),
+    );
+    expect(presence.usesUserBrowser, isTrue);
+    expect(presence.value, isFalse, reason: 'never a screen to show');
+    expect(changes, 1);
+    // A sandbox header flips it back; a new pairing forgets it.
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 't',
+        state: 'idle',
+        browserTarget: kBrowserTargetSandbox,
+      ),
+    );
+    expect(presence.usesUserBrowser, isFalse);
+    controller.emit(
+      const AgentsRelayRunState(
+        sessionKey: 't',
+        state: 'idle',
+        browserTarget: kBrowserTargetUserBrowser,
+      ),
+    );
+    controller.set(
+      const AgentsRelayState(
+        phase: AgentsRelayPhase.paired,
+        peerDeviceId: 'host-b',
+      ),
+    );
+    expect(presence.usesUserBrowser, isFalse);
+  });
+
   test('a fresh connection never inherits the last one\'s screen', () {
     // The transport can go from paired to paired: a re-pair, or the same app
     // attaching to a different coworker. A screen belongs to ONE live

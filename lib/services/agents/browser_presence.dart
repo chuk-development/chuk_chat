@@ -174,10 +174,28 @@ class BrowserPresence extends ValueNotifier<bool> {
   /// anything about a screen.
   String get parkedBecause => value ? '' : _because;
 
+  // ── own browser ──
+  /// The coworker drives the user's own browser (the last
+  /// `run_state.browser_target` said `user_browser`). Then there is never a
+  /// screen to show, and the parked screen target says "Works in your
+  /// browser" instead of "No screen open yet", as the desktop header does.
+  /// False on an old host that never says, and after [reset].
+  bool get usesUserBrowser => _usesUserBrowser;
+  bool _usesUserBrowser = false;
+
+  void _readBrowserTarget(AgentsRelayRunState state) {
+    final bool next = state.usesUserBrowser;
+    if (next == _usesUserBrowser) return;
+    _usesUserBrowser = next;
+    notifyListeners();
+  }
+  // ── end own browser ──
+
   void _onInbound(AgentsRelayInbound event) {
     // A retained socket/controller is not evidence of a reachable screen.
     // Reconnection must obtain fresh presence from the host's replay header.
     if (!controller.state.value.isPaired) return;
+    if (event is AgentsRelayRunState) _readBrowserTarget(event); // own browser
     final bool? next = switch (event) {
       // Tool names cannot distinguish a sandbox browser from user_browser.
       // Only the host's explicit capability may enable the viewer, so a tool
@@ -254,7 +272,14 @@ class BrowserPresence extends ValueNotifier<bool> {
   }
 
   /// Forget the state (a new pairing, a different coworker).
-  void reset() => _revoke();
+  void reset() {
+    _revoke();
+    // own browser: the next host's header says again.
+    if (_usesUserBrowser) {
+      _usesUserBrowser = false;
+      notifyListeners();
+    }
+  }
 
   @override
   void dispose() {

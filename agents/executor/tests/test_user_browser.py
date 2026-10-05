@@ -268,6 +268,28 @@ def test_allow_again_in_the_browser_lifts_the_stop(broker):
     assert wait_for(lambda: not broker.status()["stopped"])
 
 
+def test_allow_again_in_the_app_lifts_the_stop_and_tells_the_addon(broker):
+    fake = addon(broker)
+    seen: list[dict] = []
+    broker.add_change_listener(seen.append)
+    a = client(broker, "agent-a")
+    fake.send({"type": "browser_stop"})
+    assert wait_for(lambda: broker.status()["stopped"])
+    with pytest.raises(RuntimeError, match="pressed Stop"):
+        a.call("browser_snapshot", {})
+    assert broker.resume_by_user() is True
+    assert broker.status()["stopped"] is False
+    assert seen[-1]["stopped"] is False
+    # The add-on hears it, so its strip and panel stop saying "Stopped".
+    assert wait_for(lambda: any(f.get("type") == "browser_resume" for f in fake.frames))
+    a.call("browser_snapshot", {})
+    # No Stop: nothing lifted, nothing sent.
+    before = len(fake.frames)
+    assert broker.resume_by_user() is False
+    time.sleep(0.05)
+    assert [f for f in fake.frames[before:] if f.get("type") == "browser_resume"] == []
+
+
 def test_a_browser_that_was_stopped_before_the_host_came_says_so(broker):
     fake = FakeAddon.__new__(FakeAddon)
     fake.frames, fake.tabs, fake.driving = [], [], None
@@ -675,3 +697,76 @@ def test_chrome_bridge_broker_and_mcp_server_as_real_processes(broker):
         for proc in (bridge, server):
             proc.kill()
             proc.wait(5)
+
+
+# -- user_browser_resume from the app -------------------------------------------------
+
+
+def _boot_app(tmp_path, *, hook=None, controller_channel=None):
+    from chuk_agents_executor import ControllerSession
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir(exist_ok=True)
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = Executor(
+        name="user-browser",
+        endpoint=executor_ep,
+        opener=channel.executor.opener,
+        sealer=channel.executor.sealer,
+        environment=LocalEnvironment(workdir=str(workspace)),
+        db_path=str(tmp_path / "state.db"),
+        model_factory=lambda: MockModelClient(["unused"]),
+        on_agent_frame=hook,
+    )
+    sender = (controller_channel or channel).controller
+    controller = ControllerSession(
+        endpoint=controller_ep, sealer=sender.sealer, opener=channel.controller.opener
+    )
+    return executor, controller
+
+
+def test_the_apps_resume_reaches_the_host_and_its_status_is_the_terminal(tmp_path):
+    seen: list[dict] = []
+
+    def hook(payload):
+        seen.append(payload)
+        return {"type": "user_browser_status", "user_browser": {"stopped": False}}
+
+    executor, controller = _boot_app(tmp_path, hook=hook)
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "user_browser_resume"})
+        reply = controller.collect(rid, timeout=10.0)[-1]
+    finally:
+        executor.stop()
+    assert [p["type"] for p in seen] == ["user_browser_resume"]
+    assert reply == {"type": "user_browser_status", "user_browser": {"stopped": False}}
+
+
+def test_without_a_host_hook_the_resume_is_answered_with_a_status_error(tmp_path):
+    """Never a bare ``error``: the app reads that as the end of a run."""
+    executor, controller = _boot_app(tmp_path)
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "user_browser_resume"})
+        reply = controller.collect(rid, timeout=10.0)[-1]
+    finally:
+        executor.stop()
+    assert reply["type"] == "user_browser_status"
+    assert "not enabled" in reply["error"]
+
+
+def test_only_the_paired_app_can_lift_a_stop(tmp_path):
+    seen: list[dict] = []
+    executor, controller = _boot_app(
+        tmp_path, hook=lambda p: seen.append(p) or {}, controller_channel=paired_channel()
+    )
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "user_browser_resume"})
+        reply = controller.collect(rid, timeout=10.0)[-1]
+    finally:
+        executor.stop()
+    assert seen == []
+    assert "rejected" in str(reply.get("error") or reply)

@@ -224,3 +224,50 @@ def test_the_panel_runs_the_host_waits_on_are_capped(tmp_path, monkeypatch):
     assert "run-1" not in host._panel_runs
     host._on_run_finished({"run_id": f"run-{total}", "origin": PANEL_ORIGIN, "final_answer": "ok"})
     assert broker.sent == [{"type": "page_reply", "coworker": "Your coworker", "text": "ok"}]
+
+
+# -- "Allow again" in the app (user_browser_resume) ----------------------------------
+
+
+class _StoppedBroker:
+    running = True
+
+    def __init__(self) -> None:
+        self.stopped = True
+        self.lifts = 0
+
+    def resume_by_user(self) -> bool:
+        self.lifts += 1
+        was, self.stopped = self.stopped, False
+        return was
+
+
+def test_the_apps_resume_lifts_the_stop_and_answers_with_the_status(tmp_path, monkeypatch):
+    host, _party = _host(tmp_path, attached=True)
+    broker = _StoppedBroker()
+    monkeypatch.setattr(host_module, "shared_broker", lambda start=True: broker)
+    monkeypatch.setattr(host_module, "shared_status", lambda: _status(None, stopped=broker.stopped))
+    reply = host._on_agent_frame({"type": "user_browser_resume"})
+    assert broker.lifts == 1
+    assert reply["type"] == "user_browser_status"
+    assert reply["user_browser"]["stopped"] is False
+    assert "in_use_by_this_agent" not in reply["user_browser"]  # host-wide, like the push
+    # A second tap finds no Stop: still a status, nothing else changes.
+    again = host._on_agent_frame({"type": "user_browser_resume"})
+    assert again["user_browser"]["stopped"] is False
+
+
+def test_the_resume_without_a_broker_still_answers(tmp_path, monkeypatch):
+    host, _party = _host(tmp_path, attached=True)
+    monkeypatch.setattr(host_module, "shared_broker", lambda start=True: None)
+    monkeypatch.setattr(host_module, "shared_status", lambda: _status(None, host_listening=False))
+    reply = host._on_agent_frame({"type": "user_browser_resume"})
+    assert reply["type"] == "user_browser_status"
+    assert reply["user_browser"]["host_listening"] is False
+
+
+def test_host_route_names_the_resume_capability(tmp_path, monkeypatch):
+    host, party = _host(tmp_path, attached=True)
+    host._on_agent_frame({"type": "agent_list"})
+    routes = [f for f in party.frames if f.get("type") == "host_route"]
+    assert routes and "user_browser_resume" in routes[-1]["capabilities"]

@@ -2367,6 +2367,14 @@ class AgentsThreadViewState extends State<AgentsThreadView>
               service: _userBrowserService,
             ),
           ),
+          // ── browser resume ──
+          onAllowAgain: _userBrowserService.userBrowserResumeSupported
+              ? () => unawaited(
+                  allowUserBrowserAgain(context, _userBrowserService),
+                )
+              : null,
+          allowAgainBusy: _userBrowserService.resumingUserBrowser,
+          // ── end browser resume ──
         ),
       // ── end own browser ──
       if (warning != null)

@@ -37,6 +37,7 @@ class MobileChatScreen extends StatefulWidget {
     this.onOpenProfile,
     this.onOpenBrowser,
     this.browserAvailable = false,
+    this.usesUserBrowser = false, // own browser
     this.onOpenFiles,
     this.onReconnect,
     this.onMore,
@@ -51,6 +52,10 @@ class MobileChatScreen extends StatefulWidget {
 
   /// Is a screen open to take over? Drives the chrome's screen target.
   final bool browserAvailable;
+
+  /// The coworker works in the user's own browser: the chrome's parked screen
+  /// target says so (own browser).
+  final bool usesUserBrowser;
   final VoidCallback? onOpenFiles;
   final VoidCallback? onReconnect;
   final VoidCallback? onMore;
@@ -191,6 +196,7 @@ class _MobileChatScreenState extends State<MobileChatScreen>
                 onOpenProfile: widget.onOpenProfile,
                 onOpenBrowser: widget.onOpenBrowser,
                 browserAvailable: widget.browserAvailable,
+                usesUserBrowser: widget.usesUserBrowser, // own browser
                 onOpenFiles: widget.onOpenFiles,
                 onReconnect: widget.onReconnect,
                 onMore: widget.onMore,

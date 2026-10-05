@@ -11,6 +11,8 @@
 /// user's own browser.
 library;
 
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
@@ -181,6 +183,13 @@ Future<void> _sendOverRelay(Map<String, dynamic> payload) async {
 /// The capability a host names in `host_route.capabilities` when it answers
 /// the permission frames. The app sends them to no other host.
 const String kAgentPermissionsCapability = 'agent_permissions';
+
+// ── browser resume ──
+/// The capability a host names when it lifts a Stop in the user's browser on
+/// the app's `user_browser_resume`. The app shows "Allow again" for no other
+/// host.
+const String kUserBrowserResumeCapability = 'user_browser_resume';
+// ── end browser resume ──
 
 // ── F2: automations + cost totals ──
 /// The capability a host names when it keeps a weekly euro budget per
@@ -536,9 +545,11 @@ class AgentsPermissionsService extends ChangeNotifier {
   }
 
   /// Takes one `user_browser_status` push: the whole status replaces the
-  /// stored one, and every listener repaints. No polling.
+  /// stored one, and every listener repaints. No polling. It is also the
+  /// host's answer to `user_browser_resume`.
   void handleUserBrowserStatus(Map<String, dynamic> payload) {
     if (payload['type'] != 'user_browser_status') return;
+    if (_endResume()) notifyListeners(); // browser resume
     final UserBrowserStatus? status = UserBrowserStatus.fromJson(
       payload['user_browser'],
     );
@@ -552,14 +563,66 @@ class AgentsPermissionsService extends ChangeNotifier {
     if (_connection.value != null) return;
     _userBrowser = null;
     _userBrowserMine.clear();
+    _endResume(); // browser resume
   }
   // ── end own browser ──
+
+  // ── browser resume ──
+  /// A `user_browser_resume` is on its way and the host has not answered.
+  bool _resumingUserBrowser = false;
+  Timer? _resumeTimeout;
+
+  /// How long "Allow again" waits for the host before it can be tapped again.
+  static const Duration resumeTimeout = Duration(seconds: 10);
+
+  /// The connected host lifts a Stop on the app's word: it named
+  /// [kUserBrowserResumeCapability] in `host_route.capabilities`.
+  bool get userBrowserResumeSupported =>
+      _capabilities.value.contains(kUserBrowserResumeCapability);
+
+  /// "Allow again" was sent and the host has not answered yet.
+  bool get resumingUserBrowser => _resumingUserBrowser;
+
+  /// "Allow again": sends `user_browser_resume` (docs/WIRE_CONTRACT.md, "The
+  /// user's own browser"). The host lifts the Stop and answers with
+  /// `user_browser_status`, which repaints every view. False when the host
+  /// does not name the capability, nothing is connected, a request is
+  /// already out, or the frame could not be sent.
+  Future<bool> resumeUserBrowser() async {
+    if (!connected || !userBrowserResumeSupported || _resumingUserBrowser) {
+      return false;
+    }
+    _resumingUserBrowser = true;
+    _resumeTimeout?.cancel();
+    _resumeTimeout = Timer(resumeTimeout, () {
+      if (_endResume()) notifyListeners();
+    });
+    notifyListeners();
+    try {
+      await _send(<String, dynamic>{'type': 'user_browser_resume'});
+      return true;
+    } catch (_) {
+      if (_endResume()) notifyListeners();
+      return false;
+    }
+  }
+
+  /// Ends a pending resume. True when one was pending.
+  bool _endResume() {
+    _resumeTimeout?.cancel();
+    _resumeTimeout = null;
+    if (!_resumingUserBrowser) return false;
+    _resumingUserBrowser = false;
+    return true;
+  }
+  // ── end browser resume ──
 
   @override
   void dispose() {
     _connection.removeListener(notifyListeners);
     _capabilities.removeListener(notifyListeners);
     _connection.removeListener(_forgetUserBrowserOnDrop); // own browser
+    _endResume(); // browser resume
     super.dispose();
   }
 
@@ -576,6 +639,7 @@ class AgentsPermissionsService extends ChangeNotifier {
     _optimisticApprovals.clear(); // F1: approvals
     _userBrowser = null; // own browser
     _userBrowserMine.clear(); // own browser
+    _endResume(); // browser resume
   }
 }
 

@@ -407,6 +407,34 @@ void main() {
     expect(taps, 1);
   });
 
+  testWidgets('a coworker in the user\'s browser: the parked target says so', (
+    tester,
+  ) async {
+    // Bead chuk_chat-atm2: like the desktop header, never "No screen open
+    // yet" for a coworker that works in the user's own browser.
+    int taps = 0;
+    await pumpPhone(
+      tester,
+      MobileChatChrome(
+        agent: agent(id: 'a1', name: 'Chief of Staff'),
+        onBack: () {},
+        onOpenBrowser: () => taps++,
+        usesUserBrowser: true,
+      ),
+    );
+    expect(
+      find.descendant(
+        of: findId('mobile_chat_browser'),
+        matching: find.byTooltip('Works in your browser'),
+      ),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('No screen open yet'), findsNothing);
+    await tester.tap(findId('mobile_chat_browser'));
+    await tester.pump();
+    expect(taps, 1);
+  });
+
   testWidgets('an available screen target reads as ready', (tester) async {
     await pumpPhone(
       tester,
