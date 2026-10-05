@@ -238,3 +238,13 @@ def test_https_with_a_certificate_for_another_name_is_refused(tls_site):
             verify=tls_site.client_ctx,
         )
     assert tls_site.requests == []
+
+
+def test_a_real_client_is_refused_so_the_pin_cannot_be_skipped():
+    import httpx
+    import pytest
+
+    from chuk_agents_host import url_watch
+
+    with httpx.Client() as client, pytest.raises(ValueError):
+        url_watch.fetch_url("https://example.org/", client=client)
