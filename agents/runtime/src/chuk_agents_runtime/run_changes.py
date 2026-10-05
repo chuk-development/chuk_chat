@@ -56,6 +56,12 @@ SYSTEM_PREFIXES: tuple[str, ...] = (f"{JOURNAL_DIRNAME}/", "memory/", "transcrip
 #: At most this many files / commits in one ``run_changes`` frame.
 FILES_CAP = 500
 COMMITS_CAP = 200
+# The run's commits are searched from HEAD back to the run's start minus this
+# margin (a clock step between the start and a commit), not through the whole
+# history. ``git log --since`` stops the first-parent walk at the first older
+# commit; a subagent's work enters by a merge made during the run, so the
+# merge is inside the window too.
+SINCE_MARGIN_S = 3600
 
 # ``reason`` / ``code`` values (docs/WIRE_CONTRACT.md).
 REASON_NO_HISTORY = "no_history"
@@ -176,8 +182,25 @@ def _trailers(body: str) -> dict[str, str]:
     return out
 
 
-def _run_commit_shas(root: Path, run_id: str) -> list[str]:
-    """The run's commits on the first-parent line, newest first."""
+def _since_arg(since: float | None) -> list[str]:
+    """``--since`` for a run that started at ``since`` (epoch seconds)."""
+    if since is None:
+        return []
+    try:
+        start = float(since)
+    except (TypeError, ValueError):
+        return []
+    if start <= 0:
+        return []
+    return [f"--since=@{max(0, int(start - SINCE_MARGIN_S))} +0000"]
+
+
+def _run_commit_shas(root: Path, run_id: str, since: float | None = None) -> list[str]:
+    """The run's commits on the first-parent line, newest first.
+
+    ``since``: the run's start (epoch seconds). The walk then stops
+    :data:`SINCE_MARGIN_S` before it instead of reading the whole history.
+    """
     run_id = run_tag(run_id)
     if not run_id:
         return []
@@ -185,6 +208,7 @@ def _run_commit_shas(root: Path, run_id: str) -> list[str]:
         root,
         "log",
         "--first-parent",
+        *_since_arg(since),
         "-F",
         f"--grep={RUN_ID_TRAILER}: {run_id}",
         "--format=%H%x1f%B%x1e",
@@ -343,9 +367,9 @@ def _pending_paths(root: Path) -> set[str]:
 # -- analysis ------------------------------------------------------------------
 
 
-def _scan(root: Path, run_id: str) -> _Scan | None:
+def _scan(root: Path, run_id: str, since: float | None = None) -> _Scan | None:
     """The run's changes, or ``None`` when the run left no commit."""
-    shas = _run_commit_shas(root, run_id)
+    shas = _run_commit_shas(root, run_id, since)
     if not shas:
         return None
     run_id = run_tag(run_id)
@@ -460,12 +484,17 @@ def _summary(files: list[_FileChange]) -> dict[str, Any]:
 
 
 def run_changes(
-    root: str | os.PathLike | None, run_id: str, *, busy: bool = False
+    root: str | os.PathLike | None,
+    run_id: str,
+    *,
+    busy: bool = False,
+    since: float | None = None,
 ) -> dict[str, Any]:
     """The body of a ``run_changes`` frame (without ``type``).
 
     ``busy``: a run is in progress in this workspace right now; the list is
-    still answered, but nothing is undoable until it ends.
+    still answered, but nothing is undoable until it ends. ``since``: the
+    run's start (epoch seconds), which bounds the history walk.
     """
     body: dict[str, Any] = {
         "run_id": run_id,
@@ -477,7 +506,7 @@ def run_changes(
         body["reason"] = REASON_NO_HISTORY
         return body
     try:
-        scan = _scan(Path(root), run_id)  # type: ignore[arg-type]
+        scan = _scan(Path(root), run_id, since)  # type: ignore[arg-type]
     except (OSError, subprocess.SubprocessError):
         body["reason"] = REASON_FAILED
         return body
@@ -522,14 +551,17 @@ def run_changes(
     return body
 
 
-def run_change_summary(root: str | os.PathLike | None, run_id: str) -> dict[str, Any] | None:
+def run_change_summary(
+    root: str | os.PathLike | None, run_id: str, *, since: float | None = None
+) -> dict[str, Any] | None:
     """The compact block a ``done`` carries: ``{"files", "additions",
     "deletions", "undone"}``. ``None`` when there is no history or the run
-    changed no file. Never raises."""
+    changed no file. ``since``: the run's start, which bounds the history
+    walk. Never raises."""
     try:
         if not run_id or not has_history(root):
             return None
-        scan = _scan(Path(root), run_id)  # type: ignore[arg-type]
+        scan = _scan(Path(root), run_id, since)  # type: ignore[arg-type]
     except Exception:  # noqa: BLE001 — a summary must never fail a run
         return None
     if scan is None or not scan.files:
@@ -569,8 +601,12 @@ def undo_run(
     paths: list[str] | None = None,
     force: bool = False,
     busy: bool = False,
+    since: float | None = None,
 ) -> dict[str, Any]:
-    """The body of a ``run_undo_result`` frame (without ``type``)."""
+    """The body of a ``run_undo_result`` frame (without ``type``).
+
+    ``since``: the run's start (epoch seconds), which bounds the history walk.
+    """
     result: dict[str, Any] = {
         "run_id": run_id,
         "ok": False,
@@ -592,7 +628,7 @@ def undo_run(
         )
     workspace = Path(root)  # type: ignore[arg-type]
     try:
-        scan = _scan(workspace, run_id)
+        scan = _scan(workspace, run_id, since)
     except (OSError, subprocess.SubprocessError) as exc:
         return refuse(REASON_FAILED, f"Could not read the history: {type(exc).__name__}")
     if scan is None or not scan.files:
