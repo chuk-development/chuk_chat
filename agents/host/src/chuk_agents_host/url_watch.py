@@ -28,11 +28,13 @@ import difflib
 import hashlib
 import ipaddress
 import socket
+import ssl
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Callable
 from urllib.parse import urljoin, urlsplit
 
+import httpcore
 import httpx
 
 #: Neutral, identity-free (no mail, name, host name or address).
@@ -124,22 +126,97 @@ def text_diff(old: str, new: str, limit: int = DIFF_CHARS) -> str:
     return out
 
 
-def _public_host(host: str) -> bool:
-    """True when every address ``host`` resolves to is a global one."""
+#: ``resolve(host) -> [address, ...]``. Injected by tests.
+Resolver = Callable[[str], list[str]]
+
+
+def _resolve(host: str) -> list[str]:
+    """Every address ``host`` resolves to, in resolver order."""
     try:
         infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
     except (socket.gaierror, UnicodeError, OSError) as exc:
         raise UrlWatchError("the host name does not resolve") from exc
-    if not infos:
+    return [str(info[4][0]) for info in infos]
+
+
+def _vetted_address(host: str, resolve: Resolver, allow_private: bool) -> str:
+    """Resolve ``host`` once and return the one address to connect to.
+
+    Unless ``allow_private`` is set, every address must be a global one. The
+    caller pins the connection to the returned address, so a second DNS
+    answer (DNS rebinding) can never move the connection somewhere else.
+    """
+    addresses = resolve(host)
+    if not addresses:
         raise UrlWatchError("the host name does not resolve")
-    for info in infos:
-        try:
-            address = ipaddress.ip_address(info[4][0].split("%")[0])
-        except ValueError:
-            return False
-        if not address.is_global:
-            return False
-    return True
+    if not allow_private:
+        for raw in addresses:
+            try:
+                address = ipaddress.ip_address(raw.split("%")[0])
+            except ValueError:
+                raise UrlWatchError("the url points into a private network") from None
+            if not address.is_global:
+                raise UrlWatchError("the url points into a private network")
+    return addresses[0]
+
+
+class _PinnedBackend(httpcore.NetworkBackend):
+    """A network backend that connects only to vetted addresses.
+
+    ``pins`` maps a host name to the address that was checked for it. The
+    TCP connection goes to that address. TLS still runs against the host
+    name (httpcore passes the URL host as SNI and for certificate checks),
+    and the ``Host`` header is not changed. A host without a pin is refused.
+    """
+
+    def __init__(self, inner: httpcore.NetworkBackend | None = None) -> None:
+        self.inner = inner or httpcore.SyncBackend()
+        self.pins: dict[str, str] = {}
+
+    def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options=None,  # noqa: ANN001 — httpcore signature
+    ) -> httpcore.NetworkStream:
+        address = self.pins.get(host.lower().rstrip("."))
+        if address is None:
+            raise httpcore.ConnectError("no vetted address for this host")
+        return self.inner.connect_tcp(
+            address,
+            port,
+            timeout=timeout,
+            local_address=local_address,
+            socket_options=socket_options,
+        )
+
+    def connect_unix_socket(self, path, timeout=None, socket_options=None):  # noqa: ANN001, ANN201
+        raise httpcore.ConnectError("unix sockets are not allowed")
+
+    def sleep(self, seconds: float) -> None:
+        self.inner.sleep(seconds)
+
+
+def _pinned_client(backend: _PinnedBackend, verify: ssl.SSLContext | bool = True) -> httpx.Client:
+    """An httpx client whose every TCP connection goes through ``backend``.
+
+    ``trust_env`` is off: a proxy from the environment would make the
+    connection go somewhere the pin does not cover.
+    """
+    transport = httpx.HTTPTransport(verify=verify, retries=0)
+    pool = getattr(transport, "_pool", None)
+    if pool is None or not hasattr(pool, "_network_backend"):
+        # Fail closed if httpx changes its internals.
+        raise RuntimeError("httpx transport has no pluggable network backend")
+    pool._network_backend = backend
+    return httpx.Client(
+        transport=transport,
+        timeout=TIMEOUT_SECONDS,
+        follow_redirects=False,
+        trust_env=False,
+    )
 
 
 def fetch_url(
@@ -149,12 +226,21 @@ def fetch_url(
     last_modified: str | None = None,
     allow_private: bool = False,
     client: httpx.Client | None = None,
-    host_check: Callable[[str], bool] | None = None,
+    resolver: Resolver | None = None,
+    network_backend: httpcore.NetworkBackend | None = None,
+    verify: ssl.SSLContext | bool = True,
 ) -> FetchResult:
-    """One conditional GET. Raises :class:`UrlWatchError` on any failure."""
-    check = host_check or _public_host
+    """One conditional GET. Raises :class:`UrlWatchError` on any failure.
+
+    Each hop (the first request and every redirect) resolves the host once,
+    checks the addresses and pins the connection to the checked address.
+    ``client`` replaces the pinned client (tests with a mock transport);
+    ``resolver``, ``network_backend`` and ``verify`` are for tests too.
+    """
+    resolve = resolver or _resolve
+    backend = _PinnedBackend(network_backend)
     own = client is None
-    http = client or httpx.Client(timeout=TIMEOUT_SECONDS, follow_redirects=False)
+    http = client or _pinned_client(backend, verify)
     headers = {"User-Agent": USER_AGENT, "Accept": "text/html,text/plain,application/json;q=0.9,*/*;q=0.5"}
     if etag:
         headers["If-None-Match"] = etag
@@ -166,8 +252,14 @@ def fetch_url(
             parts = urlsplit(current)
             if parts.scheme.lower() not in ("http", "https") or not parts.hostname:
                 raise UrlWatchError("a redirect left http(s)")
-            if not allow_private and not check(parts.hostname):
-                raise UrlWatchError("the url points into a private network")
+            try:
+                # The IDNA-encoded form, the same one httpcore connects to.
+                host = httpx.URL(current).raw_host.decode("ascii").lower().rstrip(".")
+            except (httpx.InvalidURL, UnicodeError) as exc:
+                raise UrlWatchError("the url is not valid") from exc
+            if not host:
+                raise UrlWatchError("the url is not valid")
+            backend.pins[host] = _vetted_address(host, resolve, allow_private)
             try:
                 with http.stream("GET", current, headers=headers) as response:
                     if response.status_code in (301, 302, 303, 307, 308):
