@@ -623,13 +623,30 @@ class AgentsPermissionsService extends ChangeNotifier {
   /// `user_browser_status`, which repaints every view. False when the host
   /// does not name the capability, nothing is connected, a request is
   /// already out, or the frame could not be sent.
-  Future<bool> resumeUserBrowser() async {
+  Future<bool> resumeUserBrowser() async =>
+      (await _startResume()) != null;
+
+  /// Sends "Allow again" and waits for the answer to exactly this request:
+  /// `sent` is false when the frame did not go out; `refused` is the host's
+  /// reason when it said no, null when the Stop was lifted, the wait timed
+  /// out or the link dropped.
+  Future<({bool sent, String? refused})> resumeUserBrowserAndWait() async {
+    final Future<String?>? answer = await _startResume();
+    if (answer == null) return (sent: false, refused: null);
+    return (sent: true, refused: await answer);
+  }
+
+  /// Starts one resume request and returns its own answer future, or null
+  /// when nothing was sent. The future belongs to this request, so a later
+  /// tap can never read another request's answer.
+  Future<Future<String?>?> _startResume() async {
     if (!connected || !userBrowserResumeSupported || _resumingUserBrowser) {
-      return false;
+      return null;
     }
     _resumingUserBrowser = true;
     _lastResumeError = null;
-    _resumeAnswer = Completer<String?>();
+    final Completer<String?> completer = Completer<String?>();
+    _resumeAnswer = completer;
     _resumeTimeout?.cancel();
     _resumeTimeout = Timer(resumeTimeout, () {
       if (_endResume()) notifyListeners();
@@ -637,11 +654,11 @@ class AgentsPermissionsService extends ChangeNotifier {
     notifyListeners();
     try {
       await _send(<String, dynamic>{'type': 'user_browser_resume'});
-      return true;
     } catch (_) {
       if (_endResume()) notifyListeners();
-      return false;
+      return null;
     }
+    return completer.future;
   }
 
   /// Ends a pending resume, with the host's reason when it said no. True
