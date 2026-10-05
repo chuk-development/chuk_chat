@@ -723,6 +723,7 @@ def done_payload(
     run_stamps: dict[str, Any] | None = None,
     host_notified: bool = False,
     session_key: str | None = None,
+    cost: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -751,7 +752,41 @@ def done_payload(
         payload["session_key"] = session_key
     if host_notified:
         payload["host_notified"] = True
+    # docs/WIRE_CONTRACT.md, "Cost per run and weekly budget": what the run
+    # cost (``chuk_agents_runtime.cost.cost_block``). Absent when nothing was
+    # spent or measured.
+    if cost:
+        payload["cost"] = dict(cost)
     return payload
+
+
+#: ``done.reason`` of a run the weekly budget refused before it started
+#: (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
+REASON_BUDGET_EXCEEDED = "budget_exceeded"
+
+
+def budget_warning_payload(
+    *,
+    agent_id: str,
+    session_key: str,
+    level: str,
+    spent_eur: float,
+    budget_eur: float,
+    week_starts_at: float,
+) -> dict[str, Any]:
+    """Host -> app: a coworker's spend this week reached 80 % (``warning``)
+    or 100 % (``exceeded``) of its ``budget_weekly``. Sent once per level and
+    week, as an event on the run's stream that crossed it."""
+    return {
+        "type": "budget_warning",
+        "agent_id": agent_id,
+        "session_key": session_key,
+        "level": level,
+        "currency": "EUR",
+        "spent_eur": round(float(spent_eur), 6),
+        "budget_eur": round(float(budget_eur), 2),
+        "week_starts_at": float(week_starts_at),
+    }
 
 
 # -- automations (docs/WIRE_CONTRACT.md, "Automations") ----------------------
@@ -833,6 +868,7 @@ def agent_status_payload(
     tokens: dict[str, Any] | None = None,
     runtime: dict[str, Any] | None = None,
     sandbox: dict[str, Any] | None = None,
+    cost: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Host -> app: the answer to an ``agent_status`` request, and the same
     frame the host pushes after every run of that session.
@@ -850,6 +886,8 @@ def agent_status_payload(
         body["runtime"] = dict(runtime)
     if sandbox:
         body["sandbox"] = dict(sandbox)
+    if cost:
+        body["cost"] = dict(cost)
     return body
 
 

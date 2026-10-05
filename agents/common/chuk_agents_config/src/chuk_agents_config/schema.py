@@ -840,6 +840,15 @@ class LimitsConfig:
             "answer."
         ),
     )
+    automation_light_context: bool = setting(
+        False,
+        env="AGENTS_AUTOMATION_LIGHT_CONTEXT",
+        doc=(
+            "Skip memory recall and fact extraction for automation and job "
+            "runs, to make scheduled runs cheaper. The memory tools stay. Off "
+            "by default: an automation that relies on memories answers worse."
+        ),
+    )
     takeover_wait_seconds: float = setting(
         900.0,
         env="AGENTS_TAKEOVER_WAIT_SECONDS",

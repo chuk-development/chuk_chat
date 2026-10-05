@@ -646,6 +646,17 @@ class BackendModelClient:
         executor's selector); ``None`` = the server default."""
         return self._reasoning_effort
 
+    @property
+    def model_id(self) -> str:
+        """The model this client calls (what a run's cost is priced on)."""
+        return self._model_id
+
+    @property
+    def provider_slug(self) -> str | None:
+        """The provider pin; ``None`` = the server picks (priced at the
+        model's cheapest provider, the API's own fallback)."""
+        return self._provider_slug
+
     def chat_spec(self) -> dict[str, Any]:
         """What this client runs on, for the agent loop's streaming model
         (``chuk_agents_runtime.pai.wiring``)."""

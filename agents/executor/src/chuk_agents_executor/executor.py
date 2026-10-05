@@ -124,6 +124,21 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
+from chuk_agents_runtime.cost import (
+    BUDGET_EXCEEDED,
+    BUDGET_OK,
+    CURRENCY,
+    LINE_AUX,
+    LINE_BROWSER,
+    LINE_RUN,
+    budget_state,
+    cost_block,
+    day_start,
+    metered,
+    round_eur,
+    usage_split,
+    week_start,
+)
 from chuk_agents_crypto import (
     AgentsFrameOpener,
     AgentsFrameRejected,
@@ -163,6 +178,8 @@ from .protocol import (
     automation_list_payload,
     agent_list_payload,
     agent_status_payload,
+    budget_warning_payload,
+    REASON_BUDGET_EXCEEDED,
     delta_payload,
     done_payload,
     encode_payload,
@@ -195,6 +212,38 @@ ORIGIN_APP = "app"
 
 #: Runs nobody watches live: the host announces their end itself.
 UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
+
+#: Origins a lighter context may serve (docs/WIRE_CONTRACT.md, "Cost per run
+#: and weekly budget"): a fired schedule / watcher and a background job wake.
+#: A mail or Telegram run is a conversation and keeps its full context.
+LIGHT_CONTEXT_ORIGINS = ("automation", "job")
+
+#: The operator's opt-in for that lighter context (no memory recall, no fact
+#: extraction): ``1`` / ``true`` / ``yes`` / ``on``. Off by default, because an
+#: automation that leans on what the agent remembers would answer worse.
+LIGHT_CONTEXT_ENV = "AGENTS_AUTOMATION_LIGHT_CONTEXT"
+
+
+def budget_refusal_text(*, spent: float, budget: float, interactive: bool) -> str:
+    """The sentence a run the weekly budget refused answers with."""
+    head = (
+        f"Weekly budget reached: this coworker spent \u20ac{spent:.2f} of its "
+        f"\u20ac{budget:.2f} budget this week."
+    )
+    if interactive:
+        return (
+            head + " Nothing was run. Choose \"Run anyway\" to go over the budget "
+            "once, or raise the budget in the coworker's settings."
+        )
+    return (
+        head + " This run was skipped. Raise the budget in the coworker's settings "
+        "to let it run again."
+    )
+
+
+def light_context_enabled() -> bool:
+    return os.environ.get(LIGHT_CONTEXT_ENV, "").strip().lower() in ("1", "true", "yes", "on")
+
 
 #: Model rounds of a restricted mail run: read, note, maybe a draft, archive.
 MAIL_RESTRICTED_MAX_ITERATIONS = 8
@@ -408,6 +457,15 @@ class _Run:
     # tools of that mail.
     profile: str | None = None
     mail_message_id: str | None = None
+    # docs/WIRE_CONTRACT.md, "Cost per run and weekly budget": the user
+    # confirmed in the app to run over the coworker's weekly budget once. Only
+    # a task frame (origin ``app``) can carry it.
+    budget_override: bool = False
+    # The model / provider the run's client really called (what its cost is
+    # priced on), and the ``cost`` block of its ``done``.
+    priced_model: str | None = None
+    priced_provider: str | None = None
+    cost: dict | None = None
 
 
 class _Heartbeat:
@@ -670,8 +728,9 @@ class _PendingApproval:
             if self.decided:
                 return False
             self.decided = True
-            self.approved = approved is True
-            self.scope = parse_scope(self.approved, scope, self.options or None)
+            self.scope = parse_scope(approved, scope, self.options or None)
+            # A yes whose scope is "deny" is a deny: never approve it.
+            self.approved = approved is True and self.scope != "deny"
             return True
 
 
@@ -1000,6 +1059,8 @@ class Executor:
         on_call_frame: Callable[[dict], Any] | None = None,
         agent_mail=None,
         action_approvals=None,
+        price_book=None,
+        budget=None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -1127,6 +1188,14 @@ class Executor:
         # action_class, scope, site)`` stores a lasting decision. ``None``
         # (a room member, the tests): only here.now in ``ask`` mode asks.
         self._action_approvals = action_approvals
+        # Cost per run and weekly budget (docs/WIRE_CONTRACT.md, "Cost per run
+        # and weekly budget"): ``price_book`` prices the usage
+        # (chuk_agents_runtime.cost.PriceBook, or a zero-argument callable that
+        # returns the current one); ``budget`` is the host's per-coworker
+        # budget (``agent_key`` / ``budget_weekly`` / ``first_notice`` /
+        # ``notify``). Either ``None``: no price, no budget.
+        self._price_book = price_book
+        self._budget = budget
         # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls
         # the user"): the host's call service (``bound(session_key)`` gives a
         # task ``call_user`` / ``call_status``) and the hook that takes the
@@ -1764,6 +1833,7 @@ class Executor:
                 str(reasoning_effort) if reasoning_effort is not None else None
             ),
             regenerate=bool(payload.get("regenerate")),
+            budget_override=payload.get("budget_override") is True,
             run_id=uuid4().hex,
             started_at=time.time(),
         )
@@ -2026,6 +2096,280 @@ class Executor:
             answer = {**failure, "error": "channels not enabled"}
         self._terminal(request_id, answer)
 
+    # -- cost per run and weekly budget (docs/WIRE_CONTRACT.md) -----------
+    def _current_price_book(self) -> Any:
+        """The price list (``PriceBook``) or ``None`` when there is none. A
+        callable is read each time, so a list the host re-read applies."""
+        book = self._price_book
+        if callable(book):
+            try:
+                book = book()
+            except Exception:  # noqa: BLE001 — no price, never a failed run
+                return None
+        if book is None or not callable(getattr(book, "cost", None)) or not book:
+            return None
+        return book
+
+    def _price(self, model: str | None, provider: str | None, prompt: int,
+               completion: int, cached: int) -> float | None:
+        book = self._current_price_book()
+        if book is None or not (prompt or completion):
+            return None
+        try:
+            return book.cost(
+                model, provider,
+                prompt_tokens=prompt, completion_tokens=completion, cached_tokens=cached,
+            )
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            return None
+
+    def _price_run(self, run: _Run, timings: Any) -> float | None:
+        """What the run's own model calls cost, or ``None`` (no price)."""
+        if timings is None:
+            return None
+        return self._price(
+            run.priced_model,
+            run.priced_provider,
+            int(getattr(timings, "prompt_tokens", 0) or 0),
+            int(getattr(timings, "completion_tokens", 0) or 0),
+            int(getattr(timings, "cached_tokens", 0) or 0),
+        )
+
+    def _usage_sink(self, run: _Run):
+        """Where a housekeeping client's call goes: one priced
+        ``usage_lines`` row that names this run, written when the call ends
+        (also on a background thread after the run)."""
+        if not run.run_id:
+            return None
+        db_path = self._db_path
+
+        def sink(kind: str, model: str | None, provider: str | None, usage: Any) -> None:
+            prompt, completion, cached = usage_split(usage)
+            if not (prompt or completion):
+                return
+            eur = self._price(model, provider, prompt, completion, cached)
+            store = StateStore(db_path)
+            try:
+                store.add_usage_line(
+                    run_id=run.run_id,
+                    session_key=run.session_key,
+                    kind=kind,
+                    model=model,
+                    provider=provider,
+                    prompt_tokens=prompt,
+                    completion_tokens=completion,
+                    cached_tokens=cached,
+                    cost_eur=eur,
+                )
+            finally:
+                store.close()
+
+        return sink
+
+    def _agent_of(self, session_key: str) -> str:
+        """The coworker a session belongs to (the host's key), or the key
+        itself when no budget bridge is wired."""
+        key_for = getattr(self._budget, "agent_key", None)
+        if callable(key_for):
+            try:
+                return str(key_for(session_key))
+            except Exception:  # noqa: BLE001
+                pass
+        return session_key
+
+    def _budget_of(self, session_key: str) -> float:
+        """The coworker's ``budget_weekly`` in euro; 0 = none."""
+        get = getattr(self._budget, "budget_weekly", None)
+        if not callable(get):
+            return 0.0
+        try:
+            value = float(get(session_key) or 0.0)
+        except Exception:  # noqa: BLE001 — a broken store is "no budget"
+            return 0.0
+        return value if value > 0 else 0.0
+
+    def _spend_since(self, session_key: str, *since: float) -> list[float]:
+        """Euro the coworker of ``session_key`` spent since each ``since``,
+        over every thread of that coworker."""
+        agent = self._agent_of(session_key)
+        try:
+            store = StateStore(self._db_path)
+            try:
+                maps = [store.spend_by_session(start) for start in since]
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — no record, no spend
+            return [0.0 for _ in since]
+        owners: dict[str, bool] = {}
+
+        def owned(key: str) -> bool:
+            if key not in owners:
+                owners[key] = key == session_key or self._agent_of(key) == agent
+            return owners[key]
+
+        return [sum(eur for key, eur in by.items() if owned(key)) for by in maps]
+
+    def _budget_refusal(self, run: _Run) -> dict | None:
+        """The facts of a refusal when the coworker is at or over its weekly
+        budget and this run may not go over it, else ``None``. Only a task
+        the user sent with ``budget_override`` may go over (once)."""
+        budget = self._budget_of(run.session_key)
+        if budget <= 0:
+            return None
+        week = week_start()
+        (spent,) = self._spend_since(run.session_key, week)
+        if spent < budget:
+            return None
+        if run.origin == ORIGIN_APP and run.budget_override:
+            logger.info(
+                "run=%s session=%s goes over the weekly budget (%.4f of %.2f EUR): "
+                "the user confirmed it",
+                run.run_id, run.session_key, spent, budget,
+            )
+            return None
+        return {"spent": spent, "budget": budget, "week": week,
+                "agent": self._agent_of(run.session_key)}
+
+    def _refuse_for_budget(self, run: _Run, over: dict) -> None:
+        """End a run the weekly budget refused, before it built or spent
+        anything: a ``done`` with reason ``budget_exceeded`` and a sentence
+        for the user, a closed ``runs`` row, the usual finished hook."""
+        request_id, session_key = run.request_id, run.session_key
+        message = budget_refusal_text(
+            spent=over["spent"], budget=over["budget"], interactive=run.origin == ORIGIN_APP
+        )
+        logger.info(
+            "run=%s session=%s origin=%s refused: weekly budget %.2f EUR reached (%.4f)",
+            run.run_id, session_key, run.origin, over["budget"], over["spent"],
+        )
+        self._notify_budget(run, request_id, BUDGET_EXCEEDED, over)
+        stamps: dict[str, Any] = {}
+        if run.run_id:
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    store.finish_run(
+                        run.run_id,
+                        reason=REASON_BUDGET_EXCEEDED,
+                        final_answer=message,
+                        iterations=0,
+                        tokens_spent=0,
+                    )
+                    stamps = run_stamp_fields(store.get_run(run.run_id))
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — bookkeeping must not block the answer
+                stamps = {}
+        self._stop_beat(request_id)
+        self._terminal(
+            request_id,
+            done_payload(
+                final_answer=message,
+                reason=REASON_BUDGET_EXCEEDED,
+                iterations=0,
+                tokens_spent=0,
+                run_id=run.run_id,
+                run_stamps=stamps,
+                host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
+                session_key=session_key,
+            ),
+        )
+        self._forget(request_id)
+        self._call_hook(
+            self._on_run_finished,
+            self._run_summary(run, reason=REASON_BUDGET_EXCEEDED, final_answer=message),
+        )
+
+    def _check_budget(self, run: _Run, request_id: str) -> None:
+        """After a run: warn once when the coworker's week reached 80 % or
+        100 % of its budget. Best effort."""
+        try:
+            budget = self._budget_of(run.session_key)
+            if budget <= 0:
+                return
+            week = week_start()
+            (spent,) = self._spend_since(run.session_key, week)
+            level = budget_state(spent, budget)
+            if level == BUDGET_OK:
+                return
+            self._notify_budget(
+                run, request_id, level,
+                {"spent": spent, "budget": budget, "week": week,
+                 "agent": self._agent_of(run.session_key)},
+            )
+        except Exception:  # noqa: BLE001 — a warning must not take a run down
+            logger.debug("budget check failed", exc_info=True)
+
+    def _notify_budget(self, run: _Run, request_id: str, level: str, over: dict) -> None:
+        """One ``budget_warning`` per coworker, level and week: on the run's
+        stream, and to the host's ``notify`` (the push)."""
+        bridge = self._budget
+        first = getattr(bridge, "first_notice", None)
+        if callable(first):
+            try:
+                if not first(over["agent"], over["week"], level):
+                    return
+            except Exception:  # noqa: BLE001
+                return
+        payload = budget_warning_payload(
+            agent_id=run.session_key,
+            session_key=run.session_key,
+            level=level,
+            spent_eur=over["spent"],
+            budget_eur=over["budget"],
+            week_starts_at=over["week"],
+        )
+        try:
+            self._event(request_id, payload)
+        except Exception:  # noqa: BLE001 — no stream, the push still goes
+            pass
+        notify = getattr(bridge, "notify", None)
+        if callable(notify):
+            try:
+                notify({**payload, "origin": run.origin, "run_id": run.run_id})
+            except Exception as exc:  # noqa: BLE001
+                logger.info("budget push failed: %s", type(exc).__name__)
+
+    def _status_cost(self, session_key: str, rows: list[dict]) -> dict | None:
+        """The ``cost`` block of ``agent_status``: this thread's total and
+        last run, the coworker's today and this week, and its budget. Absent
+        when nothing was ever priced for the coworker and it has no budget."""
+        budget = self._budget_of(session_key)
+        today_at, week_at = day_start(), week_start()
+        session_total, today, week = self._spend_since(session_key, 0.0, today_at, week_at)
+        try:
+            store = StateStore(self._db_path)
+            try:
+                own = store.spend_by_session(0.0).get(session_key)
+                last_eur = None
+                for row in reversed(rows):
+                    run_id = row.get("run_id")
+                    if not run_id:
+                        continue
+                    block = cost_block(store.usage_lines(str(run_id)))
+                    if block and "eur" in block:
+                        last_eur = block["eur"]
+                    break
+            finally:
+                store.close()
+        except Exception:  # noqa: BLE001 — no record, no block
+            return None
+        if not session_total and not budget and self._current_price_book() is None:
+            return None
+        body: dict[str, Any] = {
+            "currency": CURRENCY,
+            "session_total": round_eur(own or 0.0),
+            "today": round_eur(today),
+            "week": round_eur(week),
+            "week_starts_at": week_at,
+        }
+        if last_eur is not None:
+            body["last_run"] = last_eur
+        if budget > 0:
+            body["budget_weekly"] = budget
+            body["budget_state"] = budget_state(week, budget)
+        return body
+
     # -- agent status (docs/WIRE_CONTRACT.md, "Agent status") -------------
     def _handle_agent_status(self, request_id: str, payload: dict) -> None:
         """Answer one ``agent_status`` request with measured figures only."""
@@ -2062,6 +2406,7 @@ class Executor:
             tokens=tokens,
             runtime=runtime,
             sandbox=self._status_sandbox(session_key),
+            cost=self._status_cost(session_key, rows),
         )
 
     def _session_runs(self, session_key: str) -> list[dict]:
@@ -2080,7 +2425,7 @@ class Executor:
         try:
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(
-                "SELECT state, tokens_spent, started_at, finished_at, model, "
+                "SELECT run_id, state, tokens_spent, started_at, finished_at, model, "
                 "provider, reasoning_effort FROM runs WHERE session_key=? "
                 "ORDER BY started_at, rowid",
                 (session_key,),
@@ -3671,6 +4016,12 @@ class Executor:
 
     # -- one task --------------------------------------------------------
     def _run_task(self, run: _Run) -> None:
+        # The weekly budget (docs/WIRE_CONTRACT.md, "Cost per run and weekly
+        # budget"): checked before anything is built or spent.
+        over = self._budget_refusal(run)
+        if over is not None:
+            self._refuse_for_budget(run, over)
+            return
         if run.profile == PROFILE_MAIL_UNTRUSTED:
             self._run_restricted_mail(run)
             return
@@ -3729,6 +4080,9 @@ class Executor:
         # (docs/WIRE_CONTRACT.md, "Agent status"). Read off the client that was
         # just built — the effective answer even when the task named nothing.
         self._note_model_identity(session_key, inner_model)
+        # What the run's cost is priced on: the client that was really built.
+        run.priced_model = getattr(inner_model, "model_id", None) or run.model
+        run.priced_provider = getattr(inner_model, "provider_slug", None) or run.provider
         # The browser fallback (§8) gets its own client: the loop's client is
         # wrapped to stream deltas into the chat, and a browser step's per-step
         # JSON has no business there. Built here, not inline, so the ``finally``
@@ -3752,6 +4106,13 @@ class Executor:
         # leaks past the task.
         cheap_clone = getattr(inner_model, "cheap_clone", None)
         hero_model = cheap_clone() if callable(cheap_clone) else None
+        # Their calls are cost lines of their own (docs/WIRE_CONTRACT.md,
+        # "Cost per run and weekly budget"): the user sees what compaction,
+        # memory extraction and the browser fallback cost. A background
+        # summary's clone is metered too and still names this run.
+        usage_sink = self._usage_sink(run)
+        hero_model = metered(hero_model, usage_sink, kind=LINE_AUX)
+        browser_client = metered(browser_client, usage_sink, kind=LINE_BROWSER)
 
         # "Cancels in-flight" (§7.1): a Stop kills the command the sandbox is
         # blocked on and the model turn in flight, instead of ending the run only
@@ -3886,6 +4247,9 @@ class Executor:
             aux_model=hero_model,
             # Off unless the task set ``debug``; ``None`` means zero overhead.
             debug_observer=debug_observer,
+            # A scheduled run on a lighter context (no recall, no extraction),
+            # only when the operator opted in (AGENTS_AUTOMATION_LIGHT_CONTEXT).
+            light_context=run.origin in LIGHT_CONTEXT_ORIGINS and light_context_enabled(),
             # One ``tool`` frame per native tool call, after its result, with the
             # same fields a replay rebuilds (name, arguments, result, status,
             # started_at / completed_at).
@@ -4008,6 +4372,9 @@ class Executor:
         # the host even when the app is gone and the frame is dropped. The
         # closed row also stamps the done (clock + message rows).
         run_stamps = self._record_run(run, result=result, reason=reason)
+        # 80 % / 100 % of the coworker's weekly budget: one warning per level
+        # and week, on this stream and as a push (the host words it).
+        self._check_budget(run, request_id)
         # The finished turn lands in <workspace>/transcript/ (read-only, the
         # agent's long-term search) before the app hears ``done``.
         self._export_transcript(session_key)
@@ -4028,6 +4395,7 @@ class Executor:
                 # host itself; a Telegram run is answered in Telegram.
                 host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
                 session_key=session_key,
+                cost=run.cost,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -4358,6 +4726,8 @@ class Executor:
                 if failed is not None:
                     store.fail_run(run.run_id, reason=failed)
                 elif result is not None:
+                    timings = getattr(result, "timings", None)
+                    run_cost = self._price_run(run, timings)
                     store.finish_run(
                         run.run_id,
                         reason=reason or result.reason.value,
@@ -4368,9 +4738,26 @@ class Executor:
                         tokens_spent=result.tokens_spent,
                         # Where the wall clock went, so a slow run is diagnosable
                         # from its row instead of from message timestamps.
-                        timings=getattr(result, "timings", None)
-                        and result.timings.as_row(),
+                        timings=timings and timings.as_row(),
+                        cost_eur=run_cost,
                     )
+                    # The run's own calls are its ``run`` line; the aux and
+                    # browser lines were written as their calls ended.
+                    if timings is not None and (
+                        timings.prompt_tokens or timings.completion_tokens
+                    ):
+                        store.add_usage_line(
+                            run_id=run.run_id,
+                            session_key=run.session_key,
+                            kind=LINE_RUN,
+                            model=run.priced_model,
+                            provider=run.priced_provider,
+                            prompt_tokens=timings.prompt_tokens,
+                            completion_tokens=timings.completion_tokens,
+                            cached_tokens=timings.cached_tokens,
+                            cost_eur=run_cost,
+                        )
+                    run.cost = cost_block(store.usage_lines(run.run_id))
                 return run_stamp_fields(store.get_run(run.run_id))
             finally:
                 store.close()

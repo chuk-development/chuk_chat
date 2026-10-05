@@ -144,6 +144,57 @@ def test_deny_is_a_no(tmp_path):
     store.close()
 
 
+def test_approved_true_with_scope_deny_is_a_no(tmp_path):
+    """A yes whose scope says deny is contradictory: it must never approve."""
+    executor = _executor(tmp_path)
+    _frame, answer = _ask(executor, _mail_request(), {"approved": True, "scope": "deny"})
+    assert answer == ActionDecision(approved=False, scope="deny")
+    assert not answer
+    store = StateStore(str(tmp_path / "state.db"))
+    (row,) = store.replay_events(store.route("thread-1"))
+    assert row["decision"] == "denied" and row["decision_scope"] == "deny"
+    store.close()
+
+
+def test_approved_true_with_scope_deny_does_not_run_the_tool(tmp_path, stub):  # noqa: F811
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    _make_site(ws)
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    executor = Executor(
+        name="pub",
+        endpoint=executor_ep,
+        opener=channel.executor.opener,
+        sealer=channel.executor.sealer,
+        environment=LocalEnvironment(workdir=str(ws)),
+        db_path=str(tmp_path / "state.db"),
+        model_factory=lambda: MockModelClient(
+            [tool_call_response(("herenow_publish", {"path": "site"})), "done"]
+        ),
+        workspace=str(ws),
+        action_approvals=_Hook(),
+    )
+    controller = ControllerSession(
+        endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener
+    )
+    executor.start()
+    try:
+        rid = controller.send_payload(
+            task_payload("publish it", "t1", herenow={"enabled": True, "approval": "ask", "base_url": stub})
+        )
+        events = _drive_scoped(controller, controller_ep, rid, scope="deny")
+    finally:
+        executor.stop()
+    asks = [e for e in events if e.get("type") == "approval_request" and "decision" not in e]
+    assert len(asks) == 1
+    assert _Stub.uploaded == {}
+    store = StateStore(str(tmp_path / "state.db"))
+    rows = [r for r in store.replay_events(store.route("t1")) if r.get("type") == "approval_request"]
+    store.close()
+    assert rows and rows[-1]["decision"] == "denied"
+
+
 def test_a_browser_card_offers_the_site(tmp_path):
     executor = _executor(tmp_path)
     request = ActionRequest(

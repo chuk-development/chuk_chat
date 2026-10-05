@@ -27,6 +27,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
+from .cost import cost_block
 from .search import ensure_fts_schema, register_functions, search_messages
 from .sqlite_tuning import tune_connection
 from .tool_events import tool_event_fields
@@ -133,10 +134,40 @@ CREATE TABLE IF NOT EXISTS runs (
     -- time to the first streamed token of the run's first call, the history
     -- rebuild (``prepare_ms``) left out. 0 = not reported / not measured.
     cached_tokens  INTEGER NOT NULL DEFAULT 0,
-    first_token_ms INTEGER NOT NULL DEFAULT 0
+    first_token_ms INTEGER NOT NULL DEFAULT 0,
+    -- The split of ``tokens_spent`` and what the run's own model calls cost in
+    -- euro at the price the API bills (chuk_agents_runtime.cost, bead
+    -- chuk_chat-qcbv). ``cost_eur`` NULL = not priced (no price list, or a
+    -- model the list does not know). Housekeeping calls are not in it: they
+    -- are rows of ``usage_lines``.
+    prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_eur          REAL
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
+
+-- One row per priced line of spend (docs/WIRE_CONTRACT.md, "Cost per run and
+-- weekly budget"): ``run`` is a run's own model calls, ``aux`` the context
+-- summary and memory extraction, ``browser`` the browser fallback. ``run_id``
+-- is the run that caused it (a background summary made after the run still
+-- names it). The weekly budget sums ``cost_eur`` by ``created_at``.
+CREATE TABLE IF NOT EXISTS usage_lines (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    run_id            TEXT,
+    session_key       TEXT NOT NULL,
+    kind              TEXT NOT NULL,
+    model             TEXT,
+    provider          TEXT,
+    prompt_tokens     INTEGER NOT NULL DEFAULT 0,
+    completion_tokens INTEGER NOT NULL DEFAULT 0,
+    cached_tokens     INTEGER NOT NULL DEFAULT 0,
+    cost_eur          REAL,
+    created_at        REAL NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_usage_lines_run ON usage_lines(run_id);
+CREATE INDEX IF NOT EXISTS idx_usage_lines_time ON usage_lines(created_at);
 """
 
 #: Columns added to ``runs`` after the table first shipped, in order. Each is
@@ -160,6 +191,10 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     # Cache hits and time to first token, for the speed harness.
     ("cached_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("first_token_ms", "INTEGER NOT NULL DEFAULT 0"),
+    # Cost per run (bead chuk_chat-qcbv). Old rows read 0 / NULL: not priced.
+    ("prompt_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("completion_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("cost_eur", "REAL"),
 )
 
 #: The timing columns, in the order :meth:`StateStore.finish_run` writes them.
@@ -173,6 +208,8 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
     "retry_ms",
     "cached_tokens",
     "first_token_ms",
+    "prompt_tokens",
+    "completion_tokens",
 )
 
 #: Run states (the ``runs.state`` column).
@@ -865,6 +902,7 @@ class StateStore:
         iterations: int,
         tokens_spent: int,
         timings: dict[str, int] | None = None,
+        cost_eur: float | None = None,
     ) -> None:
         """Close a run as ``finished``. ``last_mid`` is the message cursor at the
         end, so a replay can place the run's terminal after its last turn.
@@ -872,6 +910,9 @@ class StateStore:
         ``timings`` is :meth:`chuk_agents_runtime.loop.RunTimings.as_row` — where the
         run's wall clock went. Unknown keys are ignored and missing ones stay
         zero, so an older caller that passes nothing still closes a valid row.
+        ``cost_eur`` is what the run's own model calls cost (``None`` = not
+        priced); the caller writes the matching ``run`` line with
+        :meth:`add_usage_line`.
         """
         stamps = {k: int(v) for k, v in (timings or {}).items() if k in RUN_TIMING_COLUMNS}
         timing_sql = "".join(f", {column}=?" for column in RUN_TIMING_COLUMNS)
@@ -889,7 +930,7 @@ class StateStore:
             ).fetchone()
             cur.execute(
                 "UPDATE runs SET state=?, reason=?, final_answer=?, iterations=?, "
-                "tokens_spent=?, last_mid=?, finished_at=?" + timing_sql
+                "tokens_spent=?, last_mid=?, finished_at=?, cost_eur=?" + timing_sql
                 + " WHERE run_id=?",
                 (
                     RUN_FINISHED,
@@ -899,6 +940,7 @@ class StateStore:
                     int(tokens_spent),
                     int(last["m"]) if last else 0,
                     time.time(),
+                    float(cost_eur) if cost_eur is not None else None,
                     *timing_values,
                     run_id,
                 ),
@@ -930,6 +972,90 @@ class StateStore:
             _close_open_approvals(cur, int(row["session_id"]), "stopped", None)
 
         self._write(op)
+
+    # -- cost lines (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget")
+
+    def add_usage_line(
+        self,
+        *,
+        session_key: str,
+        kind: str,
+        run_id: str | None = None,
+        model: str | None = None,
+        provider: str | None = None,
+        prompt_tokens: int = 0,
+        completion_tokens: int = 0,
+        cached_tokens: int = 0,
+        cost_eur: float | None = None,
+        at: float | None = None,
+    ) -> int:
+        """Record one priced line of spend. Returns the row id."""
+
+        def op(cur: sqlite3.Cursor) -> int:
+            cur.execute(
+                "INSERT INTO usage_lines(run_id, session_key, kind, model, provider, "
+                "prompt_tokens, completion_tokens, cached_tokens, cost_eur, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    run_id,
+                    session_key,
+                    kind,
+                    model,
+                    provider,
+                    max(0, int(prompt_tokens or 0)),
+                    max(0, int(completion_tokens or 0)),
+                    max(0, int(cached_tokens or 0)),
+                    float(cost_eur) if cost_eur is not None else None,
+                    float(at if at is not None else time.time()),
+                ),
+            )
+            return int(cur.lastrowid)
+
+        return int(self._write(op))
+
+    def usage_lines(self, run_id: str) -> list[dict]:
+        """The lines one run caused, oldest first, summed per ``(kind, model,
+        provider)``: one ``run`` line, one ``aux`` line per aux model, ...
+        ``cost_eur`` is ``None`` when any summed row was not priced."""
+        rows = self._conn().execute(
+            "SELECT kind, model, provider, COUNT(*) AS calls, "
+            "SUM(prompt_tokens) AS prompt_tokens, "
+            "SUM(completion_tokens) AS completion_tokens, "
+            "SUM(cached_tokens) AS cached_tokens, SUM(cost_eur) AS cost_eur, "
+            "SUM(cost_eur IS NULL) AS unpriced, MIN(id) AS first "
+            "FROM usage_lines WHERE run_id=? GROUP BY kind, model, provider "
+            "ORDER BY first",
+            (run_id,),
+        ).fetchall()
+        out: list[dict] = []
+        for row in rows:
+            out.append(
+                {
+                    "kind": row["kind"],
+                    "model": row["model"],
+                    "provider": row["provider"],
+                    "calls": int(row["calls"] or 0),
+                    "prompt_tokens": int(row["prompt_tokens"] or 0),
+                    "completion_tokens": int(row["completion_tokens"] or 0),
+                    "cached_tokens": int(row["cached_tokens"] or 0),
+                    "cost_eur": (
+                        None if int(row["unpriced"] or 0) else float(row["cost_eur"] or 0.0)
+                    ),
+                }
+            )
+        return out
+
+    def spend_by_session(self, since: float, *, until: float | None = None) -> dict[str, float]:
+        """Euro spent per ``session_key`` in ``[since, until)``, from every
+        priced line (runs and housekeeping alike). Unpriced lines count 0."""
+        sql = (
+            "SELECT session_key, SUM(COALESCE(cost_eur, 0)) AS eur FROM usage_lines "
+            "WHERE created_at >= ?" + (" AND created_at < ?" if until is not None else "")
+            + " GROUP BY session_key"
+        )
+        params: tuple = (float(since),) + ((float(until),) if until is not None else ())
+        rows = self._conn().execute(sql, params).fetchall()
+        return {str(r["session_key"]): float(r["eur"] or 0.0) for r in rows}
 
     def get_run(self, run_id: str) -> dict | None:
         row = self._conn().execute(
@@ -981,6 +1107,11 @@ class StateStore:
                     **run_stamp_fields(dict(r)),
                 }
             )
+            # What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and
+            # weekly budget"): the same block a live done carries.
+            cost = cost_block(self.usage_lines(r["run_id"]))
+            if cost:
+                events[-1]["cost"] = cost
         return events
 
     def mark_run_notified(self, run_id: str) -> bool:

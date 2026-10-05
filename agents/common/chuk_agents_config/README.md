@@ -264,6 +264,7 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_RUN_MAX_SECONDS` | `limits.run_max_seconds` | number | `7200.0` | Wall clock guard on one run. |
 | `AGENTS_RUN_ACK_TIMEOUT_SECONDS` | `limits.run_ack_timeout_seconds` | number | `15.0` | How long a run that ended with an app attached may go without the app's acknowledgement before it is announced as finished while away. |
 | `AGENTS_APPROVAL_WAIT_SECONDS` | `limits.approval_wait_seconds` | number | `600.0` | How long an approval prompt waits for the user before it gives up and denies. |
+| `AGENTS_AUTOMATION_LIGHT_CONTEXT` | `limits.automation_light_context` | boolean | `false` | Skip memory recall and fact extraction for automation and job runs (cheaper scheduled runs; the memory tools stay). |
 | `AGENTS_TAKEOVER_WAIT_SECONDS` | `limits.takeover_wait_seconds` | number | `900.0` | How long a browser takeover (a login, a 2FA code or a CAPTCHA the user does in the live view) waits for the user before it gives up. |
 | `AGENTS_SECRET_REQUEST_TIMEOUT_SECONDS` | `limits.secret_request_timeout_seconds` | number | `600.0` | How long a request for a credential waits before every open name is reported missing. |
 | `AGENTS_JOB_TIMEOUT_SECONDS` | `limits.job_timeout_seconds` | number | `86400.0` | The fallback cap on one background job started from the shell tools. |

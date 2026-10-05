@@ -149,7 +149,10 @@ def make_request_takeover_handler(backend: TakeoverBackend):
                 )
         except Exception:  # noqa: BLE001 — a probe that raises means "no"
             return _error("the browser takeover is not available right now")
-        result = backend.request(level, clean_site(site), _clip(reason, MAX_REASON_CHARS))
+        try:
+            result = backend.request(level, clean_site(site), _clip(reason, MAX_REASON_CHARS))
+        except Exception:  # noqa: BLE001 — never hand raw exception text to the model
+            return _error("the takeover could not be started")
         status = result.get("status") if isinstance(result, dict) else None
         if status not in TAKEOVER_STATUSES:
             message = result.get("error") if isinstance(result, dict) else None

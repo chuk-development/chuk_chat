@@ -637,7 +637,10 @@ Semantics, in this order:
 stopped the run — `AGENTS_RUN_MAX_SECONDS`, default 7200, `0` disables — the
 way a stop does (kill switch, model call cancelled), persisted with that
 reason, notified like any other terminal. The app renders `timeout` like a
-stop (`wasStopped`).
+stop (`wasStopped`). `budget_exceeded` (bead chuk_chat-qcbv): the coworker's
+weekly budget refused the run before it started (§ "Cost per run and weekly
+budget"); it is neither a stop nor a failure. A `done` may also carry `cost`
+(same section).
 
 Persisted run terminals are replayed in message-id order, interleaved with the
 messages of that run.
@@ -965,7 +968,9 @@ is connected. The wait is `Executor._request_takeover`: the pending-approval
 table, the persisted row and the `on_approval_pending` hook of a publish, with
 `AGENTS_TAKEOVER_WAIT_SECONDS` (default 900). The hook info carries
 `action`, `kind`, `site` and `session_key`; the host push says "<Coworker>
-needs you in the browser" / "Sign in to <site>." (`notification_text.takeover_text`).
+needs you in the browser" / "Sign in in the browser." (`notification_text.takeover_text`).
+The push never names the site: it is not end-to-end, so only the sealed
+`approval_request` carries it.
 
 Auto-resolve reads the current tab every 2.5 s with `browser_tabs
 {"action": "list"}` on the session's Playwright MCP server (a read, never a
@@ -1602,8 +1607,8 @@ Host → app, `agent_status` (reply, and a push):
   exposes no model id (a mock in a test) the block is absent.
 - `tokens` sums `runs.tokens_spent` over the session. `last_run` is the newest
   run's own spend. Absent when the session has no run: an empty thread has not
-  spent zero, it has spent nothing that was ever measured. There is no
-  prompt/completion split, because the host stores the total only.
+  spent zero, it has spent nothing that was ever measured. The split and the
+  euro figures are in the `cost` block (§ "Cost per run and weekly budget").
 - `runtime.active_seconds` is time the agent was **running**, summed over its
   runs — not wall clock since the thread was opened. A live run adds its elapsed
   time and sets `running` plus `current_seconds`.
@@ -2317,6 +2322,271 @@ A bad entry is dropped on load (logged) and that coworker gets the defaults.
    every `agent_permissions` frame (a lasting decision from a run sends one).
    Text under the section: "Applies from the next action."
 6. The push needs nothing new: the host words it.
+
+## Cost per run and weekly budget (bead chuk_chat-qcbv)
+
+Host side IMPLEMENTED 2026-10-05. App side NOT YET (list at the end of this
+section). Additive: an older app ignores the new fields, and an older host
+never sends them. Research: docs/research/AGENT_COMPETITORS_2026-10.md,
+item 8.
+
+### The idea
+
+Cost and quota are the largest complaint about every competitor (Grok Bot
+used 99 % of a weekly quota in 3 days, OpenClaw spent $18.75 in one night).
+The host now prices every run in euro, at the price the chuk API really
+charges, and shows it under each answer. Per coworker, the user can set a
+weekly budget. At 80 % the host warns once. At 100 % it stops the
+coworker's unattended runs and asks before a run the user starts.
+
+### Price source and formula
+
+- **Source:** the account's `GET /v1/models_info` list. The host reads it
+  once when it is provisioned (the same call that resolves the model) and
+  keeps it as a price list (`chuk_agents_runtime.cost.PriceBook`). Each
+  provider entry carries `pricing` in USD per token: `prompt`, `completion`,
+  `cache_read`, `cache_write`. That `pricing` is the discounted price the API
+  bills with (`api_server` `routers/ai/multiplex.py`, `_bill_usage`), not
+  `pricing_listed`.
+- **Currency:** the API deducts credits 1:1 USD -> EUR
+  (`services/payment_service.py`, `calculate_cost`), and the app shows the
+  balance in euro. So every figure on the wire is EUR, and it is the figure
+  that leaves the balance.
+- **Why the host computes it:** the OpenAI-compatible route the agent loop
+  uses (`/v1/chat/completions`) returns `usage` but no charge. It removes
+  OpenRouter's `cost` on purpose: that is our cost, not the user's charge.
+- **Formula** (the same as `calculate_cost`): `prompt_tokens` includes the
+  cached tokens. Cached tokens cost `cache_read` (or `prompt` when the
+  provider lists no cache price, never free). The rest of the prompt costs
+  `prompt`. Completion tokens (reasoning included) cost `completion`.
+- **Provider:** the run's provider pin. With no pin, or a pin the list does
+  not know, the model's cheapest provider by prompt price (the API's
+  `find_pricing_provider`).
+- **Rounding:** the API rounds each call to 0.0001 EUR. The host prices a
+  whole run at once, so a run's figure can differ from the sum of its bills
+  by at most 0.00005 EUR per model call. Frames carry 6 decimals.
+- A model the list does not know, or a host with no list (offline, a test),
+  has **no price**: the tokens are still sent, the `eur` fields are absent.
+- Not counted yet (follow-up): `cache_write` tokens (not reported by the
+  loop), the Hindsight memory sidecar's own model calls (they do not go
+  through a host client), and subagent runs (a child has its own loop and
+  client; its spend is in its own `tokens_spent` only).
+
+### Lines
+
+The spend of a run has lines. Each line is one kind of model use:
+
+| kind | what |
+|---|---|
+| `run` | the run's own model calls (the agent loop) |
+| `aux` | the housekeeping client: the context summary (compaction) and the memory fact extraction |
+| `browser` | the browser fallback (`browser_task`) |
+
+A line names its model and provider. The `aux` line shows what compaction
+costs. A background summary that finishes after the run still names the run;
+it is in the replayed `done`, but can be missing from the live one.
+
+### `done` (extended)
+
+```json
+{"type": "done", ..., "tokens_spent": 1100,
+ "cost": {"currency": "EUR", "eur": 0.002345,
+          "input_tokens": 5000, "output_tokens": 150, "cached_tokens": 3000,
+          "lines": [
+            {"kind": "run", "model": "z-ai/glm-5.3-flash", "provider": "deepinfra/fp4",
+             "input_tokens": 1000, "output_tokens": 100, "cached_tokens": 0,
+             "calls": 1, "eur": 0.002},
+            {"kind": "aux", "model": "deepseek/deepseek-v4-flash-0731",
+             "input_tokens": 4000, "output_tokens": 50, "cached_tokens": 3000,
+             "calls": 1, "eur": 0.000345}]}?}
+```
+
+- `cost.eur` is the total. It is present only when **every** line is priced:
+  a total that leaves out a line would be a wrong number. A line without a
+  price has no `eur`.
+- `input_tokens` includes `cached_tokens`.
+- `cost` is absent when the run spent no tokens (a refused run, a run that
+  made no model call).
+- A replayed `done` (persisted run terminal) carries the same block.
+
+### `agent_status` (extended)
+
+```json
+{"type": "agent_status", ...,
+ "cost": {"currency": "EUR", "session_total": 0.41, "last_run": 0.002345?,
+          "today": 0.12, "week": 0.87, "week_starts_at": 1759701600.0,
+          "budget_weekly": 5.0?, "budget_state": "ok" | "warning" | "exceeded"?}?}
+```
+
+- `session_total` and `last_run` are this thread. `today` and `week` are the
+  **coworker**: every thread of it (a coworker's own thread is its id; the
+  host's other keys are the host's own coworker).
+- `today` starts at the host's local midnight. `week` starts at the host's
+  local Monday 00:00 (`week_starts_at`, unix seconds).
+- `last_run` is absent when the last run has no complete price.
+- `budget_weekly` and `budget_state` are present only when a budget is set.
+- The block is absent when the coworker never had a priced line, has no
+  budget, and the host has no price list.
+
+### The budget setting (`agent_permissions_get` / `_set`, extended)
+
+Capability: `host_route.capabilities` adds `cost_budget`. The app shows the
+budget setting and sends `budget_weekly` / `budget_override` only to a host
+that names it.
+
+App -> host (may stand alone, or next to `permissions` / `approvals`):
+
+```json
+{"type": "agent_permissions_set", "agent_id": "<agent id>", "budget_weekly": 5.0}
+```
+
+Host -> app, `agent_permissions` gains:
+
+```json
+{"type": "agent_permissions", ..., "budget_weekly": 5.0}
+```
+
+- Euro per week; `0` = no budget. Rounded to cents.
+- Strict: not a number (a bool or a string is not), not finite, below 0 or
+  above 10000 refuses the **whole** set. Nothing changes; the reply carries
+  the unchanged values plus `error`.
+- `budget_weekly` is in every reply for a known agent (also `0`).
+- A change goes to every attached device, like a switch.
+- Applies from the next task (the check runs at a task's start).
+- Host-side record: `agent_permissions.json` gains `budgets`:
+  `{"budgets": {"<agent key>": 5.0}}`. Only budgets above 0 are stored. A bad
+  entry is dropped on load (logged).
+
+### Inbound: host -> app `budget_warning` (NEW)
+
+```json
+{"type": "budget_warning", "agent_id": "<agent id>", "session_key": "<key>",
+ "level": "warning" | "exceeded", "currency": "EUR",
+ "spent_eur": 4.02, "budget_eur": 5.0, "week_starts_at": 1759701600.0}
+```
+
+- `warning` when the coworker's week reaches 80 % of its budget, `exceeded`
+  at 100 %. Each level once per coworker and week. (The host keeps this in
+  memory: after a host restart one warning can come again.)
+- An event on the stream of the run that crossed it, **before** its `done`.
+  A run the budget refused also sends `exceeded` (once a week).
+- The host also sends a push, always (a scheduled run has no stream). The
+  push text has no amounts, because a push is not end-to-end:
+  "<Coworker>: weekly budget" / "This coworker used 80 % of its weekly
+  budget." or "This coworker reached its weekly budget. Scheduled runs stop
+  until next week or until you raise the budget." Row kind `budget`, row
+  `run_id` `budget:<session key>:<week start>:<level>`.
+
+### The stop at 100 %
+
+The check runs at the start of each run, before a model is built, so a
+refused run spends nothing.
+
+- **Unattended runs** (origin `automation`, `job`, `mail`, `mail_untrusted`,
+  `telegram`) are **refused**: `done` with `reason: "budget_exceeded"`,
+  `iterations: 0`, `tokens_spent: 0`, and a `final_answer` that says why
+  ("... This run was skipped. Raise the budget ..."). The run row is closed
+  with that reason. The host's run-finished hook gets it like any end (a
+  Telegram run answers with the sentence in Telegram; an automation is
+  announced like any automation end).
+- **A run the user starts** (a `task` frame, origin `app`) is refused the
+  same way, with a sentence that offers the way out ("... Choose \"Run
+  anyway\" to go over the budget once ..."). The app then sends the same
+  task again with `"budget_override": true`:
+
+  ```json
+  {"type": "task", "prompt": "<same prompt>", "session_key": "<key>", ...,
+   "budget_override": true}
+  ```
+
+  That one run goes over the budget. Only `true` counts, and only on a
+  `task` frame: an automation can never carry it.
+- **Decision: a plain refusal plus `budget_override`, not an approval
+  card.** The approval machinery holds a run open for up to 600 s and needs
+  the app's per-action card, which is not built yet. A refusal ends at once,
+  holds no run, works with an older app (it shows the sentence as the
+  answer), and the next task decides. The refused prompt is not stored as a
+  turn; the retry with `budget_override` stores it.
+- A run that is already running is not stopped when it crosses 100 %
+  (follow-up: a per-run euro limit through Pydantic AI usage limits). The
+  wall-clock guard and `max_iterations` still bound it.
+- No budget (`0`) means no check at all.
+
+### Scheduled runs on a lighter context (optional)
+
+`AGENTS_AUTOMATION_LIGHT_CONTEXT=1` (off by default) runs a fired schedule
+/ watcher (`automation`) and a background job wake (`job`) without the
+memory recall at the task start and without the fact extraction after the
+turn (an aux call each time). The memory tools stay. Off by default, because
+an automation that leans on what the agent remembers ("news on my
+interests") answers worse without the recall.
+
+Follow-up (not built): an isolated, short session per automation run (like
+OpenClaw's `isolatedSession`, ~100K -> 2-5K tokens), with only the last
+result of the same automation as history and the answer copied into the
+coworker's thread; and a per-automation `light` switch in the app instead of
+the host-wide variable.
+
+### Host side (implemented)
+
+Runtime: `chuk_agents_runtime/cost.py` (`PriceBook`, `cost_eur`,
+`cost_block`, `MeteredClient` / `metered`, `usage_split`, `week_start` /
+`day_start`, `budget_state`, `valid_budget`, `BudgetNotices`), `state.py`
+(`runs.prompt_tokens` / `completion_tokens` / `cost_eur`, table
+`usage_lines`, `add_usage_line`, `usage_lines`, `spend_by_session`, `cost`
+on replayed `done`), `loop.py` (`RunTimings.prompt_tokens` /
+`completion_tokens`), `backend.py` (`BackendModelClient.model_id` /
+`provider_slug`), `runtime.py` (`build_runtime(light_context=)`). Executor:
+`executor.py` (`Executor(price_book=, budget=)`, the metered aux and browser
+clients, `_record_run` pricing, `_budget_refusal` / `_refuse_for_budget`,
+`_check_budget` / `_notify_budget`, `_status_cost`, `budget_override` on
+`task`, `LIGHT_CONTEXT_ENV`), `protocol.py` (`done_payload(cost=)`,
+`agent_status_payload(cost=)`, `budget_warning_payload`,
+`REASON_BUDGET_EXCEEDED`), `backend.py`
+(`resolve_backend_model_wiring(models=)`). Host: `agent_permissions.py`
+(`budgets`, `update_budget`, `budget_weekly` in the frames, `BudgetBridge`,
+`BUDGET_CAPABILITY`), `host.py` (the price list at provisioning, the bridge,
+the capability, `_on_budget_warning`), `serve.py` (pass-through),
+`notify.py` (`notify_budget`, kind `budget`), `notification_text.py`
+(`budget_text`). Tests: `agents/runtime/tests/test_cost.py`,
+`agents/executor/tests/test_cost_budget.py`, `agents/host/tests/test_budget.py`.
+
+### App side (to build)
+
+1. Parse `cost` on `AgentsRelayDone` (`agents_relay_client.dart`), live and
+   replayed: `currency`, `eur?`, `input_tokens`, `output_tokens`,
+   `cached_tokens`, `lines` (`kind`, `model?`, `provider?`, `calls?`, the
+   token counts, `eur?`). Keep it with the answer's message.
+2. **Under each answer, in the thread meta line** (`agents_thread_view.dart`,
+   next to the time and the model): "€0.0023 · 5.2k tokens". Show `eur` with
+   2 decimals when >= €0.01, else "< €0.01". No `eur`: the tokens only.
+   Tapping the line opens a small sheet with one row per line ("Answer",
+   "Summary and memory" for `aux`, "Browser") with its model, tokens and
+   euro. No glow; the existing meta text style.
+3. **Details pane totals** (`agent_control_panel.dart`, the "Token usage"
+   block that reads `agent_status`): parse `cost` (`session_total`,
+   `last_run?`, `today`, `week`, `week_starts_at`, `budget_weekly?`,
+   `budget_state?`). Show "This thread €0.41", "Today €0.12", "This week
+   €0.87 of €5.00" with a thin progress bar when a budget is set (the bar
+   uses the warning colour at `warning`, the error colour at `exceeded`).
+   Absent block: keep today's token figures only.
+4. **Budget setting in the coworker controls** (the agent profile's
+   permissions section, `AgentsPermissionsService`), only for a host that
+   names `cost_budget`: a row "Weekly budget" with a euro field (empty or 0 =
+   "No limit"), sent as `agent_permissions_set` with `budget_weekly` only.
+   Replace the shown value with every `agent_permissions` frame. Text under
+   it: "At 80 % you get a warning. At 100 % scheduled runs stop, and the
+   app asks before it runs a new task."
+5. **`budget_warning`**: show a one-line notice in the thread
+   ("Weekly budget: 80 % used (€4.02 of €5.00)") and refresh the status.
+   Dedup per `(agent_id, week_starts_at, level)`.
+6. **`done.reason == "budget_exceeded"`**: render the `final_answer` as a
+   notice, not as an answer bubble, with a button "Run anyway" (only when the
+   run was the user's own task) that sends the same prompt again with
+   `budget_override: true`, and a second button "Change budget" that opens
+   the setting. Do not count it as a stop (`wasStopped` stays false) and not
+   as a failure.
+7. The push needs nothing new: the host words it (kind `budget`).
 
 ## Agent mail (bead chuk_chat-m0j3)
 

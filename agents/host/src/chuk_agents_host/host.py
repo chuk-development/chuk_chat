@@ -26,7 +26,8 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession
+from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
+from chuk_agents_runtime.cost import PriceBook
 from chuk_agents_runtime.agent_mail import ORIGIN_MAIL, ORIGIN_MAIL_UNTRUSTED
 from chuk_agents_runtime.hindsight_service import (
     configure_memory_service,
@@ -69,6 +70,8 @@ from .agent_mail import (
 )
 from .agent_permissions import (
     APPROVALS_CAPABILITY,
+    BUDGET_CAPABILITY,
+    BudgetBridge,
     CAPABILITY as AGENT_PERMISSIONS_CAPABILITY,
     FILE_NAME as AGENT_PERMISSIONS_FILE,
     FRAMES as AGENT_PERMISSION_FRAMES,
@@ -326,6 +329,16 @@ class LocalHost:
             on_change=self._on_approvals_changed,
             log=self._log,
         )
+        # Cost per run and weekly budget (docs/WIRE_CONTRACT.md, "Cost per run
+        # and weekly budget"): the budget sits in the same store; the price
+        # list is the account's ``/v1/models_info``, read at provisioning.
+        self._budget = BudgetBridge(
+            self._permissions,
+            self._agent_key,
+            on_warning=self._on_budget_warning,
+            log=self._log,
+        )
+        self._price_book: PriceBook | None = None
 
         # The container lifecycle (§6) is only built for the docker backend: one
         # labelled container per agent, its workspace bind-mounted, reused across
@@ -1196,9 +1209,14 @@ class LocalHost:
         # The account owner, for the notification rows (owner-only RLS).
         self._user_id = str(token.get("user_id") or "")
         self._log("resolving a model from the account (one /v1/models_info call)...")
+        models = fetch_models_info(session)
+        # The same list prices every run (chuk_agents_runtime.cost): the
+        # ``pricing`` the API bills with, per provider.
+        self._price_book = PriceBook(models)
         return resolve_backend_model_wiring(
             session, preferred_model_id=self._model_id,
-            preferred_provider=self._provider_slug, reasoning_effort=self._reasoning_effort
+            preferred_provider=self._provider_slug, reasoning_effort=self._reasoning_effort,
+            models=models,
         )
 
     def _build_task_server(
@@ -1319,6 +1337,10 @@ class LocalHost:
             # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
             # approvals"): each coworker's policy and the store for "always".
             action_approvals=getattr(self, "_action_approvals", None),
+            # Cost per run and weekly budget (docs/WIRE_CONTRACT.md): read live,
+            # so a re-provision's fresh price list applies to the next run.
+            price_book=lambda: getattr(self, "_price_book", None),
+            budget=getattr(self, "_budget", None),
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -1967,6 +1989,7 @@ class LocalHost:
             "capabilities": [
                 AGENT_PERMISSIONS_CAPABILITY,
                 APPROVALS_CAPABILITY,
+                BUDGET_CAPABILITY,
                 CHANNELS_CAPABILITY,
             ],
         })
@@ -2059,6 +2082,7 @@ class LocalHost:
                     "docker" if self._containers is not None else "local"
                 ),
                 approvals=approvals,
+                budget_weekly=self._permissions.budget(key),
             )
         )
 
@@ -2136,6 +2160,18 @@ class LocalHost:
             )
         except Exception:  # noqa: BLE001 — a toast must never take a run down
             pass
+
+    def _on_budget_warning(self, payload: dict) -> None:
+        """A coworker's week reached 80 % or 100 % of its budget
+        (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget"). The frame
+        went out on the run's stream; the push goes always, once per level
+        and week, because a scheduled run has no stream at all."""
+        notifier = getattr(self, "_notifier", None)
+        if notifier is None:
+            return
+        notify = getattr(notifier, "notify_budget", None)
+        if callable(notify):
+            notify(payload)
 
     def _on_approval_pending(self, info: dict) -> None:
         """A run is blocked on a here.now publish approval. With no app attached

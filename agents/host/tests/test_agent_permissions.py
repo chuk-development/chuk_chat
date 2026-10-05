@@ -157,6 +157,9 @@ def test_get_answers_the_whole_set_what_is_enforced_and_when_it_applies(tmp_path
         # Per-action approvals ride the same reply (docs/WIRE_CONTRACT.md,
         # "Per-action approvals").
         "approvals": {**ActionPolicy().to_dict(), "applies_from": "next_action"},
+        # The weekly budget too (docs/WIRE_CONTRACT.md, "Cost per run and
+        # weekly budget"): 0 = none.
+        "budget_weekly": 0.0,
     }
     assert APPLIES_FROM == "next_task"
 
