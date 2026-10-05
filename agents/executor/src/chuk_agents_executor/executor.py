@@ -176,6 +176,7 @@ from .protocol import (
     debug_context_payload,
     decode_payload,
     automation_list_payload,
+    automation_saved_payload,
     agent_list_payload,
     agent_status_payload,
     budget_warning_payload,
@@ -1693,7 +1694,7 @@ class Executor:
             # control frame like approval_decision: no terminal.
             self._handle_secrets(payload)
             return
-        if kind in ("automation_control", "automation_list"):
+        if kind in ("automation_control", "automation_list", "automation_create", "automation_update"):
             # The user manages the automations of this host (docs/WIRE_CONTRACT.md,
             # "Automations"). A control is like a stop (no terminal; the state
             # change comes back as an ``automation`` event); a list request is
@@ -2033,6 +2034,11 @@ class Executor:
         if kind == "automation_list":
             rows = answer if isinstance(answer, list) else []
             self._terminal(request_id, automation_list_payload(rows))
+        elif kind in ("automation_create", "automation_update"):
+            # docs/WIRE_CONTRACT.md, "Event triggers": one terminal with the
+            # saved row or the error, like a list.
+            result = answer if isinstance(answer, dict) else {"ok": False, "error": "no answer"}
+            self._terminal(request_id, automation_saved_payload(result))
 
     def _handle_agent_frame(self, request_id: str, payload: dict) -> None:
         hook = self._on_agent_frame
@@ -4261,11 +4267,7 @@ class Executor:
             # This session's automation tools (docs/WIRE_CONTRACT.md,
             # "Automations"): bound to ``session_key`` here, so the model can
             # only ever name its own schedules and watchers.
-            automations=(
-                self._automations.bound(session_key)
-                if self._automations is not None
-                else None
-            ),
+            automations=self._automation_backend(run, session_key),
             # ``call_user`` / ``call_status`` (docs/WIRE_CONTRACT.md, "The
             # agent calls the user"), bound to ``session_key`` the same way:
             # a fired automation run gets them too, which is what makes a
@@ -4416,6 +4418,11 @@ class Executor:
         # the host even when the app is gone and the frame is dropped. The
         # closed row also stamps the done (clock + message rows).
         run_stamps = self._record_run(run, result=result, reason=reason)
+        # "Notify only on change" (docs/WIRE_CONTRACT.md, "Event triggers"):
+        # the host compares what the run reported with the last result. The
+        # outcome rides the ``done`` (the app collapses a "no change" run) and
+        # the run summary (the host skips the toast and the push).
+        automation_result = self._finish_automation(run, ok=reason == StopReason.FINISHED.value)
         # 80 % / 100 % of the coworker's weekly budget: one warning per level
         # and week, on this stream and as a push (the host words it).
         self._check_budget(run, request_id)
@@ -4440,6 +4447,7 @@ class Executor:
                 host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
                 session_key=session_key,
                 cost=run.cost,
+                automation_result=automation_result,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -4454,8 +4462,41 @@ class Executor:
                 final_answer=result.final_answer,
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
+                automation_result=automation_result,
             ),
         )
+
+    def _automation_backend(self, run: _Run, session_key: str):
+        """The automation tools' backend for this run, bound to its session.
+        A fired automation run is also bound to its run and automation id
+        (``for_run``), so ``automation_result`` reports for exactly that run."""
+        if self._automations is None:
+            return None
+        backend = self._automations.bound(session_key)
+        attach = getattr(backend, "for_run", None)
+        if run.automation_id and callable(attach):
+            backend = attach(run.run_id, run.automation_id)
+        return backend
+
+    def _finish_automation(self, run: _Run, *, ok: bool) -> dict | None:
+        """Ask the host whether a fired ``on_change`` run counts as a change.
+        ``None`` for every other run (and for a host without the hook)."""
+        if not run.automation_id or run.origin != "automation":
+            return None
+        finish = getattr(self._automations, "finish_run", None)
+        if not callable(finish):
+            return None
+        try:
+            outcome = finish(run.run_id, run.automation_id, ok=ok)
+        except Exception:  # noqa: BLE001 — bookkeeping must not mask a result
+            logger.warning("automation result failed run=%s", run.run_id, exc_info=True)
+            return None
+        if not isinstance(outcome, dict):
+            return None
+        out: dict = {"changed": bool(outcome.get("changed", True))}
+        if outcome.get("summary"):
+            out["summary"] = str(outcome["summary"])
+        return out
 
     # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
     def _handle_mail_key(self, request_id: str, payload: dict) -> None:
@@ -4817,6 +4858,7 @@ class Executor:
         iterations: int = 0,
         tokens_spent: int = 0,
         error: str | None = None,
+        automation_result: dict | None = None,
     ) -> dict:
         """What the host's ``on_run_finished`` hook receives. No transcript: the
         host decides whether and how to notify; content stays in the store."""
@@ -4836,6 +4878,9 @@ class Executor:
             # docs/WIRE_CONTRACT.md, "Automations": who started the run.
             "origin": run.origin,
             "automation_id": run.automation_id,
+            # docs/WIRE_CONTRACT.md, "Event triggers": ``{"changed": false}``
+            # = an on_change run with nothing new; the host stays quiet.
+            "automation_result": automation_result,
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------

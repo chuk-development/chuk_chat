@@ -312,3 +312,132 @@ def test_the_done_of_a_fired_task_says_host_notified(tmp_path):
         executor.stop()
     rid, payload = sent[-1]
     assert rid.startswith("auto-") and payload["type"] == "done" and payload["host_notified"] is True
+
+
+# -- event triggers and "notify only on change" (docs/WIRE_CONTRACT.md,
+# "Event triggers") ------------------------------------------------------------
+
+
+class _OnChangeManager:
+    """A host manager whose automation ``a1`` is ``on_change``: binds the run,
+    records the result, answers ``finish_run`` like the host does."""
+
+    def __init__(self) -> None:
+        self.recorded: list[tuple[str | None, bool, str]] = []
+        self.finished: list[tuple[str | None, str | None, bool]] = []
+
+    def bound(self, session_key: str):
+        manager = self
+
+        class _Bound(RecordingBackend):
+            run_id: str | None = None
+
+            def for_run(self, run_id, automation_id):
+                bound = _Bound(session_key=session_key, result_wanted=automation_id == "a1")
+                bound.run_id = run_id
+                return bound
+
+            def record_result(self, changed, summary):
+                manager.recorded.append((self.run_id, changed, summary))
+                return {"ok": True}
+
+        return _Bound(session_key=session_key)
+
+    def finish_run(self, run_id, automation_id, *, ok=True):
+        self.finished.append((run_id, automation_id, ok))
+        if not self.recorded:
+            return {"changed": True, "reported": False}
+        _, changed, summary = self.recorded[-1]
+        return {"changed": changed, "summary": summary, "reported": True}
+
+
+def test_an_on_change_run_reports_its_result_and_the_done_carries_it(tmp_path):
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    manager = _OnChangeManager()
+    sent: list[tuple[str, dict]] = []
+    finished: list[dict] = []
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=lambda: MockModelClient(
+            [tool_call_response(("automation_result", {"changed": False, "summary": "price 129 EUR"})), "same as before"]
+        ),
+        automations=manager,
+        on_run_finished=finished.append,
+    )
+    executor._terminal = lambda rid, payload: sent.append((rid, payload))  # type: ignore[method-assign]
+    executor.start()
+    try:
+        run_id = executor.submit_task("s1", "[automation a1 fired: price]\nnotify: on_change", {"automation_id": "a1"})
+        assert _wait(lambda: len(finished) == 1, timeout=15.0)
+    finally:
+        executor.stop()
+    assert manager.recorded == [(run_id, False, "price 129 EUR")]
+    assert manager.finished == [(run_id, "a1", True)]
+    done = [p for _, p in sent if p.get("type") == "done"][-1]
+    assert done["automation_result"] == {"changed": False, "summary": "price 129 EUR"}
+    assert done["host_notified"] is True
+    assert finished[0]["automation_result"] == {"changed": False, "summary": "price 129 EUR"}
+
+
+def test_an_app_task_has_no_automation_result(tmp_path):
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    manager = _OnChangeManager()
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=lambda: MockModelClient(
+            [tool_call_response(("automation_result", {"changed": True, "summary": "x"})), "end"]
+        ),
+        automations=manager,
+    )
+    controller = ControllerSession(endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener)
+    executor.start()
+    try:
+        rid = controller.send_payload({"type": "task", "prompt": "hi", "session_key": "s1"})
+        events = controller.collect(rid, timeout=15.0)
+    finally:
+        executor.stop()
+    # Not a fired on_change run: the tool is not offered, nothing is finished.
+    tool = [e for e in events if e["type"] == "tool"]
+    assert tool and tool[0]["status"] == "error"
+    assert manager.finished == []
+    assert "automation_result" not in [e for e in events if e["type"] == "done"][0]
+
+
+def test_automation_create_and_update_frames_are_answered_with_one_terminal(tmp_path):
+    from chuk_agents_executor import automation_create_payload, automation_update_payload
+
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    seen: list[dict] = []
+
+    def hook(payload: dict):
+        seen.append(payload)
+        if payload["type"] == "automation_create":
+            return {"ok": True, "id": "w1", "kind": "watch_url", "notify": "on_change"}
+        return {"ok": False, "error": "not found"}
+
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=lambda: MockModelClient(["unused"]),
+        on_automation_frame=hook,
+    )
+    controller = ControllerSession(endpoint=controller_ep, sealer=channel.controller.sealer, opener=channel.controller.opener)
+    executor.start()
+    try:
+        rid1 = controller.send_payload(
+            automation_create_payload(
+                session_key="s1", kind="watch_url", spec={"url": "https://example.org/"},
+                prompt="summarize", notify="on_change",
+            )
+        )
+        created = controller.collect(rid1, timeout=10.0)
+        rid2 = controller.send_payload(automation_update_payload(automation_id="zz", notify="always"))
+        updated = controller.collect(rid2, timeout=10.0)
+    finally:
+        executor.stop()
+    assert seen[0]["type"] == "automation_create" and seen[0]["notify"] == "on_change"
+    assert seen[1] == {"type": "automation_update", "id": "zz", "notify": "always"}
+    assert created == [{"type": "automation_saved", "ok": True, "automation": {"id": "w1", "kind": "watch_url", "notify": "on_change"}}]
+    assert updated == [{"type": "automation_saved", "ok": False, "error": "not found"}]

@@ -7,7 +7,7 @@ what needs a process that stays up:
 - :class:`AutomationStore` — the ``automations`` table, in the executor's
   state SQLite file next to ``runs``. Persisted, so a host restart loses
   nothing.
-- :class:`AutomationManager` — three jobs on two daemon threads:
+- :class:`AutomationManager` — four jobs on three daemon threads:
 
   1. **Scheduler** (every ``tick`` seconds): fire every active schedule whose
      ``next_fire_at`` is due, then compute the next time.
@@ -19,6 +19,21 @@ what needs a process that stays up:
      ``.agents/automations/triggers.jsonl``, the file ``agents_hooks.trigger``
      appends to, and turn each line into a task of the watcher's session —
      at most one per watcher per ``rate_window`` seconds; the rest is folded.
+  4. **URL checker** (every ``tick`` seconds): fetch each due ``watch_url``
+     page (``url_watch.fetch_url``) and queue a fire when its text changed.
+
+Event triggers (docs/WIRE_CONTRACT.md, "Event triggers"): a ``watch_url``
+row fires on a changed page; a ``mail`` row fires when the mail dispatcher
+offers a claimed mail that matches its filter (:meth:`AutomationManager.offer_mail`).
+Both go through the same pending table as a watcher's report, so the rate
+limit and the busy gate apply to them too.
+
+"Notify only on change": a row with ``notify = on_change`` asks the fired run
+to call ``automation_result(changed, summary)``. When the run ends the
+executor calls :meth:`AutomationManager.finish_run`, which compares the digest
+of the summary with the last one, stores the new one and says whether the run
+counts as a change. No change = no toast, no push, and the app collapses the
+run (``done.automation_result.changed == false``).
 
 A fire is a normal task: the manager calls the ``fire`` callable the host
 wired (``Executor.submit_task``) and gets a ``run_id`` back — or ``None``
@@ -57,8 +72,13 @@ from typing import Any
 from chuk_agents_runtime import StateStore
 from chuk_agents_runtime.automations import (
     AUTOMATIONS_DIRNAME,
+    KIND_MAIL,
     KIND_SCHEDULE,
+    KIND_WATCH_URL,
     KIND_WATCHER,
+    MAX_RESULT_SUMMARY_CHARS,
+    NOTIFY_ALWAYS,
+    NOTIFY_ON_CHANGE,
     STATE_ACTIVE,
     STATE_DONE,
     STATE_FAILED,
@@ -66,12 +86,20 @@ from chuk_agents_runtime.automations import (
     TRIGGERS_FILENAME,
     AutomationSpecError,
     cap_payload,
+    decide_changed,
     fired_prompt,
+    mail_matches,
     next_fire,
+    parse_mail_spec,
+    parse_notify,
     parse_schedule_spec,
+    parse_watch_url_spec,
     spec_label,
+    summary_digest,
 )
 from chuk_agents_runtime import agents_hooks as _hooks_module
+
+from . import url_watch
 
 #: ``fire(session_key, prompt, meta) -> run_id | None``. ``meta`` carries
 #: ``automation_id`` and ``name``. ``None`` = the host cannot run a task now.
@@ -83,6 +111,9 @@ EnvProvider = Callable[[], Mapping[str, str]]
 #: The sandbox environment the watchers must share boundaries with. Duck-typed:
 #: a docker environment has ``container_id`` (and a ``_cli`` with a binary).
 EnvironmentProvider = Callable[[], Any]
+#: ``fetch(url, etag, last_modified) -> url_watch.FetchResult``; raises
+#: ``url_watch.UrlWatchError``. Injected by tests.
+UrlFetcher = Callable[[str, str | None, str | None], "url_watch.FetchResult"]
 
 EVENT_CREATED = "created"
 EVENT_FIRED = "fired"
@@ -91,6 +122,15 @@ EVENT_RESUMED = "resumed"
 EVENT_CANCELLED = "cancelled"
 EVENT_FAILED = "failed"
 EVENT_DONE = "done"
+#: The app changed name / prompt / spec / notify (``automation_update``).
+EVENT_UPDATED = "updated"
+#: An ``on_change`` run reported its result (``changed`` + ``summary``).
+EVENT_RESULT = "result"
+
+#: Mails one pending mail trigger collects before it fires.
+MAX_PENDING_MAILS = 10
+#: An ``automation_result`` that no run end picked up is dropped after this.
+RESULT_TTL_SECONDS = 6 * 3600
 
 #: Restart policy for a crashing watcher.
 BACKOFF_MAX_SECONDS = 60.0
@@ -117,10 +157,24 @@ CREATE TABLE IF NOT EXISTS automations (
     last_error       TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_automations_session ON automations(session_key, created_at);
+CREATE TABLE IF NOT EXISTS automation_url_state (
+    id TEXT PRIMARY KEY, state TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS automation_trigger_checkpoint (
     workspace TEXT PRIMARY KEY, offset INTEGER NOT NULL, pending TEXT NOT NULL
 );
 """
+
+
+#: Columns added after the first release, with their DDL. Added in place on
+#: open; an old row reads as ``notify = always`` with no last result.
+_ADDED_COLUMNS = (
+    ("notify", "TEXT NOT NULL DEFAULT 'always'"),
+    ("last_digest", "TEXT"),
+    ("last_summary", "TEXT"),
+    ("last_result_at", "REAL"),
+    ("unchanged_count", "INTEGER NOT NULL DEFAULT 0"),
+)
 
 
 def _new_id() -> str:
@@ -136,6 +190,10 @@ class AutomationStore:
         self._path = path
         with self._connect() as conn:
             conn.executescript(_SCHEMA)
+            have = {row[1] for row in conn.execute("PRAGMA table_info(automations)")}
+            for name, ddl in _ADDED_COLUMNS:
+                if name not in have:
+                    conn.execute(f"ALTER TABLE automations ADD COLUMN {name} {ddl}")
 
     def _connect(self):
         """A connection that is CLOSED on exit (a bare sqlite3 connection as a
@@ -167,12 +225,13 @@ class AutomationStore:
         prompt: str,
         next_fire_at: float | None,
         automation_id: str | None = None,
+        notify: str = NOTIFY_ALWAYS,
     ) -> dict:
         row_id = automation_id or _new_id()
         with self._connect() as conn:
             conn.execute(
                 "INSERT INTO automations(id, session_key, kind, name, spec, prompt, state, "
-                "created_at, next_fire_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "created_at, next_fire_at, notify) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     row_id,
                     session_key,
@@ -183,6 +242,7 @@ class AutomationStore:
                     STATE_ACTIVE,
                     time.time(),
                     next_fire_at,
+                    notify,
                 ),
             )
         return self.get(row_id)  # type: ignore[return-value]
@@ -211,14 +271,44 @@ class AutomationStore:
             rows = conn.execute(sql, args).fetchall()
         return [self._row(r) for r in rows]  # type: ignore[misc]
 
-    def due(self, now: float) -> list[dict]:
+    def due(self, now: float, kind: str = KIND_SCHEDULE) -> list[dict]:
+        """Active rows of ``kind`` whose ``next_fire_at`` is due. For a
+        ``watch_url`` row ``next_fire_at`` is the next check, not a fire."""
         with self._connect() as conn:
             rows = conn.execute(
                 "SELECT * FROM automations WHERE kind=? AND state=? AND next_fire_at IS NOT NULL "
                 "AND next_fire_at<=? ORDER BY next_fire_at, rowid",
-                (KIND_SCHEDULE, STATE_ACTIVE, now),
+                (kind, STATE_ACTIVE, now),
             ).fetchall()
         return [self._row(r) for r in rows]  # type: ignore[misc]
+
+    def url_state(self, automation_id: str) -> dict:
+        """What the last check of a ``watch_url`` row saw: ``hash``, ``etag``,
+        ``last_modified``, ``checked_at``, ``changed_at`` and the ``snapshot``
+        text the next diff starts from. Kept apart from the row, so a list
+        never carries the page."""
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT state FROM automation_url_state WHERE id=?", (automation_id,)
+            ).fetchone()
+        if row is None:
+            return {}
+        try:
+            data = json.loads(row["state"])
+        except (TypeError, ValueError):
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def set_url_state(self, automation_id: str, state: dict | None) -> None:
+        with self._connect() as conn:
+            if state is None:
+                conn.execute("DELETE FROM automation_url_state WHERE id=?", (automation_id,))
+            else:
+                conn.execute(
+                    "INSERT INTO automation_url_state(id, state) VALUES(?, ?) "
+                    "ON CONFLICT(id) DO UPDATE SET state=excluded.state",
+                    (automation_id, json.dumps(state)),
+                )
 
     def update(self, automation_id: str, **fields: Any) -> dict | None:
         if not fields:
@@ -265,10 +355,15 @@ def automation_fields(row: dict, *, log_path: str | None = None) -> dict:
         "fire_count": int(row.get("fire_count") or 0),
         "suppressed_count": int(row.get("suppressed_count") or 0),
         "created_at": row.get("created_at"),
+        # Additive (docs/WIRE_CONTRACT.md, "Event triggers"): an older row
+        # reads as ``always``.
+        "notify": row.get("notify") or NOTIFY_ALWAYS,
     }
-    for key in ("next_fire_at", "last_fired_at", "last_error"):
+    for key in ("next_fire_at", "last_fired_at", "last_error", "last_summary", "last_result_at"):
         if row.get(key) is not None:
             out[key] = row[key]
+    if row.get("unchanged_count"):
+        out["unchanged_count"] = int(row["unchanged_count"])
     if log_path:
         out["log_path"] = log_path
     return out
@@ -324,6 +419,9 @@ class AutomationManager:
         rate_window: float = 30.0,
         python: str = "python3",
         clock: Callable[[], float] = time.time,
+        url_fetcher: UrlFetcher | None = None,
+        network_allowed: Callable[[], bool] | None = None,
+        allow_private_urls: bool = False,
     ) -> None:
         self._db_path = db_path
         self._workspace = Path(workspace).expanduser().resolve()
@@ -343,6 +441,14 @@ class AutomationManager:
         self._rate_window = rate_window
         self._python = python
         self._now = clock
+        self._allow_private_urls = allow_private_urls
+        self._url_fetcher: UrlFetcher = url_fetcher or self._default_fetch
+        # The coworker's ``network`` permission: off = no URL is fetched for it.
+        self._network_allowed = network_allowed or (lambda: True)
+        # ``run_id -> {automation_id, changed, summary, at}``: what an
+        # ``on_change`` run reported through ``automation_result``, until the
+        # executor ends the run (:meth:`finish_run`).
+        self._results: dict[str, dict] = {}
 
         self.store = AutomationStore(db_path)
         self._dir = self._workspace / AUTOMATIONS_DIRNAME
@@ -389,7 +495,11 @@ class AutomationManager:
                 restarted += 1
         if restarted:
             self._log(f"[automations] restarted {restarted} watcher(s)")
-        for name, target in (("scheduler", self._scheduler_loop), ("watchdog", self._watchdog_loop)):
+        for name, target in (
+            ("scheduler", self._scheduler_loop),
+            ("watchdog", self._watchdog_loop),
+            ("urlwatch", self._url_loop),
+        ):
             thread = threading.Thread(target=target, name=f"agents-automations-{name}", daemon=True)
             thread.start()
             self._threads.append(thread)
@@ -412,9 +522,17 @@ class AutomationManager:
     def bound(self, session_key: str) -> "SessionAutomations":
         return SessionAutomations(self, session_key)
 
-    def schedule(self, session_key: str, spec: dict | str, prompt: str, name: str | None) -> dict:
+    def schedule(
+        self,
+        session_key: str,
+        spec: dict | str,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+    ) -> dict:
         try:
             parsed = parse_schedule_spec(spec)
+            notify = parse_notify(notify)
         except AutomationSpecError as exc:
             return {"ok": False, "error": str(exc)}
         now = self._now()
@@ -428,8 +546,153 @@ class AutomationManager:
             spec=parsed,
             prompt=prompt,
             next_fire_at=when,
+            notify=notify,
         )
         self._emit(row, EVENT_CREATED)
+        return {"ok": True, **automation_fields(row)}
+
+    def watch_url(
+        self,
+        session_key: str,
+        spec: dict,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+    ) -> dict:
+        """A ``watch_url`` row. The first check runs at the next URL tick and
+        only records the page; a later check with other text fires."""
+        try:
+            parsed = parse_watch_url_spec(spec.get("url"), spec.get("every"))
+            notify = parse_notify(notify)
+        except (AutomationSpecError, AttributeError) as exc:
+            return {"ok": False, "error": str(exc)}
+        if not isinstance(prompt, str) or not prompt.strip():
+            return {"ok": False, "error": "prompt must not be empty"}
+        row = self.store.create(
+            session_key=session_key,
+            kind=KIND_WATCH_URL,
+            name=name or spec_label(parsed),
+            spec=parsed,
+            prompt=prompt.strip(),
+            next_fire_at=self._now(),
+            notify=notify,
+        )
+        self._emit(row, EVENT_CREATED)
+        return {"ok": True, **automation_fields(row)}
+
+    def watch_mail(
+        self,
+        session_key: str,
+        spec: dict,
+        prompt: str,
+        name: str | None,
+        notify: str = NOTIFY_ALWAYS,
+    ) -> dict:
+        """A ``mail`` row: fires for each claimed mail that matches."""
+        try:
+            parsed = parse_mail_spec(spec.get("from"), spec.get("subject"))
+            notify = parse_notify(notify)
+        except (AutomationSpecError, AttributeError) as exc:
+            return {"ok": False, "error": str(exc)}
+        if not isinstance(prompt, str) or not prompt.strip():
+            return {"ok": False, "error": "prompt must not be empty"}
+        row = self.store.create(
+            session_key=session_key,
+            kind=KIND_MAIL,
+            name=name or spec_label(parsed),
+            spec=parsed,
+            prompt=prompt.strip(),
+            next_fire_at=None,
+            notify=notify,
+        )
+        self._emit(row, EVENT_CREATED)
+        return {"ok": True, **automation_fields(row)}
+
+    def create(self, payload: dict) -> dict:
+        """The app's ``automation_create`` (docs/WIRE_CONTRACT.md, "Event
+        triggers"). ``kind`` is ``schedule`` / ``watch_url`` / ``mail``; a
+        watcher needs a script in the workspace and is the model's job."""
+        session_key = payload.get("session_key")
+        if not isinstance(session_key, str) or not session_key.strip():
+            return {"ok": False, "error": "session_key is required"}
+        kind = payload.get("kind")
+        spec = payload.get("spec")
+        prompt = payload.get("prompt")
+        name = _clean_name(payload.get("name"))
+        notify = payload.get("notify")
+        if not isinstance(prompt, str) or not prompt.strip():
+            return {"ok": False, "error": "prompt must not be empty"}
+        if kind == KIND_SCHEDULE:
+            if not isinstance(spec, (dict, str)):
+                return {"ok": False, "error": "spec is required"}
+            try:
+                mode = parse_notify(notify)
+            except AutomationSpecError as exc:
+                return {"ok": False, "error": str(exc)}
+            return self.schedule(session_key, spec, prompt.strip(), name, mode)
+        if not isinstance(spec, dict):
+            return {"ok": False, "error": "spec must be an object"}
+        if kind == KIND_WATCH_URL:
+            return self.watch_url(session_key, spec, prompt, name, notify)
+        if kind == KIND_MAIL:
+            return self.watch_mail(session_key, spec, prompt, name, notify)
+        return {"ok": False, "error": f"cannot create an automation of kind {kind!r}"}
+
+    def update(self, session_key: str | None, automation_id: str, changes: dict) -> dict:
+        """Change ``name`` / ``prompt`` / ``notify`` / ``spec`` of one row
+        (the app's ``automation_update``). ``session_key`` set = scoped like
+        the tools. A new spec is validated for the row's kind; a schedule
+        gets a new ``next_fire_at``, a URL watch a fresh baseline. Switching
+        ``notify`` back to ``always`` forgets the last result."""
+        row = self.store.get(automation_id)
+        if row is None or (session_key is not None and row["session_key"] != session_key):
+            return {"ok": False, "error": "not found"}
+        if row["state"] in (STATE_DONE,):
+            return {"ok": False, "error": "a cancelled automation cannot be changed"}
+        fields: dict[str, Any] = {}
+        reset_url = False
+        try:
+            if "name" in changes:
+                name = _clean_name(changes.get("name"))
+                fields["name"] = name or spec_label(row["spec"])
+            if "prompt" in changes:
+                prompt = changes.get("prompt")
+                if not isinstance(prompt, str):
+                    return {"ok": False, "error": "prompt must be text"}
+                if not prompt.strip() and row["kind"] != KIND_WATCHER:
+                    return {"ok": False, "error": "prompt must not be empty"}
+                fields["prompt"] = prompt.strip()
+            if "notify" in changes:
+                fields["notify"] = parse_notify(changes.get("notify"))
+                if fields["notify"] == NOTIFY_ALWAYS:
+                    fields.update(last_digest=None, last_summary=None, last_result_at=None, unchanged_count=0)
+            if "spec" in changes:
+                spec = changes.get("spec")
+                if row["kind"] == KIND_SCHEDULE:
+                    parsed = parse_schedule_spec(spec)  # type: ignore[arg-type]
+                    when = next_fire(parsed, after=self._now())
+                    if when is None:
+                        return {"ok": False, "error": "that time is already in the past"}
+                    fields.update(spec=parsed, next_fire_at=when)
+                elif row["kind"] == KIND_WATCH_URL and isinstance(spec, dict):
+                    parsed = parse_watch_url_spec(spec.get("url"), spec.get("every"))
+                    reset_url = parsed["url"] != row["spec"].get("url")
+                    fields.update(spec=parsed, next_fire_at=self._now())
+                elif row["kind"] == KIND_MAIL and isinstance(spec, dict):
+                    fields["spec"] = parse_mail_spec(spec.get("from"), spec.get("subject"))
+                else:
+                    return {"ok": False, "error": f"the spec of a {row['kind']} cannot be changed here"}
+        except AutomationSpecError as exc:
+            return {"ok": False, "error": str(exc)}
+        if not fields:
+            return {"ok": False, "error": "nothing to change"}
+        if row["state"] != STATE_ACTIVE and "next_fire_at" in fields:
+            # A paused row gets its next time at resume.
+            fields.pop("next_fire_at")
+        if reset_url:
+            self.store.set_url_state(row["id"], None)
+        row = self.store.update(row["id"], **fields) or row
+        self._emit(row, EVENT_UPDATED)
         return {"ok": True, **automation_fields(row)}
 
     def start_watcher(self, session_key: str, script_path: str, name: str | None, restart: bool) -> dict:
@@ -489,6 +752,10 @@ class AutomationManager:
                     if when is None:
                         fields["state"] = STATE_DONE
                     fields["next_fire_at"] = when
+            elif row["kind"] == KIND_WATCH_URL:
+                now = self._now()
+                if row.get("next_fire_at") is None or float(row["next_fire_at"]) <= now:
+                    fields["next_fire_at"] = now
             row = self.store.update(row["id"], **fields) or row
             if row["kind"] == KIND_WATCHER and row["state"] == STATE_ACTIVE:
                 self._spawn(row)
@@ -500,6 +767,9 @@ class AutomationManager:
             self._stop_watcher(row["id"])
             self._pending.pop(row["id"], None)
             row = self.store.update(row["id"], state=STATE_DONE, next_fire_at=None) or row
+            if row["kind"] == KIND_WATCH_URL:
+                # The page snapshot is the user's data; a cancelled watch keeps none.
+                self.store.set_url_state(row["id"], None)
             self._emit(row, EVENT_CANCELLED)
         else:
             return {"ok": False, "error": f"unknown action {action!r}"}
@@ -695,7 +965,15 @@ class AutomationManager:
 
     def _fire_row(self, row: dict, *, payload: Any, reason: str | None, suppressed: int = 0) -> bool:
         automation_id = row["id"]
-        prompt = fired_prompt(automation_id, row["name"], row.get("prompt"), payload)
+        notify = row.get("notify") or NOTIFY_ALWAYS
+        prompt = fired_prompt(
+            automation_id,
+            row["name"],
+            row.get("prompt"),
+            payload,
+            notify=notify,
+            last_summary=row.get("last_summary") if notify == NOTIFY_ON_CHANGE else None,
+        )
         meta = {"automation_id": automation_id, "name": row["name"], "kind": row["kind"], "reason": reason}
         try:
             run_id = self._fire(row["session_key"], prompt, meta)
@@ -716,6 +994,11 @@ class AutomationManager:
             when = next_fire(row["spec"], after=now)
             if when is None:
                 state = STATE_DONE
+        elif row["kind"] == KIND_WATCH_URL:
+            # ``next_fire_at`` of a URL watch is its next check; a fire
+            # does not move it.
+            current = self.store.get(automation_id) or row
+            when = current.get("next_fire_at")
         updated = self.store.record_fire(
             automation_id, fired_at=now, next_fire_at=when, suppressed=suppressed, state=state
         ) or row
@@ -724,6 +1007,208 @@ class AutomationManager:
         if state == STATE_DONE:
             self._emit(updated, EVENT_DONE)
         return True
+
+    # -- event triggers: URL watch -----------------------------------------------------
+
+    def _url_loop(self) -> None:
+        while not self._stop.wait(self._tick):
+            try:
+                self.run_url_checks_once()
+            except Exception as exc:  # noqa: BLE001 — the checker must keep running
+                self._log(f"[automations] url checks: {type(exc).__name__}: {exc}")
+
+    def _default_fetch(self, url: str, etag: str | None, last_modified: str | None) -> url_watch.FetchResult:
+        return url_watch.fetch_url(
+            url, etag=etag, last_modified=last_modified, allow_private=self._allow_private_urls
+        )
+
+    def run_url_checks_once(self) -> int:
+        """Check every due ``watch_url`` row once. Returns how many changes
+        were queued. Exposed for tests."""
+        if self._estop_engaged():
+            return 0
+        now = self._now()
+        changed = 0
+        for row in self.store.due(now, KIND_WATCH_URL):
+            if self._check_url(row):
+                changed += 1
+        if changed:
+            self._save_triggers()
+        return changed
+
+    def _check_url(self, row: dict) -> bool:
+        spec = row["spec"] or {}
+        every = float(spec.get("every") or 3600)
+        now = self._now()
+        # The next check is set before the fetch: a page that hangs or a
+        # crash in here cannot turn into a tight retry loop.
+        self.store.update(row["id"], next_fire_at=now + every)
+        try:
+            allowed = bool(self._network_allowed())
+        except Exception:  # noqa: BLE001 — a broken probe means "not allowed"
+            allowed = False
+        if not allowed:
+            self.store.update(row["id"], last_error="network is off for this coworker; the page is not checked")
+            return False
+        state = self.store.url_state(row["id"])
+        url = str(spec.get("url") or "")
+        try:
+            result = self._url_fetcher(url, state.get("etag"), state.get("last_modified"))
+        except url_watch.UrlWatchError as exc:
+            self.store.update(row["id"], last_error=f"check failed: {exc}")
+            return False
+        except Exception as exc:  # noqa: BLE001 — one bad page must not stop the rest
+            self.store.update(row["id"], last_error=f"check failed: {type(exc).__name__}")
+            return False
+        state["checked_at"] = now
+        if result.etag:
+            state["etag"] = result.etag
+        if result.last_modified:
+            state["last_modified"] = result.last_modified
+        if result.not_modified:
+            self.store.set_url_state(row["id"], state)
+            self._clear_check_error(row)
+            return False
+        digest = url_watch.content_hash(result.text)
+        previous = state.get("hash")
+        old_text = str(state.get("snapshot") or "")
+        state["hash"] = digest
+        state["snapshot"] = result.text[: url_watch.SNAPSHOT_CHARS]
+        if previous == digest:
+            self.store.set_url_state(row["id"], state)
+            self._clear_check_error(row)
+            return False
+        state["changed_at"] = now
+        self.store.set_url_state(row["id"], state)
+        self._clear_check_error(row)
+        if previous is None:
+            # The first look is the baseline, not a change.
+            self._log(f"[automations] url watch {row['id']}: baseline recorded")
+            return False
+        payload: dict[str, Any] = {
+            "url": url,
+            "status": result.status,
+            "content_type": result.content_type,
+            "diff": url_watch.text_diff(old_text, result.text),
+            "excerpt": result.text[: url_watch.EXCERPT_CHARS],
+        }
+        if result.final_url and result.final_url != url:
+            payload["final_url"] = result.final_url
+        if result.truncated:
+            payload["truncated"] = True
+        self._log(f"[automations] url watch {row['id']}: the page changed")
+        self._queue(row["id"], "page changed", payload)
+        return True
+
+    def _clear_check_error(self, row: dict) -> None:
+        if str(row.get("last_error") or "").startswith(("check failed", "network is off")):
+            self.store.update(row["id"], last_error=None)
+
+    # -- event triggers: mail ----------------------------------------------------------
+
+    def offer_mail(self, mail: dict) -> bool:
+        """The mail dispatcher claimed ``mail`` (an opened summary in the
+        HostView shape: ``id``, ``from_address``, ``subject``,
+        ``sender_trust`` ...). Every active ``mail`` row whose filter matches
+        queues a fire with it. Returns True when at least one row took it.
+        Called on the mail thread."""
+        if not isinstance(mail, dict):
+            return False
+        taken = False
+        for row in self.store.list(states=(STATE_ACTIVE,)):
+            if row["kind"] != KIND_MAIL or not mail_matches(row["spec"] or {}, mail):
+                continue
+            self._queue(row["id"], "mail", mail, collect=True)
+            taken = True
+        if taken:
+            self._save_triggers()
+        return taken
+
+    def _queue(self, automation_id: str, reason: str, payload: Any, *, collect: bool = False) -> None:
+        """Hold one fire for the pending table (rate limit + busy gate).
+        ``collect`` keeps a list (``{"mails": [...]}``, newest last, capped)
+        instead of letting the last payload win."""
+        with self._lock:
+            pending = self._pending.get(automation_id)
+            if collect:
+                mails = []
+                if pending is not None and isinstance(pending.payload, dict):
+                    mails = list(pending.payload.get("mails") or [])
+                mails = (mails + [payload])[-MAX_PENDING_MAILS:]
+                value: Any = {"mails": mails}
+            else:
+                value = cap_payload(payload)
+            if pending is None:
+                self._pending[automation_id] = _Pending(reason=reason, payload=value)
+            else:
+                pending.reason = reason
+                pending.payload = value
+                pending.folded += 1
+
+    # -- "notify only on change" -------------------------------------------------------
+
+    def wants_result(self, session_key: str, automation_id: str | None) -> bool:
+        if not automation_id:
+            return False
+        row = self.store.get(automation_id)
+        return bool(
+            row is not None
+            and row["session_key"] == session_key
+            and (row.get("notify") or NOTIFY_ALWAYS) == NOTIFY_ON_CHANGE
+        )
+
+    def record_result(
+        self, session_key: str, automation_id: str | None, run_id: str | None, changed: bool, summary: str
+    ) -> dict:
+        """What ``automation_result`` reports. Held until the run ends; the
+        last call of a run wins."""
+        if not run_id or not self.wants_result(session_key, automation_id):
+            return {"ok": False, "error": "this run is not an on_change automation run"}
+        now = self._now()
+        with self._lock:
+            for key in [k for k, v in self._results.items() if now - float(v.get("at") or 0) > RESULT_TTL_SECONDS]:
+                self._results.pop(key, None)
+            self._results[run_id] = {
+                "automation_id": automation_id,
+                "changed": bool(changed),
+                "summary": " ".join(str(summary or "").split())[:MAX_RESULT_SUMMARY_CHARS],
+                "at": now,
+            }
+        return {"ok": True, "recorded": True, "note": "the host decides at the end of the run whether the user is told"}
+
+    def finish_run(self, run_id: str | None, automation_id: str | None, *, ok: bool = True) -> dict | None:
+        """The run of an automation ended. For an ``on_change`` row: compare
+        the reported summary's digest with the last one and store the new
+        one. Returns ``{"changed": bool, "summary": str}`` (the run counts as
+        a change or not) or ``None`` when the row is not ``on_change``.
+
+        Fail-open: a failed run, or a run that never called
+        ``automation_result``, is a change (the user is told as before), and
+        the stored result stays as it was."""
+        with self._lock:
+            reported = self._results.pop(run_id, None) if run_id else None
+        if not automation_id:
+            return None
+        row = self.store.get(automation_id)
+        if row is None or (row.get("notify") or NOTIFY_ALWAYS) != NOTIFY_ON_CHANGE:
+            return None
+        if not ok or reported is None or reported.get("automation_id") != automation_id:
+            outcome = {"changed": True, "reported": False}
+            self._emit(row, EVENT_RESULT, run_id=run_id, extra=outcome)
+            return outcome
+        summary = str(reported.get("summary") or "")
+        digest = summary_digest(summary)
+        changed = decide_changed(bool(reported.get("changed")), digest, row.get("last_digest"))
+        fields: dict[str, Any] = {
+            "last_digest": digest,
+            "last_summary": summary,
+            "last_result_at": self._now(),
+            "unchanged_count": 0 if changed else int(row.get("unchanged_count") or 0) + 1,
+        }
+        row = self.store.update(automation_id, **fields) or row
+        outcome = {"changed": changed, "summary": summary, "reported": True}
+        self._emit(row, EVENT_RESULT, run_id=run_id, extra=outcome)
+        return outcome
 
     # -- watcher supervisor -----------------------------------------------------------
 
@@ -1056,7 +1541,15 @@ class AutomationManager:
 
     # -- events ----------------------------------------------------------------------
 
-    def _emit(self, row: dict, event: str, *, run_id: str | None = None, reason: str | None = None) -> None:
+    def _emit(
+        self,
+        row: dict,
+        event: str,
+        *,
+        run_id: str | None = None,
+        reason: str | None = None,
+        extra: dict | None = None,
+    ) -> None:
         payload: dict[str, Any] = {
             "type": "automation",
             "event": event,
@@ -1067,6 +1560,8 @@ class AutomationManager:
             payload["run_id"] = run_id
         if reason:
             payload["reason"] = reason
+        if extra:
+            payload.update(extra)
         # Persist first (the row exists even if nobody listens), then stream.
         try:
             store = StateStore(self._db_path)
@@ -1105,6 +1600,13 @@ class AutomationManager:
         return True
 
 
+def _clean_name(name: Any) -> str | None:
+    if not isinstance(name, str):
+        return None
+    cleaned = " ".join(name.split())[:80]
+    return cleaned or None
+
+
 def _env_name_ok(name: str) -> bool:
     return bool(name) and name.replace("_", "a").isalnum() and not name[0].isdigit() and " " not in name
 
@@ -1113,16 +1615,46 @@ class SessionAutomations:
     """The :class:`chuk_agents_runtime.automations.AutomationBackend` for ONE session.
     Every call carries the bound key; there is no way to name another."""
 
-    def __init__(self, manager: AutomationManager, session_key: str) -> None:
+    def __init__(
+        self,
+        manager: AutomationManager,
+        session_key: str,
+        *,
+        run_id: str | None = None,
+        automation_id: str | None = None,
+    ) -> None:
         self._manager = manager
         self._session_key = session_key
+        self._run_id = run_id
+        self._automation_id = automation_id
 
     @property
     def session_key(self) -> str:
         return self._session_key
 
-    def schedule(self, spec: dict, prompt: str, name: str | None) -> dict:
-        return self._manager.schedule(self._session_key, spec, prompt, name)
+    def for_run(self, run_id: str | None, automation_id: str | None) -> "SessionAutomations":
+        """The same session, bound to one fired run: ``automation_result``
+        reports for that run and that automation only."""
+        return SessionAutomations(
+            self._manager, self._session_key, run_id=run_id, automation_id=automation_id
+        )
+
+    def schedule(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
+        return self._manager.schedule(self._session_key, spec, prompt, name, notify)
+
+    def watch_url(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
+        return self._manager.watch_url(self._session_key, spec, prompt, name, notify)
+
+    def watch_mail(self, spec: dict, prompt: str, name: str | None, notify: str = NOTIFY_ALWAYS) -> dict:
+        return self._manager.watch_mail(self._session_key, spec, prompt, name, notify)
+
+    def wants_result(self) -> bool:
+        return self._manager.wants_result(self._session_key, self._automation_id)
+
+    def record_result(self, changed: bool, summary: str) -> dict:
+        return self._manager.record_result(
+            self._session_key, self._automation_id, self._run_id, changed, summary
+        )
 
     def start_watcher(self, script_path: str, name: str | None, restart: bool) -> dict:
         return self._manager.start_watcher(self._session_key, script_path, name, restart)
@@ -1146,4 +1678,6 @@ __all__ = [
     "EVENT_CANCELLED",
     "EVENT_FAILED",
     "EVENT_DONE",
+    "EVENT_RESULT",
+    "EVENT_UPDATED",
 ]

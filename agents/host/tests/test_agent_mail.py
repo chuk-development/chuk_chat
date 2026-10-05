@@ -802,3 +802,48 @@ def test_the_host_answers_not_enabled_without_a_mail_service(tmp_path):
     finally:
         host._roster.close()
         host._coworker_names.close()
+
+
+# -- mail automations (docs/WIRE_CONTRACT.md, "Event triggers") ----------------
+
+
+def test_claimed_mail_is_offered_to_the_mail_automations(tmp_path):
+    api = _Api(
+        [
+            _row("t1", "owner"),
+            _row("t2", "trusted"),
+            _row("b1", "unknown", bulk=True),
+            _row("u1", "unknown"),
+        ]
+    )
+    runs = _Runs()
+    offered: list[dict] = []
+
+    def on_mail(view: dict) -> bool:
+        offered.append(view)
+        return view["id"] in ("t2", "b1", "u1")
+
+    report = _service(tmp_path, api, runs, _Clock(), on_mail=on_mail).dispatch_once()
+    assert sorted(v["id"] for v in offered) == ["b1", "t1", "t2", "u1"]
+    by_id = {v["id"]: v for v in offered}
+    # The HostView of a summary: an unknown sender shows sender and subject only.
+    assert by_id["u1"]["subject"] == "subject u1" and by_id["u1"]["sender_trust"] == "unknown"
+    assert "snippet" not in by_id["u1"] and "text" not in by_id["u1"]
+    assert report.automations == 3
+    # The taken trusted mail left the general run; the unknown one keeps its
+    # restricted run; bulk still starts nothing of its own.
+    full = [s for s in runs.submitted if s[2]["origin"] == "mail"]
+    assert len(full) == 1 and full[0][2]["message_ids"] == ["t1"]
+    restricted = [s for s in runs.submitted if s[2]["origin"] == "mail_untrusted"]
+    assert [s[2]["message_id"] for s in restricted] == ["u1"]
+
+
+def test_a_broken_mail_hook_loses_no_mail(tmp_path):
+    api = _Api([_row("t1", "owner")])
+    runs = _Runs()
+
+    def on_mail(view: dict) -> bool:
+        raise RuntimeError("boom")
+
+    _service(tmp_path, api, runs, _Clock(), on_mail=on_mail).dispatch_once()
+    assert len(runs.submitted) == 1 and runs.submitted[0][2]["message_ids"] == ["t1"]

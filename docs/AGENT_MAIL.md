@@ -257,6 +257,11 @@ and no addresses. Routing: Email Routing catch-all → Worker.
   one run. `unknown` → wait until 30 s old, claim, restricted run
   (`origin = "mail_untrusted"`, session `mail:<id>`, own store, no transcript
   export).
+* Mail automations (`docs/WIRE_CONTRACT.md`, "Event triggers"): every
+  claimed mail is offered as its summary (HostView shape) to the `mail`
+  automations. A match fires that automation in its own session. A trusted
+  mail an automation took leaves the general full run; an unknown mail keeps
+  its restricted run; bulk still starts no run of its own.
 * Tools in a full run: `mail_address`, `mail_list`, `mail_read`, `mail_send`,
   `mail_reply`, `mail_archive`, `mail_delete`, `mail_wait`.
 * Tools in a restricted run: `mail_read`, `mail_note`, `mail_draft_reply`
