@@ -60,7 +60,7 @@ export class Driver {
   /** Point the driver at a tab the user already has open (his usual case). */
   async adopt(tabId) {
     if (this.tabId === tabId) return tabId;
-    await this.detach();
+    await this.release();
     const tab = await api.tabs.get(tabId);
     this.tabId = tab.id;
     this.leases.grant(tab.id, ORIGIN.USER);
@@ -74,16 +74,60 @@ export class Driver {
    */
   async ensureInjected(tabId) {
     if (!this.leases.held(tabId)) throw new Error(`no lease on tab ${tabId}`);
-    if (this.injected.has(tabId)) return;
-    await api.scripting.executeScript({
-      target: { tabId, allFrames: true },
-      files: ["src/snapshot.js"],
-    });
-    await api.scripting.executeScript({
-      target: { tabId },
-      files: ["src/indicator.js"],
-    });
-    this.injected.add(tabId);
+    if (!this.injected.has(tabId)) {
+      // sensitive.js first: the snapshot blanks passwords and card fields with it.
+      await api.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        files: ["src/sensitive.js", "src/snapshot.js"],
+      });
+      await api.scripting.executeScript({
+        target: { tabId },
+        files: ["src/indicator.js"],
+      });
+      this.injected.add(tabId);
+    }
+    // The strip shows on the tab the coworker drives, on every page it loads.
+    if (tabId === this.tabId) await this.mark(this.leases.get(tabId)?.state ?? STATE.ACTIVE);
+  }
+
+  /**
+   * Let go of the tab: detach, take the strip down, drop the lease. A tab the
+   * coworker opened itself stays open as it is; a tab the user handed over is
+   * the user's again. Returns the tab id it let go of, or null.
+   */
+  async release() {
+    const tabId = this.tabId;
+    await this.detach();
+    if (tabId === null) return null;
+    await this.unmark(tabId);
+    this.leases.release(tabId);
+    this.tabId = null;
+    return tabId;
+  }
+
+  /** The user's Stop: let go at once and say so on the page for a moment. */
+  async stop() {
+    const tabId = this.tabId;
+    await this.detach();
+    if (tabId !== null) {
+      try {
+        await api.tabs.sendMessage(tabId, { channel: "agents", op: "driving", on: true, state: "stopped" });
+      } catch {
+        // The page may be gone.
+      }
+      setTimeout(() => this.unmark(tabId), 4000);
+    }
+    for (const lease of this.leases.list()) this.leases.release(lease.tabId);
+    this.tabId = null;
+    return tabId;
+  }
+
+  async unmark(tabId) {
+    try {
+      await api.tabs.sendMessage(tabId, { channel: "agents", op: "driving", on: false });
+    } catch {
+      // No page script there any more: nothing to take down.
+    }
   }
 
   /** Tell the page which badge to wear, and remember it on the lease. */

@@ -1,8 +1,8 @@
 // Content script: turn the visible page into something small enough to put in a
 // prompt, and hand back geometry so the service worker can aim real input at it.
 //
-// Runs in every frame at document_start. It stays passive until the service
-// worker asks; nothing is sent anywhere on its own.
+// Injected only into a tab the coworker holds (after sensitive.js). It stays
+// passive until the service worker asks; nothing is sent anywhere on its own.
 
 (() => {
   const REF_ATTR = "data-cowork-ref";
@@ -73,7 +73,13 @@
       byRef.set(ref, el);
       const box = el.getBoundingClientRect();
       const node = { ref, role: role(el), name: label };
-      if (el.value) node.value = String(el.value).slice(0, MAX_TEXT);
+      if (el.value) {
+        // Passwords, card data and one-time codes never leave the page: the
+        // model learns the field is filled, not what is in it (sensitive.js).
+        const guard = globalThis.agentsSensitive;
+        const secret = !guard || guard.isSensitiveField(el);
+        node.value = secret ? (guard ? guard.HIDDEN : "[hidden]") : String(el.value).slice(0, MAX_TEXT);
+      }
       if (el.placeholder) node.placeholder = el.placeholder.slice(0, MAX_TEXT);
       if (act) node.interactive = true;
       node.box = [Math.round(box.x), Math.round(box.y), Math.round(box.width), Math.round(box.height)];

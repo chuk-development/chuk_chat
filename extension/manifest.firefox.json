@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Agents",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Agents in your browser: talk about the page, or let your coworker drive its own tab.",
   "icons": {
     "128": "icons/icon-128.png"
@@ -43,16 +43,5 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
-  },
-  "web_accessible_resources": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "resources": [
-        "src/snapshot.js",
-        "src/indicator.js"
-      ]
-    }
-  ]
+  }
 }

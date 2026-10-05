@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Agents",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu2JNns+fphRy5FjFqz5NxcUgYsikbOO1q/WOm6amj+Syn4AH68WNB1AMetIpnZ43LwolvRbzi7MU3T/7WGZMJA07JjU18tLsfqEJ2XfvYmZRhX9VQBq+4wruAI1p//LR9S4jKkluBJNBSAZgqhjO04OmCvZdlFwAbuGFhS5zJkn1EuWYfWq8SAF8pFmd8oDL2JF5jLexkPgNafYNqxEXteEU+W/tL1YYNpaHG7oW//0VuCa9MgLafRp7LFvt1894+ULDGJUX/H4f+Kawmeaz2432n5FKDFQtEoDlimOlo501YIZOVv/6vcjzi0KIpc11mHTwBLsIU4ZwDkUXrpdrTQIDAQAB",
   "description": "Agents in your browser: talk about the page, or let your coworker drive its own tab.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -42,17 +43,6 @@
     }
   },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' wss://* https://*; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:"
-  },
-  "web_accessible_resources": [
-    {
-      "matches": [
-        "<all_urls>"
-      ],
-      "resources": [
-        "src/snapshot.js",
-        "src/indicator.js"
-      ]
-    }
-  ]
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
 }

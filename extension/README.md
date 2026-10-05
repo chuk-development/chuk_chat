@@ -27,22 +27,38 @@ screenshot with coordinates. Screenshots exist as an extra
 
 ## How it reaches Agents
 
-Two transports, one command vocabulary:
+One way only: `runtime.connectNative("dev.chuk.cowork")` starts
+`tools/agents-browser-bridge`, which passes frames to the Agents host's browser
+broker over a unix socket in `$XDG_RUNTIME_DIR/chuk-agents/`. The access rule
+is the host manifest's `allowed_origins`: it names this add-on and nothing
+else, and only you can write that file. No port, no token, nothing on the
+network. (The old "relay" WebSocket is gone: it took commands from whatever
+answered at a configured address.)
 
-* **native** — `runtime.connectNative("dev.chuk.cowork")` starts
-  `tools/agents-browser-bridge`, which passes frames to the Agents host over a
-  unix socket. The access rule is the host manifest's `allowed_origins`: it
-  names this add-on and nothing else, and only you can write that file. No port,
-  no token.
-* **relay** — a WebSocket, for a Agents host on another machine. Set it under
-  the add-on's settings.
+The host lets one coworker hold the browser at a time, and every page-changing
+step asks you first unless you allowed the site for that coworker
+(docs/WIRE_CONTRACT.md, "The user's own browser").
+
+## Stop
+
+While a coworker holds a tab, a strip runs along the top of the page with a
+Stop button. Stop (there, in the panel, or "Cancel" on Chrome's debugging bar)
+lets go of every tab at once, refuses every further command, and stops the
+coworker's run on the host. "Allow again" in the panel, or a new task you send,
+lifts it.
+
+## What never leaves the page
+
+The add-on has no `cookies` permission and no command that reads cookies or
+saved passwords. The snapshot shows `[hidden]` for password, card and
+one-time-code fields (`src/sensitive.js`).
 
 ## Build and load
 
 ```bash
-./build.sh chrome     # -> dist/chrome, load unpacked
+./build.sh chrome     # -> dist/chrome, load unpacked (id gchdfokldhdgbjmdcjmkeapcknekogmm)
 ./build.sh firefox    # -> dist/firefox, load temporary add-on
-../tools/agents-browser-bridge/install_host_manifest.py --chrome-id <id from chrome://extensions>
+../tools/agents-browser-bridge/install_host_manifest.py   # the pairing; once per computer
 ```
 
 ## The command vocabulary
@@ -93,9 +109,11 @@ src/protocol.js    the command vocabulary and its validation
 src/snapshot.js    content script: page -> small tree, ref -> geometry
 src/driver.js      cdp and synthetic engines, the coworker's own tab
 src/commands.js    one command in, one result out
-src/transport.js   native messaging and relay
+src/transport.js   native messaging, one command at a time
+src/gate.js        the user's Stop
+src/sensitive.js   which form fields are never read out
 src/background.js  the long-lived piece
 src/panel.*        the panel on the right
-src/options.*      relay address, what this browser can do
-src/indicator.js   the strip that shows the coworker is driving
+src/options.*      connection state, the pairing command, what this browser can do
+src/indicator.js   the strip with the Stop button
 ```

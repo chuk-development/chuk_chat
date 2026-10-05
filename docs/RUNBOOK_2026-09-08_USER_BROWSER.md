@@ -1,124 +1,156 @@
 # Runbook: den Coworker im eigenen Browser fahren lassen
 
-Stand 2026-09-08, Session cowork-3c. Alles committet auf `agents`.
+Stand 2026-10-05 (bead chuk_chat-rixw). Ersetzt den Stand vom 2026-09-08, der
+noch auf das alte `~/git/cowork`-Repo zeigte. Alles liegt jetzt in diesem Repo:
+`extension/`, `tools/agents-browser-bridge/`, `tools/agents-extension-mcp/`,
+`agents/executor/src/chuk_agents_executor/user_browser.py`.
+Wire-Spezifikation: `docs/WIRE_CONTRACT.md`, Abschnitt "The user's own browser".
 
-## Was schon geht und was nicht
+## Wie es zusammenhaengt
 
-Getestet ohne Browser, grün:
+```
+Agent ── agents-extension-mcp ── Broker im Host ── agents-browser-bridge ── Add-on in Chrome
+         (pro Coworker)          (ein Prozess,     (startet Chrome selbst,
+                                  lebt mit Host)    native messaging)
+```
 
-* MCP-Server ↔ gefälschtes Add-on über den Unix-Socket (6 Tests)
-* MCP-Server ↔ echte Bridge ↔ Chrome-Native-Messaging-Framing (4 Tests)
-* Add-on-Vokabular, Adressierung, Leases (10 Tests)
-* Ziel-Auswahl im Executor (5 Tests)
+* Kein offener Port. Beide Sockets liegen in `$XDG_RUNTIME_DIR/chuk-agents/`
+  (`/run/user/1000/chuk-agents/`), Modus 0600.
+* Ein Coworker haelt den Browser, ein zweiter bekommt "in use", bis der erste
+  loslaesst oder 5 Minuten nichts tut.
+* Jede Aktion im eigenen Browser fragt (Klick, Tippen, Taste, Seite oeffnen,
+  Tab uebernehmen), ausser die Seite steht auf der Freigabeliste des Coworkers
+  ("Immer fuer diese Seite") oder der Nutzer hat `browser_act` fuer ihn auf
+  `allow` gestellt.
+* Stop im Browser (Leiste oben auf der Seite, Panel, oder "Abbrechen" in
+  Chromes gelber Debug-Leiste) haelt den Lauf des Coworkers an und sperrt den
+  Browser, bis der Nutzer im Panel "Allow again" drueckt oder eine neue
+  Aufgabe schickt.
 
-Nicht getestet: das Browser-Ende. Dafür ist dieser Runbook da.
+## Was getestet ist (ohne Browser)
 
-## 0. Browser
+```bash
+node extension/test/protocol_test.mjs                 # 10: Vokabular, Leases
+node extension/test/stop_and_secrets_test.mjs         # 12: Stop, Passwortfelder, Manifest-Rechte
+python3 tools/agents-extension-mcp/test_agents_extension_mcp.py   # 6
+python3 tools/agents-browser-bridge/test_bridge_roundtrip.py      # 4
+cd agents/executor && .venv/bin/python -m pytest -q tests/test_user_browser.py           # 24
+cd agents/runtime  && .venv/bin/python -m pytest -q tests/test_user_browser_approvals.py # 9
+```
 
-Auf dieser Maschine liegen Chrome 151, Brave 151 und Firefox 154. Alle drei
-können Manifest v3, es muss nichts installiert werden. **Nimm Chrome oder
-Brave** — siehe Abschnitt "Firefox" unten.
+`test_user_browser.py` faehrt die ganze Kette als echte Prozesse: Chromes
+Native-Messaging-Rahmen, Bridge, Broker, MCP-Server, inklusive Stop.
+
+Nicht getestet: das Browser-Ende selbst. Dafuer sind die Schritte unten.
 
 ## 1. Add-on bauen und laden
 
 ```bash
-cd ~/git/cowork/extension
+cd ~/git/chuk_chat/extension
 ./build.sh chrome
 ```
 
-Dann in Chrome: `chrome://extensions` → Entwicklermodus an → *Entpackte
-Erweiterung laden* → `~/git/cowork/extension/dist/chrome`.
+Chrome (oder Brave): `chrome://extensions` -> Entwicklermodus an ->
+*Entpackte Erweiterung laden* -> `~/git/chuk_chat/extension/dist/chrome`.
 
-Chrome zeigt danach eine ID (32 Kleinbuchstaben). Die brauchst du im nächsten
-Schritt.
+Die ID muss `gchdfokldhdgbjmdcjmkeapcknekogmm` sein (fest durch den `key` im
+Manifest). Steht dort eine andere ID, ist ein altes `dist/` geladen.
 
-## 2. Bridge registrieren
-
-```bash
-~/git/cowork/tools/agents-browser-bridge/install_host_manifest.py --chrome-id <die ID>
-```
-
-Das schreibt `dev.chuk.cowork.json` nach
-`~/.config/google-chrome/NativeMessagingHosts/` (und für Chromium und Brave
-gleich mit). In der Datei steht `allowed_origins` mit genau dieser einen
-Erweiterung — das ist die komplette Zugriffsregel, es gibt keinen Port und
-kein Token.
-
-Danach die Erweiterung einmal neu laden, damit sie den Host findet.
-
-## 3. Host auf das Nutzer-Ziel stellen
-
-Der laufende Host muss neu, weil die Ziel-Wahl beim Start gelesen wird:
+## 2. Bridge registrieren (das ist das Pairing)
 
 ```bash
-pkill -f cowork-host          # oder den laufenden sauber beenden
-cd ~/git/cowork/host
-AGENTS_BROWSER_TARGET=user_browser \
-  ./.venv/bin/cowork-host run --sandbox docker \
-  --model z-ai/glm-5.3-flash --provider fireworks/serverless --reasoning-effort none
+~/git/chuk_chat/tools/agents-browser-bridge/install_host_manifest.py
 ```
 
-`--sandbox local` geht auch und ist für einen ersten Versuch leichter: dann ist
-gar kein Container im Spiel.
+Schreibt `dev.chuk.cowork.json` fuer Chrome, Chromium, Brave und Firefox.
+`allowed_origins` nennt genau diese eine Erweiterung. Danach die Erweiterung
+einmal neu laden.
 
-Ohne die Variable bleibt alles wie bisher — Sandbox-Browser mit VNC.
+## 3. Host neu starten und Coworker umstellen
 
-## 4. App starten
+Der Broker startet mit dem Host. Ein Host von vor diesem Stand hat ihn nicht,
+also einmal neu starten (wie ueblich, nicht mitten in einem Lauf).
+
+Dann in der App beim Coworker unter *Permissions* "Your browser" einschalten.
+Gilt ab der naechsten Aufgabe.
+
+Pruefen ohne App:
 
 ```bash
-cd ~/git/cowork/app
-GDK_BACKEND=x11 FLUTTER_HOT_EXTRA='' flutter-hot start linux
+ls -l /run/user/1000/chuk-agents/        # browser-bridge.sock und browser-broker.sock
 ```
 
-## 5. Den Coworker losschicken
+Optionsseite der Erweiterung (Rechtsklick aufs Icon -> Optionen): "connected
+to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
 
-Im Chat, sinngemäß:
+## 4. Manueller Test (in dieser Reihenfolge)
 
-> Ich hab die Seite hier schon offen. Schau dir meine Tabs an und übernimm den
-> mit \<X\>, dann \<Aufgabe\>.
-
-Er sollte dann `browser_tabs` mit `action: "list"` aufrufen, deinen Tab in der
-Liste sehen, `action: "select"` mit der `tabId` schicken und ab da mit
-`browser_snapshot` / `browser_click` / `browser_type` arbeiten. Am oberen Rand
-der Seite läuft ein farbiger Streifen, solange er fährt.
-
-Soll er selbst etwas aufmachen, reicht `browser_navigate` — dann legt er sich
-einen eigenen Tab in einer lila Tab-Gruppe "Agents" an und fasst deine nicht an.
+1. **Verbindung.** Panel oeffnen (Icon klicken). Oben gruener Punkt,
+   `Agents · native · cdp input`.
+2. **Erste Seite fragt.** Dem Coworker schreiben: "Oeffne github.com in meinem
+   Browser und sag mir, was oben steht." Erwartet: eine Freigabe-Karte "Open
+   github.com", Kennzeichen "in your own browser". "Immer fuer diese Seite"
+   waehlen. Ein neuer Tab in der lila Gruppe "Agents" oeffnet sich, oben auf
+   der Seite eine farbige Leiste mit "Agents is using this tab" und "Stop".
+3. **Freigabe gilt fuer die Seite.** "Klick dort auf Pull requests." Erwartet:
+   keine Karte, der Klick passiert.
+4. **Andere Seite fragt wieder.** "Oeffne jetzt example.org." Erwartet: Karte
+   "Open example.org". Ablehnen. Der Coworker meldet, dass es nicht passiert ist.
+5. **Eigenen Tab uebergeben.** Einen Tab mit einer Seite oeffnen, auf der du
+   eingeloggt bist. "Schau dir meine Tabs an und uebernimm den mit <Seite>."
+   Erwartet: `browser_tabs list` ohne Karte, dann Karte "Take over your tab on
+   <Seite>". Nach Ja: Leiste auf deinem Tab.
+6. **Kein Passwort ans Modell.** Auf einer Login-Seite mit vom Passwortmanager
+   gefuelltem Passwortfeld: "Mach einen Snapshot und sag mir, was im
+   Passwortfeld steht." Erwartet: `[hidden]`.
+7. **Stop auf der Seite.** Waehrend er arbeitet, in der Leiste auf "Stop".
+   Erwartet: Leiste wird grau "Agents stopped" und verschwindet, der Lauf in
+   der App endet als gestoppt, das Panel zeigt "Stopped" und "Allow again".
+   Ein neuer Versuch des Coworkers bekommt "the user pressed Stop".
+8. **Stop aufheben.** Neue Aufgabe in der App schicken -> geht wieder. Oder im
+   Panel "Allow again".
+9. **Chromes eigene Leiste.** Waehrend er klickt, in Chromes gelber Leiste
+   "... debuggt diesen Browser" auf "Abbrechen". Erwartet: wie Stop.
+10. **Zwei Coworker.** Zwei Coworker mit "Your browser" gleichzeitig etwas
+    oeffnen lassen. Erwartet: der zweite bekommt "in use by another coworker".
+11. **Zurueck auf Sandbox.** "Your browser" ausschalten, neue Aufgabe:
+    Sandbox-Browser mit VNC wie vorher.
 
 ## Wenn nichts passiert
 
-* **Der Socket existiert nur, solange ein Task läuft.** `agents-extension-mcp`
-  wird pro Sitzung gestartet und legt dabei
-  `~/.agents/browser-bridge.sock` an. Die Erweiterung versucht im Minutentakt
-  neu zu verbinden, es kann also bis zu einer Minute dauern, bis sie nach dem
-  ersten Task hängt. Nachsehen: Optionsseite der Erweiterung, oder das Panel —
-  dort steht `Agents · native · cdp input`, wenn es steht.
-* **`ls -l ~/.agents/browser-bridge.sock`** — ist die Datei da, läuft der
-  MCP-Server. Ist sie weg, läuft gerade kein Task.
-* **Service-Worker-Log**: `chrome://extensions` → bei Agents auf
-  *Service Worker* klicken, das öffnet die DevTools des Hintergrundskripts.
-* **Bridge-Log**: die Bridge schreibt nichts; wenn der Socket fehlt, schickt sie
-  einmal `browser_attach_error` und beendet sich.
+* **Panel sagt "not connected".** `ls /run/user/1000/chuk-agents/` - fehlen die
+  Sockets, laeuft kein Host mit Broker. Fehlt die Registrierung, Schritt 2.
+  Die Erweiterung versucht alle 30 Sekunden neu.
+* **Service-Worker-Log**: `chrome://extensions` -> bei Agents auf *Service
+  Worker* klicken.
+* **"Agents host is not running its browser broker"** im Tool-Ergebnis: der
+  MCP-Server findet `browser-broker.sock` nicht. Host neu starten.
+* **Host ohne `XDG_RUNTIME_DIR`** (z. B. als Systemdienst ohne Login-Session):
+  dann liegen die Sockets in `~/.agents/`, Chrome sucht aber in
+  `/run/user/1000/chuk-agents/`. Beiden dieselbe Umgebung geben, oder
+  `AGENTS_BRIDGE_SOCKET` setzen.
 
 ## Firefox
 
-Geht, aber schwächer, und das liegt nicht an uns:
+Geht, aber schwaecher, und das liegt nicht an uns:
 
-* **`chrome.debugger` gibt es in Firefox nicht** (MDN, "Chrome
-  incompatibilities", *Unsupported APIs*). Damit fallen echte Eingaben weg. Das
-  Add-on schaltet automatisch auf synthetische DOM-Events um; das Panel schreibt
-  `synthetic input` statt `cdp input`.
-* Was funktioniert: Panel (als `sidebar_action`), Kontextmenü, Seiten-Chat,
-  Tabs auflisten und übernehmen, Snapshot, Navigieren, Scrollen, Screenshot
-  (über `tabs.captureVisibleTab`), Klicken und Tippen auf den meisten Seiten.
-* Was nicht: Seiten, die auf `isTrusted` prüfen, echte Datei-Uploads, Tastatur
-  in manchen Editoren, Tab-Gruppen (die API fehlt auch).
-* Laden: `./build.sh firefox`, dann `about:debugging#/runtime/this-firefox` →
-  *Temporäres Add-on laden* → `dist/firefox/manifest.json`. Temporär heißt: beim
-  Neustart weg. Dauerhaft braucht eine über AMO signierte XPI.
-* Für volle Kontrolle in Firefox gäbe es einen zweiten Weg: Firefox mit
-  `--marionette` starten und WebDriver BiDi sprechen. Firefox hat die
-  Chrome-136-Sperre nicht, das läuft also auch auf dem echten Profil. Ist aber
-  eine andere Baustelle als dieses Add-on.
+* `chrome.debugger` gibt es in Firefox nicht. Das Add-on nutzt synthetische
+  DOM-Events; das Panel zeigt `synthetic input`. Seiten, die auf `isTrusted`
+  pruefen, echte Datei-Uploads und manche Editoren gehen nicht. Tab-Gruppen
+  fehlen.
+* Laden: `./build.sh firefox`, dann `about:debugging#/runtime/this-firefox` ->
+  *Temporaeres Add-on laden* -> `dist/firefox/manifest.json`. Beim Neustart
+  weg; dauerhaft braucht eine ueber AMO signierte XPI.
 
-**Kurz: für den ersten Versuch Chrome oder Brave.**
+**Fuer den ersten Versuch Chrome oder Brave.**
+
+## Bekannte Grenzen
+
+* Mit `--sandbox local` laeuft der Agent als der Nutzer und kommt am Broker
+  vorbei direkt an den Socket (und an das Chrome-Profil auf der Platte). Der
+  Broker ist nur fuer die Docker-Sandbox eine Grenze.
+* Die Leiste nennt den Coworker noch nicht beim Namen.
+* Das Seitenpanel ("Talk to Agents about this page") schickt `page_message`,
+  das noch kein Host verarbeitet.
+* Die App zeigt den Pairing-Status noch nicht an (Arbeitsliste im
+  Wire-Contract).

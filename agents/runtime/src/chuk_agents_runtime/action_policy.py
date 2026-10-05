@@ -108,6 +108,36 @@ BROWSER_ACT_TOOLS = frozenset(
     }
 )
 
+#: The extra tools that act when the browser is the USER's own (the add-on,
+#: ``agents-extension-mcp``): opening a page or taking over one of the user's
+#: tabs happens inside the user's logged-in session, so it asks like a click.
+#: In the sandbox browser these only read and stay free. ``browser_tabs`` acts
+#: only with ``action: "select"`` (:func:`user_browser_tool_acts`).
+USER_BROWSER_ACT_TOOLS = frozenset({"browser_navigate", "browser_navigate_back", "browser_tabs"})
+
+
+def user_browser_tool_acts(tool: str, args: Mapping[str, Any] | None) -> bool:
+    """Whether one call of a :data:`USER_BROWSER_ACT_TOOLS` tool acts in the
+    user's browser. Structure, not text: ``browser_tabs`` acts only when it
+    takes over a tab (``select``); ``list`` reads and ``new`` opens a blank
+    tab of the coworker's own."""
+    if tool == "browser_tabs":
+        return isinstance(args, Mapping) and args.get("action") == "select"
+    return tool in USER_BROWSER_ACT_TOOLS
+
+
+def user_browser_policy(policy: ActionPolicy) -> ActionPolicy:
+    """The policy that holds while a coworker drives the user's own browser.
+
+    ``browser_act`` asks by default there: the add-on acts in the user's real
+    session with the user's logins. The user's own explicit choice for the
+    class still wins (``allow`` = never ask for this coworker, ``deny`` =
+    refuse), and every site on the allow-list turns ``ask`` into ``allow``.
+    Only the evaluation changes; the stored policy is never rewritten."""
+    if BROWSER_ACT in policy.modes:
+        return policy
+    return ActionPolicy(modes={**policy.modes, BROWSER_ACT: MODE_ASK}, sites=policy.sites)
+
 
 def is_destructive(annotations: Mapping[str, Any] | None) -> bool:
     """True when an MCP server declared a tool destructive: an explicit
@@ -364,6 +394,14 @@ class ActionApprovals:
     ask: Callable[[ActionRequest], Any] | None
     remember: Callable[[str, str, str], None] | None = None
     site: Callable[[], str] | None = None
+    #: ``True`` while the run drives the user's own browser (the add-on): the
+    #: extra :data:`USER_BROWSER_ACT_TOOLS` then ask too.
+    user_browser: bool = False
+    #: ``site_for(tool, args)``: the site one call acts on when it is not the
+    #: current page (``browser_navigate`` -> the host of its URL,
+    #: ``browser_tabs select`` -> the host of that tab). ``None`` = use
+    #: ``site()``.
+    site_for: Callable[[str, Mapping[str, Any]], str | None] | None = None
 
     def current(self) -> ActionPolicy:
         try:
@@ -432,12 +470,18 @@ _BROWSER_VERBS = {
     "browser_run_code": "Run a script on the page",
     "browser_mouse_click_xy": "Click",
     "browser_mouse_drag_xy": "Drag",
+    "browser_navigate": "Open",
+    "browser_navigate_back": "Go back",
+    "browser_tabs": "Take over your tab",
 }
 
 
-def describe_browser(tool: str, args: Mapping[str, Any], site: str) -> ActionRequest:
+def describe_browser(
+    tool: str, args: Mapping[str, Any], site: str, *, user_browser: bool = False
+) -> ActionRequest:
     """``browser_act``: what is done on which site. Never the typed text or a
-    form value: it can be a password, and the live view shows the page."""
+    form value: it can be a password, and the live view shows the page.
+    ``user_browser`` marks a card for the user's own browser (the add-on)."""
     verb = _BROWSER_VERBS.get(tool, "Act")
     element = _clip(args.get("element") or args.get("startElement"))
     details: dict[str, Any] = {"browser_tool": tool}
@@ -455,6 +499,19 @@ def describe_browser(tool: str, args: Mapping[str, Any], site: str) -> ActionReq
         details["accept"] = args.get("accept") is True
     if tool == "browser_file_upload" and isinstance(args.get("paths"), list):
         details["files"] = [_clip(p, 120) for p in args["paths"] if isinstance(p, str)][:10]
+    if user_browser:
+        # The app says "in your own browser": these act in the user's session.
+        details["browser"] = "user_browser"
+    if tool == "browser_navigate":
+        details["url"] = _clip(args.get("url"), 200)
+        summary = f"Open {site or details['url'] or 'a page'}"
+        return ActionRequest(BROWSER_ACT, tool, summary, details, site=site)
+    if tool == "browser_tabs":
+        tab = args.get("tabId")
+        if isinstance(tab, int) and not isinstance(tab, bool):
+            details["tab_id"] = tab
+        where = f" on {site}" if site else ""
+        return ActionRequest(BROWSER_ACT, tool, f"{verb}{where}", details, site=site)
     target = f" {element}" if element and verb in ("Click", "Type into", "Choose an option in", "Drag") else ""
     where = f" on {site}" if site else ""
     return ActionRequest(BROWSER_ACT, tool, f"{verb}{target}{where}", details, site=site)
@@ -516,6 +573,7 @@ __all__ = [
     "SCOPE_SITE",
     "SEND_EXTERNAL",
     "SITE_CLASSES",
+    "USER_BROWSER_ACT_TOOLS",
     "ActionApprovals",
     "ActionDecision",
     "ActionPolicy",
@@ -530,4 +588,6 @@ __all__ = [
     "options_for",
     "parse_scope",
     "site_matches",
+    "user_browser_policy",
+    "user_browser_tool_acts",
 ]

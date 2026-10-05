@@ -2629,6 +2629,8 @@ the text of an argument.
   connector tool behind a card. A server that declares nothing keeps the old
   behaviour. `always_this_agent` covers every destructive connector tool of
   that coworker; the card says so.
+- In the user's own browser (the add-on) `browser_act` asks by default and
+  covers three more tools; see "The user's own browser".
 - `browser_act` starts at `allow`. With `ask`, an agent that browses would ask
   at the first click on every site. The user switches the class to `ask` per
   coworker; from then on each site the user allows with `always_this_site` is
@@ -2843,6 +2845,190 @@ A bad entry is dropped on load (logged) and that coworker gets the defaults.
    every `agent_permissions` frame (a lasting decision from a run sends one).
    Text under the section: "Applies from the next action."
 6. The push needs nothing new: the host words it.
+
+## The user's own browser (bead chuk_chat-rixw)
+
+Status 2026-10-05: host, bridge and add-on side implemented and tested without a
+browser. App side: see "App work list" at the end of this section. All changes
+are additive. An old app and an old host keep working.
+
+### The idea
+
+A coworker can use the user's real Chrome, with the user's logins, in place of
+the sandbox browser. The user switches this on per coworker (permission
+`user_browser`, section "Agent permissions"). It is off by default.
+
+The tool names do not change (`mcp__playwright__browser_*`). The executor gives
+the agent `agents-extension-mcp` in place of the sandbox Playwright server.
+Tool cards, replay and `browser_open` read the same transcript.
+
+### Transport: local only
+
+```
+agent (executor) ── stdio MCP ── agents-extension-mcp
+                                   │ unix socket  $XDG_RUNTIME_DIR/chuk-agents/browser-broker.sock
+                              host browser broker (chuk_agents_executor.user_browser)
+                                   │ unix socket  $XDG_RUNTIME_DIR/chuk-agents/browser-bridge.sock
+                              agents-browser-bridge (started by Chrome)
+                                   │ native messaging (stdio, 4-byte length frames)
+                              the add-on (extension/)
+```
+
+- No TCP port is open. No web page and nothing on the network can reach the
+  add-on's commands. The add-on's old "relay" WebSocket is removed.
+- Pairing is the native-messaging host manifest
+  (`tools/agents-browser-bridge/install_host_manifest.py`). Its
+  `allowed_origins` names one extension id. The development build pins that id
+  with the `key` in `extension/manifest.chrome.json`
+  (`gchdfokldhdgbjmdcjmkeapcknekogmm`), so the installer needs no argument.
+- Both sockets are mode 0600 in a 0700 directory. `$XDG_RUNTIME_DIR` is a
+  private tmpfs that no sandbox mounts (fallback `~/.agents`). The broker never
+  takes over a socket that a live broker answers on.
+- The host starts the broker in `Host.start`, so the pairing status is live
+  before the first task. It runs inside the host process for the life of the
+  host.
+
+### Broker rules
+
+| rule | what happens |
+|---|---|
+| one holder | The first coworker that acts holds the browser. Another coworker gets "in use by another coworker" until the holder sends `browser_close` / `browser_handoff`, its MCP server goes away, or it is idle for 300 s (then the add-on lets go of its tab). |
+| reads take nothing | `browser_tabs` with `action: "list"` works for every coworker and takes no hold. |
+| Stop wins | The user's Stop fails every command, stops the run of the holder (same as the app's Stop) and lasts until the user allows the browser again in the add-on, or sends a new task to a coworker with the user browser. An automation, a mail or a Telegram run does not lift it. |
+| no secrets | The add-on has no `cookies`, `history`, `webRequest` or `privacy` permission, and no command returns cookies or saved passwords. The snapshot shows `[hidden]` for password, card and one-time-code fields. A tab the coworker does not hold shows its URL without query and fragment in the tab list. |
+
+### Frames: host ↔ add-on (local, over the bridge)
+
+Same newline JSON on the unix socket, native-messaging frames to Chrome.
+
+```json
+{"type": "browser_attach", "attached": true, "browser": "chrome" | "firefox",
+ "engine": "cdp" | "synthetic", "version": "0.2.0",
+ "features": {"trusted_input": true, "tab_groups": true}, "stopped": false}
+{"type": "browser_cmd", "cmd_id": "<id>", "op": "browser_navigate", "args": {...}}
+{"type": "browser_result", "cmd_id": "<id>", "ok": true, "data": {...}}
+{"type": "browser_result", "cmd_id": "<id>", "ok": false, "error": "<text>"}
+{"type": "browser_stop", "reason": "page" | "panel" | "debugger_bar"}   // add-on -> host
+{"type": "browser_resume"}                                               // both ways
+```
+
+- `stopped` in `browser_attach` (new): the add-on was stopped before the host
+  came up. The host takes it over.
+- `browser_stop` (new): the user pressed Stop on the strip on the page, in the
+  panel, or "Cancel" on Chrome's debugging bar.
+- `browser_resume` (new): add-on -> host when the user taps "Allow again";
+  host -> add-on when the user sends a new task.
+
+Coworker ↔ broker (local, `browser-broker.sock`): the MCP server sends
+`{"type": "client_hello", "session": "<session_key>"}` first, then the same
+`browser_cmd` frames. The broker gives each command its own id toward the
+add-on. The session comes from the MCP entry's env
+(`AGENTS_BROWSER_SESSION`, set by `protocol.extension_mcp_entry(session_key)`).
+
+### Approvals in the user's browser
+
+The class is the existing `browser_act` (section "Per-action approvals"). Two
+things change while a coworker drives the user's browser:
+
+1. The class **asks by default**. The user's explicit mode for the coworker
+   still wins: `allow` = never ask, `deny` = refuse. A site in
+   `approvals.sites.browser_act` turns `ask` into `allow`. The stored policy is
+   not changed; `agent_permissions` keeps showing the stored values.
+2. Three more tools act: `browser_navigate` (the site is the host of its
+   `url`), `browser_navigate_back`, and `browser_tabs` with
+   `action: "select"` (the site is the host of that tab). `browser_tabs list`,
+   `new` and `close`, `browser_snapshot`, `browser_take_screenshot`,
+   `browser_scroll`, `browser_close` and `browser_handoff` do not ask.
+
+So one "Always for github.com" on the first page covers every later step on
+github.com. The `approval_request` frame does not change. Its `details` get two
+optional keys:
+
+| key | when |
+|---|---|
+| `details.browser` | `"user_browser"` on every card of the user's browser. The app says "in your own browser". |
+| `details.url` | `browser_navigate`: the URL, cut to 200 characters. |
+| `details.tab_id` | `browser_tabs select`: the tab id. |
+
+`summary` reads "Open github.com", "Take over your tab on mail.example.org",
+"Click Save on github.com".
+
+### Inbound: `run_state.browser_target` (additive)
+
+```json
+{"type": "run_state", ..., "browser_target": "sandbox" | "user_browser"}
+```
+
+Which browser this agent drives. Left out by an old host. An unknown value
+means `sandbox`.
+
+### Inbound: `agent_permissions.user_browser` (additive)
+
+Every `agent_permissions` reply that carries `permissions` also carries the
+host's status of the user's browser:
+
+```json
+{"type": "agent_permissions", "agent_id": "...", "permissions": {...},
+ "user_browser": {
+   "host_listening": true,
+   "installed": true,
+   "browsers": ["chrome", "brave"],
+   "connected": true,
+   "browser": "chrome",
+   "version": "0.2.0",
+   "trusted_input": true,
+   "in_use": true,
+   "in_use_by_this_agent": false,
+   "stopped": false}}
+```
+
+| key | meaning |
+|---|---|
+| `host_listening` | The host's broker runs. `false` on an old host build or when another process holds the sockets. |
+| `installed` | The bridge is registered with at least one browser (`browsers`). This is "paired". |
+| `connected` | An add-on is connected now. |
+| `browser`, `version`, `trusted_input` | What the connected add-on said. `trusted_input: false` = Firefox, synthetic input only. |
+| `in_use`, `in_use_by_this_agent` | A coworker holds the browser now; this one or another one. |
+| `stopped` | The user pressed Stop and did not allow the browser again. |
+
+The block never carries a URL, a tab title or a coworker's session key. The
+app gets a fresh value with every `agent_permissions_get`; there is no push
+yet.
+
+### Known limits
+
+- With `--sandbox local` the agent runs as the user on the host. It can reach
+  the broker socket (and the Chrome profile on disk) directly. The broker is
+  a boundary only for the docker sandbox.
+- `in_use_by_this_agent` compares the broker's session key with the
+  permission key. For the host's own agent the two can differ.
+- The coworker's name is not shown on the strip yet ("Agents is using this
+  tab").
+- The add-on's "talk about this page" panel sends `page_message` frames that
+  no host handles yet.
+
+### App work list
+
+1. **Toggle per coworker.** Exists ("Your browser",
+   `lib/widgets/agents_permissions/agent_permissions_section.dart`). Add a
+   subtitle from `agent_permissions.user_browser`: "Paired with Chrome",
+   "Add-on not connected", "Not set up on this computer" (`installed: false`),
+   "Stopped in the browser" (`stopped: true`). Disable nothing; the host is the
+   truth.
+2. **Pairing status and setup.** When `installed` is `false` or `connected` is
+   `false`: a short card with the three steps (load the add-on, run
+   `install_host_manifest.py`, reload the add-on), and a refresh that sends
+   `agent_permissions_get` again. No host URL, no port, no "WebSocket" wording.
+3. **Which browser is active.** Read `run_state.browser_target`. Show "Your
+   browser" or "Sandbox browser" next to the browser state of the thread.
+   With `user_browser`, never show the VNC "watch" button (already gated by
+   `vnc_available`), and never offer a browser takeover.
+4. **Approval card.** With `details.browser == "user_browser"`: title "In your
+   own browser", show `site` and `details.url`. The options stay as sent
+   (`always_this_site` is the useful one).
+5. **In use / stopped.** With `in_use` and not `in_use_by_this_agent`: "Another
+   coworker is using your browser". With `stopped`: "You stopped this in your
+   browser. Send a new task, or tap Allow again in the add-on."
 
 ## Cost per run and weekly budget (bead chuk_chat-qcbv)
 

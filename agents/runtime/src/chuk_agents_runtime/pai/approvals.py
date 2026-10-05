@@ -68,6 +68,8 @@ from ..action_policy import (
     describe_mcp,
     describe_publish,
     is_destructive,
+    USER_BROWSER_ACT_TOOLS,
+    user_browser_tool_acts,
 )
 from ..loop import KillSwitch
 from .convert import tool_call_args
@@ -103,6 +105,14 @@ class ApprovalRule:
     #: class (here.now in ``auto`` mode): ``ask`` then reads as ``allow``, and
     #: only a ``deny`` still stops the call.
     ask_means_allow: bool = False
+    #: ``applies(args)``: ``False`` when this one call does not act at all and
+    #: runs without the policy (``browser_tabs list`` in the user's browser).
+    #: ``None`` = every call of the tool is checked.
+    applies: Callable[[dict], bool] | None = None
+    #: ``site_of(args)``: the site this call acts on, when it is not the page
+    #: the browser shows (``browser_navigate`` -> the host of its URL).
+    #: ``None`` from it, or no callable, means the browser's current site.
+    site_of: Callable[[dict], str | None] | None = None
 
     def mode(self, site: str | None = None) -> str:
         """``ask`` / ``allow`` / ``deny`` for one call, from the live policy."""
@@ -188,10 +198,18 @@ class ApprovalPolicy:
     ) -> ToolApproved | ToolDenied:
         if self.kill is not None and (self.kill.interrupted() or self.kill.estop_engaged()):
             return self._deny(call_id, rule.declined(args, "stopped"))
+        if rule.applies is not None and not _applies(rule.applies, args):
+            return ToolApproved()
         site = ""
         if rule.action_class is not None:
-            if rule.action_class in SITE_CLASSES and rule.approvals is not None and rule.approvals.site:
-                site = await anyio.to_thread.run_sync(_read_site, rule.approvals.site)
+            if rule.action_class in SITE_CLASSES and rule.approvals is not None:
+                own = None
+                if rule.site_of is not None:
+                    own = await anyio.to_thread.run_sync(_read_site_of, rule.site_of, args)
+                if own is not None:
+                    site = own
+                elif rule.approvals.site:
+                    site = await anyio.to_thread.run_sync(_read_site, rule.approvals.site)
             mode = rule.mode(site)
             if mode == MODE_ALLOW:
                 return ToolApproved()
@@ -240,6 +258,21 @@ def _read_site(reader: Callable[[], str]) -> str:
     except Exception:  # noqa: BLE001 — an unknown site only means no site option
         return ""
     return value if isinstance(value, str) else ""
+
+
+def _read_site_of(reader: Callable[[dict], str | None], args: dict) -> str | None:
+    try:
+        value = reader(args)
+    except Exception:  # noqa: BLE001 — fall back to the current page
+        return None
+    return value if isinstance(value, str) else None
+
+
+def _applies(check: Callable[[dict], bool], args: dict) -> bool:
+    try:
+        return bool(check(args))
+    except Exception:  # noqa: BLE001 — when in doubt the call is checked
+        return True
 
 
 def _prepare(rule: ApprovalRule, args: dict, site: str) -> Any:
@@ -343,8 +376,26 @@ def action_rules(registry: Any, manager: Any, approvals: ActionApprovals) -> dic
                 if info.name in BROWSER_ACT_TOOLS:
                     rules[full] = action_rule(
                         BROWSER_ACT,
-                        lambda args, site, _t=info.name: describe_browser(_t, args, site),
+                        lambda args, site, _t=info.name, _u=approvals.user_browser: describe_browser(
+                            _t, args, site, user_browser=_u
+                        ),
                         approvals,
+                    )
+                elif approvals.user_browser and info.name in USER_BROWSER_ACT_TOOLS:
+                    # The user's own browser: opening a page or taking over a
+                    # tab happens in the user's logged-in session.
+                    rule = action_rule(
+                        BROWSER_ACT,
+                        lambda args, site, _t=info.name: describe_browser(
+                            _t, args, site, user_browser=True
+                        ),
+                        approvals,
+                    )
+                    rule.applies = lambda args, _t=info.name: user_browser_tool_acts(_t, args)
+                    rules[full] = rule
+                if full in rules and approvals.site_for is not None:
+                    rules[full].site_of = (
+                        lambda args, _t=info.name, _f=approvals.site_for: _f(_t, args)
                     )
                 continue
             if is_destructive(getattr(info, "annotations", None)):

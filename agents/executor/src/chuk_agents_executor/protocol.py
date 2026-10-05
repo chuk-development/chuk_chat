@@ -260,6 +260,7 @@ def run_state_payload(
     prompt: str | None = None,
     browser_open: bool | None = None,
     vnc_available: bool = False,
+    browser_target: str | None = None,
 ) -> dict[str, Any]:
     """Build the ``run_state`` event that opens every replay response (see
     ``docs/WIRE_CONTRACT.md``). ``state`` is ``running`` when a run for the
@@ -274,6 +275,10 @@ def run_state_payload(
     }
     if browser_open is not None:
         payload["browser_open"] = bool(browser_open)
+    if browser_target in BROWSER_TARGETS:
+        # Which browser this agent drives: its sandbox's, or the user's own
+        # (docs/WIRE_CONTRACT.md, "The user's own browser"). Additive.
+        payload["browser_target"] = browser_target
     if run_id:
         payload["run_id"] = run_id
     if started_at is not None:
@@ -1435,7 +1440,7 @@ def extension_mcp_script() -> Path | None:
     return path if path.exists() else None
 
 
-def extension_mcp_entry() -> dict | None:
+def extension_mcp_entry(session_key: str | None = None) -> dict | None:
     """The MCP server entry for the user's own browser.
 
     Named ``playwright`` on purpose: the agent builds its tool names as
@@ -1443,8 +1448,14 @@ def extension_mcp_entry() -> dict | None:
     ``mcp__playwright__browser_*``. The name is the compatibility seam, not a
     claim about what drives the page — behind it is the add-on, over a unix
     socket, with no Playwright anywhere.
+
+    ``session_key`` names the coworker to the host's browser broker
+    (``user_browser.py``), which lets one coworker hold the browser at a time.
     """
     script = extension_mcp_script()
     if script is None:
         return None
-    return {"name": "playwright", "command": sys.executable, "args": [str(script)]}
+    entry: dict = {"name": "playwright", "command": sys.executable, "args": [str(script)]}
+    if session_key:
+        entry["env"] = {"AGENTS_BROWSER_SESSION": str(session_key)}
+    return entry

@@ -112,8 +112,10 @@ from chuk_agents_runtime.mcp_client import BROWSER_OPEN_TOOL, auto_open_enabled
 from chuk_agents_runtime.action_policy import (
     ActionApprovals,
     ActionDecision,
+    ActionPolicy,
     ActionRequest,
     parse_scope,
+    user_browser_policy,
 )
 from chuk_agents_runtime.takeover import (
     STATUS_DONE as TAKEOVER_DONE,
@@ -126,6 +128,7 @@ from chuk_agents_runtime.takeover import (
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
 from chuk_agents_runtime.run_changes import (
+    REASON_FAILED as RUN_REASON_FAILED,
     REASON_NOT_FOUND as RUN_REASON_NOT_FOUND,
     run_change_summary,
     run_changes,
@@ -163,6 +166,7 @@ from .environment import SandboxEnvironment
 from .secrets import SecretsVault
 from .shell import JobWakeRouter
 from . import box_browser as _box_browser
+from . import user_browser as _user_browser
 from .box_browser import TOOLS_FILE, BoxBrowser, box_of
 from .protocol import (
     ACTION_BROWSER_TAKEOVER,
@@ -177,6 +181,7 @@ from .protocol import (
     INBOUND_METHODS,
     MAX_BROWSER_CHUNK,
     METHOD_EVENT,
+    SANDBOX_BROWSER,
     USER_BROWSER,
     action_approval_request_payload,
     approval_class_fields,
@@ -2083,6 +2088,7 @@ class Executor:
                     prompt=live.prompt,
                     browser_open=self._browser_open,
                     vnc_available=self._vnc_available(str(session_key)),
+                    browser_target=self._browser_target_name(str(session_key)),
                 ),
             )
             # Close this request so the sender is not left waiting on a stream
@@ -2927,25 +2933,36 @@ class Executor:
             session_key = str(row.get("session_key") or "")
             workspace = self._workspace_for(session_key)
             busy = self._workspace_busy(workspace)
+            # The run's start bounds the history walk (no full-history scan).
+            since = row.get("started_at") or None
             if kind == "run_changes_get":
-                body = run_changes(workspace, run_id, busy=busy)
+                body = run_changes(workspace, run_id, busy=busy, since=since)
                 body["session_key"] = session_key
                 self._terminal(request_id, run_changes_payload(body))
                 return
-            raw_paths = payload.get("paths")
-            paths = (
-                [p for p in raw_paths if isinstance(p, str)]
-                if isinstance(raw_paths, list)
-                else None
-            )
+            # Only an absent ``paths`` means every file; anything else that is
+            # not a list must not widen a partial undo to the whole run.
+            paths: list[str] | None = None
+            if "paths" in payload:
+                raw_paths = payload["paths"]
+                if not isinstance(raw_paths, list):
+                    self._terminal(request_id, run_undo_result_payload({
+                        "run_id": run_id, "ok": False, "reverted": [], "conflicts": [],
+                        "code": RUN_REASON_FAILED,
+                        "error": "paths must be a list of file paths.",
+                        "session_key": session_key,
+                    }))
+                    return
+                paths = [p for p in raw_paths if isinstance(p, str)]
             result = undo_run(
-                workspace, run_id, paths=paths, force=payload.get("force") is True, busy=busy
+                workspace, run_id, paths=paths, force=payload.get("force") is True,
+                busy=busy, since=since,
             )
             result["session_key"] = session_key
             if result.get("ok"):
                 # The done's ``changes`` block follows the undo, so a replayed
                 # card can say "undone" instead of offering Undo again.
-                summary = run_change_summary(workspace, run_id)
+                summary = run_change_summary(workspace, run_id, since=since)
                 store = StateStore(self._db_path)
                 try:
                     store.set_run_changes(run_id, summary)
@@ -3118,6 +3135,7 @@ class Executor:
                 prompt=live.prompt,
                 browser_open=self._browser_open,
                 vnc_available=self._vnc_available(session_key),
+                browser_target=self._browser_target_name(session_key),
             )
         latest = store.latest_run(session_key)
         if latest is not None and latest.get("state") == "running":
@@ -3129,11 +3147,20 @@ class Executor:
                 prompt=latest.get("prompt"),
                 browser_open=self._browser_open,
                 vnc_available=self._vnc_available(session_key),
+                browser_target=self._browser_target_name(session_key),
             )
         return run_state_payload(
             session_key, "idle", browser_open=self._browser_open,
             vnc_available=self._vnc_available(session_key),
+            browser_target=self._browser_target_name(session_key),
         )
+
+    def _browser_target_name(self, session_key: str | None) -> str:
+        """``user_browser`` or ``sandbox``: which browser this agent drives."""
+        try:
+            return USER_BROWSER if self._uses_user_browser(session_key) else SANDBOX_BROWSER
+        except Exception:  # noqa: BLE001 — a header must never fail on this
+            return SANDBOX_BROWSER
 
     def _vnc_available(self, session_key: str | None = None) -> bool:
         """A current sandbox browser can be viewed; VNC is started on demand.
@@ -3322,7 +3349,13 @@ class Executor:
             this one also works on the base image and with the local sandbox.
         """
         if self._uses_user_browser(session_key):
-            return extension_mcp_entry()
+            # The host owns the add-on's socket for its whole life and lets one
+            # coworker hold the browser at a time (user_browser.py).
+            broker = _user_browser.shared_broker()
+            if broker is not None and not getattr(self, "_user_browser_listening", False):
+                broker.add_stop_listener(self._on_user_browser_stop)
+                self._user_browser_listening = True
+            return extension_mcp_entry(session_key)
         if not self._browser_mcp:
             return None
         prep = self._vnc_exec_prefix(session_key)
@@ -4009,25 +4042,58 @@ class Executor:
         current tab of the session's browser server, read only when a site
         class asks."""
         hook = self._action_approvals
-        if hook is None:
+        # The user's own browser asks for every page-changing step unless the
+        # user allowed it (docs/WIRE_CONTRACT.md, "The user's own browser"),
+        # so it gets a binding even on a host that keeps no policy.
+        user_browser = self._uses_user_browser(session_key)
+        if hook is None and not user_browser:
             return None
         key = session_key or ""
 
         def policy():
-            return hook.policy_for(key)
+            current = hook.policy_for(key) if hook is not None else ActionPolicy()
+            return user_browser_policy(current) if user_browser else current
 
         def remember(action_class: str, scope: str, site: str) -> None:
-            hook.remember(key, action_class, scope, site)
+            if hook is not None:
+                hook.remember(key, action_class, scope, site)
 
         def site() -> str:
             return host_of(self._takeover_page_url(session_key or ""))
+
+        def site_for(tool: str, args) -> str | None:
+            return _user_browser.site_for(
+                tool, args, lambda: self._user_browser_tabs_text(session_key or "")
+            )
 
         return ActionApprovals(
             policy=policy,
             ask=self._make_approval_gate(request_id, kill, session_key),
             remember=remember,
             site=site,
+            user_browser=user_browser,
+            site_for=site_for if user_browser else None,
         )
+
+    def _user_browser_tabs_text(self, session_key: str) -> str | None:
+        """The user browser's tab list, as the coworker's MCP server renders it
+        (one read through the broker; it takes nothing)."""
+        with self._mcp_lock:
+            manager = self._mcp_managers.get(session_key)
+        for name in browser_servers(manager):
+            result = manager.call(name, BROWSER_OPEN_TOOL, {"action": "list"})
+            if result.get("ok"):
+                content = result.get("content")
+                return content if isinstance(content, str) else None
+        return None
+
+    def _on_user_browser_stop(self, session_key: str) -> None:
+        """The user pressed Stop in their own browser while ``session_key``
+        held it: stop that coworker's run like the app's Stop does."""
+        for run in self._live_runs():
+            if run.session_key == session_key:
+                logger.info("user browser stop: stopping run %s", run.request_id)
+                run.kill.interrupt()
 
     def _close_approval(
         self,
@@ -4558,6 +4624,13 @@ class Executor:
         browser_entry = self._browser_mcp_entry(session_key)
         if browser_entry is not None:
             servers.append(browser_entry)
+            if self._uses_user_browser(session_key):
+                broker = _user_browser.shared_broker(start=False)
+                if broker is not None:
+                    # A task the user sent clears an earlier Stop in the browser.
+                    broker.begin_run(
+                        str(session_key), by_user=run.origin not in (*UNATTENDED_ORIGINS, "telegram")
+                    )
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
         if mcp_manager is None and run.origin in ("automation", ORIGIN_MAIL, "telegram") and online:
             # A fired automation carries no forwarded connectors (no frame,
@@ -5239,8 +5312,12 @@ class Executor:
                     run.cost = cost_block(store.usage_lines(run.run_id))
                 # What the run changed in its workspace (docs/WIRE_CONTRACT.md,
                 # "What did it do"): on the done, and on the row for a replay.
+                row = store.get_run(run.run_id) or {}
+                starts = [v for v in (row.get("started_at"), run.started_at) if v]
                 run.changes = run_change_summary(
-                    self._known_workspace_for(run.session_key), run.run_id
+                    self._known_workspace_for(run.session_key),
+                    run.run_id,
+                    since=min(float(v) for v in starts) if starts else None,
                 )
                 if run.changes:
                     store.set_run_changes(run.run_id, run.changes)
