@@ -35,6 +35,7 @@ class AgentsTakeoverCard extends StatelessWidget {
     required this.visited,
     required this.onOpenBrowser,
     required this.onDone,
+    required this.onSkip,
     this.dense = false,
   });
 
@@ -55,6 +56,11 @@ class AgentsTakeoverCard extends StatelessWidget {
 
   /// Tells the host the step is done, so the run continues.
   final VoidCallback onDone;
+
+  /// Tells the host the user will not do the step. Always offered, also
+  /// before the view was opened and while no transport exists, so the
+  /// user can always end the wait.
+  final VoidCallback onSkip;
 
   /// Desktop size (docs/DESIGN.md §14.8): the dense buttons.
   final bool dense;
@@ -196,6 +202,14 @@ class AgentsTakeoverCard extends StatelessWidget {
                   dense: dense,
                   onTap: onDone,
                 ),
+              ExpressiveButton(
+                key: const ValueKey<String>('agents-takeover-skip'),
+                label: l?.takeoverSkip ?? 'Skip',
+                icon: Icons.skip_next_rounded,
+                tonal: true,
+                dense: dense,
+                onTap: onSkip,
+              ),
             ])
               FittedBox(fit: BoxFit.scaleDown, child: button),
           ],

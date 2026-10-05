@@ -894,14 +894,10 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                     return Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
                           child: ExpressiveInfoCard(
-                            text:
-                                'The app default. New chats use it, and so '
-                                'does every coworker that has no model of '
-                                'its own. A coworker gets its own model on '
-                                'its profile, under Model.',
+                            text: l.modelDefaultAgentsInfo,
                           ),
                         ),
                         panel,

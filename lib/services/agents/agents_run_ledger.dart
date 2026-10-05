@@ -437,11 +437,10 @@ ToolCall takeoverCallFromRelay(
   };
   return ToolCall(
     name: 'ask_user',
-    arguments: <String, dynamic>{
-      ...payload,
-      'action': request.action,
-      if (request.url != null) 'url': request.url,
-    },
+    // The page URL is never kept here: it can carry an OAuth code or a
+    // magic-link token, and the arguments are stored with the chat and
+    // exported by "Copy full chat". The site (a host name) is enough.
+    arguments: <String, dynamic>{...payload, 'action': request.action},
     status: ToolCallStatus.completed,
     result: jsonEncode(payload),
   )..completedAt = now ?? DateTime.now();
