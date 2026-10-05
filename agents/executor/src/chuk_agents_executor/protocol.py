@@ -724,6 +724,7 @@ def done_payload(
     host_notified: bool = False,
     session_key: str | None = None,
     cost: dict[str, Any] | None = None,
+    automation_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -757,6 +758,11 @@ def done_payload(
     # spent or measured.
     if cost:
         payload["cost"] = dict(cost)
+    # docs/WIRE_CONTRACT.md, "Event triggers": the outcome of a fired
+    # ``on_change`` automation run. ``changed: false`` = nothing new: the host
+    # did not notify, and the app collapses the run to "no change".
+    if automation_result is not None:
+        payload["automation_result"] = dict(automation_result)
     return payload
 
 
@@ -801,6 +807,51 @@ def automation_list_payload(automations: list[dict[str, Any]]) -> dict[str, Any]
 def automation_control_payload(*, automation_id: str, action: str) -> dict[str, Any]:
     """App -> host: pause / resume / cancel one automation."""
     return {"type": "automation_control", "id": automation_id, "action": action}
+
+
+def automation_create_payload(
+    *,
+    session_key: str,
+    kind: str,
+    spec: dict[str, Any] | str,
+    prompt: str,
+    name: str | None = None,
+    notify: str | None = None,
+) -> dict[str, Any]:
+    """App -> host: create a ``schedule`` / ``watch_url`` / ``mail`` automation
+    in ``session_key`` (docs/WIRE_CONTRACT.md, "Event triggers")."""
+    payload: dict[str, Any] = {
+        "type": "automation_create",
+        "session_key": session_key,
+        "kind": kind,
+        "spec": spec,
+        "prompt": prompt,
+    }
+    if name:
+        payload["name"] = name
+    if notify:
+        payload["notify"] = notify
+    return payload
+
+
+def automation_update_payload(*, automation_id: str, **changes: Any) -> dict[str, Any]:
+    """App -> host: change ``name`` / ``prompt`` / ``spec`` / ``notify`` of one
+    automation. Only the given keys change."""
+    payload: dict[str, Any] = {"type": "automation_update", "id": automation_id}
+    for key in ("name", "prompt", "spec", "notify"):
+        if key in changes:
+            payload[key] = changes[key]
+    return payload
+
+
+def automation_saved_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Host -> app: the terminal answer to ``automation_create`` /
+    ``automation_update``: ``{"ok": true, "automation": {...}}`` or
+    ``{"ok": false, "error": "<text>"}``."""
+    if result.get("ok"):
+        row = {k: v for k, v in result.items() if k != "ok"}
+        return {"type": "automation_saved", "ok": True, "automation": row}
+    return {"type": "automation_saved", "ok": False, "error": str(result.get("error") or "failed")}
 
 
 def automation_list_request_payload(session_key: str | None = None) -> dict[str, Any]:

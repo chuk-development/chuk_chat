@@ -25,6 +25,13 @@ What it does with each mail that is not delivered yet:
 | ``owner`` / ``trusted`` | claim, then ONE full run on the main agent session for all of them (``origin="mail"``) |
 | ``unknown`` | wait until the mail is 30 s old, claim, then one restricted run on ``mail:<id>`` (``origin="mail_untrusted"``), at most 20 per day |
 
+Mail automations (docs/WIRE_CONTRACT.md, "Event triggers"): every claimed
+mail is also offered, as its opened summary in the HostView shape
+(``summary_view``: sender and subject only for an unknown sender), to
+``on_mail``. When a ``mail`` automation takes a trusted mail, that mail
+leaves the general full run (the automation handles it). Bulk mail still
+starts no run of its own, and an unknown mail keeps its restricted run.
+
 The server's claim is what makes a mail run once: two hosts of one user, or a
 host after a restart, can list the same mail, but only the host whose claim
 names it starts a run. A mail whose claim this host lost starts nothing. A
@@ -62,6 +69,7 @@ from chuk_agents_runtime.agent_mail import (
     MailKey,
     mail_prompt,
     open_row,
+    summary_view,
     parse_time,
     restricted_prompt,
     restricted_session_key,
@@ -120,6 +128,8 @@ class DispatchReport:
     deferred: int = 0
     lost: int = 0
     pending: int = 0
+    #: Claimed mails a ``mail`` automation took.
+    automations: int = 0
     retry_in: float | None = None
 
     def soon(self, seconds: float) -> None:
@@ -332,8 +342,11 @@ class AgentMailService:
         unknown_delay: float = UNKNOWN_DELAY_SECONDS,
         daily_cap: int = RESTRICTED_DAILY_CAP,
         key_store: MailKeyStore | None = None,
+        on_mail: Callable[[dict], bool] | None = None,
     ) -> None:
         self.keys = key_store if key_store is not None else MailKeyStore()
+        #: ``on_mail(summary) -> taken``: the mail automations' hook.
+        self._on_mail = on_mail
         self._client = AgentMailClient(
             session_provider,
             key_provider=self.keys.get,
@@ -523,7 +536,8 @@ class AgentMailService:
         report.lost = sum(1 for ident in wanted if ident not in claimed)
         report.bulk = sum(1 for ident in bulk if ident in claimed)
 
-        mine = [r for r in known if str(r["id"]).strip() in claimed]
+        taken = self._offer_to_automations(rows, claimed, report)
+        mine = [r for r in known if str(r["id"]).strip() in claimed and str(r["id"]).strip() not in taken]
         for start in range(0, len(mine), MAX_BATCH):
             batch = mine[start : start + MAX_BATCH]
             if not self._start_full_run(batch, report):
@@ -550,9 +564,35 @@ class AgentMailService:
             f"trusted {report.full_mails} in {len(report.full_runs)} run(s), "
             f"unknown {len(report.restricted_runs)} run(s), capped {report.capped}, "
             f"waiting {report.waiting}, deferred {report.deferred}, lost {report.lost}, "
-            f"pending {report.pending}"
+            f"pending {report.pending}, automations {report.automations}"
         )
         return report
+
+    def _offer_to_automations(self, rows: list[dict], claimed: set[str], report: DispatchReport) -> set[str]:
+        """Offer every mail this host claimed to the mail automations. Returns
+        the ids a ``mail`` automation took. Only the summary is opened, and the
+        automation sees it through ``summary_view``: an unknown sender's mail
+        shows its sender and subject, nothing more."""
+        if self._on_mail is None:
+            return set()
+        key = self.keys.get()
+        if key is None:
+            return set()
+        taken: set[str] = set()
+        for row in rows:
+            ident = valid_id(row.get("id"))
+            if ident is None or ident not in claimed:
+                continue
+            try:
+                view = summary_view(open_row(row, key))
+                if view.get("error"):
+                    continue
+                if self._on_mail(view):
+                    taken.add(ident)
+            except Exception as exc:  # noqa: BLE001 — a broken hook must not lose the mail
+                self._log(f"[mail] automation hook failed: {type(exc).__name__}")
+        report.automations = len(taken)
+        return taken
 
     def _mailbox_ok(self, report: DispatchReport) -> bool:
         now = self._clock()

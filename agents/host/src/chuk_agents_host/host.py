@@ -733,6 +733,10 @@ class LocalHost:
             ),
             estop_path=self._estop_path,
             logger=self._log,
+            # A URL watch fetches from the host: the coworker's ``network``
+            # switch decides whether it may (docs/WIRE_CONTRACT.md, "Event
+            # triggers").
+            network_allowed=lambda: bool(self._permissions.get(self._agent.id).network),
         )
         # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and
         # background commands"): the same trigger tail, a second consumer. A
@@ -780,6 +784,9 @@ class LocalHost:
                 submit=self._submit_mail_run,
                 ready=lambda: self._mail_executor() is not None,
                 busy=self._mail_session_busy,
+                # Mail automations (docs/WIRE_CONTRACT.md, "Event triggers"):
+                # a claimed mail that matches a ``mail`` row fires it.
+                on_mail=self._offer_mail_to_automations,
                 main_session=host_agent_id(self._device_id),
                 state_path=self._workspace / AGENT_MAIL_STATE_FILE,
                 logger=self._log,
@@ -1800,6 +1807,13 @@ class LocalHost:
             except Exception as exc:  # noqa: BLE001 — a channel must not break the hook
                 self._log(f"channel reply failed: {type(exc).__name__}")
         origin = summary.get("origin") if isinstance(summary, dict) else None
+        outcome = summary.get("automation_result") if isinstance(summary, dict) else None
+        if isinstance(outcome, dict) and outcome.get("changed") is False:
+            # "Notify only on change" (docs/WIRE_CONTRACT.md, "Event
+            # triggers"): the run found nothing new. No toast, no push; the
+            # app shows the run collapsed.
+            self._log(f"automation {summary.get('automation_id')}: no change, not notified")
+            return
         if origin in (CHANNEL_ORIGIN, ORIGIN_MAIL_UNTRUSTED):
             # A Telegram run is answered in Telegram. The restricted run of an
             # unknown mail (docs/AGENT_MAIL.md §7) ends as the note on the
@@ -1951,6 +1965,14 @@ class LocalHost:
             return "not_enabled"
         return mail.accept_key_frame(payload)
 
+    def _offer_mail_to_automations(self, mail: dict) -> bool:
+        """A claimed mail (opened summary, HostView shape). True when a
+        ``mail`` automation took it."""
+        manager = getattr(self, "_automations", None)
+        if manager is None:
+            return False
+        return manager.offer_mail(mail)
+
     def _on_job_trigger(self, record: dict) -> None:
         """A ``kind: job`` line in the trigger file: a background job ended
         (docs/WIRE_CONTRACT.md, "The wake-up"). Handed to the executor's job
@@ -1972,13 +1994,23 @@ class LocalHost:
             return
         self._log(f"[jobs] job {record.get('job_id')} exit {record.get('exit_code')} -> {outcome}")
 
-    def _on_automation_frame(self, payload: dict) -> list[dict] | None:
-        """The app's ``automation_control`` / ``automation_list``. The app is
-        the user: it may manage every automation of this host, so no session
-        scope is applied here (the tools apply it)."""
+    def _on_automation_frame(self, payload: dict) -> list[dict] | dict | None:
+        """The app's ``automation_control`` / ``automation_list`` /
+        ``automation_create`` / ``automation_update``. The app is the user: it
+        may manage every automation of this host, so no session scope is
+        applied here (the tools apply it)."""
         manager = getattr(self, "_automations", None)
         if manager is None or not isinstance(payload, dict):
             return None
+        kind = payload.get("type")
+        if kind == "automation_create":
+            return manager.create(payload)
+        if kind == "automation_update":
+            automation_id = payload.get("id")
+            if not isinstance(automation_id, str) or not automation_id:
+                return {"ok": False, "error": "id is required"}
+            changes = {k: payload[k] for k in ("name", "prompt", "spec", "notify") if k in payload}
+            return manager.update(None, automation_id, changes)
         if payload.get("type") == "automation_list":
             key = payload.get("session_key")
             return manager.list(key if isinstance(key, str) and key else None)
