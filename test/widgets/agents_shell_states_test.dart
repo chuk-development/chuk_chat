@@ -98,7 +98,11 @@ class _HangingController extends FakeRelayController {
 /// A host that lists no agents: pairing does not bring a host coworker.
 class _EmptyHostRoster extends LocalAgentRosterSource {
   @override
-  AgentsAgent ensureHostAgent(String peerDeviceId) => AgentsAgent(
+  AgentsAgent ensureHostAgent(
+    String peerDeviceId, {
+    String? label,
+    Set<String> replaceableLabels = const <String>{},
+  }) => AgentsAgent(
     id: 'host:$peerDeviceId',
     name: peerDeviceId,
     onHost: true,
