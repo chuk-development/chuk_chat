@@ -28,9 +28,13 @@ from chuk_agents_runtime.browser import (
     BrowserTaskSpec,
     BrowserUnavailable,
     BrowserUseRunner,
+    SCREEN_ENV_VAR,
+    configured_screen,
     display_available,
+    display_size,
     ensure_display,
     headless_requested,
+    window_bounds,
 )
 from chuk_agents_runtime.mcp_client import (
     BROWSER_LAUNCH_TOOL,
@@ -236,6 +240,91 @@ def test_a_dead_display_is_reported_dead(monkeypatch):
         lambda *a, **k: subprocess.CompletedProcess(a[0], 1, b"", b"cannot open display"),
     )
     assert display_available(":123") is False
+
+
+# -- the window covers the display (bead chuk_chat-elw7) -----------------------
+
+
+def _xdpyinfo(monkeypatch, stdout, returncode=0):
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/xdpyinfo")
+    monkeypatch.setattr(
+        "subprocess.run",
+        lambda *a, **k: subprocess.CompletedProcess(a[0], returncode, stdout, ""),
+    )
+
+
+def test_the_display_size_is_measured_not_assumed(monkeypatch):
+    """An agent once started its own 1440x2000 Xvfb on :99. The window must
+    follow the display that exists, not the size we would have started."""
+    _xdpyinfo(monkeypatch, "screen #0:\n  dimensions:    1440x2000 pixels (381x529 millimeters)\n")
+    assert display_size(":99") == (1440, 2000)
+
+
+def test_an_unmeasurable_display_falls_back_to_the_configured_screen(monkeypatch):
+    _xdpyinfo(monkeypatch, "", returncode=1)
+    monkeypatch.setenv(SCREEN_ENV_VAR, "1600x900x24")
+    assert display_size(":99") == (1600, 900)
+
+
+def test_a_broken_screen_setting_falls_back_to_the_default(monkeypatch):
+    monkeypatch.setenv(SCREEN_ENV_VAR, "huge")
+    assert configured_screen() == "1280x800x24"
+    monkeypatch.delenv(SCREEN_ENV_VAR)
+    assert configured_screen() == "1280x800x24"
+
+
+def test_the_window_sits_at_the_origin_one_pixel_larger_than_the_display(monkeypatch):
+    """Chromium on X11 shrinks an exactly screen-sized window by 1 px, which
+    left a black line at the right and bottom edge (measured: 1280,800 gives
+    1279x799). One pixel more covers the display completely."""
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_size", lambda display=None: (1280, 800))
+    size, position = window_bounds(":99")
+    assert size == {"width": 1281, "height": 801}
+    assert position == {"width": 0, "height": 0}
+
+
+def test_xvfb_starts_with_the_configured_screen(monkeypatch):
+    import chuk_agents_runtime.browser as browser_mod
+
+    monkeypatch.setenv(SCREEN_ENV_VAR, "1600x900x24")
+    monkeypatch.setattr(browser_mod, "_xvfb", None)
+    monkeypatch.setattr("shutil.which", lambda name: "/usr/bin/Xvfb")
+    monkeypatch.setattr(browser_mod, "display_available", lambda name=None: False)
+    started: list[list[str]] = []
+
+    class _DeadXvfb:
+        def __init__(self, argv, **kwargs):
+            started.append(argv)
+
+        def poll(self):
+            return 1  # dies at once: the number is "taken", try the next
+
+    monkeypatch.setattr("subprocess.Popen", _DeadXvfb)
+    assert browser_mod.start_xvfb(displays=[99]) is None
+    assert started and started[0][started[0].index("-screen") + 2] == "1600x900x24"
+
+
+def test_a_headful_run_hands_browser_use_the_display_sized_window(
+    fake_browser_use, chromium, monkeypatch
+):
+    monkeypatch.delenv(HEADLESS_ENV_VAR, raising=False)
+    monkeypatch.setattr("chuk_agents_runtime.browser.ensure_display", lambda: ":99")
+    monkeypatch.setattr("chuk_agents_runtime.browser.display_size", lambda display=None: (1440, 2000))
+
+    run_once(BrowserUseRunner())
+
+    assert fake_browser_use["window_size"] == {"width": 1441, "height": 2001}
+    assert fake_browser_use["window_position"] == {"width": 0, "height": 0}
+    # No fixed viewport: the page follows the window, so nothing is cut off.
+    assert "viewport" not in fake_browser_use
+
+
+def test_an_attached_or_headless_browser_gets_no_window_geometry(
+    fake_browser_use, chromium, monkeypatch
+):
+    monkeypatch.setenv(HEADLESS_ENV_VAR, "1")
+    run_once(BrowserUseRunner())
+    assert "window_size" not in fake_browser_use
 
 
 # -- the MCP browser server is opened on sight --------------------------------
