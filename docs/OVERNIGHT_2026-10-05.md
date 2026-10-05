@@ -307,3 +307,8 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   from the app, per-thread browser target, review fixes). After a host
   restart the first "hi" has pre-run 1.56 s (was 3.4 s); warm 2.3 s.
   Running: docker work out of the pre-run path (bead 5o8j).
+- 14:05 47e0c356 (no docker before the first model call) live after a
+  restart: pre-run 150 ms first turn, 39 ms warm (was 1.56 s / 0.3 s). But
+  cached_tokens fell to 0 on both turns (was 20 224 at 10:30): a prefix
+  regression from a later change; an agent is on it. Not pushed yet
+  (CodeRabbit quota).
