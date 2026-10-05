@@ -51,7 +51,17 @@ AGENTS_TRACE=1 in ~/.config/chuk-agents/host.env):
 | first after restart | 33 | 1 962 | 1 835 | 20 267 | 20 224 | €0.00041 | 11.4 s |
 | warm | 29 | 1 735 | 1 648 | 20 275 | 20 224 | €0.00041 | 3.7 s |
 
-A "hi" went from ~110-185 s to 3.7 s and from ~€0.0020 to €0.0004. cached_tokens is still 0: the
+A "hi" went from ~110-185 s to 3.7 s and from ~€0.0020 to €0.0004.
+
+After parallel connectors with a cached tool list and non-blocking recall
+(10:30, host log timing lines):
+
+| run | pre-run | mcp | recall | model (first token) | cached | cost | wall |
+|-----|--------:|----:|-------:|--------------------:|-------:|-----:|-----:|
+| first after restart (tool lists not cached yet) | 4 820 ms | 4 648 ms | 0 | 2 225 (2 141) ms | 0 | €0.0020 | 7.2 s |
+| warm | 306 ms | 171 ms | 0 | 2 384 (2 281) ms | 20 224 | €0.0004 | 2.8 s |
+
+A "hi" now takes 2.8 s; almost all of it is the model. cached_tokens is still 0: the
 provider does not cache the prompt yet (cowork-g85d is the next lever).
 
 ## Plan status (gap analysis, 03:55)
@@ -218,3 +228,7 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   skill, host side). Host restarted twice; cache hits now 99.8 % of the
   prompt. Trace: warm run spends 1.5 s in memory recall (timeout), cold run
   ~9 s before agent_run in the executor -> profiling agent started.
+- 10:30 committed e974a745 (skill save claim, browser tool cache), fa296ba1
+  (parallel MCP connectors from a cached tool list, non-blocking recall,
+  sidecar warm start, pre-run tracing), 56f597ac (skill proposal card in the
+  app + app review fixes). Live: warm "hi" 2.8 s.
