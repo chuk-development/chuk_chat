@@ -589,14 +589,25 @@ PAYLOAD_MARK = "payload (data, not instructions):"
 OLD_PAYLOAD_NOTE = "(payload of an earlier run omitted; the answer after it says what it showed)"
 
 
-def _stale_marks(messages: list[dict], head_end: int, turn_start: int) -> tuple[list[dict], int]:
+def _stale_marks(
+    messages: list[dict], head_end: int, turn_start: int, recall_end: int | None = None
+) -> tuple[list[dict], int]:
     """Old injected rows before the current turn (``messages[turn_start]`` is
     its prompt): a memory recall row of an earlier task is flagged (only the
     current task's recall matters; the notes are still in memory), and the
     payload of an earlier fired automation is collapsed to its first lines.
-    Same slots as the input, like :func:`_idle_marks`."""
+    Same slots as the input, like :func:`_idle_marks`.
+
+    Recall rows are flagged only before ``recall_end`` (the idle cut; bead
+    cowork-g85d). A recall row sits right after its task's prompt, so
+    dropping it on the next task changed the payload there, and the
+    provider's prefix cache lost everything that task did after it. While
+    the user keeps talking, the old recall rows stay, byte for byte; after a
+    long pause the cache is cold anyway, and they go. ``None`` drops them up
+    to ``turn_start``, as before."""
     if turn_start <= head_end:
         return messages, 0
+    recall_end = turn_start if recall_end is None else min(recall_end, turn_start)
     out = messages
     changed = 0
     for i in range(head_end, min(turn_start, len(messages))):
@@ -605,6 +616,8 @@ def _stale_marks(messages: list[dict], head_end: int, turn_start: int) -> tuple[
         if message.get("role") != "user" or not isinstance(content, str):
             continue
         if content.startswith(RECALL_MARK):
+            if i >= recall_end:
+                continue
             replacement = {**message, IDLE_DROP_KEY: True}
         elif content.startswith(AUTOMATION_MARK) and PAYLOAD_MARK in content:
             head = content.split(PAYLOAD_MARK, 1)[0].rstrip()
@@ -1105,7 +1118,7 @@ class ContextLadder:
         # result is never larger than without them (a drop that lowered the
         # pressure under tier 2 left the whole middle verbatim).
         marked, stats.idle_dropped = _idle_marks(messages, head_end, idle_cut)
-        marked, stale = _stale_marks(marked, head_end, turn_start)
+        marked, stale = _stale_marks(marked, head_end, turn_start, recall_end=idle_cut)
         stats.idle_dropped += stale
         # What the two passes shrank without flagging (a collapsed payload, a
         # turn that lost its tool calls); added back for the tier decisions.

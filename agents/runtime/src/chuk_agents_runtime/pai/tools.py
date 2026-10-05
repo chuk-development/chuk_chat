@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -139,6 +139,16 @@ class RegistryToolset(AbstractToolset[Any]):
     #: Filled per call; the loop reads and clears it after each tool round.
     calls: dict[str, CallRecord] = field(default_factory=dict)
     toolset_id: str = "chuk-registry"
+    #: Deferred tools the conversation already found (``"pai"`` mode only),
+    #: in the order they were found. They are declared like core tools, after
+    #: the core tools and in this order, and they stay declared for the rest
+    #: of the conversation (bead cowork-g85d). Every chat template renders the
+    #: ``tools`` array before the history, so a tool set that changes between
+    #: two requests costs the provider's prefix cache the whole prompt.
+    #: Without this, a found tool sat in registry order between the core tools
+    #: and ``search_tools``, and it left the array again when the context
+    #: ladder summarized or idle-dropped the search that found it.
+    found: Callable[[], Sequence[str]] | None = None
 
     @property
     def id(self) -> str | None:
@@ -149,24 +159,37 @@ class RegistryToolset(AbstractToolset[Any]):
         if not self.enabled:
             return tools
         registry = self.registry
+        found: list[str] = []
+        if self.found is not None and self.deferred_mode == "pai":
+            try:
+                found = [n for n in self.found() if registry.has(n) and registry.is_deferred(n)]
+            except Exception:  # noqa: BLE001 — a lost cache hit, never a failed request
+                found = []
+        declared = set(found)
         for name in registry.names():
             deferred = registry.is_deferred(name)
-            if deferred and self.deferred_mode == "hide":
+            if deferred and (self.deferred_mode == "hide" or name in declared):
                 continue
-            if not registry.available(name):
-                continue
-            overrides: dict[str, Any] = {}
-            if deferred:
-                overrides["defer_loading"] = True
-            if self.requires_approval(name):
-                overrides["kind"] = "unapproved"
-            tools[name] = ToolsetTool(
-                toolset=self,
-                tool_def=tool_definition(registry, name, **overrides),
-                max_retries=TOOL_RETRIES,
-                args_validator=ANY_ARGS,
-            )
+            self._add(tools, name, deferred=deferred)
+        for name in found:
+            self._add(tools, name, deferred=False)
         return tools
+
+    def _add(self, tools: dict[str, ToolsetTool[Any]], name: str, *, deferred: bool) -> None:
+        registry = self.registry
+        if not registry.available(name):
+            return
+        overrides: dict[str, Any] = {}
+        if deferred:
+            overrides["defer_loading"] = True
+        if self.requires_approval(name):
+            overrides["kind"] = "unapproved"
+        tools[name] = ToolsetTool(
+            toolset=self,
+            tool_def=tool_definition(registry, name, **overrides),
+            max_retries=TOOL_RETRIES,
+            args_validator=ANY_ARGS,
+        )
 
     async def call_tool(
         self,

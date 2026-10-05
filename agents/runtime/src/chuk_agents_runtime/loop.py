@@ -50,6 +50,7 @@ from .context import (
     ContextLadder,
     estimate_message_tokens,
     estimate_tokens,
+    idle_cut,
     prompt_tokens_from_usage,
     total_tokens_from_usage,
 )
@@ -348,7 +349,7 @@ from pydantic_ai.usage import UsageLimits  # noqa: E402
 
 from .pai import disable_banner  # noqa: E402
 from .pai.approvals import ApprovalPolicy  # noqa: E402
-from .pai.convert import response_to_row, rows_to_messages, tool_call_args  # noqa: E402
+from .pai.convert import found_tools, response_to_row, rows_to_messages, tool_call_args  # noqa: E402
 from .pai.events import StreamMapper  # noqa: E402
 from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
 from .pai.tools import TOOL_RETRIES, UNSET, RegistryToolset  # noqa: E402
@@ -442,6 +443,10 @@ class _ActiveRun:
     outbound: list[dict] = field(default_factory=list)
     prepare_ms: float = 0.0
     written_calls: set[str] = field(default_factory=set)
+    #: Deferred tools this conversation already found, in the order found:
+    #: declared outright on every request (bead cowork-g85d, see
+    #: :attr:`~chuk_agents_runtime.pai.tools.RegistryToolset.found`).
+    found_tools: list[str] = field(default_factory=list)
 
 
 def _run_blocking(coro: Coroutine[Any, Any, Any]) -> Any:
@@ -547,6 +552,7 @@ class AgentLoop:
                 if phase_observer is not None
                 else None
             ),
+            found=self._found_now,
         )
         self._policy.toolset = self._toolset
         self._extra_capabilities = list(capabilities)
@@ -639,11 +645,34 @@ class AgentLoop:
                 messages=len(messages),
                 ms=round((time.monotonic() - read_started) * 1000, 3),
             )
+        active = self._active
+        if active is not None and active.session_id == session_id:
+            active.found_tools = self._found_tools(messages, timestamps)
         if self._ladder is None:
             return messages
         return self._ladder.prepare(
             messages, session_id=session_id, timestamps=timestamps, turn_start=turn_start
         )
+
+    def _found_now(self) -> Sequence[str]:
+        active = self._active
+        return active.found_tools if active is not None else ()
+
+    def _found_tools(self, messages: list[dict], timestamps: list[float]) -> list[str]:
+        """The deferred tools the stored conversation found (bead cowork-g85d),
+        counted from the idle cut on: the context ladder drops the tool traffic
+        before a long pause (the provider cache is cold by then anyway), so the
+        declared set starts afresh at the same row the ladder does. Read from
+        the stored rows, not from the ladder's output, so a summary that folds
+        the search away does not take the tool off the request again."""
+        deferred = self._registry.deferred_names()
+        if not deferred:
+            return []
+        # Without a ladder nothing is dropped: the whole history is sent.
+        config = getattr(self._ladder, "config", None)
+        gap = float(getattr(config, "idle_drop_seconds", 0) or 0)
+        cut = idle_cut(messages, timestamps, gap) if gap > 0 else 0
+        return found_tools(messages[cut:], deferred=deferred, order=self._registry.names())
 
     def _ladder_input(self, session_id: int) -> tuple[list[dict], list[float], int]:
         """The stored rows with the system prompt upgrade applied, their
@@ -749,6 +778,13 @@ class AgentLoop:
         timings.recall_ms = self._inject_recall(session_id, user_message)
 
         active = _ActiveRun(session_key=session_key, session_id=session_id)
+        # The first request's tools are built before its history (Pydantic AI
+        # prepares the tools first), so the found set is read once here.
+        if self._registry.deferred_names():
+            rows = store.get_conversation(session_id)
+            active.found_tools = self._found_tools(
+                [m.content for m in rows], [m.created_at for m in rows]
+            )
         self._active = active
         tools_used: list[str] = []
         try:
