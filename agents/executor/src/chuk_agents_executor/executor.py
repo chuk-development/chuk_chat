@@ -237,6 +237,10 @@ ORIGIN_APP = "app"
 #: Runs nobody watches live: the host announces their end itself.
 UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
 
+#: Origins whose task frame carries no ``mcp_servers`` (no app sent it): they
+#: run with the connectors the session already has.
+CONNECTORLESS_ORIGINS = ("automation", ORIGIN_MAIL, "telegram", _user_browser.PANEL_ORIGIN)
+
 #: Origins a lighter context may serve (docs/WIRE_CONTRACT.md, "Cost per run
 #: and weekly budget"): a fired schedule / watcher and a background job wake.
 #: A mail or Telegram run is a conversation and keeps its full context.
@@ -1398,6 +1402,11 @@ class Executor:
         # worker builds it while ``stop`` closes it.
         self._mcp_managers: dict[str, MCPManager] = {}
         self._mcp_signatures: dict[str, str] = {}
+        # Per session: the connectors the app forwarded with the session's last
+        # task that carried a list. A run that comes with none (an automation,
+        # a mail, Telegram, the browser panel) uses it, so the browser entry
+        # is added to the session's connectors instead of replacing them.
+        self._mcp_forwarded: dict[str, list[dict]] = {}
         # The last tool list of every forwarded server, next to the state db
         # (bead chuk_chat-4xc5): a new session's manager offers those tools at
         # once and dials in the background, instead of holding the first model
@@ -4623,7 +4632,7 @@ class Executor:
         # With the network switched off only the sandbox's own browser server
         # stays: the forwarded connectors run on the internet or on the host.
         online = run_policy is None or run_policy.network
-        servers = list(run.mcp_servers or []) if online else []
+        servers = self._forwarded_mcp_servers(run, session_key) if online else []
         browser_entry = self._browser_mcp_entry(session_key)
         if browser_entry is not None:
             servers.append(browser_entry)
@@ -4635,11 +4644,7 @@ class Executor:
                         str(session_key), by_user=run.origin not in (*UNATTENDED_ORIGINS, "telegram")
                     )
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
-        if (
-            mcp_manager is None
-            and run.origin in ("automation", ORIGIN_MAIL, "telegram", _user_browser.PANEL_ORIGIN)
-            and online
-        ):
+        if mcp_manager is None and run.origin in CONNECTORLESS_ORIGINS and online:
             # A fired automation carries no forwarded connectors (no frame,
             # no app), and neither does a message from the browser panel. It
             # runs with the connectors the session already has, exactly as the
@@ -5372,6 +5377,24 @@ class Executor:
         }
 
     # -- MCP credential forwarding (§9, §10) -----------------------------
+    def _forwarded_mcp_servers(self, run: _Run, session_key: str) -> list[dict]:
+        """The connectors this run speaks to, without the browser entry.
+
+        A frame that carried ``mcp_servers`` (also an empty list) is the app's
+        current choice: it is kept for the session and used. A run of a
+        connectorless origin carries none, so it gets the list the session's
+        last task brought. Then the cached manager is reused (same signature),
+        and a browser entry added for the panel does not drop the other
+        connectors.
+        """
+        with self._mcp_lock:
+            if run.mcp_servers is not None:
+                self._mcp_forwarded[session_key] = list(run.mcp_servers)
+                return list(run.mcp_servers)
+            if run.origin in CONNECTORLESS_ORIGINS:
+                return list(self._mcp_forwarded.get(session_key) or [])
+        return []
+
     def _forget_session_mcp(self, *, close: bool, session_key: str) -> None:
         """Drop everything cached for this session's MCP connectors.
 
@@ -5811,6 +5834,7 @@ class Executor:
             managers = list(self._mcp_managers.values())
             self._mcp_managers.clear()
             self._mcp_signatures.clear()
+            self._mcp_forwarded.clear()
             self._mcp_refresh_baseline.clear()
             self._mcp_refresh_seen.clear()
             self._mcp_entry_meta.clear()

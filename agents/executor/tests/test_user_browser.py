@@ -337,8 +337,8 @@ def test_a_panel_message_goes_to_the_coworker_in_the_browser(broker):
     assert wait_for(lambda: len(calls) == 3)
     assert calls == [(None, "nobody holds it"), ("agent-a", "while a holds it"),
                      ("agent-a", "after a handed off")]
-    acks = [f for f in fake.frames if f.get("type") == "page_message_ack"]
     assert wait_for(lambda: len([f for f in fake.frames if f.get("type") == "page_message_ack"]) == 3)
+    acks = [f for f in fake.frames if f.get("type") == "page_message_ack"]
     assert acks[0] == {"type": "page_message_ack", "ok": True, "coworker": "Ada"}
     assert broker.send_to_extension({"type": "page_reply", "text": "hi"}) is True
     assert wait_for(lambda: {"type": "page_reply", "text": "hi"} in fake.frames)
