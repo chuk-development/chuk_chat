@@ -80,3 +80,16 @@ def test_an_availability_probe_is_not_reported_as_agent_activity():
 
         shim.run_bash("echo hi")
         assert seen == ["echo hi"]
+
+
+def test_box_live_follows_the_container():
+    from types import SimpleNamespace
+
+    from chuk_agents_executor import SandboxEnvironment
+
+    docker_like = SimpleNamespace(container_id=None)
+    shim = SandboxEnvironment(docker_like)
+    assert shim.box_live is False  # the next command would create it
+    docker_like.container_id = "abc"
+    assert shim.box_live is True
+    assert SandboxEnvironment(SimpleNamespace()).box_live is True  # no containers

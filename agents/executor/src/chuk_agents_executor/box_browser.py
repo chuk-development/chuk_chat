@@ -18,6 +18,11 @@ hands it out), so:
 - the tool calls are serialized: one Playwright page, one caller at a time;
 - the server starts on the first browser call (or when the user opens the live
   view), not when a task starts. A thread that never browses starts nothing.
+- the box itself (the container) is not touched before that either. The entry
+  names the box by its fixed container name; the ``prepare`` hook brings the
+  container up and turns the entry into the real ``docker exec`` command only
+  when the server is about to start (bead chuk_chat-5o8j). A task that does
+  not browse runs no docker command for the browser at all.
 
 To register the browser tools before the server runs, the tool list of the last
 connection is kept, in memory and in a small JSON file next to the executor's
@@ -150,10 +155,17 @@ class BoxBrowser:
         *,
         tools_path: str | None = None,
         connect: Callable[[MCPServerConfig], Any] | None = None,
+        prepare: Callable[[MCPServerConfig], MCPServerConfig | None] | None = None,
     ) -> None:
         self.config = config
         self._tools_path = tools_path
         self._connect = connect or (lambda c: MCPConnection(c))
+        #: Runs just before the server starts: brings the box up and returns
+        #: the config to start with (the real container id, the exec user,
+        #: the retired-owner hint), or ``None`` when the box is not there.
+        self._prepare = prepare
+        #: The config the running server was started with (see :attr:`target`).
+        self._launched_config: MCPServerConfig | None = None
         self._conn: Any = None
         self._known: list[MCPToolInfo] = load_tools(tools_path)
         self._error: str | None = None
@@ -177,6 +189,20 @@ class BoxBrowser:
         """The server runs now (it was started and its session is up)."""
         conn = self._conn
         return bool(conn is not None and conn.alive())
+
+    @property
+    def launched_config(self) -> MCPServerConfig | None:
+        """The config the running server was started with, or ``None`` while
+        no server runs. Its ``docker exec`` target is the real container."""
+        return self._launched_config if self.launched else None
+
+    @property
+    def target(self) -> str | None:
+        """The container the running server execs into, or ``None`` while no
+        server runs. The entry names the box by its fixed name; this is the
+        container that name was resolved to when the server started."""
+        config = self.launched_config
+        return box_of(config) if config is not None else None
 
     @property
     def tools(self) -> list[MCPToolInfo]:
@@ -203,10 +229,16 @@ class BoxBrowser:
             return True
         return bool(self._known) and self._error is None
 
-    def adopt(self, config: MCPServerConfig) -> None:
-        """A newer entry for the same box (an env such as the retired hostname
-        can differ). Used on the next start; a running server is kept."""
+    def adopt(
+        self,
+        config: MCPServerConfig,
+        prepare: Callable[[MCPServerConfig], MCPServerConfig | None] | None = None,
+    ) -> None:
+        """A newer entry for the same box. Used on the next start; a running
+        server is kept. A new ``prepare`` hook replaces the old one."""
         self.config = config
+        if prepare is not None:
+            self._prepare = prepare
 
     def start(self) -> bool:
         """Called by every thread's manager at task start. Starts nothing when
@@ -233,7 +265,19 @@ class BoxBrowser:
                     old.close()
                 except Exception:  # noqa: BLE001 — a dead session must not block a new one
                     pass
-            conn = self._connect(self.config)
+            self._launched_config = None
+            config = self.config
+            if self._prepare is not None:
+                # The box comes up here, on first use, and not at task start.
+                try:
+                    config = self._prepare(self.config)
+                except Exception as exc:  # noqa: BLE001 — a box that fails is reported
+                    self._error = f"{type(exc).__name__}: {exc}"
+                    return False
+                if config is None:
+                    self._error = "the sandbox could not be started"
+                    return False
+            conn = self._connect(config)
             try:
                 ok = bool(conn.start())
             except Exception as exc:  # noqa: BLE001
@@ -241,6 +285,7 @@ class BoxBrowser:
                 self._error = f"{type(exc).__name__}: {exc}"
             if ok:
                 self._conn = conn
+                self._launched_config = config
                 self._error = None
                 tools = list(conn.tools)
                 if tools and not same_tools(tools, self._known):
@@ -296,16 +341,22 @@ _BOXES: dict[str, BoxBrowser] = {}
 _BOXES_LOCK = threading.Lock()
 
 
-def acquire(box: str, config: MCPServerConfig, *, tools_path: str | None = None) -> BoxBrowser:
+def acquire(
+    box: str,
+    config: MCPServerConfig,
+    *,
+    tools_path: str | None = None,
+    prepare: Callable[[MCPServerConfig], MCPServerConfig | None] | None = None,
+) -> BoxBrowser:
     """The process's one :class:`BoxBrowser` of ``box``, made on first use.
     Each executor acquires a box once and releases it when it stops."""
     with _BOXES_LOCK:
         shared = _BOXES.get(box)
         if shared is None or shared._shut:  # noqa: SLF001
-            shared = BoxBrowser(config, tools_path=tools_path)
+            shared = BoxBrowser(config, tools_path=tools_path, prepare=prepare)
             _BOXES[box] = shared
         else:
-            shared.adopt(config)
+            shared.adopt(config, prepare)
         shared._holders += 1  # noqa: SLF001
         return shared
 

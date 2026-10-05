@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import threading
 
 
 def retired_browser_hostname(binary: str, container_id: str, workspace: str | None) -> str | None:
@@ -65,3 +66,48 @@ def retired_browser_hostname(binary: str, container_id: str, workspace: str | No
         return hostname
     except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
         return None
+
+
+#: One answer per box workspace: ``(binary, workspace) -> (proof, hostname)``,
+#: where the proof is ``(container, box start, lock target)``.
+_CACHE: dict[tuple[str, str], tuple[tuple[str, str, str], str | None]] = {}
+_CACHE_LOCK = threading.Lock()
+
+
+def cached_retired_browser_hostname(
+    binary: str, container_id: str, workspace: str | None, box_start: str | None
+) -> str | None:
+    """:func:`retired_browser_hostname`, asked once per box life.
+
+    The answer is reused while the box and the lock are the same: the same
+    container, started at the same time (``box_start``, the start time of its
+    PID 1, so a restart of the same container asks again), and the same
+    ``SingletonLock`` target. Without a lock there is nothing to attest and no
+    docker command runs at all. Without ``box_start`` the restart cannot be
+    seen, so nothing is cached.
+    """
+    if not workspace:
+        return None
+    lock = Path(workspace).resolve() / ".agents" / "chrome-profile" / "SingletonLock"
+    try:
+        target = os.readlink(lock)
+    except OSError:
+        return None
+    if not box_start:
+        return retired_browser_hostname(binary, container_id, workspace)
+    key = (binary, workspace)
+    proof = (container_id, box_start, target)
+    with _CACHE_LOCK:
+        hit = _CACHE.get(key)
+    if hit is not None and hit[0] == proof:
+        return hit[1]
+    answer = retired_browser_hostname(binary, container_id, workspace)
+    with _CACHE_LOCK:
+        _CACHE[key] = (proof, answer)
+    return answer
+
+
+def forget_retired_browser_hostnames() -> None:
+    """Drop every cached answer (tests)."""
+    with _CACHE_LOCK:
+        _CACHE.clear()

@@ -229,7 +229,7 @@ def test_browser_mcp_entry_execs_the_launcher_in_the_container(tmp_path):
     assert entry is not None
     assert entry["name"] == "playwright"
     assert entry["command"] == "docker"
-    # docker exec -i -u agents <cid> agents-browser-mcp
+    # docker exec -i -u agents <box> agents-browser-mcp
     assert entry["args"] == [
         "exec",
         "-i",
@@ -238,33 +238,180 @@ def test_browser_mcp_entry_execs_the_launcher_in_the_container(tmp_path):
         "cid-abc123",
         "agents-browser-mcp",
     ]
-    assert env.realized >= 1  # the container was forced live first
+    # Task start does not touch the box (bead chuk_chat-5o8j): it comes up on
+    # the first browser call.
+    assert env.realized == 0
 
 
-def test_browser_mcp_entry_rejects_failed_container_probe(tmp_path):
+class _RecordingCli:
+    """A docker CLI that records every call and answers none of them."""
+
+    binary = "docker"
+
+    def __init__(self) -> None:
+        self.calls: list[tuple] = []
+
+    def available(self) -> bool:
+        self.calls.append(("available",))
+        return True
+
+    def run(self, *args, **kwargs):  # noqa: ANN002, ANN003
+        self.calls.append(args)
+        raise AssertionError(f"docker called at task start: {args}")
+
+
+def test_browser_mcp_entry_runs_no_docker_command(tmp_path):
+    """A "hi" needs no box: the entry is built from the box's fixed name, with
+    no container created and no docker CLI call (bead chuk_chat-5o8j)."""
+    from chuk_agents_sandbox import DockerEnvironment
+
+    cli = _RecordingCli()
+    env = DockerEnvironment(
+        image="agents-browser:latest", agent_id="coworker-1",
+        workdir=str(tmp_path / "ws"), cli=cli,
+    )
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    entry = ex._browser_mcp_entry()
+    assert cli.calls == []
+    assert env.container_id is None
+    assert entry["args"] == [
+        "exec", "-i", "-u", "agents", env.container_name, "agents-browser-mcp",
+    ]
+    # The same entry once the box exists, so the session's manager is reused.
+    env._container = "f00d"  # noqa: SLF001
+    env._user, env._user_resolved = "agents", True  # noqa: SLF001
+    assert ex._browser_mcp_entry() == entry
+
+
+def test_box_launch_brings_the_container_up_and_execs_into_it(tmp_path):
+    from chuk_agents_runtime import MCPServerConfig
+
+    env = _FakeDockerEnv()
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    entry = ex._browser_mcp_entry()
+    config = MCPServerConfig(name="playwright", command=entry["command"], args=entry["args"])
+    launched = ex._prepare_box_launch("cid-abc123", config)
+    assert env.realized == 1  # the container was forced live, now
+    assert launched.args == ["exec", "-i", "-u", "agents", "cid-abc123", "agents-browser-mcp"]
+
+
+def test_box_launch_fails_when_the_container_does_not_answer(tmp_path):
+    from chuk_agents_runtime import MCPServerConfig
     from chuk_agents_sandbox import ProcessResult
+
+    from chuk_agents_executor.box_browser import BoxBrowser
 
     env = _FakeDockerEnv()
     env.run_bash = lambda *a, **kw: ProcessResult("", "No such container", 1)
     ex = _executor_with(tmp_path, env, browser_mcp=True)
-    assert ex._browser_mcp_entry() is None
+    entry = ex._browser_mcp_entry()
+    config = MCPServerConfig(name="playwright", command=entry["command"], args=entry["args"])
+    assert ex._prepare_box_launch("cid-abc123", config) is None
+    started: list = []
+    shared = BoxBrowser(
+        config,
+        connect=lambda c: started.append(c),
+        prepare=lambda c: ex._prepare_box_launch("cid-abc123", c),
+    )
+    assert shared.ensure() is False
+    assert started == []  # no server was started against a missing box
+    assert "could not be started" in (shared.error or "")
 
 
-def test_browser_mcp_entry_passes_verified_retirement_to_container(tmp_path, monkeypatch):
+def _stale_lock(workspace) -> None:
+    profile = workspace / ".agents" / "chrome-profile"
+    profile.mkdir(parents=True, exist_ok=True)
+    (profile / "SingletonLock").symlink_to("retired-container-77")
+
+
+def test_box_launch_passes_verified_retirement_to_container(tmp_path, monkeypatch):
+    from chuk_agents_runtime import MCPServerConfig
+
+    from chuk_agents_executor import browser_profile
+
+    browser_profile.forget_retired_browser_hostnames()
     env = _FakeDockerEnv()
     env.workspace = str(tmp_path)
+    _stale_lock(tmp_path)
     seen = []
     def attest(binary, cid, workspace):
         seen.append((binary, cid, workspace))
         return "retired-container"
-    monkeypatch.setattr("chuk_agents_executor.browser_profile.retired_browser_hostname", attest)
+    monkeypatch.setattr(browser_profile, "retired_browser_hostname", attest)
     ex = _executor_with(tmp_path, env, browser_mcp=True)
     entry = ex._browser_mcp_entry()
+    assert seen == []  # not at task start
+    config = MCPServerConfig(name="playwright", command=entry["command"], args=entry["args"])
+    launched = ex._prepare_box_launch("cid-abc123", config)
     assert seen == [("docker", "cid-abc123", str(tmp_path))]
-    assert entry["args"][-4:] == [
+    assert launched.args[-4:] == [
         "-e", "AGENTS_BROWSER_RETIRED_HOSTNAME=retired-container",
         "cid-abc123", "agents-browser-mcp",
     ]
+
+
+def test_retired_hostname_is_asked_once_per_box_life(tmp_path, monkeypatch):
+    from chuk_agents_executor import browser_profile
+
+    browser_profile.forget_retired_browser_hostnames()
+    _stale_lock(tmp_path)
+    seen = []
+    def attest(binary, cid, workspace):
+        seen.append(cid)
+        return "retired-container"
+    monkeypatch.setattr(browser_profile, "retired_browser_hostname", attest)
+    ask = browser_profile.cached_retired_browser_hostname
+    ws = str(tmp_path)
+    assert ask("docker", "c1", ws, "100") == "retired-container"
+    assert ask("docker", "c1", ws, "100") == "retired-container"
+    assert seen == ["c1"]  # the same box: no second docker inventory
+    ask("docker", "c1", ws, "200")  # the box restarted
+    ask("docker", "c2", ws, "200")  # the box was replaced
+    assert seen == ["c1", "c1", "c2"]
+    lock = tmp_path / ".agents" / "chrome-profile" / "SingletonLock"
+    lock.unlink()
+    lock.symlink_to("other-owner-5")  # a new lock
+    ask("docker", "c2", ws, "200")
+    assert seen == ["c1", "c1", "c2", "c2"]
+    ask("docker", "c2", ws, None)  # restart cannot be seen: never cached
+    ask("docker", "c2", ws, None)
+    assert len(seen) == 6
+    lock.unlink()
+    assert ask("docker", "c2", ws, "200") is None  # no lock: no docker at all
+    assert len(seen) == 6
+    browser_profile.forget_retired_browser_hostnames()
+
+
+def test_pid1_start_reads_the_start_time():
+    from chuk_agents_executor.executor import _pid1_start
+
+    line = "1 (sleep it) S 0 1 1 0 -1 4194560 100 0 0 0 0 0 0 0 20 0 1 0 98765 2 3\n"
+    assert _pid1_start(line) == "98765"
+    assert _pid1_start("") is None
+    assert _pid1_start("garbage") is None
+
+
+def test_unstarted_box_without_a_container_is_not_a_view_target(tmp_path):
+    """A box whose browser never started and whose container does not exist
+    yet is not probed: nothing would answer there."""
+    env = _FakeDockerEnv()
+    ex = _executor_with(tmp_path, env, browser_mcp=True)
+    from chuk_agents_runtime import MCPToolInfo
+
+    manager = ex._session_mcp_manager("s", [ex._browser_mcp_entry()])
+    try:
+        shared = ex._box_browser_for(manager.configs[0])
+        manager.connections["playwright"] = shared  # what manager.start() wires
+        # Tools known from an earlier start: alive, but not launched.
+        shared._known = [MCPToolInfo(name="browser_tabs", description="", schema={})]  # noqa: SLF001
+        shared._error = None  # noqa: SLF001
+        env.container_id = None
+        assert ex._browser_server_targets("s", "") == []
+        env.container_id = "cid-abc123"
+        targets = ex._browser_server_targets("s", "cid-abc123")
+        assert [box for _p, box, _m in targets] == ["cid-abc123"]
+    finally:
+        manager.close()
 
 
 def test_browser_manager_rebuilt_when_container_changes(tmp_path):

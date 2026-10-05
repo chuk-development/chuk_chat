@@ -328,3 +328,87 @@ def test_save_tools_uses_its_own_temp_file_and_removes_it_on_failure(tmp_path, m
     monkeypatch.setattr(box_mod.os, "replace", real_replace)
     box_mod.save_tools(str(path), tools)
     assert [p.name for p in tmp_path.iterdir()] == ["tools.json"]
+
+
+class _NamedDockerEnv(_FakeDockerEnv):
+    """A box known by its fixed name; the container appears on first use."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.container_name = "agents-coworker-abc"
+        self.container_id = None
+        self.realized = 0
+
+    def run_bash(self, cmd, *, timeout=120, internal=False):  # noqa: ANN001
+        self.realized += 1
+        self.container_id = "cid-real"
+        return None
+
+
+def _named_executor(tmp_path, env) -> Executor:
+    channel = paired_channel()
+    _c, executor_ep = loopback_pair()
+    return Executor(
+        name="worker",
+        endpoint=executor_ep,
+        opener=channel.executor.opener,
+        sealer=channel.executor.sealer,
+        environment=env,
+        db_path=str(tmp_path / "state.db"),
+        model_factory=lambda: MockModelClient(["done"]),
+        browser_mcp=True,
+    )
+
+
+def test_the_box_comes_up_on_the_first_browser_call_not_at_task_start(tmp_path, fake_server):
+    """bead chuk_chat-5o8j: a task whose tools are known registers the browser
+    without creating the container; the first browser call brings it up and
+    the server execs into the real container."""
+    env = _NamedDockerEnv()
+    learning = _named_executor(tmp_path, env)
+    try:
+        _task_registry(learning, "thread-a")  # first ever: learns the tools
+    finally:
+        learning._close_mcp_managers()
+    assert fake_server.owner.config.args[-2] == "cid-real"
+
+    env = _NamedDockerEnv()  # the host restarted; the box is not up yet
+    fake_server.owner = None
+    executor = _named_executor(tmp_path, env)
+    try:
+        registry = _task_registry(executor, "thread-a")
+        assert registry.available("mcp__playwright__browser_tabs")
+        manager = executor._mcp_managers["thread-a"]
+        assert manager.configs[0].args[-2] == "agents-coworker-abc"
+        assert env.realized == 0 and env.container_id is None
+        assert executor._browser_server_targets("thread-a", "") == []
+        result = registry.dispatch("mcp__playwright__browser_tabs", {"action": "list"})
+        assert result["ok"] is True
+        assert env.realized == 1
+        assert fake_server.owner.config.args == [
+            "exec", "-i", "-u", "agents", "cid-real", "agents-browser-mcp",
+        ]
+        shared = executor._box_browsers["agents-coworker-abc"]
+        assert shared.target == "cid-real"
+        # The view finds the box by its real container.
+        targets = executor._browser_server_targets("thread-a", "cid-real")
+        assert [box for _p, box, _m in targets] == ["cid-real"]
+    finally:
+        executor._close_mcp_managers()
+
+
+def test_the_live_view_starts_a_named_box_by_its_container_id(tmp_path, fake_server):
+    env = _NamedDockerEnv()
+    executor = _named_executor(tmp_path, env)
+    try:
+        _task_registry(executor, "thread-a")  # learn the tools
+        executor._close_mcp_managers()
+        fake_server.owner = None
+        _task_registry(executor, "thread-a")  # a task that does not browse
+        shared = executor._box_browsers["agents-coworker-abc"]
+        assert not shared.launched
+        env.run_bash("true")  # the view realized the box (_vnc_exec_prefix)
+        executor._launch_box_browser("cid-real")
+        assert shared.launched and shared.target == "cid-real"
+    finally:
+        executor._close_mcp_managers()
