@@ -15,6 +15,7 @@ import stat
 import pytest
 
 from chuk_agents_manager import ContainerSupervisor
+from chuk_agents_runtime.action_policy import ActionPolicy
 from chuk_agents_sandbox import (
     DEFAULT_POLICY,
     LABEL_POLICY,
@@ -153,6 +154,9 @@ def test_get_answers_the_whole_set_what_is_enforced_and_when_it_applies(tmp_path
         "permissions": DEFAULT_POLICY.to_dict(),
         "applies_from": APPLIES_FROM,
         "enforced": enforced_permissions("docker"),
+        # Per-action approvals ride the same reply (docs/WIRE_CONTRACT.md,
+        # "Per-action approvals").
+        "approvals": {**ActionPolicy().to_dict(), "applies_from": "next_action"},
     }
     assert APPLIES_FROM == "next_task"
 

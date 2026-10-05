@@ -28,6 +28,7 @@ from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .chat_documents import DocumentStore, register_document_tool
 from .files_out import FileSink
+from .action_policy import ActionApprovals
 from .herenow import ApprovalGate, HereNowConfig, register_herenow_tools
 from .loop import AgentLoop, IterationBudget, KillSwitch, LoopResult
 from .mcp_client import MCPManager, open_browser_gui_async, register_mcp_tools
@@ -307,6 +308,7 @@ def build_runtime(
     shell_session_key: str | None = None,
     context_providers: Sequence[Callable[[], list[dict]]] | None = None,
     policy: Any = None,
+    action_approvals: ActionApprovals | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -403,6 +405,13 @@ def build_runtime(
     restricted mail run uses it. ``base_instructions`` replaces the behaviour
     contract (:data:`chuk_agents_runtime.prompt.BASE_INSTRUCTIONS`) for a run
     that has a job of its own and none of the file or shell tools.
+
+    ``action_approvals`` (docs/WIRE_CONTRACT.md, "Per-action approvals") is
+    the executor's binding for one run: the coworker's approval policy, the
+    ask, where a lasting decision goes and the browser's site. With it the
+    class tools (``herenow_publish``, ``mail_send`` / ``mail_reply``, a
+    connector tool marked destructive, a page-changing browser tool) follow
+    that policy. Unset, only here.now in ``ask`` mode asks, as before.
 
     ``shell_session_key`` (docs/WIRE_CONTRACT.md, "Interactive shell and
     background commands") is the conversation a background job's end is
@@ -739,6 +748,9 @@ def build_runtime(
         herenow_config=herenow_config,
         herenow_gate=herenow_gate,
         expose_tools=include_tool_docs,
+        registry=registry,
+        mcp=manager,
+        action_approvals=action_approvals,
     )
     loop = AgentLoop(
         loop_model,

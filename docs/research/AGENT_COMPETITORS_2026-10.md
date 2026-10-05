@@ -384,6 +384,9 @@ Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
    send message/mail, payment, delete outside workspace, first login on a new site.
    Effort M. Where: `.../runtime/pai/approvals.py` (`ApprovalPolicy`),
    `lib/widgets/ask_user_card.dart`, `lib/widgets/agents_permissions/`.
+   Status 2026-10-05: host side done (bead chuk_chat-mxxm), classes `publish`,
+   `send_external`, `mcp_destructive`, `browser_act`; spec and app work list in
+   docs/WIRE_CONTRACT.md, "Per-action approvals".
 
 8. **Visible cost and budgets per agent and per run.**
    Why: the number one complaint for every competitor (Grok Bot 99 % in 3 days,

@@ -826,6 +826,8 @@ as an answer with nothing attached.
   - `decision`: `approved` | `denied`
   - `decision_reason`: `user` | `timeout` | `stopped`
   - `decided_at`: epoch seconds
+  - `decision_scope` (per-action approvals, only for a request with
+    `options`): what the user's answer covered (§ "Per-action approvals")
   A row without `decision` means the host is still blocked on the user.
   No row stays that way: when the run closes (`finished` / `failed` /
   `stopped`) the executor patches every still-open approval row of that
@@ -2055,6 +2057,266 @@ Runtime: `build_runtime(policy=…)`, `HOST_NETWORK_TOOLS`. App:
 (real daemon), `agents/host/tests/test_agent_permissions.py`,
 `agents/executor/tests/test_agent_permissions.py`,
 `agents/runtime/tests/test_network_permission.py`, `test/agents_permissions/`.
+
+## Per-action approvals (bead chuk_chat-mxxm)
+
+Host side IMPLEMENTED 2026-10-05. App side NOT YET (list at the end of this
+section). Additive: an older app keeps working with approve / deny, and an
+older host never sends the new fields. Research: docs/research/
+AGENT_COMPETITORS_2026-10.md, item 7.
+
+### The idea
+
+Competitors let the user approve a risky action once, always for this agent,
+or always for one site. Before this, only a here.now publish asked. Now a
+small set of **action classes** can ask. Per coworker, the user sets each class
+to `ask`, `allow` or `deny`. A card that asks offers `once`,
+`always_this_agent`, `always_this_site` (browser classes only) and `deny`. A
+lasting answer is stored on the host and applies from the next action, also
+inside the running task.
+
+The owner's rule stays: **everything is allowed by default**. Only an outward
+or clearly dangerous action asks.
+
+### Classes
+
+A class is decided by the **structure** of the tool call: the tool name, the
+MCP server that offers it, and the annotation that server declared. Never by
+the text of an argument.
+
+| class | tools | default | `always_this_site` |
+|---|---|---|---|
+| `publish` | `herenow_publish` (only while the here.now connector is enabled) | `ask` | no |
+| `send_external` | `mail_send`, `mail_reply` (the full mail set) | `ask` | no |
+| `mcp_destructive` | a tool of a connected MCP server that is not a browser server, when the server declared `annotations.destructiveHint: true` and not `readOnlyHint: true` | `ask` | no |
+| `browser_act` | a page-changing tool of a browser MCP server (a server that can open a page): `browser_click`, `browser_type`, `browser_fill_form`, `browser_select_option`, `browser_press_key`, `browser_drag`, `browser_file_upload`, `browser_handle_dialog`, `browser_evaluate`, `browser_run_code`, `browser_mouse_click_xy`, `browser_mouse_drag_xy` | **`allow`** | yes |
+
+- `publish`: the here.now connector setting still applies. In `auto` mode the
+  class never asks; only `deny` stops a publish. In `ask` mode the class policy
+  decides (`allow` publishes without a card).
+- `send_external`: the server rule stays in force under it (a mail to an
+  address that is not allowed still becomes a draft, docs/AGENT_MAIL.md §2).
+  The restricted run's `mail_draft_reply` only writes drafts and is not in the
+  class.
+- `mcp_destructive`: only the explicit flag counts. The MCP spec reads a
+  missing hint as "may be destructive", but that would put nearly every
+  connector tool behind a card. A server that declares nothing keeps the old
+  behaviour. `always_this_agent` covers every destructive connector tool of
+  that coworker; the card says so.
+- `browser_act` starts at `allow`. With `ask`, an agent that browses would ask
+  at the first click on every site. The user switches the class to `ask` per
+  coworker; from then on each site the user allows with `always_this_site` is
+  remembered. The site is the host name of the current tab of the session's
+  browser server (`browser_tabs list`, a read), read just before the call.
+  Navigation, snapshots, tabs, screenshots and waits are reads and never ask.
+
+Left out, because the tool call alone cannot show them reliably:
+
+- **`purchase_or_payment`**: no tool says that it pays. A payment through a
+  connector is caught only when its server marks the tool destructive
+  (`mcp_destructive`).
+- **`browser_submit`**: a click on a submit button and a click on a link are
+  the same `browser_click`. `browser_act` covers every page-changing tool
+  instead.
+- **`delete_files_outside_workspace`**: there is no delete tool. Files are
+  deleted through `run_command` or `python`, and the target is only in the
+  command text.
+- **dangerous shell / network commands**: the same. The sandbox switches
+  (`sudo`, `network`, § "Agent permissions") are the control for that.
+
+### Policy and sites
+
+- Modes: `ask` (card), `allow` (no card), `deny` (refused, no card; the model
+  gets "this coworker is not allowed to ...").
+- A site is a lower-case host name without `www.`, port or trailing dot. An
+  allowed site also covers its subdomains (`github.com` covers
+  `gist.github.com`). A site turns `ask` into `allow`; it never lifts a `deny`.
+  At most 200 sites per class.
+- Key: the coworker, the same key as its permissions (`host:<device id>`,
+  the roster id and `default` are the host's own coworker; a registered
+  coworker is itself). A run's policy is its session's coworker.
+- A subagent runs under its parent's binding: it asks with the parent's card
+  and follows the parent's policy.
+- Room member executors (`room:<agent>`) have no binding: only here.now in
+  `ask` mode asks there, as before.
+
+### Capability
+
+`host_route.capabilities` adds `action_approvals`. The app shows the approval
+settings and sends `approvals` only to a host that names it. The
+`approval_request` fields below are additive and need no capability check: an
+app reads them when they are present.
+
+### Frames: settings (`agent_permissions_get` / `_set`, extended)
+
+App -> host, the change (partial; `permissions` may be left out when only
+`approvals` change):
+
+```json
+{"type": "agent_permissions_set", "agent_id": "<agent id>",
+ "approvals": {"classes": {"send_external": "allow", "browser_act": "ask"},
+               "sites": {"browser_act": ["github.com", "shop.example"]}}}
+```
+
+- `classes` merges: only the named classes change.
+- `sites` replaces the WHOLE list of each class it names (`[]` clears it). The
+  app removes a site by sending the list without it.
+- Strict, like `permissions`: an unknown class, a mode other than
+  `ask` / `allow` / `deny`, a list for a non-site class, or a value that is not
+  a host name refuses the whole set. Neither `permissions` nor `approvals`
+  change then; the reply carries the unchanged sets plus `error`.
+
+Host -> app, `agent_permissions` (to both frames, and to every attached device
+after a change) gains:
+
+```json
+{"type": "agent_permissions", "agent_id": "<agent id>",
+ "permissions": {...}, "enforced": {...}, "applies_from": "next_task",
+ "approvals": {
+   "classes": {"publish": "ask", "send_external": "allow",
+               "mcp_destructive": "ask", "browser_act": "ask"},
+   "sites": {"browser_act": ["github.com"]},
+   "defaults": {"publish": "ask", "send_external": "ask",
+                "mcp_destructive": "ask", "browser_act": "allow"},
+   "applies_from": "next_action"}}
+```
+
+- `classes` always lists every class with its effective mode; `defaults` lets
+  the app mark a class that is still at its default.
+- `approvals.applies_from` is `next_action`: the runtime reads the policy at
+  every class call. (`applies_from` of the sandbox switches stays `next_task`.)
+- **A lasting decision from a run sends this frame too**, to every attached
+  device, so the settings page shows the new "always" at once.
+
+### Inbound: host -> app `approval_request` (extended)
+
+A class action that is not a publish:
+
+```json
+{"type": "approval_request", "approval_id": "<id>", "session_key": "<key>",
+ "action": "action_approval",
+ "action_class": "send_external" | "mcp_destructive" | "browser_act",
+ "options": ["once", "always_this_agent", "always_this_site"?, "deny"],
+ "summary": "<one line for the card>",
+ "tool": "<registry tool name>",
+ "site": "<host name>"?,
+ "details": {...}?,
+ "path": "", "name": "", "file_count": 0, "total_bytes": 0,
+ "base_url": "", "public": false}
+```
+
+A publish keeps its old frame (`action: "herenow_publish"` and the scan
+fields) and, when the host has a policy store, adds `action_class: "publish"`,
+`options`, `summary` and `tool`.
+
+`details` per class (every string cut; never a typed text, a form value or a
+password):
+
+| class | `details` |
+|---|---|
+| `send_external`, `mail_send` | `to` (list), `cc` (list)?, `subject`, `preview` (first 300 characters of the text), `attachments` (paths)? |
+| `send_external`, `mail_reply` | `reply_to` (the mail id), `preview` |
+| `mcp_destructive` | `server`, `remote_tool`, `arguments` (compact JSON, at most 600 characters) |
+| `browser_act` | `browser_tool`, `element`? (the page's own label of the target), `submit`? (`browser_type`), `key`? (`browser_press_key`), `fields`? (field names of `browser_fill_form`, never values), `accept`? (`browser_handle_dialog`), `files`? (`browser_file_upload`) |
+
+- `always_this_site` is in `options` only for `browser_act` and only when the
+  site is known.
+- The wait, the persisted row, the replay, Stop and ESTOP are those of a
+  publish (§ "Persisted subagent / file / approval events"):
+  `APPROVAL_WAIT_SECONDS` (600 s), then `denied` / `timeout`. The push
+  (`on_approval_pending`) carries `action_class` and `site`; its text names
+  the class only ("Open the app to allow or deny sending a mail."), never a
+  recipient, subject or argument.
+- A run that nobody can answer is still asked: the card waits in the thread
+  and in the push until the timeout. The model gets "the user declined" on a
+  no, a stop or a timeout, and "not allowed" for a `deny` mode.
+
+### Outbound: app -> host `approval_decision` (extended)
+
+```json
+{"type": "approval_decision", "approval_id": "<id>", "approved": true,
+ "scope": "once" | "always_this_agent" | "always_this_site" | "deny"}
+```
+
+- `approved: true` plus a `scope` from the request's `options` is that scope.
+- `approved: true` with no `scope`, an unknown scope or a scope the request did
+  not offer is `once`. **An older app (no `scope`) is therefore exactly
+  "approve once".** A decision never reaches further than what the card
+  showed.
+- `approved: false` (any scope) or `scope: "deny"` is a no for this call. A
+  "never" is the `deny` mode in the settings, not a card answer.
+- `always_this_agent` sets the class to `allow` for the coworker;
+  `always_this_site` adds the site to the class's list. Both are stored before
+  the tool runs and apply to the next call of the same run.
+
+### Persisted row
+
+The outcome patch (§ "Persisted subagent / file / approval events") gains
+`decision_scope` for a request with `options`, when the user answered:
+`once` | `always_this_agent` | `always_this_site` | `deny`. A replayed decided
+request is still informational, never a prompt.
+
+### Host side (implemented)
+
+Runtime: `chuk_agents_runtime/action_policy.py` (classes, modes, defaults,
+`ActionPolicy`, `ActionRequest`, `ActionDecision`, `parse_scope`,
+`ActionApprovals`, the card describers), `pai/approvals.py` (`ApprovalRule`
+with `action_class`, `action_rules`, `bind_publish`, the handler: policy
+first, then the card, then `remember`), `pai/wiring.py` (`loop_setup(...,
+registry, mcp, action_approvals)`), `mcp_client.py`
+(`MCPToolInfo.annotations`), `runtime.py` (`build_runtime(action_approvals=)`).
+Executor: `protocol.py` (`action_approval_request_payload`,
+`approval_class_fields`, `approval_decision_payload(scope=)`,
+`approval_outcome_fields(scope=)`), `executor.py` (`Executor(action_approvals=)`,
+`_action_approvals_binding`, the gate for `ActionRequest`, `_PendingApproval`
+scope, the child binding). Host: `agent_permissions.py` (`approvals` in
+`agent_permissions.json`, `update_approvals`, `remember_approval`, the frame
+fields, `ActionApprovalsBridge`, `APPROVALS_CAPABILITY`), `host.py` (the
+bridge, `_on_approvals_changed`, the capability), `serve.py` (pass-through),
+`notification_text.py` / `notify.py` (class push text). Tests:
+`agents/runtime/tests/test_action_approvals.py`,
+`agents/executor/tests/test_action_approvals.py`,
+`agents/host/tests/test_action_approvals.py`.
+
+Host-side record: `<state dir>/agent_permissions.json` gains a top-level
+`approvals` object, only what the user set:
+`{"version": 1, "agents": {...}, "approvals": {"<agent key>": {"classes":
+{"send_external": "allow"}, "sites": {"browser_act": ["github.com"]}}}}`.
+A bad entry is dropped on load (logged) and that coworker gets the defaults.
+
+### App side (to build)
+
+1. Parse the new fields on `AgentsRelayApprovalRequest`
+   (`agents_relay_client.dart`): `actionClass`, `options` (list of strings),
+   `summary`, `tool`, `site` (already there for takeovers), `details` (map),
+   and `decisionScope` on a replayed row. `isActionApproval` = `action ==
+   "action_approval"`.
+2. `sendApprovalDecision(approvalId, approved, {String? scope})`: add `scope`
+   when the user picked one. Leave it out for a request without `options`
+   (old host, takeover).
+3. The card (`agents_thread_view.dart`, where `_buildApprovalBar` draws the
+   publish today; reuse `AskUserCard`): a title from `summary`; a body per
+   class from `details` (mail: to / cc / subject / preview; connector:
+   server, tool, arguments in a monospace block; browser: the site, the
+   element, "and submit" when `submit` is true, the field names; publish: the
+   old scan line); one button per entry of `options`, in that order, with
+   these labels: `once` "Allow once", `always_this_agent` "Always for
+   <Coworker>" (for `mcp_destructive`: "Always allow connector actions for
+   <Coworker>"), `always_this_site` "Always on <site>", `deny` "Deny". `deny`
+   sends `approved: false, scope: "deny"`; the others send `approved: true`
+   and the scope.
+4. Replay: a decided row is informational (unchanged), and may show what the
+   answer covered from `decision_scope` ("Allowed always for <Coworker>").
+5. Settings (`lib/widgets/agents_permissions/agent_permissions_section.dart`,
+   `AgentsPermissionsService`), only for a host that names
+   `action_approvals`: a section "Approvals" with one row per class of
+   `approvals.classes` (a three-way choice Ask / Allow / Deny; mark the
+   `defaults` value), and under `browser_act` the list of
+   `approvals.sites.browser_act` with a remove action. Send changes as
+   `agent_permissions_set` with `approvals` only. Replace what is shown with
+   every `agent_permissions` frame (a lasting decision from a run sends one).
+   Text under the section: "Applies from the next action."
+6. The push needs nothing new: the host words it.
 
 ## Agent mail (bead chuk_chat-m0j3)
 

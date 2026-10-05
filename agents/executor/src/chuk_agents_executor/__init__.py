@@ -27,6 +27,7 @@ from .executor import Executor, ModelFactory, ModelSelect, StreamingModelClient
 from .secrets import SecretsVault, clean_entries
 from .shell import JobWakeRouter, job_payload, wake_text
 from .protocol import (
+    ACTION_ACTION_APPROVAL,
     ACTION_BROWSER_TAKEOVER,
     APPROVAL_AUTO,
     HEARTBEAT_PHASES,
@@ -42,6 +43,8 @@ from .protocol import (
     METHOD_STOP,
     PayloadTooLarge,
     approval_decision_payload,
+    action_approval_request_payload,
+    approval_class_fields,
     approval_request_payload,
     b64_to_frame,
     browser_data_payload,
@@ -104,6 +107,8 @@ __all__ = [
     "ModelSelect",
     "PayloadTooLarge",
     "approval_decision_payload",
+    "action_approval_request_payload",
+    "approval_class_fields",
     "approval_request_payload",
     "SandboxEnvironment",
     "StreamingModelClient",
@@ -130,6 +135,7 @@ __all__ = [
     "frame_to_b64",
     "heartbeat_payload",
     "takeover_request_payload",
+    "ACTION_ACTION_APPROVAL",
     "ACTION_BROWSER_TAKEOVER",
     "APPROVAL_AUTO",
     "HEARTBEAT_PHASES",

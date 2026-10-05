@@ -567,6 +567,11 @@ class MCPToolInfo:
     name: str
     description: str
     schema: dict
+    #: The tool's MCP ``annotations`` (``readOnlyHint``, ``destructiveHint``,
+    #: ...), as the server declared them; empty when it declared none. Hints
+    #: only: the per-action approvals read ``destructiveHint: true`` to ask
+    #: before a call (docs/WIRE_CONTRACT.md, "Per-action approvals").
+    annotations: dict = field(default_factory=dict)
 
 
 class MCPConnection:
@@ -893,9 +898,26 @@ def _tool_infos(listed: Any) -> list[MCPToolInfo]:
                 name=name,
                 description=_clip(getattr(tool, "description", ""), DESCRIPTION_CAP),
                 schema=schema,
+                annotations=_annotations(getattr(tool, "annotations", None)),
             )
         )
     return infos
+
+
+_HINTS = ("readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint")
+
+
+def _annotations(raw: Any) -> dict:
+    """The boolean hints of an MCP ``ToolAnnotations`` (an SDK model or a
+    dict). Anything that is not a real ``bool`` is dropped."""
+    if raw is None:
+        return {}
+    out: dict = {}
+    for key in _HINTS:
+        value = raw.get(key) if isinstance(raw, dict) else getattr(raw, key, None)
+        if isinstance(value, bool):
+            out[key] = value
+    return out
 
 
 def _normalize_result(server: str, tool: str, result: Any) -> dict:

@@ -108,6 +108,12 @@ from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
 from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
 from chuk_agents_runtime.mcp_client import BROWSER_OPEN_TOOL, auto_open_enabled
+from chuk_agents_runtime.action_policy import (
+    ActionApprovals,
+    ActionDecision,
+    ActionRequest,
+    parse_scope,
+)
 from chuk_agents_runtime.takeover import (
     STATUS_DONE as TAKEOVER_DONE,
     STATUS_SKIPPED as TAKEOVER_SKIPPED,
@@ -131,7 +137,6 @@ from .secrets import SecretsVault
 from .shell import JobWakeRouter
 from .protocol import (
     ACTION_BROWSER_TAKEOVER,
-    ACTION_HERENOW_PUBLISH,
     APPROVAL_AUTO,
     APPROVAL_BY_USER,
     APPROVAL_STOPPED,
@@ -144,6 +149,8 @@ from .protocol import (
     MAX_BROWSER_CHUNK,
     METHOD_EVENT,
     USER_BROWSER,
+    action_approval_request_payload,
+    approval_class_fields,
     approval_outcome_fields,
     approval_request_payload,
     b64_to_frame,
@@ -649,14 +656,22 @@ class _PendingApproval:
     #: or a takeover the host resolved itself); a second decision is a no-op.
     decided: bool = False
     lock: threading.Lock = field(default_factory=threading.Lock)
+    #: The answers the request offered (per-action approvals); empty for a
+    #: request without classes, whose answer is only yes or no.
+    options: tuple[str, ...] = ()
+    #: What the user's answer covered (``once`` / ``always_this_agent`` /
+    #: ``always_this_site`` / ``deny``), set with the decision.
+    scope: str = "once"
 
-    def decide(self, approved: bool) -> bool:
-        """Record a decision; False when one was already recorded."""
+    def decide(self, approved: bool, scope: Any = None) -> bool:
+        """Record a decision; False when one was already recorded. ``scope``
+        is the app's raw value: it is checked against ``options``."""
         with self.lock:
             if self.decided:
                 return False
             self.decided = True
-            self.approved = bool(approved)
+            self.approved = approved is True
+            self.scope = parse_scope(self.approved, scope, self.options or None)
             return True
 
 
@@ -984,6 +999,7 @@ class Executor:
         calls=None,
         on_call_frame: Callable[[dict], Any] | None = None,
         agent_mail=None,
+        action_approvals=None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -1105,6 +1121,12 @@ class Executor:
         # returns the current list (each answered with one ``agent_list``).
         # ``None`` -> those frames are unknown.
         self._on_agent_frame = on_agent_frame
+        # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
+        # approvals"): the host's store of each coworker's approval policy.
+        # ``policy_for(session_key)`` reads it, ``remember(session_key,
+        # action_class, scope, site)`` stores a lasting decision. ``None``
+        # (a room member, the tests): only here.now in ``ask`` mode asks.
+        self._action_approvals = action_approvals
         # The agent calls the user (docs/WIRE_CONTRACT.md, "The agent calls
         # the user"): the host's call service (``bound(session_key)`` gives a
         # task ``call_user`` / ``call_status``) and the hook that takes the
@@ -3148,21 +3170,46 @@ class Executor:
         publish does not happen.
         """
 
-        def gate(req: PublishRequest) -> bool:
+        def gate(req: PublishRequest | ActionRequest) -> bool | ActionDecision:
+            action = req if isinstance(req, ActionRequest) else None
+            publish = action.publish if action is not None else req
             approval_id = uuid4().hex
-            pending = _PendingApproval()
+            pending = _PendingApproval(options=tuple(action.options) if action else ())
             with self._approvals_lock:
                 self._approvals[approval_id] = pending
-            payload = approval_request_payload(
-                approval_id=approval_id,
-                path=req.path,
-                name=req.name,
-                file_count=req.file_count,
-                total_bytes=req.total_bytes,
-                base_url=req.base_url,
-                public=req.public,
-                session_key=session_key,
-            )
+            if publish is not None:
+                payload = approval_request_payload(
+                    approval_id=approval_id,
+                    path=publish.path,
+                    name=publish.name,
+                    file_count=publish.file_count,
+                    total_bytes=publish.total_bytes,
+                    base_url=publish.base_url,
+                    public=publish.public,
+                    session_key=session_key,
+                )
+                if action is not None:
+                    # Per-action approvals: the class and its answers ride on
+                    # the publish frame, additively.
+                    payload.update(
+                        approval_class_fields(
+                            action_class=action.action_class,
+                            options=action.options,
+                            summary=action.summary,
+                            tool=action.tool,
+                        )
+                    )
+            else:
+                payload = action_approval_request_payload(
+                    approval_id=approval_id,
+                    action_class=action.action_class,
+                    options=action.options,
+                    summary=action.summary,
+                    tool=action.tool,
+                    site=action.site,
+                    details=action.details,
+                    session_key=session_key,
+                )
             # The row first, the frame second (docs/WIRE_CONTRACT.md,
             # cowork-266): a replay must show the request whatever the socket
             # did, and its outcome is patched into this row below.
@@ -3176,31 +3223,80 @@ class Executor:
                     {
                         "approval_id": approval_id,
                         "request_id": request_id,
-                        "action": ACTION_HERENOW_PUBLISH,
+                        "action": payload["action"],
+                        **(
+                            {"action_class": action.action_class}
+                            if action is not None
+                            else {}
+                        ),
+                        **({"site": action.site} if action is not None and action.site else {}),
                         **({"session_key": session_key} if session_key else {}),
                     },
                 )
                 deadline = time.monotonic() + APPROVAL_WAIT_SECONDS
+
+                def answer(approved: bool) -> bool | ActionDecision:
+                    if action is None:
+                        return approved
+                    scope = pending.scope if approved else "deny"
+                    return ActionDecision(approved=approved, scope=scope)
+
                 # Poll so a Stop reaches the wait: the loop only checks the kill
                 # switch between tool calls, and this call is inside one.
                 with self._waiting_user(request_id):
                     while True:
                         if kill.interrupted() or kill.estop_engaged():
                             self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                            return False
+                            return answer(False)
                         if pending.event.wait(self._poll):
-                            return pending.approved
+                            return answer(pending.approved)
                         if time.monotonic() >= deadline:
                             self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                            return False
+                            return answer(False)
             finally:
                 with self._approvals_lock:
                     self._approvals.pop(approval_id, None)
 
         return gate
 
+    def _action_approvals_binding(
+        self, request_id: str, kill: KillSwitch, session_key: str | None
+    ) -> ActionApprovals | None:
+        """The run's per-action approval binding, or ``None`` when the host
+        keeps no approval policy (then only here.now in ``ask`` mode asks).
+
+        The policy is read live (``policy_for``): an "always" decision applies
+        to the next call of the same run. The site is the host name of the
+        current tab of the session's browser server, read only when a site
+        class asks."""
+        hook = self._action_approvals
+        if hook is None:
+            return None
+        key = session_key or ""
+
+        def policy():
+            return hook.policy_for(key)
+
+        def remember(action_class: str, scope: str, site: str) -> None:
+            hook.remember(key, action_class, scope, site)
+
+        def site() -> str:
+            return host_of(self._takeover_page_url(session_key or ""))
+
+        return ActionApprovals(
+            policy=policy,
+            ask=self._make_approval_gate(request_id, kill, session_key),
+            remember=remember,
+            site=site,
+        )
+
     def _close_approval(
-        self, pending: _PendingApproval, *, approved: bool, reason: str
+        self,
+        pending: _PendingApproval,
+        *,
+        approved: bool,
+        reason: str,
+        scope: str | None = None,
     ) -> None:
         """Patch the outcome into the persisted ``approval_request`` row, once.
         Best effort: a store failure loses the stamp, never the decision."""
@@ -3213,7 +3309,7 @@ class Executor:
                 store.update_event(
                     pending.mid,
                     approval_outcome_fields(
-                        approved=approved, reason=reason, at=time.time()
+                        approved=approved, reason=reason, at=time.time(), scope=scope
                     ),
                 )
             finally:
@@ -3260,9 +3356,14 @@ class Executor:
             pending = self._approvals.get(approval_id)
         if pending is None:
             return  # a decision for a publish that already ended: no-op
-        if not pending.decide(bool(payload.get("approved"))):
+        if not pending.decide(payload.get("approved") is True, payload.get("scope")):
             return  # the host already resolved it (a takeover's "auto")
-        self._close_approval(pending, approved=pending.approved, reason=APPROVAL_BY_USER)
+        self._close_approval(
+            pending,
+            approved=pending.approved,
+            reason=APPROVAL_BY_USER,
+            scope=pending.scope if pending.options else None,
+        )
         pending.event.set()
 
     # -- browser takeover (docs/WIRE_CONTRACT.md, "Browser takeover") ------
@@ -3727,7 +3828,14 @@ class Executor:
         # env for the child processes, the two tools, the dispatch scrubber.
         # Children get the same access through the subagent config below.
         secrets_access = self._secrets_access(request_id, run.kill, session_key)
-        subagents = self._subagent_config(request_id, session_key, secrets_access)
+        # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action approvals"):
+        # the coworker's policy, the same gate as a publish, and the store for
+        # a lasting decision. Children get the same binding: a subagent never
+        # sends a mail the parent would have had to ask for.
+        action_approvals = self._action_approvals_binding(request_id, run.kill, session_key)
+        subagents = self._subagent_config(
+            request_id, session_key, secrets_access, action_approvals=action_approvals
+        )
         loop = build_runtime(
             model,
             session=(self._account_session_provider()
@@ -3744,6 +3852,7 @@ class Executor:
             subagents=subagents,
             herenow_config=herenow_config,
             herenow_gate=herenow_gate,
+            action_approvals=action_approvals,
             # This session's automation tools (docs/WIRE_CONTRACT.md,
             # "Automations"): bound to ``session_key`` here, so the model can
             # only ever name its own schedules and watchers.
@@ -4773,7 +4882,12 @@ class Executor:
 
     # -- subagents (§7.6) ------------------------------------------------
     def _subagent_config(
-        self, request_id: str, session_key: str, secrets_access=None
+        self,
+        request_id: str,
+        session_key: str,
+        secrets_access=None,
+        *,
+        action_approvals: ActionApprovals | None = None,
     ) -> SubagentConfig | None:
         """Build the child wiring for one task, or ``None`` when subagents are off.
 
@@ -4813,6 +4927,12 @@ class Executor:
                     **({"secrets": secrets_access} if secrets_access is not None else {}),
                     # The parent's permissions gate the child's tools too.
                     **({"policy": parent_policy} if parent_policy is not None else {}),
+                    # So do the parent's per-action approvals.
+                    **(
+                        {"action_approvals": action_approvals}
+                        if action_approvals is not None
+                        else {}
+                    ),
                     "session": (self._account_session_provider()
                                 if self._account_session_provider is not None else None),
                 }
