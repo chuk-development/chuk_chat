@@ -1915,6 +1915,166 @@ Host → app, the terminal answer (same request stream):
   decided state.
 - Strings in `strings_en.dart` / `strings_de.dart`.
 
+## What did it do: run changes and undo (bead chuk_chat-4qry)
+
+Python side IMPLEMENTED 2026-10-05 (`chuk_agents_runtime.run_changes`,
+`GitWorkspace.begin_run` / `revert_paths`, `Executor._answer_run_changes`).
+App side: open (work list below). Additive: an older app ignores `changes` on
+`done`, and an older host answers the two new frames with `unknown payload
+type`. Research item 14 (docs/research/AGENT_COMPETITORS_2026-10.md).
+
+### The idea
+
+The user opens a run and sees which files the agent changed. The user can
+undo the run, or only some of its files. The undo is a NEW commit in the
+workspace's git journal. History is never rewritten.
+
+- Every workspace commit a run makes carries the trailer
+  `run-id: <run_id>` in its body. A subagent's work enters through a merge
+  commit that carries the same trailer, so it counts for the run.
+- Before a run starts, the host commits all pending changes as an untagged
+  checkpoint (`checkpoint: changes outside the agent`). An edit the user made
+  by hand between runs is therefore never part of a run, and an undo never
+  reverts it. An edit the user makes WHILE a run works can be committed with
+  the run's next action; the host cannot tell those apart.
+- The agent's own state is never listed and never reverted: `.agents/`
+  (journal, jobs, automations), `memory/`, `transcript/`.
+- A file is undoable when its content now is exactly what the run left and
+  nothing is pending on it. Otherwise it is a conflict. A later change that
+  was undone again does not block.
+- A workspace without git (or a run that changed no file) answers "nothing to
+  undo". Asking never creates a repo.
+- Honest boundary (as for `workspace_undo`): only workspace files come back.
+  Sent mail, API calls and host changes are NOT undone. The app must say so.
+
+### `done` (extended)
+
+```json
+{"type": "done", ..., "changes": {"files": 3, "additions": 42, "deletions": 7,
+                                  "undone": 0}?}
+```
+
+- `files`: workspace files the run added, modified or deleted (net: a file
+  the run created and deleted again does not count).
+- `undone`: how many of those files are back to their state before the run
+  (an earlier undo, or reverted by hand).
+- Absent when the run changed no file or the workspace has no git.
+- A replayed `done` carries the same block. After an undo the host updates
+  it, so a replayed card shows the undone state.
+
+### Outbound: app → host `run_changes_get`
+
+```json
+{"type": "run_changes_get", "run_id": "<run id>"}
+{"type": "run_changes_get", "session_key": "<thread>", "last": true}
+```
+
+`run_id` names one run. Without it, `session_key` (+ `last`, default true)
+names that thread's most recently started run.
+
+### Inbound: host → app `run_changes` (terminal)
+
+```json
+{"type": "run_changes", "run_id": "<run id>", "session_key": "<thread>",
+ "files": [
+   {"path": "notes/plan.md", "change": "added", "additions": 12, "deletions": 0,
+    "undoable": true},
+   {"path": "report.csv", "change": "modified", "additions": 3, "deletions": 1,
+    "undoable": false,
+    "conflict": {"path": "report.csv", "reason": "changed_later",
+                 "runs": ["<later run id>"], "outside": true}},
+   {"path": "old.txt", "change": "deleted", "additions": 0, "deletions": 9,
+    "undoable": false, "undone": true},
+   {"path": "logo.bin", "change": "added", "additions": 0, "deletions": 0,
+    "undoable": true, "binary": true}],
+ "files_total": 812?,
+ "commits": [{"commit": "<sha>", "short": "1a2b3c4d", "time": "<ISO 8601>",
+              "subject": "write_file: notes/plan.md", "seq": 17, "files": 1}],
+ "commits_total": 260?, "actions": 23,
+ "summary": {"files": 3, "additions": 15, "deletions": 10, "undone": 1},
+ "undoable": true, "reason": "<reason>"?,
+ "conflicts": [{"path": "...", "reason": "...", "runs": [...]?, "outside": true?}]?}
+```
+
+- `change`: `added` | `modified` | `deleted`. `additions` / `deletions` are
+  line counts; `binary: true` means no line counts.
+- `files` is capped at 500 (`files_total` then gives the real count);
+  `commits` lists the run's commits that changed a file, the newest 200
+  (`commits_total`). `actions` counts all the run's commits, journal-only
+  ones (a read, a web call) included.
+- `conflict.reason`: `changed_later` (a later commit changed the file;
+  `runs` names later runs, `outside: true` means a change outside any run,
+  for example the user's own edit) or `uncommitted` (the file has edits on
+  disk that are not committed yet).
+- `undoable`: at least one file can be undone without `force`. When true and
+  some files conflict, `conflicts` lists them.
+- `reason` (when `undoable` is false): `no_history` (no git in the
+  workspace), `not_found` (no such run), `no_changes` (the run changed no
+  file), `already_undone`, `conflicts` (every open file conflicts),
+  `run_active` (a run works in this workspace right now; the list is still
+  sent), `failed` (git could not be read).
+
+### Outbound: app → host `run_undo`
+
+```json
+{"type": "run_undo", "run_id": "<run id>", "paths": ["notes/plan.md"]?,
+ "force": true?}
+```
+
+- No `paths`: undo every file of the run. With `paths`: only those (paths as
+  `run_changes` listed them).
+- `force` must be the JSON `true`. Without it a conflict refuses the whole
+  undo and nothing changes.
+
+### Inbound: host → app `run_undo_result` (terminal)
+
+```json
+{"type": "run_undo_result", "run_id": "<run id>", "session_key": "<thread>",
+ "ok": true, "reverted": ["notes/plan.md"], "conflicts": [],
+ "skipped": [{"path": "x.txt", "reason": "not_in_run"}]?,
+ "forced": true?, "commit": "<sha of the undo commit>"?,
+ "changes": {"files": 3, "additions": 15, "deletions": 10, "undone": 2}?,
+ "note": "Files in the workspace are restored. Effects outside ...",
+ "code": "<reason>"?, "error": "<text for the user>"?}
+```
+
+- `ok: true`: the files in `reverted` are back to their state before the run,
+  in one new commit (body trailer `undo-of: <run_id>`). Before it, pending
+  changes are committed as an untagged checkpoint, so a forced undo over an
+  uncommitted edit keeps that edit in the history. `changes` is the updated
+  `done` block.
+- `ok: false`: nothing changed. `code` is one of `no_history`, `not_found`,
+  `no_changes`, `already_undone`, `conflicts` (then `conflicts` lists the
+  files, same shape as above), `run_active`, `failed`. `error` is a sentence
+  the app can show as it is.
+- `skipped.reason`: `not_in_run` (the run did not change that path),
+  `already_undone`, `outside_workspace` (an absolute path, a `..`, or a path
+  whose real directory is outside the workspace through a symlink).
+- With `force: true` and conflicts, `ok` is true, `forced` is true and
+  `conflicts` lists the files that were overwritten.
+
+### App work list
+
+- `AgentsRelayDone`: parse `changes` (`files`, `additions`, `deletions`,
+  `undone`), live and replayed.
+- Under an answer whose `done` has `changes.files > 0`: one line
+  "3 files changed · Undo" (`lib/widgets/agent_run_views.dart`). When
+  `undone == files`: "Changes undone", no button. Partly undone:
+  "3 files changed · 1 undone · Undo".
+- Tap on the line: a sheet with `run_changes_get {run_id}`: one row per file
+  (icon for added / modified / deleted, path, `+a −d`, a check box when
+  `undoable`), the conflict reason under a conflicting row ("Changed later by
+  another run" / "Changed by you" / "Edited, not saved yet"), and the
+  commits as a collapsed timeline (time, subject).
+- "Undo" sends `run_undo` with the checked paths (all checked by default).
+  On `code: conflicts`: a dialog that lists the files and offers "Undo
+  anyway" (`force: true`) or "Cancel". On `run_active`: "Wait until the
+  agent is done" with the button off while the thread runs.
+- After `ok: true`: update the line from `changes`, show a snackbar with the
+  count, and show the `note` once (effects outside the workspace stay).
+- Strings in `strings_en.dart` / `strings_de.dart`. Chuk's components, one
+  button family, no glow (docs/DESIGN.md).
+
 ## Agent status: model, spend, clock, sandbox (bead cowork-6ag)
 
 Python side IMPLEMENTED 2026-09-07 (`chuk_agents_executor.protocol.agent_status_payload`,

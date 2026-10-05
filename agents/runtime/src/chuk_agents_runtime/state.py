@@ -142,7 +142,11 @@ CREATE TABLE IF NOT EXISTS runs (
     -- are rows of ``usage_lines``.
     prompt_tokens     INTEGER NOT NULL DEFAULT 0,
     completion_tokens INTEGER NOT NULL DEFAULT 0,
-    cost_eur          REAL
+    cost_eur          REAL,
+    -- What the run changed in the workspace, as JSON
+    -- (chuk_agents_runtime.run_changes.run_change_summary): files, additions,
+    -- deletions, undone. NULL = no history or no file changed.
+    changes_json      TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
@@ -195,6 +199,8 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("prompt_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("completion_tokens", "INTEGER NOT NULL DEFAULT 0"),
     ("cost_eur", "REAL"),
+    # "What did it do" (bead chuk_chat-4qry). Old rows read NULL: unknown.
+    ("changes_json", "TEXT"),
 )
 
 #: The timing columns, in the order :meth:`StateStore.finish_run` writes them.
@@ -246,6 +252,18 @@ def run_stamp_fields(row: dict | None) -> dict[str, Any]:
         if value is not None:
             fields[key] = int(value)
     return fields
+
+
+def run_changes_field(row: dict | None) -> dict[str, Any] | None:
+    """The ``changes`` block of a ``done`` from a ``runs`` row, or ``None``."""
+    raw = (row or {}).get("changes_json")
+    if not raw:
+        return None
+    try:
+        value = json.loads(raw)
+    except (TypeError, ValueError):
+        return None
+    return value if isinstance(value, dict) and value.get("files") else None
 
 
 def _close_open_approvals(
@@ -1077,6 +1095,16 @@ class StateStore:
         ).fetchone()
         return dict(row) if row else None
 
+    def set_run_changes(self, run_id: str, changes: dict | None) -> None:
+        """Store the run's change summary (docs/WIRE_CONTRACT.md, "What did it
+        do: run changes and undo"); ``None`` clears it."""
+        text = json.dumps(changes, separators=(",", ":")) if changes else None
+
+        def op(cur: sqlite3.Cursor) -> None:
+            cur.execute("UPDATE runs SET changes_json=? WHERE run_id=?", (text, run_id))
+
+        self._write(op)
+
     def latest_run(self, session_key: str) -> dict | None:
         """The most recently started run for a session, or None."""
         row = self._conn().execute(
@@ -1128,6 +1156,11 @@ class StateStore:
             cost = cost_block(lines.get(r["run_id"], []))
             if cost:
                 events[-1]["cost"] = cost
+            # What the run changed in the workspace ("What did it do"): the
+            # same block a live done carries.
+            changes = run_changes_field(dict(r))
+            if changes:
+                events[-1]["changes"] = changes
         return events
 
     def mark_run_notified(self, run_id: str) -> bool:
