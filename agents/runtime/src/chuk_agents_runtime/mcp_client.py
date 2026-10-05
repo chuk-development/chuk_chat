@@ -626,6 +626,11 @@ class MCPConnection:
         #: Called on the transport thread once the server listed its tools.
         #: The manager uses it to keep :class:`MCPToolCache` current.
         self.on_listed: Callable[["MCPConnection"], None] | None = None
+        #: Called on the transport thread when a handshake ends without a
+        #: tool list (an error or a timeout, not a close). The manager uses it
+        #: to mark the server in :class:`MCPToolCache`, so the next start does
+        #: not wait for it again (bead chuk_chat-l16i).
+        self.on_failed: Callable[["MCPConnection"], None] | None = None
 
     # -- lifecycle --------------------------------------------------------
 
@@ -743,6 +748,13 @@ class MCPConnection:
             self._error = f"{type(exc).__name__}: {exc}"
         finally:
             self._session = None
+            # Before the waiter wakes: it may read what the hook recorded.
+            failed_hook = self.on_failed
+            if failed_hook is not None and not self._ready.is_set() and not self._closed:
+                try:
+                    failed_hook(self)
+                except Exception:  # noqa: BLE001 — a cache write must not hide the error
+                    pass
             # Unblock a `start()` that is still waiting on a failed connect.
             self._ready.set()
 
@@ -1071,12 +1083,21 @@ class MCPToolCache:
     stored. Tool names, descriptions and schemas are what the server publishes
     to every client. Thread-safe; every failure is silent (a cold cache costs
     one waited handshake, nothing else).
+
+    A server that has never listed its tools and whose last handshake failed
+    is remembered too, as ``{"failed_at": <unix time>}`` instead of a list
+    (bead chuk_chat-l16i). Without that mark such a server had no entry, so
+    every new manager (every host restart) waited for it to fail again: two
+    broken connectors cost ~3 s before the first model call. A marked server
+    is dialed in the background; when it answers, its tool list replaces the
+    mark. A list is never replaced by a mark: a known server that fails once
+    keeps its tools for the next start.
     """
 
     def __init__(self, path: str | os.PathLike | None) -> None:
         self._path = Path(path) if path else None
         self._lock = threading.Lock()
-        self._data: dict[str, list[dict]] | None = None
+        self._data: dict[str, list[dict] | dict] | None = None
 
     @staticmethod
     def key(config: MCPServerConfig) -> str:
@@ -1090,23 +1111,28 @@ class MCPToolCache:
         raw = json.dumps(ident, sort_keys=True, ensure_ascii=False)
         return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
-    def _load(self) -> dict[str, list[dict]]:
+    def _load(self) -> dict[str, list[dict] | dict]:
         if self._data is not None:
             return self._data
-        data: dict[str, list[dict]] = {}
+        data: dict[str, list[dict] | dict] = {}
         if self._path is not None:
             try:
                 raw = json.loads(self._path.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 raw = {}
             if isinstance(raw, dict):
-                data = {k: v for k, v in raw.items() if isinstance(v, list)}
+                data = {
+                    k: v
+                    for k, v in raw.items()
+                    if isinstance(v, list) or (isinstance(v, dict) and "failed_at" in v)
+                }
         self._data = data
         return data
 
     def get(self, config: MCPServerConfig) -> list[MCPToolInfo]:
         with self._lock:
-            items = list(self._load().get(self.key(config)) or [])
+            value = self._load().get(self.key(config))
+            items = list(value) if isinstance(value, list) else []
         tools: list[MCPToolInfo] = []
         for item in items:
             if not isinstance(item, dict) or not isinstance(item.get("name"), str):
@@ -1141,24 +1167,47 @@ class MCPToolCache:
             if data.get(key) == rows:
                 return
             data[key] = rows
-            if self._path is None:
+            self._write_locked(data)
+
+    def failed(self, config: MCPServerConfig) -> bool:
+        """Whether the server has no known tool list and its last handshake
+        failed (see the class docs)."""
+        with self._lock:
+            value = self._load().get(self.key(config))
+        return isinstance(value, dict)
+
+    def put_failed(self, config: MCPServerConfig) -> None:
+        """Remember that the server's handshake failed. A no-op when its tool
+        list is known or the mark is already there, so a server that fails on
+        every start writes the file once."""
+        key = self.key(config)
+        with self._lock:
+            data = self._load()
+            if key in data:
                 return
-            # One temp file per writer: two hosts on one state dir must not
-            # replace each other's half-written file.
-            tmp = self._path.with_name(
-                f"{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
-            )
+            data[key] = {"failed_at": round(time.time())}
+            self._write_locked(data)
+
+    def _write_locked(self, data: dict) -> None:
+        """Replace the file with [data]. The caller holds ``_lock``."""
+        if self._path is None:
+            return
+        # One temp file per writer: two hosts on one state dir must not
+        # replace each other's half-written file.
+        tmp = self._path.with_name(
+            f"{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                json.dump(data, handle)
+            os.replace(tmp, self._path)
+        except (OSError, TypeError, ValueError):
             try:
-                self._path.parent.mkdir(parents=True, exist_ok=True)
-                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-                with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                    json.dump(data, handle)
-                os.replace(tmp, self._path)
-            except (OSError, TypeError, ValueError):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
+                os.unlink(tmp)
+            except OSError:
+                pass
 
 
 class MCPManager:
@@ -1190,6 +1239,10 @@ class MCPManager:
             )
         )
         self._registered: set[str] = set()
+        #: Servers a lazy start dials in the background without a tool list:
+        #: their last handshake failed (:meth:`MCPToolCache.failed`). Their
+        #: tools join at the next start after the handshake succeeds.
+        self._background: set[str] = set()
 
     @classmethod
     def from_workspace(
@@ -1220,8 +1273,12 @@ class MCPManager:
         waited for, so the cost is the slowest server, not the sum. With
         ``lazy`` and a :attr:`tool_cache` that knows a server's tools, that
         server is not waited for at all: its cached tools are offered and the
-        handshake finishes in the background. ``lazy=False`` (the app's probe)
-        waits for every server, also one an earlier lazy start left running.
+        handshake finishes in the background. A server the cache marks as
+        failed (no tool list, last handshake failed) is not waited for either:
+        it is dialed in the background and reported unusable for now. Only a
+        server the cache has never seen is waited for. ``lazy=False`` (the
+        app's probe) waits for every server, also one an earlier lazy start
+        left running.
         """
         status: dict[str, bool] = {}
         waiting: list[tuple[str, Any]] = []
@@ -1234,6 +1291,8 @@ class MCPManager:
                 if getattr(existing, "pending", False):
                     if lazy and existing.usable():
                         status[config.name] = True
+                    elif lazy and config.name in self._background:
+                        status[config.name] = False
                     else:
                         waiting.append((config.name, existing))
                     continue
@@ -1253,10 +1312,12 @@ class MCPManager:
                 blocking.append((config.name, connection))
                 continue
             cached = self.tool_cache.get(config) if self.tool_cache is not None else []
+            known_failed = bool(
+                not cached and self.tool_cache is not None and self.tool_cache.failed(config)
+            )
             if cached:
                 connection.seed_tools(cached)
-            if self.tool_cache is not None:
-                connection.on_listed = self._cache_listed(config)
+            self._wire_cache(config, connection)
             try:
                 begun = bool(begin())
             except Exception as exc:  # noqa: BLE001
@@ -1268,6 +1329,12 @@ class MCPManager:
                 continue
             if lazy and cached:
                 status[config.name] = True
+                continue
+            if lazy and known_failed:
+                # Failed last time: do not hold the task for it to fail again.
+                # Not recorded as a failure either: it is still connecting.
+                self._background.add(config.name)
+                status[config.name] = False
                 continue
             waiting.append((config.name, connection))
         for name, connection in blocking:
@@ -1296,6 +1363,22 @@ class MCPManager:
         connection = self.connections.get(name)
         error = getattr(connection, "error", None) if connection is not None else None
         self.errors.append(f"{name}: not available ({error or 'unknown error'})")
+
+    def _wire_cache(self, config: MCPServerConfig, connection: Any) -> None:
+        """Keep :attr:`tool_cache` current from [connection]'s handshakes."""
+        if self.tool_cache is None or not isinstance(connection, MCPConnection):
+            return
+        connection.on_listed = self._cache_listed(config)
+        connection.on_failed = self._cache_failed(config)
+
+    def _cache_failed(self, config: MCPServerConfig) -> Callable[[Any], None]:
+        cache = self.tool_cache
+
+        def failed(connection: Any) -> None:
+            if cache is not None:
+                cache.put_failed(config)
+
+        return failed
 
     def _cache_listed(self, config: MCPServerConfig) -> Callable[[Any], None]:
         cache = self.tool_cache
@@ -1429,6 +1512,8 @@ class MCPManager:
                 pass
         connection = self._factory(config)
         self.connections[server] = connection
+        self._background.discard(server)
+        self._wire_cache(config, connection)
         try:
             ok = connection.start()
         except Exception as exc:  # noqa: BLE001

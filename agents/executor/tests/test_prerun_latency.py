@@ -168,3 +168,48 @@ def test_a_restarted_executor_does_not_wait_for_a_known_connector(tmp_path):
         assert any("VIA MCP" in json.dumps(e) for e in tool_events), tool_events
     finally:
         executor.stop()
+
+
+def _broken() -> dict:
+    """A connector that never answers: the process exits after 1.5 s."""
+    return {
+        "name": "broken",
+        "command": sys.executable,
+        "args": ["-c", "import time; time.sleep(1.5)"],
+        "auth": "none",
+        "connect_timeout": 10.0,
+        "call_timeout": 10.0,
+    }
+
+
+def test_a_restart_does_not_wait_for_a_connector_that_failed(tmp_path):
+    """Bead chuk_chat-l16i: after a host restart the first task still waited
+    ~3 s for MCP, because two connectors that fail on every handshake never
+    got a cache entry and were waited for by every new manager."""
+    servers = [*_servers(), _broken()]
+
+    # First host life: nothing is known; both are waited for, and the broken
+    # one is marked in the cache file.
+    executor, _ = _pair(tmp_path, lambda: MockModelClient(["hi"]))
+    manager = executor._session_mcp_manager("thread-1", servers)
+    assert manager is not None
+    started = time.monotonic()
+    assert manager.start() == {"fake": True, "broken": False}
+    assert time.monotonic() - started >= 1.0
+    executor._close_mcp_managers()
+
+    # Second host life (a new executor on the same state dir): no wait for
+    # either connector; the fake's tools come from the cache.
+    executor, _ = _pair(tmp_path, lambda: MockModelClient(["hi"]))
+    manager = executor._session_mcp_manager("thread-2", servers)
+    assert manager is not None
+    started = time.monotonic()
+    status = manager.start()
+    waited = time.monotonic() - started
+    try:
+        assert status == {"fake": True, "broken": False}
+        assert waited < 0.3, waited
+        assert manager.is_alive("fake")
+        assert manager.call("fake", "shout", {"text": "hi"})["content"] == "HI"
+    finally:
+        executor._close_mcp_managers()

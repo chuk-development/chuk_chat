@@ -215,3 +215,128 @@ def test_a_broken_cache_file_is_ignored(tmp_path):
     assert cache.get(_config("x")) == []
     cache.put(_config("x"), [MCPToolInfo(name="a", description="", schema={})])
     assert [t.name for t in MCPToolCache(path).get(_config("x"))] == ["a"]
+
+
+# -- servers that fail (bead chuk_chat-l16i) --------------------------------
+#
+# After a host restart the first task still waited ~3 s for MCP: two of five
+# connectors failed on every handshake, so they never got a tool list in the
+# cache, and every new manager waited for them to fail again.
+
+
+def test_a_server_that_failed_is_not_waited_for_after_a_restart(tmp_path):
+    path = tmp_path / "t.json"
+    good = _config("github")
+    bad = _config("broken")
+    # First host life: nothing is known, so the start waits for both, and the
+    # broken server is marked.
+    manager = MCPManager(
+        [good, bad],
+        connection_factory=lambda c: _timed(0.3, ["t"], fail=c.name == "broken")(c),
+        tool_cache=MCPToolCache(path),
+    )
+    try:
+        assert manager.start() == {"github": True, "broken": False}
+    finally:
+        manager.close()
+    stored = json.loads(path.read_text(encoding="utf-8"))
+    assert sorted(type(v).__name__ for v in stored.values()) == ["dict", "list"]
+    assert MCPToolCache(path).failed(bad)
+    assert not MCPToolCache(path).failed(good)
+
+    # Second host life: a new cache object on the same file. The broken server
+    # takes 2 s to fail; the start does not wait for it, nor for the good one.
+    manager = MCPManager(
+        [good, bad],
+        connection_factory=lambda c: _timed(
+            2.0 if c.name == "broken" else 1.0, ["t"], fail=c.name == "broken"
+        )(c),
+        tool_cache=MCPToolCache(path),
+    )
+    try:
+        started = time.monotonic()
+        status = manager.start()
+        assert time.monotonic() - started < 0.2
+        assert status == {"github": True, "broken": False}
+        assert sorted(manager.pending()) == ["broken", "github"]
+        # Only the known tools are offered; nothing is recorded as an error
+        # while the broken server is still connecting.
+        assert manager.register(ToolRegistry()) == [tool_name("github", "t")]
+        assert manager.errors == []
+        # The next task of the same session does not wait for it either.
+        started = time.monotonic()
+        assert manager.start()["broken"] is False
+        assert time.monotonic() - started < 0.2
+    finally:
+        manager.close()
+
+
+def test_a_marked_server_that_answers_again_gets_its_tools_back(tmp_path):
+    path = tmp_path / "t.json"
+    config = _config("notion")
+    MCPToolCache(path).put_failed(config)
+    manager = MCPManager(
+        [config], connection_factory=_timed(0.2, ["query"]), tool_cache=MCPToolCache(path)
+    )
+    try:
+        assert manager.start() == {"notion": False}  # not waited for
+        manager.connections["notion"].await_start()
+        # The next task of the session offers the tools...
+        assert manager.start() == {"notion": True}
+        assert manager.register(ToolRegistry()) == [tool_name("notion", "query")]
+    finally:
+        manager.close()
+    # ...and the next host life has them at once: the list replaced the mark.
+    fresh = MCPToolCache(path)
+    assert not fresh.failed(config)
+    assert [t.name for t in fresh.get(config)] == ["query"]
+
+
+def test_a_failure_never_replaces_a_known_tool_list(tmp_path):
+    path = tmp_path / "t.json"
+    cache = MCPToolCache(path)
+    config = _config("gmail")
+    cache.put(config, [MCPToolInfo(name="send", description="", schema={})])
+    manager = MCPManager(
+        [config], connection_factory=_timed(0.1, [], fail=True), tool_cache=cache
+    )
+    try:
+        manager.start(lazy=False)
+    finally:
+        manager.close()
+    fresh = MCPToolCache(path)
+    assert not fresh.failed(config)
+    assert [t.name for t in fresh.get(config)] == ["send"]
+
+
+def test_a_server_that_fails_every_time_writes_the_file_once(tmp_path):
+    path = tmp_path / "t.json"
+    config = _config("dead")
+    for _ in range(2):
+        manager = MCPManager(
+            [config],
+            connection_factory=_timed(0.05, [], fail=True),
+            tool_cache=MCPToolCache(path),
+        )
+        try:
+            manager.start(lazy=False)
+        finally:
+            manager.close()
+        if _ == 0:
+            first = path.stat().st_mtime_ns
+            marked = json.loads(path.read_text(encoding="utf-8"))
+    assert path.stat().st_mtime_ns == first
+    assert json.loads(path.read_text(encoding="utf-8")) == marked
+
+
+def test_a_closed_handshake_is_not_a_failure(tmp_path):
+    path = tmp_path / "t.json"
+    config = _config("slow")
+    manager = MCPManager(
+        [config], connection_factory=_timed(5.0, ["t"]), tool_cache=MCPToolCache(path)
+    )
+    connection = manager._factory(config)
+    manager._wire_cache(config, connection)
+    connection.begin()
+    connection.close()
+    assert not MCPToolCache(path).failed(config)
