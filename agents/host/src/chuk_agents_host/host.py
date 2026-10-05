@@ -104,6 +104,16 @@ from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
 from .automations import AutomationManager
 from .calls import CallService
+from .channels import (
+    CAPABILITY as CHANNELS_CAPABILITY,
+    FILE_NAME as CHANNELS_FILE,
+    FRAMES as CHANNEL_FRAMES,
+    ORIGIN as CHANNEL_ORIGIN,
+    ChannelManager,
+    ChannelSettings,
+    ChannelStore,
+    channels_at_rest_key,
+)
 from .notification_text import DEFAULT_COWORKER, coworker_name
 from .notify import SupabaseNotifier
 from .serve import TaskServer
@@ -202,6 +212,8 @@ class LocalHost:
         on_pairing_reset: Callable[[], None] | None = None,
         # Test seam: skip the real Supabase/backend and use this factory.
         model_factory_override: ModelFactory | None = None,
+        # Test seam: the messenger channels' bounds (Bot API base, clocks).
+        channel_settings: ChannelSettings | None = None,
         logger: Callable[[str], None] | None = None,
     ) -> None:
         self._log = logger or (lambda _msg: None)
@@ -340,6 +352,18 @@ class LocalHost:
         loaded = self._secrets_vault.load()
         if loaded:
             self._log(f"[cowork-host] loaded {loaded} secret name(s) at rest")
+
+        # Messenger channels (``channels/``): opt-in per coworker, off by
+        # default. The bot tokens sit in their own encrypted file, NOT in the
+        # secret set: that set is replaced whole by every app frame and handed
+        # to every sandbox process, and a coworker must not read its bot token.
+        self._channel_store = ChannelStore(
+            path=self._workspace / CHANNELS_FILE,
+            key=channels_at_rest_key(self._identity),
+        )
+        self._channels: ChannelManager | None = None
+        # Test seam: ``None`` reads ``[channels]`` from the configuration.
+        self._channel_settings: ChannelSettings | None = channel_settings
 
         # Built here, after the secret set exists: a room turn is a normal agent
         # run and gets the same secrets every other turn does.
@@ -695,6 +719,14 @@ class LocalHost:
             desktop=self._desktop_notifier.notify,
             logger=self._log,
         )
+        # Messenger channels: one poller per coworker the user turned one on
+        # for. Before the party, like automations: a message that arrives
+        # before the app provisions the host gets a "not ready" reply.
+        self._channels = self._build_channels(self._channel_settings)
+        try:
+            self._channels.start()
+        except Exception as exc:  # noqa: BLE001 — a channel must not block startup
+            self._log(f"could not start channels: {type(exc).__name__}: {exc}")
         transport, controller_token, reconnect_pipe = self._build_transport()
         party_class = CloudHostParty if self._transport_kind == TRANSPORT_CLOUD else HostParty
         extra = {"trust_provider": lambda: self._trust} if party_class is CloudHostParty else {}
@@ -810,6 +842,11 @@ class LocalHost:
             party.on_controller_left(token)
 
     def stop(self) -> None:
+        # Channels first: no new Telegram message may start a run while the
+        # rest of the host goes down. The long polls are cut, not waited out.
+        channels = getattr(self, "_channels", None)
+        if channels is not None:
+            channels.stop()
         automations = getattr(self, "_automations", None)
         if automations is not None:
             automations.stop()
@@ -1639,6 +1676,16 @@ class LocalHost:
         definition: the desktop toast fires even with a controller attached
         (its ``done`` says ``host_notified`` so the app draws no second one);
         the cloud push still only when nobody is attached."""
+        # A run a messenger channel started is answered in that messenger.
+        # The reply is the notification there, so no toast and no push here.
+        channels = getattr(self, "_channels", None)
+        if channels is not None:
+            try:
+                channels.on_run_finished(summary)
+            except Exception as exc:  # noqa: BLE001 — a channel must not break the hook
+                self._log(f"channel reply failed: {type(exc).__name__}")
+        if isinstance(summary, dict) and summary.get("origin") == CHANNEL_ORIGIN:
+            return
         attached = self._controller_attached()
         # ``automation`` and ``job`` runs are unattended by definition.
         automation = isinstance(summary, dict) and summary.get("origin") in ("automation", "job")
@@ -1792,6 +1839,8 @@ class LocalHost:
         frames ride the same hook and are answered with one dict."""
         if isinstance(payload, dict) and payload.get("type") in AGENT_PERMISSION_FRAMES:
             return self._on_permissions_frame(payload)
+        if isinstance(payload, dict) and payload.get("type") in CHANNEL_FRAMES:
+            return self._on_channel_frame(payload)
         # Announce the actual API routing UUID through the authenticated
         # channel. It is NOT the crypto identity (usually "cowork-host").
         self._send_host_payload({
@@ -1799,9 +1848,65 @@ class LocalHost:
             "url": f"{relay_ws_url(self._relay_base_url)}?cw_device={self._relay_device_id}",
             # What this host can do beyond the base contract. The app sends a
             # frame of a named feature only to a host that names it.
-            "capabilities": [AGENT_PERMISSIONS_CAPABILITY],
+            "capabilities": [AGENT_PERMISSIONS_CAPABILITY, CHANNELS_CAPABILITY],
         })
         return handle_agent_frame(self._coworker_names, payload, log=self._log)
+
+    # -- messenger channels (channels/) ---------------------------------
+
+    def _build_channels(self, settings: ChannelSettings | None = None) -> ChannelManager:
+        """The channel manager over this host's store, run path and relay.
+        ``settings`` ``None`` reads ``[channels]`` from the configuration."""
+        return ChannelManager(
+            store=self._channel_store,
+            submit=self._submit_channel_task,
+            key_for=self._channel_key,
+            label_for=lambda key: self._call_agent(key)[1],
+            scrub=self._secrets_vault.scrubber().scrub_text,
+            db_path=self._db_path,
+            send_payload=self._send_host_payload,
+            settings=settings or ChannelSettings.from_config(),
+            logger_fn=self._log,
+        )
+
+    def _channel_key(self, agent_id: str) -> str | None:
+        """The session key a channel of the app's ``agent_id`` feeds, or
+        ``None`` for an id that is no coworker of this host. Every name of
+        this host's own coworker maps to the app's ``host:<device id>``, the
+        thread key the app uses, so a Telegram turn lands in the app's thread."""
+        if agent_id in self._primary_agent_ids():
+            return host_agent_id(self._device_id)
+        return agent_id if self._is_own_coworker(agent_id) else None
+
+    def _submit_channel_task(self, session_key: str, prompt: str, meta: dict) -> str | None:
+        """Start a task a channel message asks for: a normal run of that
+        coworker's one session. ``None`` while the host has no provisioned
+        task server (restarted, no app since)."""
+        party = self._party
+        server = party.task_server if party is not None else None
+        if server is None:
+            return None
+        executor = server.supervisor.executor(self._agent.id)
+        if executor is None:
+            return None
+        return executor.submit_task(session_key, prompt, meta)
+
+    def _on_channel_frame(self, payload: dict) -> dict:
+        """``agent_channel_get`` / ``_set``. A change is also pushed to every
+        attached device, so a second phone shows the new state."""
+        channels = getattr(self, "_channels", None)
+        if channels is None:
+            return {
+                "type": "agent_channel",
+                "agent_id": str(payload.get("agent_id") or ""),
+                "channel": str(payload.get("channel") or "telegram"),
+                "e2e": False,
+                "error": "channels not running",
+            }
+        reply = channels.handle_frame(payload)
+        if payload.get("type") == "agent_channel_set" and "error" not in reply:
+            self._send_host_payload(reply)
+        return reply
 
     def _watcher_env(self) -> dict[str, str]:
         """The secret set for an automation watcher, or nothing when the host

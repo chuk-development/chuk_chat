@@ -1419,6 +1419,11 @@ class Executor:
             # terminal ``agent_permissions`` frame.
             self._handle_permissions_frame(request_id, payload)
             return
+        if kind in ("agent_channel_get", "agent_channel_set"):
+            # Messenger channels of one coworker (host channels/). The host
+            # keeps them; answered with one terminal ``agent_channel`` frame.
+            self._handle_channel_frame(request_id, payload)
+            return
         if kind == "mcp_probe":
             # The app just connected a server (or opened the connector list) and
             # wants to know what it holds. Answered with one terminal
@@ -1733,6 +1738,31 @@ class Executor:
             return
         if not isinstance(answer, dict) or answer.get("type") != "agent_permissions":
             answer = {**failure, "error": "agent permissions not enabled"}
+        self._terminal(request_id, answer)
+
+    def _handle_channel_frame(self, request_id: str, payload: dict) -> None:
+        """Hand ``agent_channel_get`` / ``_set`` to the host's agent hook (the
+        host runs the channels) and send its answer as the terminal."""
+        agent_id = payload.get("agent_id")
+        failure = {
+            "type": "agent_channel",
+            "agent_id": agent_id if isinstance(agent_id, str) else "",
+            "channel": str(payload.get("channel") or "telegram"),
+            "e2e": False,
+        }
+        hook = self._on_agent_frame
+        if hook is None:
+            self._terminal(request_id, {**failure, "error": "channels not enabled"})
+            return
+        try:
+            answer = hook(payload)
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad hook
+            self._terminal(
+                request_id, {**failure, "error": f"channel frame failed: {type(exc).__name__}"}
+            )
+            return
+        if not isinstance(answer, dict) or answer.get("type") != "agent_channel":
+            answer = {**failure, "error": "channels not enabled"}
         self._terminal(request_id, answer)
 
     # -- agent status (docs/WIRE_CONTRACT.md, "Agent status") -------------
@@ -3256,7 +3286,7 @@ class Executor:
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
-        if mcp_manager is None and run.origin == "automation" and online:
+        if mcp_manager is None and run.origin in ("automation", "telegram") and online:
             # A fired automation carries no forwarded connectors (no frame,
             # no app). It runs with the connectors the session already has,
             # exactly as the last task of that session did.
@@ -3482,7 +3512,7 @@ class Executor:
                 run_id=run.run_id,
                 run_stamps=run_stamps,
                 # A fired automation / job is notified on by the host itself.
-                host_notified=run.origin in ("automation", "job"),
+                host_notified=run.origin in ("automation", "job", "telegram"),
                 session_key=session_key,
             ),
         )
