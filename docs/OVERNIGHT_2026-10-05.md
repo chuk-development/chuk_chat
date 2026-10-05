@@ -8,6 +8,53 @@ The coordinator only manages subagents. Result expected in the morning.
 This file is the log. Each track has a bead; each finished step gets a line
 here with the commit.
 
+## Summary for the owner (12:15)
+
+**Speed.** A "hi" to a coworker took 110-185 s and about €0.002. It now
+takes **2.8 s** warm and **€0.0004** (99.8 % of the prompt from the
+provider cache). The causes were: a context summary re-made before every
+turn (100-180 s), a tool list that changed between requests (no cache
+hits), five MCP connectors dialed one after another (8.5 s), a memory
+recall that waited for its 1.5 s timeout, and Chromium started at every
+task. All fixed and measured on the real host.
+
+**Host.** Runs from this checkout now (`~/.local/bin/agents-host` ->
+`agents/host/.venv`, unit uses `agents-browser:latest`, `AGENTS_TRACE=1`
+in `~/.config/chuk-agents/host.env`). Backups of the old wrapper and unit:
+`_scratch/host-rollout/`.
+
+**Built (host + app, tested, reviewed, pushed in batches):**
+- Voice call without a first message; desktop header like the phone;
+  "+" menu; Chat-half chips.
+- VNC/browser fills the display (no black area); takeover card for
+  login/2FA/CAPTCHA with auto-resolve; live turn status (Sending, Preparing,
+  Thinking, tool, Writing; offline with Retry).
+- One place for a coworker's model, provider and reasoning, with prices.
+- Per-action approvals (once / always for this agent / per site).
+- Cost per answer, totals, weekly budget with warning and stop.
+- Automations: watch a page, mail filter, notify only on change.
+- Telegram channel per coworker (opt-in, not E2E, pairing code).
+- 15 coworker templates in New agent.
+- Save a successful task as a skill (only on approval).
+- "N files changed · Undo" per answer with conflict handling.
+- Own browser via the extension (broker, approvals, Stop, secrets hidden).
+- UI audit fixes: readable text on accent fills (your orange theme
+  unchanged), German, no truncation at 360 px, icons, DESIGN.md aligned.
+- Isolated end-to-end test of the host (13 flows) and a speed bench.
+
+**Needs you:**
+- Unlock the screen and look at the app (I tested on a private Xvfb
+  display because the screen was locked).
+- The own-browser add-on is not tested in a real Chrome yet: steps in
+  `docs/RUNBOOK_2026-09-08_USER_BROWSER.md`.
+- Telegram is tested only against a fake Bot API; a real bot token test is
+  open.
+- `chukdoo-web.service` (another project) restarts every 3 s (CHDIR:
+  working directory missing). Not touched.
+
+Research: `docs/research/AGENT_COMPETITORS_2026-10.md` ("Grogbot" = Grok
+Bot). UI audit: `docs/UI_AUDIT_2026-10-05.md`.
+
 ## Tracks
 
 | # | Track | Bead | State |
