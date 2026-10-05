@@ -297,3 +297,9 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   answer ("< €0.01 · 20.3k tokens"), profile "Runs on the host: Yes",
   "Your browser: Not set up on this computer", Approvals section. Running:
   MCP cold start after a host restart (bead l16i).
+- 13:00 76cb2580: two of the five forwarded MCP connectors fail every
+  handshake (which ones is not stored on the host: check them in the app,
+  they deliver no tools). The tool cache now remembers failures, so a
+  restart no longer waits ~3 s for them; the marks were written at 12:57.
+  Remaining first-turn cost ~650 ms is docker work for the box (bead filed
+  by the agent).
