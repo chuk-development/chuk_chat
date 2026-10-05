@@ -1,14 +1,22 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/pages/coworker_model_page.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
+import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
+import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
 
+import '../support/kv_cache_test_env.dart';
 import '../support/test_app.dart';
 
 void main() {
@@ -35,26 +43,28 @@ void main() {
   void tap(String key) =>
       taps.update(key, (value) => value + 1, ifAbsent: () => 1);
 
-  Widget page({bool optional = false}) => MobileAgentsSettingsPage(
-    agentId: 'alex',
-    source: source,
-    profiles: profiles,
-    preferences: preferences,
-    onEdit: () => tap('profile'),
-    onControls: () => tap('host'),
-    onModel: () => tap('model'),
-    onAutomations: () => tap('automations'),
-    onSkills: () => tap('skills'),
-    onConnectors: () => tap('connectors'),
-    onSecrets: () => tap('secrets'),
-    onRooms: () => tap('rooms'),
-    onSettings: () => tap('settings'),
-    onDocuments: optional ? () => tap('files') : null,
-    onCopyChat: optional ? () => tap('export') : null,
-    onBrowser: optional ? () => tap('browser') : null,
-    onDelete: optional ? () => tap('delete') : null,
-    onChat: () => tap('chat'),
-  );
+  Widget page({bool optional = false, String? chatId}) =>
+      MobileAgentsSettingsPage(
+        agentId: 'alex',
+        chatId: chatId,
+        source: source,
+        profiles: profiles,
+        preferences: preferences,
+        onEdit: () => tap('profile'),
+        onControls: () => tap('host'),
+        onModel: () => tap('model'),
+        onAutomations: () => tap('automations'),
+        onSkills: () => tap('skills'),
+        onConnectors: () => tap('connectors'),
+        onSecrets: () => tap('secrets'),
+        onRooms: () => tap('rooms'),
+        onSettings: () => tap('settings'),
+        onDocuments: optional ? () => tap('files') : null,
+        onCopyChat: optional ? () => tap('export') : null,
+        onBrowser: optional ? () => tap('browser') : null,
+        onDelete: optional ? () => tap('delete') : null,
+        onChat: () => tap('chat'),
+      );
 
   Future<void> smallPhone(WidgetTester tester, Widget child) async {
     tester.view.physicalSize = const Size(320, 640);
@@ -262,5 +272,50 @@ void main() {
     await reveal(tester, 'Remove coworker');
     expect(find.text('Remove coworker').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  group('a coworker with a thread', () {
+    late Directory kv;
+    setUp(() async {
+      ChatModelSelectionService.instance.clearMemoryForTesting();
+      CoworkerModel.debugCatalogue = () async =>
+          const <CoworkerCatalogueModel>[
+            CoworkerCatalogueModel(
+              id: 'z-ai/glm-5.3-flash',
+              name: 'Z.ai: GLM 5.3 Flash',
+              providers: <CoworkerProvider>[
+                CoworkerProvider(
+                  slug: 'fireworks/serverless',
+                  name: 'Fireworks',
+                ),
+              ],
+            ),
+          ];
+      kv = await useTempKvCache();
+      await ModelCapabilitiesService.initialize();
+    });
+    tearDown(() async {
+      CoworkerModel.debugCatalogue = null;
+      await disposeTempKvCache(kv);
+    });
+
+    testWidgets('the model row says it follows the app default and opens the '
+        'coworker s model page, not the shell action', (tester) async {
+      await smallPhone(tester, page(chatId: 'host:alex'));
+      final Finder row = find.byKey(const ValueKey('settings_Model'));
+      expect(row, findsOneWidget);
+      expect(tester.widget(row), isA<CoworkerModelTile>());
+      expect(
+        find.descendant(
+          of: row,
+          matching: find.text('App default (Fast) · Fireworks · Reasoning low'),
+        ),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Model'));
+      await tester.pumpAndSettle();
+      expect(find.byType(CoworkerModelPage), findsOneWidget);
+      expect(taps['model'], isNull);
+    });
   });
 }

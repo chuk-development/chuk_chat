@@ -201,7 +201,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: _SettingsRow(
                   icon: Icons.smart_toy_outlined,
                   title: l.modelSelection,
-                  subtitle: l.modelSelectionSubtitle,
+                  // In the Agents build this page is also every coworker's
+                  // default; a coworker's own model is on its profile.
+                  subtitle: agentsChatCore
+                      ? 'App default for chats and coworkers'
+                      : l.modelSelectionSubtitle,
                   onTap: () {
                     Navigator.push(
                       context,

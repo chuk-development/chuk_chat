@@ -210,7 +210,7 @@ class _DesktopSettingsModalState extends State<DesktopSettingsModal> {
           icon: Icons.smart_toy_outlined,
           label: l.modelSelection,
           keywords: 'model models ai llm gpt deepseek glm provider selection '
-              'default modell auswahl',
+              'default coworker agent reasoning modell auswahl',
           builder: (_) => const ModelSelectorPage(),
         ),
         _SettingsDest(

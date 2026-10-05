@@ -27,6 +27,13 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
   /// Optional chat override. Unscoped legacy hosts retain account defaults.
   String? get modelSelectionChatId => null;
 
+  /// Called when a provider lookup finds that the chat has its own model and
+  /// it is not the model on screen: something (a mode restore, the global
+  /// model notifier) put another model into a chat that has its own. The
+  /// default does nothing; `ChatModelSelectionMixin` puts the chat's own model
+  /// back, so the composer never shows a model the send will not use.
+  void onChatScopedModelMismatch() {}
+
   /// The provider the active Fast or Thinking mode pins for [modelId], or
   /// null when the mode is custom, runs another model, or pins nothing.
   ///
@@ -68,6 +75,12 @@ mixin ModelProviderResolutionMixin<T extends StatefulWidget> on State<T> {
         if (selectedProviderSlug != choice.providerSlug) {
           setState(() => selectedProviderSlug = choice.providerSlug);
         }
+        return;
+      }
+      if (choice != null) {
+        // The send resolves the chat's own pair again, so a provider looked up
+        // for this foreign model would only be a label that lies.
+        onChatScopedModelMismatch();
         return;
       }
     }

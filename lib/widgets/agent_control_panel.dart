@@ -1,5 +1,6 @@
-/// The in-UI control surface (§16): the model this coworker runs on, what it
-/// has spent, how long it has worked, the box it works in, and its skills.
+/// The in-UI control surface (§16): the model this coworker runs on (its own
+/// or the app default, with the way to change it, and what the last run
+/// really used), what it has spent, how long it has worked, the box it works in, and its skills.
 ///
 /// The panel draws only what the host measured. A block the host did not report
 /// says so, with the reason — never a plausible-looking zero. There are no
@@ -15,6 +16,9 @@ import 'package:chuk_chat/ui/expressive/icon_map.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
+import 'package:chuk_chat/services/agents/coworker_model.dart';
+import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 
 class AgentControlPanel extends StatefulWidget {
   const AgentControlPanel({
@@ -136,7 +140,24 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
                 ),
               ),
             const SizedBox(height: 8),
-            _section(context, 'Model', _buildModel(context, snapshot.model)),
+            _section(
+              context,
+              'Model',
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  // What the next message runs on, and the way to change it:
+                  // the coworker's model page, the one place for it.
+                  CoworkerModelTile(
+                    chatId: _sessionKey,
+                    coworkerName: widget.agent.name,
+                    controlSource: widget.source,
+                  ),
+                  const SizedBox(height: 8),
+                  _buildModel(context, snapshot.model),
+                ],
+              ),
+            ),
             _section(
               context,
               'Token use',
@@ -172,13 +193,21 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
         reason,
       ),
       ControlLoading<AgentModelChoice>() => _loading(),
+      // What the host says the last run really used — the proof that a
+      // change applied, once the next message has run.
       ControlAvailable<AgentModelChoice>(value: final choice) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Text(
+            'Last run',
+            style: theme.textTheme.labelMedium?.copyWith(
+              color: theme.hintColor,
+            ),
+          ),
           Text(choice.id),
-          if (choice.detail != null)
+          if (_runDetail(choice) case final String detail)
             Text(
-              choice.detail!,
+              detail,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.hintColor,
               ),
@@ -324,6 +353,20 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
   }
 
   // --- helpers ---------------------------------------------------------------
+
+  /// `Fireworks · Reasoning low` for a run's provider and level, or null when
+  /// the host named neither.
+  static String? _runDetail(AgentModelChoice choice) {
+    final String? provider = choice.provider;
+    final String? effort = choice.reasoningEffort;
+    final List<String> parts = <String>[
+      if (provider != null && provider.isNotEmpty)
+        providerLabelFromSlug(provider),
+      if (effort != null && effort.isNotEmpty)
+        'Reasoning ${ChatModeService.reasoningLabel(effort).toLowerCase()}',
+    ];
+    return parts.isEmpty ? null : parts.join(' · ');
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     try {

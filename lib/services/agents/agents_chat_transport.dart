@@ -592,6 +592,9 @@ class AgentsChatTransport {
       chain = chain.then((_) async {
         try {
           final route = await selectedRoute;
+          // The coworker's own reasoning level rides with its own model; a
+          // chat with none keeps the level the composer sent.
+          final String? effort = route.reasoningEffort ?? reasoningEffort;
           // Recorded BEFORE the frame goes out, never after. A fire-and-forget
           // `send()` on a half-open socket reports success for a frame nobody
           // will read, so "the send returned" is not evidence of anything: the
@@ -613,7 +616,7 @@ class AgentsChatTransport {
               prompt: message,
               modelId: route.modelId,
               providerSlug: route.providerSlug,
-              reasoningEffort: reasoningEffort,
+              reasoningEffort: effort,
             ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
           );
           ledger.taskSent(sessionKey, wireTaskId);
@@ -622,7 +625,7 @@ class AgentsChatTransport {
             sessionKey: sessionKey,
             modelId: route.modelId,
             providerSlug: route.providerSlug,
-            reasoningEffort: reasoningEffort,
+            reasoningEffort: effort,
             // Names this send, so a re-send after a reconnect is the same
             // task to the host and the host's answer says which one it means.
             taskId: wireTaskId,
@@ -798,7 +801,7 @@ Future<OutboxTask?> _queueForLater(
       prompt: message,
       modelId: route?.modelId,
       providerSlug: route?.providerSlug,
-      reasoningEffort: reasoningEffort,
+      reasoningEffort: route?.reasoningEffort ?? reasoningEffort,
     );
   } catch (error) {
     if (kDebugMode) {

@@ -1,8 +1,7 @@
 // Merge note: upstream's screen is the base — its ApiAvailabilityPolling mixin,
-// NiceSnackBar and FloatingAppBar chrome all stay. Kept from Agents: the
-// per-chat scoping (`chatId`, ChatModelSelectionService), which
-// messenger_shell and mobile_model_selection_mixin already call this page
-// with. Agents's ExpressiveScreen chrome is dropped as the same intent.
+// NiceSnackBar and FloatingAppBar chrome all stay. A `chatId` (messenger_shell
+// passes the coworker's thread key) turns the page into that coworker's own
+// model page, `CoworkerModelPage`; unscoped it is the app default.
 // lib/model_selector_page.dart
 import 'dart:async';
 import 'dart:convert';
@@ -36,7 +35,8 @@ import 'package:chuk_chat/widgets/model_selection_dropdown.dart'
 import 'package:chuk_chat/widgets/nice_snackbar.dart';
 import 'package:chuk_chat/widgets/api_availability_polling.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
-import 'package:chuk_chat/services/chat_model_selection_service.dart';
+import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/widgets/searchable_picker.dart';
 
 // ─── Data models (mirroring FastAPI Pydantic models) ─────────────────────
@@ -163,8 +163,10 @@ enum _ModelListFilter {
 class ModelSelectorPage extends StatefulWidget {
   const ModelSelectorPage({super.key, this.chatId});
 
-  /// When set, picking a model/provider affects this chat only. The legacy
-  /// unscoped page remains the account-wide catalogue/preferences editor.
+  /// When set, the page is that coworker's own model page
+  /// ([CoworkerModelPage]): one place for a coworker's model, provider and
+  /// reasoning level, whoever opens it. Unscoped, this is the app default —
+  /// the Fast / Thinking modes — plus the account-wide catalogue.
   final String? chatId;
 
   @override
@@ -218,6 +220,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
         _searchQuery = _searchController.text.toLowerCase();
       });
     });
+    // A coworker's page loads its own data.
+    if (_chatScoped) return;
     _refreshSubscription = ModelSelectionEventBus().refreshStream.listen((_) {
       if (!mounted) return;
       // Realtime change from another device — re-fetch silently so the user
@@ -229,7 +233,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   }
 
   Future<void> _loadModeConfigs() async {
-    if (_chatScoped) return;
     var fast = await ChatModeService.loadConfig(ChatMode.fast);
     final thinking = await ChatModeService.loadConfig(ChatMode.thinking);
 
@@ -485,17 +488,8 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       }
       final String accessToken = session.accessToken;
 
-      if (_chatScoped) {
-        final choice = await ChatModelSelectionService.instance.load(
-          widget.chatId!,
-        );
-        _lastSavedPreferences = choice == null
-            ? {}
-            : {choice.modelId: choice.providerSlug};
-      } else {
-        _lastSavedPreferences =
-            await UserPreferencesService.loadAllProviderPreferences();
-      }
+      _lastSavedPreferences =
+          await UserPreferencesService.loadAllProviderPreferences();
       final response = await http.get(
         Uri.parse('$_baseUrl/v1/models_info'),
         headers: {'Authorization': 'Bearer $accessToken'},
@@ -528,11 +522,9 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
               );
             } on StateError {
               selectedProvider = null;
-              if (!_chatScoped) {
-                cleanupFutures.add(
-                  UserPreferencesService.clearSelectedProvider(model.id),
-                );
-              }
+              cleanupFutures.add(
+                UserPreferencesService.clearSelectedProvider(model.id),
+              );
             }
           }
 
@@ -673,23 +665,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
     String modelId,
     ModelProviderInfo? provider,
   ) async {
-    if (_chatScoped) {
-      if (provider == null) return;
-      final choice = ChatModelSelection(
-        modelId: modelId,
-        providerSlug: provider.slug,
-      );
-      try {
-        await ChatModelSelectionService.instance.save(widget.chatId!, choice);
-      } catch (_) {
-        if (mounted) {
-          _showSnackBar('Could not save this chat model. Please try again.');
-        }
-        return;
-      }
-      if (mounted) Navigator.of(context).pop(choice);
-      return;
-    }
     setState(() {
       _selectedProviders[modelId] = provider;
       _autoSelected.remove(modelId);
@@ -709,10 +684,6 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
   Future<void> _onAutoSelect(CustomModelInfo model) async {
     final cheapest = _cheapestProvider(model);
     if (cheapest == null) return;
-    if (_chatScoped) {
-      await _onProviderSelect(model.id, cheapest);
-      return;
-    }
     setState(() {
       _selectedProviders[model.id] = cheapest;
       _autoSelected[model.id] = cheapest;
@@ -789,6 +760,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
 
   @override
   Widget build(BuildContext context) {
+    if (_chatScoped) return CoworkerModelPage(chatId: widget.chatId!);
     final l = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
@@ -799,7 +771,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
       // The page runs underneath the floating header.
       extendBodyBehindAppBar: true,
       appBar: FloatingAppBar(
-        title: Text(_chatScoped ? 'Model for this chat' : l.models),
+        title: Text(l.models),
         bottom: PinnedSettingsSearchBar(
           controller: _searchController,
           hintText: l.searchModels,
@@ -864,25 +836,7 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                 itemCount: _displayModels.length + 2,
                 itemBuilder: (context, index) {
                   if (index == 0) {
-                    // Chat-scoped: the mode picker sets the account-wide
-                    // fast/thinking pair, which this route may not touch.
-                    if (_chatScoped) {
-                      return Padding(
-                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-                        child: Text(
-                          'Choose a model and provider for this chat.',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: m3.onSurfaceVariant,
-                          ),
-                        ),
-                      );
-                    }
-                    return Padding(
-                      // No bottom gap here: the "Available" section header
-                      // below carries its own top spacing, so 16 on top of
-                      // that left an oversized gap above the model list.
-                      padding: EdgeInsets.zero,
-                      child: _ModePickerPanel(
+                    final Widget panel = _ModePickerPanel(
                         buildIconWidget: _buildIconWidget,
                         models: _enabledModels,
                         fast: _ModeRowData(
@@ -933,7 +887,25 @@ class _ModelSelectorPageState extends State<ModelSelectorPage>
                           onPickProvider: (slug) =>
                               _setProviderForMode(ChatMode.thinking, slug),
                         ),
-                      ),
+                      );
+                    // In the Agents build these two modes are also what
+                    // every coworker without a model of its own runs on.
+                    if (!agentsChatCore) return panel;
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 12),
+                          child: ExpressiveInfoCard(
+                            text:
+                                'The app default. New chats use it, and so '
+                                'does every coworker that has no model of '
+                                'its own. A coworker gets its own model on '
+                                'its profile, under Model.',
+                          ),
+                        ),
+                        panel,
+                      ],
                     );
                   }
                   if (index == 1) {
@@ -1758,6 +1730,10 @@ class _ModePickerPanel extends StatelessWidget {
           PickerOption<String>(
             value: provider.slug,
             label: provider.name,
+            // The price is what tells two providers of one model apart.
+            subtitle:
+                '${provider.pricing.formatTokenPrice(provider.pricing.prompt)} in · '
+                '${provider.pricing.formatTokenPrice(provider.pricing.completion)} out',
             selected: provider.slug == data.providerSlug,
             leading: buildIconWidget(
               provider.iconUrl,

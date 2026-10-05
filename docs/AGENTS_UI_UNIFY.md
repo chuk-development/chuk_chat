@@ -236,3 +236,18 @@ This replaces the "Left out in Agents" line under Result, C.
   detail page's device check are this device's (`verifyReachable`, for a
   chuk_chat chat, which calls the server through `McpService.call`). The
   detail page offers Reconnect when either side fails.
+
+## Model, provider and reasoning (2026-10-05, `chuk_chat-2wuc`)
+
+One record per coworker, one page to change it, one app default.
+
+| What | Where it is set | Where it is stored |
+|---|---|---|
+| A coworker's own model, provider, reasoning level | `CoworkerModelPage` (`lib/pages/coworker_model_page.dart`), reached from the profile ("Model" row on phone and desktop), the desktop details pane, the phone "Host & activity" page and the composer's "More models". The composer of that coworker's thread writes the same record: a model pick or a reasoning level becomes the coworker's own; Fast / Thinking drop it again. | `ChatModelSelectionService`, keyed by the thread key, on this device. `CoworkerModel` (`lib/services/agents/coworker_model.dart`) resolves own-or-default. |
+| The app default (new chats, and every coworker with no own model) | Settings → Model Selection (`ModelSelectorPage` unscoped): the Fast / Thinking cards. | `ChatModeService`, account-wide mode. |
+| What the last run really used | Read only: "Last run" on the model page and in the details pane. | The host's status frame (`AgentModelChoice`). |
+
+The relay send resolves the own record again at send time, reasoning level
+included (`AgentsChatTransport`), so the composer cannot send something the
+profile does not show. `ModelSelectorPage(chatId: …)` is the coworker page.
+The record is per device: the host stores no coworker model.
