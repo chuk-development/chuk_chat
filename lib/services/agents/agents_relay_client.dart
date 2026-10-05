@@ -44,6 +44,7 @@ import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
+import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
     show AgentsCloudRelayAddress;
@@ -563,7 +564,17 @@ class AgentsRelayDone extends AgentsRelayInbound {
     // ── F1: approvals + cost ──
     this.cost,
     // ── end F1 ──
+    // ── run changes ──
+    this.changes,
+    // ── end run changes ──
   });
+
+  // ── run changes ──
+  /// What the run changed in the workspace (docs/WIRE_CONTRACT.md, "What did
+  /// it do: run changes and undo"), live and replayed. Null on an old host,
+  /// for a run that changed no file, and for a workspace without git.
+  final AgentsRunChangesSummary? changes;
+  // ── end run changes ──
 
   // ── F1: approvals + cost ──
   /// What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and weekly
@@ -1864,6 +1875,13 @@ class AgentsRelayClient
   /// `result` event arrives. Null drops it.
   static void Function(Map<String, dynamic> payload)? automationDoneSink;
   // ── end F2 ──
+
+  // ── run changes ──
+  /// Where the host's `run_changes` and `run_undo_result` answers go.
+  /// `AgentsRunChangesService` sets it; null drops the frame. A sink like
+  /// [agentPermissionsSink]: only the changes sheet reads these frames.
+  static void Function(Map<String, dynamic> payload)? runChangesSink;
+  // ── end run changes ──
 
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
@@ -3469,8 +3487,18 @@ class AgentsRelayClient
             oldestMid: AgentsRelayTool._asInt(payload['oldest_mid']),
             pageBeforeId: AgentsRelayTool._asInt(payload['before_id']),
             cost: AgentsRunCost.fromJson(payload['cost']), // F1: cost
+            // ── run changes ──
+            changes: AgentsRunChangesSummary.fromJson(payload['changes']),
+            // ── end run changes ──
           ),
         );
+      // ── run changes ──
+      case 'run_changes':
+      case 'run_undo_result':
+        // The terminal answers to `run_changes_get` / `run_undo`. Not a run
+        // event: only the changes sheet that asked reads them.
+        runChangesSink?.call(payload);
+      // ── end run changes ──
       // ── F1: approvals + cost ──
       case 'budget_warning':
         // A notice, not a transcript event: [AgentsRelayInbound] is sealed,

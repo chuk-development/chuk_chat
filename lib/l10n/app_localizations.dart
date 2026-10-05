@@ -1272,6 +1272,49 @@ class AppLocalizations {
   String get agentsCwPermissionsSubtitle =>
       _get('agentsCwPermissionsSubtitle');
   // ── end polish ──
+  // ── run changes ──
+  String get runChangesFilesOne => _get('runChangesFilesOne');
+  String runChangesFilesMany(int count) =>
+      _get('runChangesFilesMany').replaceAll('{count}', '$count');
+  String runChangesUndoneCount(int count) =>
+      _get('runChangesUndoneCount').replaceAll('{count}', '$count');
+  String get runChangesUndo => _get('runChangesUndo');
+  String get runChangesAllUndone => _get('runChangesAllUndone');
+  String get runChangesDetails => _get('runChangesDetails');
+  String get runChangesSheetTitle => _get('runChangesSheetTitle');
+  String get runChangesLoading => _get('runChangesLoading');
+  String get runChangesConflictLater => _get('runChangesConflictLater');
+  String get runChangesConflictYou => _get('runChangesConflictYou');
+  String get runChangesConflictUnsaved => _get('runChangesConflictUnsaved');
+  String get runChangesBinary => _get('runChangesBinary');
+  String get runChangesFileUndone => _get('runChangesFileUndone');
+  String runChangesMoreFiles(int count) =>
+      _get('runChangesMoreFiles').replaceAll('{count}', '$count');
+  String get runChangesStepsOne => _get('runChangesStepsOne');
+  String runChangesStepsMany(int count) =>
+      _get('runChangesStepsMany').replaceAll('{count}', '$count');
+  String get runChangesBoundary => _get('runChangesBoundary');
+  String get runChangesUndoOne => _get('runChangesUndoOne');
+  String runChangesUndoMany(int count) =>
+      _get('runChangesUndoMany').replaceAll('{count}', '$count');
+  String get runChangesWaitAgent => _get('runChangesWaitAgent');
+  String get runChangesConflictTitle => _get('runChangesConflictTitle');
+  String get runChangesConflictBody => _get('runChangesConflictBody');
+  String get runChangesUndoAnyway => _get('runChangesUndoAnyway');
+  String get runChangesCancel => _get('runChangesCancel');
+  String get runChangesUndidOne => _get('runChangesUndidOne');
+  String runChangesUndidMany(int count) =>
+      _get('runChangesUndidMany').replaceAll('{count}', '$count');
+  String get runChangesNoteTitle => _get('runChangesNoteTitle');
+  String get runChangesNoteOk => _get('runChangesNoteOk');
+  String get runChangesErrNotConnected => _get('runChangesErrNotConnected');
+  String get runChangesErrNoAnswer => _get('runChangesErrNoAnswer');
+  String get runChangesErrNoHistory => _get('runChangesErrNoHistory');
+  String get runChangesErrNotFound => _get('runChangesErrNotFound');
+  String get runChangesErrNoChanges => _get('runChangesErrNoChanges');
+  String get runChangesErrAllConflict => _get('runChangesErrAllConflict');
+  String get runChangesErrFailed => _get('runChangesErrFailed');
+  // ── end run changes ──
 }
 
 class _AppLocalizationsDelegate

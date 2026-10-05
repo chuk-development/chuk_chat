@@ -2279,4 +2279,75 @@ void main() {
     });
   });
   // ── end F1 ──
+
+  // ── run changes ──
+  group('run changes (bead chuk_chat-4qry)', () {
+    test('done carries changes, live and replayed; an old host none',
+        () async {
+      final (client, host, _) = await paired();
+      final events = <AgentsRelayInbound>[];
+      final sub = client.inbound.listen(events.add);
+      await host.emit(<String, dynamic>{
+        'type': 'done',
+        'reason': 'finished',
+        'run_id': 'run-1',
+        'changes': <String, dynamic>{
+          'files': 3,
+          'additions': 42,
+          'deletions': 7,
+          'undone': 0,
+        },
+      });
+      await host.emit(<String, dynamic>{
+        'type': 'done',
+        'reason': 'finished',
+        'replay': true,
+        'run_id': 'run-0',
+        'changes': <String, dynamic>{'files': 2, 'undone': 2},
+      });
+      await host.emit(<String, dynamic>{
+        'type': 'done',
+        'reason': 'finished',
+        'run_id': 'run-old',
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      final dones = events.whereType<AgentsRelayDone>().toList();
+      expect(dones, hasLength(3));
+      expect(dones[0].changes!.files, 3);
+      expect(dones[0].changes!.additions, 42);
+      expect(dones[0].changes!.deletions, 7);
+      expect(dones[1].isReplay, isTrue);
+      expect(dones[1].changes!.allUndone, isTrue);
+      expect(dones[2].changes, isNull);
+      await sub.cancel();
+      await client.dispose();
+    });
+
+    test('run_changes and run_undo_result go to the sink, not the UI',
+        () async {
+      final (client, host, _) = await paired();
+      final events = <AgentsRelayInbound>[];
+      final sub = client.inbound.listen(events.add);
+      final got = <String>[];
+      final original = AgentsRelayClient.runChangesSink;
+      AgentsRelayClient.runChangesSink = (p) => got.add('${p['type']}');
+      addTearDown(() => AgentsRelayClient.runChangesSink = original);
+      await host.emit(<String, dynamic>{
+        'type': 'run_changes',
+        'run_id': 'run-1',
+        'files': <Object>[],
+      });
+      await host.emit(<String, dynamic>{
+        'type': 'run_undo_result',
+        'run_id': 'run-1',
+        'ok': true,
+      });
+      await Future<void>.delayed(const Duration(milliseconds: 10));
+      expect(got, <String>['run_changes', 'run_undo_result']);
+      expect(events, isEmpty);
+      await sub.cancel();
+      await client.dispose();
+    });
+  });
+  // ── end run changes ──
 }

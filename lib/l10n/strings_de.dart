@@ -1284,4 +1284,46 @@ const Map<String, String> stringsDe = {
   'agentsCwPermissions': 'Berechtigungen',
   'agentsCwPermissionsSubtitle': 'Was er darf, Freigaben und Budget',
   // ── end polish ──
+  // ── run changes ──
+  'runChangesFilesOne': '1 Datei geändert',
+  'runChangesFilesMany': '{count} Dateien geändert',
+  'runChangesUndoneCount': '{count} rückgängig',
+  'runChangesUndo': 'Rückgängig',
+  'runChangesAllUndone': 'Änderungen rückgängig gemacht',
+  'runChangesDetails': 'Zeigen, was dieser Lauf geändert hat',
+  'runChangesSheetTitle': 'Was dieser Lauf geändert hat',
+  'runChangesLoading': 'Änderungen werden geladen…',
+  'runChangesConflictLater': 'Später von einem anderen Lauf geändert',
+  'runChangesConflictYou': 'Von dir geändert',
+  'runChangesConflictUnsaved': 'Bearbeitet, noch nicht gespeichert',
+  'runChangesBinary': 'Binärdatei',
+  'runChangesFileUndone': 'Rückgängig gemacht',
+  'runChangesMoreFiles': '{count} weitere Dateien sind nicht aufgeführt',
+  'runChangesStepsOne': '1 Schritt',
+  'runChangesStepsMany': '{count} Schritte',
+  'runChangesBoundary':
+      'Nur Dateien im Arbeitsbereich kommen zurück. Gesendete Mails, Webaufrufe und Änderungen außerhalb des Arbeitsbereichs bleiben.',
+  'runChangesUndoOne': '1 Datei zurücksetzen',
+  'runChangesUndoMany': '{count} Dateien zurücksetzen',
+  'runChangesWaitAgent': 'Warte, bis der Agent fertig ist',
+  'runChangesConflictTitle': 'Diese Dateien wurden nach dem Lauf geändert',
+  'runChangesConflictBody':
+      'Rückgängig überschreibt diese späteren Änderungen.',
+  'runChangesUndoAnyway': 'Trotzdem rückgängig',
+  'runChangesCancel': 'Abbrechen',
+  'runChangesUndidOne': '1 Datei zurückgesetzt',
+  'runChangesUndidMany': '{count} Dateien zurückgesetzt',
+  'runChangesNoteTitle': 'Dateien wiederhergestellt',
+  'runChangesNoteOk': 'OK',
+  'runChangesErrNotConnected':
+      'Keine Verbindung zu deinem Computer. Versuch es wieder, wenn er da ist.',
+  'runChangesErrNoAnswer':
+      'Dein Computer hat nicht geantwortet. Versuch es noch einmal.',
+  'runChangesErrNoHistory':
+      'Dieser Arbeitsbereich führt keinen Verlauf, darum gibt es nichts zurückzusetzen.',
+  'runChangesErrNotFound': 'Dein Computer kennt diesen Lauf nicht.',
+  'runChangesErrNoChanges': 'Dieser Lauf hat keine Datei geändert.',
+  'runChangesErrAllConflict': 'Jede Datei wurde nach diesem Lauf geändert.',
+  'runChangesErrFailed': 'Dein Computer konnte die Änderungen nicht lesen.',
+  // ── end run changes ──
 };

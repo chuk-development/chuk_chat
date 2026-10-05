@@ -12,6 +12,7 @@ import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
+import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 
@@ -784,6 +785,33 @@ void main() {
     expect(loader.cursorFor(sessionKey), 9);
   });
   // ── end chuk_chat-dksi ──
+
+  // ── run changes ──
+  test('a replayed done keeps what the run changed on its answer', () async {
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayUser('tidy the notes', mid: 4),
+      AgentsRelayDelta('done', replay: true, mid: 9),
+      AgentsRelayDone(
+        reason: 'finished',
+        replay: true,
+        runId: 'run-7',
+        changes: AgentsRunChangesSummary(files: 3, additions: 4, undone: 1),
+      ),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ]);
+    final Object? raw = rowsFor(sessionKey)[1]['toolCalls'];
+    final calls = (jsonDecode(raw! as String) as List)
+        .map((Object? e) => ToolCall.fromJson(e! as Map<String, dynamic>))
+        .toList();
+    final meta = splitRunMeta(calls, null);
+    expect(meta.runId, 'run-7');
+    expect(
+      meta.changes,
+      const AgentsRunChangesSummary(files: 3, additions: 4, undone: 1),
+    );
+    expect(meta.toolCalls, isEmpty);
+  });
+  // ── end run changes ──
 
   test('a LIVE user frame is ignored like every other live frame (F13)',
       () async {

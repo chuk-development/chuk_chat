@@ -18,6 +18,7 @@ import 'package:intl/intl.dart';
 
 import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
+import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 
 /// One kind of model use inside a run: `run` (the agent loop), `aux` (the
 /// context summary and the memory extraction) or `browser` (the browser
@@ -142,18 +143,29 @@ double? _eur(Object? value) {
 // ── the answer's copy: one synthetic tool call ──────────────────────────────
 
 /// The name of the synthetic call that carries a run's meta on its answer:
-/// what it cost and the host's run id (which folds a quiet automation run to
-/// one line). Never shown as a tool line: [splitRunMeta] lifts it off first.
+/// what it cost, the host's run id (which folds a quiet automation run to
+/// one line) and what it changed in the workspace (`changes`). Never shown as a tool line: [splitRunMeta] lifts it off first.
 const String kAgentsRunMetaTool = 'agents_run_meta';
 
 /// The run's meta as the call the answer keeps. ONE mapping for the live
 /// ledger and the replay loader. Null when there is nothing to keep.
-ToolCall? runMetaCall({AgentsRunCost? cost, String? runId, DateTime? now}) {
-  if (cost == null && (runId == null || runId.isEmpty)) return null;
+ToolCall? runMetaCall({
+  AgentsRunCost? cost,
+  String? runId,
+  DateTime? now,
+  // ── run changes ──
+  AgentsRunChangesSummary? changes,
+  // ── end run changes ──
+}) {
+  if (cost == null && changes == null && (runId == null || runId.isEmpty)) {
+    return null;
+  }
   final DateTime at = now ?? DateTime.now();
   final Map<String, dynamic> meta = <String, dynamic>{
     'cost': ?cost?.raw,
     if (runId != null && runId.isNotEmpty) 'run_id': runId,
+    // ── run changes ── what the run changed in the workspace (`done.changes`)
+    'changes': ?changes?.toJson(),
   };
   return ToolCall(
     name: kAgentsRunMetaTool,
@@ -196,14 +208,19 @@ void putRunMeta(List<ToolCall> calls, ToolCall? call) {
   List<ContentBlock>? contentBlocks,
   AgentsRunCost? cost,
   String? runId,
+  AgentsRunChangesSummary? changes, // run changes
 })
 splitRunMeta(List<ToolCall>? toolCalls, List<ContentBlock>? contentBlocks) {
   AgentsRunCost? cost;
   String? runId;
+  AgentsRunChangesSummary? changes; // run changes
   void read(ToolCall call) {
     cost = AgentsRunCost.fromJson(call.arguments['cost']) ?? cost;
     final Object? id = call.arguments['run_id'];
     if (id is String && id.isNotEmpty) runId = id;
+    // run changes
+    changes =
+        AgentsRunChangesSummary.fromJson(call.arguments['changes']) ?? changes;
   }
 
   bool isMeta(ToolCall c) => c.name == kAgentsRunMetaTool;
@@ -242,7 +259,13 @@ splitRunMeta(List<ToolCall>? toolCalls, List<ContentBlock>? contentBlocks) {
       if (kept.isNotEmpty) blocks.add(ContentBlock.toolCalls(kept));
     }
   }
-  return (toolCalls: calls, contentBlocks: blocks, cost: cost, runId: runId);
+  return (
+    toolCalls: calls,
+    contentBlocks: blocks,
+    cost: cost,
+    runId: runId,
+    changes: changes,
+  );
 }
 
 // ── formatting ──────────────────────────────────────────────────────────────
