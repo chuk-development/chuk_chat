@@ -1091,6 +1091,62 @@ void main() {
   );
 
   testWidgets(
+    "phone screen chip: another thread's browser target leaves this one alone",
+    (tester) async {
+      final (controller, roster) = await pumpShell(
+        tester,
+        size: const Size(420, 900),
+      );
+      controller.pair();
+      await tester.pumpAndSettle();
+      final agent = roster.agents.single;
+      await tester.tap(
+        find.byKey(ValueKey<String>('mobile-agent-${agent.id}')),
+      );
+      await tester.pumpAndSettle();
+      final String selected = agent.threads.single.key;
+      bool usesUserBrowser() => tester
+          .widget<MobileChatScreen>(find.byType(MobileChatScreen))
+          .usesUserBrowser;
+      expect(usesUserBrowser(), isFalse);
+
+      // Another coworker's header says it works in the user's browser: the
+      // selected thread's chip does not change.
+      controller.emit(
+        AgentsRelayRunState(
+          sessionKey: '$selected-other',
+          state: 'running',
+          browserTarget: kBrowserTargetUserBrowser,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(usesUserBrowser(), isFalse);
+
+      // The selected thread's own header does.
+      controller.emit(
+        AgentsRelayRunState(
+          sessionKey: selected,
+          state: 'running',
+          browserTarget: kBrowserTargetUserBrowser,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(usesUserBrowser(), isTrue);
+
+      // And another thread back on the sandbox leaves it in the browser.
+      controller.emit(
+        AgentsRelayRunState(
+          sessionKey: '$selected-other',
+          state: 'idle',
+          browserTarget: kBrowserTargetSandbox,
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(usesUserBrowser(), isTrue);
+    },
+  );
+
+  testWidgets(
     'phone profile scopes model settings and automations to its own chat',
     (tester) async {
       final (controller, roster) = await pumpShell(

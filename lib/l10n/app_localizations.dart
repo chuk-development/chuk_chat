@@ -1356,6 +1356,8 @@ class AppLocalizations {
   String get ubAllowAgain => _get('ubAllowAgain');
   String get ubNoticeStoppedApp => _get('ubNoticeStoppedApp');
   String get ubAllowAgainFailed => _get('ubAllowAgainFailed');
+  String ubAllowAgainRefused(String reason) =>
+      _get('ubAllowAgainRefused').replaceAll('{reason}', reason);
   // ── end browser resume ──
 }
 

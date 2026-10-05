@@ -175,19 +175,25 @@ class BrowserPresence extends ValueNotifier<bool> {
   String get parkedBecause => value ? '' : _because;
 
   // ── own browser ──
-  /// The coworker drives the user's own browser (the last
-  /// `run_state.browser_target` said `user_browser`). Then there is never a
-  /// screen to show, and the parked screen target says "Works in your
-  /// browser" instead of "No screen open yet", as the desktop header does.
-  /// False on an old host that never says, and after [reset].
-  bool get usesUserBrowser => _usesUserBrowser;
-  bool _usesUserBrowser = false;
+  /// The coworker of thread [sessionKey] drives the user's own browser (the
+  /// last `run_state.browser_target` for that thread said `user_browser`).
+  /// Then there is never a screen to show, and the parked screen target says
+  /// "Works in your browser" instead of "No screen open yet", as the desktop
+  /// header does. Kept per thread, because one host runs many coworkers and
+  /// each header names its own thread; the desktop thread view filters the
+  /// same way. False for a thread the host never said anything about (an old
+  /// host), and after [reset].
+  bool usesUserBrowserIn(String sessionKey) =>
+      _userBrowserBySession[sessionKey] ?? false;
+  final Map<String, bool> _userBrowserBySession = <String, bool>{};
 
   void _readBrowserTarget(AgentsRelayRunState state) {
+    // A header without the field says nothing (an old host), as on desktop.
+    if (state.browserTarget == null) return;
     final bool next = state.usesUserBrowser;
-    if (next == _usesUserBrowser) return;
-    _usesUserBrowser = next;
-    notifyListeners();
+    final bool before = usesUserBrowserIn(state.sessionKey);
+    _userBrowserBySession[state.sessionKey] = next;
+    if (next != before) notifyListeners();
   }
   // ── end own browser ──
 
@@ -274,11 +280,10 @@ class BrowserPresence extends ValueNotifier<bool> {
   /// Forget the state (a new pairing, a different coworker).
   void reset() {
     _revoke();
-    // own browser: the next host's header says again.
-    if (_usesUserBrowser) {
-      _usesUserBrowser = false;
-      notifyListeners();
-    }
+    // own browser: the next host's headers say again.
+    final bool hadUserBrowser = _userBrowserBySession.containsValue(true);
+    _userBrowserBySession.clear();
+    if (hadUserBrowser) notifyListeners();
   }
 
   @override

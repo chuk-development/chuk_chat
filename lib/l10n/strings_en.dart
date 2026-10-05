@@ -1350,5 +1350,6 @@ const Map<String, String> stringsEn = {
   'ubNoticeStoppedApp':
       'You stopped this in your browser. Tap Allow again, or send a new task.',
   'ubAllowAgainFailed': 'Could not reach your computer. Try again.',
+  'ubAllowAgainRefused': 'Could not allow it again: {reason}',
   // ── end browser resume ──
 };

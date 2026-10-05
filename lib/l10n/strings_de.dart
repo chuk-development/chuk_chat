@@ -1370,5 +1370,6 @@ const Map<String, String> stringsDe = {
   'ubNoticeStoppedApp':
       'Du hast das in deinem Browser gestoppt. Tippe auf Wieder erlauben oder schick eine neue Aufgabe.',
   'ubAllowAgainFailed': 'Dein Computer ist nicht erreichbar. Versuch es noch einmal.',
+  'ubAllowAgainRefused': 'Konnte es nicht wieder erlauben: {reason}',
   // ── end browser resume ──
 };

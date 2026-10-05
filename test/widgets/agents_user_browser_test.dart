@@ -590,13 +590,26 @@ void main() {
       service.handleUserBrowserStatus(_push(_block()));
       expect(service.resumingUserBrowser, isFalse);
       expect(service.userBrowserStatus!.stopped, isFalse);
-      // An answer with an error (no block) ends the wait too.
+      expect(service.lastResumeError, isNull);
+      expect(await service.resumeAnswer, isNull);
+      // An answer with an error (no block) ends the wait too, and hands the
+      // host's reason to the tap that asked.
       expect(await service.resumeUserBrowser(), isTrue);
+      final Future<String?> answer = service.resumeAnswer;
       service.handleUserBrowserStatus(<String, dynamic>{
         'type': 'user_browser_status',
         'error': 'user browser not enabled',
       });
       expect(service.resumingUserBrowser, isFalse);
+      expect(service.lastResumeError, 'user browser not enabled');
+      expect(await answer, 'user browser not enabled');
+      // The stored status is not touched by the refusal.
+      expect(service.userBrowserStatus!.stopped, isFalse);
+      // A new request forgets the old reason.
+      expect(await service.resumeUserBrowser(), isTrue);
+      expect(service.lastResumeError, isNull);
+      service.handleUserBrowserStatus(_push(_block()));
+      expect(service.lastResumeError, isNull);
       // A send that fails is no wait.
       host.fail = true;
       expect(await service.resumeUserBrowser(), isFalse);
@@ -620,6 +633,25 @@ void main() {
       await tester.pump();
       expect(find.byKey(button), findsNothing);
       expect(_subtitleOf('Paired with Chrome'), findsOneWidget);
+    });
+
+    testWidgets('a refusal from the host shows its reason', (tester) async {
+      final (_, AgentsPermissionsService service) = await resumable(tester);
+      await tester.tap(find.byKey(button));
+      await tester.pump();
+      service.handleUserBrowserStatus(<String, dynamic>{
+        'type': 'user_browser_status',
+        'error': 'user browser not enabled',
+      });
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(
+        find.text('Could not allow it again: user browser not enabled'),
+        findsOneWidget,
+      );
+      // Still stopped: the button stays for another try.
+      expect(find.byKey(button), findsOneWidget);
+      await tester.pump(const Duration(seconds: 5));
     });
 
     testWidgets('no button for a host that does not name the capability', (

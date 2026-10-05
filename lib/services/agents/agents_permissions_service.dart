@@ -549,11 +549,18 @@ class AgentsPermissionsService extends ChangeNotifier {
   /// host's answer to `user_browser_resume`.
   void handleUserBrowserStatus(Map<String, dynamic> payload) {
     if (payload['type'] != 'user_browser_status') return;
-    if (_endResume()) notifyListeners(); // browser resume
     final UserBrowserStatus? status = UserBrowserStatus.fromJson(
       payload['user_browser'],
     );
-    if (status == null) return;
+    // browser resume: an answer with an `error` and no block is the host
+    // saying no. Its reason goes to the "Allow again" tap that asked.
+    final bool ended = _endResume(
+      error: status == null ? _resumeErrorText(payload['error']) : null,
+    );
+    if (status == null) {
+      if (ended) notifyListeners();
+      return;
+    }
     _userBrowser = status;
     _userBrowserMine.clear();
     notifyListeners();
@@ -583,6 +590,34 @@ class AgentsPermissionsService extends ChangeNotifier {
   /// "Allow again" was sent and the host has not answered yet.
   bool get resumingUserBrowser => _resumingUserBrowser;
 
+  /// The host's reason when it answered the last "Allow again" with an
+  /// `error` and no status block. Null when it lifted the Stop, when no
+  /// answer came, and while a new request is out.
+  String? get lastResumeError => _lastResumeError;
+  String? _lastResumeError;
+
+  /// Completed when the pending "Allow again" ends.
+  Completer<String?>? _resumeAnswer;
+
+  /// The end of the last "Allow again": [lastResumeError] once the host
+  /// answered, the connection dropped or [resumeTimeout] passed. Await it
+  /// after [resumeUserBrowser] returned true to tell the user why the host
+  /// said no.
+  Future<String?> get resumeAnswer =>
+      _resumeAnswer?.future ?? Future<String?>.value(_lastResumeError);
+
+  /// The longest host reason a toast shows.
+  static const int _maxResumeErrorLength = 200;
+
+  static String? _resumeErrorText(Object? error) {
+    if (error is! String) return null;
+    final String text = error.trim();
+    if (text.isEmpty) return null;
+    return text.length <= _maxResumeErrorLength
+        ? text
+        : '${text.substring(0, _maxResumeErrorLength - 1)}…';
+  }
+
   /// "Allow again": sends `user_browser_resume` (docs/WIRE_CONTRACT.md, "The
   /// user's own browser"). The host lifts the Stop and answers with
   /// `user_browser_status`, which repaints every view. False when the host
@@ -593,6 +628,8 @@ class AgentsPermissionsService extends ChangeNotifier {
       return false;
     }
     _resumingUserBrowser = true;
+    _lastResumeError = null;
+    _resumeAnswer = Completer<String?>();
     _resumeTimeout?.cancel();
     _resumeTimeout = Timer(resumeTimeout, () {
       if (_endResume()) notifyListeners();
@@ -607,12 +644,17 @@ class AgentsPermissionsService extends ChangeNotifier {
     }
   }
 
-  /// Ends a pending resume. True when one was pending.
-  bool _endResume() {
+  /// Ends a pending resume, with the host's reason when it said no. True
+  /// when one was pending.
+  bool _endResume({String? error}) {
     _resumeTimeout?.cancel();
     _resumeTimeout = null;
     if (!_resumingUserBrowser) return false;
     _resumingUserBrowser = false;
+    _lastResumeError = error;
+    final Completer<String?>? answer = _resumeAnswer;
+    _resumeAnswer = null;
+    if (answer != null && !answer.isCompleted) answer.complete(error);
     return true;
   }
   // ── end browser resume ──
