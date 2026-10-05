@@ -67,11 +67,10 @@ REQUEST_TIMEOUT = 30.0
 WEB_SEARCH_SCHEMA = {
     "type": "object",
     "description": (
-        "Search the web and get ranked results with title, URL and a short "
+        "Search the web: ranked results with title, URL and a short "
         "description. Use it for facts that can change, for anything after your "
-        "training data, and to discover source URLs through our API server. "
-        "Verify dynamic pages, local prices and availability in the browser. "
-        "Use web_fetch only for static text or API responses."
+        "training data, and to find source URLs. Check dynamic pages, local "
+        "prices and availability in the browser."
     ),
     "properties": {
         "query": {
@@ -85,10 +84,7 @@ WEB_SEARCH_SCHEMA = {
         },
         "freshness": {
             "type": "string",
-            "description": (
-                "Limit the age of the results: 'pd' past day, 'pw' past week, "
-                "'pm' past month, 'py' past year."
-            ),
+            "description": "Maximum age: pd day, pw week, pm month, py year.",
         },
     },
     "required": ["query"],

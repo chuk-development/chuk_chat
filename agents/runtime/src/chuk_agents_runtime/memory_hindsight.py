@@ -378,14 +378,10 @@ class HindsightMemoryStore(MemoryStore):
             _budget=self._recall_budget, _max_tokens=self._recall_max_tokens,
             _timeout=self._recall_timeout,
         )
-        from .memory import RECALL_PREFIX, neutralize
+        from .memory import neutralize, recall_block
 
         clean = [neutralize(str(n)).strip() for n in result.get("results") or []]
-        clean = [n for n in clean if n]
-        if not clean:
-            return []
-        body = "\n".join(f"- {_clip(n, 500)}" for n in clean)
-        return [{"role_tag": "memory", "role": "user", "content": RECALL_PREFIX + body}]
+        return recall_block([n for n in clean if n])
 
     def recall_messages_bounded(
         self, query: str, *, limit: int = RECALL_LIMIT, timeout: float | None = None
@@ -482,6 +478,11 @@ class HindsightMemoryStore(MemoryStore):
         )
         self._retain_async(item, "remember_summary")
         return {"ok": True, "action": "remember_summary", "status": "queued"}
+
+    def observe_summary(self, summary: str) -> None:
+        """The context ladder's summary hook. :meth:`remember_summary` already
+        only queues an async retain, so this never blocks the caller."""
+        self.remember_summary(summary)
 
     def observe_turn(
         self,

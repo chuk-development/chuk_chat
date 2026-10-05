@@ -271,6 +271,7 @@ def build_runtime(
     context_ladder: bool = True,
     context_config: LadderConfig | None = None,
     aux_model: ModelClient | None = None,
+    aux_model_factory: Callable[[], ModelClient] | None = None,
     enable_terminal: bool = True,
     terminal_task_id: str = "task",
     enable_browser: bool = True,
@@ -315,7 +316,12 @@ def build_runtime(
     tier 1 only — deterministic dedup/truncation, no LLM call, no spend — which
     is the tier that reclaims most of the waste anyway. Pass a cheap
     ``aux_model`` to enable the tier-2/3 summary of the middle, or
-    ``context_ladder=False`` to send the raw history.
+    ``context_ladder=False`` to send the raw history. ``aux_model_factory``
+    builds a private aux client for a background summary (cowork-z9mo): the
+    summary is then made after the run and off the turn path, so a turn does
+    not wait for it. Unset, ``aux_model.cheap_clone`` is used when the aux
+    client has one (the production backend client); a client without it (a
+    test mock) keeps the blocking summary.
 
     ``version_workspace`` (§7.7) makes the workspace a git repo, journals every
     tool call into it and registers the undo/history tools. It needs a
@@ -351,10 +357,13 @@ def build_runtime(
     the approval round-trip the executor binds, so a public publish waits on the
     user in ``ask`` mode and refuses when no one can approve.
 
-    ``enable_tool_search`` (§7.2) hides the MCP tools behind ``tool_search`` /
-    ``tool_describe`` / ``tool_call`` once their schemas pass
-    ``tool_search_threshold`` of the effective input budget. Core tools are never
-    hidden. The measured decision is on the loop as ``loop.tool_search``.
+    ``enable_tool_search`` (§7.2, bead chuk_chat-b3g4) hides every deferrable,
+    non-core tool (the MCP tools and the rarely used built-ins) behind Pydantic
+    AI's ``search_tools`` from the first round: ``tool_search_threshold`` is
+    ``0`` by default; a positive share of the effective input budget restores
+    the old size rule. Core tools are never hidden. A deferred tool the model
+    calls without searching still runs (the loop dispatches it and records the
+    discovery). The measured decision is on the loop as ``loop.tool_search``.
 
     ``debug_observer`` is the backend half of a debug "copy raw context" feature:
     a callback fired once per model round with the EXACT message list sent to the
@@ -471,9 +480,15 @@ def build_runtime(
 
     ladder: ContextLadder | None = None
     if context_ladder:
+        make_aux = aux_model_factory or (
+            getattr(aux_model, "cheap_clone", None) if aux_model is not None else None
+        )
         ladder = ContextLadder(
             config=ladder_config,
             summarizer=AuxSummarizer(aux_model) if aux_model is not None else None,
+            summarizer_factory=(
+                (lambda: AuxSummarizer(make_aux())) if callable(make_aux) else None
+            ),
         )
 
     store = StateStore(db_path)
@@ -536,8 +551,10 @@ def build_runtime(
                 subagents.runtime_kwargs.setdefault("memory_bank_id", bank)
             # Nothing a compaction summarized away is lost: every new tier-2/3
             # summary is handed to memory as facts (§12).
+            # ``observe_summary`` hands the facts over without holding up the
+            # caller (the Mem0 extraction is itself an aux call).
             if ladder is not None and memory.automatic:
-                ladder.on_summary = memory.remember_summary
+                ladder.on_summary = getattr(memory, "observe_summary", None) or memory.remember_summary
 
     library = SkillLibrary()
     if enable_skills:

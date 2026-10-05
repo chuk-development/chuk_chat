@@ -1481,6 +1481,9 @@ def register_browser_task(
         ),
         check_fn=available,
         is_async=True,
+        # Deferrable (§7.2, bead chuk_chat-b3g4): the fallback browser is
+        # found with ``search_tools`` when a task needs it.
+        deferrable=True,
     )
 
 

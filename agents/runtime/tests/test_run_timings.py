@@ -239,3 +239,100 @@ def test_a_recall_provider_is_timed(tmp_path):
     rows = [m.content for m in store.get_conversation(result.session_id)]
     assert {"role": "user", "content": "recalled"} in rows
     store.close()
+
+
+# -- cache hits and time to first token (the speed harness reads these) -------
+
+
+def test_cache_hits_and_first_token_reach_the_row(tmp_path):
+    store = StateStore(str(tmp_path / "fresh.db"))
+    try:
+        session_id = store.route("sess")
+        store.begin_run("r1", session_id, "sess", "why")
+        timings = RunTimings(model_calls=1, cached_tokens=31_744, first_token_ms=812.6)
+        store.finish_run(
+            "r1", reason="finished", final_answer="ok", iterations=1, tokens_spent=9,
+            timings=timings.as_row(),
+        )
+        row = store.get_run("r1")
+        assert row["cached_tokens"] == 31_744
+        assert row["first_token_ms"] == 812
+    finally:
+        store.close()
+
+
+def test_an_unmeasured_first_token_is_zero_on_the_row():
+    assert RunTimings().as_row()["first_token_ms"] == 0
+    assert RunTimings().as_row()["cached_tokens"] == 0
+
+
+def test_cached_tokens_are_read_from_every_usage_shape():
+    from chuk_agents_runtime.loop import cached_tokens_from_usage
+
+    assert cached_tokens_from_usage({"prompt_tokens_details": {"cached_tokens": 7}}) == 7
+    assert cached_tokens_from_usage({"cached_tokens": 5}) == 5
+    assert cached_tokens_from_usage({"cache_read_tokens": 4}) == 4
+    assert cached_tokens_from_usage({"cache_read_input_tokens": 3}) == 3
+    assert cached_tokens_from_usage({"prompt_tokens": 10}) == 0
+    assert cached_tokens_from_usage(None) == 0
+    assert cached_tokens_from_usage({"cached_tokens": True}) == 0
+
+
+def test_a_blocking_client_reports_its_cached_tokens(tmp_path):
+    store = StateStore(str(tmp_path / "loop.db"))
+    model = MockModelClient(["done"])
+    original = model.complete
+
+    def complete(messages):
+        response = original(messages)
+        response.raw["usage"] = {
+            "prompt_tokens": 1_000,
+            "completion_tokens": 5,
+            "prompt_tokens_details": {"cached_tokens": 900},
+        }
+        return response
+
+    model.complete = complete  # type: ignore[method-assign]
+    result = AgentLoop(model, ToolRegistry(), store, max_iterations=3).run("sess", "go")
+    assert result.timings.cached_tokens == 900
+    assert result.timings.first_token_ms is None  # nothing was streamed
+    store.close()
+
+
+def test_the_streaming_route_fills_cache_hits_and_first_token(tmp_path):
+    """Through the production model (OpenAI-compatible SSE): the route reports
+    ``prompt_tokens_details.cached_tokens``; every call adds to the run's
+    figure, and the first call's first token is timed."""
+    import httpx2
+    from pai_fakes import FakeChatEndpoint, FakeSession, text_turn, tool_turn
+
+    from chuk_agents_runtime.pai.model import ChukModelSpec, chuk_chat_model
+
+    def usage(cached: int) -> dict:
+        return {
+            "prompt_tokens": 1_000,
+            "completion_tokens": 8,
+            "total_tokens": 1_008,
+            "prompt_tokens_details": {"cached_tokens": cached},
+        }
+
+    endpoint = FakeChatEndpoint(
+        [
+            tool_turn([("c1", "echo", {})], usage=usage(600)),
+            text_turn(["ok"], usage=usage(950)),
+        ]
+    )
+    model, settings = chuk_chat_model(
+        FakeSession(), ChukModelSpec(model_id="m"), base_url="https://api.test",
+        transport=httpx2.MockTransport(endpoint.handler),
+    )
+    registry = ToolRegistry()
+    registry.register("echo", {"type": "object", "properties": {}}, lambda: "echoed")
+    store = StateStore(str(tmp_path / "loop.db"))
+    result = AgentLoop(model, registry, store, model_settings=settings, max_iterations=4).run(
+        "sess", "go"
+    )
+    assert result.final_answer == "ok"
+    assert result.timings.cached_tokens == 1_550
+    assert result.timings.first_token_ms is not None and result.timings.first_token_ms >= 0
+    store.close()

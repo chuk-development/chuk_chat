@@ -557,12 +557,16 @@ def register_media_tools(
         RUN_FFMPEG_SCHEMA,
         make_run_ffmpeg_handler(mount, runner=runner, binary=ffmpeg_binary),
         check_fn=lambda: _available(ffmpeg_binary),
+        # Deferrable (§7.2, bead chuk_chat-b3g4): behind ``search_tools`` until
+        # a task works on audio or video.
+        deferrable=True,
     )
     registry.register(
         "run_ffprobe",
         RUN_FFPROBE_SCHEMA,
         make_run_ffprobe_handler(mount, runner=runner, binary=ffprobe_binary),
         check_fn=lambda: _available(ffprobe_binary),
+        deferrable=True,
     )
 
 

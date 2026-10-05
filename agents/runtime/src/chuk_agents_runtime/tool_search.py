@@ -5,25 +5,44 @@ the request's ``tools`` array is re-sent with each turn. A handful of core tools
 is cheap. Twelve MCP servers with twenty tools each is not: that surface can pass
 fifty thousand tokens, which is spent before the model has read the task.
 
-So the surface is measured against the **effective input budget**
-(``context_window − reserved_output``, the same figure the context ladder uses,
-§7.3). Above ~10 % of it, every **deferrable** tool stops being declared. The
+So the deferrable surface is **hidden from token 0** (bead chuk_chat-b3g4).
+A plain "hi" to a coworker used to declare 64 tools — about 10k tokens on every
+round — because the old rule hid tools only once they passed ~10 % of the
+effective input budget, and the browser's 24 Playwright tools plus the
+schedule / call / secrets / shell / document tools never got there. A schema
+that is declared but not used is paid on every round; a tool that is searched
+for costs one extra round, once, in the task that needs it. So the default
+threshold is ``0``: every deferrable, non-core tool stops being declared. The
 loop's Pydantic AI ``ToolSearch`` capability then gives the model one
 ``search_tools(queries)`` tool; a tool it finds joins the declared set on the
 next request and is called directly (docs/PYDANTIC_AI_LOOP.md, section 14).
+A positive ``threshold`` restores the old size rule: defer only above that
+share of the effective input budget
+(``context_window − reserved_output``, the same figure the context ladder uses,
+§7.3).
 
 Two invariants:
 
-1. **Core tools are never deferred.** ``run_command``, the file tools,
-   ``memory``, ``skill``, ``web_search``, ``web_fetch``, the terminal set and the
-   subagent set stay declared at every size. They are used in almost every
-   task, so hiding them would cost two extra round trips to save nothing. The
-   guarantee is structural, not a list-check-at-render-time: a tool can only be
-   deferred if it registered ``deferrable=True``
-   (:meth:`chuk_agents_runtime.registry.ToolRegistry.defer` refuses otherwise), and
-   only :mod:`chuk_agents_runtime.mcp_client` does that. :data:`CORE_TOOLS` below is a
-   second belt — a name on it is refused even if some future caller marks it
-   deferrable.
+1. **Core tools are never deferred.** ``run_command``, ``python``, the file
+   tools, ``memory_search`` / ``memory_add``, ``skill``, ``web_search``, ``web_fetch``,
+   ``send_file_to_user``, ``search_chats`` and the subagent set stay declared
+   at every size. They are used in almost every task, so hiding them would cost
+   an extra round trip to save nothing. The guarantee is structural, not a
+   list-check-at-render-time: a tool can only be deferred if it registered
+   ``deferrable=True`` (:meth:`chuk_agents_runtime.registry.ToolRegistry.defer`
+   refuses otherwise). The MCP tools opt in (:mod:`chuk_agents_runtime.mcp_client`),
+   and so do the built-in tools a task rarely needs: the interactive shell,
+   background jobs, workspace history/undo,
+   ``chat_document``, ffmpeg/ffprobe, ``browser_task`` and the combined
+   ``memory`` tool (its add/search verbs stay declared), and the automation,
+   call and secrets tools. :data:`CORE_TOOLS` below is a second belt — a name
+   on it is refused even if some caller marks it deferrable.
+
+   Pydantic AI refuses a call to a deferred tool the model has not searched
+   for. The loop runs such a call anyway when the tool exists, is available
+   and needs no approval (``AgentLoop._write_tool_row``), and
+   ``pai.convert.rows_to_messages`` adds a discovery record for it, so the
+   next call of that tool is not refused again.
 2. **Deferral is declaration-only.** The tool stays registered; once found it
    is dispatched through the same registry as any direct call, so there is no
    second execution path to keep in sync (journaling, arg coercion and the
@@ -50,33 +69,28 @@ from .registry import ToolRegistry
 CORE_TOOLS = frozenset(
     {
         "run_command",
+        "python",
+        "finish",
         "write_file",
         "read_file",
         "list_dir",
         "read_document",
-        "memory",
+        "memory_search",
+        "memory_add",
         "skill",
         "web_search",
         "web_fetch",
         "send_file_to_user",
         "search_chats",
-        "run_ffmpeg",
-        "run_ffprobe",
-        "workspace_history",
-        "workspace_undo",
-        "terminal_open",
-        "terminal_send_keys",
-        "terminal_read",
-        "terminal_wait",
-        "terminal_close",
         "delegate_task",
         "subagent_control",
     }
 )
 
 #: Share of the effective input budget the deferrable surface may occupy before
-#: tool search takes over.
-DEFAULT_THRESHOLD = 0.10
+#: tool search takes over. ``0`` = always: every deferrable, non-core tool is
+#: behind ``search_tools`` from the first round (see the module docstring).
+DEFAULT_THRESHOLD = 0.0
 #: Same defaults as :class:`chuk_agents_runtime.context.LadderConfig`, so both parts of
 #: the token story are measured against one budget.
 DEFAULT_CONTEXT_WINDOW = 128_000
@@ -150,6 +164,9 @@ def apply_tool_search(
     threshold: float = DEFAULT_THRESHOLD,
 ) -> ToolSearchDecision:
     """Measure the deferrable surface and, above the threshold, hide it.
+
+    With the default ``threshold=0`` "above" means "there is any": every
+    available, deferrable, non-core tool is deferred.
 
     Idempotent: it starts from the undeferred state every time, so calling it
     again after a server connected or dropped re-decides on the current surface

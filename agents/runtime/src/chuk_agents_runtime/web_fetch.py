@@ -107,12 +107,10 @@ USER_AGENT = "AgentsAgent/0.1 (+https://chuk.chat)"
 WEB_FETCH_SCHEMA = {
     "type": "object",
     "description": (
-        "Fetch one web page or API response and return it as Markdown or plain "
-        "text. Use for known static pages or API URLs. Use web_search for "
-        "discovery, not search-engine HTML. Use the browser for dynamic pages, "
-        "local prices, cookies or interaction. Only http and https, only text-like content "
-        "(HTML, text, Markdown, JSON, XML). The result is truncated at 40000 "
-        "characters."
+        "Fetch one known static page or API response (http/https; HTML, text, "
+        "Markdown, JSON, XML) as Markdown or plain text, truncated at 40000 "
+        "characters. Not for search-engine result pages (use web_search) or "
+        "for dynamic pages, cookies and interaction (use the browser)."
     ),
     "properties": {
         "url": {

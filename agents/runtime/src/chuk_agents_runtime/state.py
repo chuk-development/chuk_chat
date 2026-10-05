@@ -127,7 +127,13 @@ CREATE TABLE IF NOT EXISTS runs (
     tool_ms       INTEGER NOT NULL DEFAULT 0,
     recall_ms     INTEGER NOT NULL DEFAULT 0,
     retries       INTEGER NOT NULL DEFAULT 0,
-    retry_ms      INTEGER NOT NULL DEFAULT 0
+    retry_ms      INTEGER NOT NULL DEFAULT 0,
+    -- Prompt tokens the provider served from its cache, summed over the run's
+    -- model calls (``prompt_tokens_details.cached_tokens``), and the provider's
+    -- time to the first streamed token of the run's first call, the history
+    -- rebuild (``prepare_ms``) left out. 0 = not reported / not measured.
+    cached_tokens  INTEGER NOT NULL DEFAULT 0,
+    first_token_ms INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_key, started_at);
@@ -151,6 +157,9 @@ RUNS_MIGRATIONS: tuple[tuple[str, str], ...] = (
     ("recall_ms", "INTEGER NOT NULL DEFAULT 0"),
     ("retries", "INTEGER NOT NULL DEFAULT 0"),
     ("retry_ms", "INTEGER NOT NULL DEFAULT 0"),
+    # Cache hits and time to first token, for the speed harness.
+    ("cached_tokens", "INTEGER NOT NULL DEFAULT 0"),
+    ("first_token_ms", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 #: The timing columns, in the order :meth:`StateStore.finish_run` writes them.
@@ -162,6 +171,8 @@ RUN_TIMING_COLUMNS: tuple[str, ...] = (
     "recall_ms",
     "retries",
     "retry_ms",
+    "cached_tokens",
+    "first_token_ms",
 )
 
 #: Run states (the ``runs.state`` column).

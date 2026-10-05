@@ -51,6 +51,11 @@ from .sqlite_tuning import tune_connection
 
 MAX_DESCRIPTION_CHARS = 1024
 MAX_CATALOG_DESCRIPTION_CHARS = 300
+#: The whole level-1 catalogue (bead chuk_chat-b3g4). Each line is paid on
+#: every round of every session, and ``MAX_SKILLS`` lines of 300 characters
+#: would be ~8k tokens. Past this budget the remaining skills are listed by
+#: name only — still loadable with the ``skill`` tool, just without the blurb.
+MAX_CATALOG_CHARS = 6_000
 MAX_BODY_CHARS = 40_000
 MAX_SKILLS = 100
 
@@ -183,7 +188,17 @@ class SkillLibrary:
             "kind of work it describes, not after.",
             "",
         ]
-        lines.extend(self.skills[name].catalog_line() for name in self.names())
+        used = 0
+        names_only: list[str] = []
+        for name in self.names():
+            line = self.skills[name].catalog_line()
+            if names_only or used + len(line) + 1 > MAX_CATALOG_CHARS:
+                names_only.append(f"`{name}`")
+                continue
+            lines.append(line)
+            used += len(line) + 1
+        if names_only:
+            lines.append("- Also available (load by name): " + ", ".join(names_only))
         return "\n".join(lines)
 
     def upgrade_catalog(self, prompt: str) -> str:

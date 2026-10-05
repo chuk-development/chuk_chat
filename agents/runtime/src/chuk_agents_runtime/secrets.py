@@ -268,10 +268,17 @@ def register_secrets_tools(registry: ToolRegistry, access: SecretsAccess | None)
     registered and the prompt does not mention secrets."""
     if access is None:
         return
+    # Deferred behind ``search_tools`` (bead chuk_chat-b3g4); an unsearched
+    # call still runs (the loop dispatches it and records the discovery).
     registry.register(
-        REQUEST_SECRETS_TOOL, REQUEST_SECRETS_SCHEMA, make_request_secrets_handler(access)
+        REQUEST_SECRETS_TOOL,
+        REQUEST_SECRETS_SCHEMA,
+        make_request_secrets_handler(access),
+        deferrable=True,
     )
-    registry.register(LIST_SECRETS_TOOL, LIST_SECRETS_SCHEMA, make_list_secrets_handler(access))
+    registry.register(
+        LIST_SECRETS_TOOL, LIST_SECRETS_SCHEMA, make_list_secrets_handler(access), deferrable=True
+    )
     registry.result_filter = Scrubber(access.env).scrub_obj
 
 

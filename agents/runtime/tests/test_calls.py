@@ -87,8 +87,42 @@ def test_build_runtime_offers_the_call_tools_to_the_model(tmp_path):
         version_workspace=False, enable_memory=False, enable_mcp=False,
         calls=RecordingCallBackend(),
     )
-    names = {t["function"]["name"] for t in loop.registry.openai_tools()}
-    assert set(CALL_TOOL_NAMES) <= names
+    # Offered behind ``search_tools`` (bead chuk_chat-b3g4): registered,
+    # available and deferred. An unsearched call still runs (see
+    # test_an_unsearched_deferred_call_runs_and_is_not_refused_again).
+    registry = loop.registry
+    for name in CALL_TOOL_NAMES:
+        assert registry.has(name) and registry.available(name)
+        assert registry.is_deferred(name)
+
+
+def test_an_unsearched_deferred_call_runs_and_is_not_refused_again(tmp_path):
+    """Pydantic AI refuses a deferred tool the model has not searched for.
+    The loop runs the call anyway (the model named it right) and stores a
+    discovery record, so the second call in the next round runs too."""
+    from chuk_agents_runtime.model import tool_call_response
+
+    backend = RecordingCallBackend()
+    loop = build_runtime(
+        MockModelClient(
+            [
+                tool_call_response(("call_user", {"reason": "pizza"})),
+                tool_call_response(("call_status", {"call_id": "c1"})),
+                "done",
+            ]
+        ),
+        db_path=str(tmp_path / "s.db"), workspace=str(tmp_path),
+        version_workspace=False, enable_memory=False, enable_mcp=False,
+        calls=backend,
+    )
+    assert loop.registry.is_deferred("call_user")
+    result = loop.run("s", "ring me")
+    assert result.final_answer == "done"
+    tools = [m.content for m in loop.store.get_conversation(result.session_id) if m.role == "tool"]
+    assert len(tools) == 2
+    assert "not available yet" not in str(tools)
+    assert tools[1]["content"]["state"] == "ringing"
+    assert len(backend.calls) == 1
 
 
 def test_in_spec_is_a_one_shot_relative_time():

@@ -60,6 +60,7 @@ __all__ = [
     "AutomationConfig",
     "BrowserConfig",
     "AgentsConfig",
+    "ChannelsConfig",
     "DocumentsConfig",
     "EmulatorConfig",
     "LimitsConfig",
@@ -481,6 +482,33 @@ class ModelConfig:
         doc=(
             "The default reasoning effort for new autonomous sessions. Empty "
             "means the backend's own default."
+        ),
+    )
+    aux: str = setting(
+        "deepseek/deepseek-v4-flash-0731",
+        env="AGENTS_MODEL_AUX",
+        doc=(
+            "The housekeeping model: the context summary and the Mem0 fact "
+            "extraction run on it, never the task's model. It must be fast, "
+            "cheap and able to turn reasoning off (its catalogue efforts "
+            "include ``none``); a model with mandatory reasoning keeps "
+            "thinking. Empty means the task's own model."
+        ),
+    )
+    aux_provider: str = setting(
+        "",
+        env="AGENTS_MODEL_AUX_PROVIDER",
+        doc=(
+            "The provider slug the housekeeping model is pinned to. Empty "
+            "means the backend's cheapest healthy provider."
+        ),
+    )
+    aux_reasoning_effort: str = setting(
+        "none",
+        env="AGENTS_MODEL_AUX_REASONING_EFFORT",
+        doc=(
+            "The reasoning effort of the housekeeping model. ``none`` turns "
+            "thinking off; empty means the backend's default."
         ),
     )
     api_key_ref: str = setting(
@@ -962,6 +990,59 @@ class EmulatorConfig:
 
 
 @dataclass(frozen=True)
+class ChannelsConfig:
+    """Messenger channels: talk to one coworker from outside the app.
+
+    A channel is off for every coworker until the user turns it on for one
+    coworker in the app and gives it a bot token. The token is a secret: it
+    lives in the host's encrypted channel store, never in this file. These
+    keys only bound what the app may switch on.
+
+    Privacy: Telegram is **not** end-to-end encrypted. Telegram's servers see
+    every message the user sends to the bot and every reply. The app's own
+    path stays end-to-end encrypted; the channel is an extra path for people
+    who accept that.
+    """
+
+    telegram_allowed: bool = setting(
+        True,
+        env="AGENTS_TELEGRAM_ALLOWED",
+        doc=(
+            "Let the app turn on the Telegram channel for a coworker. Off "
+            "forbids it on this host: a stored bot token is kept but no "
+            "poller starts. The channel itself is off per coworker until "
+            "the user turns it on."
+        ),
+    )
+    telegram_api_base: str = setting(
+        "https://api.telegram.org",
+        env="AGENTS_TELEGRAM_API_BASE",
+        doc=(
+            "The Bot API server the poller talks to. Change it only for a "
+            "self-hosted Bot API server. The host dials out with long "
+            "polling; it opens no port and sets no webhook."
+        ),
+    )
+    telegram_poll_timeout: int = setting(
+        25,
+        env="AGENTS_TELEGRAM_POLL_TIMEOUT",
+        doc=(
+            "Seconds one ``getUpdates`` long poll waits for a message before "
+            "it returns empty and the poller asks again."
+        ),
+    )
+    telegram_link_ttl: int = setting(
+        600,
+        env="AGENTS_TELEGRAM_LINK_TTL",
+        doc=(
+            "Seconds a link code the bot sends to a new chat stays valid. "
+            "The user types the code into the app to make that chat the one "
+            "chat the coworker answers."
+        ),
+    )
+
+
+@dataclass(frozen=True)
 class AgentsConfig:
     """Every setting of one Agents installation.
 
@@ -984,6 +1065,7 @@ class AgentsConfig:
     trace: TraceConfig = field(default_factory=TraceConfig)
     automation: AutomationConfig = field(default_factory=AutomationConfig)
     emulator: EmulatorConfig = field(default_factory=EmulatorConfig)
+    channels: ChannelsConfig = field(default_factory=ChannelsConfig)
 
 
 def _build_sections() -> dict[str, type]:

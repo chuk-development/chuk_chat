@@ -127,13 +127,17 @@ def register_workspace_tools(
     """
     if workspace is None or not workspace.enabled:
         return
+    # Deferrable (§7.2, bead chuk_chat-b3g4): behind ``search_tools`` until a
+    # task needs it, so its schema is not paid on every round of every task.
     registry.register(
         "workspace_history",
         WORKSPACE_HISTORY_SCHEMA,
         make_workspace_history_handler(workspace),
+        deferrable=True,
     )
     registry.register(
         "workspace_undo",
         WORKSPACE_UNDO_SCHEMA,
         make_workspace_undo_handler(workspace),
+        deferrable=True,
     )

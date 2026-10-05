@@ -327,7 +327,9 @@ def register_document_tool(registry: ToolRegistry, store: DocumentStore, sink: F
             'source_url': {'type': 'string'}, 'retrieved_at': {'type': 'string'},
             'caption': {'type': 'string'},
         }, 'required': ['action'],
-    }, chat_document)
+    # Deferrable (§7.2, bead chuk_chat-b3g4): the largest built-in schema, found
+    # with ``search_tools`` by the task that keeps a document.
+    }, chat_document, deferrable=True)
 
 
 DOCUMENT_SUFFIXES = {'.md', '.txt', '.csv', '.pdf', '.docx', '.xlsx', '.pptx', '.html', '.svg'}

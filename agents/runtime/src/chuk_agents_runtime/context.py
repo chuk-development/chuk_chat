@@ -51,6 +51,20 @@ and an orphaned call makes some of them error outright.
 **Anti-thrashing.** If the last two passes each saved under 10%, the ladder
 stops trying: paying an aux model to shave 3% off every round is a leak, not a
 saving.
+
+**Summaries off the turn path (cowork-z9mo).** With a ``summarizer_factory``
+and a :class:`SummaryStore`, a needed summary is made on a background thread
+and persisted; the turn does not wait for it. The turn sends what it already
+has (the last valid summary plus the aged slice verbatim, or the tier-1
+payload) as long as that stays under ``hard_threshold`` of the budget. Only a
+payload over that hard ceiling waits for one blocking aux call, and that is
+logged as a warning. After a run, :meth:`ContextLadder.plan_ahead` starts the
+job if the next turn would need a summary, so the next turn only loads it.
+
+**Idle rule (cowork-z9mo).** A user message that arrives after a pause of at
+least ``idle_drop_seconds`` drops every tool call and tool result before it;
+the conversation text stays. The provider cache is cold after such a pause
+anyway, so the rewrite costs nothing, and the answers say what the agent did.
 """
 
 from __future__ import annotations
@@ -59,11 +73,16 @@ from collections.abc import Callable
 
 import hashlib
 import json
+import logging
 import re
+import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
 
 from .think_scrubber import scrub_history
+
+logger = logging.getLogger(__name__)
 
 # -- token accounting ---------------------------------------------------------
 
@@ -323,6 +342,8 @@ def render_transcript(messages: list[dict]) -> str:
     """Flatten messages into the plain text the aux model summarizes."""
     lines: list[str] = []
     for message in messages:
+        if message.get(IDLE_DROP_KEY):
+            continue
         role = message.get("role", "?")
         if role == "tool":
             name = message.get("name", "tool")
@@ -382,6 +403,12 @@ class AuxSummarizer:
         text = getattr(response, "text", None)
         return (text or "").strip()
 
+    def close(self) -> None:
+        """Release the wrapped client (a background job owns its own)."""
+        close = getattr(self._client, "close", None)
+        if callable(close):
+            close()
+
 
 # -- configuration ------------------------------------------------------------
 
@@ -407,6 +434,10 @@ class LadderConfig:
     # effective input budget.
     tail_token_budget: int | None = None
     tail_budget_fraction: float = 0.25
+    # The fraction is only an upper bound: the tail is re-sent verbatim in
+    # every round, so 25% of a 128k budget (~30k tokens) was the floor of
+    # every request. Capped at this many tokens.
+    tail_token_cap: int = 10_000
 
     # Tier 1 caps.
     max_tool_result_tokens: int = 1_000
@@ -418,6 +449,17 @@ class LadderConfig:
     thrash_min_savings: float = 0.10
     thrash_window: int = 2
 
+    # Hard ceiling (cowork-z9mo): with a background summarizer, a turn sends
+    # what it has while that stays under this pressure, and waits for a
+    # blocking aux call only above it. Below 1.0 because the estimate is rough.
+    hard_threshold: float = 0.90
+    # After a run, refresh the summary in the background already when the
+    # next payload is within this much pressure of the tier-2 threshold.
+    plan_headroom: float = 0.05
+    # A user message after a pause this long (seconds) drops the tool calls
+    # and tool results before it. 0 turns the rule off.
+    idle_drop_seconds: float = 1800.0
+
     enabled: bool = True
 
     @property
@@ -428,7 +470,10 @@ class LadderConfig:
     def tail_budget(self) -> int:
         if self.tail_token_budget is not None:
             return max(0, self.tail_token_budget)
-        return max(1, int(self.effective_input_budget * self.tail_budget_fraction))
+        return max(
+            1,
+            min(self.tail_token_cap, int(self.effective_input_budget * self.tail_budget_fraction)),
+        )
 
 
 @dataclass
@@ -440,6 +485,12 @@ class CompressionStats:
     tokens_before: int = 0
     tokens_after: int = 0
     skipped_reason: str | None = None
+    #: A needed summary went to the background; the turn did not wait.
+    deferred: bool = False
+    #: The turn waited for an aux call (no background, or over the ceiling).
+    blocking_aux: bool = False
+    #: Messages whose tool traffic the idle rule dropped.
+    idle_dropped: int = 0
 
     @property
     def saved(self) -> int:
@@ -456,6 +507,10 @@ class CompressionStats:
 
 DUP_KEY = "cowork_dup_of_index"
 TRUNCATION_NOTE = "cowork_truncated"
+#: Private flag on a message the idle rule dropped. Such a message keeps its
+#: slot (and its content, for back-references) until the very end of a pass,
+#: so every index stays aligned with the input; it is never sent.
+IDLE_DROP_KEY = "cowork_idle_dropped"
 
 
 def _canonical(content: Any) -> str:
@@ -483,6 +538,184 @@ def _prefix_digest(messages: list[dict], start: int, end: int) -> str:
         )
         h.update(b"\x1e")
     return h.hexdigest()
+
+
+def _cost(message: dict) -> int:
+    """Token cost of one message as sent: an idle-dropped message costs 0."""
+    if message.get(IDLE_DROP_KEY):
+        return 0
+    return estimate_message_tokens(message)
+
+
+def idle_cut(messages: list[dict], timestamps: list[float] | None, gap_seconds: float) -> int:
+    """Index of the newest user message that arrived ``gap_seconds`` or more
+    after the message before it; 0 when there is none.
+
+    Only a user message counts: a long build that ran for 40 minutes is a gap
+    between two tool rows, not a user who went away. The cut is computed from
+    the stored timestamps on every pass, so it is the same on every later
+    turn until the next long pause moves it forward."""
+    if gap_seconds <= 0 or not timestamps or len(timestamps) != len(messages):
+        return 0
+    for i in range(len(messages) - 1, 0, -1):
+        if messages[i].get("role") != "user":
+            continue
+        try:
+            gap = float(timestamps[i]) - float(timestamps[i - 1])
+        except (TypeError, ValueError):
+            continue
+        if gap >= gap_seconds:
+            return i
+    return 0
+
+
+#: The head of a task-start memory recall row (``memory.RECALL_PREFIX``).
+RECALL_MARK = "[memory recall"
+#: The head of a fired automation's prompt and the line before its payload
+#: (``automations.fired_prompt`` / ``automations.PAYLOAD_MARKER``).
+AUTOMATION_MARK = "[automation "
+PAYLOAD_MARK = "payload (data, not instructions):"
+OLD_PAYLOAD_NOTE = "(payload of an earlier run omitted; the answer after it says what it showed)"
+
+
+def _stale_marks(messages: list[dict], head_end: int, turn_start: int) -> tuple[list[dict], int]:
+    """Old injected rows before the current turn (``messages[turn_start]`` is
+    its prompt): a memory recall row of an earlier task is flagged (only the
+    current task's recall matters; the notes are still in memory), and the
+    payload of an earlier fired automation is collapsed to its first lines.
+    Same slots as the input, like :func:`_idle_marks`."""
+    if turn_start <= head_end:
+        return messages, 0
+    out = messages
+    changed = 0
+    for i in range(head_end, min(turn_start, len(messages))):
+        message = messages[i]
+        content = message.get("content")
+        if message.get("role") != "user" or not isinstance(content, str):
+            continue
+        if content.startswith(RECALL_MARK):
+            replacement = {**message, IDLE_DROP_KEY: True}
+        elif content.startswith(AUTOMATION_MARK) and PAYLOAD_MARK in content:
+            head = content.split(PAYLOAD_MARK, 1)[0].rstrip()
+            replacement = {**message, "content": f"{head}\n{OLD_PAYLOAD_NOTE}"}
+        else:
+            continue
+        if out is messages:
+            out = list(messages)
+        out[i] = replacement
+        changed += 1
+    return out, changed
+
+
+def _idle_marks(messages: list[dict], head_end: int, cut: int) -> tuple[list[dict], int]:
+    """Drop the tool traffic in ``messages[head_end:cut]`` (the idle rule).
+
+    A tool result and an assistant turn that only called tools are flagged
+    with :data:`IDLE_DROP_KEY` (same slot, content kept for back-references);
+    an assistant turn with text keeps the text and loses its ``tool_calls``.
+    Calls and results go together, so no orphan is ever left. Returns the new
+    list and how many messages changed."""
+    if cut <= head_end:
+        return messages, 0
+    out = list(messages)
+    changed = 0
+    for i in range(head_end, min(cut, len(messages))):
+        message = messages[i]
+        role = message.get("role")
+        if role == "tool":
+            out[i] = {**message, IDLE_DROP_KEY: True}
+            changed += 1
+        elif role == "assistant" and message.get("tool_calls"):
+            text = message.get("content")
+            if isinstance(text, str) and text.strip():
+                out[i] = {k: v for k, v in message.items() if k != "tool_calls"}
+            else:
+                out[i] = {**message, IDLE_DROP_KEY: True}
+            changed += 1
+    return out, changed
+
+
+# -- background summaries -------------------------------------------------------
+
+
+class BackgroundSummaries:
+    """Process-wide bookkeeping of the background summary jobs (cowork-z9mo).
+
+    At most one job per ``(store, session)``: a second request while one runs
+    is refused, and the caller goes on with what it has. Every finished job
+    bumps the key's generation, which tells a live ladder to re-read the
+    stored summary before its next pass."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._running: dict[tuple, threading.Thread] = {}
+        self._generation: dict[tuple, int] = {}
+
+    def running(self, key: tuple) -> bool:
+        with self._lock:
+            thread = self._running.get(key)
+            return thread is not None and thread.is_alive()
+
+    def generation(self, key: tuple) -> int:
+        with self._lock:
+            return self._generation.get(key, 0)
+
+    def start(self, key: tuple, job: Callable[[], None]) -> bool:
+        """Run ``job`` on a daemon thread unless one already runs for ``key``."""
+
+        def body() -> None:
+            try:
+                job()
+            except Exception:  # noqa: BLE001 — a background job never raises
+                logger.warning("background summary failed", exc_info=True)
+            finally:
+                with self._lock:
+                    self._generation[key] = self._generation.get(key, 0) + 1
+                    if self._running.get(key) is threading.current_thread():
+                        del self._running[key]
+
+        with self._lock:
+            current = self._running.get(key)
+            if current is not None and current.is_alive():
+                return False
+            thread = threading.Thread(target=body, name="agents-context-summary", daemon=True)
+            self._running[key] = thread
+        thread.start()
+        return True
+
+    def wait(self, key: tuple, timeout: float | None = None) -> bool:
+        """Block until the job for ``key`` ends (tests, shutdown). True when
+        none runs any more."""
+        with self._lock:
+            thread = self._running.get(key)
+        if thread is None:
+            return True
+        thread.join(timeout)
+        return not thread.is_alive()
+
+
+_BACKGROUND = BackgroundSummaries()
+
+
+def background_summaries() -> BackgroundSummaries:
+    """The process-wide :class:`BackgroundSummaries`."""
+    return _BACKGROUND
+
+
+def _summary_message(summary: str) -> dict:
+    return {"role": "user", "content": SUMMARY_PREFIX + summary}
+
+
+def _covers_more(row: dict, source: list[dict], head_end: int, upto: int) -> bool:
+    """True when a stored summary row is a newer, valid one than a background
+    result covering ``source[head_end:upto]``: it covers more, and either it
+    came from a longer history or its digest matches this one."""
+    row_upto = row.get("summarized_upto")
+    if not isinstance(row_upto, int) or row_upto <= upto:
+        return False
+    if row_upto > len(source):
+        return True
+    return _prefix_digest(source, head_end, row_upto) == row.get("prefix_digest")
 
 
 def expand_back_references(messages: list[dict]) -> list[dict]:
@@ -555,7 +788,7 @@ def _tail_start(messages: list[dict], budget: int) -> tuple[int, int]:
     chosen = len(messages)
     for k in range(len(starts) - 1, -1, -1):
         unit = messages[bounds[k] : bounds[k + 1]]
-        cost = sum(estimate_message_tokens(m) for m in unit)
+        cost = sum(_cost(m) for m in unit)
         if used + cost > budget:
             break
         used += cost
@@ -584,10 +817,16 @@ class ContextLadder:
     #: Fired with every NEW tier-2/3 summary text, after it replaced the middle
     #: of the live context. The memory layer keeps its facts (§12), so what left
     #: the window is still recallable. Best-effort: a raising hook is swallowed.
+    #: A background summary fires it on the background thread.
     on_summary: Callable[[str], None] | None = None
     #: Keeps the summary across runs of one session (see :class:`SummaryStore`).
     #: Used only when :meth:`prepare` is given a ``session_id``.
     summary_store: SummaryStore | None = None
+    #: Builds a private summarizer for one background job (cowork-z9mo). Set
+    #: together with a :attr:`summary_store` and a session, a needed summary is
+    #: made off the turn path; unset, the ladder blocks on :attr:`summarizer`
+    #: exactly as before. The job closes what it built (``close()``).
+    summarizer_factory: Callable[[], Summarizer] | None = None
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
@@ -595,7 +834,12 @@ class ContextLadder:
     # ``_summary`` covers. ``None`` = not checked against a history yet.
     _summary_digest: str | None = field(default=None, init=False, repr=False)
     _session_id: int | None = field(default=None, init=False, repr=False)
+    # Background generation of this session when the summary was last read
+    # from the store. A newer generation means a job wrote a fresher one.
+    _loaded_generation: int = field(default=0, init=False, repr=False)
     _calibration: float = field(default=1.0, init=False, repr=False)
+    # Tokens the idle/stale passes removed without flagging, this pass.
+    _decision_extra: int = field(default=0, init=False, repr=False)
     _last_estimate: int = field(default=0, init=False, repr=False)
     # (tier that ran, ratio saved) per pass — the tier matters, see _thrashing.
     _pass_savings: list[tuple[int, float]] = field(
@@ -634,30 +878,91 @@ class ContextLadder:
 
     # -- entry point ------------------------------------------------------
 
-    def prepare(self, messages: list[dict], *, session_id: int | None = None) -> list[dict]:
+    def prepare(
+        self,
+        messages: list[dict],
+        *,
+        session_id: int | None = None,
+        timestamps: list[float] | None = None,
+        turn_start: int | None = None,
+    ) -> list[dict]:
         """The loop's one call: scrub stale reasoning, then compress under
         pressure. Returns the message list to send.
 
         ``session_id`` names the stored session ``messages`` came from. With a
         :attr:`summary_store`, the session's last summary is picked up on the
         first call and every new one is written back, so the next run does not
-        pay the aux model again for a middle that did not change."""
+        pay the aux model again for a middle that did not change.
+
+        ``timestamps`` are the stored ``created_at`` of ``messages`` (same
+        length); they drive the idle rule (:func:`idle_cut`). ``turn_start``
+        is the index of the current task's prompt; injected rows of earlier
+        tasks before it are dropped or collapsed (:func:`_stale_marks`)."""
         if session_id is not None and session_id != self._session_id:
             self._bind_session(session_id)
         scrubbed = scrub_history(messages)
-        out = self.compress(scrubbed)
+        cut = idle_cut(scrubbed, timestamps, self.config.idle_drop_seconds)
+        out = self.compress(scrubbed, idle_cut=cut, turn_start=turn_start or 0)
         self._last_estimate = self._measure(out)
         return out
+
+    def plan_ahead(self, messages: list[dict], *, session_id: int) -> bool:
+        """After a run (cowork-z9mo): if the next turn would need a new
+        summary, start it now on a background thread, so the next turn only
+        loads it from the store. ``messages`` are the stored rows exactly as
+        :meth:`prepare` would get them. Never blocks; True when a job started.
+
+        The trigger is the tier-2 threshold minus ``plan_headroom``: the next
+        turn adds at least a user message, and a summary refreshed a little
+        early costs a cheap background call, never the user's time."""
+        cfg = self.config
+        if not cfg.enabled or self.summarizer_factory is None or self.summary_store is None:
+            return False
+        if session_id != self._session_id:
+            self._bind_session(session_id)
+        scrubbed = scrub_history(messages)
+        head_end = _head_end(scrubbed, cfg.head_messages)
+        self._refresh_from_background()
+        self._check_summary(scrubbed, head_end)
+        raw_tail_start, raw_exempt_start = _tail_start(scrubbed, cfg.tail_budget)
+        tail_start = max(head_end, raw_tail_start)
+        exempt_start = max(head_end, raw_exempt_start)
+        if tail_start <= head_end:
+            return False
+        working = self._tier1(scrubbed, exempt_start)
+        trigger = cfg.tier2_threshold - cfg.plan_headroom
+        if self._pressure(self._measure(working)) < trigger:
+            return False
+        slice_start, previous = self._slice_start(head_end, tail_start)
+        new_slice = working[slice_start:tail_start]
+        if not new_slice:
+            return False
+        if previous:
+            kept = working[:head_end] + [_summary_message(previous)] + working[slice_start:]
+            if self._pressure(self._measure(kept)) < trigger:
+                return False
+        return self._schedule(scrubbed, working, head_end, slice_start, tail_start, previous)
+
+    def wait_background(self, timeout: float | None = None) -> bool:
+        """Block until this session's background summary job (if any) ends.
+        For tests and an orderly shutdown; a turn never calls it."""
+        if self.summary_store is None or self._session_id is None:
+            return True
+        return background_summaries().wait(self._job_key(), timeout)
 
     def _bind_session(self, session_id: int) -> None:
         self._session_id = session_id
         self._summary = None
         self._summarized_upto = 0
         self._summary_digest = None
-        if self.summary_store is None:
+        self._loaded_generation = background_summaries().generation(self._job_key())
+        self._load_from_store()
+
+    def _load_from_store(self) -> None:
+        if self.summary_store is None or self._session_id is None:
             return
         try:
-            row = self.summary_store.load_context_summary(session_id)
+            row = self.summary_store.load_context_summary(self._session_id)
         except Exception:  # noqa: BLE001 — a cache miss, never a failed turn
             row = None
         if not row:
@@ -669,6 +974,29 @@ class ContextLadder:
             self._summary = summary
             self._summarized_upto = upto
             self._summary_digest = str(digest)
+
+    def _job_key(self) -> tuple:
+        store = self.summary_store
+        where = getattr(store, "_path", None) or id(store)
+        return (where, self._session_id)
+
+    def _refresh_from_background(self) -> None:
+        """A background job finished since the summary was read: take the
+        stored one (it is the newest; this ladder persists its own too)."""
+        if self.summary_store is None or self._session_id is None:
+            return
+        generation = background_summaries().generation(self._job_key())
+        if generation == self._loaded_generation:
+            return
+        self._loaded_generation = generation
+        self._load_from_store()
+
+    def _can_defer(self) -> bool:
+        return (
+            self.summarizer_factory is not None
+            and self.summary_store is not None
+            and self._session_id is not None
+        )
 
     def _persist_summary(self, messages: list[dict], head_end: int) -> None:
         self._summary_digest = _prefix_digest(messages, head_end, self._summarized_upto)
@@ -702,7 +1030,17 @@ class ContextLadder:
     # -- measurement ------------------------------------------------------
 
     def _measure(self, messages: list[dict]) -> int:
+        """What ``messages`` cost as sent (flagged messages are free)."""
+        return sum(_cost(m) for m in messages) + self.config.tool_schema_tokens
+
+    def _measure_all(self, messages: list[dict]) -> int:
+        """Flagged messages count too."""
         return estimate_messages_tokens(messages) + self.config.tool_schema_tokens
+
+    def _decision_size(self, messages: list[dict]) -> int:
+        """The size the tier decisions use: as if the idle rule and the stale
+        row pass had not run, so they can only make the payload smaller."""
+        return self._measure_all(messages) + self._decision_extra
 
     def _pressure(self, tokens: int) -> float:
         return (tokens * self._calibration) / self.config.effective_input_budget
@@ -726,50 +1064,70 @@ class ContextLadder:
 
     # -- the ladder proper -------------------------------------------------
 
-    def compress(self, messages: list[dict]) -> list[dict]:
+    def compress(
+        self, messages: list[dict], *, idle_cut: int = 0, turn_start: int = 0
+    ) -> list[dict]:
         cfg = self.config
         before = self._measure(messages)
-        pressure = self._pressure(before)
-        stats = CompressionStats(tier=0, pressure=pressure, tokens_before=before, tokens_after=before)
+        stats = CompressionStats(tier=0, pressure=0.0, tokens_before=before, tokens_after=before)
 
         if not cfg.enabled:
+            stats.pressure = self._pressure(before)
             stats.skipped_reason = "disabled"
             self._last_stats = stats
             return messages
+
+        head_end = _head_end(messages, cfg.head_messages)
+        # The idle rule and the stale injected rows first. Flagged messages
+        # keep their slot until the end, so every index below is an input
+        # index. They only ever REMOVE from the payload: every tier decision
+        # below is made on the unflagged size (``_measure_all``), so the
+        # result is never larger than without them (a drop that lowered the
+        # pressure under tier 2 left the whole middle verbatim).
+        marked, stats.idle_dropped = _idle_marks(messages, head_end, idle_cut)
+        marked, stale = _stale_marks(marked, head_end, turn_start)
+        stats.idle_dropped += stale
+        # What the two passes shrank without flagging (a collapsed payload, a
+        # turn that lost its tool calls); added back for the tier decisions.
+        self._decision_extra = max(0, self._measure_all(messages) - self._measure_all(marked))
+        pressure = self._pressure(self._measure_all(messages))
+        stats.pressure = pressure
+
         if pressure < cfg.tier1_threshold:
             stats.skipped_reason = "below_threshold"
-            self._last_stats = stats
-            return messages
+            return self._finish(marked, stats, record=False)
         intended_tier = (
             2 if self.summarizer is not None and pressure >= cfg.tier2_threshold else 1
         )
         if self._thrashing(intended_tier):
             stats.skipped_reason = "anti_thrash"
-            self._last_stats = stats
-            return messages
+            return self._finish(marked, stats, record=False)
 
-        head_end = _head_end(messages, cfg.head_messages)
-        # A shorter history than we already summarized means a different run;
-        # a changed slice means the summary no longer describes it.
+        # A background job may have written a fresher summary since this
+        # ladder read it; then check that the summary still covers this
+        # history (a shorter or changed one means it does not).
+        self._refresh_from_background()
         self._check_summary(messages, head_end)
 
-        raw_tail_start, raw_exempt_start = _tail_start(messages, cfg.tail_budget)
+        raw_tail_start, raw_exempt_start = _tail_start(marked, cfg.tail_budget)
         tail_start = max(head_end, raw_tail_start)
         exempt_start = max(head_end, raw_exempt_start)
 
         # -- tier 1: deterministic, no LLM ---------------------------------
-        working = self._tier1(messages, exempt_start)
+        working = self._tier1(marked, exempt_start)
         stats.tier = 1
 
         # -- tier 2/3: aux-model summary of the middle ---------------------
         had_summary = self._summary is not None
         if (
             self.summarizer is not None
-            and self._pressure(self._measure(working)) >= cfg.tier2_threshold
+            and self._pressure(self._decision_size(working)) >= cfg.tier2_threshold
             and tail_start > head_end
         ):
             covered = (self._summary, self._summarized_upto)
-            summarized = self._summarize_middle(working, head_end, tail_start)
+            summarized = self._summarize_middle(
+                working, head_end, tail_start, source=messages, stats=stats
+            )
             if summarized is not None:
                 working = summarized
                 stats.tier = 3 if had_summary else 2
@@ -778,11 +1136,21 @@ class ContextLadder:
                 # scrubbed input, which tier 1 has not touched) and keep it.
                 self._persist_summary(messages, head_end)
 
-        after = self._measure(working)
-        stats.tokens_after = after
+        return self._finish(working, stats, record=True)
+
+    def _finish(self, working: list[dict], stats: CompressionStats, *, record: bool) -> list[dict]:
+        """Remove what the idle rule flagged, keep back-references valid, and
+        close the pass's stats."""
+        out = working
+        if any(m.get(IDLE_DROP_KEY) for m in working):
+            out = self._repair_dangling_refs(
+                [m for m in working if not m.get(IDLE_DROP_KEY)], working
+            )
+        stats.tokens_after = self._measure(out)
         self._last_stats = stats
-        self._pass_savings.append((stats.tier, stats.saved_ratio))
-        return working
+        if record:
+            self._pass_savings.append((stats.tier, stats.saved_ratio))
+        return out
 
     # -- tier 1 -----------------------------------------------------------
 
@@ -797,6 +1165,11 @@ class ContextLadder:
         for i, message in enumerate(messages):
             role = message.get("role")
             in_tail = i >= exempt_start
+
+            if message.get(IDLE_DROP_KEY):
+                # Never sent: neither a dedup target nor worth truncating.
+                out.append(message)
+                continue
 
             if role == "tool":
                 content = message.get("content")
@@ -840,20 +1213,32 @@ class ContextLadder:
 
     # -- tier 2 / 3 -------------------------------------------------------
 
-    def _summarize_middle(
-        self, messages: list[dict], head_end: int, tail_start: int
-    ) -> list[dict] | None:
-        assert self.summarizer is not None
-        # Tier 3: only the slice that has aged since the last pass is sent; the
-        # rest is already represented by the existing summary.
-        slice_start = head_end
+    def _slice_start(self, head_end: int, tail_start: int) -> tuple[int, str | None]:
+        """Where the not-yet-summarized slice begins, and the summary before it.
+        Tier 3: only the slice that has aged since the last pass is sent; the
+        rest is already represented by the existing summary."""
         previous = self._summary
         if previous and self._summarized_upto > head_end:
-            slice_start = min(self._summarized_upto, tail_start)
+            return min(self._summarized_upto, tail_start), previous
+        return head_end, previous
+
+    def _summarize_middle(
+        self,
+        messages: list[dict],
+        head_end: int,
+        tail_start: int,
+        *,
+        source: list[dict] | None = None,
+        stats: CompressionStats | None = None,
+    ) -> list[dict] | None:
+        assert self.summarizer is not None
+        cfg = self.config
+        slice_start, previous = self._slice_start(head_end, tail_start)
 
         new_slice = messages[slice_start:tail_start]
         head = messages[:head_end]
-        if new_slice and previous:
+        kept: list[dict] | None = None
+        if previous:
             # Tier 3 is paid only when it is needed. While the summary plus the
             # newly-aged slice (sent verbatim) plus the tail is still under the
             # tier-2 threshold, the summary is reused as it is: the model sees
@@ -861,35 +1246,121 @@ class ContextLadder:
             # the aux model for a slice of a few messages. Without this, every
             # round that moved the tail by one unit paid a blocking aux call
             # (bead chuk_chat-p5xm).
-            kept = head + [
-                {"role": "user", "content": SUMMARY_PREFIX + previous}
-            ] + messages[slice_start:]
-            if self._pressure(self._measure(kept)) < self.config.tier2_threshold:
+            kept = head + [_summary_message(previous)] + messages[slice_start:]
+            if not new_slice or self._pressure(self._decision_size(kept)) < cfg.tier2_threshold:
                 return self._repair_dangling_refs(kept, messages)
-        if new_slice:
-            # Redact BEFORE the transcript leaves the machine, and redact what
-            # comes back. The model is asked to redact too, but is not trusted to.
-            transcript = redact_secrets(render_transcript(new_slice))
-            summary = self.summarizer.summarize(transcript, previous)
-            summary = redact_secrets(summary).strip()
-            if not summary:
-                return None
-            self._summary = summary
-            self._summarized_upto = tail_start
-            if self.on_summary is not None:
-                try:
-                    self.on_summary(summary)
-                except Exception:  # noqa: BLE001 — memory must never break compaction
-                    pass
-        elif not previous:
+        if not new_slice:
             return None
 
-        summary_message = {
-            "role": "user",
-            "content": SUMMARY_PREFIX + (self._summary or ""),
-        }
-        rebuilt = head + [summary_message] + messages[tail_start:]
+        if self._can_defer() and source is not None:
+            # cowork-z9mo: the summary is made in the background and the turn
+            # goes on with what it has, as long as that fits the hard ceiling.
+            candidate = kept if kept is not None else messages
+            pressure = self._pressure(self._measure(candidate))
+            if pressure < cfg.hard_threshold:
+                self._schedule(source, messages, head_end, slice_start, tail_start, previous)
+                if stats is not None:
+                    stats.deferred = True
+                if kept is not None:
+                    return self._repair_dangling_refs(kept, messages)
+                return None
+            logger.warning(
+                "context ladder: blocking aux summary for session %s: the payload "
+                "without it is at %.0f%% of the input budget (hard ceiling %.0f%%)",
+                self._session_id,
+                pressure * 100,
+                cfg.hard_threshold * 100,
+            )
+        if stats is not None:
+            stats.blocking_aux = True
+
+        # Redact BEFORE the transcript leaves the machine, and redact what
+        # comes back. The model is asked to redact too, but is not trusted to.
+        transcript = redact_secrets(render_transcript(new_slice))
+        started = time.monotonic()
+        summary = self.summarizer.summarize(transcript, previous)
+        summary = redact_secrets(summary).strip()
+        logger.info(
+            "context ladder: blocking aux summary took %.0f ms (%d transcript chars)",
+            (time.monotonic() - started) * 1000,
+            len(transcript),
+        )
+        if not summary:
+            return None
+        self._summary = summary
+        self._summarized_upto = tail_start
+        if self.on_summary is not None:
+            try:
+                self.on_summary(summary)
+            except Exception:  # noqa: BLE001 — memory must never break compaction
+                pass
+
+        rebuilt = head + [_summary_message(self._summary)] + messages[tail_start:]
         return self._repair_dangling_refs(rebuilt, messages)
+
+    def _schedule(
+        self,
+        source: list[dict],
+        working: list[dict],
+        head_end: int,
+        slice_start: int,
+        tail_start: int,
+        previous: str | None,
+    ) -> bool:
+        """Start the background job that summarizes ``working[slice_start:
+        tail_start]`` (onto ``previous``) and stores it as covering
+        ``source[head_end:tail_start]``. The transcript is rendered and
+        redacted here, so the job thread only waits on the model. False when
+        a job for this session already runs (the caller does not wait)."""
+        factory = self.summarizer_factory
+        store = self.summary_store
+        session_id = self._session_id
+        if factory is None or store is None or session_id is None:
+            return False
+        key = self._job_key()
+        if background_summaries().running(key):
+            return False
+        transcript = redact_secrets(render_transcript(working[slice_start:tail_start]))
+        digest = _prefix_digest(source, head_end, tail_start)
+        on_summary = self.on_summary
+
+        def job() -> None:
+            started = time.monotonic()
+            summarizer = factory()
+            try:
+                summary = redact_secrets(summarizer.summarize(transcript, previous) or "").strip()
+            finally:
+                close = getattr(summarizer, "close", None)
+                if callable(close):
+                    try:
+                        close()
+                    except Exception:  # noqa: BLE001 — cleanup must not raise
+                        pass
+            if not summary:
+                return
+            row = store.load_context_summary(session_id)
+            if row and _covers_more(row, source, head_end, tail_start):
+                # The turn path made a newer one meanwhile (a blocking call
+                # over the ceiling); a background result never replaces it.
+                return
+            store.save_context_summary(
+                session_id, summary=summary, summarized_upto=tail_start, prefix_digest=digest
+            )
+            logger.info(
+                "context ladder: background summary for session %s stored in %.0f ms "
+                "(%d transcript chars, covers %d messages)",
+                session_id,
+                (time.monotonic() - started) * 1000,
+                len(transcript),
+                tail_start,
+            )
+            if on_summary is not None:
+                try:
+                    on_summary(summary)
+                except Exception:  # noqa: BLE001 — memory must never break compaction
+                    pass
+
+        return background_summaries().start(key, job)
 
     @staticmethod
     def _repair_dangling_refs(rebuilt: list[dict], source: list[dict]) -> list[dict]:

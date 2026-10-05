@@ -153,8 +153,14 @@ def register_call_tools(registry: ToolRegistry, backend: CallBackend | None) -> 
     ring, and the model must not be offered a tool that cannot work."""
     if backend is None:
         return
-    registry.register("call_user", CALL_USER_SCHEMA, make_call_user_handler(backend))
-    registry.register("call_status", CALL_STATUS_SCHEMA, make_call_status_handler(backend))
+    # Deferred behind ``search_tools`` (bead chuk_chat-b3g4); an unsearched
+    # call still runs (the loop dispatches it and records the discovery).
+    registry.register(
+        "call_user", CALL_USER_SCHEMA, make_call_user_handler(backend), deferrable=True
+    )
+    registry.register(
+        "call_status", CALL_STATUS_SCHEMA, make_call_status_handler(backend), deferrable=True
+    )
 
 
 class RecordingCallBackend:

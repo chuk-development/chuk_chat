@@ -35,6 +35,7 @@ import os
 import re
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -53,7 +54,13 @@ os.environ.setdefault("MEM0_TELEMETRY", "False")
 # Retained for the static markdown snapshot: a persona file is clipped, never
 # truncated silently in a way that hides that it happened.
 MAX_ENTRY_CHARS = 1_500
-MAX_FILE_CHARS = 20_000
+#: How much of ONE static file (soul.md, agents.md) goes into the system
+#: prompt. The snapshot is paid on every round of the session, so it is capped
+#: like Hermes caps its memory files (2,200 chars), with a little headroom for
+#: the seeded templates. The file itself is not cut: the rest stays on disk and
+#: the cut names the file to read (bead chuk_chat-b3g4; it was 20,000, so two
+#: files could put ~10k tokens into every request).
+MAX_FILE_CHARS = 2_500
 
 # -- static markdown targets -----------------------------------------------
 STATIC_FILES: dict[str, str] = {"soul": "soul.md", "agents": "agents.md"}
@@ -153,6 +160,13 @@ RECALL_PREFIX = (
 )
 #: How many memories a task-start recall injects at most.
 RECALL_LIMIT = 5
+#: One recalled note in the task-start block is clipped to this many characters.
+#: The recall rides in the stored history, so every task pays it again in every
+#: later round of the session (bead chuk_chat-b3g4: it was 500 per note, about
+#: 2,500 characters a task). ``memory_search`` still returns notes in full.
+RECALL_NOTE_CHARS = 300
+#: The whole recall block, notes only (without :data:`RECALL_PREFIX`).
+RECALL_MAX_CHARS = 1_200
 #: Per-message cap for what one turn hands the extractor. A whole file dump in
 #: an answer is not a fact; the extractor works on the gist.
 TURN_EXTRACT_CHARS = 6_000
@@ -410,7 +424,11 @@ class MemoryStore:
             if not body:
                 continue
             if len(body) > self._max_file:
-                body = body[: self._max_file] + "\n[memory: truncated at the limit]"
+                body = (
+                    body[: self._max_file]
+                    + f"\n[memory: truncated at the limit of {self._max_file} characters; "
+                    f"the rest is in memory/{STATIC_FILES[target]}, read it when needed]"
+                )
             blocks.append(f"## {_FILE_TITLES[target]}\n\n{body}")
         if not blocks:
             return ""
@@ -595,8 +613,7 @@ class MemoryStore:
         clean = [n for n in clean if n]
         if not clean:
             return []
-        body = "\n".join(f"- {_clip(n, 500)}" for n in clean)
-        return [{"role_tag": "memory", "role": "user", "content": RECALL_PREFIX + body}]
+        return recall_block(clean)
 
     def recall_messages_bounded(
         self, query: str, *, limit: int = RECALL_LIMIT,
@@ -703,14 +720,47 @@ class MemoryStore:
         when it ran inline."""
         if not (user_message or "").strip() and not (final_answer or "").strip():
             return None
+        return self._in_background(
+            "agents-memory-extract",
+            "turn extraction",
+            lambda: self.remember_turn(user_message, final_answer, tool_names=tool_names),
+            wait=wait,
+        )
+
+    def observe_summary(self, summary: str) -> threading.Thread | None:
+        """The context ladder's summary hook, off the caller's path: the Mem0
+        ``add`` is an aux-model call (57-119 s in the Sep-17 trace) and the
+        caller may be a turn that is waiting to send its payload (bead
+        chuk_chat-sa7r). Same thread rules as :meth:`observe_turn`."""
+        if not (summary or "").strip():
+            return None
+        return self._in_background(
+            "agents-memory-summary",
+            "summary extraction",
+            lambda: self.remember_summary(summary),
+        )
+
+    def _in_background(
+        self,
+        name: str,
+        what: str,
+        work: Callable[[], object],
+        *,
+        wait: bool = False,
+    ) -> threading.Thread | None:
+        """Run ``work`` on a daemon thread with a private cheap writer client
+        (``cheap_clone`` of the writer: the executor closes the task's clients
+        the moment the loop returns). Without a clonable writer (the mock, a
+        stub), or with ``wait``, it runs inline. Returns the thread, or None
+        when it ran inline."""
         clone = getattr(self._llm_client, "cheap_clone", None)
         if wait or not callable(clone):
-            self.remember_turn(user_message, final_answer, tool_names=tool_names)
+            work()
             return None
         try:
             private = clone()
         except Exception:  # noqa: BLE001 — no private client: do it inline
-            self.remember_turn(user_message, final_answer, tool_names=tool_names)
+            work()
             return None
 
         def job() -> None:
@@ -724,13 +774,11 @@ class MemoryStore:
                     self._llm_client = private
                     try:
                         mem0_provider.set_backend_client(private)
-                        self.remember_turn(
-                            user_message, final_answer, tool_names=tool_names
-                        )
+                        work()
                     finally:
                         self._llm_client = keep
             except Exception:  # noqa: BLE001 — a background job never raises
-                logger.warning("turn extraction failed", exc_info=True)
+                logger.warning("%s failed", what, exc_info=True)
             finally:
                 close = getattr(private, "close", None)
                 if callable(close):
@@ -739,7 +787,7 @@ class MemoryStore:
                     except Exception:  # noqa: BLE001 — cleanup must not raise
                         pass
 
-        thread = threading.Thread(target=job, name="agents-memory-extract", daemon=True)
+        thread = threading.Thread(target=job, name=name, daemon=True)
         with _EXTRACT_LOCK:
             _EXTRACT_THREADS.difference_update(
                 t for t in list(_EXTRACT_THREADS) if not t.is_alive()
@@ -807,6 +855,24 @@ def _extract_memories(result: object, limit: int) -> list[str]:
         if len(out) >= limit:
             break
     return out
+
+
+def recall_block(notes: list[str]) -> list[dict]:
+    """The task-start recall message for already neutralized ``notes``:
+    each note clipped to :data:`RECALL_NOTE_CHARS`, the block stopped before
+    :data:`RECALL_MAX_CHARS`. Shared by both stores, so the budget is one
+    number. Empty in, nothing out."""
+    lines: list[str] = []
+    used = 0
+    for note in notes:
+        line = f"- {_clip(note, RECALL_NOTE_CHARS)}"
+        if lines and used + len(line) + 1 > RECALL_MAX_CHARS:
+            break
+        lines.append(line)
+        used += len(line) + 1
+    if not lines:
+        return []
+    return [{"role_tag": "memory", "role": "user", "content": RECALL_PREFIX + "\n".join(lines)}]
 
 
 def _clip(text: str, limit: int) -> str:
@@ -912,8 +978,12 @@ MEMORY_ADD_SCHEMA = {
 def register_memory_tool(registry: ToolRegistry, store: MemoryStore) -> None:
     """The memory tools: the combined ``memory`` (add / search / list) plus
     the explicit ``memory_search`` and ``memory_add`` — one verb per tool, so
-    the model reaches for recall without having to remember an action enum."""
-    registry.register("memory", MEMORY_SCHEMA, make_memory_handler(store))
+    the model reaches for recall without having to remember an action enum.
+
+    The combined tool is deferrable (§7.2, bead chuk_chat-b3g4): the two
+    one-verb tools stay declared and cover add and search, so ``memory`` (for
+    ``list``) is found with ``search_tools`` instead of riding on every round."""
+    registry.register("memory", MEMORY_SCHEMA, make_memory_handler(store), deferrable=True)
 
     def memory_search(query: str, limit: int | None = None) -> dict:
         try:

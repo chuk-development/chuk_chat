@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import threading
 import time
@@ -56,6 +57,8 @@ from .state import StateStore
 from .tool_events import tool_event_fields
 from .tools import FINISH_TOOL
 from .telemetry import get_tracer, set_round
+
+logger = logging.getLogger(__name__)
 
 
 #: Stands in for a tool result the run was stopped before reaching. The row has
@@ -245,6 +248,14 @@ class RunTimings:
     retries: int = 0
     #: Time burned by those dead attempts.
     retry_ms: float = 0.0
+    #: Prompt tokens the provider served from its cache, over all calls
+    #: (``prompt_tokens_details.cached_tokens``). 0 = none or not reported.
+    cached_tokens: int = 0
+    #: The provider's time to the first streamed token (text, reasoning or a
+    #: tool call) of the run's FIRST model call, ``prepare_ms`` of that call left out. With
+    #: ``recall_ms`` and ``prepare_ms`` this is the turn's time to first token.
+    #: ``None`` = not measured (a blocking client streams nothing).
+    first_token_ms: float | None = None
 
     def as_row(self) -> dict[str, int]:
         """Integer milliseconds for the ``runs`` row."""
@@ -256,6 +267,8 @@ class RunTimings:
             "recall_ms": int(self.recall_ms),
             "retries": int(self.retries),
             "retry_ms": int(self.retry_ms),
+            "cached_tokens": int(self.cached_tokens),
+            "first_token_ms": int(self.first_token_ms or 0),
         }
 
 
@@ -592,13 +605,30 @@ class AgentLoop:
         pipeline as the native loop, so the model sees the same payload."""
         tracer = get_tracer()
         read_started = time.monotonic()
-        messages = self._stored_rows(session_id)
+        messages, timestamps, turn_start = self._ladder_input(session_id)
         if tracer.enabled:
             tracer.emit(
                 "history_loaded",
                 messages=len(messages),
                 ms=round((time.monotonic() - read_started) * 1000, 3),
             )
+        if self._ladder is None:
+            return messages
+        return self._ladder.prepare(
+            messages, session_id=session_id, timestamps=timestamps, turn_start=turn_start
+        )
+
+    def _ladder_input(self, session_id: int) -> tuple[list[dict], list[float], int]:
+        """The stored rows with the system prompt upgrade applied, their
+        ``created_at`` (the idle rule reads the pauses between them) and the
+        index of the current task's prompt (the newest ``user`` row; recall
+        and nudge rows have their own roles), before which the ladder drops
+        the injected rows of earlier tasks."""
+        rows = self._store.get_conversation(session_id)
+        turn_start = next(
+            (i for i in range(len(rows) - 1, -1, -1) if rows[i].role == "user"), 0
+        )
+        messages = [m.content for m in rows]
         if self._system_prompt_upgrade is not None:
             messages = [
                 {**message, "content": self._system_prompt_upgrade(message["content"])}
@@ -607,9 +637,30 @@ class AgentLoop:
                 else message
                 for message in messages
             ]
-        if self._ladder is None:
-            return messages
-        return self._ladder.prepare(messages, session_id=session_id)
+        return messages, [m.created_at for m in rows], turn_start
+
+    def _plan_compaction(self, session_id: int) -> None:
+        """After the run (cowork-z9mo): let the ladder start the next turn's
+        summary in the background now, so that turn does not wait for it.
+        Costs a history read and a tier-1 pass; never blocks on a model."""
+        ladder = self._ladder
+        plan = getattr(ladder, "plan_ahead", None)
+        if not callable(plan):
+            return
+        started = time.monotonic()
+        try:
+            messages, _, _ = self._ladder_input(session_id)
+            started_job = bool(plan(messages, session_id=session_id))
+        except Exception:  # noqa: BLE001 — planning must never fail a finished run
+            logger.warning("compaction planning failed", exc_info=True)
+            return
+        tracer = get_tracer()
+        if tracer.enabled:
+            tracer.emit(
+                "compaction_planned",
+                started=started_job,
+                ms=round((time.monotonic() - started) * 1000, 3),
+            )
 
     def _process_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
         """The ``ProcessHistory`` hook: ignore Pydantic AI's in-run list and
@@ -625,7 +676,7 @@ class AgentLoop:
         tracer = get_tracer()
         if tracer.enabled:
             self._trace_prepare(tracer, outbound, elapsed)
-        converted = rows_to_messages(outbound)
+        converted = rows_to_messages(outbound, deferred=self._registry.deferred_names())
         if not converted or not hasattr(converted[-1], "parts") or converted[-1].kind != "request":
             # Pydantic AI needs the history to end in a request. The store
             # always ends in the user row or tool results by the time a model
@@ -698,6 +749,7 @@ class AgentLoop:
                 **timings.as_row(),
             )
         self._observe_turn(session_key, user_message, outcome, tools_used)
+        self._plan_compaction(session_id)
         return outcome
 
     def _pre_round_stop(self, iterations: int) -> StopReason | None:
@@ -725,7 +777,9 @@ class AgentLoop:
 
         token = CancellationToken()
         self._kill.on_interrupt(token.cancel)
-        history = rows_to_messages(self._stored_rows(active.session_id))
+        history = rows_to_messages(
+            self._stored_rows(active.session_id), deferred=self._registry.deferred_names()
+        )
         state = _DriveState()
         tracer = get_tracer()
         # A model built for this run (the HTTP model: its client is bound to
@@ -974,6 +1028,20 @@ class AgentLoop:
                 if (usage.input_tokens or usage.output_tokens)
                 else None
             )
+            if raw_usage is not None and usage.cache_read_tokens:
+                raw_usage["cached_tokens"] = usage.cache_read_tokens
+        timings.cached_tokens += cached_tokens_from_usage(raw_usage)
+        if timings.first_token_ms is None and timings.model_calls == 1:
+            # Text, thinking or a tool call: whatever the provider sent first.
+            first = [
+                v
+                for v in (mapper.first_content_ms, mapper.first_reasoning_ms, mapper.first_event_ms)
+                if v is not None
+            ]
+            if first:
+                # The mapper's clock starts before the history processor
+                # runs inside the request node; the provider's part is after.
+                timings.first_token_ms = max(0.0, min(first) - active.prepare_ms)
         timing = details.get("timing") if details else None
         if isinstance(timing, dict):
             attempts = int(timing.get("attempts") or 1)
@@ -1083,14 +1151,28 @@ class AgentLoop:
             result = record.result
             raised = record.raised
         elif isinstance(part, RetryPromptPart):
-            if self._registry.has(call.tool_name):
+            args = tool_call_args(call)
+            if (
+                self._registry.has(call.tool_name)
+                and self._registry.is_deferred(call.tool_name)
+                and not self._policy.requires_approval(call.tool_name)
+                and self._registry.available(call.tool_name)
+            ):
+                # Pydantic AI refuses a deferred tool the model has not
+                # searched for. The model named it right, so it runs: the
+                # stored row is its real result, and the discovery record
+                # ``rows_to_messages`` adds keeps the next call from being
+                # refused again. A tool behind an approval is never run here.
+                result = self._registry.dispatch(
+                    call.tool_name, args if isinstance(args, dict) else {}
+                )
+            elif self._registry.has(call.tool_name):
                 # A real tool Pydantic AI refused this turn (a deferred tool
                 # the model has not searched for yet): its reason, as an error.
                 result = {"error": part.model_response(), "tool": call.tool_name}
             else:
                 # A name no tool answers to: the registry's own envelope (with
                 # the browser hint), the same row the native loop stored.
-                args = tool_call_args(call)
                 result = self._registry.dispatch(
                     call.tool_name, args if isinstance(args, dict) else {}
                 )
@@ -1289,6 +1371,9 @@ class AgentLoop:
                 tokens_before=stats.tokens_before,
                 tokens_after=stats.tokens_after,
                 dropped=max(0, int(stats.tokens_before) - int(stats.tokens_after)),
+                summary_deferred=bool(getattr(stats, "deferred", False)),
+                blocking_aux=bool(getattr(stats, "blocking_aux", False)),
+                idle_dropped=int(getattr(stats, "idle_dropped", 0)),
             )
         else:
             tracer.emit("ladder_pass", ms=round(elapsed * 1000, 3), tier=0)
@@ -1382,6 +1467,28 @@ def _no_output(response: ModelResponse) -> bool:
         isinstance(p, ThinkingPart) or (isinstance(p, TextPart) and not p.content)
         for p in parts
     )
+
+
+def cached_tokens_from_usage(usage: dict | None) -> int:
+    """Prompt tokens served from the provider's cache, from a usage dict in
+    any of the shapes the route and the clients produce: OpenAI's
+    ``prompt_tokens_details.cached_tokens``, a flat ``cached_tokens`` /
+    ``cache_read_tokens``, or Anthropic's ``cache_read_input_tokens``."""
+    if not isinstance(usage, dict):
+        return 0
+    candidates: list[Any] = []
+    details = usage.get("prompt_tokens_details")
+    if isinstance(details, dict):
+        candidates.append(details.get("cached_tokens"))
+    candidates += [
+        usage.get("cached_tokens"),
+        usage.get("cache_read_tokens"),
+        usage.get("cache_read_input_tokens"),
+    ]
+    for value in candidates:
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            return int(value)
+    return 0
 
 
 def _log_cut_off(reason: str | None) -> None:

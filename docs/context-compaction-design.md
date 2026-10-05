@@ -274,6 +274,46 @@ Built this session and proven on the real backend (`deepseek-v4-flash`):
   doing this: build → review → fix → re-verify, with real-model probes on the
   load-bearing paths.
 
+## 10b. Status — summary off the turn path (2026-10-05)
+
+Beads chuk_chat-p5xm, cowork-z9mo, chuk_chat-sa7r. A "hi" to a long session
+waited 100-180 s in `prepare` for a blocking aux summary. Now:
+
+- **The summary is persisted per session** (`context_summaries` table,
+  `SummaryStore`). A new run reuses it while the prefix digest still matches.
+- **A needed summary is made in the background**
+  (`ContextLadder.summarizer_factory`, `BackgroundSummaries`). The turn sends
+  what it has: the last valid summary plus the aged slice verbatim, or the
+  tier-1 payload. It waits for one blocking aux call only when that payload is
+  over `hard_threshold` (90 % of the input budget); that call is logged as a
+  warning. At most one job per session; a turn never waits for a running job.
+- **After each run** `AgentLoop` calls `ContextLadder.plan_ahead`: when the
+  next turn would need a new summary (tier 2 minus `plan_headroom`), the job
+  starts at once, so the next turn only loads it.
+- **Idle rule:** a user message after a pause of `idle_drop_seconds` (30 min)
+  drops every tool call and tool result before it. The text stays. The cut is
+  computed from the stored `created_at`, so it is stable on later turns.
+- **Old injected rows:** a memory recall row of an earlier task is dropped
+  (only the current task's recall is sent), and the payload of an earlier
+  fired automation is collapsed to its first lines.
+- **The drops only shrink the payload.** Every tier decision is made on the
+  size before the idle and stale-row drops, so a drop never switches tier 2
+  off and leaves the middle verbatim.
+- **Tail cap:** the verbatim tail is at most `tail_token_cap` (10k) tokens;
+  25 % of the budget is only an upper bound. Before, the tail alone was about
+  30k tokens in every round.
+- brisk-heron, next prompt "hi" (`_scratch/prompt-size/prompt_size.py`):
+  history after the ladder 31.3k tokens before this work, 48.7k with the
+  first idle rule, 10.7k now.
+- **The aux model is a separate, fast model with reasoning really off**
+  (`model.aux`, default `deepseek/deepseek-v4-flash-0731`, `none` effort).
+  The old same-model clone ran on glm-5.3-flash, whose reasoning is
+  mandatory, so `none` was clamped to a thinking level.
+- **The Mem0 summary extraction** runs on a background thread
+  (`MemoryStore.observe_summary`); Hindsight only queues an async retain.
+- **`runs.cached_tokens` and `runs.first_token_ms`** record provider cache
+  hits and the provider's time to first token for the speed harness.
+
 ## 11. How this maps onto agents today
 
 - Backend is text-only ChukChat `/v2/ws`; the only current trimming is the

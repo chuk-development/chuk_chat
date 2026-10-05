@@ -290,11 +290,20 @@ def test_chat_spec_describes_the_client_for_the_loop():
     }
 
 
-def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
+@pytest.fixture(autouse=False)
+def no_aux_env(monkeypatch):
+    for name in ("AGENTS_MODEL_AUX", "AGENTS_MODEL_AUX_PROVIDER", "AGENTS_MODEL_AUX_REASONING_EFFORT"):
+        monkeypatch.delenv(name, raising=False)
+    return monkeypatch
+
+
+def test_cheap_clone_is_reasoning_off_small_and_shares_the_session(no_aux_env):
+    from chuk_agents_runtime.backend import DEFAULT_AUX_MODEL
+
     session = _session()
     client = BackendModelClient(
         session,
-        model_id="deepseek/deepseek-v4-flash",
+        model_id="z-ai/glm-5.3-flash",
         provider_slug="fireworks",
         base_url="https://api.chuk.chat",
         reasoning_effort="high",
@@ -302,8 +311,11 @@ def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
     clone = client.cheap_clone()
     assert clone.reasoning_effort == "none"
     assert clone._max_tokens == 512
-    assert clone.chat_spec()["model_id"] == client.chat_spec()["model_id"]
-    assert clone.chat_spec()["provider_slug"] == "fireworks"
+    # Bead chuk_chat-sa7r: the default aux model is a fast one whose reasoning
+    # really turns off, not the task's (glm-5.3-flash reasons always). The
+    # task's provider pin belongs to the task's model and is not carried over.
+    assert clone.chat_spec()["model_id"] == DEFAULT_AUX_MODEL
+    assert clone.chat_spec()["provider_slug"] is None
     assert clone.chat_spec()["base_url"] == "https://api.chuk.chat"
     assert clone._session is client._session
     assert clone is not client
@@ -312,12 +324,56 @@ def test_cheap_clone_is_reasoning_off_small_and_shares_the_session():
     assert client.cheap_clone().on_delta is None
 
 
-def test_cheap_clone_honours_a_custom_max_tokens_and_sends_it():
+def test_cheap_clone_honours_a_custom_max_tokens_and_sends_it(no_aux_env):
+    from chuk_agents_runtime.backend import DEFAULT_AUX_MODEL
+
     route = MockRoute(lambda body: completion("summary"))
     clone = _client(route, _session()).cheap_clone(max_tokens=256)
     clone.complete([{"role": "user", "content": "summarise"}])
     assert (route.bodies[0].get("max_tokens") or route.bodies[0].get("max_completion_tokens")) == 256
     assert route.bodies[0]["reasoning_effort"] == "none"
+    assert route.bodies[0]["model"] == DEFAULT_AUX_MODEL
+    # No provider pin and no owner identity: only model, messages, limits.
+    assert "provider" not in route.bodies[0]
+    assert "user" not in route.bodies[0]
+    assert "tools" not in route.bodies[0]
+
+
+def test_cheap_clone_follows_the_aux_settings(no_aux_env):
+    client = BackendModelClient(
+        _session(), model_id="z-ai/glm-5.3-flash", provider_slug="deepinfra/fp4",
+        reasoning_effort="high",
+    )
+    no_aux_env.setenv("AGENTS_MODEL_AUX", "mistralai/mistral-small-2603")
+    no_aux_env.setenv("AGENTS_MODEL_AUX_PROVIDER", "mistral/zdr")
+    no_aux_env.setenv("AGENTS_MODEL_AUX_REASONING_EFFORT", "low")
+    clone = client.cheap_clone()
+    assert clone.chat_spec()["model_id"] == "mistralai/mistral-small-2603"
+    assert clone.chat_spec()["provider_slug"] == "mistral/zdr"
+    assert clone.reasoning_effort == "low"
+
+
+def test_an_empty_aux_model_means_the_tasks_own_model(no_aux_env):
+    client = BackendModelClient(
+        _session(), model_id="moonshotai/kimi-k2.6", provider_slug="fireworks",
+        reasoning_effort="high",
+    )
+    no_aux_env.setenv("AGENTS_MODEL_AUX", "")
+    clone = client.cheap_clone()
+    assert clone.chat_spec()["model_id"] == "moonshotai/kimi-k2.6"
+    assert clone.chat_spec()["provider_slug"] == "fireworks"
+    assert clone.reasoning_effort == "none"
+
+
+def test_aux_model_settings_defaults():
+    from chuk_agents_runtime.backend import (
+        DEFAULT_AUX_MODEL,
+        AuxModelSettings,
+        aux_model_settings,
+    )
+
+    assert aux_model_settings({}) == AuxModelSettings(DEFAULT_AUX_MODEL, None, "none")
+    assert aux_model_settings({"AGENTS_MODEL_AUX_REASONING_EFFORT": ""}).reasoning_effort is None
 
 
 def test_client_exposes_the_effort_it_sends():

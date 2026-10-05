@@ -215,6 +215,15 @@ def test_remember_summary_is_idempotent_per_summary(tmp_path):
     assert store.remember_summary("  ")["status"] == "nothing_to_remember"
 
 
+def test_observe_summary_only_queues_an_async_retain(tmp_path):
+    """The default backend adds no blocking call on the summary path."""
+    service = FakeService(tmp_path)
+    store = _store(tmp_path, service)
+    assert store.observe_summary("GOAL: ship v2") is None
+    assert drain_retains(5)
+    assert service.api_obj.retains[0]["async"] is True
+
+
 def test_the_static_persona_snapshot_still_works(tmp_path):
     store = HindsightMemoryStore(tmp_path / "memory", service=None)
     assert (tmp_path / "memory" / "soul.md").exists()
