@@ -1674,6 +1674,66 @@ in this session are skipped). Host: `chuk_agents_host/coworker_names.py`
 executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 `agent_rename_payload`, `agent_list_request_payload`, `agent_list_payload`.
 
+## Coworker templates (bead chuk_chat-dsh0)
+
+Additive to "Coworker names". The app's "New agent" flow offers ready-made
+coworkers (`lib/services/agents/coworker_templates.dart`, 15 of them:
+research, inbox triage, news, prices, jobs, writing, code, data, meetings,
+social drafts, support drafts, travel, finance notes, learning, household).
+A template is app data. The host learns of one only through the create frame.
+
+### The frame
+
+`agent_create` takes an optional `template` object:
+
+```json
+{"type": "agent_create", "agent_id": "local:Research assistant:3:51022",
+ "name": "Research assistant",
+ "template": {"id": "research",
+              "persona": "You are a research assistant.\n- Search the web, ..."}}
+```
+
+- `template.id`: `[a-z0-9][a-z0-9_-]{0,47}`. Only for the log line; an id
+  of another shape is logged as `custom`, the persona still counts.
+- `template.persona`: English text, trimmed, 1..4000 characters. The model
+  reads it, not the user, and it still answers in the user's language. Any
+  other value drops the persona with a log line; the coworker is still
+  created.
+- The answer does not change: one terminal `agent_list`, as before.
+- An older host ignores `template` and creates a plain coworker.
+
+### What the host does
+
+After the name store registered the id, the host writes the persona into
+that coworker's own `<workspace>/memory/soul.md` — the file the runtime
+already reads as the persona (`MemoryStore.snapshot`). It writes only when
+the file is missing, empty or still the packaged default, so a repeated
+`agent_create` never undoes an edit. The host's own agent is never seeded.
+Tools and skills do not change: every coworker gets the same ones; the
+"works with" line in the picker is a hint.
+
+### What stays in the app
+
+- The face (silhouette and colour) and the role line go to the app's
+  `AgentProfileStore` / roster, like any edit on the profile page.
+- A template may carry a starter schedule (news brief, inbox sort, practice
+  task, job scan). It is OFF in the picker. Only when the user turns it on
+  does the app send a normal `automation_create` (kind `schedule`, a cron
+  string, `session_key` = the new agent id) right after `agent_create`, on
+  the same socket. A failed save is shown to the user.
+
+### Implemented
+
+App: `CoworkerTemplatePicker` (`lib/widgets/coworker_template_picker.dart`),
+`_openOnboarding` / `_createOnHost` in `lib/pages/agents_shell_state.dart`,
+`AgentsRelayController.createAgent(..., template:)`. Host:
+`chuk_agents_host/coworker_templates.py` (`template_seed`, `seed_persona`),
+called from `LocalHost._on_agent_frame`. Payload helper:
+`agent_create_payload(..., template=)`. Tests:
+`agents/host/tests/test_coworker_templates.py`,
+`test/widgets/coworker_template_picker_test.dart`,
+`test/services/agents/coworker_templates_test.dart`.
+
 ## Skills: the host's list, the user's switches (session cowork-18, bead cowork-qk7)
 
 Python side IMPLEMENTED 2026-09-05 (agent 27deda5, executor + host in the
