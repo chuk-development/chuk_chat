@@ -353,3 +353,97 @@ def test_a_recall_back_within_the_wait_sits_right_after_the_prompt(tmp_path):
     messages = endpoint.requests[0]["body"]["messages"]
     assert messages[-2]["content"] == "question"
     assert messages[-1]["content"] == "[memory recall]\n- fast"
+
+
+# -- the verbatim part after a stored summary (bead chuk_chat-b61u) -------------
+
+
+class _NoSummarizer:
+    """Tier 2/3 needs a summarizer; this test must never call it."""
+
+    def summarize(self, transcript: str, previous: str | None) -> str:
+        raise AssertionError("the stored summary covers the middle; no new one is due")
+
+
+def _worked_session() -> tuple[list[dict], list[float]]:
+    """A task with ten tool rounds, then a long pause, then a short chat."""
+    t0 = 1_000_000.0
+    rows: list[dict] = [
+        {"role": "system", "content": "You are a test agent. " * 20},
+        {"role": "user", "content": "build the watcher"},
+    ]
+    for i in range(10):
+        rows.append(
+            {
+                "role": "assistant",
+                "content": f"step {i}: " + "x" * 200,
+                "tool_calls": [
+                    {"id": f"c{i}", "type": "function", "function": {"name": "run_command", "arguments": "{}"}}
+                ],
+            }
+        )
+        rows.append({"role": "tool", "tool_call_id": f"c{i}", "name": "run_command", "content": "r" * 800})
+    stamps = [t0 + i for i in range(len(rows))]
+    # The user comes back after two hours: the idle rule drops the tool rows
+    # before this prompt, so they cost nothing and the tail budget reaches far
+    # back, past the end of the stored summary.
+    rows += [
+        {"role": "user", "content": "hi"},
+        {"role": "assistant", "content": "Hi"},
+        {"role": "user", "content": "hi"},
+    ]
+    stamps += [t0 + 7200, t0 + 7201, t0 + 7202]
+    return rows, stamps
+
+
+def test_the_rows_after_a_stored_summary_do_not_slide_with_the_tail():
+    """The verbatim part after the summary used to start at
+    ``min(summarized_upto, tail_start)``. ``tail_start`` is counted from the
+    end of the history by token budget, so every new turn moved it forward
+    while it lay before the summary's end: the oldest verbatim row fell out
+    right after the summary and the provider cache lost the rest of the
+    prompt (production, 2026-10-05 14:01: cached_tokens 0 on a warm "hi").
+    The start is the summary's end now, on every turn."""
+    from chuk_agents_runtime.context import (
+        _idle_marks,
+        _tail_start,
+        estimate_messages_tokens,
+        idle_cut,
+    )
+
+    rows, stamps = _worked_session()
+    upto = 18  # the stored summary covers rows[2:18]
+    config = LadderConfig(
+        context_length=int(estimate_messages_tokens(rows) * 1.2),
+        reserved_output=0,
+        tail_token_budget=300,
+    )
+
+    def ladder() -> ContextLadder:
+        # A fresh ladder per task, as in production, with the stored summary.
+        made = ContextLadder(config=config, summarizer=_NoSummarizer())
+        made._summary = "the watcher was built and tested"  # type: ignore[attr-defined]
+        made._summarized_upto = upto  # type: ignore[attr-defined]
+        return made
+
+    first = ladder().prepare(rows, timestamps=stamps)
+    later = rows + [{"role": "assistant", "content": "Hello again. " * 20}, {"role": "user", "content": "hi"}]
+    later_stamps = stamps + [stamps[-1] + 5, stamps[-1] + 20]
+    second = ladder().prepare(later, timestamps=later_stamps)
+
+    # The precondition of the bug: the tail by budget starts before the end
+    # of the summary, and it moves when the conversation grows.
+    def tail(messages, timestamps):
+        marked, _ = _idle_marks(messages, 2, idle_cut(messages, timestamps, config.idle_drop_seconds))
+        return _tail_start(marked, config.tail_budget)[0]
+
+    assert tail(rows, stamps) < upto
+    assert tail(rows, stamps) < tail(later, later_stamps) < upto
+
+    # The second payload is the first plus the new turn, byte for byte.
+    assert _canon(second[: len(first)]) == _canon(first)
+    assert [m["role"] for m in second[len(first) :]] == ["assistant", "user"]
+    # Head, summary, then the rows from the summary's end. The rows before it
+    # are in the summary and are not sent a second time.
+    assert first[2]["content"].endswith("the watcher was built and tested")
+    assert first[3]["content"] == rows[upto]["content"]
