@@ -281,6 +281,11 @@ class AgentsChannelsService extends ChangeNotifier {
 
   @override
   void dispose() {
+    // Stop routing frames to a disposed instance. Tear-offs of one instance
+    // method on one object compare equal, so another instance's sink stays.
+    if (AgentsRelayClient.agentChannelSink == handleFrame) {
+      AgentsRelayClient.agentChannelSink = null;
+    }
     _connection.removeListener(notifyListeners);
     _capabilities.removeListener(notifyListeners);
     super.dispose();

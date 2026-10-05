@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -376,6 +378,84 @@ void main() {
       state.pendingLinkExpiresAt,
       DateTime.fromMillisecondsSinceEpoch(1790000000000, isUtc: true),
     );
+  });
+
+  testWidgets('switching coworkers while a send is out keeps the answer '
+      'clock of the new one', (tester) async {
+    const String otherId = 'local:other:1:2';
+    final Completer<void> setGate = Completer<void>();
+    final AgentsChannelsService gated = AgentsChannelsService(
+      send: (Map<String, dynamic> payload) async {
+        sent.add(payload);
+        if (payload['type'] == 'agent_channel_set') await setGate.future;
+      },
+      connection: connection,
+      capabilities: capabilities,
+    );
+    addTearDown(gated.dispose);
+    tester.view.physicalSize = const Size(420, 1400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    Widget section(String id) => MaterialApp(
+      localizationsDelegates: kTestLocalizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: AgentTelegramSection(agentId: id, service: gated),
+        ),
+      ),
+    );
+    await tester.pumpWidget(section(agentId));
+    await tester.pump();
+    host(<String, dynamic>{...off, 'has_token': true});
+    await tester.pump();
+
+    // The enable for the first coworker goes out and hangs.
+    await tester.tap(key('agent-telegram-switch'));
+    await tester.pump();
+    expect(sent.last['action'], 'enable');
+    expect(gated.isBusy(agentId), isTrue);
+
+    // The section switches to another coworker; its host never answers.
+    await tester.pumpWidget(section(otherId));
+    await tester.pump();
+    expect(sent.last, <String, dynamic>{
+      'type': 'agent_channel_get',
+      'agent_id': otherId,
+      'channel': 'telegram',
+    });
+    expect(gated.isBusy(otherId), isFalse);
+
+    // The first coworker's send completes half-way through the wait. It
+    // must not restart the new coworker's answer clock.
+    await tester.pump(const Duration(seconds: 5));
+    setGate.complete();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 6));
+    expect(find.text('The host did not answer.'), findsOneWidget);
+  });
+
+  test('dispose stops the relay sink only when it is its own', () {
+    AgentsChannelsService make() => AgentsChannelsService(
+      send: (Map<String, dynamic> payload) async => sent.add(payload),
+      connection: connection,
+      capabilities: capabilities,
+    );
+    final AgentsChannelsService first = make();
+    final AgentsChannelsService second = make();
+    first.attach();
+    second.dispose();
+    expect(AgentsRelayClient.agentChannelSink, isNotNull);
+    AgentsRelayClient.agentChannelSink!(<String, dynamic>{
+      'type': 'agent_channel',
+      'agent_id': agentId,
+      'channel': 'telegram',
+      ...off,
+    });
+    expect(first.stateOf(agentId), isNotNull);
+    first.dispose();
+    expect(AgentsRelayClient.agentChannelSink, isNull);
   });
 
   testWidgets('German', (tester) async {
