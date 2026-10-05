@@ -232,3 +232,11 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   (parallel MCP connectors from a cached tool list, non-blocking recall,
   sidecar warm start, pre-run tracing), 56f597ac (skill proposal card in the
   app + app review fixes). Live: warm "hi" 2.8 s.
+- 11:00 pushed efdb3078..69831b3b (12 commits: e2e flows, templates, app
+  side for approvals/cost/budget/automations/templates, lazy box browser,
+  skill proposals host + app card, parallel connectors + non-blocking
+  recall, review fixes, ordered host frames, MCP SDK v2 hints). Flutter
+  suite green, CodeRabbit clean on every batch. Beads closed: dsh0 mxxm
+  baa3 hn3m al2u 4xc5 s3y2 qcbv 02s5 1pnz b95f g85d (plus 9i41 ev7v cfsd
+  h7w6 by the cleanup agent). Running: run timeline with undo (host), app
+  polish (cache cost line, phone permissions, WIRE_CONTRACT status).
