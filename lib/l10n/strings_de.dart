@@ -1241,4 +1241,41 @@ const Map<String, String> stringsDe = {
   'tpl.home.name': 'Haushalt und Einkauf',
   'tpl.home.desc': 'Führt deine Einkaufsliste und die To-dos im Haushalt.',
   // ── end templates ──
+  // ── skill proposals ──
+  'skillProposalTitle': 'Als Skill speichern?',
+  'skillProposalShowSteps': 'Schritte anzeigen',
+  'skillProposalHideSteps': 'Schritte ausblenden',
+  'skillProposalEdit': 'Bearbeiten',
+  'skillProposalSave': 'Skill speichern',
+  'skillProposalDismiss': 'Verwerfen',
+  'skillProposalCancel': 'Abbrechen',
+  'skillProposalSaved': 'Als Skill {name} gespeichert',
+  'skillProposalNotSaved': 'Nicht gespeichert',
+  'skillProposalScrubbed':
+      'Geheimnisse und persönliche Daten wurden aus dem Skill entfernt.',
+  'skillProposalNameLabel': 'Name',
+  'skillProposalNameHelp':
+      'Kleinbuchstaben und Ziffern, mit Bindestrichen verbunden.',
+  'skillProposalDescriptionLabel': 'Beschreibung',
+  'skillProposalBodyLabel': 'Schritte',
+  'skillProposalErrNameEmpty': 'Gib dem Skill einen Namen.',
+  'skillProposalErrNameTooLong': 'Der Name hat mehr als 64 Zeichen.',
+  'skillProposalErrNameInvalid':
+      'Nur Kleinbuchstaben und Ziffern, mit einzelnen Bindestrichen '
+      'verbunden, zum Beispiel wochen-bericht.',
+  'skillProposalErrDescriptionEmpty':
+      'Schreib eine Zeile, die sagt, was der Skill tut.',
+  'skillProposalErrDescriptionTooLong':
+      'Die Beschreibung hat mehr als 300 Zeichen.',
+  'skillProposalErrDescriptionMultiline':
+      'Die Beschreibung muss eine Zeile sein.',
+  'skillProposalErrBodyEmpty': 'Die Schritte sind leer.',
+  'skillProposalErrBodyTooLong':
+      'Die Schritte sind zu lang: höchstens 500 Zeilen und 40000 Zeichen.',
+  'skillProposalErrNotConnected':
+      'Keine Verbindung zu deinem Computer. Versuch es wieder, wenn er da ist.',
+  'skillProposalErrNoAnswer':
+      'Dein Computer hat nicht geantwortet. Versuch es noch einmal.',
+  'skillProposalErrNotFound': 'Dein Computer hat dieses Angebot nicht mehr.',
+  // ── end skill proposals ──
 };

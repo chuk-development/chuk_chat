@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:chuk_chat/l10n/strings_de.dart';
 import 'package:chuk_chat/l10n/strings_en.dart';
 import 'package:chuk_chat/services/agents/coworker_templates.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
 void main() {
@@ -72,5 +73,76 @@ void main() {
       expect(s.cron.split(' '), hasLength(5), reason: s.cron);
       expect(s.prompt.trim(), isNotEmpty);
     }
+  });
+
+  group('announceCoworkerToHost', () {
+    AgentsAutomation savedRow() => AgentsAutomation.fromPayload(
+      <String, dynamic>{
+        'id': 'a1',
+        'session_key': 'agent-1',
+        'kind': 'schedule',
+        'name': 'Morning',
+        'state': 'active',
+        'spec': <String, dynamic>{'cron': '0 8 * * 1-5'},
+        'prompt': 'x',
+      },
+    )!;
+
+    test('no controller: nothing is sent, the starter neither', () async {
+      var starters = 0;
+      final outcome = await announceCoworkerToHost(
+        createAgent: null,
+        createStarter: () async {
+          starters++;
+          return AutomationSaveResult.saved(savedRow());
+        },
+      );
+      expect(outcome.ok, isFalse);
+      expect(outcome.notConnected, isTrue);
+      expect(outcome.agentFailed, isTrue);
+      expect(starters, 0);
+    });
+
+    test('a failed agent_create keeps the starter back', () async {
+      var starters = 0;
+      final outcome = await announceCoworkerToHost(
+        createAgent: () async => throw StateError('Not paired'),
+        createStarter: () async {
+          starters++;
+          return AutomationSaveResult.saved(savedRow());
+        },
+      );
+      expect(outcome.agentFailed, isTrue);
+      expect(outcome.agentError, contains('Not paired'));
+      expect(starters, 0);
+    });
+
+    test('agent first, then the starter; a starter failure is reported',
+        () async {
+      final order = <String>[];
+      final outcome = await announceCoworkerToHost(
+        createAgent: () async => order.add('agent'),
+        createStarter: () async {
+          order.add('starter');
+          return const AutomationSaveResult.failed('bad cron');
+        },
+      );
+      expect(order, <String>['agent', 'starter']);
+      expect(outcome.agentFailed, isFalse);
+      expect(outcome.starterError, 'bad cron');
+      expect(outcome.ok, isFalse);
+    });
+
+    test('everything sent: ok', () async {
+      final outcome = await announceCoworkerToHost(
+        createAgent: () async {},
+        createStarter: () async => AutomationSaveResult.saved(savedRow()),
+      );
+      expect(outcome.ok, isTrue);
+      expect(
+        (await announceCoworkerToHost(createAgent: () async {})).ok,
+        isTrue,
+      );
+    });
   });
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -184,6 +185,37 @@ void main() {
       await tester.pump();
       expect(find.byType(MessageBubble), findsOneWidget);
     });
+  });
+
+  testWidgets('the quiet-run line opens from the keyboard (Enter, Space)', (
+    tester,
+  ) async {
+    final source = AutomationsSource.instance..attach();
+    await tester.pumpWidget(
+      _app(
+        _item(<ToolCall>[runMetaCall(runId: 'run-k')!], text: 'Full report'),
+      ),
+    );
+    await tester.pump();
+    AgentsRelayClient.automationDoneSink!(<String, dynamic>{
+      'type': 'done',
+      'run_id': 'run-k',
+      'automation_result': <String, dynamic>{'changed': false},
+    });
+    await tester.pump();
+    expect(source.isQuietRun('run-k'), isTrue);
+    final line = find.byKey(const ValueKey<String>('agents-quiet-run-line'));
+    expect(tester.widget(line), isA<InkWell>());
+    Focus.of(
+      tester.element(find.descendant(of: line, matching: find.byType(Row))),
+    ).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.byType(MessageBubble), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(find.byType(MessageBubble), findsNothing);
   });
 
   group('budget notices', () {

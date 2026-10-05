@@ -407,6 +407,18 @@ class AgentsBudgetOverride {
     return DateTime.now().difference(at) <= window;
   }
 
+  /// True when [sessionKey] is armed and still inside [window], without
+  /// using the arm up. The send path reads it, and [disarm]s only once the
+  /// task frame went out: a send that fails keeps the "Run anyway" for the
+  /// next try. A stale arm is dropped here.
+  static bool peek(String sessionKey) {
+    final DateTime? at = _armed[sessionKey];
+    if (at == null) return false;
+    if (DateTime.now().difference(at) <= window) return true;
+    _armed.remove(sessionKey);
+    return false;
+  }
+
   static void disarm(String sessionKey) => _armed.remove(sessionKey);
 
   @visibleForTesting

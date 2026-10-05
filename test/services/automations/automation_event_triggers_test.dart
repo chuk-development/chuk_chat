@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/tool_call.dart';
@@ -303,6 +305,121 @@ void main() {
       );
       expect(result.ok, isFalse);
       expect(result.error, contains('did not answer'));
+    });
+
+    test('a late answer after a timeout never completes the next waiter '
+        '(host echoes request_id)', () async {
+      final before = AutomationsSource.saveTimeout;
+      AutomationsSource.saveTimeout = const Duration(milliseconds: 10);
+      addTearDown(() => AutomationsSource.saveTimeout = before);
+      final first = await source.create(
+        sessionKey: 'thread-1',
+        kind: 'schedule',
+        spec: 'every 1h',
+        prompt: 'x',
+      );
+      expect(first.ok, isFalse);
+      final firstId = controller.creates.first['request_id'] as String;
+      AutomationsSource.saveTimeout = before;
+      final second = source.create(
+        sessionKey: 'thread-1',
+        kind: 'schedule',
+        spec: 'every 2h',
+        prompt: 'y',
+      );
+      await Future<void>.delayed(Duration.zero);
+      final secondId = controller.creates.last['request_id'] as String;
+      expect(secondId, isNot(firstId));
+      var done = false;
+      unawaited(second.then((_) => done = true));
+      // The first request's answer lands late: folded, not handed on.
+      AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+        'type': 'automation_saved',
+        'ok': true,
+        'request_id': firstId,
+        'automation': row('late', kind: 'schedule'),
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(done, isFalse);
+      expect(source.byId('late'), isNotNull);
+      AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+        'type': 'automation_saved',
+        'ok': true,
+        'request_id': secondId,
+        'automation': row('mine', kind: 'schedule'),
+      });
+      final result = await second;
+      expect(result.ok, isTrue);
+      expect(result.automation!.id, 'mine');
+    });
+
+    test('an older host without request_id: the orphaned answer is dropped',
+        () async {
+      final before = AutomationsSource.saveTimeout;
+      AutomationsSource.saveTimeout = const Duration(milliseconds: 10);
+      addTearDown(() => AutomationsSource.saveTimeout = before);
+      expect(
+        (await source.update(<String, dynamic>{
+          'type': 'automation_update',
+          'id': 'w1',
+          'prompt': 'a',
+        })).ok,
+        isFalse,
+      );
+      AutomationsSource.saveTimeout = before;
+      final second = source.update(<String, dynamic>{
+        'type': 'automation_update',
+        'id': 'w2',
+        'prompt': 'b',
+      });
+      await Future<void>.delayed(Duration.zero);
+      var done = false;
+      unawaited(second.then((_) => done = true));
+      AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+        'type': 'automation_saved',
+        'ok': true,
+        'automation': row('w1'),
+      });
+      await Future<void>.delayed(Duration.zero);
+      expect(done, isFalse);
+      AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+        'type': 'automation_saved',
+        'ok': true,
+        'automation': row('w2'),
+      });
+      final result = await second;
+      expect(result.automation!.id, 'w2');
+    });
+
+    test('an orphan that is never answered expires', () async {
+      final before = AutomationsSource.saveTimeout;
+      final lifetime = AutomationsSource.orphanLifetime;
+      AutomationsSource.saveTimeout = const Duration(milliseconds: 10);
+      AutomationsSource.orphanLifetime = Duration.zero;
+      addTearDown(() {
+        AutomationsSource.saveTimeout = before;
+        AutomationsSource.orphanLifetime = lifetime;
+      });
+      await source.create(
+        sessionKey: 'thread-1',
+        kind: 'schedule',
+        spec: 'every 1h',
+        prompt: 'x',
+      );
+      AutomationsSource.saveTimeout = before;
+      final second = source.create(
+        sessionKey: 'thread-1',
+        kind: 'schedule',
+        spec: 'every 2h',
+        prompt: 'y',
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 2));
+      AgentsRelayClient.automationSavedSink!(<String, dynamic>{
+        'type': 'automation_saved',
+        'ok': true,
+        'automation': row('s2', kind: 'schedule'),
+      });
+      expect((await second).automation!.id, 's2');
     });
 
     test('a send error fails at once', () async {

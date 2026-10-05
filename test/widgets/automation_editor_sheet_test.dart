@@ -104,7 +104,10 @@ void main() {
     await tester.pump();
     await tapSave(tester);
     expect(controller.creates, hasLength(1));
-    expect(controller.creates.single, <String, dynamic>{
+    // The request id is fresh per send; the rest is the frame.
+    expect(controller.creates.single['request_id'], isA<String>());
+    expect(Map<String, dynamic>.of(controller.creates.single)
+      ..remove('request_id'), <String, dynamic>{
       'type': 'automation_create',
       'session_key': 'thread-1',
       'kind': 'schedule',
@@ -193,7 +196,8 @@ void main() {
 
     await tester.enterText(field('minutes'), '120');
     await tapSave(tester);
-    expect(controller.updates.single, <String, dynamic>{
+    expect(Map<String, dynamic>.of(controller.updates.single)
+      ..remove('request_id'), <String, dynamic>{
       'type': 'automation_update',
       'id': 'w1',
       'spec': <String, dynamic>{'url': 'https://shop.example/p', 'every': 7200},

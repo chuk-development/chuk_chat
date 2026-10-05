@@ -419,6 +419,13 @@ class AgentsChatTransport {
           // "Secrets"); nothing for the transcript. Values never pass here.
           break;
 
+        // ── skill proposals ──
+        case AgentsRelaySkillProposal():
+          // Its own card at the end of the thread (SkillProposalsSource);
+          // no transcript line. The run does not wait on the answer.
+          break;
+        // ── end skill proposals ──
+
         case AgentsRelayRunError(:final message):
           // A host that names the thread (session_key) ends that thread's
           // stream only; the other threads ignore it. An error that names no
@@ -663,8 +670,10 @@ class AgentsChatTransport {
             ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
           );
           ledger.taskSent(sessionKey, wireTaskId);
-          // F1: the one task "Run anyway" armed for this thread.
-          final bool overBudget = AgentsBudgetOverride.consume(sessionKey);
+          // F1: the one task "Run anyway" armed for this thread. Read, not
+          // used up: it is disarmed only after the frame went out, so a send
+          // that fails keeps it for the next try.
+          final bool overBudget = AgentsBudgetOverride.peek(sessionKey);
           await controller.sendTask(
             message,
             sessionKey: sessionKey,
@@ -689,6 +698,7 @@ class AgentsChatTransport {
             // the override goes out as a plain new turn.
             budgetOverride: overBudget,
           );
+          if (overBudget) AgentsBudgetOverride.disarm(sessionKey);
         } catch (error) {
           if (terminated) return;
           terminated = true;
@@ -766,6 +776,7 @@ class AgentsChatTransport {
     AgentsRelayFile(:final replay) => replay,
     AgentsRelayApprovalRequest(:final replay) => replay,
     AgentsRelayAutomation(:final replay) => replay,
+    AgentsRelaySkillProposal(:final replay) => replay, // skill proposals
     AgentsRelayDone(:final isReplay) => isReplay,
     _ => false,
   };

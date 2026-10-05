@@ -49,6 +49,10 @@ import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_takeover_card.dart';
 import 'package:chuk_chat/widgets/agents_action_approval_card.dart'; // F1
+// ── skill proposals ──
+import 'package:chuk_chat/services/skills/skill_proposals_source.dart';
+import 'package:chuk_chat/widgets/agents_skill_proposal_card.dart';
+// ── end skill proposals ──
 import 'package:chuk_chat/widgets/agents_budget_notice.dart'; // F1
 import 'package:chuk_chat/widgets/agent_control_panel.dart' // F1
     show WeeklyBudgetField;
@@ -325,6 +329,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// "Automations"), drawn as a strip above the chat while any is active or
   /// paused. The source folds live and replayed events; this view only reads.
   final AutomationsSource _automations = AutomationsSource.instance;
+  // ── skill proposals ──
+  final SkillProposalsSource _skillProposals = SkillProposalsSource.instance;
+
+  void _onSkillProposalsChanged() {
+    if (mounted) setState(() {});
+  }
+  // ── end skill proposals ──
   bool _automationsCollapsed = true;
 
   /// A `request_secrets` waiting on the user (docs/WIRE_CONTRACT.md,
@@ -419,6 +430,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // approval prompt and the live `run_ack`.
     _inboundSub = _link.inbound.listen(_onInbound);
     _loader.attach();
+    // ── skill proposals ──
+    // The cards at the end of the thread read the app-wide source, which
+    // keeps every proposal under its thread across thread switches.
+    _skillProposals.attach();
+    _skillProposals.addListener(_onSkillProposalsChanged);
+    // ── end skill proposals ──
     _running = _ledger.isRunning(widget.threadKey);
     _ledger.addListener(_onLedgerChanged);
     // A run that goes quiet is asked about rather than animated for ever.
@@ -519,6 +536,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _watchdogTimer?.cancel();
     VerboseService.instance.removeListener(_onVerboseChanged);
     AppThemeService.instance.removeListener(_onThemeChanged);
+    _skillProposals.removeListener(_onSkillProposalsChanged); // skill proposals
     MobileChatPreferences.instance.removeListener(_onThemeChanged);
     _ledger.removeListener(_onLedgerChanged);
     // Tear-offs of the same method on the same state object compare equal,
@@ -1417,6 +1435,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       case AgentsRelayAutomationList():
       case AgentsRelayDocuments():
       case AgentsRelaySkillsList():
+      case AgentsRelaySkillProposal(): // skill proposals: SkillProposalsSource
       case AgentsRelayAgentList():
         // Transcript events belong to the adapter and the replay loader; room
         // and browser frames to the shell's own pages; automation frames to
@@ -2327,6 +2346,32 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           dense: dense,
           onSelect: _decideActionApproval,
         ),
+      // ── skill proposals ──
+      // "Save as skill?" The run does not wait on it, so it stays after the
+      // run ended until the user answers (docs/WIRE_CONTRACT.md, "Skill
+      // proposals").
+      for (final SkillProposalEntry entry in _skillProposals.forThread(
+        widget.threadKey,
+      ))
+        AgentsSkillProposalCard(
+          key: ValueKey<String>('skill-proposal-${entry.proposalId}'),
+          entry: entry,
+          dense: dense,
+          onDecide:
+              ({
+                required bool accept,
+                String? name,
+                String? description,
+                String? body,
+              }) => _skillProposals.decide(
+                entry.proposalId,
+                accept: accept,
+                name: name,
+                description: description,
+                body: body,
+              ),
+        ),
+      // ── end skill proposals ──
     ];
     if (cards.isEmpty) return null;
     if (cards.length == 1) return cards.single;

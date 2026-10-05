@@ -9,6 +9,7 @@ import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -677,6 +678,38 @@ void main() {
     expect(seen.last, isA<DoneEvent>());
     // The send failed, so there is nothing to stop.
     expect(controller.stopCalls, 0);
+  });
+
+  test('a failed send keeps "Run anyway" armed; a sent one uses it up',
+      () async {
+    AgentsBudgetOverride.reset();
+    addTearDown(AgentsBudgetOverride.reset);
+    AgentsBudgetOverride.arm(sessionKey);
+    controller.taskError = StateError('Not paired');
+    final failed = AgentsChatTransport.sendStreamingChat(
+      accessToken: 'token',
+      message: 'do the thing',
+      modelId: 'gpt-5',
+      providerSlug: 'openai',
+      chatId: sessionKey,
+    ).listen((_) {});
+    await _drain();
+    await failed.cancel();
+    expect(controller.taskBudgetOverrides, <bool>[true]);
+    expect(AgentsBudgetOverride.isArmed(sessionKey), isTrue);
+
+    controller.taskError = null;
+    final sent = AgentsChatTransport.sendStreamingChat(
+      accessToken: 'token',
+      message: 'do the thing',
+      modelId: 'gpt-5',
+      providerSlug: 'openai',
+      chatId: sessionKey,
+    ).listen((_) {});
+    await _drain();
+    await sent.cancel();
+    expect(controller.taskBudgetOverrides, <bool>[true, true]);
+    expect(AgentsBudgetOverride.isArmed(sessionKey), isFalse);
   });
 
   group('a prompt the host could not take', () {

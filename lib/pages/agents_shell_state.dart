@@ -912,40 +912,49 @@ mixin AgentsShellHost on State<MessengerShell> {
   }
 
   /// Tells the host about a new coworker, then — only when the user turned
-  /// it on — creates the template's starter automation for it. The two go
-  /// in this order on one socket, so the host knows the coworker before the
-  /// automation names its session key. A failed automation is said, not
-  /// swallowed: the coworker exists, the schedule does not.
+  /// it on — creates the template's starter automation for it
+  /// ([announceCoworkerToHost]). A failure is said, not swallowed: when
+  /// `agent_create` did not go out (no controller, a failed send) the
+  /// starter is not sent and the user is told; when only the automation
+  /// failed, the coworker exists and the schedule does not.
   Future<void> _createOnHost(
     AgentsAgent agent,
     CoworkerTemplate? template, {
     required bool startAutomation,
   }) async {
     final controller = _controller.value;
-    try {
-      await controller?.createAgent(
-        agent.id,
-        agent.name,
-        template: template?.toWire(),
-      );
-    } catch (error) {
-      if (kDebugMode) debugPrint('agent_create failed: $error');
-    }
     final starter = template?.starter;
-    if (!startAutomation || starter == null) return;
     final l = _l10n;
-    final result = await AutomationsSource.instance.create(
-      sessionKey: agent.id,
-      kind: 'schedule',
-      spec: starter.cron,
-      prompt: starter.prompt,
-      name: l.tpl(starter.nameKey),
+    final outcome = await announceCoworkerToHost(
+      createAgent: controller == null
+          ? null
+          : () => controller.createAgent(
+              agent.id,
+              agent.name,
+              template: template?.toWire(),
+            ),
+      createStarter: !startAutomation || starter == null
+          ? null
+          : () => AutomationsSource.instance.create(
+              sessionKey: agent.id,
+              kind: 'schedule',
+              spec: starter.cron,
+              prompt: starter.prompt,
+              name: l.tpl(starter.nameKey),
+            ),
     );
-    if (result.ok || !mounted) return;
+    if (outcome.ok || !mounted) return;
+    if (outcome.agentFailed && kDebugMode) {
+      debugPrint('agent_create failed: ${outcome.agentError ?? 'no controller'}');
+    }
     ScaffoldMessenger.maybeOf(context)?.showSnackBar(
       SnackBar(
         content: Text(
-          l.tplStarterFailed(agent.name, result.error ?? ''),
+          outcome.agentFailed
+              // No dedicated string yet: a failed send means the socket is
+              // not paired, which is exactly "not connected".
+              ? l.automationNotConnected
+              : l.tplStarterFailed(agent.name, outcome.starterError ?? ''),
         ),
       ),
     );
