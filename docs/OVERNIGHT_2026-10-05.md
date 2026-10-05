@@ -292,3 +292,8 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   code (broker running). Control: warm "hi" 2.3 s / €0.0004 (cached
   20 288); first after restart 6.0 s, of which mcp 3.0 s (bead filed: the
   tool cache should make this near 0). Running: own-browser app side.
+- 12:45 pushed 8155b997..1fa2a447 (own browser in the app). Verified in the
+  real app (Xvfb :82): New agent template picker, cost line under every
+  answer ("< €0.01 · 20.3k tokens"), profile "Runs on the host: Yes",
+  "Your browser: Not set up on this computer", Approvals section. Running:
+  MCP cold start after a host restart (bead l16i).
