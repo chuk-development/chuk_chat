@@ -598,14 +598,15 @@ Future<void> allowUserBrowserAgain(
   AgentsPermissionsService service,
 ) async {
   final AppLocalizations l = _l(context);
-  final bool sent = await service.resumeUserBrowser();
-  if (!sent) {
+  final ({bool sent, String? refused}) result = await service
+      .resumeUserBrowserAndWait();
+  if (!result.sent) {
     if (!service.resumingUserBrowser && context.mounted) {
       pillToast(context, l.ubAllowAgainFailed);
     }
     return;
   }
-  final String? refused = await service.resumeAnswer;
+  final String? refused = result.refused;
   if (refused != null && context.mounted) {
     pillToast(context, l.ubAllowAgainRefused(refused));
   }
