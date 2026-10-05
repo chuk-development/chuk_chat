@@ -168,6 +168,11 @@ HEAL_RETRY_SECONDS = 600.0
 #: that budget.
 HOST_SESSION_REQUEST_INTERVAL_SECONDS = 30.0
 
+#: The most browser panel runs the host waits on for an answer. A run whose
+#: end never reaches the host (a crash, a lost frame) would else stay in the
+#: map for the life of the host; the oldest is dropped first.
+MAX_PANEL_RUNS = 64
+
 
 def _agent_dirname(agent_id: str, limit: int = 32) -> str:
     """A filesystem-safe, collision-free directory name for one agent id.
@@ -2360,6 +2365,9 @@ class LocalHost:
             }
         with self._browser_lock:
             self._panel_runs[str(run_id)] = name
+            # Insertion order is age: drop the oldest past the cap.
+            while len(self._panel_runs) > MAX_PANEL_RUNS:
+                self._panel_runs.pop(next(iter(self._panel_runs)))
         self._log(f"browser panel: message started run {run_id}")
         return {"ok": True, "coworker": name}
 
