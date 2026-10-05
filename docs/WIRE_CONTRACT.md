@@ -446,6 +446,44 @@ Rules:
   visible thing it may do is move the header out of "Connecting", because the
   host answering is exactly what `run_state`-less prefill lacked.
 
+### `heartbeat.phase` (PROPOSED, additive; app side implemented)
+
+```json
+{"type": "heartbeat", "run_id": "<uuid>"?, "session_key": "<key>"?,
+ "seq": 3, "elapsed": 31.4,
+ "phase": "queued" | "preparing" | "model" | "tool" | "waiting_user"?,
+ "tool": "<tool name>"?}
+```
+
+What the run is doing right now, so the status line above the answer can say
+it (research item 4, `docs/research/AGENT_COMPETITORS_2026-10.md`).
+
+- `queued`: the task waits behind another task of the same thread.
+- `preparing`: the run builds its context (history, summary, memory, skills)
+  and nothing has gone to the model yet. This is the long silent stretch the
+  user reads as "frozen".
+- `model`: the request is with the model (prefill or generation).
+- `tool`: a tool runs; `tool` names it (the raw id, e.g.
+  `mcp__playwright__browser_click`; the app makes it readable).
+- `waiting_user`: the run waits on an approval, a secret or a takeover.
+
+Rules:
+
+- Send the FIRST heartbeat at once when the task is accepted (seq 1, before
+  the context is built), then one on every phase change, then every
+  `AGENTS_HEARTBEAT_SECONDS` as today. Within ~300 ms of the send the app
+  should know the host has the task (it already does from `task_ack`) and
+  which phase it is in.
+- Optional and additive: a host that sends no `phase` keeps working; the app
+  then reads the phase from `task_ack`, the first heartbeat, `reasoning`,
+  `delta` and `tool` frames. An unknown word is ignored.
+- Never persisted, never rendered as a message (as for `heartbeat`).
+
+App side: `AgentsRelayHeartbeat.phase` / `.tool`
+(`lib/services/agents/agents_relay_client.dart`), stored per run by the thread
+view (`AgentsRunLedger.hostPhase`) and mapped in
+`lib/services/agents/agents_turn_phase.dart`.
+
 ### `browser_view` `started` (extended, additive)
 
 ```json
@@ -830,6 +868,90 @@ never over the one the user happens to be looking at. A persisted row keeps it,
 so a replayed request carries it too. Absent on an old host: the app then
 falls back to the thread the socket is bound to, as before.
 
+
+## Browser takeover (PROPOSED, research item 6; app side implemented)
+
+### The idea
+
+The agent's browser reaches a step only the user can do: a login, a 2FA code,
+a CAPTCHA. Today the model can only write "please log in" into its answer.
+Instead it calls a tool, the run WAITS, the app shows one card "<Coworker>
+needs you in the browser" with a button that opens the live VNC view, the user
+does the step themselves, and the run goes on.
+
+It reuses the approval machinery as it is: the same frame, the same blocking
+wait, the same persisted row, the same push for a pending approval.
+
+### Tool (model side)
+
+`request_takeover(kind: str, site: str = "", reason: str = "") -> dict`
+
+- `kind`: `login`, `two_factor`, `captcha` or `other`.
+- `site`: the host name the browser is on (`accounts.google.com`). The
+  executor may fill it from the page URL when the model leaves it empty.
+- `reason`: one short line for the card ("GitHub asks for the 2FA code").
+- Returns `{"status": "done" | "skipped" | "timeout" | "stopped"}`. On
+  `done` the model takes a fresh `browser_snapshot` and continues. Never a
+  password, never page content.
+- Only offered while the agent's sandbox browser is the target (not the user's
+  own extension browser), like the VNC view itself (`vnc_available`).
+
+### Inbound: host -> app `approval_request` with action `browser_takeover`
+
+```json
+{"type": "approval_request",
+ "approval_id": "<id>", "session_key": "<key>",
+ "action": "browser_takeover",
+ "kind": "login" | "two_factor" | "captcha" | "other",
+ "site": "<host name>"?, "reason": "<one line>"?, "url": "<page url>"?,
+ "path": "", "name": "", "file_count": 0, "total_bytes": 0,
+ "base_url": "", "public": false}
+```
+
+- The publish fields stay present with empty values, so an older app parses
+  the frame (it then shows the publish bar; acceptable for an old app).
+- Persisted and replayed like every `approval_request` row (bead cowork-266);
+  the outcome is patched into the row.
+- The wait: as `_make_approval_gate` in the executor, but with a longer
+  deadline (`TAKEOVER_WAIT_SECONDS`, default 900 s: a 2FA code can take a
+  while). Stop and ESTOP end it as today.
+- Push: the existing `on_approval_pending` hook (`notify.py`,
+  `notify_approval_pending`), with its own text for this action:
+  "<Coworker> needs you in the browser" / "sign in to <site>".
+
+### Outbound: app -> host `approval_decision`
+
+Unchanged frame: `approved: true` means "done", `approved: false` means
+"skip". The app sends `true` from the card's Done button.
+
+### The host may resolve it by itself (optional)
+
+While the run waits, the executor may watch the page (every few seconds:
+URL and title through the Playwright MCP server). When the login page is
+gone, it closes the wait as approved with `decision_reason: "auto"` and sends
+the SAME request again, live, decided:
+
+```json
+{"type": "approval_request", "approval_id": "<same id>", "session_key": "<key>",
+ "action": "browser_takeover", "decision": "approved",
+ "decision_reason": "auto", ...}
+```
+
+The app then shows "<Coworker> continues" and removes the card with the run's
+next frame. Every other closing (timeout, stop) needs no frame: the card goes
+away when the run ends. `auto` joins `user` / `timeout` / `stopped` as a
+valid `decision_reason` in `protocol.py`.
+
+### App side (implemented)
+
+`AgentsRelayApprovalRequest.isTakeover`, `.takeoverKind`, `.site`, `.reason`,
+`.url` (`agents_relay_client.dart`); the transcript line
+`takeoverCallFromRelay` (`agents_run_ledger.dart`, never tappable); the card
+`lib/widgets/agents_takeover_card.dart`; the wiring in
+`lib/widgets/agents_thread_view.dart` (`_onTakeoverRequest`,
+`_openTakeoverBrowser`, the card under the desktop header and above the phone
+chat). The browser view opens through `BrowserViewPage.open`, which is always
+interactive. Tests: `test/widgets/agents_takeover_card_test.dart`.
 
 ## Automations: schedules, watchers, self-wake (session cowork-94)
 

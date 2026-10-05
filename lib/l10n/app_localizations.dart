@@ -221,6 +221,35 @@ class AppLocalizations {
   String get aiDisclaimer => _get('aiDisclaimer');
   String get agentsAiDisclaimer => _get('agentsAiDisclaimer');
   String get archive => _get('archive');
+  // Agents: the live status line and the browser takeover card.
+  String get agentsPhaseSending => _get('agentsPhaseSending');
+  String get agentsPhaseNoAnswer => _get('agentsPhaseNoAnswer');
+  String get agentsPhaseOffline => _get('agentsPhaseOffline');
+  String get agentsPhaseReceived => _get('agentsPhaseReceived');
+  String get agentsPhaseQueued => _get('agentsPhaseQueued');
+  String get agentsPhasePreparing => _get('agentsPhasePreparing');
+  String get agentsPhaseThinking => _get('agentsPhaseThinking');
+  String get agentsPhaseWorking => _get('agentsPhaseWorking');
+  String get agentsPhaseWriting => _get('agentsPhaseWriting');
+  String get agentsPhaseWaitingForYou => _get('agentsPhaseWaitingForYou');
+  String get agentsPhaseNotDelivered => _get('agentsPhaseNotDelivered');
+  String get agentsPhaseRetry => _get('agentsPhaseRetry');
+  String takeoverTitle(String name) =>
+      _get('takeoverTitle').replaceAll('{name}', name);
+  String get takeoverSomeone => _get('takeoverSomeone');
+  String get takeoverThisSite => _get('takeoverThisSite');
+  String takeoverLogin(String site) =>
+      _get('takeoverLogin').replaceAll('{site}', site);
+  String takeoverTwoFactor(String site) =>
+      _get('takeoverTwoFactor').replaceAll('{site}', site);
+  String takeoverCaptcha(String site) =>
+      _get('takeoverCaptcha').replaceAll('{site}', site);
+  String takeoverOther(String site) =>
+      _get('takeoverOther').replaceAll('{site}', site);
+  String get takeoverOpen => _get('takeoverOpen');
+  String get takeoverDone => _get('takeoverDone');
+  String takeoverContinues(String name) =>
+      _get('takeoverContinues').replaceAll('{name}', name);
 
   // ── Tool calling page ──────────────────────────────────────
   String get engine => _get('engine');

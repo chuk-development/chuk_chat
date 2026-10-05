@@ -22,7 +22,18 @@ class TurnStatus {
     this.phase,
     this.runningToolLabel,
     this.elapsed,
+    this.liveVerb,
   });
+
+  /// The phase as an Agents turn reports it (`agents_turn_phase.dart`): what
+  /// the coworker's run is doing, read from the host's frames rather than
+  /// from this client's stream. It outranks everything while the turn runs,
+  /// a running tool included — the run ledger already names the tool when
+  /// one is open, and it knows things the stream cannot (the host has the
+  /// message, the computer is offline, the run waits on the user). Printed
+  /// as "Preparing · 41s": a phase is not always a verb that reads with
+  /// "for".
+  final String? liveVerb;
 
   /// Whether the turn is still going.
   final bool isRunning;
@@ -54,6 +65,8 @@ class TurnStatus {
   /// shape of the turn rather than claiming a phase that was never read.
   String get verb {
     if (isRunning) {
+      final live = liveVerb;
+      if (live != null && live.isNotEmpty) return live;
       final tool = runningToolLabel;
       if (tool != null && tool.isNotEmpty) return tool;
       final p = phase;
@@ -85,6 +98,8 @@ class TurnStatus {
     final text = isRunning
         ? formatAgentDurationLive(elapsed!)
         : formatAgentDuration(elapsed!);
+    final live = liveVerb;
+    if (isRunning && live != null && live.isNotEmpty) return '$live · $text';
     return '$verb for $text';
   }
 }

@@ -44,6 +44,8 @@ import 'package:chuk_chat/widgets/ask_user_card.dart';
 import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
+import 'package:chuk_chat/widgets/agents_takeover_card.dart';
+import 'package:chuk_chat/widgets/browser_view_page.dart';
 
 /// Room a desktop thread keeps above its first message for the header that
 /// floats over it: the whole band, fade included, so the first message
@@ -102,7 +104,17 @@ class AgentsThreadView extends StatefulWidget {
     this.phoneLayout = false,
     this.linkReport,
     this.emptyState,
+    this.openBrowserView,
   });
+
+  /// Opens the live browser view for a takeover card. Null opens
+  /// [BrowserViewPage]; tests pass a fake so no VNC bridge starts.
+  final Future<void> Function(
+    BuildContext context,
+    AgentsRelayController controller,
+    String sessionKey,
+  )?
+  openBrowserView;
 
   /// Builds the transport controller. Async because a real client generates a
   /// device signing key first. Widget tests return a fake synchronously. Called
@@ -276,6 +288,18 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   AgentsRelayApprovalRequest? _approval;
   bool? _approvalDecision;
 
+  /// A browser takeover (an [_approval] with action `browser_takeover`): the
+  /// user opened the live view at least once for it, so the card also offers
+  /// "Done".
+  bool _takeoverVisited = false;
+
+  /// The takeover is answered and the card says the coworker continues. It
+  /// goes away with the run's next frame, or when the run ends.
+  bool _takeoverContinuing = false;
+
+  /// Guards against opening the browser view twice from one card.
+  bool _browserViewOpen = false;
+
   /// This thread's schedules and watchers (docs/WIRE_CONTRACT.md,
   /// "Automations"), drawn as a strip above the chat while any is active or
   /// paused. The source folds live and replayed events; this view only reads.
@@ -430,7 +454,16 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _mountedWithRows = _threadHasRows;
       _approval = null;
       _approvalDecision = null;
+      _takeoverVisited = false;
+      _takeoverContinuing = false;
       _clearSecretRequest();
+      // The old thread no longer shows the card its run waits on. After the
+      // frame: this runs during a build, and the ledger's listeners rebuild.
+      final String oldKey = oldWidget.threadKey;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ledger.setWaitingForUser(oldKey, false);
+        if (mounted) _syncWaitingForUser();
+      });
       _requestReplay();
       if (!_mountedWithRows) unawaited(_readSwitchedThread(widget.threadKey));
     }
@@ -1188,6 +1221,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         // (review F9). A host that does not say which thread means this one.
         final forThread = event.sessionKey;
         if (forThread != null && forThread != widget.threadKey) return;
+        if (event.isTakeover) {
+          _onTakeoverRequest(event);
+          return;
+        }
         // A replayed request that is already decided, or whose run is over,
         // is history: never prompt for it (bead cowork-266).
         if (event.replay &&
@@ -1197,7 +1234,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         setState(() {
           _approval = event;
           _approvalDecision = null;
+          _takeoverVisited = false;
+          _takeoverContinuing = false;
         });
+        _syncWaitingForUser();
       case AgentsRelaySecretRequest():
         // The model asked for keys by name and the run waits on the answer.
         // Another coworker's run asked: its own view prompts, not this one.
@@ -1212,11 +1252,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             _secretFields[name] = TextEditingController();
           }
         });
+        _syncWaitingForUser();
       case AgentsRelayDone():
         if (event.isReplay) return;
         if (event.sessionKey != null && event.sessionKey != widget.threadKey) {
           return;
         }
+        // The run is over: a takeover it waited on has nothing left to wait
+        // for.
+        _clearTakeover();
         final runtime = ChatRuntimeRegistry.instance.lookup(widget.threadKey);
         final localStreamActive =
             runtime?.isStreaming.value == true ||
@@ -1295,14 +1339,30 @@ class AgentsThreadViewState extends State<AgentsThreadView>
             ).catchError((Object _) {}),
           );
         }
-      case AgentsRelayHeartbeat():
-      case AgentsRelayDelta():
-      case AgentsRelayUser():
-      case AgentsRelayReasoning():
-      case AgentsRelayTool():
-      case AgentsRelayFile():
-      case AgentsRelaySubagent():
+      case AgentsRelayHeartbeat(:final phase):
+        // A host that says what the run is doing (`heartbeat.phase`) feeds
+        // the status line above the answer; one that does not changes
+        // nothing here — the adapter already counts the heartbeat itself.
+        if (phase != null) {
+          _ledger.hostPhase(
+            event.sessionKey ?? widget.threadKey,
+            phase: phase,
+            tool: event.tool,
+          );
+        }
+      case AgentsRelayDelta(:final replay) ||
+          AgentsRelayReasoning(:final replay) ||
+          AgentsRelayTool(:final replay) ||
+          AgentsRelayFile(:final replay) ||
+          AgentsRelaySubagent(:final replay):
+        // The agent is moving again: an answered takeover card has said
+        // "continues" long enough.
+        if (!replay && _takeoverContinuing) _clearTakeover();
       case AgentsRelayRunError():
+        if (event.sessionKey == null || event.sessionKey == widget.threadKey) {
+          _clearTakeover();
+        }
+      case AgentsRelayUser():
       case AgentsRelayRunState():
       case AgentsRelayDebugContext():
       case AgentsRelayRoomTurn():
@@ -1358,6 +1418,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
     if (!mounted) return;
     setState(_clearSecretRequest);
+    _syncWaitingForUser();
   }
 
   /// The user does not have (or want to give) the keys: tell the host so the
@@ -1373,6 +1434,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
     if (!mounted) return;
     setState(_clearSecretRequest);
+    _syncWaitingForUser();
   }
 
   /// Answer a here.now publish approval. Idempotent: once a decision is sent
@@ -1389,7 +1451,105 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           )
           .catchError((Object _) {}),
     );
-    setState(() => _approvalDecision = approved);
+    setState(() {
+      _approvalDecision = approved;
+      // A takeover answered "done" says the coworker continues until the
+      // run's next frame; one answered "skip" simply goes.
+      if (request.isTakeover) {
+        if (approved) {
+          _takeoverContinuing = true;
+        } else {
+          _approval = null;
+        }
+      }
+    });
+    _syncWaitingForUser();
+  }
+
+  /// A browser takeover from the host (`approval_request` with action
+  /// `browser_takeover`, docs/WIRE_CONTRACT.md "Browser takeover").
+  ///
+  /// A fresh, open request shows the card. The SAME request coming back
+  /// decided — the host saw the step done by itself, or the wait ran out —
+  /// resolves it: "done" says the coworker continues, anything else closes
+  /// the card. A replayed request is history unless the run still waits.
+  void _onTakeoverRequest(AgentsRelayApprovalRequest event) {
+    final AgentsRelayApprovalRequest? current = _approval;
+    if (event.isDecided) {
+      if (current == null || current.approvalId != event.approvalId) return;
+      if (event.isApproved) {
+        setState(() {
+          _approvalDecision = true;
+          _takeoverContinuing = true;
+        });
+        _syncWaitingForUser();
+      } else {
+        _clearTakeover();
+      }
+      return;
+    }
+    if (event.replay && !_ledger.isRunning(widget.threadKey)) return;
+    if (current != null && current.approvalId == event.approvalId) {
+      // A reconnect's replay of the card already on screen: keep what the
+      // user already did with it.
+      return;
+    }
+    setState(() {
+      _approval = event;
+      _approvalDecision = null;
+      _takeoverVisited = false;
+      _takeoverContinuing = false;
+    });
+    _syncWaitingForUser();
+  }
+
+  /// Takes a takeover card off the thread, whatever state it was in.
+  void _clearTakeover() {
+    final AgentsRelayApprovalRequest? current = _approval;
+    if (current == null || !current.isTakeover) return;
+    setState(() {
+      _approval = null;
+      _approvalDecision = null;
+      _takeoverVisited = false;
+      _takeoverContinuing = false;
+    });
+    _syncWaitingForUser();
+  }
+
+  /// Tells the ledger whether this thread's run waits on a card here, so the
+  /// status line above the answer says "Waiting for you" instead of counting
+  /// a wait the agent is not responsible for.
+  void _syncWaitingForUser() {
+    final String key = widget.threadKey;
+    if (key.isEmpty) return;
+    final bool waiting =
+        (_approval != null && _approvalDecision == null) ||
+        _secretRequest != null;
+    _ledger.setWaitingForUser(key, waiting);
+  }
+
+  /// Opens the live browser view for the takeover card, in control: the
+  /// user signs in or solves the check themselves while the run waits.
+  Future<void> _openTakeoverBrowser() async {
+    final AgentsRelayController? controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) return;
+    if (_browserViewOpen) return;
+    _browserViewOpen = true;
+    setState(() => _takeoverVisited = true);
+    try {
+      final opener = widget.openBrowserView;
+      if (opener != null) {
+        await opener(context, controller, widget.threadKey);
+      } else {
+        await BrowserViewPage.open(
+          context,
+          controller,
+          sessionKey: widget.threadKey,
+        );
+      }
+    } finally {
+      _browserViewOpen = false;
+    }
   }
 
   /// Copies the WHOLE thread to the clipboard for debugging (bd cowork-338):
@@ -1419,7 +1579,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     if (running != _running) {
       setState(() => _running = running);
       widget.onRunStateChanged?.call(widget.threadKey, running);
-      if (!running) _onRunClosed();
+      if (!running) {
+        _onRunClosed();
+        _clearTakeover();
+      }
     }
     widget.onActivity?.call(widget.threadKey, DateTime.now());
     _syncRevision();
@@ -1612,6 +1775,27 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                       showAutomations ? automations : null,
                     ),
                   ),
+                  // A takeover sits under the header, on the transcript's
+                  // own measure, where the reader is already looking.
+                  if (approval != null && approval.isTakeover)
+                    Positioned(
+                      top: kAgentsThreadHeaderInset,
+                      left: 0,
+                      right: 0,
+                      child: Center(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 720),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: _buildTakeoverCard(
+                              context,
+                              approval,
+                              dense: true,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               )
             : chat;
@@ -1620,7 +1804,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           children: [
             if (!desktop && (approval != null || secretRequest != null))
               SizedBox(height: widget.topInset),
-            if (connected && approval != null)
+            if (approval != null && approval.isTakeover && !desktop)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                child: _buildTakeoverCard(context, approval, dense: false),
+              ),
+            if (connected && approval != null && !approval.isTakeover)
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
@@ -2021,6 +2210,29 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           const SizedBox(height: 4),
         ],
       ),
+    );
+  }
+
+  // --- the browser takeover ---------------------------------------------------
+
+  Widget _buildTakeoverCard(
+    BuildContext context,
+    AgentsRelayApprovalRequest request, {
+    required bool dense,
+  }) {
+    final AgentsRelayController? controller = _controller;
+    final bool canOpen =
+        controller != null && controller.state.value.isPaired;
+    return AgentsTakeoverCard(
+      request: request,
+      coworkerName: widget.title ?? widget.agent?.name ?? '',
+      stage: _takeoverContinuing
+          ? AgentsTakeoverStage.continuing
+          : AgentsTakeoverStage.waiting,
+      visited: _takeoverVisited,
+      onOpenBrowser: canOpen ? () => unawaited(_openTakeoverBrowser()) : null,
+      onDone: () => _decideApproval(true),
+      dense: dense,
     );
   }
 

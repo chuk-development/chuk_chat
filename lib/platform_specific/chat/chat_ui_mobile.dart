@@ -39,6 +39,7 @@ import 'package:chuk_chat/models/chat_reply.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/chat_reaction_service.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
+import 'package:chuk_chat/widgets/agent_activity/agents_live_status.dart';
 import 'package:chuk_chat/services/offline_send_coordinator.dart';
 import 'package:chuk_chat/services/mcp/mcp_availability.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
@@ -3419,12 +3420,26 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     final int itemCount = _messages.length + (showHostTyping ? 1 : 0);
     Widget rowBuilder(BuildContext _, int i) {
       if (i == _messages.length) {
-        return const Padding(
-          key: ValueKey<String>('host-run-typing'),
-          padding: EdgeInsets.symmetric(vertical: 8),
+        final String? hostKey = _activeChatId ?? widget.selectedChatId;
+        return Padding(
+          key: const ValueKey<String>('host-run-typing'),
+          padding: const EdgeInsets.symmetric(vertical: 8),
           child: Align(
             alignment: Alignment.centerLeft,
-            child: MessengerTypingIndicator(),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const MessengerTypingIndicator(),
+                // What the host's run is doing, with its clock: a pill that
+                // only bounces for minutes reads as frozen.
+                if (hostKey != null && hostKey.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6, left: 4),
+                    child: AgentsLiveStatusLine(sessionKey: hostKey),
+                  ),
+              ],
+            ),
           ),
         );
       }

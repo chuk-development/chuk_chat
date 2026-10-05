@@ -31,7 +31,24 @@ class AgentActivityTimeline extends StatefulWidget {
     this.phase,
     this.startedAt,
     this.finalDuration,
+    this.liveVerb,
+    this.liveTrailing,
+    this.liveListenable,
   });
+
+  /// The phase an Agents turn reports, read again on every repaint while the
+  /// round runs (see [TurnStatus.liveVerb]). A callback rather than a value:
+  /// the header repaints itself once a second, and a value handed down by
+  /// the bubble would be as old as the bubble's last build.
+  final String? Function(BuildContext context)? liveVerb;
+
+  /// Shown after the header while the round runs, e.g. a Retry target when
+  /// the computer is offline. Read on every repaint, like [liveVerb].
+  final Widget? Function(BuildContext context)? liveTrailing;
+
+  /// Repaints the header the moment it fires, instead of on the next tick —
+  /// the host's acknowledgement should show within a frame, not a second.
+  final Listenable? liveListenable;
 
   /// The round's calls, in the order the model made them. Drives the
   /// duration, and the lines when [steps] is null.
@@ -103,6 +120,11 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     super.initState();
     _expandedOverride = widget.initiallyExpanded;
     _syncTicker();
+    widget.liveListenable?.addListener(_onLive);
+  }
+
+  void _onLive() {
+    if (mounted && widget.isRunning) setState(() {});
   }
 
   @override
@@ -121,11 +143,16 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
     if (oldWidget.isRunning != widget.isRunning) {
       _syncTicker();
     }
+    if (oldWidget.liveListenable != widget.liveListenable) {
+      oldWidget.liveListenable?.removeListener(_onLive);
+      widget.liveListenable?.addListener(_onLive);
+    }
   }
 
   @override
   void dispose() {
     _ticker?.cancel();
+    widget.liveListenable?.removeListener(_onLive);
     super.dispose();
   }
 
@@ -183,13 +210,27 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
         lastLiveDuration: _settledDuration,
         toolCalls: widget.toolCalls,
       ),
+      liveVerb: widget.isRunning ? widget.liveVerb?.call(context) : null,
     );
+    final Widget? trailing = widget.isRunning
+        ? widget.liveTrailing?.call(context)
+        : null;
 
     return SelectionContainer.disabled(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildHeader(theme, muted, status),
+          if (trailing == null)
+            _buildHeader(theme, muted, status)
+          else
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Flexible(child: _buildHeader(theme, muted, status)),
+                const SizedBox(width: 6),
+                trailing,
+              ],
+            ),
           if (_isExpanded) ...[
             const SizedBox(height: 4),
             for (int i = 0; i < entries.length; i++)
@@ -232,11 +273,15 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: muted,
-                  fontWeight: FontWeight.w500,
+              Flexible(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: muted,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
               const SizedBox(width: 4),

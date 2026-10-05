@@ -123,6 +123,24 @@ String? agentsRunEndNotice(AgentsRunOutcome outcome) => switch (outcome) {
     'This message did not reach your host. Nothing ran — send it again.',
 };
 
+/// The kind of the newest frame that folded into a run: what the coworker
+/// was doing the last time it said anything. The live status line reads it
+/// (`agents_turn_phase.dart`), so a run that wrote a line and then went into a
+/// long tool does not keep saying "Writing".
+enum AgentsRunSignal {
+  /// Nothing has arrived yet.
+  none,
+
+  /// Answer tokens.
+  writing,
+
+  /// Model reasoning.
+  thinking,
+
+  /// A tool line, a child agent, a file or an approval.
+  tool,
+}
+
 /// Everything one run produced, in renderer shapes.
 class AgentsRun {
   AgentsRun(this.sessionKey);
@@ -241,6 +259,22 @@ class AgentsRun {
   /// though it has produced no output yet, so the pre-run rule stands down.
   bool sawHeartbeat = false;
 
+  /// The newest frame kind that folded into this run, and when it came.
+  AgentsRunSignal lastSignal = AgentsRunSignal.none;
+  DateTime? lastSignalAt;
+
+  /// What the host last said the run is doing (`heartbeat.phase`): `queued`,
+  /// `preparing`, `model`, `tool` or `waiting_user`. Null from a host that
+  /// sends no phase. [hostPhaseTool] names the tool for `tool`.
+  String? hostPhase;
+  String? hostPhaseTool;
+  DateTime? hostPhaseAt;
+
+  /// The run is blocked on the user: an approval, a secret request or a
+  /// browser takeover is open in the thread. Set by the thread view, which
+  /// owns those cards.
+  bool waitingForUser = false;
+
   /// True while nothing has positively shown that the host has this task: no
   /// ack, no heartbeat, no host header, no output. This is the state the
   /// pre-run rule acts on — never a bare timer on the spinner, because a
@@ -332,6 +366,9 @@ ToolCall approvalCallFromRelay(
   bool decided = false,
   DateTime? now,
 }) {
+  if (request.isTakeover) {
+    return takeoverCallFromRelay(request, decided: decided, now: now);
+  }
   final question = request.name.isEmpty
       ? 'Publish to the web?'
       : 'Publish "${request.name}" to the web?';
@@ -358,6 +395,52 @@ ToolCall approvalCallFromRelay(
       'file_count': request.fileCount,
       'total_bytes': request.totalBytes,
       'public': request.public,
+    },
+    status: ToolCallStatus.completed,
+    result: jsonEncode(payload),
+  )..completedAt = now ?? DateTime.now();
+}
+
+/// The transcript line of a browser takeover (`approval_request` with
+/// action `browser_takeover`) — ONE mapping for the live ledger and the
+/// replay loader, like every other approval.
+///
+/// Unlike a publish, the options are never tappable in the transcript: the
+/// answer belongs to the standing card above the chat while the run waits,
+/// and once the run is over there is nothing left to answer. So the options
+/// always ride under `offered_options`, and `decision` records what happened
+/// once it is known (`Done`, `Skipped` or `Expired`).
+ToolCall takeoverCallFromRelay(
+  AgentsRelayApprovalRequest request, {
+  bool decided = false,
+  DateTime? now,
+}) {
+  final String? site = request.site;
+  final String question = site == null
+      ? 'Needs you in the browser'
+      : 'Needs you in the browser on $site';
+  const options = <String>['Done', 'Skip'];
+  final bool settled = decided || request.isDecided;
+  final payload = <String, dynamic>{
+    'question': question,
+    'offered_options': options,
+    'approvalId': request.approvalId,
+    'kind': request.takeoverKind ?? 'other',
+    'site': ?site,
+    if (request.reason != null) 'reason': request.reason,
+    if (settled)
+      'decision': request.isApproved
+          ? 'Done'
+          : (request.isDecided ? 'Skipped' : 'Expired'),
+    if (request.decisionReason != null)
+      'decision_reason': request.decisionReason,
+  };
+  return ToolCall(
+    name: 'ask_user',
+    arguments: <String, dynamic>{
+      ...payload,
+      'action': request.action,
+      if (request.url != null) 'url': request.url,
     },
     status: ToolCallStatus.completed,
     result: jsonEncode(payload),
@@ -574,13 +657,53 @@ class AgentsRunLedger extends ChangeNotifier {
 
   /// Records that something happened in [sessionKey]'s run, so the ceiling
   /// starts again. Every frame that proves the run is alive lands here.
+  ///
+  /// The adapter calls it for every answer token, so it also records that the
+  /// coworker is writing. A host header that only says "still running" goes
+  /// through [_keepAlive] instead, which claims no phase.
   void touch(String sessionKey) {
     final run = _runs[sessionKey];
     if (run == null || !run.running) return;
+    _keepAlive(run);
+    _signal(run, AgentsRunSignal.writing);
+  }
+
+  void _keepAlive(AgentsRun run) {
     run
       ..lastActivity = DateTime.now()
       ..producedOutput = true
       ..probedAt = null;
+  }
+
+  /// Records the kind of the newest frame. Notifies only when the kind
+  /// changes, so a stream of tokens does not rebuild the thread per token.
+  void _signal(AgentsRun run, AgentsRunSignal signal) {
+    final bool changed = run.lastSignal != signal;
+    run
+      ..lastSignal = signal
+      ..lastSignalAt = DateTime.now();
+    if (changed) notifyListeners();
+  }
+
+  /// The host said what the run is doing (`heartbeat.phase`). Notifies when
+  /// the phase or its tool changed, so the status line moves at once.
+  void hostPhase(String sessionKey, {String? phase, String? tool}) {
+    final run = _runs[sessionKey];
+    if (run == null || !run.running || phase == null || phase.isEmpty) return;
+    final bool changed = run.hostPhase != phase || run.hostPhaseTool != tool;
+    run
+      ..hostPhase = phase
+      ..hostPhaseTool = tool
+      ..hostPhaseAt = DateTime.now();
+    if (changed) notifyListeners();
+  }
+
+  /// The thread view opened or closed a card the run waits on.
+  void setWaitingForUser(String sessionKey, bool waiting) {
+    final run = _runs[sessionKey];
+    if (run == null || run.waitingForUser == waiting) return;
+    run.waitingForUser = waiting;
+    notifyListeners();
   }
 
   /// The host says the run is still running, and nothing else.
@@ -592,6 +715,9 @@ class AgentsRunLedger extends ChangeNotifier {
   void heartbeat(String sessionKey) {
     final run = _runs[sessionKey];
     if (run == null || !run.running) return;
+    // The first one moves the status line from "Sending" to "Preparing" at
+    // once; the later ones change nothing anybody can see.
+    final bool first = !run.sawHeartbeat;
     run
       // A heartbeat also proves the task ARRIVED, which is what the pre-run
       // window is waiting to learn. An old host that sends heartbeats but no
@@ -599,6 +725,7 @@ class AgentsRunLedger extends ChangeNotifier {
       ..sawHeartbeat = true
       ..lastActivity = DateTime.now()
       ..probedAt = null;
+    if (first) notifyListeners();
   }
 
   /// The user pressed Stop and the frame went out. The terminal that follows
@@ -636,7 +763,8 @@ class AgentsRunLedger extends ChangeNotifier {
   /// cowork-gnr8).
   void reconcile(String sessionKey, {required bool hostRunning}) {
     if (hostRunning) {
-      touch(sessionKey);
+      final run = _runs[sessionKey];
+      if (run != null && run.running) _keepAlive(run);
       return;
     }
     reconcileIdle(sessionKey);
@@ -654,7 +782,7 @@ class AgentsRunLedger extends ChangeNotifier {
     final existing = _runs[sessionKey];
     if (existing != null && existing.running) {
       existing.hostObserved = true;
-      touch(sessionKey);
+      _keepAlive(existing);
       return;
     }
     final run = AgentsRun(sessionKey)
@@ -713,6 +841,7 @@ class AgentsRunLedger extends ChangeNotifier {
       startedAt: DateTime.now(),
     );
     run.toolCalls.add(call);
+    _signal(run, AgentsRunSignal.tool);
     notifyListeners();
     return call;
   }
@@ -724,6 +853,7 @@ class AgentsRunLedger extends ChangeNotifier {
   /// same name or same call id) is filled in instead of duplicated.
   ToolCall recordTool(String sessionKey, AgentsRelayTool event) {
     final run = _live(sessionKey);
+    _signal(run, AgentsRunSignal.tool);
     final mapped = toolCallFromRelay(event);
     for (var i = run.toolCalls.length - 1; i >= 0; i--) {
       final candidate = run.toolCalls[i];
@@ -794,6 +924,7 @@ class AgentsRunLedger extends ChangeNotifier {
     String? error,
   }) {
     final run = _live(sessionKey);
+    _signal(run, AgentsRunSignal.tool);
     final key = '$sessionKey\u0000$subagentId';
     final existing = _subagentCalls[key];
     final call = subagentCallFromRelay(
@@ -867,7 +998,9 @@ class AgentsRunLedger extends ChangeNotifier {
   /// Accumulates the model's thinking for the run.
   void reasoning(String sessionKey, String text) {
     if (text.isEmpty) return;
-    _live(sessionKey).modelReasoning += text;
+    final run = _live(sessionKey);
+    run.modelReasoning += text;
+    if (run.running) _signal(run, AgentsRunSignal.thinking);
   }
 
   /// Stashes the latest raw model context for the copy button. Never rendered.
