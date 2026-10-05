@@ -491,6 +491,7 @@ class AgentsReplayLoader extends ChangeNotifier {
               cost: event.cost,
               runId: event.runId,
               now: event.finishedAt,
+              changes: event.changes, // run changes
             ),
           );
         }

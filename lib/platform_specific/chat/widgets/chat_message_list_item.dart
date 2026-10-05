@@ -3,11 +3,13 @@ import 'package:uuid/uuid.dart';
 
 import 'package:chuk_chat/models/chat_message.dart' show ChatMessageStatus;
 import 'package:chuk_chat/platform_specific/chat/chat_ui_helpers.dart';
+import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/chat_runtime.dart';
 import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
+import 'package:chuk_chat/widgets/agents_run_changes_line.dart'; // run changes
 import 'package:chuk_chat/widgets/agents_run_cost_meta.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
@@ -115,6 +117,12 @@ class ChatMessageListItem extends StatelessWidget {
         : splitRunMeta(data.toolCalls, data.contentBlocks);
     final AgentsRunCost? runCost = costSplit?.cost;
     final String? runId = costSplit?.runId;
+    // ── run changes ── "3 files changed · Undo" next to the cost line. It
+    // needs the run id: the sheet behind it asks the host by run.
+    final AgentsRunChangesSummary? runChanges = runId == null
+        ? null
+        : costSplit?.changes;
+    // ── end run changes ──
 
     MessageBubble buildBubble(String text, String? reasoning) => MessageBubble(
       key: ValueKey<String>(uiKey),
@@ -205,14 +213,31 @@ class ChatMessageListItem extends StatelessWidget {
         ? null
         : data.reasoning;
     final Widget answer = buildBubble(data.displayText, reasoning);
-    final Widget withCost = runCost == null || data.isStreamingMessage
+    final Widget withCost =
+        (runCost == null && runChanges == null) || data.isStreamingMessage
         ? answer
         : Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               answer,
-              AgentsRunCostMeta(cost: runCost),
+              // The meta lines wrap onto two rows on a narrow phone instead
+              // of cutting either one.
+              Wrap(
+                spacing: 12,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: <Widget>[
+                  if (runCost != null) AgentsRunCostMeta(cost: runCost),
+                  // ── run changes ──
+                  if (runChanges != null && runId != null)
+                    AgentsRunChangesLine(
+                      runId: runId,
+                      changes: runChanges,
+                      sessionKey: activeChatId,
+                    ),
+                  // ── end run changes ──
+                ],
+              ),
             ],
           );
     final Widget bubble = runId == null || data.isStreamingMessage
