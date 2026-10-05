@@ -47,6 +47,7 @@ from .prompt import build_system_prompt, upgrade_research_instructions
 from .registry import ToolRegistry
 from .search import register_search_tool
 from .secrets import SecretsAccess
+from .agent_mail import MailBinding, register_agent_mail_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
@@ -297,6 +298,9 @@ def build_runtime(
     secrets: SecretsAccess | None = None,
     automations: AutomationBackend | None = None,
     calls: CallBackend | None = None,
+    agent_mail: MailBinding | None = None,
+    tool_allowlist: Sequence[str] | None = None,
+    base_instructions: str | None = None,
     shell_session_key: str | None = None,
     context_providers: Sequence[Callable[[], list[dict]]] | None = None,
     policy: Any = None,
@@ -379,6 +383,13 @@ def build_runtime(
     ``calls`` (docs/WIRE_CONTRACT.md, "The agent calls the user") adds
     ``call_user`` / ``call_status``, bound to one session by the executor.
     Unset, neither tool exists.
+
+    ``agent_mail`` (docs/AGENT_MAIL.md §7) adds the mail tools: the full set,
+    or the restricted set of one mail. Unset, no mail tool exists.
+    ``tool_allowlist`` keeps only the named tools, after every tool is in; the
+    restricted mail run uses it. ``base_instructions`` replaces the behaviour
+    contract (:data:`chuk_agents_runtime.prompt.BASE_INSTRUCTIONS`) for a run
+    that has a job of its own and none of the file or shell tools.
 
     ``shell_session_key`` (docs/WIRE_CONTRACT.md, "Interactive shell and
     background commands") is the conversation a background job's end is
@@ -503,6 +514,19 @@ def build_runtime(
         register_search_tool(registry, store)
 
     kill = kill_switch or KillSwitch(estop_path)
+
+    # Agent mail (docs/AGENT_MAIL.md §7): the full set for a normal run, or the
+    # four tools of ONE mail for a restricted run, bound by the executor.
+    # ``None`` (no account session, no mailbox) registers nothing. Stop reaches
+    # into ``mail_wait``, which can park for minutes.
+    register_agent_mail_tools(
+        registry,
+        agent_mail,
+        # Attachments are read from this directory only (the host side of the
+        # sandbox workspace), never from anywhere a path might point.
+        workspace=workspace,
+        cancel=lambda: kill.interrupted() or kill.estop_engaged(),
+    )
 
     if subagents is not None:
         supervisor = SubagentSupervisor(
@@ -636,6 +660,13 @@ def build_runtime(
                 cancel=lambda: kill.interrupted() or kill.estop_engaged(),
             )
 
+    # An allowlist (the restricted mail run, docs/AGENT_MAIL.md §7) keeps
+    # only the named tools. Applied last, so no tool registered above can slip
+    # past it: not a shell, not a file tool, not memory, not an MCP tool.
+    if tool_allowlist is not None:
+        allowed = set(tool_allowlist)
+        _withhold_tools(registry, [name for name in registry.names() if name not in allowed])
+
     decision = ToolSearchDecision(
         active=False,
         effective_budget=0,
@@ -657,6 +688,7 @@ def build_runtime(
         library.reload()
         return build_system_prompt(
             registry,
+            instructions=base_instructions,
             persona=system_prompt,
             workspace=workspace,
             skills=library.catalog(),

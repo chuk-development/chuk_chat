@@ -2024,3 +2024,130 @@ Runtime: `build_runtime(policy=…)`, `HOST_NETWORK_TOOLS`. App:
 (real daemon), `agents/host/tests/test_agent_permissions.py`,
 `agents/executor/tests/test_agent_permissions.py`,
 `agents/runtime/tests/test_network_permission.py`, `test/agents_permissions/`.
+
+## Agent mail (bead chuk_chat-m0j3)
+
+Python side IMPLEMENTED 2026-09-30 (`chuk_agents_host.agent_mail`,
+`chuk_agents_runtime.agent_mail`, the executor's `mail_untrusted` profile).
+Version 2 (2026-10-01): the server stores every mail sealed to the user's mail
+key, the host opens it (`chuk_agents_runtime.mail_seal`) and the HostView is
+host code. Additive: nothing above changes. Product spec and server API:
+`docs/AGENT_MAIL.md`.
+
+### Frame (relay → host)
+
+```json
+{"type": "agent_mail", "event": "new", "message_id": "<uuid>"}
+```
+
+- A relay control frame, like `cowork_pair_bound`. It is NOT inside a
+  `cowork_relay` payload and it is not sealed. The API server sends it to every
+  host of the user when a new mail is stored (`docs/AGENT_MAIL.md` §5.2). A
+  mail that a `mail_wait` took gets no frame.
+- It carries no content. It only tells the host to fetch. The host lists the
+  undelivered mail itself (`GET /v1/agent-mail/messages?undelivered=true`).
+- `CloudRelayLink.handle_frame` records it in the frame ledger:
+  `relay_frame_in` with `decision: "mail_fetch"`, the `event` and the
+  `message_id`. A host without the mail service logs it as
+  `relay_frame_dropped` with `reason: "not_enabled"`. An older host logs it as
+  `unknown_type`. No frame leaves the dispatch silently.
+- The host also fetches when it starts, when the relay connects again with the
+  account token, when it is provisioned, when the mail key arrives, and every 5
+  minutes. So a frame that is lost while the host is away costs at most one
+  poll interval.
+
+### Frame (app → host, sealed): `agent_mail_key`
+
+```json
+{"type": "agent_mail_key", "public_key": "<base64>", "private_key": "<base64>"}
+```
+
+- A sealed app payload, like `secrets`: it travels in a `controller_frame` on
+  the end-to-end channel. Both values are standard base64 (with padding) of
+  the raw 32-byte X25519 keys of the user's mail key (`docs/AGENT_MAIL.md`
+  §3.1, §6.1). Other fields are ignored.
+- The app sends it each time its end-to-end channel to a host comes up (after
+  its `account_authentication`), and after it makes a new key. It is
+  idempotent: the host stores the pair when it differs from the stored one.
+- The host answers NOTHING: no terminal, no ack, no error frame.
+- The host checks that both keys are 32 bytes and that the public key belongs
+  to the private key. A pair that fails is refused and the stored key stays.
+- Where it is taken: `CloudHostParty` handles it next to
+  `account_authentication`, before the provision gate, so it lands even when
+  no task server exists yet and it never passes through the executor's ticket
+  table. On the local relay, where the executor opens the frames, the
+  executor hands it to the host's mail service (`Executor._handle_mail_key`).
+- The ledger: `relay_frame_in` with `decision: "mail_key"` and
+  `outcome: "stored" | "unchanged"`; a refused pair is `relay_frame_dropped`
+  with `reason: "invalid"`; a host without agent mail logs
+  `relay_frame_dropped` with `reason: "not_enabled"`. No line carries a key.
+- At rest: `agent_mail_key.enc` in the host state directory, AES-256-GCM
+  under a key derived (HKDF-SHA256) from the host's device seed with the
+  label `cowork/host/agent-mail-key-at-rest/v1`, file mode 0600. It is NOT in
+  the secret vault (`secrets.enc`), because the vault's values reach every
+  sandbox process. Deleting `host_device.key` makes it unreadable; the next
+  key frame replaces it.
+- Without a key the host claims no mail and starts no mail run, and every
+  mail tool answers "open the app once and go to Settings > Agents > Mailbox"
+  (the app makes the key on that page). The key frame
+  wakes the dispatcher.
+
+### Runs (host side, informative)
+
+| mail | run | `origin` | `session_key` |
+|---|---|---|---|
+| `is_bulk` | none (claimed only) | — | — |
+| `owner` / `trusted` | one full run for all waiting mails | `mail` | the host's own coworker, `host:<host device id>` |
+| `unknown`, 30 s old | one restricted run per mail, max 20 per day | `mail_untrusted` | `mail:<message_id>` |
+
+- The server claim (`POST /v1/agent-mail/messages/claim`) decides which host
+  runs a mail. A mail whose claim this host lost starts nothing. A mail this
+  host claimed but could not start is kept as pending (in memory and in
+  `agent_mail.json`) and is started before the next claim round.
+- `mail_send` attaches only files inside the agent's workspace: a relative
+  path, or an absolute path under the host workspace or `/workspace`. The
+  path is resolved on the host, symlinks included; anything outside is refused.
+- A `mail` run is a normal run of the host coworker's thread. It streams like
+  an automation run, and its `done` carries `host_notified: true`: the host
+  announces it (desktop toast, cloud push when no app is attached).
+- A `mail_untrusted` run sends NOTHING to the app: no `delta`, no `tool`, no
+  `done`. It is not in any chat thread, it gets no notification, and its
+  transcript is not exported. Its output is the `agent_note` / `importance` on
+  the mail, which the app reads from the mail API. The `runs` row exists, on
+  its own session key, without the model's last message. Its messages go to
+  `mail-untrusted.db` next to the executor store, so `search_chats` or a
+  replay of a full run cannot find the untrusted text.
+- `user_requested` on `POST /v1/agent-mail/send` is true only in a run with
+  `origin: "app"` (a `task` frame the user sent). The executor sets it; it is
+  not a tool argument. The reply of a `mail_untrusted` run is sent with
+  `force_draft: true`, so it is always a draft.
+- The server returns sealed fields (`sealed_summary`, `sealed_body`,
+  `agent_note_sealed`, attachment objects in the binary form). Each JSON field
+  is a JSON string that holds the text envelope; the host also accepts the
+  envelope as an object. The host opens them with the mail key. A field that does not open is shown to the model as
+  an error ("could not be decrypted on this host"), never as bytes.
+- The HostView is host code (the server cannot read the mail): the full-run
+  tools show text, snippet, name and agent note only for `sender_trust`
+  `owner`, `trusted` and `self` (the agent's own sent mail and drafts), text
+  cut at 8 000 characters. Any other value counts as `unknown` and gives only
+  `{id, from_address, subject, sender_trust, codes, links, note}`. The
+  restricted run's `mail_read` gives the full text of its own mail. A `self`
+  mail starts no run.
+- `mail_wait` gets only a `message_id` from the server; the host fetches and
+  opens that mail and applies the HostView. The server's wait cannot see mail
+  that is already stored (it cannot read it). So at the start and at every
+  poll the host also lists the undelivered inbound mail received since the
+  wait start minus 120 s, opens each `sealed_summary`, matches
+  `from_contains` (address and name) and `subject_contains` as
+  case-insensitive substrings, and claims the newest match with
+  `POST /messages/claim`. A claim the host wins ends the wait with that mail;
+  a lost claim (the dispatcher or another host took it) keeps the wait going.
+  The dispatcher's 30 s delay for unknown mail means the wait normally wins.
+- `mail_send` refuses attachments above 3 MiB raw in total before it calls
+  the server (the server answers `422 attachments_too_large` above it). `mail_reply` and the restricted
+  `mail_draft_reply` send `in_reply_to` and `references`, which the host reads
+  from the opened parent.
+- `mail_read(id, save_attachments: true)` downloads and opens the stored
+  attachments of a readable mail into `mail-attachments/<id>/` in the
+  workspace (each directory opened without following a symlink). Never for
+  `unknown` mail.

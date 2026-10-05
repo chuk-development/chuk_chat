@@ -1540,6 +1540,7 @@ class AgentsRelayClient
     McpStore? mcpStore,
     HereNowStore? hereNowStore,
     Future<void> Function()? secretsForwarder,
+    Future<void> Function(AgentsRelayClient client)? mailKeyForwarder,
     this.onTrustUpdated,
     Iterable<String> Function()? replaySessions,
     AccountSessionSource? sessionSource,
@@ -1557,6 +1558,7 @@ class AgentsRelayClient
        _mcpStore = mcpStore,
        _hereNowStore = hereNowStore,
        _secretsForwarder = secretsForwarder,
+       _mailKeyForwarder = mailKeyForwarder,
        _replaySessions = replaySessions,
        _sessionSource = sessionSource,
        _authChanges = authChanges,
@@ -1626,6 +1628,12 @@ class AgentsRelayClient
   /// device holds. Null (tests, a bare client) forwards nothing; the app
   /// passes `SecretsService.instance.forwardToHost`.
   final Future<void> Function()? _secretsForwarder;
+
+  /// Hands the host the user's mail key after every provision
+  /// (docs/AGENT_MAIL.md §6.1), through this client. Null (tests, a bare
+  /// client) sends nothing; the app passes
+  /// `AgentMailKeyHandover.instance.forwardTo`.
+  final Future<void> Function(AgentsRelayClient client)? _mailKeyForwarder;
 
   /// Supplies the session keys whose transcript must be replayed after a
   /// (re)connect — the threads the caller has no local transcript for. Called
@@ -2139,6 +2147,12 @@ class AgentsRelayClient
     final forward = _secretsForwarder;
     if (forward != null) {
       unawaited(sent.then((_) => forward()).catchError((Object _) {}));
+    }
+    // The mail key rides behind the token too (docs/AGENT_MAIL.md §6.1):
+    // idempotent on the host, so a re-provision may send it again.
+    final mailKey = _mailKeyForwarder;
+    if (mailKey != null) {
+      unawaited(sent.then((_) => mailKey(this)).catchError((Object _) {}));
     }
     return sent;
   }

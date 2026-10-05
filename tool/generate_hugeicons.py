@@ -50,6 +50,9 @@ WANTED = [
     "Calendar01Icon", "MapPinIcon",
     "Location01Icon", "Logout01Icon", "Moon02Icon", "Sun01Icon",
     "Alert01Icon", "AiBrain01Icon",
+    # Agent mail (docs/AGENT_MAIL.md §6).
+    "Mail01Icon", "InboxIcon", "Archive02Icon", "UserCheck01Icon",
+    "UserBlock01Icon",
 ]
 
 CAMEL = re.compile(r"([a-z0-9])([A-Z])")

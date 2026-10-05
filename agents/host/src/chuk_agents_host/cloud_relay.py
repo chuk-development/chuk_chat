@@ -83,8 +83,10 @@ from .relay import EVENT_JOIN, EVENT_LEAVE
 from .relay_ledger import (
     DECISION_DELIVERED,
     DECISION_HANDSHAKE,
+    DECISION_MAIL_FETCH,
     InboundFrameLog,
     REASON_MALFORMED,
+    REASON_NOT_ENABLED,
     REASON_REJECTED,
     REASON_UNKNOWN_TYPE,
 )
@@ -112,6 +114,10 @@ TYPE_EXECUTOR_STATUS = "executor_status"
 TYPE_PAIR_BOUND = "cowork_pair_bound"
 #: Nobody claimed the channel in time. Followed by close(1008).
 TYPE_PAIR_EXPIRED = "cowork_pair_expired"
+#: New mail for the agent (docs/AGENT_MAIL.md §5.2, §6.1, §7):
+#: ``{"type": "agent_mail", "event": "new", "message_id": "<uuid>"}``. It
+#: carries no content; it only tells the host to fetch.
+TYPE_AGENT_MAIL = "agent_mail"
 
 #: The error code the relay answers with when the executor sends a frame and no
 #: controller of that user is attached anywhere. Our one honest "the app left".
@@ -257,6 +263,7 @@ class CloudRelayTransport:
         on_controller_event: ControllerEvent | None = None,
         on_pairing_expired: Callable[[], None] | None = None,
         fixed_pairing_channel: bool = False,
+        on_agent_mail: Callable[[str], None] | None = None,
         logger: Callable[[str], None] | None = None,
         open_timeout: float = 15.0,
         connect: Callable[..., Any] = ws_connect,
@@ -272,6 +279,11 @@ class CloudRelayTransport:
         # True for an install token from the app: the pairing channel does not
         # change when the relay drops it, and no code is shown to scan.
         self._fixed_pairing_channel = fixed_pairing_channel
+        # "Fetch the mail now" (docs/AGENT_MAIL.md §7): called with
+        # ``"frame"`` for an ``agent_mail`` frame and with ``"connected"`` for
+        # every authenticated connect, because a frame sent while the host was
+        # away is lost.
+        self._on_agent_mail = on_agent_mail
         self._log = logger or (lambda _msg: None)
         self._open_timeout = open_timeout
         self._connect = connect
@@ -376,10 +388,16 @@ class CloudRelayTransport:
             expires_in=expires_in if parked else None,
             heal=heal,
             fixed_pairing_channel=self._fixed_pairing_channel,
+            on_agent_mail=self._on_agent_mail,
         )
         # The same hello the loopback relay gets, as the first payload: it tells a
         # controller already on the channel that the executor is here.
         link.send_join()
+        if not parked and self._on_agent_mail is not None:
+            try:
+                self._on_agent_mail("connected")
+            except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
+                self._log(f"cloud relay: mail listener failed: {type(exc).__name__}")
         return link
 
 
@@ -403,6 +421,7 @@ class CloudRelayLink:
         expires_in: float | None = None,
         heal: bool = False,
         fixed_pairing_channel: bool = False,
+        on_agent_mail: Callable[[str], None] | None = None,
     ) -> None:
         # ``join_message`` here is the built hello dict, not the protocol helper
         # of the same name — the transport builds it and hands it over.
@@ -425,6 +444,7 @@ class CloudRelayLink:
         # An install token: the app waits on this same channel, so there is no
         # code on screen to warn about and no fresh one to mint.
         self._fixed_pairing_channel = fixed_pairing_channel
+        self._on_agent_mail = on_agent_mail
         self._warning: threading.Timer | None = None
         # Every frame off this socket reports what became of it. The pipe is the
         # first place a lost message can disappear, and until this existed a
@@ -607,6 +627,9 @@ class CloudRelayLink:
         if kind == TYPE_PAIR_EXPIRED:
             self._on_expired()
             return []
+        if kind == TYPE_AGENT_MAIL:
+            self._on_agent_mail_frame(frame)
+            return []
         if kind in (TYPE_AGENTS_ERROR, TYPE_ERROR):
             self._on_error(frame)
             return []
@@ -621,6 +644,26 @@ class CloudRelayLink:
         self._log(f"cloud relay: ignoring frame type {kind!r}")
         self._frames.dropped(kind, REASON_UNKNOWN_TYPE, req_id=req_id)
         return []
+
+    def _on_agent_mail_frame(self, frame: dict[str, Any]) -> None:
+        """New mail (docs/AGENT_MAIL.md §6.1). Recorded in the ledger, then
+        handed up as "fetch now". The frame has no content, and the id is the
+        only field of it that is logged."""
+        req_id = frame.get("req_id")
+        message_id = frame.get("message_id")
+        fields = {
+            "req_id": req_id,
+            "event": str(frame.get("event") or "")[:32],
+            "message_id": message_id[:64] if isinstance(message_id, str) else None,
+        }
+        if self._on_agent_mail is None:
+            self._frames.dropped(TYPE_AGENT_MAIL, REASON_NOT_ENABLED, **fields)
+            return
+        self._frames.acted(TYPE_AGENT_MAIL, DECISION_MAIL_FETCH, **fields)
+        try:
+            self._on_agent_mail("frame")
+        except Exception as exc:  # noqa: BLE001 - a listener must not kill the pipe
+            self._log(f"cloud relay: mail listener failed: {type(exc).__name__}")
 
     def send_control(self, frame: dict[str, Any]) -> None:
         """Send a relay control frame verbatim (not wrapped in a payload)."""

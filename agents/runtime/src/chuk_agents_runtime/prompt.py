@@ -282,6 +282,7 @@ def render_tool_docs(registry: ToolRegistry) -> str:
 def build_system_prompt(
     registry: ToolRegistry,
     *,
+    instructions: str | None = None,
     persona: str | None = None,
     workspace: str | None = None,
     skills: str | None = None,
@@ -310,8 +311,12 @@ def build_system_prompt(
     frozen snapshot (§12) — both are read once, when a session is seeded, and
     never rewritten mid-session, so the prefix cache survives the whole run.
     Both are sanitized by their own module before they arrive here.
+
+    ``instructions`` replaces :data:`BASE_INSTRUCTIONS`. The restricted mail
+    run (docs/AGENT_MAIL.md §2, §7) has no file or shell tools, so the default
+    contract, which tells the model to use them, would be wrong there.
     """
-    parts = [BASE_INSTRUCTIONS]
+    parts = [instructions if instructions and instructions.strip() else BASE_INSTRUCTIONS]
     if skills and skills.strip():
         parts.append(skills.strip())
     names = [str(n).strip() for n in (mcp_servers or []) if str(n).strip()]

@@ -65,7 +65,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 from contextlib import nullcontext
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace as dataclass_replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -92,6 +92,17 @@ from chuk_agents_runtime import (
     redact_secrets,
     run_stamp_fields,
     skills_inventory,
+)
+from chuk_agents_runtime.agent_mail import (
+    KEY_FRAME_TYPE,
+    ORIGIN_MAIL,
+    ORIGIN_MAIL_UNTRUSTED,
+    PROFILE_MAIL_UNTRUSTED,
+    RESTRICTED_INSTRUCTIONS,
+    RESTRICTED_TOOL_NAMES,
+    MailBinding,
+    NoSandbox,
+    valid_id,
 )
 from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
@@ -153,6 +164,25 @@ logger = logging.getLogger(__name__)
 # What a task's model fields read in the log and the runs row when it named
 # nothing: the host decides.
 HOST_DEFAULT = "host-default"
+
+#: The origin of a run the user started in the chat (a ``task`` frame). Only
+#: such a run may send mail with ``user_requested`` (docs/AGENT_MAIL.md §2).
+ORIGIN_APP = "app"
+
+#: Runs nobody watches live: the host announces their end itself.
+UNATTENDED_ORIGINS = ("automation", "job", ORIGIN_MAIL)
+
+#: Model rounds of a restricted mail run: read, note, maybe a draft, archive.
+MAIL_RESTRICTED_MAX_ITERATIONS = 8
+
+#: Wall clock of a restricted mail run. It shares the one task worker with the
+#: user's own chat, and an unknown sender decides when it starts.
+MAIL_RESTRICTED_MAX_SECONDS = 300.0
+
+#: The store of the restricted mail runs, next to the executor's own. Their
+#: transcripts hold untrusted mail text, so they must not be in the store a
+#: full run searches (``search_chats``) or replays (docs/AGENT_MAIL.md §2).
+MAIL_UNTRUSTED_DB = "mail-untrusted.db"
 
 # A fresh model per task. MockModelClient is single-use (it pops a script), so
 # the factory hands back a new one each time; a real client can be reused.
@@ -348,6 +378,12 @@ class _Run:
     # automation run is notified on even with a controller attached.
     origin: str = "app"
     automation_id: str | None = None
+    # The run profile (docs/AGENT_MAIL.md §2, §7). ``None`` is a normal run.
+    # ``mail_untrusted`` is the restricted run of ONE mail from an unknown
+    # sender: no shell, no files, no browser, no memory, no MCP, only the four
+    # tools of that mail.
+    profile: str | None = None
+    mail_message_id: str | None = None
 
 
 class _Heartbeat:
@@ -795,6 +831,7 @@ class Executor:
         on_agent_frame: Callable[[dict], list | None] | None = None,
         calls=None,
         on_call_frame: Callable[[dict], Any] | None = None,
+        agent_mail=None,
     ) -> None:
         self._name = name
         self._endpoint = endpoint
@@ -915,6 +952,10 @@ class Executor:
         # frame is unknown.
         self._calls = calls
         self._on_call_frame = on_call_frame
+        # Agent mail (docs/AGENT_MAIL.md §7): the host's mail service.
+        # ``client()`` gives the REST client, or ``None`` when the host has no
+        # account session or no mailbox; then no mail tool is registered.
+        self._agent_mail = agent_mail
         # Skills (docs/WIRE_CONTRACT.md, "Skills"): the app lists and switches
         # the workspace's skills through ``skills_list`` / ``skill_control``.
         # The executor answers both itself from ``<workspace>/skills`` and the
@@ -1214,7 +1255,12 @@ class Executor:
             # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
             # permissions"): the policy is snapshot here, and the box cannot
             # change under this run — not even for a room turn that shares it.
-            leased = self._lease_sandbox(run.session_key)
+            # A restricted mail run touches no sandbox, so it leases none.
+            leased = (
+                None
+                if run.profile == PROFILE_MAIL_UNTRUSTED
+                else self._lease_sandbox(run.session_key)
+            )
             try:
                 self._run_task(run)
             except Exception as exc:  # noqa: BLE001 — one bad task must not kill the worker
@@ -1459,6 +1505,13 @@ class Executor:
             # is a control frame like a stop.
             self._call_hook(self._on_account_frame, payload)
             return
+        if kind == KEY_FRAME_TYPE:
+            # The mail key from the app (docs/AGENT_MAIL.md §6.1). The cloud
+            # party takes it before it gets here; this is the local relay's
+            # path. Handed to the host's mail service; idempotent, and like a
+            # stop it gets no terminal.
+            self._handle_mail_key(request_id, payload)
+            return
         if kind == "task" or kind is None:
             # ``None`` keeps the original contract: the first frames of this
             # protocol carried a prompt and no type.
@@ -1663,6 +1716,19 @@ class Executor:
             model = last.get("model") or None
             provider = last.get("provider") or None
             effort = last.get("reasoning_effort") or None
+        # The restricted mail run (docs/AGENT_MAIL.md §7) runs on the host's
+        # default model: its session is new, and the user's mode belongs to
+        # the user's own threads.
+        profile = meta.get("profile") or None
+        if profile == PROFILE_MAIL_UNTRUSTED:
+            model = provider = effort = None
+        # ``app`` is the origin of a task frame the user sent, and it grants
+        # ``user_requested`` on mail (docs/AGENT_MAIL.md §2). Only
+        # ``_accept_task`` makes such a run; a submitted task never does.
+        origin = str(meta.get("origin") or "automation")
+        if origin == ORIGIN_APP:
+            logger.warning("submit_task refused origin=app; the run is an automation")
+            origin = "automation"
         run = _Run(
             request_id=f"auto-{uuid4().hex[:12]}",
             session_key=str(session_key),
@@ -1674,9 +1740,12 @@ class Executor:
             run_id=uuid4().hex,
             started_at=time.time(),
             # ``automation`` (a fired schedule / watcher trigger) unless the
-            # caller says otherwise (``job``: a background command reporting).
-            origin=str(meta.get("origin") or "automation"),
+            # caller says otherwise (``job``: a background command reporting;
+            # ``mail`` / ``mail_untrusted``: an incoming mail).
+            origin=ORIGIN_MAIL_UNTRUSTED if profile == PROFILE_MAIL_UNTRUSTED else origin,
             automation_id=str(meta.get("automation_id") or "") or None,
+            profile=str(profile) if profile else None,
+            mail_message_id=valid_id(meta.get("message_id")),
         )
         logger.info(
             "automation task accepted request=%s session=%s run=%s automation=%s model=%s",
@@ -3176,6 +3245,9 @@ class Executor:
 
     # -- one task --------------------------------------------------------
     def _run_task(self, run: _Run) -> None:
+        if run.profile == PROFILE_MAIL_UNTRUSTED:
+            self._run_restricted_mail(run)
+            return
         request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
         # A credential rotation that happens mid-task rides this task's stream.
         with self._mcp_lock:
@@ -3286,7 +3358,7 @@ class Executor:
         if browser_entry is not None:
             servers.append(browser_entry)
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
-        if mcp_manager is None and run.origin in ("automation", "telegram") and online:
+        if mcp_manager is None and run.origin in ("automation", ORIGIN_MAIL, "telegram") and online:
             # A fired automation carries no forwarded connectors (no frame,
             # no app). It runs with the connectors the session already has,
             # exactly as the last task of that session did.
@@ -3364,6 +3436,9 @@ class Executor:
                 if self._calls is not None
                 else None
             ),
+            # The mail tools (docs/AGENT_MAIL.md §7). ``user_requested`` is
+            # decided here from the run's origin, never by the model.
+            agent_mail=self._mail_binding(run),
             # The hero/aux client (§7.3): same model, reasoning off, cheap. Enables
             # tier-2/3 compaction and mem0 extraction by default in production.
             # ``None`` (mock model) keeps tier-1-only behaviour.
@@ -3511,8 +3586,9 @@ class Executor:
                 tokens_spent=result.tokens_spent,
                 run_id=run.run_id,
                 run_stamps=run_stamps,
-                # A fired automation / job is notified on by the host itself.
-                host_notified=run.origin in ("automation", "job", "telegram"),
+                # A fired automation / job / mail run is notified on by the
+                # host itself; a Telegram run is answered in Telegram.
+                host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
                 session_key=session_key,
             ),
         )
@@ -3526,6 +3602,143 @@ class Executor:
                 run,
                 reason=reason,
                 final_answer=result.final_answer,
+                iterations=result.iterations,
+                tokens_spent=result.tokens_spent,
+            ),
+        )
+
+    # -- agent mail (docs/AGENT_MAIL.md §7) --------------------------------
+    def _handle_mail_key(self, request_id: str, payload: dict) -> None:
+        """Hand a sealed ``agent_mail_key`` frame to the host's mail service.
+        The log line names the outcome, never a key."""
+        accept = getattr(self._agent_mail, "accept_key_frame", None)
+        if accept is None:
+            logger.warning("agent_mail_key dropped request=%s: agent mail is not enabled", request_id)
+            return
+        try:
+            outcome = accept(payload)
+        except Exception as exc:  # noqa: BLE001 — a bad key frame must not kill the reader
+            logger.warning("agent_mail_key failed request=%s: %s", request_id, type(exc).__name__)
+            return
+        logger.info("agent_mail_key request=%s: %s", request_id, outcome)
+
+    def _mail_binding(self, run: _Run) -> MailBinding | None:
+        """The mail access of this run, or ``None`` for no mail tools.
+
+        A restricted run gets its one mail. A full run gets the whole set,
+        with ``user_requested`` True only when the user started it in the
+        chat (``origin == "app"``): a fired automation, a job wake or a mail
+        run never sends past the server's draft rule.
+        """
+        service = self._agent_mail
+        if service is None:
+            return None
+        try:
+            client = service.client()
+        except Exception:  # noqa: BLE001 — no mailbox is no mail tools, never a failed run
+            client = None
+        if client is None:
+            return None
+        if run.profile == PROFILE_MAIL_UNTRUSTED:
+            if run.mail_message_id is None:
+                return None
+            return MailBinding(client=client, message_id=run.mail_message_id)
+        return MailBinding(client=client, user_requested=run.origin == ORIGIN_APP)
+
+    def _run_restricted_mail(self, run: _Run) -> None:
+        """The restricted run of ONE mail from an unknown sender
+        (docs/AGENT_MAIL.md §2, §7).
+
+        No shell, no files, no browser, no memory, no MCP, no skills, no chat
+        search and no workspace: the four tools of the mail, a short prompt of
+        its own, and nothing else. It streams nothing to the app, adds nothing
+        to any chat thread and exports no transcript. Its output is the note
+        on the mail.
+
+        Its messages go to a store of their own (:data:`MAIL_UNTRUSTED_DB`):
+        they hold the untrusted text, and ``search_chats`` of a full run reads
+        every session of the executor's store. The run row stays in the
+        executor's store, like every run, without the model's last message.
+        """
+        binding = self._mail_binding(run)
+        if binding is None:
+            message = "mail unavailable"
+            self._record_run(run, failed=message)
+            self._forget(run.request_id)
+            self._call_hook(
+                self._on_run_finished,
+                self._run_summary(run, reason="failed", final_answer=None, error=message),
+            )
+            return
+        model = None
+        guard = None
+        try:
+            # Inside the try: a failure here is this run's failure, recorded
+            # on its row, and never an error frame to the app.
+            model = self._model_factory()
+            cancel_model = getattr(model, "cancel", None)
+            if callable(cancel_model):
+                run.kill.on_interrupt(cancel_model)
+            loop = build_runtime(
+                model,
+                db_path=str(Path(self._db_path).with_name(MAIL_UNTRUSTED_DB)),
+                environment=NoSandbox(),
+                workspace=None,
+                max_iterations=MAIL_RESTRICTED_MAX_ITERATIONS,
+                system_prompt=None,
+                base_instructions=RESTRICTED_INSTRUCTIONS,
+                enable_memory=False,
+                enable_skills=False,
+                enable_chat_search=False,
+                enable_terminal=False,
+                enable_browser=False,
+                enable_mcp=False,
+                enable_tool_search=False,
+                version_workspace=False,
+                agent_mail=binding,
+                tool_allowlist=RESTRICTED_TOOL_NAMES,
+                kill_switch=run.kill,
+            )
+            guard = self._arm_run_guard(
+                run,
+                limit=min(self._run_max_seconds or MAIL_RESTRICTED_MAX_SECONDS, MAIL_RESTRICTED_MAX_SECONDS),
+            )
+            self._bind_trace_scrubber()
+            with trace_run_scope(run.run_id or run.request_id, run.session_key):
+                result = loop.run(run.session_key, run.prompt)
+        except Exception as exc:  # noqa: BLE001 — one bad mail must not kill the worker
+            message = getattr(exc, "user_message", None) or f"loop failed: {type(exc).__name__}"
+            self._record_run(run, failed=message)
+            self._forget(run.request_id)
+            self._call_hook(
+                self._on_run_finished,
+                self._run_summary(run, reason="failed", final_answer=None, error=message),
+            )
+            return
+        finally:
+            if guard is not None:
+                guard.cancel()
+            close = getattr(model, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001 — cleanup must not mask a result
+                    pass
+        reason = (
+            RUN_TIMEOUT_REASON
+            if run.timed_out and result.reason is StopReason.INTERRUPTED
+            else result.reason.value
+        )
+        # The last message came from a model that read untrusted text: it is
+        # not kept in the run row, and the host is not handed it.
+        self._record_run(run, result=dataclass_replace(result, final_answer=None), reason=reason)
+        self._forget(run.request_id)
+        self._call_hook(
+            self._on_run_finished,
+            self._run_summary(
+                run,
+                reason=reason,
+                final_answer=None,
                 iterations=result.iterations,
                 tokens_spent=result.tokens_spent,
             ),
@@ -3571,9 +3784,11 @@ class Executor:
         return _Heartbeat(thread, stop)
 
     # -- wall-clock guard (Bead cowork-qxa) --------------------------------
-    def _arm_run_guard(self, run: _Run) -> threading.Timer | None:
-        """Start the run's wall-clock timer, or ``None`` when the guard is off."""
-        limit = self._run_max_seconds
+    def _arm_run_guard(self, run: _Run, *, limit: float | None = None) -> threading.Timer | None:
+        """Start the run's wall-clock timer, or ``None`` when the guard is off.
+        ``limit`` overrides the executor's budget (the restricted mail run)."""
+        if limit is None:
+            limit = self._run_max_seconds
         if not limit or limit <= 0:
             return None
         timer = threading.Timer(limit, self._on_run_guard, args=(run,))
