@@ -45,6 +45,7 @@ import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_takeover_card.dart';
+import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 
 /// Room a desktop thread keeps above its first message for the header that
@@ -2231,10 +2232,25 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           : AgentsTakeoverStage.waiting,
       visited: _takeoverVisited,
       onOpenBrowser: canOpen ? () => unawaited(_openTakeoverBrowser()) : null,
-      onDone: () => _decideApproval(true),
-      onSkip: () => _decideApproval(false),
+      onDone: () => _decideTakeover(true),
+      onSkip: () => _decideTakeover(false),
       dense: dense,
     );
+  }
+
+  /// Answers the takeover card. With no relay controller the answer cannot
+  /// reach the host, so the card stays and the run keeps waiting on the user;
+  /// a short notice says why.
+  void _decideTakeover(bool approved) {
+    if (_controller == null) {
+      AppNotifications.show(
+        context,
+        'Not connected to your computer — try again when it is back',
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+    _decideApproval(approved);
   }
 
   // --- the standing approval --------------------------------------------------

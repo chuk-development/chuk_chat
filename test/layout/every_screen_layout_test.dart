@@ -231,14 +231,20 @@ Widget _hosted(Widget child) => Scaffold(body: SafeArea(child: child));
 
 /// The Telegram section with the host's [state] already in, on a host that
 /// runs channels.
-Widget _telegram(Map<String, dynamic> state) {
+Widget _telegram(_Bag bag, Map<String, dynamic> state) {
+  // The bag disposes in reverse: the service first, then its notifiers.
+  final ValueNotifier<Object?> connection = ValueNotifier<Object?>(Object());
+  bag.keep(connection, connection.dispose);
+  final ValueNotifier<Set<String>> capabilities = ValueNotifier<Set<String>>(
+    <String>{kAgentChannelsCapability},
+  );
+  bag.keep(capabilities, capabilities.dispose);
   final AgentsChannelsService service = AgentsChannelsService(
     send: (Map<String, dynamic> _) async {},
-    connection: ValueNotifier<Object?>(Object()),
-    capabilities: ValueNotifier<Set<String>>(<String>{
-      kAgentChannelsCapability,
-    }),
+    connection: connection,
+    capabilities: capabilities,
   );
+  bag.keep(service, service.dispose);
   service.handleFrame(<String, dynamic>{
     'type': 'agent_channel',
     'agent_id': 'amber',
@@ -581,7 +587,7 @@ List<_Screen> _screens() => <_Screen>[
   }),
   _Screen(
     'widgets/agent_telegram_section (token refused, error)',
-    (_) => _telegram(<String, dynamic>{
+    (_Bag bag) => _telegram(bag, <String, dynamic>{
       'enabled': true,
       'has_token': true,
       'state': 'unauthorized',
@@ -591,7 +597,7 @@ List<_Screen> _screens() => <_Screen>[
   ),
   _Screen(
     'widgets/agent_telegram_section (waiting for the code)',
-    (_) => _telegram(<String, dynamic>{
+    (_Bag bag) => _telegram(bag, <String, dynamic>{
       'enabled': true,
       'has_token': true,
       'state': 'polling',
@@ -601,7 +607,7 @@ List<_Screen> _screens() => <_Screen>[
   ),
   _Screen(
     'widgets/agent_telegram_section (linked)',
-    (_) => _telegram(<String, dynamic>{
+    (_Bag bag) => _telegram(bag, <String, dynamic>{
       'enabled': true,
       'has_token': true,
       'state': 'polling',

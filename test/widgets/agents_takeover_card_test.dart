@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -429,6 +430,57 @@ void main() {
         findsNothing,
       );
       await tester.pumpWidget(const SizedBox.shrink());
+    });
+
+    testWidgets('Skip with no connection keeps the card and says why', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1400, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      // The view's own controller never arrives; the card still comes in on
+      // the app-wide link from another controller.
+      final Completer<AgentsRelayController> never =
+          Completer<AgentsRelayController>();
+      await tester.pumpWidget(
+        _app(
+          AgentsThreadView(
+            controllerBuilder: () => never.future,
+            sessionSource: const _FakeSessionSource(),
+            threadKey: 'thread-1',
+            title: 'Ada',
+            fileSaver: _NoopSaver(),
+          ),
+        ),
+      );
+      await tester.pump();
+      final FakeRelayController upstream = FakeRelayController();
+      AgentsRelayLink.instance.bind(upstream);
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      upstream.emit(_takeover());
+      await tester.pump();
+      expect(find.text('Ada needs you in the browser'), findsOneWidget);
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-takeover-skip')),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      // Nothing could reach the host: the card and the wait both stay.
+      expect(upstream.approvalDecisions, isEmpty);
+      expect(
+        find.byKey(const ValueKey<String>('agents-takeover-card')),
+        findsOneWidget,
+      );
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+      expect(
+        find.text('Not connected to your computer — try again when it is back'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 4));
     });
 
     testWidgets('the host resolving it by itself closes the wait', (

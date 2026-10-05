@@ -160,15 +160,18 @@ class _AgentTelegramSectionState extends State<AgentTelegramSection> {
     String? token,
     String? code,
   }) async {
-    if (_service.isBusy(widget.agentId)) return;
+    // The widget can switch to another coworker while the frame goes out:
+    // the answer belongs to the one it was sent for.
+    final String agentId = widget.agentId;
+    if (_service.isBusy(agentId)) return;
     setState(() => _noAnswer = false);
     final bool sent = await _service.act(
-      widget.agentId,
+      agentId,
       action,
       token: token,
       code: code,
     );
-    if (!mounted) return;
+    if (!mounted || agentId != widget.agentId) return;
     if (sent) {
       _waitForAnswer();
     } else {
