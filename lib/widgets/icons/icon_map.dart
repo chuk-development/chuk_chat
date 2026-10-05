@@ -226,6 +226,15 @@ final Map<int, HugeIconData> _map = <int, HugeIconData>{
   Icons.light_mode_outlined.codePoint: HugeIcons.sun01,
   Icons.photo_camera_rounded.codePoint: HugeIcons.image01,
   Icons.circle.codePoint: HugeIcons.circle,
+
+  // -- mail (docs/AGENT_MAIL.md §6)
+  Icons.mail_outline.codePoint: HugeIcons.mail01,
+  Icons.email_outlined.codePoint: HugeIcons.mail01,
+  Icons.inbox_outlined.codePoint: HugeIcons.inbox,
+  Icons.move_to_inbox_outlined.codePoint: HugeIcons.inbox,
+  Icons.archive_outlined.codePoint: HugeIcons.archive02,
+  Icons.how_to_reg_outlined.codePoint: HugeIcons.userCheck01,
+  Icons.person_off_outlined.codePoint: HugeIcons.userBlock01,
 };
 
 /// An icon that prefers the app's set and falls back to Material.

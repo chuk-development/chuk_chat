@@ -53,6 +53,7 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/services/user_status_service.dart';
 import 'package:chuk_chat/widgets/icons/icon_map.dart';
 import 'package:chuk_chat/pages/automations_page.dart';
+import 'package:chuk_chat/pages/agent_mailbox_page.dart';
 import 'package:chuk_chat/pages/secrets_settings_page.dart';
 import 'package:chuk_chat/pages/settings/embedding_settings_page.dart';
 import 'package:chuk_chat/pages/settings/herenow_settings_page.dart';
@@ -375,6 +376,20 @@ class _SettingsPageState extends State<SettingsPage> {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const SecretsSettingsPage(),
+                      ),
+                    );
+                  },
+                ),
+                // The agent's own address (docs/AGENT_MAIL.md §6).
+                _SettingsRow(
+                  icon: Icons.mail_outline,
+                  title: l.agentMail,
+                  subtitle: l.agentMailSubtitle,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const AgentMailboxPage(),
                       ),
                     );
                   },

@@ -83,6 +83,13 @@ DECISION_REPAIRED = "repaired"
 #: reports what it routed it to, so a frame that stops between the two layers
 #: has a line on one side and none on the other.
 DECISION_DELIVERED = "delivered_to_party"
+#: An ``agent_mail`` relay frame (docs/AGENT_MAIL.md §6.1): the host was told
+#: to fetch its mail, and the fetch was started.
+DECISION_MAIL_FETCH = "mail_fetch"
+#: A sealed ``agent_mail_key`` app frame (docs/AGENT_MAIL.md §6.1): the mail
+#: key was stored, or it was the key the host already held. The line carries
+#: the outcome, never a key.
+DECISION_MAIL_KEY = "mail_key"
 
 # -- reasons (a frame was dropped or ignored) -------------------------------
 
@@ -107,6 +114,12 @@ REASON_UNKNOWN_TYPE = "unknown_type"
 REASON_NOT_PAIRED = "not_paired"
 #: The account was mid-refresh and the session the frame names was replaced.
 REASON_SESSION_REPLACED = "session_replaced"
+#: A frame for a feature this host has switched off (agent mail without a
+#: mail service).
+REASON_NOT_ENABLED = "not_enabled"
+#: The frame opened, but its content was refused (an ``agent_mail_key`` whose
+#: two keys are not a matching X25519 pair).
+REASON_INVALID = "invalid"
 
 
 class InboundFrameLog:
