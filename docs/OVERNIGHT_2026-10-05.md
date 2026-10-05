@@ -303,3 +303,7 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   restart no longer waits ~3 s for them; the marks were written at 12:57.
   Remaining first-turn cost ~650 ms is docker work for the box (bead filed
   by the agent).
+- 13:30 pushed 1fa2a447..6e3ee000 (failing connectors cached, Allow again
+  from the app, per-thread browser target, review fixes). After a host
+  restart the first "hi" has pre-run 1.56 s (was 3.4 s); warm 2.3 s.
+  Running: docker work out of the pre-run path (bead 5o8j).
