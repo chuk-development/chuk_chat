@@ -24,7 +24,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterable
 
 from chuk_agents_runtime import DEFAULT_MODEL_ID, StateStore, SupabaseSession, fetch_models_info
 from chuk_agents_runtime.cost import PriceBook
@@ -335,6 +335,7 @@ class LocalHost:
         self._budget = BudgetBridge(
             self._permissions,
             self._agent_key,
+            agent_keys=self._agent_keys,
             on_warning=self._on_budget_warning,
             log=self._log,
         )
@@ -1120,6 +1121,24 @@ class LocalHost:
     def _agent_key(self, session_key: str) -> str:
         """The coworker a session key belongs to: itself, or this host's agent."""
         return session_key if self._is_own_coworker(session_key) else self._agent.id
+
+    def _agent_keys(self, session_keys: Iterable[str]) -> dict[str, str]:
+        """:meth:`_agent_key` for many session keys from ONE roster read (the
+        budget's spend sums cover every thread the store knows)."""
+        keys = list(session_keys)
+        primary = self._primary_agent_ids()
+        try:
+            coworkers = {
+                row.get("agent_id")
+                for row in self._coworker_names.list()
+                if not row.get("host")
+            }
+        except Exception:  # noqa: BLE001 — an unreadable roster is not a new agent
+            coworkers = set()
+        return {
+            key: key if key and key not in primary and key in coworkers else self._agent.id
+            for key in keys
+        }
 
     def _workspace_for_agent(self, agent_id: str) -> str:
         """The host directory an agent works in — one per agent, never shared.

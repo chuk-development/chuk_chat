@@ -251,6 +251,34 @@ def test_a_replayed_done_carries_the_cost(tmp_path):
     store.close()
 
 
+def test_a_replay_reads_every_run_cost_in_one_query(tmp_path, monkeypatch):
+    store = StateStore(str(tmp_path / "s.db"))
+    sid = store.route("k")
+    for n in range(5):
+        run_id = f"r{n}"
+        store.begin_run(run_id, sid, "k", "hi")
+        store.append_message(sid, "user", {"role": "user", "content": f"hi {n}"})
+        store.finish_run(run_id, reason="finished", final_answer="ok", iterations=1,
+                         tokens_spent=1)
+        if n != 2:  # r2 has no line and so no cost block
+            store.add_usage_line(run_id=run_id, session_key="k", kind="run", model="m",
+                                 prompt_tokens=10, completion_tokens=1,
+                                 cost_eur=0.001 * (n + 1))
+    statements: list[str] = []
+    store._conn().set_trace_callback(statements.append)
+    events = store.run_terminals("k")
+    store._conn().set_trace_callback(None)
+    assert [e["run_id"] for e in events] == ["r0", "r1", "r2", "r3", "r4"]
+    assert sum("FROM usage_lines" in sql for sql in statements) == 1
+    assert "cost" not in events[2]
+    assert events[4]["cost"]["eur"] == pytest.approx(0.005)
+    # Chunked ids (SQLite's parameter cap) give the same answer.
+    monkeypatch.setattr("chuk_agents_runtime.state._USAGE_IN_CHUNK", 2)
+    assert store.run_terminals("k") == events
+    assert store.usage_lines_for(["r0", "r2", "r4", "r0"]).keys() == {"r0", "r4"}
+    store.close()
+
+
 # -- the metered housekeeping client -----------------------------------------
 
 
