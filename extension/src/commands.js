@@ -4,7 +4,7 @@
 
 import { api } from "./api.js";
 import { validate, addressing, ok, fail } from "./protocol.js";
-import { STATE } from "./leases.js";
+import { ORIGIN, STATE } from "./leases.js";
 
 export async function run(driver, cmdId, op, args = {}) {
   const problem = validate(op, args);
@@ -121,24 +121,23 @@ async function dispatch(driver, op, args) {
         return await driver.ask("snapshot");
       }
       if (action === "new") {
-        await driver.detach();
-        driver.tabId = null;
+        await driver.release();
         const tabId = await driver.ownTab();
         return { tabId };
       }
       if (action === "close") {
-        await driver.detach();
-        if (driver.tabId !== null) await api.tabs.remove(driver.tabId);
-        driver.tabId = null;
-        return { closed: true };
+        // A tab the user handed over is never closed, only given back.
+        const lease = driver.tabId !== null ? driver.leases.get(driver.tabId) : null;
+        const tabId = await driver.release();
+        if (tabId !== null && lease?.origin === ORIGIN.AGENT) await api.tabs.remove(tabId);
+        return { closed: tabId !== null, removed: lease?.origin === ORIGIN.AGENT };
       }
       throw new Error(`browser_tabs: unknown action "${action}"`);
     }
 
     case "browser_close":
-      await driver.detach();
-      driver.tabId = null;
-      return { closed: true };
+      // Let go of the tab: the strip goes, the tab stays as it is.
+      return { closed: (await driver.release()) !== null };
 
     default:
       throw new Error(`unhandled command "${op}"`);

@@ -24,8 +24,8 @@ echo
 case "$target" in
   chrome)
     echo "Load it: chrome://extensions -> Developer mode -> Load unpacked -> $out"
-    echo "Then register the bridge with the id Chrome shows:"
-    echo "  ../tools/agents-browser-bridge/install_host_manifest.py --chrome-id <id>"
+    echo "Then register the bridge (once per computer):"
+    echo "  ../tools/agents-browser-bridge/install_host_manifest.py   (the id is pinned: gchdfokldhdgbjmdcjmkeapcknekogmm)"
     ;;
   firefox)
     echo "Load it: about:debugging#/runtime/this-firefox -> Load Temporary Add-on -> $out/manifest.json"

@@ -1,26 +1,33 @@
-// Two ways to reach the Agents host, one interface.
+// The one way to reach the Agents host: Chrome's native messaging.
 //
-//   native — chrome.runtime.connectNative to a small local process. Auth is the
-//            host manifest's `allowed_origins`, which names this extension id
-//            and nothing else; only the local user can write that file. No port,
-//            no token, no origin check. Used when the host runs on this machine.
-//   relay  — a WebSocket to the Agents relay, for a host on another machine.
+// `chrome.runtime.connectNative` starts a small local process
+// (tools/agents-browser-bridge) that passes frames to the host over a unix
+// socket. The access rule is the host manifest's `allowed_origins`, which
+// names this extension id and nothing else; only the local user can write that
+// file. No port is open anywhere, so no web page and nothing on the network can
+// reach this add-on's commands.
 //
-// Both carry the same frames: `browser_cmd` in, `browser_result` out, plus a
-// `browser_attach` hello so the host knows what this browser can do.
+// (An earlier build also had a "relay" WebSocket to a configurable address.
+// It took commands from whatever answered at that address, with no pairing at
+// all, so it is gone.)
+//
+// Frames: `browser_cmd` in, `browser_result` out, a `browser_attach` hello so
+// the host knows what this browser can do, `browser_stop` / `browser_resume`
+// both ways. Commands run one after another, never interleaved: two commands
+// on one tab at once would race on the same page.
 
 import { api } from "./api.js";
 
 export const NATIVE_HOST = "dev.chuk.cowork";
 
 export class Transport {
-  constructor({ onCommand, onStatus }) {
+  constructor({ onCommand, onFrame, onStatus }) {
     this.onCommand = onCommand;
+    this.onFrame = onFrame ?? (() => {});
     this.onStatus = onStatus ?? (() => {});
-    this.kind = null; // "native" | "relay" | null
+    this.kind = null; // "native" | null
     this.port = null;
-    this.socket = null;
-    this.backoffMs = 1000;
+    this.queue = Promise.resolve();
   }
 
   get connected() {
@@ -28,16 +35,17 @@ export class Transport {
   }
 
   send(frame) {
-    if (this.kind === "native") this.port.postMessage(frame);
-    else if (this.kind === "relay") this.socket.send(JSON.stringify(frame));
+    if (this.kind !== "native") return false;
+    try {
+      this.port.postMessage(frame);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
-  /** Try the local process first, fall back to the relay if one is configured. */
   async connect(hello) {
-    if (await this.connectNative(hello)) return "native";
-    const { relayUrl } = await api.storage.local.get("relayUrl");
-    if (relayUrl) return (await this.connectRelay(relayUrl, hello)) ? "relay" : null;
-    return null;
+    return (await this.connectNative(hello)) ? "native" : null;
   }
 
   async connectNative(hello) {
@@ -52,11 +60,20 @@ export class Transport {
           resolve(value);
         };
         port.onDisconnect.addListener(() => done(false));
-        port.onMessage.addListener(() => done(true));
+        // The bridge answers `bridge_ready` when the host is there, and
+        // `browser_attach_error` (then exits) when it is not.
+        port.onMessage.addListener((frame) => done(Boolean(frame) && frame.type !== "browser_attach_error"));
         port.postMessage(hello);
-        setTimeout(() => done(Boolean(api.runtime.lastError) === false), 800);
+        setTimeout(() => done(false), 1500);
       });
-      if (!alive) return false;
+      if (!alive) {
+        try {
+          port.disconnect();
+        } catch {
+          // already gone
+        }
+        return false;
+      }
       this.kind = "native";
       this.port = port;
       port.onMessage.addListener((frame) => this.handle(frame));
@@ -68,56 +85,23 @@ export class Transport {
     }
   }
 
-  async connectRelay(url, hello) {
-    return new Promise((resolve) => {
-      let socket;
-      try {
-        socket = new WebSocket(url);
-      } catch {
-        resolve(false);
-        return;
-      }
-      const timer = setTimeout(() => {
-        try {
-          socket.close();
-        } catch {
-          // already closing
-        }
-        resolve(false);
-      }, 5000);
-      socket.onopen = () => {
-        clearTimeout(timer);
-        this.kind = "relay";
-        this.socket = socket;
-        socket.send(JSON.stringify(hello));
-        this.onStatus({ connected: true, kind: "relay" });
-        resolve(true);
-      };
-      socket.onmessage = (event) => {
-        try {
-          this.handle(JSON.parse(event.data));
-        } catch {
-          // A frame we cannot parse is not ours to act on.
-        }
-      };
-      socket.onclose = () => this.dropped();
-      socket.onerror = () => {
-        clearTimeout(timer);
-        resolve(false);
-      };
-    });
-  }
-
-  async handle(frame) {
-    if (!frame || frame.type !== "browser_cmd") return;
-    const result = await this.onCommand(frame);
-    if (result) this.send(result);
+  handle(frame) {
+    if (!frame || typeof frame !== "object") return;
+    if (frame.type !== "browser_cmd") {
+      this.onFrame(frame);
+      return;
+    }
+    this.queue = this.queue
+      .then(async () => {
+        const result = await this.onCommand(frame);
+        if (result) this.send(result);
+      })
+      .catch(() => {});
   }
 
   dropped() {
     this.kind = null;
     this.port = null;
-    this.socket = null;
     this.onStatus({ connected: false, kind: null });
   }
 }

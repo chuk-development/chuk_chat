@@ -61,6 +61,7 @@ from chuk_agents_executor import (
     resolve_backend_model_wiring,
 )
 from chuk_agents_executor.protocol import USER_BROWSER, browser_target
+from chuk_agents_executor.user_browser import shared_broker, shared_status
 
 from .account_store import AccountStore
 from .agent_mail import (
@@ -696,6 +697,13 @@ class LocalHost:
         """Start the relay and the host party. Non-blocking."""
         self._reap_orphan_containers()
         self._sweep_orphan_runs()
+        # The user's own browser (docs/WIRE_CONTRACT.md, "The user's own
+        # browser"): listen for the add-on from the start, on local unix
+        # sockets only, so the app's pairing status is live before a task.
+        try:
+            shared_broker()
+        except Exception as exc:  # noqa: BLE001 — never blocks startup
+            self._log(f"user browser broker did not start: {type(exc).__name__}")
         # Long-term memory (§12): with `memory.backend = hindsight` one
         # Hindsight sidecar serves every executor of this host. Configured here,
         # started lazily by the first memory use, stopped in `stop()`.
@@ -2224,6 +2232,7 @@ class LocalHost:
             enforced=enforced_permissions("docker" if self._containers is not None else "local"),
             log=self._log,
         )
+        self._attach_user_browser_status(payload, reply)
         if after is not None:
             self._send_host_payload(reply)
             key = self._permission_key(str(payload.get("agent_id") or ""))
@@ -2237,6 +2246,25 @@ class LocalHost:
                 if automations is not None:
                     restart_watchers(automations, log=self._log)
         return reply
+
+    def _attach_user_browser_status(self, payload: dict, reply: dict) -> None:
+        """Add ``user_browser`` (docs/WIRE_CONTRACT.md, "The user's own
+        browser") to an ``agent_permissions`` reply: is the bridge registered,
+        is the add-on connected, which browser, is it in use or stopped. Reads
+        only; ``start`` begins listening."""
+        permissions = reply.get("permissions")
+        if not isinstance(permissions, dict):
+            return
+        try:
+            status = shared_status()
+        except Exception as exc:  # noqa: BLE001 — a status never breaks the reply
+            self._log(f"user browser status failed: {type(exc).__name__}")
+            return
+        key = self._permission_key(str(payload.get("agent_id") or "")) or ""
+        holder = status.pop("holder", None)
+        status["in_use"] = holder is not None
+        status["in_use_by_this_agent"] = bool(holder) and holder == key
+        reply["user_browser"] = status
 
     # -- the agent calls the user (docs/WIRE_CONTRACT.md) -----------------
 

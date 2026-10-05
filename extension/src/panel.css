@@ -22,3 +22,9 @@ button { font:inherit; border:1px solid var(--line); background:transparent;
 #composer { display:flex; gap:8px; padding:10px 12px; border-top:1px solid var(--line); }
 textarea { flex:1; resize:none; font:inherit; color:var(--fg); background:transparent;
            border:1px solid var(--line); border-radius:8px; padding:6px 8px; }
+#control { display:flex; align-items:center; gap:8px; padding:8px 12px;
+           border-bottom:1px solid var(--line); }
+#control-text { flex:1; }
+#control.driving { background:color-mix(in srgb, var(--accent) 12%, transparent); }
+#control.stopped { background:color-mix(in srgb, var(--fg) 8%, transparent); }
+#stop { border-color:var(--accent); color:var(--accent); font-weight:600; }

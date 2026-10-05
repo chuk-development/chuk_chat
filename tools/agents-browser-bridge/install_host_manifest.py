@@ -5,7 +5,13 @@ The host manifest is the whole access rule: ``allowed_origins`` names the one
 extension that may start the bridge, and only the local user can write the file.
 That is why the add-on needs no port, no token and no origin check.
 
+This is the whole pairing: it runs on this computer, and afterwards exactly one
+extension may start the bridge. The development build pins its Chrome id with
+the ``key`` in ``extension/manifest.chrome.json``, so the default below is right
+for an unpacked load; a store build has its own id (pass ``--chrome-id``).
+
 Usage:
+    ./install_host_manifest.py                      # the pinned dev id + Firefox
     ./install_host_manifest.py --chrome-id <32-char extension id>
     ./install_host_manifest.py --firefox-id agents@chuk.dev
 """
@@ -18,6 +24,8 @@ import os
 from pathlib import Path
 
 NAME = "dev.chuk.cowork"
+#: The id Chrome derives from the ``key`` in extension/manifest.chrome.json.
+DEV_CHROME_ID = "gchdfokldhdgbjmdcjmkeapcknekogmm"
 BRIDGE = Path(__file__).resolve().parent / "agents_browser_bridge.py"
 
 CHROMIUM_DIRS = {
@@ -38,7 +46,11 @@ def write(directory: str, manifest: dict) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--chrome-id", help="extension id as chrome://extensions shows it")
+    parser.add_argument(
+        "--chrome-id",
+        default=DEV_CHROME_ID,
+        help=f"extension id as chrome://extensions shows it (default: the dev build, {DEV_CHROME_ID})",
+    )
     parser.add_argument("--firefox-id", default="agents@chuk.dev")
     parser.add_argument("--no-firefox", action="store_true")
     args = parser.parse_args()

@@ -13,12 +13,44 @@ const input = document.getElementById("input");
 
 let pageContext = null;
 
-function paintStatus({ connected, kind }, engine) {
+const control = document.getElementById("control");
+const controlText = document.getElementById("control-text");
+const stopButton = document.getElementById("stop");
+const allowButton = document.getElementById("allow");
+
+function paintStatus({ connected, kind } = {}, engine) {
   dot.classList.toggle("on", Boolean(connected));
   state.textContent = connected
     ? `Agents · ${kind} · ${engine} input`
     : "not connected to Agents";
 }
+
+/** Who holds the browser, and the one button that matters right now. */
+function paintControl({ driving, stopped } = {}) {
+  const isDriving = driving !== null && driving !== undefined;
+  control.hidden = !isDriving && !stopped;
+  control.classList.toggle("driving", isDriving && !stopped);
+  control.classList.toggle("stopped", Boolean(stopped));
+  controlText.textContent = stopped
+    ? "Stopped. Agents cannot use this browser."
+    : "Agents is using a tab in this browser.";
+  stopButton.hidden = Boolean(stopped);
+  allowButton.hidden = !stopped;
+}
+
+function paintAll(snapshot) {
+  if (!snapshot) return;
+  paintStatus(snapshot.status, snapshot.engine ?? "");
+  paintControl(snapshot);
+}
+
+stopButton.addEventListener("click", async () => {
+  paintAll(await api.runtime.sendMessage({ channel: "agents", op: "stop", reason: "panel" }));
+});
+
+allowButton.addEventListener("click", async () => {
+  paintAll(await api.runtime.sendMessage({ channel: "agents", op: "allow_again" }));
+});
 
 function paintContext(context) {
   pageContext = context;
@@ -41,8 +73,7 @@ function append(text, mine) {
 
 document.getElementById("reconnect").addEventListener("click", async () => {
   state.textContent = "connecting…";
-  const reply = await api.runtime.sendMessage({ channel: "agents", op: "reconnect" });
-  paintStatus(reply.status, reply.engine ?? "");
+  paintAll(await api.runtime.sendMessage({ channel: "agents", op: "reconnect" }));
 });
 
 document.getElementById("composer").addEventListener("submit", async (event) => {
@@ -61,14 +92,13 @@ document.getElementById("composer").addEventListener("submit", async (event) => 
 
 api.runtime.onMessage.addListener((msg) => {
   if (!msg || msg.channel !== "agents") return;
-  if (msg.op === "status") paintStatus(msg.status, msg.engine ?? "");
+  if (msg.op === "status") paintAll(msg);
   if (msg.op === "page_context") paintContext(msg.context);
   if (msg.op === "reply") append(msg.text, false);
 });
 
 (async () => {
-  const status = await api.runtime.sendMessage({ channel: "agents", op: "get_status" });
-  paintStatus(status.status, status.engine);
+  paintAll(await api.runtime.sendMessage({ channel: "agents", op: "get_status" }));
   const { context } = await api.runtime.sendMessage({ channel: "agents", op: "page_context_request" });
   paintContext(context);
 })();

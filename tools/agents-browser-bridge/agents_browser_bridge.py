@@ -22,7 +22,19 @@ import struct
 import sys
 import threading
 
-DEFAULT_SOCKET = os.path.expanduser("~/.agents/browser-bridge.sock")
+
+
+def default_socket() -> str:
+    """Where the Agents host listens: ``$XDG_RUNTIME_DIR/chuk-agents`` (a
+    private tmpfs directory that no sandbox mounts), else ``~/.agents``. Keep
+    in step with ``chuk_agents_executor.user_browser.socket_dir``."""
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if runtime and os.path.isdir(runtime):
+        return os.path.join(runtime, "chuk-agents", "browser-bridge.sock")
+    return os.path.expanduser("~/.agents/browser-bridge.sock")
+
+
+DEFAULT_SOCKET = default_socket()
 MAX_FRAME = 64 * 1024 * 1024  # Chrome's own ceiling for a message from the add-on.
 
 

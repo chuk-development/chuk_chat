@@ -4,18 +4,44 @@
 import { api, hasDebugger, hasTabGroups } from "./api.js";
 import { Driver } from "./driver.js";
 import { run } from "./commands.js";
+import { fail } from "./protocol.js";
+import { StopGate } from "./gate.js";
 import { Transport } from "./transport.js";
 
 const driver = new Driver();
+const gate = new StopGate();
 let status = { connected: false, kind: null };
 
 const transport = new Transport({
-  onCommand: (frame) => run(driver, frame.cmd_id, frame.op, frame.args ?? {}),
+  onCommand: (frame) => {
+    // The user's Stop beats everything the host sends.
+    const refusal = gate.refusal();
+    if (refusal) return fail(frame.cmd_id, refusal);
+    return run(driver, frame.cmd_id, frame.op, frame.args ?? {});
+  },
+  onFrame: (frame) => {
+    // The host clears a Stop when the user sends a new task.
+    if (frame.type === "browser_resume" && gate.resume()) broadcast();
+  },
   onStatus: (next) => {
     status = next;
-    api.runtime.sendMessage({ channel: "agents", op: "status", status }).catch(() => {});
+    broadcast();
   },
 });
+
+function snapshotStatus() {
+  return {
+    status,
+    engine: driver.engineName,
+    driving: driver.tabId,
+    stopped: gate.stopped,
+  };
+}
+
+/** Tell an open panel what changed. */
+function broadcast() {
+  api.runtime.sendMessage({ channel: "agents", op: "status", ...snapshotStatus() }).catch(() => {});
+}
 
 function hello() {
   return {
@@ -25,7 +51,26 @@ function hello() {
     engine: driver.engineName,
     features: { trusted_input: hasDebugger, tab_groups: hasTabGroups },
     version: api.runtime.getManifest().version,
+    stopped: gate.stopped,
   };
+}
+
+/**
+ * The user's Stop, from the strip on the page, the panel, or Chrome's own
+ * "Cancel" on its debugging bar. Let go of every tab at once, refuse every
+ * command until the user allows the browser again, and tell the host, which
+ * stops the coworker's run.
+ */
+async function stopAll(reason) {
+  const changed = gate.stop(reason);
+  await driver.stop();
+  if (changed) transport.send({ type: "browser_stop", reason: String(reason) });
+  broadcast();
+}
+
+function allowAgain() {
+  if (gate.resume()) transport.send({ type: "browser_resume" });
+  broadcast();
 }
 
 async function link() {
@@ -91,14 +136,26 @@ async function pageContext(tabId, selection) {
 
 // -- the panel talks to us here ----------------------------------------------
 
-api.runtime.onMessage.addListener((msg, _sender, reply) => {
+api.runtime.onMessage.addListener((msg, sender, reply) => {
   if (!msg || msg.channel !== "agents") return;
+  if (msg.op === "stop") {
+    // From the strip on a page or from the panel. Stopping is always allowed.
+    stopAll(msg.reason || (sender.tab ? "page" : "panel")).then(() => reply(snapshotStatus()));
+    return true;
+  }
+  if (msg.op === "allow_again") {
+    // Only the add-on's own pages may lift a Stop, never a page's strip.
+    if (sender.tab) return undefined;
+    allowAgain();
+    reply(snapshotStatus());
+    return true;
+  }
   if (msg.op === "get_status") {
-    reply({ status, engine: driver.engineName, driving: driver.tabId });
+    reply(snapshotStatus());
     return true;
   }
   if (msg.op === "reconnect") {
-    link().then(() => reply({ status }));
+    link().then(() => reply(snapshotStatus()));
     return true;
   }
   if (msg.op === "send") {
@@ -121,6 +178,17 @@ api.runtime.onMessage.addListener((msg, _sender, reply) => {
 // A tab that reloads or goes away loses whatever we put in it.
 api.tabs.onUpdated.addListener((tabId, change) => {
   if (change.status === "loading") driver.forget(tabId);
+  // The strip comes back on every page the driven tab loads, also when the
+  // user navigates it.
+  if (change.status === "complete" && tabId === driver.tabId && !gate.stopped) {
+    driver.ensureInjected(tabId).catch(() => {});
+  }
+});
+
+// Chrome's own bar ("... started debugging this browser") has a Cancel
+// button. The user pressing it means the same as our Stop.
+api.debugger?.onDetach?.addListener((_source, reason) => {
+  if (reason === "canceled_by_user") stopAll("debugger_bar");
 });
 api.tabs.onRemoved.addListener((tabId) => {
   driver.forget(tabId);
@@ -128,7 +196,7 @@ api.tabs.onRemoved.addListener((tabId) => {
   if (driver.tabId === tabId) driver.tabId = null;
 });
 
-api.alarms.create("agents-link", { periodInMinutes: 1 });
+api.alarms.create("agents-link", { periodInMinutes: 0.5 });
 api.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "agents-link") link();
 });
