@@ -52,6 +52,15 @@ import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 const String kReplayCursorPrefix = 'cowork.replay_cursor.';
 const String kReplayTimestampCursorPrefix = 'cowork.replay_timestamp_cursor.';
 
+/// Marks a cursor that was earned by a fold which keeps a run's meta (what it
+/// cost, its run id) on the answer (bead chuk_chat-dksi). Answers cached
+/// before the fold kept it sit BELOW the cursor, so no delta replay ever
+/// sends their `done` again, and their cost line never shows. A cursor
+/// without this mark is dropped once: the next replay is a full one, and a
+/// full replay REPLACES the cached rows with the host's copy, which carries
+/// the meta. Replacing, not appending, is what keeps the rows single.
+const String kReplayRunMetaCursorPrefix = 'cowork.replay_run_meta_cursor.';
+
 /// One-time repair flag (bead cowork-4rpt). Caches written before the repeat
 /// guard existed already hold turns twice, and no later delta can heal a
 /// duplicate that sits in the middle of the history. Dropping every cursor
@@ -199,6 +208,12 @@ class AgentsReplayLoader extends ChangeNotifier {
         // Old caches predate message clocks. Re-fetch once without deleting
         // their visible history; only the completed replay replaces the cache.
         if (prefs.getBool('$kReplayTimestampCursorPrefix$session') != true) {
+          continue;
+        }
+        // Earned before answers kept their run meta: re-fetch once, the same
+        // way (bead chuk_chat-dksi). The cache stays as it is until the full
+        // replay replaces it.
+        if (prefs.getBool('$kReplayRunMetaCursorPrefix$session') != true) {
           continue;
         }
         final value = prefs.getInt(key);
@@ -951,6 +966,7 @@ class AgentsReplayLoader extends ChangeNotifier {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setInt('$kReplayCursorPrefix$session', mid);
       await prefs.setBool('$kReplayTimestampCursorPrefix$session', true);
+      await prefs.setBool('$kReplayRunMetaCursorPrefix$session', true);
     } catch (error) {
       // A cursor that cannot be persisted only costs a full replay next time.
       if (kDebugMode) debugPrint('[agents-replay] cursor save failed: $error');

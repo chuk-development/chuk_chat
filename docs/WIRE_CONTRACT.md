@@ -446,7 +446,7 @@ Rules:
   visible thing it may do is move the header out of "Connecting", because the
   host answering is exactly what `run_state`-less prefill lacked.
 
-### `heartbeat.phase` (PROPOSED, additive; app side implemented)
+### `heartbeat.phase` (IMPLEMENTED, additive)
 
 ```json
 {"type": "heartbeat", "run_id": "<uuid>"?, "session_key": "<key>"?,
@@ -479,7 +479,7 @@ Rules:
   `delta` and `tool` frames. An unknown word is ignored.
 - Never persisted, never rendered as a message (as for `heartbeat`).
 
-App side: `AgentsRelayHeartbeat.phase` / `.tool`
+App side IMPLEMENTED: `AgentsRelayHeartbeat.phase` / `.tool`
 (`lib/services/agents/agents_relay_client.dart`), stored per run by the thread
 view (`AgentsRunLedger.hostPhase`) and mapped in
 `lib/services/agents/agents_turn_phase.dart`.
@@ -885,7 +885,7 @@ so a replayed request carries it too. Absent on an old host: the app then
 falls back to the thread the socket is bound to, as before.
 
 
-## Browser takeover (PROPOSED, research item 6; app side implemented)
+## Browser takeover (IMPLEMENTED, research item 6)
 
 ### The idea
 
@@ -1175,6 +1175,8 @@ restarted until the file is gone.
 
 Python side IMPLEMENTED 2026-10-05. Additive: an older app ignores the new
 fields and event names, and an older row reads as `notify: "always"`.
+App side IMPLEMENTED 2026-10-05 (`lib/widgets/automation_editor_sheet.dart`,
+`lib/widgets/automation_card.dart`, `lib/widgets/agents_quiet_run_fold.dart`).
 Python: `chuk_agents_runtime.automations` (spec grammar, digest rule,
 tools), `chuk_agents_host.automations` (store columns, URL checker, mail
 hook, `finish_run`), `chuk_agents_host.url_watch` (the fetch),
@@ -1333,7 +1335,7 @@ Row fields (in events, `automation_list` and `automation_saved`), additive:
 `notify` (always present), `last_summary`?, `last_result_at`?,
 `unchanged_count`? (only when > 0).
 
-### App side (to build)
+### App side (implemented; the work list it was built from)
 
 1. Thread card: an `automation` event `result` with `changed: false`
    collapses the run with that `run_id` to one line ("no change", the
@@ -1676,6 +1678,9 @@ executor's `on_agent_frame`; payload helpers `agent_create_payload`,
 
 ## Coworker templates (bead chuk_chat-dsh0)
 
+Host and app side IMPLEMENTED 2026-10-05 (`_createOnHost` in
+`lib/pages/agents_shell_state.dart`, see "Implemented" below).
+
 Additive to "Coworker names". The app's "New agent" flow offers ready-made
 coworkers (`lib/services/agents/coworker_templates.dart`, 15 of them:
 research, inbox triage, news, prices, jobs, writing, code, data, meetings,
@@ -1810,8 +1815,9 @@ writes `<workspace>/skills/<name>/SKILL.md` and answers with `skills_list`.
 ## Skill proposals: save a finished task as a skill (bead chuk_chat-al2u)
 
 Python side IMPLEMENTED 2026-10-05 (`chuk_agents_runtime.skill_proposals`,
-`Executor._skill_proposal_sink` / `_handle_skill_proposal_decision`). App side:
-open (work list below). Additive: an older app ignores the new frame type, and
+`Executor._skill_proposal_sink` / `_handle_skill_proposal_decision`). App side
+IMPLEMENTED 2026-10-05 (`lib/widgets/agents_skill_proposal_card.dart`,
+`lib/services/skills/skill_proposals_source.dart`). Additive: an older app ignores the new frame type, and
 an older host answers the decision with `unknown payload type`.
 
 ### The idea
@@ -1895,7 +1901,7 @@ Host → app, the terminal answer (same request stream):
 - `scrubbed: true`: secrets or personal data were removed from the edits.
 - `not_found`: an unknown id (`errors: ["no skill proposal 'sp_x'"]`).
 
-### App work list
+### App work list (implemented)
 
 - Relay client: route `skill_proposal` from the run stream (live and replay)
   into the thread as its own item, and send `skill_proposal_decision` as a
@@ -2578,8 +2584,10 @@ Runtime: `build_runtime(policy=…)`, `HOST_NETWORK_TOOLS`. App:
 
 ## Per-action approvals (bead chuk_chat-mxxm)
 
-Host side IMPLEMENTED 2026-10-05. App side NOT YET (list at the end of this
-section). Additive: an older app keeps working with approve / deny, and an
+Host side IMPLEMENTED 2026-10-05. App side IMPLEMENTED 2026-10-05
+(`lib/widgets/agents_action_approval_card.dart`,
+`lib/widgets/agents_permissions/agent_approvals_section.dart`; on a phone
+through `lib/pages/mobile_agent_permissions_page.dart`). Additive: an older app keeps working with approve / deny, and an
 older host never sends the new fields. Research: docs/research/
 AGENT_COMPETITORS_2026-10.md, item 7.
 
@@ -2802,7 +2810,7 @@ Host-side record: `<state dir>/agent_permissions.json` gains a top-level
 {"send_external": "allow"}, "sites": {"browser_act": ["github.com"]}}}}`.
 A bad entry is dropped on load (logged) and that coworker gets the defaults.
 
-### App side (to build)
+### App side (implemented; the work list it was built from)
 
 1. Parse the new fields on `AgentsRelayApprovalRequest`
    (`agents_relay_client.dart`): `actionClass`, `options` (list of strings),
@@ -2838,8 +2846,10 @@ A bad entry is dropped on load (logged) and that coworker gets the defaults.
 
 ## Cost per run and weekly budget (bead chuk_chat-qcbv)
 
-Host side IMPLEMENTED 2026-10-05. App side NOT YET (list at the end of this
-section). Additive: an older app ignores the new fields, and an older host
+Host side IMPLEMENTED 2026-10-05. App side IMPLEMENTED 2026-10-05
+(`lib/services/agents/agents_run_cost.dart`, `lib/widgets/agents_run_cost_meta.dart`,
+`lib/widgets/agents_budget_notice.dart`, `WeeklyBudgetField` in
+`lib/widgets/agent_control_panel.dart`). Additive: an older app ignores the new fields, and an older host
 never sends them. Research: docs/research/AGENT_COMPETITORS_2026-10.md,
 item 8.
 
@@ -3064,7 +3074,7 @@ the capability, `_on_budget_warning`), `serve.py` (pass-through),
 (`budget_text`). Tests: `agents/runtime/tests/test_cost.py`,
 `agents/executor/tests/test_cost_budget.py`, `agents/host/tests/test_budget.py`.
 
-### App side (to build)
+### App side (implemented; the work list it was built from)
 
 1. Parse `cost` on `AgentsRelayDone` (`agents_relay_client.dart`), live and
    replayed: `currency`, `eur?`, `input_tokens`, `output_tokens`,

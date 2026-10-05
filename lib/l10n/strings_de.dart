@@ -1278,4 +1278,10 @@ const Map<String, String> stringsDe = {
       'Dein Computer hat nicht geantwortet. Versuch es noch einmal.',
   'skillProposalErrNotFound': 'Dein Computer hat dieses Angebot nicht mehr.',
   // ── end skill proposals ──
+  // ── polish ──
+  'tplAgentCreateFailed':
+      '{name} konnte nicht auf deinem Computer erstellt werden.',
+  'agentsCwPermissions': 'Berechtigungen',
+  'agentsCwPermissionsSubtitle': 'Was er darf, Freigaben und Budget',
+  // ── end polish ──
 };

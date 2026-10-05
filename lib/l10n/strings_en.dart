@@ -1262,4 +1262,9 @@ const Map<String, String> stringsEn = {
   'skillProposalErrNoAnswer': 'Your computer did not answer. Try again.',
   'skillProposalErrNotFound': 'Your computer no longer has this offer.',
   // ── end skill proposals ──
+  // ── polish ──
+  'tplAgentCreateFailed': 'Could not create {name} on your computer.',
+  'agentsCwPermissions': 'Permissions',
+  'agentsCwPermissionsSubtitle': 'What it may do, approvals and budget',
+  // ── end polish ──
 };

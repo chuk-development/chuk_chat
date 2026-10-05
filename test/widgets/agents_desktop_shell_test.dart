@@ -62,6 +62,20 @@ class _Session implements AccountSessionSource {
   Future<AccountSession?> refresh() async => current();
 }
 
+// ── polish ──
+/// A host link whose `agent_create` send fails.
+class _FailingCreateController extends FakeRelayController {
+  @override
+  Future<void> createAgent(
+    String agentId,
+    String name, {
+    Map<String, Object?>? template,
+  }) async {
+    throw StateError('socket closed');
+  }
+}
+// ── end polish ──
+
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues(<String, Object>{});
@@ -83,6 +97,7 @@ void main() {
     LocalRoomSource? rooms,
     Size size = const Size(1400, 900),
     AgentControlSource? controlSource,
+    FakeRelayController Function()? relayController, // polish
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1;
@@ -96,7 +111,8 @@ void main() {
     await tester.pumpWidget(
       testApp(
         MessengerShell(
-          relayControllerBuilder: () async => FakeRelayController(),
+          relayControllerBuilder: () async =>
+              relayController?.call() ?? FakeRelayController(),
           sessionSource: const _Session(),
           pairingStore: AgentsPairingStore(backend: _MemoryStore()),
           rosterSource: roster,
@@ -453,6 +469,30 @@ void main() {
       expect(dialog.width, lessThanOrEqualTo(kDeskDialogMaxWidth + 1));
       expect(dialog.center.dx, moreOrLessEquals(700, epsilon: 1));
     });
+
+    // ── polish ── bead chuk_chat-az1g
+    testWidgets('a failed agent_create names the coworker in the SnackBar', (
+      tester,
+    ) async {
+      await pumpDesktop(tester, relayController: _FailingCreateController.new);
+
+      await shortcut(tester, LogicalKeyboardKey.keyN);
+      await tester.tap(find.byKey(const ValueKey<String>('tpl-research')));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('tpl-name')),
+        'Scout',
+      );
+      await tester.tap(find.byKey(const ValueKey<String>('tpl-create')));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Could not create Scout on your computer.'),
+        findsOneWidget,
+      );
+      expect(find.text('Not connected to the host'), findsNothing);
+    });
+    // ── end polish ──
 
     testWidgets('Ctrl+B folds the roster to the rail and back', (tester) async {
       await pumpDesktop(tester);

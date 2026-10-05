@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/coworker_model_page.dart';
+import 'package:chuk_chat/pages/mobile_agent_permissions_page.dart'; // polish
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // polish
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -43,6 +45,7 @@ class MobileAgentsSettingsPage extends StatefulWidget {
     this.preferences,
     this.onChat,
     this.chatId,
+    this.permissions, // polish
   });
 
   final String agentId;
@@ -62,6 +65,12 @@ class MobileAgentsSettingsPage extends StatefulWidget {
       onRooms,
       onSettings;
   final VoidCallback? onDocuments, onCopyChat, onBrowser, onDelete, onChat;
+
+  // ── polish ──
+  /// Where the Permissions page reads and sends (sandbox switches, approvals,
+  /// weekly budget). Defaults to [AgentsPermissionsService.instance].
+  final AgentsPermissionsService? permissions;
+  // ── end polish ──
 
   @override
   State<MobileAgentsSettingsPage> createState() =>
@@ -193,6 +202,23 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                     widget.onControls,
                     subtitle: l.agentsCwHostSubtitle,
                   ),
+                  // ── polish ── The desktop's permissions, approvals and
+                  // weekly budget; each part shows for the host capability
+                  // it needs, as on the desktop.
+                  _row(
+                    'Permissions',
+                    l.agentsCwPermissions,
+                    Icons.verified_rounded,
+                    () => unawaited(
+                      MobileAgentPermissionsPage.open(
+                        context,
+                        agentId: agent.id,
+                        service: widget.permissions,
+                      ),
+                    ),
+                    subtitle: l.agentsCwPermissionsSubtitle,
+                  ),
+                  // ── end polish ──
                 ],
               ),
               if (widget.onDocuments != null) ...[

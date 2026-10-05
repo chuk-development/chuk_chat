@@ -1,4 +1,7 @@
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'package:chuk_chat/l10n/app_localizations.dart';
 
 import 'package:chuk_chat/l10n/strings_de.dart';
 import 'package:chuk_chat/l10n/strings_en.dart';
@@ -74,6 +77,20 @@ void main() {
       expect(s.prompt.trim(), isNotEmpty);
     }
   });
+
+  // ── polish ── bead chuk_chat-az1g
+  test('a failed agent_create has its own line that names the coworker, '
+      'in English and German', () {
+    expect(
+      AppLocalizations(const Locale('en')).tplAgentCreateFailed('Scout'),
+      'Could not create Scout on your computer.',
+    );
+    expect(
+      AppLocalizations(const Locale('de')).tplAgentCreateFailed('Scout'),
+      'Scout konnte nicht auf deinem Computer erstellt werden.',
+    );
+  });
+  // ── end polish ──
 
   group('announceCoworkerToHost', () {
     AgentsAutomation savedRow() => AgentsAutomation.fromPayload(
