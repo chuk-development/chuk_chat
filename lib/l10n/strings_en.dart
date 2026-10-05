@@ -1307,4 +1307,42 @@ const Map<String, String> stringsEn = {
   'runChangesErrAllConflict': 'Every file changed after this run.',
   'runChangesErrFailed': 'Your computer could not read the changes.',
   // ── end run changes ──
+  // ── own browser ──
+  'ubSubtitlePaired': 'Paired with {browser}',
+  'ubSubtitlePairedGeneric': 'Paired with your browser',
+  'ubSubtitleInUseHere': 'Using {browser} now',
+  'ubInUseBy': '{name} is using your browser',
+  'ubAnotherCoworker': 'Another coworker',
+  'ubSubtitleNotConnected': 'Add-on not connected',
+  'ubSubtitleNotSetUp': 'Not set up on this computer',
+  'ubSubtitleStopped': 'Stopped in the browser',
+  'ubSubtitleNoBroker': 'Restart the Agents host to use your browser',
+  'ubSetupTitleNotSetUp': 'Set up your browser',
+  'ubSetupTitleNotConnected': 'Your browser is not connected',
+  'ubSetupIntro':
+      'The coworker uses the Agents add-on in Chrome or Brave on your computer. Set it up once:',
+  'ubSetupIntroNotConnected':
+      'Open Chrome and check that the Agents add-on is on. Not set up yet? Do these steps:',
+  'ubSetupStep1': 'Run this once in a terminal on your computer:',
+  'ubSetupStep2':
+      'In Chrome, open chrome://extensions, turn on Developer mode, choose Load unpacked and pick the folder chuk_chat/extension/dist/chrome.',
+  'ubSetupStep3': 'Reload the add-on, then tap Check again.',
+  'ubSetupCopy': 'Copy command',
+  'ubSetupCopied': 'Command copied',
+  'ubSetupCheckAgain': 'Check again',
+  'ubSetupNotConnectedHost': 'Not connected to the host',
+  'ubSetupHowTo': 'How to set up',
+  'ubNoticeStopped':
+      'You stopped this in your browser. Send a new task, or tap Allow again in the add-on.',
+  'ubNoticeNotSetUp': 'Your browser is not set up on this computer',
+  'ubLabelUserBrowser': 'Your browser',
+  'ubLabelUserBrowserNamed': 'Your browser · {browser}',
+  'ubLabelSandbox': 'Sandbox browser',
+  'ubScreenTooltip': 'Works in your browser',
+  'ubScreenExplain':
+      'This coworker works in your own browser. There is no screen to show here.',
+  'ubApprovalInOwnBrowser': 'In your own browser',
+  'ubApprovalAddress': 'Address',
+  'ubApprovalTab': 'Tab',
+  // ── end own browser ──
 };

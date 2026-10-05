@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_binding.dart';
 import 'package:chuk_chat/platform_specific/chat/voice/chat_voice_call_button.dart';
@@ -74,7 +75,15 @@ class AgentsThreadHeader extends StatelessWidget {
     this.connection = AgentsThreadConnection.live,
     this.onReconnect,
     this.agentName,
+    this.usesUserBrowser = false, // own browser
   });
+
+  // ── own browser ──
+  /// The coworker drives the user's own browser (`run_state.browser_target`).
+  /// That browser has no screen here: the parked target says so, and is
+  /// never lit for it.
+  final bool usesUserBrowser;
+  // ── end own browser ──
 
   /// The coworker whose thread this is. Null (no thread open) leaves the
   /// left side empty.
@@ -256,6 +265,23 @@ class AgentsThreadHeader extends StatelessWidget {
   /// button. The phone's screen chip.
   Widget _screenChip(BuildContext context) {
     final bool open = onOpenScreen != null;
+    // ── own browser ──
+    if (!open && usesUserBrowser) {
+      final AppLocalizations? l = AppLocalizations.of(context);
+      return ChromeChip(
+        icon: Icons.desktop_windows_rounded,
+        parked: true,
+        tooltip: l?.ubScreenTooltip ?? 'Works in your browser',
+        semanticsId: 'thread_header_screen',
+        onTap: () => AppNotifications.show(
+          context,
+          l?.ubScreenExplain ??
+              'This coworker works in your own browser. There is no screen '
+                  'to show here.',
+        ),
+      );
+    }
+    // ── end own browser ──
     return ChromeChip(
       icon: Icons.desktop_windows_rounded,
       accent: open,

@@ -11,9 +11,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart'; // own browser
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/widgets/agents_permissions/agent_approvals_section.dart'; // F1
+import 'package:chuk_chat/widgets/agents_user_browser.dart'; // own browser
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// One switch of the section: the wire key, the words and the icon.
@@ -253,6 +255,19 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
           ],
         ),
         const SizedBox(height: 8),
+        // ── own browser ──
+        // The add-on is missing or not connected while the switch is on: the
+        // steps to set it up, and a check that asks the host again.
+        if (editable &&
+            permissions.userBrowser &&
+            (_service.userBrowserStatus?.needsSetup ?? false)) ...<Widget>[
+          AgentsUserBrowserSetupCard(
+            status: _service.userBrowserStatus!,
+            onCheckAgain: _checkUserBrowser,
+          ),
+          const SizedBox(height: 8),
+        ],
+        // ── end own browser ──
         if (error != null) ...<Widget>[
           ExpressiveInfoCard(
             key: const ValueKey<String>('agent-permissions-error'),
@@ -292,7 +307,11 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
       child: ExpressiveSwitchRow(
         key: ValueKey<String>('agent-permission-${spec.key}'),
         title: spec.title,
-        subtitle: enforced ? spec.explanation : kPermissionNotEnforced,
+        subtitle: !enforced
+            ? kPermissionNotEnforced
+            : spec.key == AgentPermissions.keyUserBrowser // own browser
+            ? _userBrowserSubtitle(spec)
+            : spec.explanation,
         icon: spec.icon,
         value: permissions.isOn(spec.key),
         onChanged: editable && enforced
@@ -301,6 +320,31 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
       ),
     );
   }
+
+  // ── own browser ──
+  /// "Paired with Chrome", "Add-on not connected", "Ada is using your
+  /// browser", ... from the host's status; the plain explanation before the
+  /// host sent one. Repaints on every `user_browser_status` push.
+  String _userBrowserSubtitle(AgentPermissionSpec spec) {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    return userBrowserSubtitle(
+      l,
+      _service.userBrowserStatus,
+      agentId: widget.agentId,
+      heldByOther: _service.userBrowserHeldByOther(widget.agentId),
+      fallback: spec.explanation,
+    );
+  }
+
+  Future<void> _checkUserBrowser() async {
+    final bool sent = await _service.refresh(widget.agentId);
+    if (!mounted || sent) return;
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    pillToast(context, l.ubSetupNotConnectedHost);
+  }
+  // ── end own browser ──
 
   String _statusLine(bool known) {
     switch (_phase) {

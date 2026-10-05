@@ -160,7 +160,8 @@ Geht, aber schwaecher, und das liegt nicht an uns:
 * Mit `--sandbox local` laeuft der Agent als der Nutzer und kommt am Broker
   vorbei direkt an den Socket (und an das Chrome-Profil auf der Platte). Der
   Broker ist nur fuer die Docker-Sandbox eine Grenze.
-* Die App zeigt den Pairing-Status noch nicht an und liest den Push
-  `user_browser_status` noch nicht (Arbeitsliste im Wire-Contract).
+* Die App zeigt den Status unter dem Schalter "Your browser" und am Ende
+  des Threads und folgt dem Push `user_browser_status`. "Allow again" gibt es
+  nur im Add-on: die App hat keinen Rahmen, der einen Stop aufhebt.
 * Ein Panel-Lauf ist kein `origin: "app"`: ist das Wochenbudget des
   Coworkers aufgebraucht, wird er abgelehnt wie eine Automation.

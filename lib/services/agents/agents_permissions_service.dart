@@ -223,6 +223,8 @@ class AgentsPermissionsService extends ChangeNotifier {
   }) : _send = send ?? _sendOverRelay,
        _connection = connection ?? AgentsRelayLink.instance.controller,
        _capabilities = capabilities ?? AgentsRelayClient.hostCapabilities {
+    // own browser: first, so the repaint below sees the status gone.
+    _connection.addListener(_forgetUserBrowserOnDrop);
     _connection.addListener(notifyListeners);
     _capabilities.addListener(notifyListeners);
   }
@@ -246,6 +248,8 @@ class AgentsPermissionsService extends ChangeNotifier {
   /// Routes the relay's `agent_permissions` replies here. Idempotent.
   void attach() {
     AgentsRelayClient.agentPermissionsSink = handleFrame;
+    // own browser
+    AgentsRelayClient.userBrowserStatusSink = handleUserBrowserStatus;
   }
 
   /// A host is connected right now.
@@ -342,6 +346,7 @@ class AgentsPermissionsService extends ChangeNotifier {
       _errors.remove(agentId);
     }
     _readApprovals(agentId, payload); // F1: approvals
+    _readUserBrowser(agentId, payload); // own browser
     final Object? enforced = payload['enforced'];
     if (enforced is Map) {
       _enforced[agentId] = <String, bool>{
@@ -489,10 +494,72 @@ class AgentsPermissionsService extends ChangeNotifier {
   }
   // ── end F1 ──
 
+  // ── own browser ──
+  /// The host's status of the user's own browser (docs/WIRE_CONTRACT.md,
+  /// "Inbound: agent_permissions.user_browser" and "user_browser_status").
+  /// Host-wide: the last block the host sent, from a reply or a push. Null
+  /// before the host sent one, and after the connection went away (an old
+  /// host never sends one).
+  UserBrowserStatus? _userBrowser;
+
+  /// `in_use_by_this_agent` per coworker, from the replies. A push carries no
+  /// such flag and clears these: the holder may have changed.
+  final Map<String, bool> _userBrowserMine = <String, bool>{};
+
+  /// The host's last word on the user's browser, or null.
+  UserBrowserStatus? get userBrowserStatus => _userBrowser;
+
+  /// Whether a coworker OTHER than [agentId] holds the user's browser now.
+  /// Reads `in_use_by.agent_id` first, then the reply's own flag. Unknown
+  /// counts as no: the app never claims a holder the host did not name.
+  bool userBrowserHeldByOther(String agentId) {
+    final UserBrowserStatus? s = _userBrowser;
+    if (s == null || !s.inUse) return false;
+    final String? holder = s.inUseByAgentId;
+    if (holder != null) return holder != agentId;
+    final bool? mine = _userBrowserMine[agentId];
+    return mine == false;
+  }
+
+  void _readUserBrowser(String agentId, Map<String, dynamic> payload) {
+    final UserBrowserStatus? status = UserBrowserStatus.fromJson(
+      payload['user_browser'],
+    );
+    if (status == null) return;
+    _userBrowser = status;
+    final bool? mine = status.inUseByThisAgent;
+    if (mine == null) {
+      _userBrowserMine.remove(agentId);
+    } else {
+      _userBrowserMine[agentId] = mine;
+    }
+  }
+
+  /// Takes one `user_browser_status` push: the whole status replaces the
+  /// stored one, and every listener repaints. No polling.
+  void handleUserBrowserStatus(Map<String, dynamic> payload) {
+    if (payload['type'] != 'user_browser_status') return;
+    final UserBrowserStatus? status = UserBrowserStatus.fromJson(
+      payload['user_browser'],
+    );
+    if (status == null) return;
+    _userBrowser = status;
+    _userBrowserMine.clear();
+    notifyListeners();
+  }
+
+  void _forgetUserBrowserOnDrop() {
+    if (_connection.value != null) return;
+    _userBrowser = null;
+    _userBrowserMine.clear();
+  }
+  // ── end own browser ──
+
   @override
   void dispose() {
     _connection.removeListener(notifyListeners);
     _capabilities.removeListener(notifyListeners);
+    _connection.removeListener(_forgetUserBrowserOnDrop); // own browser
     super.dispose();
   }
 
@@ -507,8 +574,151 @@ class AgentsPermissionsService extends ChangeNotifier {
     _budgets.clear(); // F2: cost totals
     _approvals.clear(); // F1: approvals
     _optimisticApprovals.clear(); // F1: approvals
+    _userBrowser = null; // own browser
+    _userBrowserMine.clear(); // own browser
   }
 }
+
+// ── own browser ──
+/// The host's status of the user's own browser: the `user_browser` block of
+/// an `agent_permissions` reply or of a `user_browser_status` push. It never
+/// carries a URL, a tab title or a thread key.
+@immutable
+class UserBrowserStatus {
+  const UserBrowserStatus({
+    this.hostListening = false,
+    this.installed = false,
+    this.browsers = const <String>[],
+    this.connected = false,
+    this.browser,
+    this.version,
+    this.trustedInput,
+    this.inUse = false,
+    this.inUseByAgentId,
+    this.inUseByName,
+    this.inUseByThisAgent,
+    this.stopped = false,
+  });
+
+  /// The host's broker runs.
+  final bool hostListening;
+
+  /// The bridge is registered with at least one browser ("paired").
+  final bool installed;
+
+  /// The browsers the bridge is registered with (`chrome`, `brave`, ...).
+  final List<String> browsers;
+
+  /// An add-on is connected now.
+  final bool connected;
+
+  /// What the connected add-on said: `chrome`, `firefox`, ...
+  final String? browser;
+  final String? version;
+
+  /// False = synthetic input only (Firefox). Null when not said.
+  final bool? trustedInput;
+
+  /// A coworker holds the browser now.
+  final bool inUse;
+
+  /// Who holds it: the app's agent id and the name the user gave it.
+  final String? inUseByAgentId;
+  final String? inUseByName;
+
+  /// Only in a reply (per coworker); null in a push.
+  final bool? inUseByThisAgent;
+
+  /// The user pressed Stop and did not allow the browser again.
+  final bool stopped;
+
+  /// Not set up, or set up and not connected: the setup card has something
+  /// to say. False while the host's broker does not run (nothing to set up
+  /// on the app's side then).
+  bool get needsSetup => hostListening && (!installed || !connected);
+
+  /// Reads one block. Null when [raw] is not a map. A key of the wrong type
+  /// keeps its default, never a guess.
+  static UserBrowserStatus? fromJson(Object? raw) {
+    if (raw is! Map) return null;
+    bool flag(String key) => raw[key] == true;
+    String? text(Object? value) =>
+        value is String && value.trim().isNotEmpty ? value.trim() : null;
+    final Object? by = raw['in_use_by'];
+    final Object? mine = raw['in_use_by_this_agent'];
+    final Object? trusted = raw['trusted_input'];
+    final Object? browsers = raw['browsers'];
+    return UserBrowserStatus(
+      hostListening: flag('host_listening'),
+      installed: flag('installed'),
+      browsers: List<String>.unmodifiable(<String>[
+        if (browsers is List)
+          for (final Object? b in browsers)
+            if (b is String && b.trim().isNotEmpty) b.trim(),
+      ]),
+      connected: flag('connected'),
+      browser: text(raw['browser']),
+      version: text(raw['version']),
+      trustedInput: trusted is bool ? trusted : null,
+      inUse: flag('in_use'),
+      inUseByAgentId: by is Map ? text(by['agent_id']) : null,
+      inUseByName: by is Map ? text(by['name']) : null,
+      inUseByThisAgent: mine is bool ? mine : null,
+      stopped: flag('stopped'),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is UserBrowserStatus &&
+      other.hostListening == hostListening &&
+      other.installed == installed &&
+      listEquals(other.browsers, browsers) &&
+      other.connected == connected &&
+      other.browser == browser &&
+      other.version == version &&
+      other.trustedInput == trustedInput &&
+      other.inUse == inUse &&
+      other.inUseByAgentId == inUseByAgentId &&
+      other.inUseByName == inUseByName &&
+      other.inUseByThisAgent == inUseByThisAgent &&
+      other.stopped == stopped;
+
+  @override
+  int get hashCode => Object.hash(
+    hostListening,
+    installed,
+    Object.hashAll(browsers),
+    connected,
+    browser,
+    version,
+    trustedInput,
+    inUse,
+    inUseByAgentId,
+    inUseByName,
+    inUseByThisAgent,
+    stopped,
+  );
+}
+
+/// A browser id as people say it: `chrome` -> `Chrome`. Unknown ids get a
+/// capital first letter.
+String userBrowserDisplayName(String id) {
+  const Map<String, String> known = <String, String>{
+    'chrome': 'Chrome',
+    'chromium': 'Chromium',
+    'brave': 'Brave',
+    'edge': 'Edge',
+    'firefox': 'Firefox',
+    'opera': 'Opera',
+    'vivaldi': 'Vivaldi',
+  };
+  final String key = id.trim().toLowerCase();
+  if (known.containsKey(key)) return known[key]!;
+  if (key.isEmpty) return id;
+  return key[0].toUpperCase() + key.substring(1);
+}
+// ── end own browser ──
 
 // ── F1: approvals + cost ──
 /// The capability a host names when it asks before outward actions

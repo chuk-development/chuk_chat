@@ -115,16 +115,38 @@ class AgentsActionApprovalCard extends StatelessWidget {
         Expanded(
           child: Padding(
             padding: const EdgeInsets.only(top: 7),
-            child: Text(
-              request.summary ??
-                  l?.approvalTitleFallback ??
-                  'Allow this action?',
-              key: const ValueKey<String>('agents-approval-title'),
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w700,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                // ── own browser ──
+                if (inUserBrowser)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      l?.ubApprovalInOwnBrowser ?? 'In your own browser',
+                      key: const ValueKey<String>(
+                        'agents-approval-own-browser',
+                      ),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                // ── end own browser ──
+                Text(
+                  request.summary ??
+                      l?.approvalTitleFallback ??
+                      'Allow this action?',
+                  key: const ValueKey<String>('agents-approval-title'),
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -170,6 +192,8 @@ class AgentsActionApprovalCard extends StatelessWidget {
         if (args != null) rows.add(_Quote(text: args, mono: true));
       case 'browser_act':
         field(l?.approvalBrowserSite ?? 'Site', request.site);
+        // own browser: the page `browser_navigate` opens.
+        field(l?.ubApprovalAddress ?? 'Address', _text(d['url']));
         final String? element = _text(d['element']);
         if (element != null) {
           field(
@@ -317,6 +341,12 @@ class AgentsActionApprovalCard extends StatelessWidget {
       _ => l?.approvalDecidedOnce ?? 'Allowed once',
     };
   }
+
+  // ── own browser ──
+  /// The action runs in the user's own browser (the add-on), not in the
+  /// sandbox: `details.browser == "user_browser"`.
+  bool get inUserBrowser => request.details?['browser'] == 'user_browser';
+  // ── end own browser ──
 
   /// One glyph per class, from the app's own set (docs/DESIGN.md §5).
   static HugeIconData _iconFor(String? actionClass) => switch (actionClass) {

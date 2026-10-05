@@ -679,6 +679,7 @@ class AgentsRelayRunState extends AgentsRelayInbound {
     this.prompt,
     this.browserOpen,
     this.vncAvailable = false,
+    this.browserTarget, // own browser
   });
 
   /// Builds a run state from a decoded `run_state` payload, or null when the
@@ -700,8 +701,20 @@ class AgentsRelayRunState extends AgentsRelayInbound {
       prompt: prompt is String ? prompt : null,
       browserOpen: browserOpen is bool ? browserOpen : null,
       vncAvailable: payload['vnc_available'] == true,
+      // own browser
+      browserTarget: parseBrowserTarget(payload['browser_target']),
     );
   }
+
+  // ── own browser ──
+  /// Which browser this agent drives (`run_state.browser_target`):
+  /// [kBrowserTargetUserBrowser] or [kBrowserTargetSandbox]. Null on an old
+  /// host that leaves it out.
+  final String? browserTarget;
+
+  /// The agent drives the user's own browser (the add-on), not the sandbox.
+  bool get usesUserBrowser => browserTarget == kBrowserTargetUserBrowser;
+  // ── end own browser ──
 
   /// The thread this state is about — the same key the replay named.
   final String sessionKey;
@@ -1875,6 +1888,14 @@ class AgentsRelayClient
   /// `result` event arrives. Null drops it.
   static void Function(Map<String, dynamic> payload)? automationDoneSink;
   // ── end F2 ──
+
+  // ── own browser ──
+  /// Where the host's `user_browser_status` push goes (docs/WIRE_CONTRACT.md,
+  /// "Inbound: user_browser_status"). `AgentsPermissionsService` sets it;
+  /// null drops the frame. A sink like [agentPermissionsSink]: the status is
+  /// host-wide, not a transcript event.
+  static void Function(Map<String, dynamic> payload)? userBrowserStatusSink;
+  // ── end own browser ──
 
   // ── run changes ──
   /// Where the host's `run_changes` and `run_undo_result` answers go.
@@ -3448,6 +3469,10 @@ class AgentsRelayClient
         _inbound.add(AgentsRelayAgentList.fromPayload(payload));
       case 'agent_permissions':
         agentPermissionsSink?.call(payload);
+      // ── own browser ──
+      case 'user_browser_status':
+        userBrowserStatusSink?.call(payload);
+      // ── end own browser ──
       case 'agent_channel':
         agentChannelSink?.call(payload);
       case 'run_state':
@@ -3849,3 +3874,22 @@ class AgentsRelayClient
   static AgentsFrame _frameFromWire(String wire) =>
       AgentsFrame.fromJsonString(utf8.decode(base64.decode(wire)));
 }
+
+// ── own browser ──
+/// The `run_state.browser_target` value for the user's own browser. Any other
+/// value is the sandbox browser.
+const String kBrowserTargetUserBrowser = 'user_browser';
+
+/// The `run_state.browser_target` value for the sandbox browser.
+const String kBrowserTargetSandbox = 'sandbox';
+
+/// Reads `run_state.browser_target`: [kBrowserTargetUserBrowser], or
+/// [kBrowserTargetSandbox] for every other string (an unknown value means
+/// the sandbox). Null when the host left it out (an old host).
+String? parseBrowserTarget(Object? raw) {
+  if (raw is! String) return null;
+  return raw == kBrowserTargetUserBrowser
+      ? kBrowserTargetUserBrowser
+      : kBrowserTargetSandbox;
+}
+// ── end own browser ──

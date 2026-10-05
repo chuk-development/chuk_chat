@@ -1326,4 +1326,43 @@ const Map<String, String> stringsDe = {
   'runChangesErrAllConflict': 'Jede Datei wurde nach diesem Lauf geändert.',
   'runChangesErrFailed': 'Dein Computer konnte die Änderungen nicht lesen.',
   // ── end run changes ──
+  // ── own browser ──
+  'ubSubtitlePaired': 'Verbunden mit {browser}',
+  'ubSubtitlePairedGeneric': 'Mit deinem Browser verbunden',
+  'ubSubtitleInUseHere': 'Nutzt gerade {browser}',
+  'ubInUseBy': '{name} nutzt gerade deinen Browser',
+  'ubAnotherCoworker': 'Ein anderer Coworker',
+  'ubSubtitleNotConnected': 'Add-on nicht verbunden',
+  'ubSubtitleNotSetUp': 'Auf diesem Computer nicht eingerichtet',
+  'ubSubtitleStopped': 'Im Browser gestoppt',
+  'ubSubtitleNoBroker':
+      'Starte den Agents-Host neu, um deinen Browser zu nutzen',
+  'ubSetupTitleNotSetUp': 'Browser einrichten',
+  'ubSetupTitleNotConnected': 'Dein Browser ist nicht verbunden',
+  'ubSetupIntro':
+      'Der Coworker nutzt das Agents-Add-on in Chrome oder Brave auf deinem Computer. Richte es einmal ein:',
+  'ubSetupIntroNotConnected':
+      'Öffne Chrome und prüfe, ob das Agents-Add-on an ist. Noch nicht eingerichtet? Mach diese Schritte:',
+  'ubSetupStep1': 'Führe das einmal in einem Terminal auf deinem Computer aus:',
+  'ubSetupStep2':
+      'Öffne in Chrome chrome://extensions, schalte den Entwicklermodus ein, wähle Entpackte Erweiterung laden und dann den Ordner chuk_chat/extension/dist/chrome.',
+  'ubSetupStep3': 'Lade das Add-on neu und tippe dann auf Erneut prüfen.',
+  'ubSetupCopy': 'Befehl kopieren',
+  'ubSetupCopied': 'Befehl kopiert',
+  'ubSetupCheckAgain': 'Erneut prüfen',
+  'ubSetupNotConnectedHost': 'Nicht mit dem Host verbunden',
+  'ubSetupHowTo': 'So richtest du ihn ein',
+  'ubNoticeStopped':
+      'Du hast das in deinem Browser gestoppt. Schick eine neue Aufgabe oder tippe im Add-on auf Allow again.',
+  'ubNoticeNotSetUp': 'Dein Browser ist auf diesem Computer nicht eingerichtet',
+  'ubLabelUserBrowser': 'Dein Browser',
+  'ubLabelUserBrowserNamed': 'Dein Browser · {browser}',
+  'ubLabelSandbox': 'Sandbox-Browser',
+  'ubScreenTooltip': 'Arbeitet in deinem Browser',
+  'ubScreenExplain':
+      'Dieser Coworker arbeitet in deinem eigenen Browser. Hier gibt es keinen Bildschirm.',
+  'ubApprovalInOwnBrowser': 'In deinem eigenen Browser',
+  'ubApprovalAddress': 'Adresse',
+  'ubApprovalTab': 'Tab',
+  // ── end own browser ──
 };
