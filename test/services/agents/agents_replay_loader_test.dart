@@ -11,6 +11,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/image_storage_service.dart';
 import 'package:chuk_chat/services/storage/chat_origin.dart';
 
@@ -715,6 +716,74 @@ void main() {
     expect(loader.takeReplayWanted(sessionKey), isTrue);
     expect(loader.takeReplayWanted(sessionKey), isFalse);
   });
+
+  // ── bead chuk_chat-dksi: cost line on answers cached before the fold kept it
+  test('an answer cached before the run meta existed gets its cost line '
+      'from the one full replay, with no row twice', () async {
+    // The old app folded this run without its meta: the row has no cost.
+    await replay(const <AgentsRelayInbound>[
+      AgentsRelayUser('weekly report', mid: 4),
+      AgentsRelayDelta('done, see the file', replay: true, mid: 9),
+      AgentsRelayDone(reason: 'finished', replay: true, runId: 'run-1'),
+      AgentsRelayDone(reason: 'replay', replay: true),
+    ]);
+    List<ToolCall> callsOf(Map<String, dynamic> row) {
+      final Object? raw = row['toolCalls'];
+      if (raw is! String || raw.isEmpty) return const <ToolCall>[];
+      return (jsonDecode(raw) as List)
+          .map((Object? e) => ToolCall.fromJson(e! as Map<String, dynamic>))
+          .toList();
+    }
+
+    expect(
+      splitRunMeta(callsOf(rowsFor(sessionKey)[1]), null).cost,
+      isNull,
+    );
+    // Its cursor predates the mark (the old app wrote no mark).
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$kReplayRunMetaCursorPrefix$sessionKey');
+    expect(prefs.getInt('$kReplayCursorPrefix$sessionKey'), 9);
+
+    // Restart: the unmarked cursor is not used, so the thread replays whole.
+    loader.reset();
+    await loader.load();
+    loader.attach();
+    expect(loader.cursorFor(sessionKey), 0);
+    // The cache-first paint still has the old rows until the replay lands.
+    expect(rowsFor(sessionKey), hasLength(2));
+
+    await replay(<AgentsRelayInbound>[
+      const AgentsRelayUser('weekly report', mid: 4),
+      const AgentsRelayDelta('done, see the file', replay: true, mid: 9),
+      AgentsRelayDone(
+        reason: 'finished',
+        replay: true,
+        runId: 'run-1',
+        cost: AgentsRunCost.fromJson(const <String, dynamic>{
+          'currency': 'EUR',
+          'eur': 0.004,
+          'input_tokens': 20000,
+          'output_tokens': 100,
+        }),
+      ),
+      const AgentsRelayDone(reason: 'replay', replay: true),
+    ]);
+
+    final rows = rowsFor(sessionKey);
+    expect(rows, hasLength(2), reason: 'a full replay replaces, never adds');
+    final meta = splitRunMeta(callsOf(rows[1]), null);
+    expect(meta.cost?.eur, closeTo(0.004, 1e-9));
+    expect(meta.cost?.totalTokens, 20100);
+    expect(meta.runId, 'run-1');
+    expect(meta.toolCalls, isEmpty, reason: 'the meta is not a tool line');
+
+    // The new cursor carries the mark: the next start is a delta again.
+    expect(prefs.getBool('$kReplayRunMetaCursorPrefix$sessionKey'), isTrue);
+    loader.reset();
+    await loader.load();
+    expect(loader.cursorFor(sessionKey), 9);
+  });
+  // ── end chuk_chat-dksi ──
 
   test('a LIVE user frame is ignored like every other live frame (F13)',
       () async {

@@ -1017,6 +1017,7 @@ void main() {
       SharedPreferences.setMockInitialValues(<String, Object>{
         '${kReplayCursorPrefix}thread-1': 42,
         '${kReplayTimestampCursorPrefix}thread-1': true,
+        '${kReplayRunMetaCursorPrefix}thread-1': true,
       });
       await AgentsReplayLoader.instance.load();
 

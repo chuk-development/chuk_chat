@@ -1260,6 +1260,18 @@ class AppLocalizations {
   String get skillProposalErrNoAnswer => _get('skillProposalErrNoAnswer');
   String get skillProposalErrNotFound => _get('skillProposalErrNotFound');
   // ── end skill proposals ──
+
+  // ── polish ──
+  /// The New-agent flow could not send `agent_create`: the coworker exists
+  /// in the roster, not on the host.
+  String tplAgentCreateFailed(String name) =>
+      _get('tplAgentCreateFailed').replaceAll('{name}', name);
+
+  /// The phone coworker page's row to its permissions page.
+  String get agentsCwPermissions => _get('agentsCwPermissions');
+  String get agentsCwPermissionsSubtitle =>
+      _get('agentsCwPermissionsSubtitle');
+  // ── end polish ──
 }
 
 class _AppLocalizationsDelegate

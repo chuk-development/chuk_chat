@@ -172,6 +172,7 @@ void _repairTests() {
       kReplayRepeatRepairKey: true,
       '${kReplayCursorPrefix}thread-1': 106,
       '${kReplayTimestampCursorPrefix}thread-1': true,
+      '${kReplayRunMetaCursorPrefix}thread-1': true,
     });
     final loader = AgentsReplayLoader.instance..reset();
     await loader.load();

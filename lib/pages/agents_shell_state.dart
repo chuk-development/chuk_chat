@@ -951,9 +951,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       SnackBar(
         content: Text(
           outcome.agentFailed
-              // No dedicated string yet: a failed send means the socket is
-              // not paired, which is exactly "not connected".
-              ? l.automationNotConnected
+              // Names the coworker: it is in the roster, not on the host
+              // (bead chuk_chat-az1g).
+              ? l.tplAgentCreateFailed(agent.name)
               : l.tplStarterFailed(agent.name, outcome.starterError ?? ''),
         ),
       ),
