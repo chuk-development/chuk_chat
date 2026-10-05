@@ -21,6 +21,7 @@ import copy
 import json
 import logging
 import os
+import tempfile
 import threading
 from pathlib import Path
 from typing import Any
@@ -62,6 +63,10 @@ class ChannelStore:
         self._path = Path(path) if path is not None else None
         self._key = key
         self._lock = threading.Lock()
+        # Serializes whole saves: the snapshot and the file write happen under
+        # it together, so an older snapshot can never land after a newer one.
+        # Separate from ``_lock`` so readers never wait on the disk.
+        self._save_lock = threading.Lock()
         self._records: dict[str, dict[str, dict]] = {}
         self._load()
 
@@ -111,26 +116,41 @@ class ChannelStore:
         path, key = self._path, self._key
         if path is None or key is None:
             return False
-        with self._lock:
-            plain = json.dumps(self._records, separators=(",", ":")).encode("utf-8")
-        try:
-            nonce = os.urandom(_NONCE_LEN)
-            sealed = AESGCM(key).encrypt(nonce, plain, _LABEL)
-            record = {
-                "version": AT_REST_VERSION,
-                "nonce": base64.b64encode(nonce).decode("ascii"),
-                "ciphertext": base64.b64encode(sealed).decode("ascii"),
-            }
-            path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = path.with_suffix(path.suffix + ".tmp")
-            fd = os.open(str(tmp), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "w", encoding="utf-8") as handle:
-                json.dump(record, handle, separators=(",", ":"))
-            os.replace(tmp, path)
-            return True
-        except Exception as exc:  # noqa: BLE001 — the state stays in memory
-            logger.warning("could not write the channel store: %s", type(exc).__name__)
-            return False
+        with self._save_lock:
+            with self._lock:
+                plain = json.dumps(self._records, separators=(",", ":")).encode("utf-8")
+            tmp: str | None = None
+            try:
+                nonce = os.urandom(_NONCE_LEN)
+                sealed = AESGCM(key).encrypt(nonce, plain, _LABEL)
+                record = {
+                    "version": AT_REST_VERSION,
+                    "nonce": base64.b64encode(nonce).decode("ascii"),
+                    "ciphertext": base64.b64encode(sealed).decode("ascii"),
+                }
+                path.parent.mkdir(parents=True, exist_ok=True)
+                # A unique temporary file per write (mode 0600), flushed to
+                # disk before the atomic rename: a crash leaves the old file
+                # or the new one, never a torn mix.
+                fd, tmp = tempfile.mkstemp(
+                    dir=str(path.parent), prefix=path.name + ".", suffix=".tmp"
+                )
+                with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                    json.dump(record, handle, separators=(",", ":"))
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(tmp, path)
+                tmp = None
+                return True
+            except Exception as exc:  # noqa: BLE001 — the state stays in memory
+                logger.warning("could not write the channel store: %s", type(exc).__name__)
+                return False
+            finally:
+                if tmp is not None:
+                    try:
+                        os.unlink(tmp)
+                    except OSError:
+                        pass
 
     def _load(self) -> None:
         path, key = self._path, self._key

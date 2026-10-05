@@ -14,18 +14,18 @@ app (`docs/research/grok-bot-0.16-vs-0.47-diff.md`,
 
 ---
 
-## 1. Kurzfassung
+## 1. Summary
 
-1. Die Besten antworten sofort: Manus hat die Aufgabenzeit von ~15 auf <4 min gedrueckt und 2.0 spart nochmal 28 % Zeit; wir brauchen fuer "hi" 100-180 s `prepare` vor einem 3-s-Modellaufruf und 33k Tokens.
-2. Prompt-Cache ist bei Manus "die wichtigste Kennzahl" (stabiler Prefix, nur anhaengen, Tools maskieren statt entfernen); Hermes friert Memory pro Session ein. Wir messen unsere Cache-Trefferquote nicht und schreiben den Tail jede Runde neu.
-3. Grok Bot, ChatGPT, Gemini und Claude zeigen klar, was der Agent gerade tut, und haben eine Uebernahme (Takeover) fuer Login/2FA/CAPTCHA. Wir haben VNC, aber keinen eigenen Takeover-Ablauf.
-4. Freigaben pro Aktion (einmal / immer / pro Seite, Auto-Review) sind Standard. Bei uns fragt nur `herenow_publish`.
-5. Kanaele: OpenClaw (20+), Hermes, Genspark Claw, Lindy, Poke laufen in WhatsApp/Telegram/iMessage/Slack. Wir nur in der eigenen App (plus Push).
-6. Automationen haben Ereignis-Trigger (neue Mail, GitHub-PR, Kalender, Webhook) und "nur melden wenn sich was aendert". Wir haben Zeitplaene und Watcher-Prozesse.
-7. Fertige Vorlagen: Grok Bot liefert 42 Preset-Bots plus Marktplatz, Lindy lebt von Templates. Wir starten leer.
-8. Onboarding: Grok Bot/Manus/Claude brauchen kein Setup (Cloud-VM oder Mac/Win). Unser Host laeuft nur auf Linux mit Docker.
-9. Groesste Beschwerde ueberall: Kosten/Kontingent (Grok Bot 99 % Wochenkontingent in 3 Tagen, OpenClaw 18,75 $ ueber Nacht). Sichtbare Kosten und Budgets sind ein Verkaufsargument.
-10. Wo wir vorne liegen: echtes Handy-App plus eigener Rechner, Docker pro Agent (Grok Bot: eine VM pro Nutzer, Bots nicht isoliert), E2E-Relay, Rooms, Voice, FTS5 + semantisches Memory.
+1. The best products answer at once. Manus cut the task time from ~15 min to <4 min, and Manus 2.0 cuts 28 % more. For "hi" we need 100-180 s of `prepare` before a 3 s model call, and 33k tokens.
+2. Manus calls the prompt cache "the most important metric". It keeps a stable prefix, only appends, and masks tools instead of removing them. Hermes freezes memory for each session. We do not measure our cache hit rate. We write the tail again in each round.
+3. Grok Bot, ChatGPT, Gemini and Claude show clearly what the agent does now. They have a takeover for login, 2FA and CAPTCHA. We have VNC, but no takeover flow of our own.
+4. Approval for each action (once, always, per site, auto-review) is standard. With us, only `herenow_publish` asks.
+5. Channels: OpenClaw (20+), Hermes, Genspark Claw, Lindy and Poke run in WhatsApp, Telegram, iMessage and Slack. We run only in our own app (plus push).
+6. Automations have event triggers (new mail, GitHub PR, calendar, webhook) and "tell me only when something changes". We have schedules and watcher processes.
+7. Ready templates: Grok Bot ships 42 preset bots and a marketplace. Lindy depends on templates. We start empty.
+8. Onboarding: Grok Bot, Manus and Claude need no setup (cloud VM, or Mac/Windows). Our host runs only on Linux with Docker.
+9. The largest complaint everywhere is cost and quota. Grok Bot used 99 % of the weekly quota in 3 days. OpenClaw cost $18.75 in one night. Visible costs and budgets are a sales point.
+10. Where we lead: a real phone app plus the user's own computer, Docker for each agent (Grok Bot has one VM per user, and its bots are not isolated), the E2E relay, Rooms, Voice, FTS5 and semantic memory.
 
 ---
 
@@ -324,7 +324,7 @@ relay with device pairing (`lib/services/agents/agents_cloud_relay.dart`).
 
 ---
 
-## 4. Was wir bauen sollten (priorisiert)
+## 4. What we should build (in priority order)
 
 Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
 

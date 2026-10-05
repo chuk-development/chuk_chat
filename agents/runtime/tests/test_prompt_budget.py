@@ -9,8 +9,7 @@ round, the persona files and the task-start recall are capped, and the skill
 catalogue has a total budget.
 
 These tests pin that budget, so it cannot silently grow back: a new tool must
-either join ``CORE_TOOLS`` (or :data:`DECLARED_NOT_CORE`) on purpose or
-register ``deferrable=True``, and a longer prompt section has to fit the
+either join ``CORE_TOOLS`` on purpose or register ``deferrable=True``, and a longer prompt section has to fit the
 numbers below. The token figure is the
 runtime's own estimate (4 characters per token), the one tool search and the
 context ladder decide on; real tokenizers count about 5-10 % less.
@@ -18,8 +17,12 @@ context ladder decide on; real tokenizers count about 5-10 % less.
 The numbers measured when this was written (fresh default coworker, built-in
 skills, seeded memory files, one MCP server):
 
-    system prompt   ~2,870   (was ~2,720; +160 for the deferred-tools section)
-    declared tools  ~3,720   (was ~10,000: 27 tools instead of 64)
+    system prompt   ~2,940   (was ~2,720; +160 for the deferred-tools section)
+    declared tools  ~2,250   (was ~10,000: 16 tools instead of 64)
+
+The automations, call and secrets tools were declared at first too (~1.3k
+tokens). A direct call to a deferred tool by its exact name is now honoured,
+so they are deferred like the rest; :data:`ALWAYS_DEFERRED` pins that.
 """
 
 from __future__ import annotations
@@ -52,14 +55,12 @@ DEFAULT_PERSONA = "You are a Agents coworker running on the user's own machine."
 #: Ceilings, in estimated tokens. Raise one only on purpose, with the reason in
 #: the commit: every token here is paid on every round of every session.
 SYSTEM_PROMPT_BUDGET = 3_300
-DECLARED_TOOLS_BUDGET = 4_000
-DECLARED_TOOLS_MAX = 28
+DECLARED_TOOLS_BUDGET = 3_000
+DECLARED_TOOLS_MAX = 20
 
-#: Declared although not core: Pydantic AI refuses a call to a deferred tool
-#: the model has not searched for, and the executor/host end-to-end tests call
-#: these by name. ~1.3k tokens; they go behind ``search_tools`` once a direct
-#: call by exact name is honoured (see ``tool_search``'s module docstring).
-DECLARED_NOT_CORE = frozenset(
+#: Deferrable tools that must never be declared up front again. They were
+#: declared while a call to a deferred tool needed a search first.
+ALWAYS_DEFERRED = frozenset(
     {
         "schedule_task", "start_watcher", "list_automations", "pause_automation",
         "resume_automation", "cancel_automation", "call_user", "call_status",
@@ -188,7 +189,7 @@ def _system_prompt(loop) -> str:
 
 def test_only_core_tools_are_declared_for_a_default_coworker(coworker):
     declared = _declared(coworker)
-    stray = sorted(set(declared) - CORE_TOOLS - DECLARED_NOT_CORE)
+    stray = sorted(set(declared) - CORE_TOOLS)
     assert not stray, (
         f"{stray} are declared on every round. Register them deferrable=True "
         "(found with search_tools) or add them to CORE_TOOLS on purpose."
@@ -200,6 +201,9 @@ def test_only_core_tools_are_declared_for_a_default_coworker(coworker):
         "shell_start", "job_output", "workspace_undo", "chat_document", "run_ffmpeg", "memory",
     ):
         assert name in deferred, name
+    for name in sorted(ALWAYS_DEFERRED):
+        assert name in deferred, name
+        assert name not in declared, name
 
 
 def test_declared_tool_schemas_stay_under_budget(coworker):
@@ -219,8 +223,8 @@ def test_system_prompt_stays_under_budget(coworker):
 def test_baseline_request_for_hi_stays_under_budget(coworker):
     total = estimate_tokens(_system_prompt(coworker)) + sum(_declared(coworker).values())
     assert total <= SYSTEM_PROMPT_BUDGET + DECLARED_TOOLS_BUDGET
-    # The measured value was ~6.6k; the old baseline was ~12.7k.
-    assert total < 7_500
+    # The measured value was ~5.2k; the old baseline was ~12.7k.
+    assert total < 6_500
 
 
 def test_the_prompt_head_is_stable_across_seeds(coworker):

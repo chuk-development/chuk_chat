@@ -383,8 +383,19 @@ class SummaryStore(Protocol):
     def load_context_summary(self, session_id: int) -> dict | None: ...
 
     def save_context_summary(
-        self, session_id: int, *, summary: str, summarized_upto: int, prefix_digest: str
-    ) -> None: ...
+        self,
+        session_id: int,
+        *,
+        summary: str,
+        summarized_upto: int,
+        prefix_digest: str,
+        only_if_covers_more: bool = False,
+        replaces: dict | None = None,
+    ) -> bool | None:
+        """Store the row. With ``only_if_covers_more`` the store must do an
+        atomic compare-and-set: replace an existing row only when it covers
+        fewer messages, or when it is still exactly ``replaces``."""
+        ...
 
 
 class AuxSummarizer:
@@ -964,6 +975,11 @@ class ContextLadder:
         try:
             row = self.summary_store.load_context_summary(self._session_id)
         except Exception:  # noqa: BLE001 — a cache miss, never a failed turn
+            logger.warning(
+                "context ladder: loading the stored summary for session %s failed",
+                self._session_id,
+                exc_info=True,
+            )
             row = None
         if not row:
             return
@@ -1010,7 +1026,11 @@ class ContextLadder:
                 prefix_digest=self._summary_digest,
             )
         except Exception:  # noqa: BLE001 — losing the cache costs time, not data
-            pass
+            logger.warning(
+                "context ladder: storing the summary for session %s failed",
+                self._session_id,
+                exc_info=True,
+            )
 
     def _check_summary(self, messages: list[dict], head_end: int) -> None:
         """Drop a summary that no longer covers ``messages``: a shorter history
@@ -1325,6 +1345,22 @@ class ContextLadder:
         on_summary = self.on_summary
 
         def job() -> None:
+            try:
+                run_job()
+            finally:
+                # The job thread ends here; its per-thread SQLite connection
+                # must not stay open until the garbage collector finds it.
+                close_conn = getattr(store, "close_thread_connection", None)
+                if callable(close_conn):
+                    try:
+                        close_conn()
+                    except Exception:  # noqa: BLE001 — cleanup must not raise
+                        logger.warning(
+                            "context ladder: closing the job's store connection failed",
+                            exc_info=True,
+                        )
+
+        def run_job() -> None:
             started = time.monotonic()
             summarizer = factory()
             try:
@@ -1343,9 +1379,24 @@ class ContextLadder:
                 # The turn path made a newer one meanwhile (a blocking call
                 # over the ceiling); a background result never replaces it.
                 return
-            store.save_context_summary(
-                session_id, summary=summary, summarized_upto=tail_start, prefix_digest=digest
+            # Compare-and-set: the row can change between the read above and
+            # this write. The store replaces it only when it still covers
+            # less, or is still the stale row read above.
+            written = store.save_context_summary(
+                session_id,
+                summary=summary,
+                summarized_upto=tail_start,
+                prefix_digest=digest,
+                only_if_covers_more=True,
+                replaces=row or None,
             )
+            if written is False:
+                logger.info(
+                    "context ladder: background summary for session %s dropped; "
+                    "a newer one was stored meanwhile",
+                    session_id,
+                )
+                return
             logger.info(
                 "context ladder: background summary for session %s stored in %.0f ms "
                 "(%d transcript chars, covers %d messages)",

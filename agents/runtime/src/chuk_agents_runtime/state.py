@@ -326,10 +326,21 @@ class StateStore:
         return ensure_fts_schema(conn)
 
     def close(self) -> None:
+        """Close the calling thread's connection (see
+        :meth:`close_thread_connection`)."""
+        self.close_thread_connection()
+
+    def close_thread_connection(self) -> None:
+        """Close the connection that belongs to the calling thread, if any.
+
+        Connections are per thread (``threading.local``). A short-lived worker
+        thread (a background summary job) calls this before it ends, so its
+        connection does not stay open until the garbage collector finds it.
+        The next call on this thread opens a fresh connection."""
         conn = getattr(self._local, "conn", None)
         if conn is not None:
-            conn.close()
             self._local.conn = None
+            conn.close()
 
     # -- write helper -----------------------------------------------------
 
@@ -544,20 +555,49 @@ class StateStore:
         }
 
     def save_context_summary(
-        self, session_id: int, *, summary: str, summarized_upto: int, prefix_digest: str
-    ) -> None:
+        self,
+        session_id: int,
+        *,
+        summary: str,
+        summarized_upto: int,
+        prefix_digest: str,
+        only_if_covers_more: bool = False,
+        replaces: dict | None = None,
+    ) -> bool:
+        """Store the session's summary. True when the row was written.
+
+        With ``only_if_covers_more`` the write is a compare-and-set in one SQL
+        statement: an existing row is replaced only when it covers fewer
+        messages than this one, or when it is still exactly ``replaces`` (the
+        row the caller read and judged stale). So a background job can never
+        overwrite a newer summary that another writer stored after its read.
+        """
+        sql = (
+            "INSERT INTO context_summaries"
+            "(session_id, summary, summarized_upto, prefix_digest, updated_at) "
+            "VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(session_id) DO UPDATE SET summary=excluded.summary, "
+            "summarized_upto=excluded.summarized_upto, "
+            "prefix_digest=excluded.prefix_digest, updated_at=excluded.updated_at"
+        )
+        params: list = [session_id, summary, int(summarized_upto), prefix_digest, time.time()]
+        if only_if_covers_more:
+            sql += " WHERE context_summaries.summarized_upto < excluded.summarized_upto"
+            if replaces is not None:
+                sql += (
+                    " OR (context_summaries.summarized_upto = ?"
+                    " AND context_summaries.prefix_digest = ?)"
+                )
+                params += [int(replaces.get("summarized_upto") or 0), replaces.get("prefix_digest")]
+        written = False
+
         def op(cur: sqlite3.Cursor) -> None:
-            cur.execute(
-                "INSERT INTO context_summaries"
-                "(session_id, summary, summarized_upto, prefix_digest, updated_at) "
-                "VALUES (?, ?, ?, ?, ?) "
-                "ON CONFLICT(session_id) DO UPDATE SET summary=excluded.summary, "
-                "summarized_upto=excluded.summarized_upto, "
-                "prefix_digest=excluded.prefix_digest, updated_at=excluded.updated_at",
-                (session_id, summary, int(summarized_upto), prefix_digest, time.time()),
-            )
+            nonlocal written
+            cur.execute(sql, params)
+            written = cur.rowcount > 0
 
         self._write(op)
+        return written
 
     def get_conversation(
         self, session_id: int, *, include_events: bool = False

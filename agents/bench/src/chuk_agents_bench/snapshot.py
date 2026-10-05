@@ -83,6 +83,7 @@ def snapshot(
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = dst_path.with_name(dst_path.name + ".partial")
     _drop_sidecars(tmp_path)
+    _create_private(tmp_path)
 
     src = sqlite3.connect(
         f"file:{src_path}?mode=ro", uri=True, timeout=BUSY_TIMEOUT_S
@@ -104,6 +105,19 @@ def snapshot(
     _drop_sidecars(dst_path)
     os.replace(tmp_path, dst_path)
     return dst_path
+
+
+def _create_private(path: Path) -> None:
+    """Create ``path`` as an empty file with mode 0600 before SQLite writes it.
+
+    The copy holds the user's conversations in plain text. SQLite opens an
+    existing (empty) file as it is and gives its journal the same mode, so
+    no other user can read the copy at any time."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    try:
+        os.fchmod(fd, 0o600)
+    finally:
+        os.close(fd)
 
 
 def _drop_sidecars(path: Path) -> None:
@@ -145,6 +159,7 @@ def copy_file(source: str | os.PathLike, dest: str | os.PathLike) -> Path:
     dst_path = Path(dest)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     _drop_sidecars(dst_path)
+    _create_private(dst_path)
     src = sqlite3.connect(f"file:{Path(source)}?mode=ro", uri=True, timeout=BUSY_TIMEOUT_S)
     try:
         dst = sqlite3.connect(str(dst_path))

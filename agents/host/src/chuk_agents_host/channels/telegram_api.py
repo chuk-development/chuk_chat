@@ -65,6 +65,10 @@ def _kind_for(status: int) -> str:
     return KIND_BAD_REQUEST
 
 
+#: The only hosts a plain-http Bot API base may name (a local test server).
+_LOOPBACK_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
+
+
 class TelegramClient:
     """One bot's view of the Bot API."""
 
@@ -74,6 +78,11 @@ class TelegramClient:
         parts = urlsplit(base_url.rstrip("/"))
         if parts.scheme not in ("https", "http") or not parts.hostname:
             raise ValueError("the Bot API base must be an http(s) URL")
+        if parts.scheme == "http" and parts.hostname.lower() not in _LOOPBACK_HOSTS:
+            # The token is in every request path: plain http would send it
+            # in clear text over the network. Only a local test server may
+            # use it.
+            raise ValueError("the Bot API base must use https unless it is a loopback host")
         self._token = token.strip()
         self._scheme = parts.scheme
         self._host = parts.hostname
