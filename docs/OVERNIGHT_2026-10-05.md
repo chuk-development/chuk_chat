@@ -287,3 +287,8 @@ Levers in order: (1) summary out of the turn, (2) host on current code,
   baa3 hn3m al2u 4xc5 s3y2 qcbv 02s5 1pnz b95f g85d (plus 9i41 ev7v cfsd
   h7w6 by the cleanup agent). Running: run timeline with undo (host), app
   polish (cache cost line, phone permissions, WIRE_CONTRACT status).
+- 12:20 pushed 69831b3b..8155b997 (timeline host + app, own-browser bridge +
+  follow-ups, polish, review fixes, summary). Host restarted on the pushed
+  code (broker running). Control: warm "hi" 2.3 s / €0.0004 (cached
+  20 288); first after restart 6.0 s, of which mcp 3.0 s (bead filed: the
+  tool cache should make this near 0). Running: own-browser app side.
