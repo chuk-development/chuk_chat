@@ -112,7 +112,8 @@ Executor -> controller (a stream, closed by ``done`` or ``error``)::
      "sandbox": {"kind": "docker", "container": "agents-...", "workspace": "..."}}
     {"type": "heartbeat",                                 # this run is alive
      "run_id": "...", "session_key": "...", "seq": 3,
-     "elapsed": 31.4}
+     "elapsed": 31.4, "phase": "tool",                    #   and what it does
+     "tool": "mcp__playwright__browser_click"}
     {"type": "done",  "final_answer": "...",              # loop finished cleanly
      "reason": "finished", "iterations": 3, "tokens_spent": 1234}
     {"type": "error", "message": "..."}                   # rejected / crashed
@@ -140,6 +141,14 @@ running emits none, and the emitter stops with the run whatever way the run ends
 An older client that does not know the type ignores it, and an older host that
 never sends it is not broken by it — a client must treat the heartbeat as an
 addition, never as a requirement.
+
+``phase`` (docs/WIRE_CONTRACT.md, ``heartbeat.phase``) says what the run does
+right now: ``queued`` (behind another task), ``preparing`` (building its
+context, nothing sent to the model yet), ``model`` (the request is with the
+model), ``tool`` (a tool runs; ``tool`` names it) or ``waiting_user`` (an
+approval, a secret or a browser takeover is open). The first heartbeat goes
+out the moment the task is accepted, then one on every phase change, then the
+fixed interval as before. Both fields are optional and additive.
 
 The ``file`` event (§9, ``send_file_to_user``) is how a produced file reaches the
 chat thread. It rides the same sealed frame as every other event, so a file the
@@ -325,7 +334,7 @@ def approval_request_payload(
     return {
         "type": "approval_request",
         "approval_id": approval_id,
-        "action": "herenow_publish",
+        "action": ACTION_HERENOW_PUBLISH,
         "path": path,
         "name": name,
         "file_count": file_count,
@@ -334,6 +343,47 @@ def approval_request_payload(
         "public": public,
         # The thread the run belongs to, so the app shows the prompt over the
         # right conversation and never over another one (P8 review F9).
+        **({"session_key": session_key} if session_key else {}),
+    }
+
+
+#: The ``action`` of an ``approval_request`` that asks the user to do one step
+#: in the agent's browser (docs/WIRE_CONTRACT.md, "Browser takeover").
+ACTION_BROWSER_TAKEOVER = "browser_takeover"
+ACTION_HERENOW_PUBLISH = "herenow_publish"
+
+
+def takeover_request_payload(
+    *,
+    approval_id: str,
+    kind: str,
+    site: str = "",
+    reason: str = "",
+    url: str = "",
+    session_key: str | None = None,
+) -> dict[str, Any]:
+    """Executor -> app: the agent's browser needs the user for one step (a
+    login, a 2FA code, a CAPTCHA). The same ``approval_request`` frame as a
+    publish, with ``action: browser_takeover``; the run blocks on it the same
+    way. ``approved: true`` in the answer means "done", ``false`` "skip".
+
+    The publish fields stay present with empty values, so an older app still
+    parses the frame (it then shows its publish bar).
+    """
+    return {
+        "type": "approval_request",
+        "approval_id": approval_id,
+        "action": ACTION_BROWSER_TAKEOVER,
+        "kind": kind,
+        **({"site": site} if site else {}),
+        **({"reason": reason} if reason else {}),
+        **({"url": url} if url else {}),
+        "path": "",
+        "name": "",
+        "file_count": 0,
+        "total_bytes": 0,
+        "base_url": "",
+        "public": False,
         **({"session_key": session_key} if session_key else {}),
     }
 
@@ -540,19 +590,39 @@ def room_done_payload(
     }
 
 
+#: The ``heartbeat.phase`` words (docs/WIRE_CONTRACT.md). A client ignores an
+#: unknown word, so the list may grow.
+PHASE_QUEUED = "queued"
+PHASE_PREPARING = "preparing"
+PHASE_MODEL = "model"
+PHASE_TOOL = "tool"
+PHASE_WAITING_USER = "waiting_user"
+HEARTBEAT_PHASES = (
+    PHASE_QUEUED,
+    PHASE_PREPARING,
+    PHASE_MODEL,
+    PHASE_TOOL,
+    PHASE_WAITING_USER,
+)
+
+
 def heartbeat_payload(
     *,
     run_id: str = "",
     session_key: str = "",
     seq: int = 0,
     elapsed: float | None = None,
+    phase: str | None = None,
+    tool: str | None = None,
 ) -> dict[str, Any]:
     """Build a ``heartbeat``: the run named by ``run_id`` is still running.
 
     Emitted on a fixed interval for the life of the run and never persisted (see
     the wire-format note above). ``seq`` counts up from 1 per run, so a client
     can see a gap; ``elapsed`` is seconds since the run started, left out when
-    the caller does not measure it.
+    the caller does not measure it. ``phase`` is what the run does now, and
+    ``tool`` the tool that runs (sent with phase ``tool`` only); both are left
+    out when unset.
     """
     payload: dict[str, Any] = {"type": "heartbeat", "seq": int(seq)}
     if run_id:
@@ -561,6 +631,10 @@ def heartbeat_payload(
         payload["session_key"] = session_key
     if elapsed is not None:
         payload["elapsed"] = round(float(elapsed), 3)
+    if phase:
+        payload["phase"] = phase
+        if phase == PHASE_TOOL and tool:
+            payload["tool"] = tool
     return payload
 
 
@@ -1031,6 +1105,10 @@ APPROVAL_DENIED = "denied"
 APPROVAL_BY_USER = "user"
 APPROVAL_TIMEOUT = "timeout"
 APPROVAL_STOPPED = "stopped"
+#: The host closed the wait itself: a browser takeover whose sign-in page is
+#: gone (docs/WIRE_CONTRACT.md, "The host may resolve it by itself").
+APPROVAL_AUTO = "auto"
+APPROVAL_REASONS = (APPROVAL_BY_USER, APPROVAL_TIMEOUT, APPROVAL_STOPPED, APPROVAL_AUTO)
 
 
 def approval_outcome_fields(
@@ -1038,11 +1116,11 @@ def approval_outcome_fields(
 ) -> dict[str, Any]:
     """The fields the host patches into a stored ``approval_request`` row once
     the outcome is known: ``decision`` (``approved`` / ``denied``),
-    ``decision_reason`` (``user`` / ``timeout`` / ``stopped``) and
+    ``decision_reason`` (``user`` / ``timeout`` / ``stopped`` / ``auto``) and
     ``decided_at`` (epoch seconds). A replayed request that carries them is an
     informational card, never a prompt (docs/WIRE_CONTRACT.md, "Persisted
     subagent / file / approval events")."""
-    if reason not in (APPROVAL_BY_USER, APPROVAL_TIMEOUT, APPROVAL_STOPPED):
+    if reason not in APPROVAL_REASONS:
         raise ValueError(f"unknown approval reason: {reason!r}")
     return {
         "decision": APPROVAL_APPROVED if approved else APPROVAL_DENIED,

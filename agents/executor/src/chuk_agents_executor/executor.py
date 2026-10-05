@@ -64,7 +64,7 @@ import threading
 import time
 from collections.abc import Callable
 from typing import Any
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field, replace as dataclass_replace
 from pathlib import Path
 from uuid import uuid4
@@ -107,7 +107,16 @@ from chuk_agents_runtime.agent_mail import (
 from chuk_agents_runtime.memory_hindsight import bank_id_for_workspace
 from chuk_agents_runtime.telemetry import get_tracer
 from chuk_agents_runtime.telemetry import run_scope as trace_run_scope
-from chuk_agents_runtime.mcp_client import auto_open_enabled
+from chuk_agents_runtime.mcp_client import BROWSER_OPEN_TOOL, auto_open_enabled
+from chuk_agents_runtime.takeover import (
+    STATUS_DONE as TAKEOVER_DONE,
+    STATUS_SKIPPED as TAKEOVER_SKIPPED,
+    STATUS_STOPPED as TAKEOVER_STOPPED,
+    STATUS_TIMEOUT as TAKEOVER_TIMEOUT,
+    TakeoverWatch,
+    current_tab_url,
+    host_of,
+)
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
 from chuk_agents_crypto import (
     AgentsFrameOpener,
@@ -121,9 +130,16 @@ from .environment import SandboxEnvironment
 from .secrets import SecretsVault
 from .shell import JobWakeRouter
 from .protocol import (
+    ACTION_BROWSER_TAKEOVER,
+    ACTION_HERENOW_PUBLISH,
+    APPROVAL_AUTO,
     APPROVAL_BY_USER,
     APPROVAL_STOPPED,
     APPROVAL_TIMEOUT,
+    PHASE_PREPARING,
+    PHASE_QUEUED,
+    PHASE_TOOL,
+    PHASE_WAITING_USER,
     INBOUND_METHODS,
     MAX_BROWSER_CHUNK,
     METHOD_EVENT,
@@ -156,6 +172,7 @@ from .protocol import (
     skills_list_payload,
     stop_ack_payload,
     subagent_payload,
+    takeover_request_payload,
     tool_payload,
 )
 
@@ -387,21 +404,131 @@ class _Run:
 
 
 class _Heartbeat:
-    """The repeating ``heartbeat`` emitter of one run (``protocol.py``).
+    """The ``heartbeat`` emitter of one run (``protocol.py``), phase-aware.
 
-    A thread, not a chain of timers: it wakes on its own switch, so stopping it
-    is one ``set()`` and the run never waits on a pending timer. ``cancel``
-    joins briefly, which is what keeps a beat from landing *after* the run's
-    terminal — a frame for a request the app has already closed.
+    Armed when the task is accepted (docs/WIRE_CONTRACT.md,
+    ``heartbeat.phase``): the first beat goes out at once (seq 1, phase
+    ``queued`` or ``preparing``), one more on every phase change, and the
+    fixed interval in between. A thread, not a chain of timers: it wakes on its
+    own switch, so stopping it is one ``set()`` and the run never waits on a
+    pending timer. ``cancel`` marks it stopped under the same lock every beat
+    takes, so no beat can land *after* the run's terminal — a frame for a
+    request the app has already closed.
     """
 
-    def __init__(self, thread: threading.Thread, stop: threading.Event) -> None:
-        self._thread = thread
-        self._stop = stop
+    def __init__(
+        self,
+        emit: Callable[[dict], None],
+        *,
+        interval: float,
+        run_id: str,
+        session_key: str,
+        phase: str,
+    ) -> None:
+        self._emit = emit
+        self._interval = interval
+        self._run_id = run_id
+        self._session_key = session_key
+        self._phase = phase
+        self._tool: str | None = None
+        self._seq = 0
+        self._started = time.monotonic()
+        self._lock = threading.Lock()
+        self._stopped = False
+        self._stop = threading.Event()
+        #: Open user waits (approval, secret, takeover) and the phase each
+        #: one interrupted; the outermost wait restores it.
+        self._waits = 0
+        self._before_wait: tuple[str, str | None] = (phase, None)
+        self._thread: threading.Thread | None = None
+
+    @property
+    def phase(self) -> str:
+        return self._phase
+
+    @property
+    def tool(self) -> str | None:
+        return self._tool
+
+    def start(self, name: str) -> None:
+        self._beat()
+        self._thread = threading.Thread(target=self._run, name=name, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            if not self._beat():
+                return
+
+    def _beat(self) -> bool:
+        """Send one beat with the current phase. Caller may hold no lock."""
+        with self._lock:
+            return self._beat_locked()
+
+    def _beat_locked(self) -> bool:
+        if self._stopped:
+            return False
+        self._seq += 1
+        try:
+            self._emit(
+                heartbeat_payload(
+                    run_id=self._run_id,
+                    session_key=self._session_key,
+                    seq=self._seq,
+                    elapsed=time.monotonic() - self._started,
+                    phase=self._phase,
+                    tool=self._tool,
+                )
+            )
+        except Exception:  # noqa: BLE001 — a dead socket ends the beat,
+            self._stopped = True  # never the run
+            self._stop.set()
+            return False
+        return True
+
+    def set_phase(self, phase: str, tool: str | None = None) -> None:
+        """A phase change goes out at once; the same phase again sends
+        nothing. While a user wait is open the change is kept for when it
+        closes (the run is still waiting on the user)."""
+        tool = tool if phase == PHASE_TOOL else None
+        with self._lock:
+            if self._waits and phase != PHASE_WAITING_USER:
+                self._before_wait = (phase, tool)
+                return
+            if (phase, tool) == (self._phase, self._tool):
+                return
+            self._phase, self._tool = phase, tool
+            self._beat_locked()
+
+    def enter_wait(self) -> None:
+        with self._lock:
+            self._waits += 1
+            if self._waits > 1:
+                return
+            self._before_wait = (self._phase, self._tool)
+            self._phase, self._tool = PHASE_WAITING_USER, None
+            self._beat_locked()
+
+    def leave_wait(self) -> None:
+        with self._lock:
+            if self._waits == 0:
+                return
+            self._waits -= 1
+            if self._waits:
+                return
+            phase, tool = self._before_wait
+            if (phase, tool) == (self._phase, self._tool):
+                return
+            self._phase, self._tool = phase, tool
+            self._beat_locked()
 
     def cancel(self, *, join_timeout: float = 2.0) -> None:
-        self._stop.set()
-        self._thread.join(join_timeout)
+        with self._lock:
+            self._stopped = True
+            self._stop.set()
+        thread = self._thread
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(join_timeout)
 
 
 #: How long a here.now publish waits for the user before it gives up and denies.
@@ -426,6 +553,17 @@ RUN_TIMEOUT_REASON = "timeout"
 #: run for a dead one, and cheap enough to be free (one small sealed frame).
 #: ``0`` (``AGENTS_HEARTBEAT_SECONDS=0``) disables the emitter entirely.
 HEARTBEAT_SECONDS = float(os.environ.get("AGENTS_HEARTBEAT_SECONDS", "10") or 0)
+
+
+#: How long a browser takeover (``request_takeover``) waits for the user
+#: before it gives up (docs/WIRE_CONTRACT.md, "Browser takeover"). Longer than
+#: an approval: a 2FA code can take a while to arrive.
+TAKEOVER_WAIT_SECONDS = float(
+    os.environ.get("AGENTS_TAKEOVER_WAIT_SECONDS", "900") or 900
+)
+#: How often the page URL is read while a takeover waits, to notice that the
+#: sign-in page is gone (``decision_reason: "auto"``).
+TAKEOVER_POLL_SECONDS = 2.5
 
 
 #: How long ``request_secrets`` waits for the user before it reports every
@@ -507,6 +645,19 @@ class _PendingApproval:
     #: cowork-266), patched with the outcome once; None when nothing was stored.
     mid: int | None = None
     closed: bool = False
+    #: Set once by whoever decides first (the user's ``approval_decision``,
+    #: or a takeover the host resolved itself); a second decision is a no-op.
+    decided: bool = False
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def decide(self, approved: bool) -> bool:
+        """Record a decision; False when one was already recorded."""
+        with self.lock:
+            if self.decided:
+                return False
+            self.decided = True
+            self.approved = bool(approved)
+            return True
 
 
 class _RfbClientFramer:
@@ -822,6 +973,7 @@ class Executor:
         on_run_ack: Callable[[dict], None] | None = None,
         run_max_seconds: float | None = None,
         heartbeat_seconds: float | None = None,
+        takeover_url_source: Callable[[str], str | None] | None = None,
         secrets: SecretsVault | None = None,
         on_secret_request_pending: Callable[[dict], None] | None = None,
         automations=None,
@@ -918,6 +1070,14 @@ class Executor:
         self._heartbeat_seconds = (
             HEARTBEAT_SECONDS if heartbeat_seconds is None else float(heartbeat_seconds)
         )
+        # The live heartbeat of every accepted run, by relay request id. Armed
+        # at accept (``_enqueue_run``), stopped by the run's terminal.
+        self._beats: dict[str, _Heartbeat] = {}
+        self._beats_lock = threading.Lock()
+        # Where a waiting browser takeover reads the page URL from, to close
+        # itself when the sign-in page is gone (docs/WIRE_CONTRACT.md,
+        # "Browser takeover"). ``None`` = the session's Playwright MCP server.
+        self._takeover_url_source = takeover_url_source
         # The user's secret set (docs/WIRE_CONTRACT.md, "Secrets"), owned by
         # the host and shared by every task: ``run_command`` / ``python`` get
         # the values as child environment, the model gets ``set`` / ``missing``,
@@ -1252,6 +1412,8 @@ class Executor:
                 run = self._queue.get(timeout=self._poll)
             except queue.Empty:
                 continue
+            # Off the queue: the run builds its context from here on.
+            self._set_phase(run.request_id, PHASE_PREPARING)
             # The run's sandbox lease (docs/WIRE_CONTRACT.md, "Agent
             # permissions"): the policy is snapshot here, and the box cannot
             # change under this run — not even for a room turn that shares it.
@@ -1693,7 +1855,15 @@ class Executor:
         except Exception:  # noqa: BLE001 — bookkeeping must not block a task
             pass
         with self._runs_lock:
+            # One worker serves every run of this executor: anything already
+            # registered is queued or in flight ahead of this one.
+            behind = bool(self._runs)
             self._runs[run.request_id] = run
+        # The first heartbeat, at once (docs/WIRE_CONTRACT.md,
+        # ``heartbeat.phase``). Not for a restricted mail run: nobody watches
+        # its stream, and it never had one.
+        if run.profile != PROFILE_MAIL_UNTRUSTED:
+            self._arm_heartbeat(run, PHASE_QUEUED if behind else PHASE_PREPARING)
         self._queue.put(run)
 
     # -- automations (docs/WIRE_CONTRACT.md, "Automations") ---------------
@@ -3003,20 +3173,26 @@ class Executor:
                 # run is blocked on them until they answer.
                 self._call_hook(
                     self._on_approval_pending,
-                    {"approval_id": approval_id, "request_id": request_id},
+                    {
+                        "approval_id": approval_id,
+                        "request_id": request_id,
+                        "action": ACTION_HERENOW_PUBLISH,
+                        **({"session_key": session_key} if session_key else {}),
+                    },
                 )
                 deadline = time.monotonic() + APPROVAL_WAIT_SECONDS
                 # Poll so a Stop reaches the wait: the loop only checks the kill
                 # switch between tool calls, and this call is inside one.
-                while True:
-                    if kill.interrupted() or kill.estop_engaged():
-                        self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
-                        return False
-                    if pending.event.wait(self._poll):
-                        return pending.approved
-                    if time.monotonic() >= deadline:
-                        self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
-                        return False
+                with self._waiting_user(request_id):
+                    while True:
+                        if kill.interrupted() or kill.estop_engaged():
+                            self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
+                            return False
+                        if pending.event.wait(self._poll):
+                            return pending.approved
+                        if time.monotonic() >= deadline:
+                            self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
+                            return False
             finally:
                 with self._approvals_lock:
                     self._approvals.pop(approval_id, None)
@@ -3084,9 +3260,156 @@ class Executor:
             pending = self._approvals.get(approval_id)
         if pending is None:
             return  # a decision for a publish that already ended: no-op
-        pending.approved = bool(payload.get("approved"))
+        if not pending.decide(bool(payload.get("approved"))):
+            return  # the host already resolved it (a takeover's "auto")
         self._close_approval(pending, approved=pending.approved, reason=APPROVAL_BY_USER)
         pending.event.set()
+
+    # -- browser takeover (docs/WIRE_CONTRACT.md, "Browser takeover") ------
+    def _takeover_backend(
+        self,
+        request_id: str,
+        kill: KillSwitch,
+        session_key: str,
+        browser_entry: dict | None,
+    ):
+        """The :class:`chuk_agents_runtime.TakeoverBackend` of one run, or
+        ``None`` when the agent's own sandbox browser is not the target.
+
+        ``browser_entry`` is the browser MCP entry this run was built with
+        (:meth:`_browser_mcp_entry`). Only the sandbox launcher counts: the
+        user's own browser (the extension) is never handed over, because the
+        user is already at it and the live view does not show it. A
+        browser-free box has nothing to take over either."""
+        if browser_entry is None or self._uses_user_browser(session_key):
+            return None
+        args = browser_entry.get("args") or []
+        if not args or args[-1] != self.BROWSER_MCP_LAUNCHER:
+            return None
+        executor = self
+
+        class _Bridge:
+            def available(self) -> bool:
+                # The sandbox browser server of this session is connected.
+                with executor._mcp_lock:
+                    manager = executor._mcp_managers.get(session_key)
+                return bool(browser_servers(manager))
+
+            def request(self, kind: str, site: str, reason: str) -> dict:
+                return executor._request_takeover(
+                    request_id, kill, session_key, kind, site, reason
+                )
+
+        return _Bridge()
+
+    def _takeover_page_url(self, session_key: str) -> str | None:
+        """The URL of the current tab of the session's sandbox browser, or
+        ``None``. One ``browser_tabs list`` on its Playwright MCP server: it
+        reads, it never navigates. Never raises."""
+        source = self._takeover_url_source
+        try:
+            if source is not None:
+                return source(session_key)
+            with self._mcp_lock:
+                manager = self._mcp_managers.get(session_key)
+            for name in browser_servers(manager):
+                connection = manager.connections.get(name)
+                tools = {info.name for info in getattr(connection, "tools", [])}
+                if BROWSER_OPEN_TOOL not in tools:
+                    continue
+                result = manager.call(name, BROWSER_OPEN_TOOL, {"action": "list"})
+                if result.get("ok"):
+                    return current_tab_url(result.get("content"))
+        except Exception:  # noqa: BLE001 — a missed read only skips one poll
+            return None
+        return None
+
+    def _request_takeover(
+        self,
+        request_id: str,
+        kill: KillSwitch,
+        session_key: str,
+        kind: str,
+        site: str,
+        reason: str,
+    ) -> dict:
+        """Worker-thread half of ``request_takeover``: one ``approval_request``
+        with ``action: browser_takeover``, then block until the user taps Done
+        (``approved: true``) or Skip, the page shows the sign-in is over (the
+        host closes it as approved with ``decision_reason: "auto"`` and sends
+        the decided request again), the wait times out, or a stop fires.
+
+        The same machinery as a publish approval: the same pending table (so
+        the app's ``approval_decision`` resolves it unchanged), the same
+        persisted row patched with the outcome, the same pending push."""
+        start_url = self._takeover_page_url(session_key) or ""
+        site = site or host_of(start_url)
+        approval_id = uuid4().hex
+        pending = _PendingApproval()
+        with self._approvals_lock:
+            self._approvals[approval_id] = pending
+        payload = takeover_request_payload(
+            approval_id=approval_id,
+            kind=kind,
+            site=site,
+            reason=reason,
+            url=start_url,
+            session_key=session_key,
+        )
+        pending.mid = self._persist_event(session_key, payload)
+        watch = TakeoverWatch(start_url or None)
+        try:
+            self._event(request_id, payload)
+            self._call_hook(
+                self._on_approval_pending,
+                {
+                    "approval_id": approval_id,
+                    "request_id": request_id,
+                    "action": ACTION_BROWSER_TAKEOVER,
+                    "kind": kind,
+                    "site": site,
+                    "session_key": session_key,
+                },
+            )
+            deadline = time.monotonic() + TAKEOVER_WAIT_SECONDS
+            next_poll = time.monotonic() + TAKEOVER_POLL_SECONDS
+            with self._waiting_user(request_id):
+                while True:
+                    if kill.interrupted() or kill.estop_engaged():
+                        self._close_approval(pending, approved=False, reason=APPROVAL_STOPPED)
+                        return {"status": TAKEOVER_STOPPED}
+                    if pending.event.wait(self._poll):
+                        return {
+                            "status": TAKEOVER_DONE if pending.approved else TAKEOVER_SKIPPED
+                        }
+                    now = time.monotonic()
+                    if now >= deadline:
+                        self._close_approval(pending, approved=False, reason=APPROVAL_TIMEOUT)
+                        return {"status": TAKEOVER_TIMEOUT}
+                    if now < next_poll:
+                        continue
+                    next_poll = now + TAKEOVER_POLL_SECONDS
+                    if not watch.observe(self._takeover_page_url(session_key)):
+                        continue
+                    if not pending.decide(True):
+                        continue  # the user's answer won the race; read it next
+                    self._close_approval(pending, approved=True, reason=APPROVAL_AUTO)
+                    pending.event.set()
+                    # The same request again, decided, so the card can say
+                    # "<Coworker> continues" (docs/WIRE_CONTRACT.md).
+                    self._event(
+                        request_id,
+                        {
+                            **payload,
+                            **approval_outcome_fields(
+                                approved=True, reason=APPROVAL_AUTO, at=time.time()
+                            ),
+                        },
+                    )
+                    return {"status": TAKEOVER_DONE}
+        finally:
+            with self._approvals_lock:
+                self._approvals.pop(approval_id, None)
 
     # -- secrets (docs/WIRE_CONTRACT.md, "Secrets") ------------------------
     def _handle_secrets(self, payload: dict) -> None:
@@ -3202,13 +3525,14 @@ class Executor:
             deadline = time.monotonic() + SECRET_REQUEST_TIMEOUT
             # Poll so a Stop reaches the wait: the loop only checks the kill
             # switch between tool calls, and this call is inside one.
-            while True:
-                if kill.interrupted() or kill.estop_engaged():
-                    break
-                if req.event.wait(self._poll):
-                    break
-                if time.monotonic() >= deadline:
-                    break
+            with self._waiting_user(stream_request_id):
+                while True:
+                    if kill.interrupted() or kill.estop_engaged():
+                        break
+                    if req.event.wait(self._poll):
+                        break
+                    if time.monotonic() >= deadline:
+                        break
         finally:
             with self._secret_requests_lock:
                 self._secret_requests.pop(req.request_id, None)
@@ -3242,6 +3566,7 @@ class Executor:
     def _forget(self, request_id: str) -> None:
         with self._runs_lock:
             self._runs.pop(request_id, None)
+        self._stop_beat(request_id)
 
     # -- one task --------------------------------------------------------
     def _run_task(self, run: _Run) -> None:
@@ -3436,6 +3761,13 @@ class Executor:
                 if self._calls is not None
                 else None
             ),
+            # ``request_takeover`` (docs/WIRE_CONTRACT.md, "Browser takeover"):
+            # only while this agent's own sandbox browser is the target.
+            takeover=self._takeover_backend(
+                request_id, run.kill, session_key, browser_entry
+            ),
+            # What the loop does right now (``heartbeat.phase``).
+            phase_observer=lambda phase, tool: self._set_phase(request_id, phase, tool),
             # The mail tools (docs/AGENT_MAIL.md §7). ``user_requested`` is
             # decided here from the run's origin, never by the model.
             agent_mail=self._mail_binding(run),
@@ -3494,11 +3826,9 @@ class Executor:
         # The wall-clock guard (Bead cowork-qxa): armed for the loop's lifetime
         # only; cancelled in the ``finally`` below whatever way the run ends.
         guard = self._arm_run_guard(run)
-        # The heartbeat rides the same lifetime, for the opposite reason: the
-        # guard bounds a run that runs too long, this one proves to the app that
-        # a run which LOOKS stalled is working. Armed here, so it can only ever
-        # beat for a run that is running.
-        heartbeat = self._arm_heartbeat(run)
+        # The heartbeat was armed when the task was accepted (``_enqueue_run``)
+        # and has said ``queued`` / ``preparing`` since; the loop's phases
+        # reach it through ``phase_observer`` above.
         try:
             # The run trace's identity (chuk_agents_runtime.telemetry): every line the
             # loop and the model client write inside this block carries this run
@@ -3529,8 +3859,7 @@ class Executor:
             if guard is not None:
                 guard.cancel()
             # Before the terminal below: the last beat must not outlive the run.
-            if heartbeat is not None:
-                heartbeat.cancel()
+            self._stop_beat(request_id)
             env_shim.on_run = None
             # Children outlive the parent's turn otherwise: a leaked child keeps a
             # container and a model stream alive with nobody reading either.
@@ -3745,43 +4074,70 @@ class Executor:
         )
 
     # -- run heartbeat (protocol.heartbeat_payload) ------------------------
-    def _arm_heartbeat(self, run: _Run) -> "_Heartbeat | None":
+    def _arm_heartbeat(
+        self, run: _Run, phase: str = PHASE_PREPARING
+    ) -> "_Heartbeat | None":
         """Start this run's ``heartbeat`` emitter, or ``None`` when it is off.
 
-        One small sealed frame every :attr:`_heartbeat_seconds` on the run's own
-        relay request, from here until the ``finally`` in :meth:`_run_task`
-        cancels it. It is the only frame that says "still running" while the
-        model reads a long prompt or a command works, and it is never persisted
-        — a replay carries transcript, not liveness.
+        Armed when the task is accepted: the first beat goes out at once, with
+        the phase the run is in (``queued`` behind another task, else
+        ``preparing``; docs/WIRE_CONTRACT.md, ``heartbeat.phase``), so the app
+        knows within one round trip what the host does with its message. Then
+        one beat per phase change (:meth:`_set_phase`) and one every
+        :attr:`_heartbeat_seconds` on the run's own relay request, until the
+        run's terminal stops it (:meth:`_stop_beat`). Never persisted — a
+        replay carries transcript, not liveness.
         """
         interval = self._heartbeat_seconds
         if not interval or interval <= 0:
             return None
-        stop = threading.Event()
-        started = time.monotonic()
-
-        def beat() -> None:
-            seq = 0
-            while not stop.wait(interval):
-                seq += 1
-                try:
-                    self._event(
-                        run.request_id,
-                        heartbeat_payload(
-                            run_id=run.run_id,
-                            session_key=run.session_key,
-                            seq=seq,
-                            elapsed=time.monotonic() - started,
-                        ),
-                    )
-                except Exception:  # noqa: BLE001 — a dead socket ends the beat,
-                    return  # never the run
-
-        thread = threading.Thread(
-            target=beat, name=f"heartbeat-{run.request_id}", daemon=True
+        beat = _Heartbeat(
+            lambda payload: self._event(run.request_id, payload),
+            interval=interval,
+            run_id=run.run_id,
+            session_key=run.session_key,
+            phase=phase,
         )
-        thread.start()
-        return _Heartbeat(thread, stop)
+        with self._beats_lock:
+            old = self._beats.pop(run.request_id, None)
+            self._beats[run.request_id] = beat
+        if old is not None:
+            old.cancel()
+        beat.start(f"heartbeat-{run.request_id}")
+        return beat
+
+    def _beat_for(self, request_id: str) -> "_Heartbeat | None":
+        with self._beats_lock:
+            return self._beats.get(request_id)
+
+    def _stop_beat(self, request_id: str) -> None:
+        """Stop the run's heartbeat. Idempotent; called before every terminal
+        of the request, so no beat can follow the frame that closes it."""
+        with self._beats_lock:
+            beat = self._beats.pop(request_id, None)
+        if beat is not None:
+            beat.cancel()
+
+    def _set_phase(self, request_id: str, phase: str, tool: str | None = None) -> None:
+        """What the run does now (docs/WIRE_CONTRACT.md, ``heartbeat.phase``);
+        a change goes out as a heartbeat at once. A run without a beat (the
+        heartbeat is off) ignores it."""
+        beat = self._beat_for(request_id)
+        if beat is not None:
+            beat.set_phase(phase, tool)
+
+    @contextmanager
+    def _waiting_user(self, request_id: str):
+        """Phase ``waiting_user`` while the block runs (an approval, a secret,
+        a takeover), then back to what the run did before."""
+        beat = self._beat_for(request_id)
+        if beat is not None:
+            beat.enter_wait()
+        try:
+            yield
+        finally:
+            if beat is not None:
+                beat.leave_wait()
 
     # -- wall-clock guard (Bead cowork-qxa) --------------------------------
     def _arm_run_guard(self, run: _Run, *, limit: float | None = None) -> threading.Timer | None:
@@ -4510,6 +4866,8 @@ class Executor:
 
     def _terminal(self, request_id: str, payload: dict) -> None:
         """Close the stream with a relay response correlated to the task."""
+        # The run's heartbeat ends first: no beat may follow the terminal.
+        self._stop_beat(request_id)
         with self._emit_lock:
             envelope = make_response(request_id, {"frame": self._seal_b64(payload)})
             self._endpoint.send(encode_frame(envelope))

@@ -123,6 +123,10 @@ job is to remove that friction, not to add to it.
   start your own Xvfb or Chromium, and never capture the X display (`xwd`,
   `import -window root`, `ImageGrab`): that picture is the whole virtual screen,
   mostly black, and the user cannot watch that browser.
+- If the browser stops at a login, a 2FA code or a CAPTCHA, do not give up
+  and do not ask in your answer: call `request_takeover` (kind `login`,
+  `two_factor`, `captcha` or `other`). The user does that step in the live
+  browser view. On `done`, take a fresh `browser_snapshot` and continue.
 - If search or browser tools are unavailable, say what could not be verified.
   Never invent a price, location, source or successful tool result. A transport
   failure or 'No such container' is an environment problem, not a website error;
@@ -184,7 +188,7 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = prompt.replace("`tool_search`", "`search_tools`")
     if not prompt.startswith(_BUILT_IN_HEADS):
         return prompt
-    return _add_deferred_tools(_add_research(prompt))
+    return _add_takeover(_add_deferred_tools(_add_research(prompt)))
 
 
 #: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts: today, and before
@@ -203,6 +207,25 @@ def _add_deferred_tools(prompt: str) -> str:
             section = _base_section("Deferred tools", "Online research")
             return prompt.replace(anchor, "\n# Deferred tools\n" + section + anchor[1:], 1)
     return prompt
+
+
+#: The research rule for a browser that stops at a login (docs/WIRE_CONTRACT.md,
+#: "Browser takeover"), as it stands in :data:`BASE_INSTRUCTIONS`.
+_TAKEOVER_RULE = (
+    "- If the browser stops at a login, a 2FA code or a CAPTCHA, do not give up\n"
+)
+#: The bullet the takeover rule is written in front of.
+_TAKEOVER_ANCHOR = "- If search or browser tools are unavailable, say what could not be verified."
+
+
+def _add_takeover(prompt: str) -> str:
+    """Sessions seeded before ``request_takeover`` existed get its rule, in
+    front of the bullet it stands in front of in :data:`BASE_INSTRUCTIONS`."""
+    if "`request_takeover`" in prompt or _TAKEOVER_ANCHOR not in prompt:
+        return prompt
+    start = BASE_INSTRUCTIONS.index(_TAKEOVER_RULE)
+    rule = BASE_INSTRUCTIONS[start : BASE_INSTRUCTIONS.index(_TAKEOVER_ANCHOR)]
+    return prompt.replace(_TAKEOVER_ANCHOR, rule + _TAKEOVER_ANCHOR, 1)
 
 
 def _add_research(prompt: str) -> str:

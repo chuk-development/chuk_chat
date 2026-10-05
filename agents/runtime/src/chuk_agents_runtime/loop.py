@@ -66,6 +66,15 @@ logger = logging.getLogger(__name__)
 #: conversation for the next session that reads it.
 INTERRUPTED_TOOL_RESULT = "not run: the run was stopped before this tool started"
 
+#: What the loop reports to ``phase_observer`` (docs/WIRE_CONTRACT.md,
+#: ``heartbeat.phase``). ``preparing``: the round's context is being built and
+#: nothing went to the model yet. ``model``: the request is with the model.
+#: ``tool``: a tool runs (the observer also gets its name). The executor adds
+#: ``queued`` and ``waiting_user``, which the loop cannot see.
+PHASE_PREPARING = "preparing"
+PHASE_MODEL = "model"
+PHASE_TOOL = "tool"
+
 
 class IterationBudget:
     """A refundable counter. ``consume`` on each real round, ``refund`` on a
@@ -472,6 +481,7 @@ class AgentLoop:
         persist_filter: Callable[[dict], dict] | None = None,
         recall_provider: Callable[[str], list[dict]] | None = None,
         turn_observer: Callable[[TurnRecord], None] | None = None,
+        phase_observer: Callable[[str, str | None], None] | None = None,
         # -- Pydantic AI only -------------------------------------------
         model_settings: ModelSettings | None = None,
         on_delta: Sink | None = None,
@@ -508,6 +518,9 @@ class AgentLoop:
         self._persist_filter = persist_filter
         self._recall_provider = recall_provider
         self._turn_observer = turn_observer
+        #: Told what the run does right now (docs/WIRE_CONTRACT.md,
+        #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
+        self._phase_observer = phase_observer
         self._model_settings = model_settings
         self._on_delta = on_delta
         self._on_reasoning = on_reasoning
@@ -520,6 +533,11 @@ class AgentLoop:
             requires_approval=self._policy.requires_approval,
             deferred_mode=deferred_mode,
             enabled=expose_tools,
+            on_tool_start=(
+                (lambda name: self._phase(PHASE_TOOL, name))
+                if phase_observer is not None
+                else None
+            ),
         )
         self._policy.toolset = self._toolset
         self._extra_capabilities = list(capabilities)
@@ -668,9 +686,12 @@ class AgentLoop:
         active = self._active
         if active is None:  # pragma: no cover — only called inside a run
             return messages
+        self._phase(PHASE_PREPARING)
         started = time.monotonic()
         outbound = self._outbound_messages(active.session_id)
         elapsed = time.monotonic() - started
+        # The history is built; what follows in this node is the request.
+        self._phase(PHASE_MODEL)
         active.outbound = outbound
         active.prepare_ms = elapsed * 1000
         tracer = get_tracer()
@@ -1163,6 +1184,7 @@ class AgentLoop:
                 # stored row is its real result, and the discovery record
                 # ``rows_to_messages`` adds keeps the next call from being
                 # refused again. A tool behind an approval is never run here.
+                self._phase(PHASE_TOOL, call.tool_name)
                 result = self._registry.dispatch(
                     call.tool_name, args if isinstance(args, dict) else {}
                 )
@@ -1258,6 +1280,17 @@ class AgentLoop:
                     raised=raised,
                 )
             )
+        except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
+            pass
+
+    def _phase(self, phase: str, tool: str | None = None) -> None:
+        """Tell the phase observer what the run does now. Never raises: a
+        status line must not end a run."""
+        observer = self._phase_observer
+        if observer is None:
+            return
+        try:
+            observer(phase, tool)
         except Exception:  # noqa: BLE001 — a UI sink error must not abort a run
             pass
 
