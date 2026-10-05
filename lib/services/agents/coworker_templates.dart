@@ -26,6 +26,7 @@ library;
 import 'package:flutter/foundation.dart';
 
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
+import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/widgets/icons/huge_icon.dart';
 
 /// The filter segments of the picker, in their order.
@@ -479,4 +480,52 @@ CoworkerTemplate? coworkerTemplateById(String id) {
     if (template.id == id) return template;
   }
   return null;
+}
+
+/// What happened when a new coworker was announced to the host.
+@immutable
+class CoworkerHostOutcome {
+  const CoworkerHostOutcome._({
+    this.notConnected = false,
+    this.agentError,
+    this.starterError,
+  });
+
+  /// There was no controller: nothing was sent.
+  final bool notConnected;
+
+  /// `agent_create` could not be sent. The starter automation was NOT sent
+  /// either: it names a session key the host would not know.
+  final String? agentError;
+
+  /// The coworker was created, the starter automation was not.
+  final String? starterError;
+
+  /// The coworker never reached the host (no controller, or the send failed).
+  bool get agentFailed => notConnected || agentError != null;
+
+  bool get ok => !agentFailed && starterError == null;
+}
+
+/// Tells the host about a new coworker (`agent_create`), then — only when
+/// that went out and [createStarter] is given (the user switched the
+/// template's starter on) — creates the starter automation. The two go in
+/// this order so the host knows the coworker before the automation names its
+/// session key. [createAgent] is null when no controller is bound.
+Future<CoworkerHostOutcome> announceCoworkerToHost({
+  required Future<void> Function()? createAgent,
+  Future<AutomationSaveResult> Function()? createStarter,
+}) async {
+  if (createAgent == null) {
+    return const CoworkerHostOutcome._(notConnected: true);
+  }
+  try {
+    await createAgent();
+  } catch (error) {
+    return CoworkerHostOutcome._(agentError: '$error');
+  }
+  if (createStarter == null) return const CoworkerHostOutcome._();
+  final result = await createStarter();
+  if (result.ok) return const CoworkerHostOutcome._();
+  return CoworkerHostOutcome._(starterError: result.error ?? '');
 }

@@ -719,6 +719,9 @@ class _WeeklyBudgetFieldState extends State<WeeklyBudgetField> {
   Future<void> _save() async {
     final AppLocalizations l =
         AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    // Until the host said its value the field is empty, and an empty field
+    // parses as 0 ("no limit"): a Save now would wipe a budget nobody saw.
+    if (widget.service.budgetOf(widget.agentId) == null) return;
     final double? value = parseBudgetWeekly(_controller.text);
     if (value == null) {
       setState(() => _error = l.budgetInvalid);
@@ -743,6 +746,7 @@ class _WeeklyBudgetFieldState extends State<WeeklyBudgetField> {
     final ThemeData theme = Theme.of(context);
     final AppLocalizations l =
         AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final bool known = widget.service.budgetOf(widget.agentId) != null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -753,7 +757,7 @@ class _WeeklyBudgetFieldState extends State<WeeklyBudgetField> {
                 key: const ValueKey<String>('budget-weekly-field'),
                 controller: _controller,
                 focusNode: _focus,
-                enabled: widget.service.budgetOf(widget.agentId) != null,
+                enabled: known,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -772,12 +776,20 @@ class _WeeklyBudgetFieldState extends State<WeeklyBudgetField> {
               ),
             ),
             const SizedBox(width: 8),
-            ExpressiveButton(
-              key: const ValueKey<String>('budget-weekly-save'),
-              label: l.save,
-              dense: true,
-              tonal: true,
-              onTap: _save,
+            // Off until the host's value is known (see [_save]).
+            IgnorePointer(
+              ignoring: !known,
+              child: AnimatedOpacity(
+                opacity: known ? 1 : 0.38,
+                duration: const Duration(milliseconds: 150),
+                child: ExpressiveButton(
+                  key: const ValueKey<String>('budget-weekly-save'),
+                  label: l.save,
+                  dense: true,
+                  tonal: true,
+                  onTap: _save,
+                ),
+              ),
             ),
           ],
         ),

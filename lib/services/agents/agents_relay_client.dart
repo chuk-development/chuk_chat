@@ -36,6 +36,7 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/services/skills/agents_skill.dart';
+import 'package:chuk_chat/services/skills/skill_proposal.dart'; // skill proposals
 import 'package:chuk_chat/services/agents/agents_approved_devices.dart';
 import 'package:chuk_chat/services/agents/agents_frame.dart';
 import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
@@ -913,6 +914,98 @@ class AgentsRelaySkillsList extends AgentsRelayInbound {
   }
 }
 
+// ── skill proposals ──
+/// The agent offers to save the task it just finished as a skill
+/// (docs/WIRE_CONTRACT.md, "Skill proposals"; bead chuk_chat-al2u). Live on
+/// the run's stream, and persisted in the thread so a replay brings the card
+/// back. Nothing is written on the host until the user accepts through
+/// [AgentsSkillProposalControl.sendSkillProposalDecision].
+///
+/// A live frame has no [status]. A replayed row carries the outcome once the
+/// user decided (`saved` / `dismissed`, with [decidedAt] and [savedName]); a
+/// replayed row without it is still pending.
+class AgentsRelaySkillProposal extends AgentsRelayInbound {
+  const AgentsRelaySkillProposal({
+    required this.proposalId,
+    required this.name,
+    required this.description,
+    required this.body,
+    this.agentId,
+    this.sessionKey,
+    this.replay = false,
+    this.mid,
+    this.status,
+    this.decidedAt,
+    this.savedName,
+  });
+
+  static const String statusSaved = 'saved';
+  static const String statusDismissed = 'dismissed';
+
+  /// Correlates the decision back to this draft (`sp_<16 hex>`).
+  final String proposalId;
+
+  /// The draft as the host scrubbed and validated it.
+  final String name;
+  final String description;
+
+  /// Markdown: title, goal, numbered steps.
+  final String body;
+
+  /// The session key of the coworker that proposed it.
+  final String? agentId;
+
+  /// The thread the card belongs to: `session_key` when the host names it,
+  /// else [agentId] (the host sends the run's session key there).
+  final String? sessionKey;
+
+  final bool replay;
+  final int? mid;
+
+  /// `saved` or `dismissed` on a replayed, decided row; null while pending.
+  final String? status;
+  final DateTime? decidedAt;
+
+  /// The name the skill was saved under (the user may have edited it).
+  final String? savedName;
+
+  bool get isDecided => status == statusSaved || status == statusDismissed;
+  bool get isSaved => status == statusSaved;
+
+  /// Null when the frame names no proposal: there would be nothing to decide.
+  static AgentsRelaySkillProposal? fromPayload(Map<String, dynamic> payload) {
+    final Object? id = payload['proposal_id'];
+    if (id is! String || id.isEmpty) return null;
+    String? text(Object? v) => v is String && v.isNotEmpty ? v : null;
+    final String? agentId = text(payload['agent_id']);
+    final String? status = text(payload['status']);
+    final Object? decided = payload['decided_at'];
+    return AgentsRelaySkillProposal(
+      proposalId: id,
+      name: text(payload['name']) ?? '',
+      description: text(payload['description']) ?? '',
+      body: text(payload['body']) ?? '',
+      agentId: agentId,
+      sessionKey: text(payload['session_key']) ?? agentId,
+      replay: payload['replay'] == true,
+      mid: AgentsRelayTool._asInt(payload['mid']),
+      // Only the two outcomes the contract names count as decided; anything
+      // else (a pending row, a word from a newer host) keeps the card open.
+      status: status == statusSaved || status == statusDismissed
+          ? status
+          : null,
+      decidedAt: decided is num
+          ? DateTime.fromMillisecondsSinceEpoch(
+              (decided * 1000).round(),
+              isUtc: true,
+            )
+          : null,
+      savedName: text(payload['saved_name']),
+    );
+  }
+}
+// ── end skill proposals ──
+
 /// What one coworker runs on, has spent and how long it has worked
 /// (docs/WIRE_CONTRACT.md, "Agent status"; bead cowork-6ag).
 ///
@@ -1676,6 +1769,7 @@ class AgentsRelayClient
         AgentsAgentStatusControl,
         AgentsSkillsControl,
         McpProbeControl,
+        AgentsSkillProposalControl, // skill proposals
         AgentsVoiceCallControl {
   AgentsRelayClient({
     required String deviceId,
@@ -2862,6 +2956,90 @@ class AgentsRelayClient
   Future<void> requestSkillsList() =>
       _sendFramePayload(<String, dynamic>{'type': 'skills_list'});
 
+  // ── skill proposals ──
+  /// How long a decision waits for its `skill_proposal_result`. A host that
+  /// predates the frame answers with an `error` that names no proposal, so
+  /// the wait is what ends it.
+  @visibleForTesting
+  static Duration skillProposalDecisionTimeout = const Duration(seconds: 30);
+
+  /// Decisions on the way, by proposal id. A second tap on the same card
+  /// shares the first one's answer instead of sending again.
+  final Map<String, Completer<AgentsSkillProposalResult>>
+  _skillProposalDecisions = <String, Completer<AgentsSkillProposalResult>>{};
+
+  @override
+  Future<AgentsSkillProposalResult> sendSkillProposalDecision({
+    required String proposalId,
+    required bool accept,
+    String? name,
+    String? description,
+    String? body,
+  }) async {
+    final Completer<AgentsSkillProposalResult>? running =
+        _skillProposalDecisions[proposalId];
+    if (running != null) return running.future;
+    final completer = Completer<AgentsSkillProposalResult>();
+    _skillProposalDecisions[proposalId] = completer;
+    try {
+      // A request like `skills_list`: the host answers on the same request
+      // stream with one terminal `skill_proposal_result`.
+      await _sendFramePayload(<String, dynamic>{
+        'type': 'skill_proposal_decision',
+        'proposal_id': proposalId,
+        'accept': accept,
+        'name': ?name,
+        'description': ?description,
+        'body': ?body,
+      });
+    } catch (error) {
+      if (kDebugMode) {
+        debugPrint('[agents-relay] skill decision not sent: $error');
+      }
+      _settleSkillProposalDecision(
+        AgentsSkillProposalResult.failed(proposalId, 'not_sent'),
+      );
+      return completer.future;
+    }
+    return completer.future.timeout(
+      skillProposalDecisionTimeout,
+      onTimeout: () {
+        final result = AgentsSkillProposalResult.failed(
+          proposalId,
+          'no_answer',
+        );
+        _settleSkillProposalDecision(result);
+        return result;
+      },
+    );
+  }
+
+  void _completeSkillProposalDecision(Map<String, dynamic> payload) {
+    final result = AgentsSkillProposalResult.fromPayload(payload);
+    if (result == null) return;
+    _settleSkillProposalDecision(result);
+  }
+
+  void _settleSkillProposalDecision(AgentsSkillProposalResult result) {
+    final completer = _skillProposalDecisions.remove(result.proposalId);
+    if (completer != null && !completer.isCompleted) completer.complete(result);
+  }
+
+  /// Ends every decision still waiting: this client is going away, and its
+  /// socket carries no answer any more.
+  void _failSkillProposalDecisions() {
+    for (final MapEntry<String, Completer<AgentsSkillProposalResult>> entry
+        in _skillProposalDecisions.entries.toList()) {
+      if (!entry.value.isCompleted) {
+        entry.value.complete(
+          AgentsSkillProposalResult.failed(entry.key, 'closed'),
+        );
+      }
+    }
+    _skillProposalDecisions.clear();
+  }
+  // ── end skill proposals ──
+
   @override
   Future<void> probeMcpServers(List<Map<String, dynamic>> servers) =>
       // Answered with one terminal `mcp_tools` frame, like a skills list
@@ -2909,6 +3087,7 @@ class AgentsRelayClient
   @override
   Future<void> dispose() async {
     if (_disposed) return;
+    _failSkillProposalDecisions(); // skill proposals
     if (_controllerSession?.authenticated == true && _state.value.isPaired) {
       try {
         await _sendFramePayload({'type': 'controller_close'});
@@ -3236,6 +3415,13 @@ class AgentsRelayClient
         _inbound.add(AgentsRelayDocuments(payload));
       case 'skills_list':
         _inbound.add(AgentsRelaySkillsList.fromPayload(payload));
+      // ── skill proposals ──
+      case 'skill_proposal':
+        final proposal = AgentsRelaySkillProposal.fromPayload(payload);
+        if (proposal != null) _inbound.add(proposal);
+      case 'skill_proposal_result':
+        _completeSkillProposalDecision(payload);
+      // ── end skill proposals ──
       case 'agent_status':
         if (!_agentStatus.isClosed) {
           _agentStatus.add(AgentsRelayAgentStatus.fromPayload(payload));

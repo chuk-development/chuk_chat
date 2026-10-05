@@ -432,6 +432,15 @@ class AgentsReplayLoader extends ChangeNotifier {
         // of a transcript.
         break;
 
+      // ── skill proposals ──
+      case AgentsRelaySkillProposal(:final replay):
+        // The card is drawn from SkillProposalsSource, not from the cache, so
+        // the row adds no line. Its mid still moves the replay cursor, so the
+        // next delta replay does not send it again.
+        if (!replay) return;
+        _noteMid(_draftFor(), event.mid);
+      // ── end skill proposals ──
+
       case AgentsRelayDone():
         if (!event.isReplay) return;
         final draft = _draftFor();

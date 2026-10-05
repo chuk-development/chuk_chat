@@ -185,11 +185,24 @@ class AutomationsSource extends ChangeNotifier {
   /// How long a create or an update waits for the host's `automation_saved`.
   static Duration saveTimeout = const Duration(seconds: 20);
 
-  /// Requests waiting for their `automation_saved`, oldest first. The host
-  /// answers each on its own request stream, in order, and the frame carries
-  /// no request id, so the first waiter takes the first answer.
-  final List<Completer<AutomationSaveResult>> _pendingSaves =
-      <Completer<AutomationSaveResult>>[];
+  /// Requests waiting for their `automation_saved`, oldest first. Each
+  /// request carries a `request_id`; a host that echoes it is matched by it.
+  /// An older host answers without one, in order, so there the first waiter
+  /// takes the first answer — minus the answers owed to timed-out requests
+  /// ([_orphanedSaves]).
+  final List<_PendingSave> _pendingSaves = <_PendingSave>[];
+
+  /// When each request that timed out gave up, oldest first. A late answer
+  /// without a `request_id` belongs to the oldest of them: it is folded into
+  /// the map and dropped, never handed to the next waiter. An entry older
+  /// than [orphanLifetime] is forgotten, so an answer that never came cannot
+  /// swallow the answers after it for good.
+  final List<DateTime> _orphanedSaves = <DateTime>[];
+
+  /// How long a timed-out request may still be answered late.
+  static Duration orphanLifetime = const Duration(minutes: 2);
+
+  int _saveSeq = 0;
 
   /// Runs of an `on_change` automation that found nothing new: run id →
   /// the summary it reported (empty when it gave none).
@@ -218,8 +231,8 @@ class AutomationsSource extends ChangeNotifier {
     String? name,
     bool notifyOnChange = false,
   }) => _save(
-    (control) => control.sendAutomationCreate(
-      automationCreateFrame(
+    (control, requestId) => control.sendAutomationCreate(<String, dynamic>{
+      ...automationCreateFrame(
         sessionKey: sessionKey,
         kind: kind,
         spec: spec,
@@ -227,34 +240,48 @@ class AutomationsSource extends ChangeNotifier {
         name: name,
         notifyOnChange: notifyOnChange,
       ),
-    ),
+      'request_id': requestId,
+    }),
   );
 
   /// Sends `automation_update` with only the keys of [frame]
   /// (see [automationUpdateFrame]).
-  Future<AutomationSaveResult> update(Map<String, dynamic> frame) =>
-      _save((control) => control.sendAutomationUpdate(frame));
+  Future<AutomationSaveResult> update(Map<String, dynamic> frame) => _save(
+    (control, requestId) => control.sendAutomationUpdate(<String, dynamic>{
+      ...frame,
+      'request_id': requestId,
+    }),
+  );
 
+  /// Sends one create or update tagged with a fresh `request_id` (echoed by
+  /// the host in its `automation_saved`) and waits for its answer.
   Future<AutomationSaveResult> _save(
-    Future<void> Function(AgentsAutomationEditControl control) send,
+    Future<void> Function(AgentsAutomationEditControl control, String requestId)
+    send,
   ) async {
     final Object? controller = AgentsRelayLink.instance.controller.value;
     if (controller is! AgentsAutomationEditControl) {
       return const AutomationSaveResult.failed('Not connected to the host.');
     }
     attach();
-    final waiter = Completer<AutomationSaveResult>();
-    _pendingSaves.add(waiter);
+    final pending = _PendingSave(
+      'as-${DateTime.now().microsecondsSinceEpoch}-${_saveSeq++}',
+    );
+    _pendingSaves.add(pending);
     try {
-      await send(controller);
+      await send(controller, pending.requestId);
     } catch (error) {
-      _pendingSaves.remove(waiter);
+      _pendingSaves.remove(pending);
       return AutomationSaveResult.failed('Could not reach the host: $error');
     }
-    return waiter.future.timeout(
+    return pending.completer.future.timeout(
       saveTimeout,
       onTimeout: () {
-        _pendingSaves.remove(waiter);
+        // Still waiting means the answer is still owed: count it, so a late
+        // un-tagged answer is not taken for the next request's.
+        if (_pendingSaves.remove(pending)) {
+          _orphanedSaves.add(DateTime.now());
+        }
         return const AutomationSaveResult.failed(
           'The host did not answer. Check the connection and try again.',
         );
@@ -269,9 +296,26 @@ class AutomationsSource extends ChangeNotifier {
       _byId[saved.id] = saved;
       notifyListeners();
     }
+    final Object? requestId = payload['request_id'];
+    if (requestId is String && requestId.isNotEmpty) {
+      // A host that echoes the id: only that request may take the answer. A
+      // late answer to a request that timed out matches nobody.
+      final index = _pendingSaves.indexWhere((p) => p.requestId == requestId);
+      if (index < 0) return;
+      final pending = _pendingSaves.removeAt(index);
+      if (!pending.completer.isCompleted) pending.completer.complete(result);
+      return;
+    }
+    // An older host: answers come in request order.
+    final cutoff = DateTime.now().subtract(orphanLifetime);
+    _orphanedSaves.removeWhere((at) => at.isBefore(cutoff));
+    if (_orphanedSaves.isNotEmpty) {
+      _orphanedSaves.removeAt(0);
+      return;
+    }
     if (_pendingSaves.isNotEmpty) {
-      final waiter = _pendingSaves.removeAt(0);
-      if (!waiter.isCompleted) waiter.complete(result);
+      final pending = _pendingSaves.removeAt(0);
+      if (!pending.completer.isCompleted) pending.completer.complete(result);
     }
   }
 
@@ -309,16 +353,26 @@ class AutomationsSource extends ChangeNotifier {
     if (AgentsRelayClient.automationDoneSink == _onDone) {
       AgentsRelayClient.automationDoneSink = null;
     }
-    for (final waiter in _pendingSaves) {
-      if (!waiter.isCompleted) {
-        waiter.complete(const AutomationSaveResult.failed('reset'));
+    for (final pending in _pendingSaves) {
+      if (!pending.completer.isCompleted) {
+        pending.completer.complete(const AutomationSaveResult.failed('reset'));
       }
     }
     _pendingSaves.clear();
+    _orphanedSaves.clear();
     _quietRuns.clear();
     _byId.clear();
     _names.clear();
     _listed.clear();
     _listedAll = false;
   }
+}
+
+/// One create / update waiting for its `automation_saved`.
+class _PendingSave {
+  _PendingSave(this.requestId);
+
+  final String requestId;
+  final Completer<AutomationSaveResult> completer =
+      Completer<AutomationSaveResult>();
 }

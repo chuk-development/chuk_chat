@@ -172,6 +172,30 @@ void main() {
     expect(sent, isEmpty);
   });
 
+  testWidgets('Save does nothing until the host value is known', (
+    tester,
+  ) async {
+    await pump(tester, _withCost(null));
+    expect(sent.single['type'], 'agent_permissions_get');
+    final save = find.byKey(const ValueKey('budget-weekly-save'));
+    // The field is still empty: a Save here must not send budget_weekly 0.
+    await tester.tap(save, warnIfMissed: false);
+    await tester.pump();
+    expect(sent, hasLength(1));
+    // Also when the save is reached another way (Enter in the field).
+    tester
+        .widget<TextField>(find.byKey(const ValueKey('budget-weekly-field')))
+        .onSubmitted!('');
+    await tester.pump();
+    expect(sent, hasLength(1));
+
+    hostSays(12);
+    await tester.pump();
+    await tester.tap(save);
+    await tester.pump();
+    expect(sent.last['budget_weekly'], 12.0);
+  });
+
   testWidgets('the budget field asks, shows, validates and sends', (
     tester,
   ) async {

@@ -53,11 +53,12 @@ class _AgentsQuietRunFoldState extends State<AgentsQuietRunFold> {
           context,
           source.quietRunSummary(widget.runId),
         );
-        if (!_open) return line;
+        // One shape open or closed, so the line keeps its element and with
+        // it the keyboard focus when it is toggled.
         return Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: <Widget>[line, widget.child],
+          children: <Widget>[line, if (_open) widget.child],
         );
       },
     );
@@ -81,25 +82,33 @@ class _AgentsQuietRunFoldState extends State<AgentsQuietRunFold> {
         button: true,
         expanded: _open,
         hint: l?.automationLastResult ?? 'Last result',
-        child: GestureDetector(
-          key: const ValueKey<String>('agents-quiet-run-line'),
-          behavior: HitTestBehavior.opaque,
-          onTap: () => setState(() => _open = !_open),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: <Widget>[
-              AppIcon(Icons.bolt_outlined, size: 14, color: color),
-              const SizedBox(width: 4),
-              Flexible(
-                child: Text(
-                  text,
-                  style: style,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.center,
-                ),
+        // An InkWell, not a bare GestureDetector: it takes keyboard focus
+        // and opens on Enter / Space like every other button.
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            key: const ValueKey<String>('agents-quiet-run-line'),
+            borderRadius: BorderRadius.circular(8),
+            onTap: () => setState(() => _open = !_open),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  AppIcon(Icons.bolt_outlined, size: 14, color: color),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      text,
+                      style: style,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),

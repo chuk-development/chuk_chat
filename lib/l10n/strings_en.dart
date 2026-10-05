@@ -1227,4 +1227,39 @@ const Map<String, String> stringsEn = {
   'tpl.home.name': 'Home and shopping',
   'tpl.home.desc': 'Keeps your shopping list and household to-dos.',
   // ── end templates ──
+  // ── skill proposals ──
+  'skillProposalTitle': 'Save as skill?',
+  'skillProposalShowSteps': 'Show steps',
+  'skillProposalHideSteps': 'Hide steps',
+  'skillProposalEdit': 'Edit',
+  'skillProposalSave': 'Save skill',
+  'skillProposalDismiss': 'Dismiss',
+  'skillProposalCancel': 'Cancel',
+  'skillProposalSaved': 'Saved as skill {name}',
+  'skillProposalNotSaved': 'Not saved',
+  'skillProposalScrubbed':
+      'Secrets and personal data were removed from the skill.',
+  'skillProposalNameLabel': 'Name',
+  'skillProposalNameHelp':
+      'Lower-case letters and digits, joined by hyphens.',
+  'skillProposalDescriptionLabel': 'Description',
+  'skillProposalBodyLabel': 'Steps',
+  'skillProposalErrNameEmpty': 'Give the skill a name.',
+  'skillProposalErrNameTooLong': 'The name has more than 64 characters.',
+  'skillProposalErrNameInvalid':
+      'Use lower-case letters and digits joined by single hyphens, for '
+      'example weekly-report.',
+  'skillProposalErrDescriptionEmpty':
+      'Write one line that says what the skill does.',
+  'skillProposalErrDescriptionTooLong':
+      'The description has more than 300 characters.',
+  'skillProposalErrDescriptionMultiline': 'The description must be one line.',
+  'skillProposalErrBodyEmpty': 'The steps are empty.',
+  'skillProposalErrBodyTooLong':
+      'The steps are too long: at most 500 lines and 40000 characters.',
+  'skillProposalErrNotConnected':
+      'Not connected to your computer. Try again when it is back.',
+  'skillProposalErrNoAnswer': 'Your computer did not answer. Try again.',
+  'skillProposalErrNotFound': 'Your computer no longer has this offer.',
+  // ── end skill proposals ──
 };

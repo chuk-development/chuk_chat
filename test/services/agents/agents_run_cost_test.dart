@@ -267,5 +267,14 @@ void main() {
       expect(AgentsBudgetOverride.consume('thread-1'), isTrue);
       expect(AgentsBudgetOverride.consume('thread-1'), isFalse);
     });
+
+    test('peek reads the override without using it up', () {
+      expect(AgentsBudgetOverride.peek('thread-1'), isFalse);
+      AgentsBudgetOverride.arm('thread-1');
+      expect(AgentsBudgetOverride.peek('thread-1'), isTrue);
+      expect(AgentsBudgetOverride.peek('thread-1'), isTrue);
+      AgentsBudgetOverride.disarm('thread-1');
+      expect(AgentsBudgetOverride.peek('thread-1'), isFalse);
+    });
   });
 }

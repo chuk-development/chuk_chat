@@ -1225,6 +1225,41 @@ class AppLocalizations {
   /// `tpl.tool.<tool>` (lib/services/agents/coworker_templates.dart).
   String tpl(String key) => _get(key);
   // ── end templates ──
+
+  // ── skill proposals ──
+  String get skillProposalTitle => _get('skillProposalTitle');
+  String get skillProposalShowSteps => _get('skillProposalShowSteps');
+  String get skillProposalHideSteps => _get('skillProposalHideSteps');
+  String get skillProposalEdit => _get('skillProposalEdit');
+  String get skillProposalSave => _get('skillProposalSave');
+  String get skillProposalDismiss => _get('skillProposalDismiss');
+  String get skillProposalCancel => _get('skillProposalCancel');
+
+  /// Holds `{name}`; the card draws the name in code style in its place.
+  String get skillProposalSaved => _get('skillProposalSaved');
+  String get skillProposalNotSaved => _get('skillProposalNotSaved');
+  String get skillProposalScrubbed => _get('skillProposalScrubbed');
+  String get skillProposalNameLabel => _get('skillProposalNameLabel');
+  String get skillProposalNameHelp => _get('skillProposalNameHelp');
+  String get skillProposalDescriptionLabel =>
+      _get('skillProposalDescriptionLabel');
+  String get skillProposalBodyLabel => _get('skillProposalBodyLabel');
+  String get skillProposalErrNameEmpty => _get('skillProposalErrNameEmpty');
+  String get skillProposalErrNameTooLong => _get('skillProposalErrNameTooLong');
+  String get skillProposalErrNameInvalid => _get('skillProposalErrNameInvalid');
+  String get skillProposalErrDescriptionEmpty =>
+      _get('skillProposalErrDescriptionEmpty');
+  String get skillProposalErrDescriptionTooLong =>
+      _get('skillProposalErrDescriptionTooLong');
+  String get skillProposalErrDescriptionMultiline =>
+      _get('skillProposalErrDescriptionMultiline');
+  String get skillProposalErrBodyEmpty => _get('skillProposalErrBodyEmpty');
+  String get skillProposalErrBodyTooLong => _get('skillProposalErrBodyTooLong');
+  String get skillProposalErrNotConnected =>
+      _get('skillProposalErrNotConnected');
+  String get skillProposalErrNoAnswer => _get('skillProposalErrNoAnswer');
+  String get skillProposalErrNotFound => _get('skillProposalErrNotFound');
+  // ── end skill proposals ──
 }
 
 class _AppLocalizationsDelegate
