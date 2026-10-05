@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
+import 'package:chuk_chat/pages/coworker_model_page.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
 import 'package:chuk_chat/services/agents/agent_profile_store.dart';
 import 'package:chuk_chat/services/settings/mobile_chat_preferences.dart';
-import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
+import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 import 'package:chuk_chat/widgets/settings_list_view.dart';
@@ -48,6 +49,8 @@ class MobileAgentsSettingsPage extends StatefulWidget {
   final AgentRosterSource source;
   final AgentProfileStore? profiles;
   final MobileChatPreferences? preferences;
+  /// [onModel] runs only for a coworker with no thread yet; with one, the
+  /// page opens the coworker's model page itself.
   final VoidCallback onEdit,
       onControls,
       onModel,
@@ -72,9 +75,20 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
   void initState() {
     super.initState();
     unawaited(_preferences.load());
-    if (widget.chatId != null) {
-      unawaited(ChatModelSelectionService.instance.load(widget.chatId!));
+  }
+
+  /// The coworker's model page — the one place its model, provider and
+  /// reasoning level are set. Without a thread there is nothing to store the
+  /// choice under, and the shell's own action runs instead.
+  void _openModel(AgentsAgent agent) {
+    final String? chatId = widget.chatId;
+    if (chatId == null) {
+      widget.onModel();
+      return;
     }
+    unawaited(
+      CoworkerModelPage.open(context, chatId: chatId, coworkerName: agent.name),
+    );
   }
 
   Future<void> _remove(AgentsAgent agent) async {
@@ -106,17 +120,9 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
   Widget build(BuildContext context) {
     final profiles = widget.profiles ?? AgentProfileStore.instance;
     return AnimatedBuilder(
-      animation: Listenable.merge([
-        widget.source,
-        profiles,
-        _preferences,
-        ChatModelSelectionService.instance,
-      ]),
+      animation: Listenable.merge([widget.source, profiles, _preferences]),
       builder: (context, _) {
         final agent = widget.source.byId(widget.agentId);
-        final selection = widget.chatId == null
-            ? null
-            : ChatModelSelectionService.instance.peek(widget.chatId!);
         if (agent == null) {
           return const Scaffold(
             // The page runs underneath the floating header.
@@ -145,7 +151,27 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
             children: [
               _contact(agent, profiles),
               const SizedBox(height: 20),
-              _actionRow(),
+              _actionRow(agent),
+              // What it runs on: its own model or the app default. One row,
+              // one page — the composer of its chat writes the same choice.
+              const ExpressiveSectionHeader('Model'),
+              ExpressiveGroup(
+                children: [
+                  if (widget.chatId != null)
+                    CoworkerModelTile(
+                      key: const ValueKey('settings_Model'),
+                      chatId: widget.chatId!,
+                      coworkerName: agent.name,
+                    )
+                  else
+                    _row(
+                      'Model',
+                      Icons.auto_awesome_outlined,
+                      () => _openModel(agent),
+                      subtitle: 'Model, provider and reasoning',
+                    ),
+                ],
+              ),
               const ExpressiveSectionHeader('Coworker'),
               ExpressiveGroup(
                 children: [
@@ -206,14 +232,6 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
               const ExpressiveSectionHeader('Agent tools'),
               ExpressiveGroup(
                 children: [
-                  _row(
-                    'Model',
-                    Icons.auto_awesome_outlined,
-                    widget.onModel,
-                    subtitle: selection == null
-                        ? 'Choose a model and provider for this chat'
-                        : '${selection.modelId}\n${selection.providerSlug.isEmpty ? 'Automatic provider' : selection.providerSlug}',
-                  ),
                   _row(
                     'Schedules & automations',
                     Icons.schedule_outlined,
@@ -294,14 +312,14 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     );
   }
 
-  Widget _actionRow() => Row(
+  Widget _actionRow(AgentsAgent agent) => Row(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
       _action('Chat', Icons.chat_rounded, () {
         Navigator.of(context).pop();
         widget.onChat?.call();
       }),
-      _action('Model', Icons.auto_awesome_rounded, widget.onModel),
+      _action('Model', Icons.auto_awesome_rounded, () => _openModel(agent)),
       if (widget.onDocuments != null)
         _action('Files', Icons.folder_rounded, widget.onDocuments!),
       _action('Schedules', Icons.schedule_rounded, widget.onAutomations),

@@ -99,7 +99,8 @@ void main() {
     await _pump(tester, source);
 
     expect(find.text('anthropic/claude-sonnet'), findsOneWidget);
-    expect(find.text('anthropic · low'), findsOneWidget);
+    expect(find.text('Anthropic · Reasoning low'), findsOneWidget);
+    expect(find.text('Last run'), findsOneWidget);
     expect(find.text('1 234 567 tokens'), findsOneWidget);
     expect(find.text('4 321 in the last run · 3 runs'), findsOneWidget);
     expect(find.text('4m 02s working'), findsOneWidget);

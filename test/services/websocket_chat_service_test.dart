@@ -176,6 +176,26 @@ void main() {
     },
   );
 
+  test(
+    'a coworker with its own reasoning level runs at it, one without keeps '
+    'the composer level',
+    () async {
+      await ChatModelSelectionService.instance.save(
+        'own',
+        const ChatModelSelection(
+          modelId: 'own-model',
+          providerSlug: 'own-provider',
+          reasoningEffort: 'high',
+        ),
+      );
+      await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'own');
+      await run(const [AgentsRelayDone(reason: 'finished')], chatId: 'plain');
+      expect(controller.taskModelIds, ['own-model', 'gpt-5']);
+      expect(controller.taskProviderSlugs, ['own-provider', 'openai']);
+      expect(controller.taskReasoning, ['high', 'low']);
+    },
+  );
+
   test('chat switch after send cannot redirect the captured request', () async {
     final store = ChatModelSelectionService.instance;
     await store.save(

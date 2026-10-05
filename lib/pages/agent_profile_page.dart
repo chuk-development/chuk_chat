@@ -4,7 +4,9 @@
 /// This is the messenger's contact page, with a coworker in place of a person.
 /// The header is the blob face, the name, the role line and the live state; the
 /// action row is Message, the parked voice call, Controls and — only while it
-/// really has one open — the coworker's browser. Under that: the standing brief,
+/// really has one open — the coworker's browser. Under that: the model it runs
+/// on (its own or the app default; a tap opens its model page), the standing
+/// brief,
 /// the schedule, the one permanent session, what it may do in its sandbox (the
 /// permissions, kept by the host), and the manage block (edit, rename, hide,
 /// delete).
@@ -30,6 +32,7 @@ import 'package:chuk_chat/ui/expressive/feedback.dart';
 import 'package:chuk_chat/ui/expressive/motion.dart';
 import 'package:chuk_chat/ui/expressive/working_dots.dart';
 import 'package:chuk_chat/widgets/agents_permissions/agent_permissions_section.dart';
+import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
 
 class AgentProfilePage extends StatelessWidget {
@@ -222,6 +225,19 @@ class AgentProfilePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+                    // What it runs on — its own model or the app default —
+                    // and the one way to change it.
+                    if (agent.threads.isNotEmpty) ...<Widget>[
+                      _SectionLabel('Model'),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: CoworkerModelTile(
+                          key: const ValueKey<String>('agent_profile_model'),
+                          chatId: agent.threads.first.key,
+                          coworkerName: agent.name,
+                        ),
+                      ),
+                    ],
                     if (brief != null)
                       _InfoCard(
                         icon: Icons.assignment_rounded,
@@ -266,17 +282,7 @@ class AgentProfilePage extends StatelessWidget {
                     // What the coworker may do in its sandbox. The host keeps
                     // it; a change applies from the next task.
                     AgentPermissionsSection(agentId: agent.id),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-                      child: Text(
-                        'MANAGE',
-                        style: text.labelMedium?.copyWith(
-                          color: scheme.onSurfaceVariant,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.8,
-                        ),
-                      ),
-                    ),
+                    _SectionLabel('Manage'),
                     SheetAction(
                       icon: Icons.person_rounded,
                       label: 'Edit profile',
@@ -401,6 +407,29 @@ class AgentProfilePage extends StatelessWidget {
     if (stored != null && stored.isNotEmpty) return stored;
     final String? own = agent.brief?.trim();
     return (own == null || own.isEmpty) ? null : own;
+  }
+}
+
+/// The small capitals over a block of the profile body.
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+      child: Text(
+        label.toUpperCase(),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: scheme.onSurfaceVariant,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.8,
+        ),
+      ),
+    );
   }
 }
 

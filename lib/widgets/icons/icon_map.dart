@@ -161,6 +161,8 @@ final Map<int, HugeIconData> _map = <int, HugeIconData>{
   Icons.terminal.codePoint: HugeIcons.terminal,
   Icons.terminal_rounded.codePoint: HugeIcons.terminal,
   Icons.storage_rounded.codePoint: HugeIcons.database01,
+  // A model provider (the server a model runs on).
+  Icons.dns_outlined.codePoint: HugeIcons.database01,
   Icons.key.codePoint: HugeIcons.key01,
   Icons.key_outlined.codePoint: HugeIcons.key01,
   Icons.key_rounded.codePoint: HugeIcons.key01,
