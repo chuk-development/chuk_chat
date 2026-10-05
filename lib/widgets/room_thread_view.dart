@@ -37,7 +37,8 @@ class RoomThreadView extends StatelessWidget {
   const RoomThreadView({
     super.key,
     required this.roomName,
-    required this.userMessage,
+    this.userMessage,
+    this.emptyHint,
     required this.turns,
     this.members = const <AgentsRoomMember>[],
     this.stop,
@@ -51,8 +52,14 @@ class RoomThreadView extends StatelessWidget {
   final List<AgentsRoomMember> members;
 
   /// What the user posted to the room. Shown at the top so the replies have a
-  /// subject.
-  final String userMessage;
+  /// subject. Null before anything was sent: no bubble then, because nobody
+  /// said anything.
+  final String? userMessage;
+
+  /// The empty room's line ("Message the room to start."): one quiet centred
+  /// line in the room intro's voice, shown while nothing was sent, no turn
+  /// arrived and nothing runs. Never a bubble, never typing dots.
+  final String? emptyHint;
 
   /// The agent turns, in order.
   final List<AgentsRoomTurn> turns;
@@ -76,9 +83,14 @@ class RoomThreadView extends StatelessWidget {
             _kFaceSize -
             _kFaceGap;
 
+        final String? sent = userMessage;
+        final String? hint = emptyHint;
+        final bool empty =
+            sent == null && turns.isEmpty && !running && stop == null;
         final List<Widget> children = <Widget>[
           _roomIntro(context),
-          _userMessage(context, lane),
+          if (sent != null) _userMessage(context, sent, lane),
+          if (empty && hint != null) _emptyLine(context, hint),
         ];
 
         for (int i = 0; i < turns.length; i++) {
@@ -166,13 +178,31 @@ class RoomThreadView extends StatelessWidget {
 
   /// The user's own line, in the user's own bubble — the same widget, the same
   /// side and the same fill a one-to-one thread gives it.
-  Widget _userMessage(BuildContext context, double lane) => MessageBubble(
-    message: userMessage,
+  Widget _userMessage(BuildContext context, String text, double lane) =>
+      MessageBubble(
+    message: text,
     isUser: true,
     messengerMode: true,
     showToolCalls: false,
     maxWidth: lane * 0.82,
   );
+
+  /// The empty room's line, in the intro's quiet voice: centred, muted, no
+  /// bubble.
+  Widget _emptyLine(BuildContext context, String hint) {
+    final ThemeData theme = Theme.of(context);
+    return Padding(
+      key: const ValueKey<String>('room-empty-hint'),
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+      child: Text(
+        hint,
+        textAlign: TextAlign.center,
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
 
   /// One coworker's turn: the chat's coworker bubble, with the member's face
   /// in the gutter and its handle over the run.

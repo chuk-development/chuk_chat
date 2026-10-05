@@ -34,7 +34,8 @@ class RoomThreadPage extends StatefulWidget {
     super.key,
     required this.roomId,
     required this.roomName,
-    required this.userMessage,
+    this.userMessage,
+    this.emptyHint,
     required this.inbound,
     this.members = const <AgentsRoomMember>[],
     this.agents = const <AgentsAgent>[],
@@ -59,8 +60,13 @@ class RoomThreadPage extends StatefulWidget {
   /// gets a row, labelled by its handle, so an empty list costs nothing.
   final List<AgentsAgent> agents;
 
-  /// What the user posted to the room, shown at the top.
-  final String userMessage;
+  /// What the user already posted to the room, shown at the top. Null for a
+  /// room opened fresh: nothing runs then until the user sends.
+  final String? userMessage;
+
+  /// The empty room's line, shown until something is sent or a turn arrives
+  /// ([RoomThreadView.emptyHint]).
+  final String? emptyHint;
 
   /// The relay client's inbound event stream. Room turns and the room's end are
   /// picked out of it; every other event is ignored here (they belong to the
@@ -90,7 +96,9 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
   final List<AgentsRoomTurn> _turns = <AgentsRoomTurn>[];
   final TextEditingController _composer = TextEditingController();
   AgentsRoomStop? _stop;
-  bool _running = true;
+  // Running only once something was sent: an opened room shows no typing
+  // dots before anyone said anything. A turn that arrives says it runs.
+  late bool _running = widget.userMessage != null;
   bool _disconnected = false;
   StreamSubscription<AgentsRelayInbound>? _sub;
   // The message the user actually sent, shown at the top once sent. Until then
@@ -361,6 +369,9 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
       ):
         if (roomId != widget.roomId) break; // another room on the same socket
         setState(() {
+          // A live turn means the room is talking, also when the exchange
+          // was started somewhere else.
+          if (_stop == null && !_disconnected) _running = true;
           _turns.add(
             AgentsRoomTurn(
               round: round,
@@ -417,6 +428,7 @@ class _RoomThreadPageState extends State<RoomThreadPage> {
     final thread = RoomThreadView(
       roomName: widget.roomName,
       userMessage: _sentMessage ?? widget.userMessage,
+      emptyHint: widget.emptyHint,
       turns: _turns,
       members: widget.members,
       stop: _stop,

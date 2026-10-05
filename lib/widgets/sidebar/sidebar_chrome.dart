@@ -101,6 +101,11 @@ const double kSbNavIconCentre = kSbNavIconLeft + kSbNavIconTile / 2;
 class SidebarTokens {
   final Color iconFg;
   final Color accent;
+
+  /// The accent as a text or icon colour on the sidebar cards. Equal to
+  /// [accent] unless that is below 3 : 1 there (the pastel default in light
+  /// mode); then a darker shade of it. Fills keep [accent].
+  final Color accentInk;
   final Color bg;
   final Color surface;
   final Color surfaceHigh;
@@ -110,6 +115,7 @@ class SidebarTokens {
   const SidebarTokens({
     required this.iconFg,
     required this.accent,
+    required this.accentInk,
     required this.bg,
     required this.surface,
     required this.surfaceHigh,
@@ -124,6 +130,7 @@ class SidebarTokens {
     return SidebarTokens(
       iconFg: iconFg,
       accent: theme.colorScheme.primary,
+      accentInk: theme.accentForegroundOn(theme.m3.surfaceContainer),
       bg: theme.cardColor.darken(0.03),
       surface: theme.m3.surfaceContainer,
       surfaceHigh: theme.m3.surfaceContainerHigh,
@@ -423,7 +430,11 @@ class SbNavIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = tone ?? Theme.of(context).colorScheme.primary;
+    final ThemeData theme = Theme.of(context);
+    // The accent as a glyph colour on the nav card: a darker shade of it
+    // when the accent alone is below 3 : 1 there (pastel in light mode).
+    final Color color =
+        tone ?? theme.accentForegroundOn(theme.m3.surfaceContainer);
     return SizedBox(
       width: size,
       height: size,
@@ -961,7 +972,16 @@ class _SbChatTileBody extends StatelessWidget {
     final bool hovered = SbCardHoverScope.of(context);
     final Color titleColor = locked
         ? theme.colorScheme.onSurface.withValues(alpha: 0.45)
-        : (selected ? theme.colorScheme.primary : theme.colorScheme.onSurface);
+        : (selected
+              // The selected card is the accent at 20 % over the card fill;
+              // the name is the accent ink on that, never below 3 : 1.
+              ? theme.accentForegroundOn(
+                  Color.alphaBlend(
+                    theme.colorScheme.primary.withValues(alpha: 0.20),
+                    theme.m3.surfaceContainer,
+                  ),
+                )
+              : theme.colorScheme.onSurface);
 
     return Row(
       children: [
@@ -1493,7 +1513,7 @@ class SbNavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = SidebarTokens.of(context);
-    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
+    final iconColor = primary ? t.accentInk : t.iconFg.withValues(alpha: 0.85);
     final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
     return Material(
       color: Colors.transparent,
@@ -1558,7 +1578,7 @@ class SbRailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = SidebarTokens.of(context);
-    final iconColor = primary ? t.accent : t.iconFg.withValues(alpha: 0.85);
+    final iconColor = primary ? t.accentInk : t.iconFg.withValues(alpha: 0.85);
     final textColor = primary ? t.iconFg : t.iconFg.withValues(alpha: 0.92);
     final BorderRadius radius = BorderRadius.circular(10);
     // Pill width is controlled by the parent (callers wrap a group of
@@ -1626,7 +1646,7 @@ class SbSectionLabel extends StatelessWidget {
     final t = SidebarTokens.of(context);
     // Just the label in the user's accent colour — no leading dot, no
     // underline. The accent itself supplies the visual emphasis.
-    final Color c = color ?? t.accent;
+    final Color c = color ?? t.accentInk;
     return Padding(
       padding: padding,
       child: Row(

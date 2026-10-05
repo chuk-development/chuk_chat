@@ -7,6 +7,12 @@ that includes screens that shipped before this file existed.
 This is a working rulebook, not a mood board. Read it before adding UI, and run
 the checklist at the end before calling a screen done.
 
+**Which document wins.** Since 2026-09-28 the Agents build draws chuk_chat's
+own components (`docs/AGENTS_UI_UNIFY.md`). Where this file and
+AGENTS_UI_UNIFY.md disagree, AGENTS_UI_UNIFY.md wins, and the code it
+describes is the reference. The sections below were aligned to it on
+2026-10-05 (UI audit, `docs/UI_AUDIT_2026-10-05.md`, D-1).
+
 ## 1. Why this exists
 
 Screens were built one at a time, each in its own idiom: round buttons here,
@@ -15,10 +21,19 @@ chat, a Save action that was a green text link in the middle of a document, four
 different back arrows. Each was defensible alone. Together they read as an app
 assembled from parts of other apps.
 
-## 2. The frame: `ExpressiveScreen`
+## 2. The frame: `FloatingAppBar` (settings-style pages) and `ExpressiveScreen`
 
-Every full-screen page uses `lib/ui/expressive/expressive_screen.dart`. Never a
-bare `Scaffold` with a Material `AppBar`.
+Settings-style pages (every settings page, the coworker page, the model page,
+Host & activity) use chuk_chat's frame: a `Scaffold` with
+`extendBodyBehindAppBar: true`, `FloatingAppBar` (`lib/widgets/floating_app_bar.dart`)
+and a `SettingsListView` with the `Expressive*` rows. That is what
+AGENTS_UI_UNIFY.md (section 5) decided; there is one settings look for both
+halves.
+
+`ExpressiveScreen` (`lib/ui/expressive/expressive_screen.dart`) stays for the
+full-screen viewers it already frames (document, image, browser view, the
+documents panel, the install page). The rules below apply to it. Never a bare
+`Scaffold` with a Material `AppBar`.
 
 ```dart
 ExpressiveScreen(
@@ -65,10 +80,10 @@ edge draws a line across the content.
 ## 4. Navigation
 
 `lib/platform_specific/mobile/mobile_nav_bar.dart`: one pill, centred, only as
-wide as its targets, floating on the bottom veil. Four destinations — Chats,
-Media, Files, Settings. The selected one is a filled capsule in `primary` with
-`onPrimary`; the rest are bare icons in `onSurfaceVariant`. The unread count
-rides on the Chats icon.
+wide as its targets, floating on the bottom veil. Three destinations: Chats,
+Media, Settings (`mobile_home.dart`; AGENTS_UI_UNIFY.md, "Phone home"). The
+selected one is a filled capsule in `primary` with `onPrimary`; the rest are
+bare icons in `onSurfaceVariant`. The unread count rides on the Chats icon.
 
 The same shape is the filter control above the roster (`ConnectedGroup`): one
 pill, the selected segment a filled capsule. A control that offers a choice
@@ -77,22 +92,25 @@ looks like the navigation, because it is the same idea.
 ## 5. Icons
 
 **One set: HugeIcons (free, MIT).** The SVGs live in
-`app/assets/icons/hugeicons/`, are registered in `pubspec.yaml` and ship inside
+`assets/icons/hugeicons/`, are registered in `pubspec.yaml` and ship inside
 the build. Nothing is fetched at run time and no icon package is a dependency.
 The licence sits next to the assets.
 
 Adding an icon:
 
-1. Put its name in `WANTED` in `app/tool/generate_hugeicons.py`.
+1. Put its name in `WANTED` in `tool/generate_hugeicons.py`.
 2. Run `python3 tool/generate_hugeicons.py <unpacked @hugeicons/core-free-icons>`.
-3. The name list in `lib/ui/expressive/huge_icon.dart` follows the file stems.
+   The script rewrites every listed SVG; keep only the new files if a newer
+   package version changes existing ones.
+3. Add the constant to `lib/widgets/icons/huge_icon.dart` (the name is the
+   file stem). `lib/ui/expressive/huge_icon.dart` only re-exports it.
 
 Using one:
 
 - `HugeIcon(HugeIcons.sheet, size: 20, color: …)` — behaves like `Icon`.
 - `ExpressiveIconButton(hugeIcon: HugeIcons.share01, …)` for a target.
 - `AppIcon(Icons.download)` where a call site already holds an `IconData`: it
-  looks the glyph up in `lib/ui/expressive/icon_map.dart` and draws the app icon,
+  looks the glyph up in `lib/widgets/icons/icon_map.dart` and draws the app icon,
   falling back to Material when the table has no entry. **New code should not add
   Material glyphs** — extend the table or name the HugeIcon directly.
 
@@ -124,7 +142,7 @@ presentation, zip, database, image, video, book.
 | File message row | 18, full lane width |
 | Dropdown, overflow menu, long-press action sheet | `MenuTileGroup` (`widgets/menu_tile_group.dart`) — one filled tile per row, outer corners 26, the corners where two rows meet 6, a 3 gap between them and 10 where a divider used to sit. No frame, no outline, no divider line; the anchored dropdown and the message menu share this one surface. |
 | Dialog | `kRadiusDialog` |
-| Chat bubble | the bubble radius helper, never a hand-rolled radius: outer 22, inner 7 (`ui/expressive/bubble_shape.dart`) |
+| Chat bubble | chuk_chat's bubble (`lib/widgets/message_bubble/layout.dart`): user bubble 16, the tail corner 5 on the last bubble of a run. The AI answer has no bubble. `ui/expressive/bubble_shape.dart` (22 / 7) is no longer drawn by the thread. |
 | Coworker face | the expressive silhouette family (`ui/expressive/shapes.dart`) |
 
 Never a bare `IconButton`, `IconButton.filledTonal` or `CircleAvatar` in a new
@@ -133,13 +151,24 @@ surface: they are the old idiom and they do not match what sits next to them.
 ## 7. Colour
 
 - The app theme owns surfaces and text. A screen never tints a surface.
-- The accent is what changes: inside an open thread, the accent roles are
-  re-seeded from the coworker's colour (`AgentTheme`), so bubbles, the send
-  button and the header pill carry that coworker's identity.
-- A coworker's colour comes from `agentAccent`: the one the user picked, else a
-  hue from `kAgentAccents`. Never a raw hash-to-hue — that put two coworkers in
-  the same teal.
+- One accent for the whole app: the user's. There is no per-coworker accent
+  inside a thread (`AgentTheme` was deleted, AGENTS_UI_UNIFY.md, Result A).
+- A coworker's own colour is for its face only. It comes from `agentAccent`:
+  the one the user picked, else a hue from `kAgentAccents`. Never a raw
+  hash-to-hue — that put two coworkers in the same teal.
 - Fixed saturation and lightness, so a white monogram always has contrast.
+- **On an accent fill** (selected pill, filled button, switch thumb, user
+  bubble) the text and glyph colour is `colorScheme.onPrimary`, or
+  `readableOnFill(fill, iconFg)` for a fill that is not exactly `primary`
+  (`lib/utils/theme_extensions.dart`). Rule: the user's icon colour stays
+  unless it is below 2 : 1 on the fill; then black or white, whichever reads
+  better. White on an orange accent stays white; the near-white default on the
+  pastel blue default becomes black.
+- **The accent as a text or icon colour** on a surface (a selected name, a
+  sidebar glyph, an accent time stamp, a text button) is
+  `Theme.of(context).accentForegroundOn(surface)`: the accent itself when it
+  reaches 3 : 1 there, else the same hue moved towards black (light mode) or
+  white (dark mode). Fills keep `primary`.
 
 ## 8. Effects
 
@@ -158,13 +187,12 @@ surface: they are the old idiom and they do not match what sits next to them.
 ### Bubbles: a run is one group
 
 Every messenger draws a run of consecutive messages from one sender as ONE
-group. The thread does the same, and all of it comes from
-`lib/ui/expressive/bubble_shape.dart` — never from a number typed into a screen.
+group. The thread does the same. The bubble itself is chuk_chat's
+(AGENTS_UI_UNIFY.md, Result B).
 
-- **Corners.** `bubbleRadius(isMine, position)`: outer corners
-  `kBubbleRadiusBig` = 22, the corners where two blocks of the run touch
-  `kBubbleRadiusSmall` = 7. The outer corner on the sender's own side stays
-  fully round, always.
+- **Corners.** The user bubble is 16 on every corner; the last bubble of a run
+  gets a 5 tail corner at the bottom on the sender's side
+  (`message_bubble/layout.dart`). The AI answer is plain text with no bubble.
 - **Gaps.** Inside a run `kBubbleGapInGroup` = **3**; between two runs
   `kBubbleGapBetweenGroups` = **14**. Nearly five times as much air, so the eye
   sorts the thread into groups before it reads a word. The gap is a TOP margin
@@ -264,7 +292,8 @@ Never a picture the agent drew, never a second bar widget.
 
 ## 13. Before you call a screen done
 
-1. Does the page use `ExpressiveScreen` with its `builder`?
+1. Does the page use the frame of §2 (`FloatingAppBar` for a settings-style
+   page, `ExpressiveScreen` with its `builder` for a full-screen viewer)?
 2. Is every icon action an `ExpressiveIconButton`, and every icon from the app's
    set (or in the map)?
 3. Any coloured shadow, glow or gradient on a control? Remove it.
@@ -272,7 +301,8 @@ Never a picture the agent drew, never a second bar widget.
 5. At 360 px and 1.3 text scale: does anything overflow, or ellipsise something
    that identifies content (a file name, a coworker name)?
 6. Does content scroll behind the bars, or stop under them?
-7. Does an open thread still show the coworker's accent?
+7. Is text on an accent fill `onPrimary` / `readableOnFill`, and the accent
+   as text `accentForegroundOn` (§7)?
 8. Tests for the layout, not only for the logic?
 
 ## 14. Desktop (wide window, Agents)
@@ -286,11 +316,11 @@ panes, dense rows, hover states, keyboard control.
 ### 14.1 Frame: three panes, no floating chrome
 
 - **Left pane: the roster.** Always docked, resizable (220–360 px, default
-  264 px), collapsible to a 56 px rail. It holds the app name, a search field,
+  320 px), collapsible to a 56 px rail. It holds the app name, a search field,
   the sections "Agents" and "Rooms", and the account row at the bottom.
-- **Centre pane: the thread.** A header row on a solid band at the top (the
-  same chips as the phone), the transcript in the middle, the composer at the
-  bottom.
+- **Centre pane: the thread.** Floating header chips at the top (the same
+  chips as the phone; `kAgentsThreadHeaderInset` keeps the first message
+  clear), the transcript in the middle, chuk_chat's composer at the bottom.
 - **Right pane: details.** The agent panel (model, tokens, runtime, sandbox,
   skills) is a docked, resizable pane (300–420 px), opened and closed from the
   title bar. It is not an overlay drawer. It pushes the thread; it does not
@@ -314,28 +344,30 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
 
 ### 14.3 Rows (roster)
 
-- Row height 36 px (agent) / 32 px (room), 8 px horizontal padding, face 24 px.
-- Hover: `surfaceContainerHigh`. Selected: `secondaryContainer` with a 3 px
-  accent bar on the left edge. Unread: bold name plus a small dot, no big badge.
-- Right click opens the context menu (rename, pin, hide, delete). The "…"
-  button appears on hover only.
+- The roster is chuk_chat's sidebar (`sidebar_chrome.dart`): every row is an
+  `SbChatTile` card (about 59 px: face, name, date line), the same card as a
+  chat in the chuk sidebar (AGENTS_UI_UNIFY.md, Result D).
+- Hover: `surfaceContainerHigh`. Selected: the accent at 20 % over the card
+  fill, the name in `accentForegroundOn` that fill. Unread: bold name plus a
+  small accent dot, no big badge.
+- Right click opens the context menu (rename, pin, hide, delete). The pin
+  shows on hover. The "…" button is on every row today (open point: audit
+  2026-10-05, desktop item 6, asks for hover only).
 
 ### 14.4 Transcript
 
 - Reading measure stays 720 px, centred in the centre pane.
-- Message actions (copy, retry, branch) appear on hover over the message, in a
-  small toolbar at the top right of the message. They are not a permanent pill
-  under every message.
+- Message actions (copy, retry, branch) are chuk_chat's action bar under the
+  answer (AGENTS_UI_UNIFY.md: `MessageHoverActions` was deleted, chuk's action
+  bar wins).
 - Day chips and bubble runs as on the phone.
 
 ### 14.5 Composer
 
-- Docked at the bottom of the centre pane, same width as the transcript.
-  Corner radius 12, not a pill. One line high when empty, grows to 40 % of the
-  pane height, then scrolls.
-- Attach, mode/model and mic are 28 px icon buttons inside the field, on the
-  bottom row. Send is a 28 px filled button.
-- A hint line under it: "Enter to send · Shift+Enter for a new line".
+- chuk_chat's composer (`_buildSearchBar` in `chat_ui_desktop.dart`, the same
+  one the phone uses in `chat_ui_mobile.dart`), with its own shape and
+  buttons. There is no second desktop composer and no keyboard hint line
+  (AGENTS_UI_UNIFY.md, Result A).
 
 ### 14.6 Dialogs and menus
 
@@ -373,13 +405,12 @@ in `mobile_chat_chrome.dart`), so both layouts read the same.
   Widths, the folded roster and the open details pane persist per device.
 - The numbers above: `lib/widgets/agents_desktop/desktop_metrics.dart`. The
   bar button, the hairline and the resize handle: `desktop_controls.dart`.
-  The quick switcher, the hover toolbar and the centred dialogs sit next to
-  them. The pane header is chuk's artifact panel header:
+  The quick switcher and the centred dialogs sit next to them. The pane header is chuk's artifact panel header:
   `lib/widgets/pane_header.dart`.
 - The roster: `lib/widgets/agent_roster_view.dart` (desktop only; the phone
   inbox is `MobileAgentList`). The title bar: the non-dense shape of
-  `AgentsThreadHeader`. The composer: `_buildAgentsComposer` in
-  `chat_ui_desktop.dart`, only for `agentsThread`.
+  `AgentsThreadHeader`. The composer: chuk_chat's `_buildSearchBar` in
+  `chat_ui_desktop.dart`.
 - Menus: chuk_chat's `MenuTileGroup`, with no desktop variant.
 - Tests: `test/widgets/agents_desktop_shell_test.dart`, plus the desktop
   cases in the roster, header, shell and thread view tests.

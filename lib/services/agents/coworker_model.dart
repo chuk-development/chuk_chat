@@ -191,6 +191,54 @@ class CoworkerModel {
     );
   }
 
+  /// How long a page or a row waits for the model data before it shows what
+  /// it has ([fallbackState], a Retry row). The waiting widget owns the
+  /// timer, so it goes with the widget.
+  static const Duration loadTimeout = Duration(seconds: 8);
+
+  /// [resolve] that does not throw: a read that fails falls back on its own
+  /// (no own model when the stored choice cannot be read, the built-in
+  /// default mode and its model otherwise). A read that hangs is the
+  /// caller's watchdog's job ([loadTimeout]).
+  static Future<CoworkerModelState> resolveOrFallback(String chatId) async {
+    Future<T> safely<T>(Future<T> Function() read, T fallback) async {
+      try {
+        return await read();
+      } catch (e) {
+        if (kDebugMode) debugPrint('CoworkerModel: read failed: $e');
+        return fallback;
+      }
+    }
+
+    final ChatModelSelection? own = chatId.isEmpty
+        ? null
+        : await safely<ChatModelSelection?>(
+            () => ChatModelSelectionService.instance.load(chatId),
+            null,
+          );
+    final ChatMode mode = await safely<ChatMode>(
+      ChatModeService.load,
+      ChatModeService.fallbackMode,
+    );
+    final ModeConfig config = await safely<ModeConfig>(
+      () => ChatModeService.loadConfig(mode),
+      ChatModeService.defaultConfig(mode),
+    );
+    return CoworkerModelState(
+      own: own,
+      defaultMode: mode,
+      defaultConfig: config,
+    );
+  }
+
+  /// What to show when the coworker's model could not be read in time: the
+  /// built-in default mode and its model.
+  static CoworkerModelState fallbackState() => CoworkerModelState(
+    own: null,
+    defaultMode: ChatModeService.fallbackMode,
+    defaultConfig: ChatModeService.defaultConfig(ChatModeService.fallbackMode),
+  );
+
   /// The catalogue as this device last cached it. Empty before the first
   /// model fetch of the install.
   static Future<List<CoworkerCatalogueModel>> catalogue() async {

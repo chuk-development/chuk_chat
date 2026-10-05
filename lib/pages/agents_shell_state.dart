@@ -772,8 +772,22 @@ mixin AgentsShellHost on State<MessengerShell> {
     return null;
   }
 
+  /// The shell's strings; English when no localizations are in the tree
+  /// (some widget tests mount the shell bare).
+  AppLocalizations get _l10n =>
+      AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+
   void _onPaired(String peerDeviceId) {
-    final agent = _roster.ensureHostAgent(peerDeviceId);
+    // A person reads "Your computer", not the raw device id. The same label
+    // in the other languages may be replaced, so a language change follows.
+    final AgentsAgent agent = _roster.ensureHostAgent(
+      peerDeviceId,
+      label: _l10n.agentsHostYourComputer,
+      replaceableLabels: <String>{
+        for (final Locale locale in AppLocalizations.supportedLocales)
+          AppLocalizations(locale).agentsHostYourComputer,
+      },
+    );
     // The names the host keeps (bead cowork-817): asked on every pair, so a
     // reinstall and a second device show the same coworkers. The answer
     // lands in [_onHostInbound].
@@ -962,7 +976,7 @@ mixin AgentsShellHost on State<MessengerShell> {
     if (controller == null) {
       return RoomThreadView(
         roomName: room.name,
-        userMessage: 'Connect your host to start this room.',
+        emptyHint: _l10n.agentsRoomConnectHostHint,
         turns: const <AgentsRoomTurn>[],
         members: room.members,
       );
@@ -975,7 +989,7 @@ mixin AgentsShellHost on State<MessengerShell> {
       // shows. A member with no matching agent still gets a row, labelled by
       // its handle.
       agents: _roster.agents,
-      userMessage: 'Message the room to start.',
+      emptyHint: _l10n.agentsRoomEmptyHint,
       inbound: controller.inbound,
       // Re-bind to the new socket on a reconnect: the page follows
       // _controller, re-subscribes to the fresh inbound and re-runs onReady

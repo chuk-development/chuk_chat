@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:chuk_chat/services/agents/coworker_model.dart';
 import 'package:chuk_chat/services/chat_model_selection_service.dart';
 import 'package:chuk_chat/services/model_capabilities_service.dart';
 import 'package:chuk_chat/ui/expressive/connected_group.dart';
+import 'package:chuk_chat/widgets/coworker_model_tile.dart';
 
 import '../support/kv_cache_test_env.dart';
 
@@ -239,5 +241,77 @@ void main() {
     await tester.drag(find.byType(Scrollable).first, const Offset(0, -2000));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+  });
+
+  group('a catalogue that does not come', () {
+    Future<void> pumpBare(WidgetTester tester, Widget child) async {
+      tester.view.physicalSize = const Size(420, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(MaterialApp(home: Scaffold(body: child)));
+      // Past the capped wait (CoworkerModel.loadTimeout).
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pump(const Duration(seconds: 9));
+      await tester.pump();
+    }
+
+    testWidgets('a hung catalogue stops the spinner and offers Retry', (
+      tester,
+    ) async {
+      await ChatModelSelectionService.instance.save(
+        _chat,
+        const ChatModelSelection(
+          modelId: 'z-ai/glm-5.3-flash',
+          providerSlug: 'fireworks/serverless',
+          reasoningEffort: 'low',
+        ),
+      );
+      CoworkerModel.debugCatalogue = () =>
+          Completer<List<CoworkerCatalogueModel>>().future;
+      await pumpBare(
+        tester,
+        const CoworkerModelPage(chatId: _chat, coworkerName: 'Alex'),
+      );
+
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        findsOneWidget,
+      );
+      expect(find.text('Could not load the model list'), findsOneWidget);
+      expect(find.text('Retry'), findsOneWidget);
+      // The stored choice still shows.
+      expect(find.text('Own choice for Alex'), findsOneWidget);
+    });
+
+    testWidgets('Retry loads the list once it is there', (tester) async {
+      CoworkerModel.debugCatalogue = () async =>
+          throw StateError('offline');
+      await pumpBare(
+        tester,
+        const CoworkerModelPage(chatId: _chat, coworkerName: 'Alex'),
+      );
+      expect(
+        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        findsOneWidget,
+      );
+
+      CoworkerModel.debugCatalogue = () async => _catalogue;
+      await tester.tap(find.text('Retry'));
+      await tester.pumpAndSettle();
+      expect(
+        find.byKey(const ValueKey<String>('coworker_model_catalogue_retry')),
+        findsNothing,
+      );
+      expect(find.text('RunAnywhere'), findsOneWidget);
+    });
+
+    testWidgets('the model tile never stays on Loading', (tester) async {
+      CoworkerModel.debugCatalogue = () =>
+          Completer<List<CoworkerCatalogueModel>>().future;
+      await pumpBare(tester, const CoworkerModelTile(chatId: _chat));
+      expect(find.text('Loading…'), findsNothing);
+      expect(find.textContaining('App default'), findsOneWidget);
+    });
   });
 }

@@ -1057,14 +1057,14 @@ class MobileAgentRow extends StatelessWidget {
                       children: <Widget>[
                         Row(
                           children: <Widget>[
-                            // Expanded, not Flexible: the name takes the room
-                            // the tag and the time leave, instead of shrinking
-                            // to its own width and ellipsising early.
+                            // The name comes first: the role tag only gets
+                            // the room the whole name leaves, and goes when
+                            // there is too little (DESIGN §13.5: a coworker
+                            // name is not ellipsised for a tag).
                             Expanded(
-                              child: Text(
-                                agent.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
+                              child: _NameWithRole(
+                                name: agent.name,
+                                role: role,
                                 style: text.titleMedium?.copyWith(
                                   fontWeight: unread
                                       ? FontWeight.w800
@@ -1072,17 +1072,24 @@ class MobileAgentRow extends StatelessWidget {
                                 ),
                               ),
                             ),
-                            if (role != null && role!.isNotEmpty) ...<Widget>[
-                              const SizedBox(width: 8),
-                              _RoleTag(role: role!),
-                            ],
                             if (time.isNotEmpty) ...<Widget>[
                               const SizedBox(width: 8),
                               Text(
                                 time,
                                 style: text.labelMedium?.copyWith(
+                                  // The accent as text: a darker shade of it
+                                  // on a light page, so a pastel accent stays
+                                  // readable.
                                   color: unread
-                                      ? accent
+                                      ? accentForegroundFor(
+                                          accent,
+                                          Color.alphaBlend(
+                                            accent.withValues(alpha: 0.13),
+                                            Theme.of(
+                                              context,
+                                            ).scaffoldBackgroundColor,
+                                          ),
+                                        )
                                       : scheme.onSurfaceVariant,
                                   fontWeight: unread
                                       ? FontWeight.w800
@@ -1242,6 +1249,58 @@ class MobileRoomRow extends StatelessWidget {
 }
 
 /// The small grey tag next to the name (the coworker's role).
+/// A coworker's name with its role tag after it. The name keeps its whole
+/// width; the tag takes what is left (at most 110 px) and is dropped when
+/// less than [_minTagWidth] remains.
+class _NameWithRole extends StatelessWidget {
+  const _NameWithRole({required this.name, required this.role, this.style});
+
+  final String name;
+  final String? role;
+  final TextStyle? style;
+
+  static const double _gap = 8;
+  static const double _minTagWidth = 48;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget nameText = Text(
+      name,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: style,
+    );
+    final String? tag = role?.trim();
+    if (tag == null || tag.isEmpty) return nameText;
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final TextPainter painter = TextPainter(
+          text: TextSpan(
+            text: name,
+            style: DefaultTextStyle.of(context).style.merge(style),
+          ),
+          maxLines: 1,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout();
+        final double room = constraints.maxWidth - painter.width - _gap;
+        painter.dispose();
+        if (room < _minTagWidth) return nameText;
+        return Row(
+          children: <Widget>[
+            Flexible(child: nameText),
+            const SizedBox(width: _gap),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: room < 110 ? room : 110),
+              child: _RoleTag(role: tag),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
 class _RoleTag extends StatelessWidget {
   const _RoleTag({required this.role});
 

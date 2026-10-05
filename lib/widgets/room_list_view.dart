@@ -129,7 +129,9 @@ class RoomListView extends StatelessWidget {
     return ListTile(
       selected: room.id == selectedRoomId,
       leading: _memberStack(room),
-      title: Text(room.name, overflow: TextOverflow.ellipsis),
+      // Two lines before an ellipsis: the face stack takes a third of a
+      // 360 px row, and the name is what tells two rooms apart.
+      title: Text(room.name, maxLines: 2, overflow: TextOverflow.ellipsis),
       subtitle: Text(
         count == 1 ? '1 member' : '$count members',
         style: theme.textTheme.bodySmall,

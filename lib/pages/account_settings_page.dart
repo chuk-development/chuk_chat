@@ -3,6 +3,7 @@
 // lib/pages/account_settings_page.dart
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/widgets/floating_app_bar.dart';
@@ -90,9 +91,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _isLoading = false;
       });
     } catch (error) {
+      // The raw exception is for the developer, never for the screen.
+      if (kDebugMode) {
+        debugPrint('Account settings: profile load failed: $error');
+      }
       if (!mounted) return;
       setState(() {
-        _errorMessage = AppLocalizations.of(context)!.failedToLoadProfile(error.toString());
+        _errorMessage = AppLocalizations.of(context)!.unableToLoadProfile;
         _isLoading = false;
       });
     }
@@ -148,10 +153,13 @@ class _AccountSettingsPageState extends State<AccountSettingsPage> {
         _errorMessage = error.message;
       });
     } catch (error) {
+      if (kDebugMode) {
+        debugPrint('Account settings: profile save failed: $error');
+      }
       if (!mounted) return;
       setState(() {
         _isSaving = false;
-        _errorMessage = l.failedToSaveProfile(error.toString());
+        _errorMessage = l.profileSaveFailedPlain;
       });
     }
   }

@@ -818,7 +818,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
                       balance: _hosted
                           ? BalanceBadge(
                               textStyle: TextStyle(
-                                color: theme.colorScheme.primary,
+                                color: theme.accentForegroundOn(
+                                  theme.m3.surfaceContainer,
+                                ),
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -1044,7 +1046,9 @@ class _AgentRosterViewState extends State<AgentRosterView> {
               icon: AppIcon(
                 pinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
                 size: 16,
-                color: pinned ? accent : iconFg.withValues(alpha: 0.75),
+                color: pinned
+                    ? theme.accentForegroundOn(theme.m3.surfaceContainerHigh)
+                    : iconFg.withValues(alpha: 0.75),
               ),
               padding: EdgeInsets.zero,
               splashRadius: 16,

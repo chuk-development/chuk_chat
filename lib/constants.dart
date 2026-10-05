@@ -183,6 +183,12 @@ ThemeData buildAppTheme({
       : bg.darken(scaled(0.15));
   final Color onSecondaryContainer = iconFg;
 
+  // The accent as a text or icon colour on the page (a text button, a
+  // selected list row). The pastel default on a light page is about 1.4 : 1;
+  // this is the same hue moved towards black until it reaches 3 : 1. When
+  // the accent already reaches 3 : 1 it is the accent itself.
+  final Color accentInk = accentForegroundFor(accent, bg);
+
   final Color outline = iconFg.withValues(alpha: scaled(0.55));
   final Color outlineVariant = iconFg.withValues(alpha: scaled(0.25));
   final Color onSurfaceVariant = iconFg.withValues(alpha: scaled(0.82));
@@ -201,12 +207,12 @@ ThemeData buildAppTheme({
     brightness: brightness,
     primary: accent,
     // What sits on an accent fill: a filled button's label, its glyph, a
-    // badge. The same rule as the round accent buttons in the composer and
-    // the sidebar — the reader's own icon colour, so nothing on an accent
-    // fill is a colour that appears nowhere else in the app. The old value
-    // was a hardcoded navy, which on the default orange read as text from a
-    // different program.
-    onPrimary: iconFg,
+    // selected pill segment, a badge. The reader's own icon colour, unless
+    // it is below 2 : 1 on the accent; then black or white, whichever reads
+    // better (`readableOnFill`). White on an orange accent stays white; the
+    // near-white default icon colour on the pastel blue default (1.33 : 1)
+    // becomes black.
+    onPrimary: readableOnFill(accent, iconFg),
     primaryContainer: primaryContainer,
     onPrimaryContainer: onPrimaryContainer,
     secondary: iconFg,
@@ -319,7 +325,7 @@ ThemeData buildAppTheme({
     listTileTheme: ListTileThemeData(
       iconColor: iconFg,
       textColor: iconFg,
-      selectedColor: accent,
+      selectedColor: accentInk,
       selectedTileColor: accent.withValues(alpha: 0.1),
       shape: RoundedRectangleBorder(borderRadius: kBorderRadiusRow),
     ),
@@ -418,7 +424,7 @@ ThemeData buildAppTheme({
     ),
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: accent,
+        foregroundColor: accentInk,
         shape: RoundedRectangleBorder(borderRadius: kBorderRadiusPill),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         minimumSize: const Size(0, 44),

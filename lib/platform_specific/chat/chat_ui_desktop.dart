@@ -138,6 +138,12 @@ class ChukChatUIDesktop extends StatefulWidget {
   /// its first row starts below it. Zero for chuk_chat's own screen.
   final double topInset;
 
+  /// A row drawn after the last message, inside the transcript's scroll (the
+  /// Agents browser takeover card). It scrolls with the messages and never
+  /// covers one. The list scrolls to it when it appears. Only the Agents
+  /// thread sets it ([agentsThread]).
+  final Widget? transcriptFooter;
+
   const ChukChatUIDesktop({
     // RENAMED CONSTRUCTOR
     super.key,
@@ -168,6 +174,7 @@ class ChukChatUIDesktop extends StatefulWidget {
     this.agentsThread = false,
     this.agentsTitle,
     this.topInset = 0,
+    this.transcriptFooter,
   });
 
   @override
@@ -553,6 +560,12 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   void didUpdateWidget(covariant ChukChatUIDesktop oldWidget) {
     // RENAMED WIDGET TYPE
     super.didUpdateWidget(oldWidget);
+
+    // A footer that just appeared (a takeover card) asks for the user: bring
+    // it into view, wherever the reader was.
+    if (widget.transcriptFooter != null && oldWidget.transcriptFooter == null) {
+      scrollChatToBottom(force: true);
+    }
 
     // Sync workspace ID from parent if it changes
     if (widget.workspaceId != oldWidget.workspaceId) {
@@ -1788,7 +1801,16 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(
       _isLinuxDesktop ? 360.0 : 600.0,
     );
+    final Widget? footer = widget.transcriptFooter;
+    final int itemCount = _messages.length + (footer != null ? 1 : 0);
     Widget rowBuilder(BuildContext _, int i) {
+      if (footer != null && i == _messages.length) {
+        return Padding(
+          key: const ValueKey<String>('transcript-footer'),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: footer,
+        );
+      }
       final data = _messageRenderCache.build(
         messages: _messages,
         index: i,
@@ -1827,7 +1849,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     final voicePlacement = voice == null
         ? null
         : placeVoiceRecords(_messages, voice.recordsFor(_activeChatId));
-    Widget itemBuilder(BuildContext context, int i) => voicePlacement == null
+    Widget itemBuilder(BuildContext context, int i) =>
+        voicePlacement == null || i >= _messages.length
         ? rowBuilder(context, i)
         : withVoiceRecords(
             item: rowBuilder(context, i),
@@ -1840,7 +1863,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       transcriptBottomInset = bottomPadding;
       return buildAnchoredTranscript(
         split: resolveTranscriptSplit(),
-        itemCount: _messages.length,
+        itemCount: itemCount,
         padding: padding,
         itemBuilder: itemBuilder,
         scrollCacheExtent: cacheExtent,
@@ -1850,7 +1873,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     return ListView.builder(
       controller: scrollController,
       padding: padding,
-      itemCount: _messages.length,
+      itemCount: itemCount,
       addAutomaticKeepAlives: true, // Keep message widgets alive
       // Each item already wraps its own RepaintBoundary below, so the
       // builder's automatic one would just be a redundant layer on every row.
@@ -1921,9 +1944,11 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         ? composerHeight + effectiveHorizontalPadding + 8
         : inputAreaEstimate;
 
-    // Determine if the chat is currently empty (no messages, no attached files)
-    final bool isChatEmpty = _messages
-        .isEmpty; // This refers to the chat history, not just text input
+    // Determine if the chat is currently empty (the chat history, not the
+    // text input). A transcript footer (the takeover card) is content too:
+    // the list shows it and the composer docks at the bottom.
+    final bool isChatEmpty =
+        _messages.isEmpty && widget.transcriptFooter == null;
     // On desktop, it centers when empty.
     final bool showInputAreaCentered = isChatEmpty;
 

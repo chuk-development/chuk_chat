@@ -279,6 +279,40 @@ void main() {
       expect(first.threads.single.key, first.id);
     });
 
+    test('the host agent reads as a label, not its raw device id', () {
+      final source = LocalAgentRosterSource();
+      // An install from before the label: named after the device id.
+      source.ensureHostAgent('host-laptop-1');
+      expect(source.agents.single.name, 'host-laptop-1');
+
+      final labelled = source.ensureHostAgent(
+        'host-laptop-1',
+        label: 'Your computer',
+      );
+      expect(labelled.name, 'Your computer');
+      expect(labelled.id, 'host:host-laptop-1');
+
+      // A language change swaps one label for the other.
+      final german = source.ensureHostAgent(
+        'host-laptop-1',
+        label: 'Dein Computer',
+        replaceableLabels: const <String>{'Your computer', 'Dein Computer'},
+      );
+      expect(german.name, 'Dein Computer');
+
+      // A name the host sent is kept.
+      source.applyHostNames(const <AgentsHostAgentName>[
+        AgentsHostAgentName(agentId: 'x', name: 'Studio Mac', host: true),
+      ], peerDeviceId: 'host-laptop-1');
+      final kept = source.ensureHostAgent(
+        'host-laptop-1',
+        label: 'Your computer',
+        replaceableLabels: const <String>{'Your computer', 'Dein Computer'},
+      );
+      expect(kept.name, 'Studio Mac');
+      expect(source.agents, hasLength(1));
+    });
+
     test('an app-created agent is not claimed to be on the host', () {
       final source = LocalAgentRosterSource(random: Random(4));
       final agent = source.addAgent(name: 'amber-otter', brief: 'do a thing');

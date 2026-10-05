@@ -705,8 +705,11 @@ void main() {
     controller.pair();
     await tester.pumpAndSettle();
 
-    // Named after the host's own device id, and marked as living there.
-    expect(find.text('cowork-host'), findsWidgets);
+    // A name a person reads, not the host's raw device id; marked as living
+    // there. The id keeps the device id.
+    expect(find.text('Your computer'), findsWidgets);
+    expect(find.text('cowork-host'), findsNothing);
+    expect(roster.agents.single.id, 'host:cowork-host');
     expect(roster.agents.single.onHost, isTrue);
     // One permanent thread, keyed by the stable agent id.
     expect(roster.agents.single.threads, hasLength(1));

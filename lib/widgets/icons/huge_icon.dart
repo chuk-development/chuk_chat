@@ -162,6 +162,24 @@ abstract final class HugeIcons {
   static const HugeIconData viewOff = HugeIconData('view-off');
   static const HugeIconData wrench01 = HugeIconData('wrench01');
   static const HugeIconData zip01 = HugeIconData('zip01');
+
+  // Added for one icon set on the Agents pages (UI audit 2026-10-05).
+  static const HugeIconData callEnd01 = HugeIconData('call-end01');
+  static const HugeIconData checkmarkBadge01 = HugeIconData(
+    'checkmark-badge01',
+  );
+  static const HugeIconData clipboardPaste = HugeIconData('clipboard-paste');
+  static const HugeIconData cloudOff = HugeIconData('cloud-off');
+  static const HugeIconData code = HugeIconData('code');
+  static const HugeIconData computerRemove = HugeIconData('computer-remove');
+  static const HugeIconData creditCard = HugeIconData('credit-card');
+  static const HugeIconData fingerPrint = HugeIconData('finger-print');
+  static const HugeIconData id = HugeIconData('id');
+  static const HugeIconData mortarboard01 = HugeIconData('mortarboard01');
+  static const HugeIconData pauseCircle = HugeIconData('pause-circle');
+  static const HugeIconData task01 = HugeIconData('task01');
+  static const HugeIconData unlink01 = HugeIconData('unlink01');
+  static const HugeIconData userCircle = HugeIconData('user-circle');
 }
 
 /// An icon of the set, drawn like a Material [Icon].

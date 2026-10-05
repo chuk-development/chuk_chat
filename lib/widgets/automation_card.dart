@@ -99,33 +99,32 @@ class _AutomationCardState extends State<AutomationCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // The name, the state and the controls share ONE line and one
-              // baseline. The badge is on every row and is always the same
-              // size, so the header line is the same height on every row and
-              // the right-hand column lines up down the list.
+              // The name has its own line (two lines at most): sharing one
+              // line with the state badge and the controls cut it to a few
+              // letters on a 360 px phone. The state and the controls follow
+              // on the line below, then the facts.
+              Text(
+                a.name,
+                maxLines: widget.compact ? 1 : 2,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: scheme.onSurface,
+                ),
+              ),
+              const SizedBox(height: 4),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Expanded(
-                    child: Text(
-                      a.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.onSurface,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   ExpressiveBadge(a.state, tone: tone),
+                  const Spacer(),
                   if (!a.isOver) _actions(),
                 ],
               ),
               const SizedBox(height: 2),
               Text(
                 facts.join(' · '),
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: m3.onSurfaceVariant,

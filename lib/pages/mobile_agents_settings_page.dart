@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/pages/coworker_model_page.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
@@ -71,6 +72,10 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
   MobileChatPreferences get _preferences =>
       widget.preferences ?? MobileChatPreferences.instance;
 
+  /// The page's words; English when the tree has no localisations (tests).
+  AppLocalizations get _l =>
+      AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+
   @override
   void initState() {
     super.initState();
@@ -92,21 +97,20 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
   }
 
   Future<void> _remove(AgentsAgent agent) async {
+    final AppLocalizations l = _l;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Remove ${agent.name}?'),
-        content: const Text(
-          'This removes the coworker from your list and control rooms. The host workspace is kept.',
-        ),
+        title: Text(l.agentsCwRemoveTitle(agent.name)),
+        content: Text(l.agentsCwRemoveBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text(l.cancel),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Remove'),
+            child: Text(l.agentsCwRemove),
           ),
         ],
       ),
@@ -122,26 +126,25 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     return AnimatedBuilder(
       animation: Listenable.merge([widget.source, profiles, _preferences]),
       builder: (context, _) {
+        final AppLocalizations l = _l;
         final agent = widget.source.byId(widget.agentId);
         if (agent == null) {
-          return const Scaffold(
+          return Scaffold(
             // The page runs underneath the floating header.
             extendBodyBehindAppBar: true,
-            appBar: FloatingAppBar(title: Text('Coworker')),
-            body: Center(
-              child: Text('This coworker is no longer in your list.'),
-            ),
+            appBar: FloatingAppBar(title: Text(l.agentsCwTitle)),
+            body: Center(child: Text(l.agentsCwGone)),
           );
         }
         return Scaffold(
           // The page runs underneath the floating header.
           extendBodyBehindAppBar: true,
           appBar: FloatingAppBar(
-            title: const Text('Coworker'),
+            title: Text(l.agentsCwTitle),
             actions: <Widget>[
               FloatingHeaderButton(
                 icon: Icons.edit_rounded,
-                tooltip: 'Edit coworker',
+                tooltip: l.agentsCwEdit,
                 onPressed: widget.onEdit,
               ),
             ],
@@ -154,7 +157,7 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
               _actionRow(agent),
               // What it runs on: its own model or the app default. One row,
               // one page — the composer of its chat writes the same choice.
-              const ExpressiveSectionHeader('Model'),
+              ExpressiveSectionHeader(l.agentsCwModel),
               ExpressiveGroup(
                 children: [
                   if (widget.chatId != null)
@@ -166,56 +169,60 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                   else
                     _row(
                       'Model',
+                      l.agentsCwModel,
                       Icons.auto_awesome_outlined,
                       () => _openModel(agent),
-                      subtitle: 'Model, provider and reasoning',
+                      subtitle: l.agentsCwModelSubtitle,
                     ),
                 ],
               ),
-              const ExpressiveSectionHeader('Coworker'),
+              ExpressiveSectionHeader(l.agentsCwTitle),
               ExpressiveGroup(
                 children: [
                   _row(
                     'Profile & preferences',
+                    l.agentsCwProfile,
                     Icons.person_outline,
                     widget.onEdit,
-                    subtitle: 'Name, picture, colour and shape',
+                    subtitle: l.agentsCwProfileSubtitle,
                   ),
                   _row(
                     'Host & activity',
+                    l.agentsCwHost,
                     Icons.computer_outlined,
                     widget.onControls,
-                    subtitle: 'Connection details, usage and workspace',
+                    subtitle: l.agentsCwHostSubtitle,
                   ),
                 ],
               ),
               if (widget.onDocuments != null) ...[
-                const ExpressiveSectionHeader('Shared files'),
+                ExpressiveSectionHeader(l.agentsCwSharedFiles),
                 ExpressiveGroup(
                   children: [
                     _row(
                       'Documents & artifacts',
+                      l.agentsCwDocuments,
                       Icons.folder_open_rounded,
                       widget.onDocuments!,
-                      subtitle: 'Files and results from this conversation',
+                      subtitle: l.agentsCwDocumentsSubtitle,
                     ),
                   ],
                 ),
               ],
-              const ExpressiveSectionHeader('Conversation'),
+              ExpressiveSectionHeader(l.agentsCwConversation),
               ExpressiveGroup(
                 children: [
                   _switch(
-                    'Show thinking',
-                    'Live reasoning, when the selected model provides it.',
+                    l.agentsCwShowThinking,
+                    l.agentsCwShowThinkingSubtitle,
                     Icons.more_horiz,
                     _preferences.showThinking,
                     _preferences.setThinking,
                     'mobile_show_thinking',
                   ),
                   _switch(
-                    'Show work details',
-                    'Tool calls and technical activity. Hidden by default.',
+                    l.agentsCwShowWork,
+                    l.agentsCwShowWorkSubtitle,
                     Icons.code_rounded,
                     _preferences.showActivity,
                     _preferences.setActivity,
@@ -224,49 +231,69 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
                   if (widget.onCopyChat != null)
                     _row(
                       'Export conversation',
+                      l.agentsCwExport,
                       Icons.ios_share_rounded,
                       widget.onCopyChat!,
                     ),
                 ],
               ),
-              const ExpressiveSectionHeader('Agent tools'),
+              ExpressiveSectionHeader(l.agentsCwAgentTools),
               ExpressiveGroup(
                 children: [
                   _row(
                     'Schedules & automations',
+                    l.agentsCwSchedules,
                     Icons.schedule_outlined,
                     widget.onAutomations,
-                    subtitle: 'Only schedules and watchers for this chat',
+                    subtitle: l.agentsCwSchedulesSubtitle,
                   ),
-                  _row('Skills', Icons.extension_outlined, widget.onSkills),
+                  _row(
+                    'Skills',
+                    l.skills,
+                    Icons.extension_outlined,
+                    widget.onSkills,
+                  ),
                 ],
               ),
-              const ExpressiveSectionHeader('Connections & access'),
+              ExpressiveSectionHeader(l.agentsCwConnections),
               ExpressiveGroup(
                 children: [
                   _row(
                     'Connected apps',
+                    l.agentsCwConnectedApps,
                     Icons.link_rounded,
                     widget.onConnectors,
                   ),
-                  _row('API keys', Icons.key_outlined, widget.onSecrets),
-                  _row('Control rooms', Icons.group_outlined, widget.onRooms),
+                  _row(
+                    'API keys',
+                    l.agentsCwApiKeys,
+                    Icons.key_outlined,
+                    widget.onSecrets,
+                  ),
+                  _row(
+                    'Control rooms',
+                    l.agentsCwControlRooms,
+                    Icons.group_outlined,
+                    widget.onRooms,
+                  ),
                   if (widget.onBrowser != null)
                     _row(
                       'Open screen',
+                      l.agentsCwOpenScreen,
                       Icons.desktop_windows_outlined,
                       widget.onBrowser!,
                     ),
                 ],
               ),
-              const ExpressiveSectionHeader('App'),
+              ExpressiveSectionHeader(l.agentsCwApp),
               ExpressiveGroup(
                 children: [
                   _row(
                     'Account & app settings',
+                    l.agentsCwAccountSettings,
                     Icons.settings_outlined,
                     widget.onSettings,
-                    subtitle: 'Account, appearance, privacy and more',
+                    subtitle: l.agentsCwAccountSettingsSubtitle,
                   ),
                 ],
               ),
@@ -289,10 +316,12 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
       children: [
         AgentFace(agent: agent, size: 96, store: profiles),
         const SizedBox(height: 16),
+        // Two lines: a coworker's name is never cut at a large text size
+        // (UI audit 2026-10-05, profile item 4).
         Text(
           agent.name,
           textAlign: TextAlign.center,
-          maxLines: 1,
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           style: theme.textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w700,
@@ -300,7 +329,9 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
         ),
         const SizedBox(height: 4),
         Text(
-          profiles.profileOf(agent.id).role ?? agent.role ?? 'Your coworker',
+          profiles.profileOf(agent.id).role ??
+              agent.role ??
+              _l.agentsCwRoleFallback,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
@@ -312,20 +343,39 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     );
   }
 
-  Widget _actionRow(AgentsAgent agent) => Row(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      _action('Chat', Icons.chat_rounded, () {
-        Navigator.of(context).pop();
-        widget.onChat?.call();
-      }),
-      _action('Model', Icons.auto_awesome_rounded, () => _openModel(agent)),
-      if (widget.onDocuments != null)
-        _action('Files', Icons.folder_rounded, widget.onDocuments!),
-      _action('Schedules', Icons.schedule_rounded, widget.onAutomations),
-      _action('Skills', Icons.extension_rounded, widget.onSkills),
-    ],
-  );
+  Widget _actionRow(AgentsAgent agent) {
+    final AppLocalizations l = _l;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _action(l.agentsCwActionChat, Icons.chat_rounded, () {
+          Navigator.of(context).pop();
+          widget.onChat?.call();
+        }),
+        _action(
+          l.agentsCwModel,
+          Icons.auto_awesome_rounded,
+          () => _openModel(agent),
+        ),
+        if (widget.onDocuments != null)
+          _action(
+            l.agentsCwActionFiles,
+            Icons.folder_rounded,
+            widget.onDocuments!,
+          ),
+        _action(
+          l.agentsCwActionSchedules,
+          Icons.schedule_rounded,
+          widget.onAutomations,
+        ),
+        _action(
+          l.agentsCwActionSkills,
+          Icons.extension_rounded,
+          widget.onSkills,
+        ),
+      ],
+    );
+  }
 
   /// One quick action: the settings icon tile over its label, the whole
   /// column the target.
@@ -360,13 +410,16 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
     );
   }
 
+  /// [id] is the row's fixed English name: it keys the row, so a test or a
+  /// tour finds it in every language.
   Widget _row(
+    String id,
     String title,
     IconData icon,
     VoidCallback action, {
     String? subtitle,
   }) => ExpressiveRow(
-    key: ValueKey('settings_$title'),
+    key: ValueKey('settings_$id'),
     icon: icon,
     title: title,
     subtitle: subtitle,
@@ -405,9 +458,9 @@ class _MobileAgentsSettingsPageState extends State<MobileAgentsSettingsPage> {
           ),
         ),
         onPressed: () => _remove(agent),
-        child: const Text(
-          'Remove coworker',
-          style: TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
+        child: Text(
+          _l.agentsCwRemoveCoworker,
+          style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 14),
         ),
       ),
     );
