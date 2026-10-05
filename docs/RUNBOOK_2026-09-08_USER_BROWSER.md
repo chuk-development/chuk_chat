@@ -31,10 +31,12 @@ Agent ── agents-extension-mcp ── Broker im Host ── agents-browser-br
 
 ```bash
 node extension/test/protocol_test.mjs                 # 10: Vokabular, Leases
-node extension/test/stop_and_secrets_test.mjs         # 12: Stop, Passwortfelder, Manifest-Rechte
+node extension/test/stop_and_secrets_test.mjs         # 38: Stop, Passwort-/Kartenfelder, Manifest-Rechte
+node extension/test/strip_test.mjs                    # 11: Name in der Leiste, Panel, Timeout, Stop leert die Schlange
 python3 tools/agents-extension-mcp/test_agents_extension_mcp.py   # 6
 python3 tools/agents-browser-bridge/test_bridge_roundtrip.py      # 4
-cd agents/executor && .venv/bin/python -m pytest -q tests/test_user_browser.py           # 24
+cd agents/executor && .venv/bin/python -m pytest -q tests/test_user_browser.py           # 35
+cd agents/host     && .venv/bin/python -m pytest -q tests/test_user_browser_host.py      # 7
 cd agents/runtime  && .venv/bin/python -m pytest -q tests/test_user_browser_approvals.py # 9
 ```
 
@@ -91,7 +93,8 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
    Browser und sag mir, was oben steht." Erwartet: eine Freigabe-Karte "Open
    github.com", Kennzeichen "in your own browser". "Immer fuer diese Seite"
    waehlen. Ein neuer Tab in der lila Gruppe "Agents" oeffnet sich, oben auf
-   der Seite eine farbige Leiste mit "Agents is using this tab" und "Stop".
+   der Seite eine farbige Leiste mit "<Name des Coworkers> is using this tab"
+   und "Stop". Das Panel sagt "<Name> is using a tab in this browser."
 3. **Freigabe gilt fuer die Seite.** "Klick dort auf Pull requests." Erwartet:
    keine Karte, der Klick passiert.
 4. **Andere Seite fragt wieder.** "Oeffne jetzt example.org." Erwartet: Karte
@@ -113,7 +116,15 @@ to Agents on this computer". Sonst: Host laeuft nicht, oder Schritt 2 fehlt.
    "... debuggt diesen Browser" auf "Abbrechen". Erwartet: wie Stop.
 10. **Zwei Coworker.** Zwei Coworker mit "Your browser" gleichzeitig etwas
     oeffnen lassen. Erwartet: der zweite bekommt "in use by another coworker".
-11. **Zurueck auf Sandbox.** "Your browser" ausschalten, neue Aufgabe:
+11. **Panel.** Rechtsklick auf eine Seite -> "Talk to Agents about this
+    page", im Panel etwas fragen. Erwartet: sofort "Sent to <Name>. ...", der
+    Lauf erscheint in der App im Thread dieses Coworkers mit der ersten Zeile
+    `[from your browser panel]`, die Antwort kommt danach ins Panel. Ohne
+    Coworker im Browser geht die Nachricht an den eigenen Coworker des Hosts.
+12. **Status live.** App mit offenem "Your browser"-Schalter, dann Chrome
+    schliessen und wieder oeffnen. Erwartet: der Status wechselt ohne Neuladen
+    (`user_browser_status`).
+13. **Zurueck auf Sandbox.** "Your browser" ausschalten, neue Aufgabe:
     Sandbox-Browser mit VNC wie vorher.
 
 ## Wenn nichts passiert
@@ -149,8 +160,7 @@ Geht, aber schwaecher, und das liegt nicht an uns:
 * Mit `--sandbox local` laeuft der Agent als der Nutzer und kommt am Broker
   vorbei direkt an den Socket (und an das Chrome-Profil auf der Platte). Der
   Broker ist nur fuer die Docker-Sandbox eine Grenze.
-* Die Leiste nennt den Coworker noch nicht beim Namen.
-* Das Seitenpanel ("Talk to Agents about this page") schickt `page_message`,
-  das noch kein Host verarbeitet.
-* Die App zeigt den Pairing-Status noch nicht an (Arbeitsliste im
-  Wire-Contract).
+* Die App zeigt den Pairing-Status noch nicht an und liest den Push
+  `user_browser_status` noch nicht (Arbeitsliste im Wire-Contract).
+* Ein Panel-Lauf ist kein `origin: "app"`: ist das Wochenbudget des
+  Coworkers aufgebraucht, wird er abgelehnt wie eine Automation.

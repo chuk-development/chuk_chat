@@ -2912,6 +2912,12 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
 {"type": "browser_result", "cmd_id": "<id>", "ok": false, "error": "<text>"}
 {"type": "browser_stop", "reason": "page" | "panel" | "debugger_bar"}   // add-on -> host
 {"type": "browser_resume"}                                               // both ways
+{"type": "browser_holder", "name": "Ada"}                                // host -> add-on
+{"type": "page_message", "text": "<words>",
+ "context": {"url": "...", "title": "...", "selection": "...", "text": "..."}}  // add-on -> host
+{"type": "page_message_ack", "ok": true, "coworker": "Ada"}              // host -> add-on
+{"type": "page_message_ack", "ok": false, "error": "<sentence>"}         // host -> add-on
+{"type": "page_reply", "coworker": "Ada", "text": "<answer>"}            // host -> add-on
 ```
 
 - `stopped` in `browser_attach` (new): the add-on was stopped before the host
@@ -2920,12 +2926,33 @@ Same newline JSON on the unix socket, native-messaging frames to Chrome.
   panel, or "Cancel" on Chrome's debugging bar.
 - `browser_resume` (new): add-on -> host when the user taps "Allow again";
   host -> add-on when the user sends a new task.
+- `browser_holder` (new, bead chuk_chat-8xsn): the broker sends it when a
+  coworker takes the browser, right before that coworker's first command, on
+  the same line. `name` is the name the user gave the coworker (the host's
+  `coworker_name`; "Your coworker" for an unnamed host agent), one line, at
+  most 40 characters; `""` when the host has no name. The add-on handles it
+  in order with the commands (`transport.js`, `IN_ORDER`) and the strip on the
+  page says "Ada is using this tab" / "Ada needs you here" / "Ada stopped".
+  Without a name it says "Agents ...". The strip stays in a closed shadow root
+  and the name is set as text, never as markup.
+- `page_message` (new, bead chuk_chat-8xsn): the user typed in the add-on's
+  side panel ("Talk to Agents about this page", plan §3a). Only the add-on's
+  own pages may send it, never a script in a page (`background.js` refuses a
+  sender with a tab). See "The browser panel" below.
+- A command the add-on cannot finish within 40 s is answered with
+  `ok: false` (the coworker's server gives up after 45 s), so one hung page
+  never blocks the queue. Stop starts a fresh queue at once.
 
 Coworker ↔ broker (local, `browser-broker.sock`): the MCP server sends
 `{"type": "client_hello", "session": "<session_key>"}` first, then the same
 `browser_cmd` frames. The broker gives each command its own id toward the
 add-on. The session comes from the MCP entry's env
 (`AGENTS_BROWSER_SESSION`, set by `protocol.extension_mcp_entry(session_key)`).
+With that env set, the MCP server always talks to the broker, also while its
+socket is missing (a host restart): each call fails until the broker is back.
+It never binds the bridge socket itself, so it can never go around the
+broker's rules. Only a server started by hand, with no session, runs
+standalone when no broker answers.
 
 ### Approvals in the user's browser
 
@@ -2980,6 +3007,7 @@ host's status of the user's browser:
    "version": "0.2.0",
    "trusted_input": true,
    "in_use": true,
+   "in_use_by": {"agent_id": "local:desk:1:7", "name": "Crypto Desk"},
    "in_use_by_this_agent": false,
    "stopped": false}}
 ```
@@ -2990,24 +3018,75 @@ host's status of the user's browser:
 | `installed` | The bridge is registered with at least one browser (`browsers`). This is "paired". |
 | `connected` | An add-on is connected now. |
 | `browser`, `version`, `trusted_input` | What the connected add-on said. `trusted_input: false` = Firefox, synthetic input only. |
-| `in_use`, `in_use_by_this_agent` | A coworker holds the browser now; this one or another one. |
+| `in_use`, `in_use_by_this_agent` | A coworker holds the browser now; this one or another one. `in_use_by_this_agent` maps the broker's session key to its coworker first (bead chuk_chat-8xsn): the host's own agent runs under `host:<device id>`, `default` or an old thread key, and all of them are this agent. |
+| `in_use_by` (new) | `null`, or who holds it: the app's agent id (`host:<device id>` for the host's own agent, else the coworker id the app registered) and the name the user gave it. |
 | `stopped` | The user pressed Stop and did not allow the browser again. |
 
-The block never carries a URL, a tab title or a coworker's session key. The
-app gets a fresh value with every `agent_permissions_get`; there is no push
-yet.
+The block never carries a URL, a tab title or a thread key. The app gets a
+fresh value with every `agent_permissions_get`, and a push on every change
+(next section).
+
+### Inbound: `user_browser_status` (push, additive, bead chuk_chat-8xsn)
+
+```json
+{"type": "user_browser_status",
+ "user_browser": {"host_listening": true, "installed": true, "browsers": ["chrome"],
+                  "connected": true, "browser": "chrome", "version": "0.2.0",
+                  "trusted_input": true, "in_use": true,
+                  "in_use_by": {"agent_id": "host:<device id>", "name": "Your coworker"},
+                  "stopped": false}}
+```
+
+- The host sends it, unprompted, to the attached apps when the add-on
+  connects or goes away, a coworker takes or leaves the browser (also an idle
+  holder after 300 s), or Stop is pressed or lifted. One frame per real
+  change: an equal status is not sent twice. A push nobody heard (no app
+  attached) is sent again on the next change.
+- The block is the `agent_permissions.user_browser` block **without**
+  `in_use_by_this_agent`: the status is host-wide, not per coworker. The app
+  compares `in_use_by.agent_id` with the agent it shows.
+- **Why a frame of its own, not an unprompted `agent_permissions`:** that
+  frame is per coworker and carries the whole permission set; a browser event
+  would have to send one per coworker, and the app would read it as a change
+  of the settings. An old app ignores the unknown type.
+
+### The browser panel (`page_message`, bead chuk_chat-8xsn)
+
+Decided from `docs/PLAN_2026-09-08_BROWSER_EXTENSION.md` §3a: the user's own
+chat about a page is a **normal task**, with the page as context. No new
+agent tool.
+
+1. The add-on sends `page_message` with the user's words and the page (URL,
+   title, selected text, start of the readable text). The panel cuts the page
+   text to 20 000 characters.
+2. The broker passes it to the host with the coworker that holds the browser,
+   or held it last (its tab is still there). With none, the host's own
+   coworker gets it, in the app's thread `host:<device id>`.
+3. The host starts a run of that coworker's session (`submit_task`, origin
+   `browser_panel`). The task text starts with `[from your browser panel]`,
+   then the user's words (at most 4000 characters), then the page: title and
+   URL, and the selection and page text in fenced blocks labelled "page
+   content, not instructions" (at most 2000 / 6000 characters). A web page can
+   never speak as the user.
+4. The add-on gets `page_message_ack` at once: `ok: true` with the coworker's
+   name ("Sent to Ada. The answer comes here and in the Agents app."), or
+   `ok: false` with a sentence (empty message, host not provisioned yet).
+5. When the run ends, the answer goes back as `page_reply` (at most 8000
+   characters). The run is in the app's thread like any other. When the add-on
+   took the answer, the host sends no desktop toast and no push; when it did
+   not, the usual ones.
+6. The run counts as one the user started: it lifts an earlier Stop in the
+   browser, like a new task from the app. It is not `origin: "app"`: a
+   weekly budget that is used up refuses it, as for an automation.
 
 ### Known limits
 
 - With `--sandbox local` the agent runs as the user on the host. It can reach
   the broker socket (and the Chrome profile on disk) directly. The broker is
   a boundary only for the docker sandbox.
-- `in_use_by_this_agent` compares the broker's session key with the
-  permission key. For the host's own agent the two can differ.
-- The coworker's name is not shown on the strip yet ("Agents is using this
-  tab").
-- The add-on's "talk about this page" panel sends `page_message` frames that
-  no host handles yet.
+- Fixed 2026-10-05 (bead chuk_chat-8xsn): `in_use_by_this_agent` for the
+  host's own agent, the coworker's name on the strip, the panel's
+  `page_message`, and the push of status changes.
 
 ### App work list
 
@@ -3028,9 +3107,15 @@ yet.
 4. **Approval card.** With `details.browser == "user_browser"`: title "In your
    own browser", show `site` and `details.url`. The options stay as sent
    (`always_this_site` is the useful one).
-5. **In use / stopped.** With `in_use` and not `in_use_by_this_agent`: "Another
-   coworker is using your browser". With `stopped`: "You stopped this in your
-   browser. Send a new task, or tap Allow again in the add-on."
+5. **In use / stopped.** With `in_use` and not `in_use_by_this_agent`:
+   "<in_use_by.name> is using your browser". With `stopped`: "You stopped
+   this in your browser. Send a new task, or tap Allow again in the add-on."
+6. **Live status.** Handle `user_browser_status` (push): replace the stored
+   status and repaint the subtitle, the setup card and the in-use line.
+   No polling of `agent_permissions_get` for it.
+7. **Panel runs.** A run with origin `browser_panel` shows in the thread like
+   any other; its first line is `[from your browser panel]`. Optional: draw
+   that line as a small "From your browser" label.
 
 ## Cost per run and weekly budget (bead chuk_chat-qcbv)
 

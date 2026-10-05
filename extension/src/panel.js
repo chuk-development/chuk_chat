@@ -2,6 +2,7 @@
 // about, and the conversation. Everything else lives in the service worker.
 
 import { api } from "./api.js";
+import { panelControlText } from "./strip.js";
 
 const dot = document.getElementById("dot");
 const state = document.getElementById("state");
@@ -26,14 +27,12 @@ function paintStatus({ connected, kind } = {}, engine) {
 }
 
 /** Who holds the browser, and the one button that matters right now. */
-function paintControl({ driving, stopped } = {}) {
+function paintControl({ driving, stopped, coworker } = {}) {
   const isDriving = driving !== null && driving !== undefined;
   control.hidden = !isDriving && !stopped;
   control.classList.toggle("driving", isDriving && !stopped);
   control.classList.toggle("stopped", Boolean(stopped));
-  controlText.textContent = stopped
-    ? "Stopped. Agents cannot use this browser."
-    : "Agents is using a tab in this browser.";
+  controlText.textContent = panelControlText({ stopped, coworker });
   stopButton.hidden = Boolean(stopped);
   allowButton.hidden = !stopped;
 }

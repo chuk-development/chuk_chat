@@ -68,6 +68,23 @@ check("a field named like a secret is blanked, a passenger is not", () => {
   assert.equal(isSensitiveField(input({ type: "text" }, { name: "compass" })), false);
 });
 
+for (const name of [
+  "cardnumber", "cardNumber", "card_number", "ccnumber", "ccNumber", "cc-num", "billing_cc_number",
+  "securitycode", "security_code", "securityCode", "cvv2",
+  "exp", "expiry", "expiration", "exp_month", "exp-year", "expdate", "expiryDate", "card_expiry", "exp_mm",
+  "iban", "iban_number", "IBAN",
+]) {
+  check(`a card or bank field named "${name}" is blanked`, () => {
+    assert.equal(isSensitiveField(input({ type: "text" }, { name })), true, name);
+  });
+}
+
+check("words that only look like card fields keep their value", () => {
+  for (const name of ["expand", "export", "experience", "expires_in_days", "express_shipping", "Libanon", "accent"]) {
+    assert.equal(isSensitiveField(input({ type: "text" }, { name })), false, name);
+  }
+});
+
 check("ordinary fields keep their value, and only inputs are judged", () => {
   assert.equal(isSensitiveField(input({ type: "email" }, { name: "email" })), false);
   assert.equal(isSensitiveField(input({ type: "search" }, { name: "q" })), false);
@@ -104,6 +121,22 @@ check("the Chrome build pins its id, so pairing needs no copied id", () => {
     "utf8",
   );
   assert.match(installer, /DEV_CHROME_ID = "[a-p]{32}"/);
+});
+
+check("the options page shows the installer the way the installer takes it", () => {
+  const options = readFileSync(new URL("../src/options.js", import.meta.url), "utf8");
+  const installer = readFileSync(
+    new URL("../../tools/agents-browser-bridge/install_host_manifest.py", import.meta.url),
+    "utf8",
+  );
+  const pinned = installer.match(/DEV_CHROME_ID = "([a-p]{32})"/)[1];
+  assert.match(options, new RegExp(`PINNED_CHROME_ID = "${pinned}"`));
+  assert.match(options, /id !== PINNED_CHROME_ID \? ` --chrome-id/);
+});
+
+check("no private key is in the add-on tree, and the ignore rule keeps it out", () => {
+  const ignore = readFileSync(new URL("../.gitignore", import.meta.url), "utf8");
+  assert.match(ignore, /^\*\.pem$/m);
 });
 
 check("the only way out is native messaging", () => {

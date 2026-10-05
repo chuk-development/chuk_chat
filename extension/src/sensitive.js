@@ -18,8 +18,19 @@
   ]);
   // Whole words of a field's name or id ("user_password", "otp-code"), not
   // substrings: "passenger" and "compass" are not secrets.
-  const SECRET_NAME =
-    /(^|[^a-z])(pass|password|passwd|passcode|pwd|pin|cvc|cvv|csc|otp|totp|secret|token|iban)([^a-z]|$)|card.?num/i;
+  // Card and bank fields are named in many ways ("cardnumber", "ccNumber",
+  // "cc-num", "security_code", "exp", "expiry_date", "iban_number"). The
+  // expiry words are anchored on both sides, so "expand" and "export" pass.
+  const SECRET_NAME = new RegExp(
+    [
+      "(^|[^a-z])(pass|password|passwd|passcode|pwd|pin|cvc|cvv|cvv2|csc|otp|totp|secret|token|iban)([^a-z]|$)",
+      "(^|[^a-z])exp(iry|iration)?([^a-z]?(date|month|year|mm|yy|yyyy))?([^a-z]|$)",
+      "card.?num",
+      "(^|[^a-z])cc.?num",
+      "security.?code",
+    ].join("|"),
+    "i",
+  );
 
   function attr(el, name) {
     if (!el) return "";

@@ -13,6 +13,7 @@
 
 import { api, hasDebugger, hasTabGroups } from "./api.js";
 import { Leases, ORIGIN, STATE } from "./leases.js";
+import { coworkerName, stripLabel } from "./strip.js";
 
 const PROTOCOL_VERSION = "1.3";
 const GROUP_TITLE = "Agents";
@@ -25,6 +26,19 @@ export class Driver {
     this.engine = hasDebugger ? "cdp" : "synthetic";
     this.leases = new Leases();
     this.injected = new Set(); // tabIds that already carry the snapshot script
+    /** The coworker that holds the browser, as the host named it. */
+    this.coworker = "";
+  }
+
+  /**
+   * The host's `browser_holder`: a coworker took the browser. The strip on
+   * the driven tab says its name from now on.
+   */
+  async setCoworker(name) {
+    const next = coworkerName(name);
+    if (next === this.coworker) return;
+    this.coworker = next;
+    if (this.tabId !== null) await this.mark(this.leases.get(this.tabId)?.state ?? STATE.ACTIVE);
   }
 
   get engineName() {
@@ -111,7 +125,13 @@ export class Driver {
     await this.detach();
     if (tabId !== null) {
       try {
-        await api.tabs.sendMessage(tabId, { channel: "agents", op: "driving", on: true, state: "stopped" });
+        await api.tabs.sendMessage(tabId, {
+          channel: "agents",
+          op: "driving",
+          on: true,
+          state: "stopped",
+          label: stripLabel("stopped", this.coworker),
+        });
       } catch {
         // The page may be gone.
       }
@@ -140,6 +160,7 @@ export class Driver {
         op: "driving",
         on: state !== null,
         state,
+        label: stripLabel(state, this.coworker),
       });
     } catch {
       // The page may be mid-navigation; the badge is not worth failing a command.
