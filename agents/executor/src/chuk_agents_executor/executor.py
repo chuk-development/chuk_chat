@@ -125,6 +125,12 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
+from chuk_agents_runtime.run_changes import (
+    REASON_NOT_FOUND as RUN_REASON_NOT_FOUND,
+    run_change_summary,
+    run_changes,
+    undo_run,
+)
 from chuk_agents_runtime.skill_proposals import (
     SkillDraft,
     SkillProposalStore,
@@ -204,6 +210,8 @@ from .protocol import (
     secret_request_payload,
     skill_proposal_payload,
     skill_proposal_result_payload,
+    run_changes_payload,
+    run_undo_result_payload,
     skills_list_payload,
     stop_ack_payload,
     subagent_payload,
@@ -521,6 +529,9 @@ class _Run:
     priced_model: str | None = None
     priced_provider: str | None = None
     cost: dict | None = None
+    # docs/WIRE_CONTRACT.md, "What did it do: run changes and undo": the
+    # ``changes`` block of its ``done`` (files changed in the workspace).
+    changes: dict | None = None
     # Set once ``_finish_automation`` asked the host. A run ends once, so the
     # host hears it once even when a later step of the run fails.
     automation_finished: bool = False
@@ -1771,6 +1782,17 @@ class Executor:
         env = self._environment_for(session_key)
         return getattr(env, "workspace", None) or self._workspace
 
+    def _known_workspace_for(self, session_key: str | None) -> str | None:
+        """Like :meth:`_workspace_for`, but never creates a sandbox: a session
+        that has none yet (a restricted mail run) has no workspace here."""
+        if self._is_primary_session(session_key):
+            return self._workspace
+        with self._env_lock:
+            env = self._session_envs.get(str(session_key))
+        if env is None:
+            return None
+        return getattr(env, "workspace", None) or self._workspace
+
     def _session_environments(self) -> list[BaseEnvironment]:
         """Every sandbox this executor owns: its own plus one per served agent."""
         with self._env_lock:
@@ -1919,6 +1941,13 @@ class Executor:
                 self._terminal(request_id, error_payload("calls not enabled"))
                 return
             self._call_hook(self._on_call_frame, payload)
+            return
+        if kind in ("run_changes_get", "run_undo"):
+            # "What did it do" (docs/WIRE_CONTRACT.md, "What did it do: run
+            # changes and undo"): the files a run changed, and undoing them as
+            # a new commit. Answered with one terminal ``run_changes`` /
+            # ``run_undo_result``; git runs on its own thread.
+            self._handle_run_changes_frame(kind, request_id, payload)
             return
         if kind == "run_ack":
             # The app saw a live ``done`` for this run. Record it so a later
@@ -2847,6 +2876,88 @@ class Executor:
             )
             return
         self._terminal(request_id, skill_proposal_result_payload(result))
+
+    # -- what did it do (docs/WIRE_CONTRACT.md, "Run changes and undo") ----
+    def _handle_run_changes_frame(self, kind: str, request_id: str, payload: dict) -> None:
+        threading.Thread(
+            target=self._answer_run_changes,
+            args=(kind, request_id, dict(payload)),
+            name="run-changes",
+            daemon=True,
+        ).start()
+
+    def _resolve_run_row(self, payload: dict) -> dict | None:
+        """``run_id``, or ``session_key`` + ``last``: the run's row, or None."""
+        store = StateStore(self._db_path)
+        try:
+            run_id = payload.get("run_id")
+            if isinstance(run_id, str) and run_id:
+                return store.get_run(run_id)
+            session_key = payload.get("session_key")
+            if isinstance(session_key, str) and session_key and payload.get("last", True):
+                return store.latest_run(session_key)
+            return None
+        finally:
+            store.close()
+
+    def _workspace_busy(self, workspace: str | None) -> bool:
+        """A run is queued or in flight in this workspace right now."""
+        if not workspace:
+            return False
+        with self._runs_lock:
+            keys = [run.session_key for run in self._runs.values()]
+        return any(self._known_workspace_for(key) == workspace for key in keys)
+
+    def _answer_run_changes(self, kind: str, request_id: str, payload: dict) -> None:
+        try:
+            row = self._resolve_run_row(payload)
+            if row is None:
+                asked = payload.get("run_id") if isinstance(payload.get("run_id"), str) else ""
+                if kind == "run_changes_get":
+                    body = {"run_id": asked, "files": [], "commits": [],
+                            "undoable": False, "reason": RUN_REASON_NOT_FOUND}
+                    self._terminal(request_id, run_changes_payload(body))
+                else:
+                    self._terminal(request_id, run_undo_result_payload({
+                        "run_id": asked, "ok": False, "reverted": [], "conflicts": [],
+                        "code": RUN_REASON_NOT_FOUND, "error": "No such run.",
+                    }))
+                return
+            run_id = str(row["run_id"])
+            session_key = str(row.get("session_key") or "")
+            workspace = self._workspace_for(session_key)
+            busy = self._workspace_busy(workspace)
+            if kind == "run_changes_get":
+                body = run_changes(workspace, run_id, busy=busy)
+                body["session_key"] = session_key
+                self._terminal(request_id, run_changes_payload(body))
+                return
+            raw_paths = payload.get("paths")
+            paths = (
+                [p for p in raw_paths if isinstance(p, str)]
+                if isinstance(raw_paths, list)
+                else None
+            )
+            result = undo_run(
+                workspace, run_id, paths=paths, force=payload.get("force") is True, busy=busy
+            )
+            result["session_key"] = session_key
+            if result.get("ok"):
+                # The done's ``changes`` block follows the undo, so a replayed
+                # card can say "undone" instead of offering Undo again.
+                summary = run_change_summary(workspace, run_id)
+                store = StateStore(self._db_path)
+                try:
+                    store.set_run_changes(run_id, summary)
+                finally:
+                    store.close()
+                if summary:
+                    result["changes"] = summary
+            self._terminal(request_id, run_undo_result_payload(result))
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive git
+            self._terminal(
+                request_id, error_payload(f"{kind} failed: {type(exc).__name__}")
+            )
 
     def _handle_run_ack(self, payload: dict) -> None:
         run_id = payload.get("run_id")
@@ -4607,6 +4718,9 @@ class Executor:
             # the draft is stored here and shown to the user as a card; only
             # the app's ``skill_proposal_decision`` writes it to disk.
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
+            # "What did it do" (docs/WIRE_CONTRACT.md, "Run changes and
+            # undo"): every workspace commit of this run carries its id.
+            run_id=run.run_id or None,
         )
 
         clock.lap("runtime_built")
@@ -4724,6 +4838,7 @@ class Executor:
                 session_key=session_key,
                 cost=run.cost,
                 automation_result=automation_result,
+                changes=run.changes,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -5122,6 +5237,13 @@ class Executor:
                             cost_eur=run_cost,
                         )
                     run.cost = cost_block(store.usage_lines(run.run_id))
+                # What the run changed in its workspace (docs/WIRE_CONTRACT.md,
+                # "What did it do"): on the done, and on the row for a replay.
+                run.changes = run_change_summary(
+                    self._known_workspace_for(run.session_key), run.run_id
+                )
+                if run.changes:
+                    store.set_run_changes(run.run_id, run.changes)
                 return run_stamp_fields(store.get_run(run.run_id))
             finally:
                 store.close()

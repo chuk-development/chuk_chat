@@ -25,6 +25,12 @@ Four properties, each enforced here rather than asked for:
    its newest state, with the undo itself appended. Undoing an action does not
    erase the record that it happened.
 
+**Runs are tagged.** :meth:`GitWorkspace.begin_run` puts ``run-id: <id>`` into
+the body of every later commit and first commits pending edits made outside
+the agent, untagged. :mod:`chuk_agents_runtime.run_changes` reads that to show
+"what did this run change" and to undo one run (:meth:`GitWorkspace.revert_paths`,
+again a new commit).
+
 **Granularity: one commit per action** (the open question in §7.7). The product
 feature is "undo the last three actions", and a per-round commit cannot express
 that. Measured cost is ~15 ms per action on a small workspace and ~38 ms on one
@@ -93,6 +99,26 @@ DEFAULT_AUTHOR_EMAIL = "agent@cowork.local"
 
 ROLLBACK_TOOL = "__rollback__"
 MERGE_TOOL = "__subagent_merge__"
+#: The journal tool of an app-side "undo this run" (docs/WIRE_CONTRACT.md,
+#: "What did it do: run changes and undo").
+RUN_UNDO_TOOL = "__run_undo__"
+#: The journal tool of the checkpoint that commits changes the agent did not
+#: make (the user's own edits, a transcript export) before a run starts or an
+#: undo runs, so they are never attributed to a run.
+OUTSIDE_TOOL = "__outside__"
+
+#: Commit-body trailer that names the run a commit belongs to.
+RUN_ID_TRAILER = "run-id"
+#: Commit-body trailer of an undo commit: the run whose changes it reverted.
+UNDO_OF_TRAILER = "undo-of"
+
+_RUN_ID_UNSAFE = re.compile(r"[^A-Za-z0-9._:-]")
+
+
+def run_tag(run_id: str | None) -> str:
+    """The run id as it is written into a ``run-id:`` trailer: one line of
+    safe characters, at most 128. ``""`` = no tag."""
+    return _RUN_ID_UNSAFE.sub("", str(run_id or ""))[:128]
 
 #: Where a subagent's worktree is checked out (§7.6/§7.7). Inside the git
 #: directory on purpose: git never scans its own directory, so the parent's
@@ -250,6 +276,9 @@ class GitWorkspace:
         # git's index lock is not a queue — it is an error.
         self._lock = _repo_lock(self.root)
         self._seq = 0
+        # The run every commit of this instance belongs to (``run-id:``
+        # trailer). Set by :meth:`begin_run`; ``None`` = untagged, as before.
+        self.run_id: str | None = None
         self._batch: list[str] | None = None
         self._batch_summary: str | None = None
         # Per-invocation overrides, not writes to the repo config: an *adopted*
@@ -310,12 +339,16 @@ class GitWorkspace:
     # -- git plumbing ------------------------------------------------------
 
     def _git(
-        self, *args: str, timeout: int = GIT_TIMEOUT_S
+        self, *args: str, timeout: int = GIT_TIMEOUT_S, input: str | None = None
     ) -> subprocess.CompletedProcess:
-        return self._git_in(self.root, *args, timeout=timeout)
+        return self._git_in(self.root, *args, timeout=timeout, input=input)
 
     def _git_in(
-        self, cwd: str | os.PathLike, *args: str, timeout: int = GIT_TIMEOUT_S
+        self,
+        cwd: str | os.PathLike,
+        *args: str,
+        timeout: int = GIT_TIMEOUT_S,
+        input: str | None = None,
     ) -> subprocess.CompletedProcess:
         """The same git, run in another checkout of the same repo — a subagent's
         worktree."""
@@ -338,6 +371,7 @@ class GitWorkspace:
             timeout=timeout,
             env=env,
             check=False,
+            input=input,
         )
 
     def _bootstrap(self) -> bool:
@@ -478,15 +512,22 @@ class GitWorkspace:
         subject: str,
         body: list[str],
         pending: list[tuple[str, str]] | None = None,
+        *,
+        tag_run: bool = True,
     ) -> CommitInfo | None:
         """``pending`` is the ``git status`` the caller already paid for — every
-        spawned git process is ~6 ms charged to the round."""
+        spawned git process is ~6 ms charged to the round.
+
+        ``tag_run=False`` leaves the ``run-id:`` trailer off: a checkpoint of
+        changes the agent did not make must not be counted as the run's."""
         if pending is None:
             pending = self._pending()
         skipped = self._enforce_size_limit(pending)
         self._git("add", "-A", "--", ".")
         lines = list(body)
         lines.extend(f"skipped-large: {item}" for item in skipped)
+        if tag_run and self.run_id:
+            lines.append(f"{RUN_ID_TRAILER}: {self.run_id}")
         message = subject if not lines else subject + "\n\n" + "\n".join(lines)
         commit = self._git("commit", "-q", "--no-verify", "-m", message)
         if commit.returncode != 0:
@@ -505,6 +546,41 @@ class GitWorkspace:
         )
 
     # -- the public surface ------------------------------------------------
+
+    def begin_run(self, run_id: str | None) -> None:
+        """Tag every later commit of this instance with ``run-id: <run_id>``.
+
+        Anything already pending (an edit the user made by hand since the last
+        run, a transcript export) is committed first, untagged, as a checkpoint
+        of changes outside the agent. Without it the run's first tool commit
+        would sweep those edits in, and "undo this run" would revert the
+        user's own work. Never raises.
+        """
+        if not self._enabled:
+            return
+        clean = run_tag(run_id)
+        with self._lock:
+            try:
+                self.commit_outside_changes()
+            except Exception:  # noqa: BLE001 — tagging must not stop the run
+                pass
+            self.run_id = clean or None
+
+    def commit_outside_changes(self) -> CommitInfo | None:
+        """Commit whatever is pending as an untagged checkpoint. ``None`` when
+        nothing was pending."""
+        if not self._enabled:
+            return None
+        with self._lock:
+            pending = self._pending()
+            if not pending:
+                return None
+            return self._commit(
+                "checkpoint: changes outside the agent",
+                [f"tool: {OUTSIDE_TOOL}"],
+                pending,
+                tag_run=False,
+            )
 
     def record(
         self,
@@ -689,6 +765,97 @@ class GitWorkspace:
             ),
         }
 
+    def revert_paths(
+        self,
+        groups: list[tuple[str, list[str]]],
+        *,
+        undo_of: str,
+        subject: str | None = None,
+    ) -> dict:
+        """Restore ``paths`` to their content at ``base``, as ONE new commit.
+
+        ``groups`` is ``[(base tree-ish, [path, ...]), ...]``; a path that does
+        not exist at ``base`` is removed. Used by "undo this run"
+        (:mod:`chuk_agents_runtime.run_changes`), which decides what may be
+        reverted; this method only writes. History is never rewritten: the
+        pending state is committed first (untagged), so a forced undo over the
+        user's uncommitted edit keeps that edit in the history.
+        """
+        if not self._enabled:
+            return {"ok": False, "error": "workspace versioning is not enabled"}
+        with self._lock:
+            self.commit_outside_changes()
+            reverted: list[str] = []
+            for base, paths in groups:
+                wanted = [p for p in paths if p and not p.startswith(JOURNAL_DIRNAME + "/")]
+                if not wanted:
+                    continue
+                # Only what still differs from ``base``: ``git restore`` fails
+                # the whole call on a pathspec that matches nothing.
+                differ = self._git(
+                    "diff", "--no-renames", "--name-only", "-z", base, "HEAD", "--"
+                )
+                if differ.returncode != 0:
+                    return {
+                        "ok": False,
+                        "error": (differ.stderr or "git diff failed").strip()[:400],
+                    }
+                changed = set(filter(None, differ.stdout.split("\0")))
+                todo = [p for p in wanted if p in changed]
+                if not todo:
+                    continue
+                restored = self._git(
+                    # A file name is a name, not a glob: ``a*.txt`` must not
+                    # also restore every other ``.txt``.
+                    "--literal-pathspecs",
+                    "restore",
+                    f"--source={base}",
+                    "--staged",
+                    "--worktree",
+                    "--pathspec-from-file=-",
+                    "--pathspec-file-nul",
+                    input="\0".join(todo) + "\0",
+                )
+                if restored.returncode != 0:
+                    # Put the index and tree back to HEAD for those paths: a
+                    # half-applied undo must not stay behind.
+                    self._git(
+                        "--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree",
+                        "--pathspec-from-file=-", "--pathspec-file-nul",
+                        input="\0".join(todo) + "\0",
+                    )
+                    return {
+                        "ok": False,
+                        "error": (restored.stderr or "git restore failed").strip()[:400],
+                    }
+                reverted.extend(todo)
+            if not reverted:
+                return {"ok": True, "reverted": [], "commit": None}
+            pending = self._pending()
+            entry = self._build_entry(
+                RUN_UNDO_TOOL,
+                {"run_id": undo_of, "paths": len(reverted)},
+                {"ok": True, "reverted_files": len(reverted)},
+                None,
+                reverted,
+            )
+            self._append_journal(entry)
+            info = self._commit(
+                subject or f"undo: revert {len(reverted)} file(s) of run {undo_of[:12]}",
+                [
+                    f"tool: {RUN_UNDO_TOOL}",
+                    f"journal-seq: {entry['seq']}",
+                    f"{UNDO_OF_TRAILER}: {undo_of}",
+                ],
+                pending,
+                tag_run=False,
+            )
+            return {
+                "ok": True,
+                "reverted": reverted,
+                "commit": info.commit if info else None,
+            }
+
     # -- subagent branches / worktrees (§7.6, §7.7) ------------------------
 
     def create_worktree(self, name: str) -> "WorktreeInfo | None":
@@ -738,9 +905,13 @@ class GitWorkspace:
             # The parent's own tree must be clean, or git refuses the merge for
             # reasons that have nothing to do with the child.
             self._commit("checkpoint: state before subagent merge", [f"tool: {MERGE_TOOL}"])
+            merge_message = message or f"subagent: merge {info.branch}"
+            if self.run_id:
+                # The merge brings the child's work in; on the first-parent
+                # line it is the run's commit for those files.
+                merge_message += f"\n\n{RUN_ID_TRAILER}: {self.run_id}"
             merged = self._git(
-                "merge", "--no-ff", "--no-edit", "-m",
-                message or f"subagent: merge {info.branch}", info.branch,
+                "merge", "--no-ff", "--no-edit", "-m", merge_message, info.branch,
             )
             if merged.returncode != 0:
                 conflicts = self._conflicts()

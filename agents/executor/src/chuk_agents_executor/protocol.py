@@ -725,6 +725,7 @@ def done_payload(
     session_key: str | None = None,
     cost: dict[str, Any] | None = None,
     automation_result: dict[str, Any] | None = None,
+    changes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -763,7 +764,54 @@ def done_payload(
     # did not notify, and the app collapses the run to "no change".
     if automation_result is not None:
         payload["automation_result"] = dict(automation_result)
+    # docs/WIRE_CONTRACT.md, "What did it do: run changes and undo": how many
+    # workspace files the run changed (``files`` / ``additions`` /
+    # ``deletions`` / ``undone``). Absent when it changed none.
+    if changes:
+        payload["changes"] = dict(changes)
     return payload
+
+
+# -- what did it do (docs/WIRE_CONTRACT.md, "Run changes and undo") ----------
+
+
+def run_changes_get_payload(
+    *, run_id: str | None = None, session_key: str | None = None
+) -> dict[str, Any]:
+    """App -> host: the files one run changed. ``run_id``, or ``session_key``
+    alone for that thread's latest run."""
+    payload: dict[str, Any] = {"type": "run_changes_get"}
+    if run_id:
+        payload["run_id"] = run_id
+    if session_key:
+        payload["session_key"] = session_key
+        if not run_id:
+            payload["last"] = True
+    return payload
+
+
+def run_undo_payload(
+    *, run_id: str, paths: list[str] | None = None, force: bool = False
+) -> dict[str, Any]:
+    """App -> host: revert one run's changes (or only ``paths``)."""
+    payload: dict[str, Any] = {"type": "run_undo", "run_id": run_id}
+    if paths is not None:
+        payload["paths"] = list(paths)
+    if force:
+        payload["force"] = True
+    return payload
+
+
+def run_changes_payload(body: dict[str, Any]) -> dict[str, Any]:
+    """Host -> app: the terminal answer to ``run_changes_get``
+    (:func:`chuk_agents_runtime.run_changes.run_changes`)."""
+    return {"type": "run_changes", **body}
+
+
+def run_undo_result_payload(body: dict[str, Any]) -> dict[str, Any]:
+    """Host -> app: the terminal answer to ``run_undo``
+    (:func:`chuk_agents_runtime.run_changes.undo_run`)."""
+    return {"type": "run_undo_result", **body}
 
 
 #: ``done.reason`` of a run the weekly budget refused before it started

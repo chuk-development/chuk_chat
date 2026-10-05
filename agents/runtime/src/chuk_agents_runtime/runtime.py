@@ -317,6 +317,7 @@ def build_runtime(
     action_approvals: ActionApprovals | None = None,
     light_context: bool = False,
     skill_proposals: SkillProposalSink | None = None,
+    run_id: str | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -421,6 +422,10 @@ def build_runtime(
     connector tool marked destructive, a page-changing browser tool) follow
     that policy. Unset, only here.now in ``ask`` mode asks, as before.
 
+    ``run_id`` (docs/WIRE_CONTRACT.md, "What did it do: run changes and
+    undo") tags every workspace commit of this run, so the app can list and
+    undo exactly what the run changed (:mod:`chuk_agents_runtime.run_changes`).
+
     ``light_context`` (docs/WIRE_CONTRACT.md, "Cost per run and weekly
     budget") is for a scheduled run: no memory recall at the task start and
     no fact extraction after the turn (one aux call each time). The memory
@@ -446,6 +451,11 @@ def build_runtime(
         if version_workspace
         else None
     )
+    if git_workspace is not None and run_id:
+        # "What did it do" (docs/WIRE_CONTRACT.md, "Run changes and undo"):
+        # every commit of this run carries ``run-id:``; edits made outside the
+        # agent since the last run are checkpointed first, untagged.
+        git_workspace.begin_run(run_id)
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
     # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and background
     # commands"): ``run_command(background=true)`` + ``job_*``. Needs no tmux,
