@@ -609,7 +609,7 @@ class AgentLoop:
             ]
         if self._ladder is None:
             return messages
-        return self._ladder.prepare(messages)
+        return self._ladder.prepare(messages, session_id=session_id)
 
     def _process_history(self, messages: list[ModelMessage]) -> list[ModelMessage]:
         """The ``ProcessHistory`` hook: ignore Pydantic AI's in-run list and

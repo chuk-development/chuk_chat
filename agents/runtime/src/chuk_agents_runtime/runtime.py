@@ -477,6 +477,11 @@ def build_runtime(
         )
 
     store = StateStore(db_path)
+    if ladder is not None:
+        # The summary outlives this run (bead chuk_chat-p5xm): the executor
+        # builds a fresh runtime per task, and without the store every task
+        # blocked on the aux model to fold the same middle again.
+        ladder.summary_store = store
     if file_sink is not None and shell_session_key:
         register_document_tool(registry, DocumentStore(db_path, shell_session_key), file_sink)
     if enable_chat_search:

@@ -35,6 +35,11 @@ model is never trusted to redact.
 **Tier 3 — iterative re-summarization.** Later passes *update* the existing
 summary with only the newly-aged slice of transcript, instead of regenerating it
 from the whole middle. Cheaper each pass, and it keeps earlier decisions stable.
+An update is made only when it is needed: while the summary plus the
+newly-aged slice (verbatim) plus the tail stays under the tier-2 threshold, the
+summary is reused and no aux call blocks the turn. With a
+:class:`SummaryStore` the summary also outlives the run, so the next task of
+the session starts from it instead of folding the whole middle again.
 
 **Shape rules.** The head (system prompt + the original request) stays verbatim
 — it is the task definition. The tail is kept by **token budget, not message
@@ -342,6 +347,25 @@ class Summarizer(Protocol):
     def summarize(self, transcript: str, previous: str | None) -> str: ...
 
 
+@runtime_checkable
+class SummaryStore(Protocol):
+    """Where a session's compaction summary outlives the run that made it.
+
+    The executor builds a fresh ladder for every task. Without a store, each
+    task started with no summary and paid a blocking aux-model call to fold
+    the same middle again (bead chuk_chat-p5xm: 100-180 s before a "hi" was
+    answered). The row is only a cache: it is used only while
+    ``prefix_digest`` still matches the stored history, so a stale or foreign
+    row costs one fresh summary and never a wrong context.
+    """
+
+    def load_context_summary(self, session_id: int) -> dict | None: ...
+
+    def save_context_summary(
+        self, session_id: int, *, summary: str, summarized_upto: int, prefix_digest: str
+    ) -> None: ...
+
+
 class AuxSummarizer:
     """Wraps any :class:`~chuk_agents_runtime.model.ModelClient` as the cheap aux model.
 
@@ -446,6 +470,21 @@ def _is_dup_marker(content: Any) -> bool:
     return isinstance(content, dict) and DUP_KEY in content
 
 
+def _prefix_digest(messages: list[dict], start: int, end: int) -> str:
+    """Identity of ``messages[start:end]`` as the ladder received them (after
+    the reasoning scrub, before tier 1). A persisted summary covers exactly
+    this slice; the digest proves it still is the same slice."""
+    h = hashlib.sha256()
+    for message in messages[start:end]:
+        h.update(
+            json.dumps(message, sort_keys=True, separators=(",", ":"), default=str).encode(
+                "utf-8", "replace"
+            )
+        )
+        h.update(b"\x1e")
+    return h.hexdigest()
+
+
 def expand_back_references(messages: list[dict]) -> list[dict]:
     """Resolve every dedup marker back to the content it points at.
 
@@ -546,9 +585,16 @@ class ContextLadder:
     #: of the live context. The memory layer keeps its facts (§12), so what left
     #: the window is still recallable. Best-effort: a raising hook is swallowed.
     on_summary: Callable[[str], None] | None = None
+    #: Keeps the summary across runs of one session (see :class:`SummaryStore`).
+    #: Used only when :meth:`prepare` is given a ``session_id``.
+    summary_store: SummaryStore | None = None
 
     _summary: str | None = field(default=None, init=False, repr=False)
     _summarized_upto: int = field(default=0, init=False, repr=False)
+    # Digest of the scrubbed input slice ``[head_end:_summarized_upto]`` that
+    # ``_summary`` covers. ``None`` = not checked against a history yet.
+    _summary_digest: str | None = field(default=None, init=False, repr=False)
+    _session_id: int | None = field(default=None, init=False, repr=False)
     _calibration: float = field(default=1.0, init=False, repr=False)
     _last_estimate: int = field(default=0, init=False, repr=False)
     # (tier that ran, ratio saved) per pass — the tier matters, see _thrashing.
@@ -588,13 +634,70 @@ class ContextLadder:
 
     # -- entry point ------------------------------------------------------
 
-    def prepare(self, messages: list[dict]) -> list[dict]:
+    def prepare(self, messages: list[dict], *, session_id: int | None = None) -> list[dict]:
         """The loop's one call: scrub stale reasoning, then compress under
-        pressure. Returns the message list to send."""
+        pressure. Returns the message list to send.
+
+        ``session_id`` names the stored session ``messages`` came from. With a
+        :attr:`summary_store`, the session's last summary is picked up on the
+        first call and every new one is written back, so the next run does not
+        pay the aux model again for a middle that did not change."""
+        if session_id is not None and session_id != self._session_id:
+            self._bind_session(session_id)
         scrubbed = scrub_history(messages)
         out = self.compress(scrubbed)
         self._last_estimate = self._measure(out)
         return out
+
+    def _bind_session(self, session_id: int) -> None:
+        self._session_id = session_id
+        self._summary = None
+        self._summarized_upto = 0
+        self._summary_digest = None
+        if self.summary_store is None:
+            return
+        try:
+            row = self.summary_store.load_context_summary(session_id)
+        except Exception:  # noqa: BLE001 — a cache miss, never a failed turn
+            row = None
+        if not row:
+            return
+        summary = row.get("summary")
+        upto = row.get("summarized_upto")
+        digest = row.get("prefix_digest")
+        if isinstance(summary, str) and summary and isinstance(upto, int) and upto > 0 and digest:
+            self._summary = summary
+            self._summarized_upto = upto
+            self._summary_digest = str(digest)
+
+    def _persist_summary(self, messages: list[dict], head_end: int) -> None:
+        self._summary_digest = _prefix_digest(messages, head_end, self._summarized_upto)
+        if self.summary_store is None or self._session_id is None or not self._summary:
+            return
+        try:
+            self.summary_store.save_context_summary(
+                self._session_id,
+                summary=self._summary,
+                summarized_upto=self._summarized_upto,
+                prefix_digest=self._summary_digest,
+            )
+        except Exception:  # noqa: BLE001 — losing the cache costs time, not data
+            pass
+
+    def _check_summary(self, messages: list[dict], head_end: int) -> None:
+        """Drop a summary that no longer covers ``messages``: a shorter history
+        (a different run), or a persisted summary whose slice changed under it
+        (a regenerate, an edited row). The next pass makes a fresh one."""
+        if self._summary is None:
+            return
+        upto = self._summarized_upto
+        if len(messages) < upto or (
+            self._summary_digest is not None
+            and _prefix_digest(messages, head_end, upto) != self._summary_digest
+        ):
+            self._summary = None
+            self._summarized_upto = 0
+            self._summary_digest = None
 
     # -- measurement ------------------------------------------------------
 
@@ -645,12 +748,11 @@ class ContextLadder:
             self._last_stats = stats
             return messages
 
-        # A shorter history than we already summarized means a different run.
-        if len(messages) < self._summarized_upto:
-            self._summary = None
-            self._summarized_upto = 0
-
         head_end = _head_end(messages, cfg.head_messages)
+        # A shorter history than we already summarized means a different run;
+        # a changed slice means the summary no longer describes it.
+        self._check_summary(messages, head_end)
+
         raw_tail_start, raw_exempt_start = _tail_start(messages, cfg.tail_budget)
         tail_start = max(head_end, raw_tail_start)
         exempt_start = max(head_end, raw_exempt_start)
@@ -666,10 +768,15 @@ class ContextLadder:
             and self._pressure(self._measure(working)) >= cfg.tier2_threshold
             and tail_start > head_end
         ):
+            covered = (self._summary, self._summarized_upto)
             summarized = self._summarize_middle(working, head_end, tail_start)
             if summarized is not None:
                 working = summarized
                 stats.tier = 3 if had_summary else 2
+            if (self._summary, self._summarized_upto) != covered:
+                # A new summary was paid for: remember what it covers (on the
+                # scrubbed input, which tier 1 has not touched) and keep it.
+                self._persist_summary(messages, head_end)
 
         after = self._measure(working)
         stats.tokens_after = after
@@ -745,6 +852,20 @@ class ContextLadder:
             slice_start = min(self._summarized_upto, tail_start)
 
         new_slice = messages[slice_start:tail_start]
+        head = messages[:head_end]
+        if new_slice and previous:
+            # Tier 3 is paid only when it is needed. While the summary plus the
+            # newly-aged slice (sent verbatim) plus the tail is still under the
+            # tier-2 threshold, the summary is reused as it is: the model sees
+            # more of the conversation, not less, and the turn does not block on
+            # the aux model for a slice of a few messages. Without this, every
+            # round that moved the tail by one unit paid a blocking aux call
+            # (bead chuk_chat-p5xm).
+            kept = head + [
+                {"role": "user", "content": SUMMARY_PREFIX + previous}
+            ] + messages[slice_start:]
+            if self._pressure(self._measure(kept)) < self.config.tier2_threshold:
+                return self._repair_dangling_refs(kept, messages)
         if new_slice:
             # Redact BEFORE the transcript leaves the machine, and redact what
             # comes back. The model is asked to redact too, but is not trusted to.
@@ -763,7 +884,6 @@ class ContextLadder:
         elif not previous:
             return None
 
-        head = messages[:head_end]
         summary_message = {
             "role": "user",
             "content": SUMMARY_PREFIX + (self._summary or ""),
