@@ -33,6 +33,8 @@ class AutomationsSource extends ChangeNotifier {
   /// Starts listening. Idempotent.
   void attach() {
     _sub ??= AgentsRelayLink.instance.inbound.listen(_onInbound);
+    AgentsRelayClient.automationSavedSink = _onSaved;
+    AgentsRelayClient.automationDoneSink = _onDone;
   }
 
   /// Every automation known to this app, newest first.
@@ -87,8 +89,9 @@ class AutomationsSource extends ChangeNotifier {
     if (sessionKey == 'default') return 'Default coworker';
     if (sessionKey.startsWith('local:')) {
       final parts = sessionKey.split(':');
-      if (parts.length >= 2 && parts[1].trim().isNotEmpty)
+      if (parts.length >= 2 && parts[1].trim().isNotEmpty) {
         return parts[1].trim();
+      }
     }
     if (sessionKey.startsWith('host:')) {
       final device = sessionKey.substring('host:'.length).trim();
@@ -140,6 +143,7 @@ class AutomationsSource extends ChangeNotifier {
     switch (event) {
       case AgentsRelayAutomation():
         _byId[event.automation.id] = event.automation;
+        _noteResult(event);
         notifyListeners();
       case AgentsRelayAgentList():
         // The same frame the roster reads. Held here so a group header can
@@ -176,11 +180,142 @@ class AutomationsSource extends ChangeNotifier {
     return bt.compareTo(at);
   }
 
+  // ── F2: automations + cost totals ──
+
+  /// How long a create or an update waits for the host's `automation_saved`.
+  static Duration saveTimeout = const Duration(seconds: 20);
+
+  /// Requests waiting for their `automation_saved`, oldest first. The host
+  /// answers each on its own request stream, in order, and the frame carries
+  /// no request id, so the first waiter takes the first answer.
+  final List<Completer<AutomationSaveResult>> _pendingSaves =
+      <Completer<AutomationSaveResult>>[];
+
+  /// Runs of an `on_change` automation that found nothing new: run id →
+  /// the summary it reported (empty when it gave none).
+  final Map<String, String> _quietRuns = <String, String>{};
+
+  /// The summary of a quiet run (an `on_change` run that reported no
+  /// change), or null when [runId] was not one. The thread folds such a run
+  /// to one "No change" line with this under it.
+  String? quietRunSummary(String runId) => _quietRuns[runId];
+
+  /// True when [runId] was an `on_change` run that found nothing new.
+  bool isQuietRun(String runId) => _quietRuns.containsKey(runId);
+
+  /// The coworkers the app knows by name (`agent_list`), session key → name.
+  /// The global page offers them when it creates an automation.
+  Map<String, String> get coworkerNames =>
+      Map<String, String>.unmodifiable(_names);
+
+  /// Sends `automation_create`. Completes with the host's answer, or a
+  /// failure that says why it could not be asked.
+  Future<AutomationSaveResult> create({
+    required String sessionKey,
+    required String kind,
+    required Object spec,
+    required String prompt,
+    String? name,
+    bool notifyOnChange = false,
+  }) => _save(
+    (control) => control.sendAutomationCreate(
+      automationCreateFrame(
+        sessionKey: sessionKey,
+        kind: kind,
+        spec: spec,
+        prompt: prompt,
+        name: name,
+        notifyOnChange: notifyOnChange,
+      ),
+    ),
+  );
+
+  /// Sends `automation_update` with only the keys of [frame]
+  /// (see [automationUpdateFrame]).
+  Future<AutomationSaveResult> update(Map<String, dynamic> frame) =>
+      _save((control) => control.sendAutomationUpdate(frame));
+
+  Future<AutomationSaveResult> _save(
+    Future<void> Function(AgentsAutomationEditControl control) send,
+  ) async {
+    final Object? controller = AgentsRelayLink.instance.controller.value;
+    if (controller is! AgentsAutomationEditControl) {
+      return const AutomationSaveResult.failed('Not connected to the host.');
+    }
+    attach();
+    final waiter = Completer<AutomationSaveResult>();
+    _pendingSaves.add(waiter);
+    try {
+      await send(controller);
+    } catch (error) {
+      _pendingSaves.remove(waiter);
+      return AutomationSaveResult.failed('Could not reach the host: $error');
+    }
+    return waiter.future.timeout(
+      saveTimeout,
+      onTimeout: () {
+        _pendingSaves.remove(waiter);
+        return const AutomationSaveResult.failed(
+          'The host did not answer. Check the connection and try again.',
+        );
+      },
+    );
+  }
+
+  void _onSaved(Map<String, dynamic> payload) {
+    final result = AutomationSaveResult.fromPayload(payload);
+    final saved = result.automation;
+    if (saved != null) {
+      _byId[saved.id] = saved;
+      notifyListeners();
+    }
+    if (_pendingSaves.isNotEmpty) {
+      final waiter = _pendingSaves.removeAt(0);
+      if (!waiter.isCompleted) waiter.complete(result);
+    }
+  }
+
+  /// A live `done` of a fired `on_change` run says its verdict before the
+  /// `result` event lands; both say the same, so either one folds the run.
+  void _onDone(Map<String, dynamic> payload) {
+    final runId = payload['run_id'];
+    final verdict = payload['automation_result'];
+    if (runId is! String || runId.isEmpty || verdict is! Map) return;
+    if (verdict['changed'] != false) return;
+    final summary = verdict['summary'];
+    _quietRuns[runId] = summary is String ? summary : '';
+    notifyListeners();
+  }
+
+  void _noteResult(AgentsRelayAutomation event) {
+    final runId = event.runId;
+    if (event.event != 'result' || runId == null) return;
+    if (event.isQuietResult) {
+      _quietRuns[runId] = event.summary ?? '';
+    } else {
+      _quietRuns.remove(runId);
+    }
+  }
+  // ── end F2 ──
+
   /// Test seam: forget everything and stop listening.
   @visibleForTesting
   void reset() {
     _sub?.cancel();
     _sub = null;
+    if (AgentsRelayClient.automationSavedSink == _onSaved) {
+      AgentsRelayClient.automationSavedSink = null;
+    }
+    if (AgentsRelayClient.automationDoneSink == _onDone) {
+      AgentsRelayClient.automationDoneSink = null;
+    }
+    for (final waiter in _pendingSaves) {
+      if (!waiter.isCompleted) {
+        waiter.complete(const AutomationSaveResult.failed('reset'));
+      }
+    }
+    _pendingSaves.clear();
+    _quietRuns.clear();
     _byId.clear();
     _names.clear();
     _listed.clear();

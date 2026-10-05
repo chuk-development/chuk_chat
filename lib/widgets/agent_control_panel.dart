@@ -17,11 +17,14 @@ import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agents_channels_service.dart';
+import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/services/agents/schedule_spec.dart';
 import 'package:chuk_chat/services/agents/coworker_model.dart';
 import 'package:chuk_chat/services/chat_mode_service.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/widgets/agents_channels/agent_telegram_section.dart';
 import 'package:chuk_chat/widgets/coworker_model_tile.dart';
+import 'package:chuk_chat/ui/expressive/motion.dart';
 
 class AgentControlPanel extends StatefulWidget {
   const AgentControlPanel({
@@ -32,7 +35,13 @@ class AgentControlPanel extends StatefulWidget {
     this.showHeader = true,
     this.showRefresh = true,
     this.channels,
+    this.permissions,
   });
+
+  /// Where the weekly budget is read and sent (F2). Defaults to
+  /// [AgentsPermissionsService.instance]; the field shows only for a host
+  /// that names `cost_budget`.
+  final AgentsPermissionsService? permissions;
 
   /// The coworker's messenger channels. Defaults to
   /// [AgentsChannelsService.instance]; the section shows only for a host
@@ -65,10 +74,30 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
       ? widget.agent.id
       : widget.agent.threads.first.key;
 
+  // ── F2: automations + cost totals ──
+  final Set<String> _budgetAsked = <String>{};
+
+  AgentsPermissionsService get _permissions =>
+      widget.permissions ?? AgentsPermissionsService.instance;
+
+  /// Asks the host for the budget once it can answer and has not yet.
+  void _askBudget() {
+    final AgentsPermissionsService service = _permissions;
+    if (!service.budgetSupported) return;
+    if (service.budgetOf(widget.agent.id) != null) return;
+    // Once per coworker and panel: a host that never answers is not asked
+    // again on every rebuild.
+    if (!_budgetAsked.add(widget.agent.id)) return;
+    service.attach();
+    service.refresh(widget.agent.id);
+  }
+  // ── end F2 ──
+
   @override
   void initState() {
     super.initState();
     widget.source.refresh(_sessionKey);
+    _askBudget(); // F2
   }
 
   @override
@@ -76,6 +105,7 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.agent.id != widget.agent.id) {
       widget.source.refresh(_sessionKey);
+      _askBudget(); // F2
     }
   }
 
@@ -172,6 +202,17 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
               'Token use',
               _buildTokens(context, snapshot.tokens),
             ),
+            // ── F2: automations + cost totals ──
+            if (snapshot.cost case ControlAvailable<AgentCostTotals>(
+              value: final AgentCostTotals cost,
+            ))
+              _section(
+                context,
+                _l10n(context).costHeading,
+                _buildCost(context, cost),
+              ),
+            _buildBudget(context),
+            // ── end F2 ──
             _section(
               context,
               'Session runtime',
@@ -380,6 +421,121 @@ class _AgentControlPanelState extends State<AgentControlPanel> {
     );
   }
 
+  // ── F2: automations + cost totals ──
+  static AppLocalizations _l10n(BuildContext context) =>
+      AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+
+  /// This thread, today and this week in euro, with the week against the
+  /// budget when one is set. The bar takes the warning colour at 80 % and the
+  /// error colour at 100 %, as the host's `budget_state` says.
+  Widget _buildCost(BuildContext context, AgentCostTotals cost) {
+    final ThemeData theme = Theme.of(context);
+    final AppLocalizations l = _l10n(context);
+    final double? share = cost.weekShare;
+    final Color barColor = switch (cost.budgetState) {
+      'exceeded' => theme.colorScheme.error,
+      'warning' => theme.m3.warning,
+      _ => theme.colorScheme.primary,
+    };
+    final String week = cost.hasBudget
+        ? l.costWeekOfBudget(
+            formatEuro(cost.week),
+            formatEuro(cost.budgetWeekly!),
+          )
+        : formatEuro(cost.week);
+    // Label left, amount right; a narrow pane at a large text size puts the
+    // amount on its own line instead of cutting it (a cut price reads as a
+    // price and is not one).
+    Widget line(String label, String value, {Key? key}) => Padding(
+      padding: const EdgeInsets.only(bottom: 2),
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        spacing: 12,
+        children: <Widget>[
+          Text(label),
+          Text(
+            value,
+            key: key,
+            style: const TextStyle(
+              fontFeatures: <FontFeature>[FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        line(
+          l.costThisThread,
+          formatEuro(cost.sessionTotal),
+          key: const ValueKey<String>('cost-thread'),
+        ),
+        line(
+          l.costToday,
+          formatEuro(cost.today),
+          key: const ValueKey<String>('cost-today'),
+        ),
+        line(l.costThisWeek, week, key: const ValueKey<String>('cost-week')),
+        if (share != null) ...<Widget>[
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: LinearProgressIndicator(
+              key: const ValueKey<String>('cost-week-bar'),
+              value: share,
+              minHeight: 4,
+              color: barColor,
+              backgroundColor: theme.m3.surfaceContainerHighest,
+            ),
+          ),
+        ],
+        if (cost.budgetState == 'warning' || cost.budgetState == 'exceeded')
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              cost.budgetState == 'exceeded'
+                  ? l.costBudgetExceeded
+                  : l.costBudgetWarning,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: cost.budgetState == 'exceeded'
+                    ? theme.colorScheme.error
+                    : theme.m3.onSurfaceVariant,
+              ),
+            ),
+          ),
+        if (cost.lastRun != null)
+          Text(
+            '${l.costLastRun} ${formatEuro(cost.lastRun!)}',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+          ),
+      ],
+    );
+  }
+
+  /// The weekly budget field, only for a host that keeps budgets.
+  Widget _buildBudget(BuildContext context) {
+    final AgentsPermissionsService service = _permissions;
+    return ListenableBuilder(
+      listenable: service,
+      builder: (BuildContext context, Widget? _) {
+        if (!service.budgetSupported) return const SizedBox.shrink();
+        // A host that names the capability only after the panel opened.
+        if (service.budgetOf(widget.agent.id) == null) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) _askBudget();
+          });
+        }
+        return _section(
+          context,
+          _l10n(context).budgetWeeklyLabel,
+          WeeklyBudgetField(agentId: widget.agent.id, service: service),
+        );
+      },
+    );
+  }
+  // ── end F2 ──
+
   // --- helpers ---------------------------------------------------------------
 
   /// `Fireworks · Reasoning low` for a run's provider and level, or null when
@@ -481,3 +637,157 @@ String formatTimestamp(DateTime when) {
   return '${when.year}-${two(when.month)}-${two(when.day)} '
       '${two(when.hour)}:${two(when.minute)}';
 }
+
+// ── F2: automations + cost totals ──
+/// The coworker's weekly budget in euro (docs/WIRE_CONTRACT.md, "The budget
+/// setting"): empty or 0 = no limit, at most 10000. Sent as
+/// `agent_permissions_set` with `budget_weekly` only; the host's reply
+/// replaces what the field shows.
+class WeeklyBudgetField extends StatefulWidget {
+  const WeeklyBudgetField({
+    super.key,
+    required this.agentId,
+    required this.service,
+  });
+
+  final String agentId;
+  final AgentsPermissionsService service;
+
+  @override
+  State<WeeklyBudgetField> createState() => _WeeklyBudgetFieldState();
+}
+
+class _WeeklyBudgetFieldState extends State<WeeklyBudgetField> {
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focus = FocusNode();
+  double? _shown;
+  String? _error;
+  bool _waiting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.service.addListener(_onService);
+    _takeHostValue();
+  }
+
+  @override
+  void didUpdateWidget(WeeklyBudgetField old) {
+    super.didUpdateWidget(old);
+    if (old.service != widget.service) {
+      old.service.removeListener(_onService);
+      widget.service.addListener(_onService);
+    }
+    if (old.agentId != widget.agentId) {
+      _shown = null;
+      _error = null;
+      _waiting = false;
+      _takeHostValue(force: true);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.service.removeListener(_onService);
+    _controller.dispose();
+    _focus.dispose();
+    super.dispose();
+  }
+
+  static String _text(double euro) => euro <= 0 ? '' : euro.toStringAsFixed(2);
+
+  /// Shows the host's value, unless the user is typing a new one.
+  void _takeHostValue({bool force = false}) {
+    final double? host = widget.service.budgetOf(widget.agentId);
+    if (host == null || (host == _shown && !force)) return;
+    _shown = host;
+    if (force || !_focus.hasFocus || _waiting) _controller.text = _text(host);
+  }
+
+  void _onService() {
+    if (!mounted) return;
+    setState(() {
+      _takeHostValue(force: _waiting);
+      if (_waiting) {
+        final String? error = widget.service.errorOf(widget.agentId);
+        _error = error;
+        _waiting = false;
+      }
+    });
+  }
+
+  Future<void> _save() async {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final double? value = parseBudgetWeekly(_controller.text);
+    if (value == null) {
+      setState(() => _error = l.budgetInvalid);
+      return;
+    }
+    setState(() {
+      _error = null;
+      _waiting = true;
+    });
+    final bool sent = await widget.service.setBudget(widget.agentId, value);
+    if (!mounted) return;
+    if (!sent) {
+      setState(() {
+        _waiting = false;
+        _error = l.budgetSendFailed;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: TextField(
+                key: const ValueKey<String>('budget-weekly-field'),
+                controller: _controller,
+                focusNode: _focus,
+                enabled: widget.service.budgetOf(widget.agentId) != null,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                textInputAction: TextInputAction.done,
+                decoration: InputDecoration(
+                  isDense: true,
+                  prefixText: '€ ',
+                  hintText: l.budgetNoLimit,
+                  errorText: _error,
+                  errorMaxLines: 3,
+                ),
+                onChanged: (_) {
+                  if (_error != null) setState(() => _error = null);
+                },
+                onSubmitted: (_) => _save(),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ExpressiveButton(
+              key: const ValueKey<String>('budget-weekly-save'),
+              label: l.save,
+              dense: true,
+              tonal: true,
+              onTap: _save,
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          l.budgetHelp,
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.hintColor),
+        ),
+      ],
+    );
+  }
+}
+// ── end F2 ──

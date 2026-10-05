@@ -33,6 +33,9 @@ import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1
+import 'package:chuk_chat/services/agents/agents_thread_composer.dart'; // F1
+import 'package:chuk_chat/l10n/app_localizations.dart'; // F1
 import 'package:chuk_chat/services/agents/agents_shell_status.dart';
 import 'package:chuk_chat/services/notifications/agents_notifications.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
@@ -45,6 +48,11 @@ import 'package:chuk_chat/widgets/automation_card.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/agents_thread_header.dart';
 import 'package:chuk_chat/widgets/agents_takeover_card.dart';
+import 'package:chuk_chat/widgets/agents_action_approval_card.dart'; // F1
+import 'package:chuk_chat/widgets/agents_budget_notice.dart'; // F1
+import 'package:chuk_chat/widgets/agent_control_panel.dart' // F1
+    show WeeklyBudgetField;
+import 'package:chuk_chat/services/agents/agents_permissions_service.dart'; // F1
 import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/browser_view_page.dart';
 
@@ -298,6 +306,18 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// goes away with the run's next frame, or when the run ends.
   bool _takeoverContinuing = false;
 
+  // ── F1: approvals + cost ──
+  /// The option the user picked on a per-action approval card ([_approval]
+  /// with `options`). The card then says what the answer covered until the
+  /// run moves on.
+  String? _approvalScope;
+
+  /// The host refused this thread's last task: the coworker's weekly budget
+  /// is used up. The notice stays at the end of the thread until the next
+  /// task or a thread switch.
+  ({String message, String? prompt})? _budgetRefusal;
+  // ── end F1 ──
+
   /// Guards against opening the browser view twice from one card.
   bool _browserViewOpen = false;
 
@@ -410,6 +430,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     _loader.addListener(_onLoaderChanged);
     _automations.attach();
     _automations.addListener(_onAutomationsChanged);
+    AgentsBudgetNotices.instance.addListener(_onBudgetNotices); // F1
     _revision = _loader.revisionFor(widget.threadKey);
     _revisionAtMount = _revision;
     _storeSub = ChatStorageService.changes.listen(_onChatStoreChanged);
@@ -457,6 +478,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       _approvalDecision = null;
       _takeoverVisited = false;
       _takeoverContinuing = false;
+      _approvalScope = null; // F1
+      _budgetRefusal = null; // F1
       _clearSecretRequest();
       // The old thread no longer shows the card its run waits on. After the
       // frame: this runs during a build, and the ledger's listeners rebuild.
@@ -506,6 +529,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
     _loader.removeListener(_onLoaderChanged);
     _automations.removeListener(_onAutomationsChanged);
+    AgentsBudgetNotices.instance.removeListener(_onBudgetNotices); // F1
     _controller?.state.removeListener(_onStateChanged);
     _startupState.dispose();
     _inboundSub?.cancel();
@@ -1235,6 +1259,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         setState(() {
           _approval = event;
           _approvalDecision = null;
+          _approvalScope = null; // F1
           _takeoverVisited = false;
           _takeoverContinuing = false;
         });
@@ -1266,6 +1291,17 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         final localStreamActive =
             runtime?.isStreaming.value == true ||
             runtime?.isSending.value == true;
+        // ── F1: approvals + cost ──
+        _clearActionApproval();
+        if (event.isBudgetExceeded) {
+          _onBudgetRefused(
+            event,
+            ownTask:
+                localStreamActive ||
+                _ledger.runFor(widget.threadKey)?.taskId != null,
+          );
+        }
+        // ── end F1 ──
         // A terminal ENDS the run, whatever else is going on. The adapter's
         // own subscription is gone after a stop or a page teardown, so this is
         // often the only listener left to see it; leaving the run open here is
@@ -1359,6 +1395,12 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         // The agent is moving again: an answered takeover card has said
         // "continues" long enough.
         if (!replay && _takeoverContinuing) _clearTakeover();
+        // F1: the same for an answered approval card, and a new run means
+        // the budget refusal before it is history.
+        if (!replay) _clearAnsweredActionApproval();
+        if (!replay && _budgetRefusal != null) {
+          setState(() => _budgetRefusal = null);
+        }
       case AgentsRelayRunError():
         if (event.sessionKey == null || event.sessionKey == widget.threadKey) {
           _clearTakeover();
@@ -1441,7 +1483,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// Answer a here.now publish approval. Idempotent: once a decision is sent
   /// the buttons are gone, so the executor never gets two answers for one
   /// publish.
-  void _decideApproval(bool approved) {
+  void _decideApproval(bool approved, {String? scope}) {
     final request = _approval;
     if (request == null || _approvalDecision != null) return;
     unawaited(
@@ -1449,6 +1491,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           ?.sendApprovalDecision(
             approvalId: request.approvalId,
             approved: approved,
+            // F1: only a card with options says what the answer covers.
+            scope: request.hasOptions ? scope : null,
           )
           .catchError((Object _) {}),
     );
@@ -1783,7 +1827,10 @@ class AgentsThreadViewState extends State<AgentsThreadView>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (!desktop && _hasBarAboveChat) SizedBox(height: widget.topInset),
-            if (connected && approval != null && !approval.isTakeover)
+            if (connected &&
+                approval != null &&
+                !approval.isTakeover &&
+                !approval.hasOptions) // F1: those draw in the transcript
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
               _buildSecretRequestBar(context, secretRequest),
@@ -1915,7 +1962,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     final AgentsRelayApprovalRequest? approval = _approval;
     final Widget? takeover = approval != null && approval.isTakeover
         ? _buildTakeoverCard(context, approval, dense: desktop)
-        : null;
+        : _transcriptCards(context, dense: desktop); // F1
     if (desktop) {
       return ChukChatUIDesktop(
         key: key,
@@ -1968,7 +2015,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
   /// count, because it lives inside the transcript.
   bool get _hasBarAboveChat {
     final AgentsRelayApprovalRequest? approval = _approval;
-    return (approval != null && !approval.isTakeover) ||
+    return (approval != null && !approval.isTakeover && !approval.hasOptions) ||
         _secretRequest != null;
   }
 
@@ -2246,6 +2293,205 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     }
     _decideApproval(approved);
   }
+
+  // ── F1: approvals + cost ──────────────────────────────────────────────────
+
+  /// What sits at the end of the transcript besides a takeover: a per-action
+  /// approval card, a budget refusal, a budget warning. Null when there is
+  /// none, so the screen keeps no empty footer.
+  Widget? _transcriptCards(BuildContext context, {required bool dense}) {
+    final AgentsRelayApprovalRequest? approval = _approval;
+    final AgentsBudgetWarning? warning = AgentsBudgetNotices.instance.forThread(
+      widget.threadKey,
+    );
+    final refusal = _budgetRefusal;
+    final List<Widget> cards = <Widget>[
+      if (warning != null)
+        AgentsBudgetWarningNotice(
+          warning: warning,
+          onDismiss: () =>
+              AgentsBudgetNotices.instance.dismiss(widget.threadKey),
+        ),
+      if (refusal != null)
+        AgentsBudgetRefusalCard(
+          message: refusal.message,
+          dense: dense,
+          onRunAnyway: refusal.prompt == null ? null : _runAnyway,
+          onChangeBudget: _openBudgetSheet,
+        ),
+      if (approval != null && approval.hasOptions && !approval.isTakeover)
+        AgentsActionApprovalCard(
+          request: approval,
+          coworkerName: widget.title ?? widget.agent?.name ?? '',
+          decision: _approvalScope,
+          dense: dense,
+          onSelect: _decideActionApproval,
+        ),
+    ];
+    if (cards.isEmpty) return null;
+    if (cards.length == 1) return cards.single;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        for (int i = 0; i < cards.length; i++) ...<Widget>[
+          if (i > 0) const SizedBox(height: 8),
+          cards[i],
+        ],
+      ],
+    );
+  }
+
+  /// Answers a per-action approval card with one of the host's options.
+  /// `deny` is a no for this call; every other option allows it and says how
+  /// far (docs/WIRE_CONTRACT.md, "Per-action approvals").
+  void _decideActionApproval(String option) {
+    final AgentsRelayApprovalRequest? request = _approval;
+    if (request == null || _approvalDecision != null) return;
+    // A closed socket would drop the answer while the card went away and the
+    // host kept waiting. Treat it like no controller at all.
+    final AgentsRelayController? controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) {
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.approvalNotConnected ??
+            'Not connected to your computer. Try again when it is back.',
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+    final bool approved = option != AgentsRelayApprovalRequest.scopeDeny;
+    _decideApproval(approved, scope: option);
+    _ledger.decideApproval(
+      request.sessionKey ?? widget.threadKey,
+      request.approvalId,
+      approved: approved,
+      scope: option,
+      site: request.site,
+    );
+    setState(() => _approvalScope = option);
+  }
+
+  /// Takes a per-action approval card off the thread, answered or not: the
+  /// run ended, so nothing waits on it any more.
+  void _clearActionApproval() {
+    final AgentsRelayApprovalRequest? current = _approval;
+    if (current == null || !current.hasOptions || current.isTakeover) return;
+    setState(() {
+      _approval = null;
+      _approvalDecision = null;
+      _approvalScope = null;
+    });
+    _syncWaitingForUser();
+  }
+
+  /// The agent moved on after an answered card: the card has said what the
+  /// answer covered long enough.
+  void _clearAnsweredActionApproval() {
+    if (_approvalScope == null) return;
+    _clearActionApproval();
+  }
+
+  /// The host refused this thread's task: the coworker's weekly budget is
+  /// used up. The host's sentence becomes a notice at the end of the thread.
+  /// "Run anyway" is offered only for the user's own task: a schedule or a
+  /// mail that was refused has nothing to send again from here.
+  void _onBudgetRefused(AgentsRelayDone event, {required bool ownTask}) {
+    final String? prompt = ownTask ? _lastPrompt() : null;
+    setState(() {
+      _budgetRefusal = (message: event.finalAnswer ?? '', prompt: prompt);
+    });
+  }
+
+  /// The prompt the refused task carried: the newest user message of this
+  /// thread, or the one the host named for a run it adopted.
+  String? _lastPrompt() {
+    final runtime = ChatRuntimeRegistry.instance.lookup(widget.threadKey);
+    final List<Map<String, String>> rows =
+        runtime?.messages.value ?? const <Map<String, String>>[];
+    for (int i = rows.length - 1; i >= 0; i--) {
+      if (rows[i]['sender'] != 'user') continue;
+      final String text = (rows[i]['text'] ?? '').trim();
+      if (text.isNotEmpty) return text;
+    }
+    final String? detached = _ledger
+        .runFor(widget.threadKey)
+        ?.detachedPrompt
+        ?.trim();
+    return detached == null || detached.isEmpty ? null : detached;
+  }
+
+  /// "Run anyway": the same task once more, over the budget. It goes through
+  /// the chat screen's own send path, so it streams like any other turn; the
+  /// one-shot override makes that task carry `budget_override: true`.
+  void _runAnyway() {
+    final String? prompt = _budgetRefusal?.prompt;
+    if (prompt == null) return;
+    AgentsBudgetOverride.arm(widget.threadKey);
+    if (!AgentsThreadComposer.send(widget.threadKey, prompt)) {
+      AgentsBudgetOverride.disarm(widget.threadKey);
+      AppNotifications.show(
+        context,
+        AppLocalizations.of(context)?.budgetRunAnywayFailed ??
+            'Could not send it again. Open the thread and try once more.',
+        duration: const Duration(seconds: 3),
+      );
+      return;
+    }
+    setState(() => _budgetRefusal = null);
+  }
+
+  void _onBudgetNotices() {
+    if (mounted) setState(() {});
+  }
+
+  /// "Change budget": the coworker's weekly budget field in a sheet, the same
+  /// field the details pane shows. The host's answer fills it; a new value
+  /// applies from the next task.
+  Future<void> _openBudgetSheet() async {
+    final String agentId = widget.agent?.id ?? widget.threadKey;
+    final AgentsPermissionsService service = AgentsPermissionsService.instance;
+    service.attach();
+    unawaited(service.refresh(agentId));
+    final ThemeData theme = Theme.of(context);
+    final AppLocalizations? l = AppLocalizations.of(context);
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: theme.colorScheme.surfaceContainerLow,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(36)),
+      ),
+      builder: (BuildContext sheetContext) => Padding(
+        padding: EdgeInsets.fromLTRB(
+          20,
+          20,
+          20,
+          20 + MediaQuery.viewInsetsOf(sheetContext).bottom,
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            key: const ValueKey<String>('agents-budget-sheet'),
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              Text(
+                l?.budgetWeeklyLabel ?? 'Weekly budget',
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 12),
+              WeeklyBudgetField(agentId: agentId, service: service),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── end F1 ──────────────────────────────────────────────────────────────
 
   // --- the standing approval --------------------------------------------------
 

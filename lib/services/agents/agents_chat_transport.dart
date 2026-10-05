@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/agents/agents_queued_marks.dart';
 import 'package:chuk_chat/services/agents/agents_task_outbox.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
@@ -209,6 +210,7 @@ class AgentsChatTransport {
       DateTime? finishedAt,
       int? firstMid,
       int? lastMid,
+      AgentsRunCost? cost, // F1: cost
     }) {
       if (terminated) return;
       terminated = true;
@@ -231,6 +233,7 @@ class AgentsChatTransport {
         finishedAt: finishedAt,
         firstMid: firstMid,
         lastMid: lastMid,
+        cost: cost, // F1: cost
       );
       // Token delivery is provisional: the host's terminal answer is the
       // complete canonical response, even after missing/filtered tail deltas.
@@ -501,6 +504,7 @@ class AgentsChatTransport {
             finishedAt: event.finishedAt,
             firstMid: event.firstMid,
             lastMid: event.lastMid,
+            cost: event.cost, // F1: cost
           );
         // The `run_ack` is the thread view's (its `_onInbound`, WS-7): it
         // sees every live terminal for the thread, including a run adopted
@@ -659,6 +663,8 @@ class AgentsChatTransport {
             ).catchError((Object _) => _unrecorded(sessionKey, wireTaskId)),
           );
           ledger.taskSent(sessionKey, wireTaskId);
+          // F1: the one task "Run anyway" armed for this thread.
+          final bool overBudget = AgentsBudgetOverride.consume(sessionKey);
           await controller.sendTask(
             message,
             sessionKey: sessionKey,
@@ -677,7 +683,11 @@ class AgentsChatTransport {
             // per attempt: the transcript shows it four times after four
             // retries, and the model is handed a history in which the user
             // asked the same thing four times (bead cowork-bkw).
-            regenerate: regenerate,
+            regenerate: overBudget ? false : regenerate,
+            // F1: "Run anyway" after a budget refusal. The refused prompt
+            // was never stored on the host, so there is no turn to replace:
+            // the override goes out as a plain new turn.
+            budgetOverride: overBudget,
           );
         } catch (error) {
           if (terminated) return;

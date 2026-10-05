@@ -18,6 +18,7 @@ import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/services/agents/agents_relay_link.dart';
 import 'package:chuk_chat/services/agents/agents_replay_loader.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/services/settings/verbose_service.dart';
 import 'package:chuk_chat/services/agents/agents_tool_call_handler.dart';
@@ -208,6 +209,11 @@ void main() {
     return result.toolCalls;
   }
 
+  /// What the chat list draws: the run's meta call (run id, cost) is lifted
+  /// off before the bubble sees the calls.
+  List<ToolCall> drawn(List<ToolCall> calls) =>
+      splitRunMeta(calls, null).toolCalls!;
+
   /// The replay path, end to end: the loader folds the frames into the
   /// cached rows the imported screen paints from.
   Future<List<ToolCall>> replayed(List<AgentsRelayInbound> events) async {
@@ -228,8 +234,8 @@ void main() {
   }
 
   test('the same run draws the same tool cards live and replayed', () async {
-    final liveCalls = await live(_liveRun);
-    final replayCalls = await replayed(_replayedRun);
+    final liveCalls = drawn(await live(_liveRun));
+    final replayCalls = drawn(await replayed(_replayedRun));
 
     expect(liveCalls, hasLength(3));
     expect(replayCalls, hasLength(3));
@@ -253,6 +259,13 @@ void main() {
       replayCalls.map((c) => '${c.name}:${c.status.name}').toList(),
       <String>['run_command:completed', 'run_command:error', 'subagent:completed'],
     );
+  });
+
+  test('both paths keep the run id on the answer, for the quiet fold', () async {
+    final liveCalls = await live(_liveRun);
+    final replayCalls = await replayed(_replayedRun);
+    expect(splitRunMeta(liveCalls, null).runId, 'run-1');
+    expect(splitRunMeta(replayCalls, null).runId, 'run-1');
   });
 
   test('a failed command carries its exit code on both paths', () async {

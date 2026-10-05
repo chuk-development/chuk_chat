@@ -26,6 +26,7 @@ import 'package:chuk_chat/models/content_block.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/automations/automation_ledger.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
+import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
 import 'package:chuk_chat/services/image_storage_service.dart';
 
 /// The renderer's shape of one host `tool` frame.
@@ -166,6 +167,12 @@ class AgentsRun {
 
   int? iterations;
   int? tokensSpent;
+
+  // ── F1: approvals + cost ──
+  /// What the run cost, from the live `done`. Also on [toolCalls] as the
+  /// answer's [kAgentsRunMetaTool] call, which is what the thread keeps.
+  AgentsRunCost? cost;
+  // ── end F1 ──
 
   /// The host's id for this run, echoed back with `run_ack`.
   String? runId;
@@ -369,6 +376,10 @@ ToolCall approvalCallFromRelay(
   if (request.isTakeover) {
     return takeoverCallFromRelay(request, decided: decided, now: now);
   }
+  // F1: approvals + cost. A card the host named its answers for.
+  if (request.hasOptions) {
+    return actionApprovalCallFromRelay(request, decided: decided, now: now);
+  }
   final question = request.name.isEmpty
       ? 'Publish to the web?'
       : 'Publish "${request.name}" to the web?';
@@ -445,6 +456,84 @@ ToolCall takeoverCallFromRelay(
     result: jsonEncode(payload),
   )..completedAt = now ?? DateTime.now();
 }
+
+// ── F1: approvals + cost ──
+/// The transcript line of a per-action approval (docs/WIRE_CONTRACT.md,
+/// "Per-action approvals"), and of a publish from a host that names the
+/// answers. ONE mapping for the live ledger and the replay loader.
+///
+/// Like a takeover, the options are never tappable here: the answer belongs
+/// to the card at the end of the thread while the run waits, and once the run
+/// is over there is nothing left to answer. `decision` records what the
+/// answer covered once it is known ([approvalDecisionLabel]).
+ToolCall actionApprovalCallFromRelay(
+  AgentsRelayApprovalRequest request, {
+  bool decided = false,
+  DateTime? now,
+}) {
+  final bool settled = decided || request.isDecided;
+  final payload = <String, dynamic>{
+    'question': request.summary ?? 'Allow this action?',
+    'offered_options': <String>[
+      for (final String option in request.options)
+        approvalOptionLabel(option, site: request.site),
+    ],
+    'approvalId': request.approvalId,
+    'action_class': ?request.actionClass,
+    'tool': ?request.tool,
+    'site': ?request.site,
+    if (settled)
+      'decision': request.isDecided
+          ? approvalDecisionLabel(
+              approved: request.isApproved,
+              scope: request.decisionScope,
+              site: request.site,
+            )
+          : 'Expired',
+    if (request.decisionScope != null) 'decision_scope': request.decisionScope,
+    if (request.decisionReason != null)
+      'decision_reason': request.decisionReason,
+  };
+  return ToolCall(
+    name: 'ask_user',
+    // The details stay out of the stored line: a mail preview or connector
+    // arguments are the user's data, and the line is exported by "Copy full
+    // chat". The summary already says what was asked.
+    arguments: <String, dynamic>{...payload, 'action': request.action},
+    status: ToolCallStatus.completed,
+    result: jsonEncode(payload),
+  )..completedAt = now ?? DateTime.now();
+}
+
+/// The transcript's word for one offered answer. The card itself names the
+/// coworker; the stored line does not, so a rename never makes it wrong.
+String approvalOptionLabel(String option, {String? site}) => switch (option) {
+  AgentsRelayApprovalRequest.scopeOnce => 'Allow once',
+  AgentsRelayApprovalRequest.scopeAlwaysAgent => 'Always for this coworker',
+  AgentsRelayApprovalRequest.scopeAlwaysSite =>
+    site == null ? 'Always on this site' : 'Always on $site',
+  AgentsRelayApprovalRequest.scopeDeny => 'Deny',
+  _ => option,
+};
+
+/// What an answer covered, for the transcript line.
+String approvalDecisionLabel({
+  required bool approved,
+  String? scope,
+  String? site,
+}) {
+  if (!approved || scope == AgentsRelayApprovalRequest.scopeDeny) {
+    return 'Denied';
+  }
+  return switch (scope) {
+    AgentsRelayApprovalRequest.scopeAlwaysAgent =>
+      'Allowed always for this coworker',
+    AgentsRelayApprovalRequest.scopeAlwaysSite =>
+      site == null ? 'Allowed always on this site' : 'Allowed always on $site',
+    _ => 'Allowed once',
+  };
+}
+// ── end F1 ──
 
 class AgentsRunLedger extends ChangeNotifier {
   AgentsRunLedger._();
@@ -994,6 +1083,48 @@ class AgentsRunLedger extends ChangeNotifier {
     return call;
   }
 
+  // ── F1: approvals + cost ──
+  /// The user answered [approvalId] on the card: the run's transcript line
+  /// records what the answer covered, as a replay of the decided row would.
+  /// Nothing happens when the line is not on this run (already folded).
+  void decideApproval(
+    String sessionKey,
+    String approvalId, {
+    required bool approved,
+    String? scope,
+    String? site,
+  }) {
+    final run = _runs[sessionKey];
+    if (run == null) return;
+    for (final ToolCall call in run.toolCalls) {
+      if (call.name != 'ask_user' ||
+          call.arguments['approvalId'] != approvalId) {
+        continue;
+      }
+      final String decision = approvalDecisionLabel(
+        approved: approved,
+        scope: scope,
+        site: site,
+      );
+      final Map<String, dynamic> args = Map<String, dynamic>.of(call.arguments)
+        ..['decision'] = decision
+        ..['decision_reason'] = 'user';
+      if (scope != null) args['decision_scope'] = scope;
+      final int index = run.toolCalls.indexOf(call);
+      run.toolCalls[index] = ToolCall(
+        id: call.id,
+        name: call.name,
+        arguments: args,
+        status: call.status,
+        result: jsonEncode(<String, dynamic>{...args}..remove('action')),
+        startedAt: call.startedAt,
+      )..completedAt = call.completedAt;
+      notifyListeners();
+      return;
+    }
+  }
+  // ── end F1 ──
+
   /// Accumulates the model's thinking for the run.
   void reasoning(String sessionKey, String text) {
     if (text.isEmpty) return;
@@ -1019,6 +1150,7 @@ class AgentsRunLedger extends ChangeNotifier {
     DateTime? finishedAt,
     int? firstMid,
     int? lastMid,
+    AgentsRunCost? cost, // F1: cost
   }) {
     final run = _ensure(sessionKey);
     run.running = false;
@@ -1036,6 +1168,15 @@ class AgentsRunLedger extends ChangeNotifier {
     if (finishedAt != null) run.finishedAt = finishedAt;
     if (firstMid != null) run.firstMid = firstMid;
     if (lastMid != null) run.lastMid = lastMid;
+    // ── F1: approvals + cost ──
+    // The cost and the run id ride on the answer as one call. A second
+    // finish (the thread view also closes the run) may carry less: it never
+    // removes what the first one put there, and the call is kept once.
+    if (cost != null) run.cost = cost;
+    // The run id rides along too: it folds a quiet automation run to one
+    // line ("notify only on change").
+    putRunMeta(run.toolCalls, runMetaCall(cost: cost, runId: runId));
+    // ── end F1 ──
     // Nothing may be left spinning once the host says the run is over.
     finalizeStaleToolCalls(run.toolCalls);
     notifyListeners();

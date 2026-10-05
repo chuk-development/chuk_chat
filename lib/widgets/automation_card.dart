@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/ui/expressive/icon_map.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
 import 'package:chuk_chat/services/automations/agents_automation.dart';
 import 'package:chuk_chat/utils/theme_extensions.dart';
@@ -29,6 +30,7 @@ class AutomationCard extends StatefulWidget {
     this.onPause,
     this.onResume,
     this.onCancel,
+    this.onEdit,
     this.compact = false,
   });
 
@@ -36,6 +38,10 @@ class AutomationCard extends StatefulWidget {
   final VoidCallback? onPause;
   final VoidCallback? onResume;
   final VoidCallback? onCancel;
+
+  /// Opens the edit sheet. Null hides the action (a watcher's script is the
+  /// model's to change, and a finished row cannot change).
+  final VoidCallback? onEdit;
 
   /// A tighter layout for the strip above a chat: no task text, no expanding.
   final bool compact;
@@ -60,28 +66,51 @@ class _AutomationCardState extends State<AutomationCard> {
       'failed' => scheme.errorContainer,
       _ => m3.surfaceContainerHighest,
     };
-    final IconData icon = a.isWatcher
-        ? Icons.visibility_outlined
-        : Icons.schedule;
+    final l10n = AppLocalizations.of(context);
+    final IconData icon = switch (a.trigger) {
+      'script' => Icons.visibility_outlined,
+      'page' => Icons.public,
+      'mail' => Icons.mail_outline,
+      _ => Icons.schedule,
+    };
+    final String kindLabel = switch (a.trigger) {
+      'script' => 'Watcher',
+      'page' => l10n?.automationTriggerPage ?? 'Page',
+      'mail' => l10n?.automationTriggerMail ?? 'Mail',
+      _ => l10n?.automationTriggerClock ?? 'Schedule',
+    };
 
     // The kind first, then the schedule or the script, then the clock facts.
-    // One term per thing: a schedule has a next time, a watcher has reports.
+    // One term per thing: a schedule has a next time, a watcher has reports,
+    // a page watch has a next check (a check fires only when the page
+    // changed, so it is not a "next run").
     final facts = <String>[
-      a.isWatcher ? 'Watcher' : 'Schedule',
+      kindLabel,
       a.specLabel,
       if (a.isActive && a.nextFireAt != null)
-        'next ${_relative(a.nextFireAt!)}',
+        a.isWatchUrl
+            ? (l10n?.automationNextCheck(_relative(a.nextFireAt!)) ??
+                  'next check ${_relative(a.nextFireAt!)}')
+            : 'next ${_relative(a.nextFireAt!)}',
       if (a.lastFiredAt != null) 'last ${_relative(a.lastFiredAt!)}',
       if (a.fireCount > 0)
         a.fireCount == 1 ? 'fired once' : 'fired ${a.fireCount}×',
       if (a.suppressedCount > 0) '${a.suppressedCount} folded',
+      if (a.notifiesOnChange)
+        l10n?.automationNotifyChangeShort ?? 'notifies on change',
+      if (a.unchangedCount == 1) l10n?.automationQuietOne ?? 'quiet 1 run',
+      if (a.unchangedCount > 1)
+        l10n?.automationQuietMany('${a.unchangedCount}') ??
+            'quiet ${a.unchangedCount} runs',
     ];
+    final String? lastSummary = widget.compact ? null : a.lastSummary;
 
     // The task text is a full-page detail; the last error belongs everywhere,
     // including the strip above a chat — it is the reason a watcher stopped.
     final bool hasPrompt = !widget.compact && a.prompt.isNotEmpty;
     final bool hasError = a.lastError != null;
-    final bool hasDetail = hasPrompt || hasError;
+    final bool hasDetail =
+        hasPrompt || hasError || (!widget.compact && a.lastSummary != null);
 
     final Widget row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -142,8 +171,23 @@ class _AutomationCardState extends State<AutomationCard> {
                       height: 1.35,
                     ),
                   ),
-                if (hasError) ...[
+                if (lastSummary != null) ...[
                   if (hasPrompt) const SizedBox(height: 4),
+                  Text(
+                    '${l10n?.automationLastResult ?? 'Last result'}: '
+                    '$lastSummary',
+                    key: ValueKey<String>('automation-summary-${a.id}'),
+                    maxLines: _open ? 20 : 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: scheme.onSurface,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+                if (hasError) ...[
+                  if (hasPrompt || lastSummary != null)
+                    const SizedBox(height: 4),
                   Text(
                     a.lastError!,
                     maxLines: _open ? 20 : 2,
@@ -170,7 +214,7 @@ class _AutomationCardState extends State<AutomationCard> {
       );
     }
     return ExpressiveTile(
-      onTap: hasPrompt ? () => setState(() => _open = !_open) : null,
+      onTap: hasDetail ? () => setState(() => _open = !_open) : null,
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       child: row,
     );
@@ -180,7 +224,14 @@ class _AutomationCardState extends State<AutomationCard> {
   /// button is the same box, so the right edge of every row lines up.
   Widget _actions() {
     final a = widget.automation;
+    final l10n = AppLocalizations.of(context);
     final buttons = <Widget>[
+      if (widget.onEdit != null && !a.isWatcher)
+        _action(
+          Icons.edit_outlined,
+          l10n?.automationEditTooltip ?? 'Edit',
+          widget.onEdit!,
+        ),
       if (a.isActive && widget.onPause != null)
         _action(Icons.pause_circle_outline, 'Pause', widget.onPause!),
       if (a.isPaused && widget.onResume != null)

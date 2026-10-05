@@ -182,6 +182,32 @@ Future<void> _sendOverRelay(Map<String, dynamic> payload) async {
 /// the permission frames. The app sends them to no other host.
 const String kAgentPermissionsCapability = 'agent_permissions';
 
+// ── F2: automations + cost totals ──
+/// The capability a host names when it keeps a weekly euro budget per
+/// coworker (docs/WIRE_CONTRACT.md, "The budget setting"). `budget_weekly`
+/// goes to no other host.
+const String kCostBudgetCapability = 'cost_budget';
+
+/// The largest weekly budget the host accepts, in euro.
+const double kBudgetWeeklyMax = 10000;
+
+/// Reads what the user typed as a weekly budget: euro with a dot or a comma,
+/// an optional `€`, empty = 0 (no limit). Null when it is not a number in
+/// 0..[kBudgetWeeklyMax]. Rounded to cents, as the host stores it.
+double? parseBudgetWeekly(String text) {
+  final String cleaned = text
+      .replaceAll('€', '')
+      .replaceAll(' ', '')
+      .replaceAll(',', '.')
+      .trim();
+  if (cleaned.isEmpty) return 0;
+  final double? value = double.tryParse(cleaned);
+  if (value == null || !value.isFinite) return null;
+  if (value < 0 || value > kBudgetWeeklyMax) return null;
+  return (value * 100).round() / 100;
+}
+// ── end F2 ──
+
 /// The app's copy of the host's answers, per coworker.
 ///
 /// It sends nothing to a host that did not name [kAgentPermissionsCapability]:
@@ -214,6 +240,8 @@ class AgentsPermissionsService extends ChangeNotifier {
       <String, Map<String, bool>>{};
   final Map<String, String> _errors = <String, String>{};
   final Map<String, String> _appliesFrom = <String, String>{};
+  // F2: cost totals. The host's weekly budget per coworker (0 = none).
+  final Map<String, double> _budgets = <String, double>{};
 
   /// Routes the relay's `agent_permissions` replies here. Idempotent.
   void attach() {
@@ -313,6 +341,7 @@ class AgentsPermissionsService extends ChangeNotifier {
     } else {
       _errors.remove(agentId);
     }
+    _readApprovals(agentId, payload); // F1: approvals
     final Object? enforced = payload['enforced'];
     if (enforced is Map) {
       _enforced[agentId] = <String, bool>{
@@ -324,8 +353,141 @@ class AgentsPermissionsService extends ChangeNotifier {
     if (appliesFrom is String && appliesFrom.isNotEmpty) {
       _appliesFrom[agentId] = appliesFrom;
     }
+    // F2: cost totals. In every reply for a known agent, also 0.
+    final Object? budget = payload['budget_weekly'];
+    if (budget is num && budget.isFinite) {
+      _budgets[agentId] = budget.toDouble();
+    }
     notifyListeners();
   }
+
+  // ── F2: automations + cost totals ──
+  /// The connected host keeps a weekly budget per coworker.
+  bool get budgetSupported =>
+      _capabilities.value.contains(kCostBudgetCapability);
+
+  /// The coworker's weekly budget as the host last said, in euro; 0 = no
+  /// limit. Null before the host answered with one.
+  double? budgetOf(String agentId) => _budgets[agentId];
+
+  /// Sends `agent_permissions_set` with `budget_weekly` only. The host's
+  /// reply replaces the shown value (or carries `error`, see [errorOf]).
+  /// False when the host does not keep budgets or the frame could not be
+  /// sent. Throws [ArgumentError] for a value outside 0..[kBudgetWeeklyMax].
+  Future<bool> setBudget(String agentId, double euro) async {
+    if (!euro.isFinite || euro < 0 || euro > kBudgetWeeklyMax) {
+      throw ArgumentError.value(euro, 'euro', 'outside 0..10000');
+    }
+    if (!budgetSupported) return false;
+    _errors.remove(agentId);
+    try {
+      await _send(<String, dynamic>{
+        'type': 'agent_permissions_set',
+        'agent_id': agentId,
+        'budget_weekly': (euro * 100).round() / 100,
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+  // ── end F2 ──
+
+  // ── F1: approvals + cost ──
+  final Map<String, AgentApprovals> _approvals = <String, AgentApprovals>{};
+  final Map<String, AgentApprovals> _optimisticApprovals =
+      <String, AgentApprovals>{};
+
+  /// The connected host asks before outward actions and keeps a policy per
+  /// coworker (docs/WIRE_CONTRACT.md, "Per-action approvals").
+  bool get approvalsSupported =>
+      _capabilities.value.contains(kActionApprovalsCapability);
+
+  /// The coworker's approval policy as the host last said, with a choice the
+  /// user just made shown until the host's reply lands. Null before the host
+  /// sent one (an old host never does).
+  AgentApprovals? approvalsOf(String agentId) =>
+      _optimisticApprovals[agentId] ?? _approvals[agentId];
+
+  void _readApprovals(String agentId, Map<String, dynamic> payload) {
+    final Object? approvals = payload['approvals'];
+    // Every `agent_permissions` reply replaces what is shown, so a lasting
+    // answer given on a card in a run lands here at once.
+    _optimisticApprovals.remove(agentId);
+    if (approvals is Map) {
+      _approvals[agentId] = AgentApprovals.fromJson(
+        approvals.map((Object? k, Object? v) => MapEntry('$k', v)),
+      );
+    }
+  }
+
+  /// Sets one class to `ask`, `allow` or `deny`. Sends `approvals` only. False
+  /// when the host does not keep approvals or the frame could not be sent;
+  /// the choice is put back then.
+  Future<bool> setApprovalMode(
+    String agentId,
+    String actionClass,
+    String mode,
+  ) {
+    if (!AgentApprovals.modes.contains(mode)) {
+      throw ArgumentError.value(mode, 'mode', 'not ask, allow or deny');
+    }
+    final AgentApprovals before =
+        approvalsOf(agentId) ?? const AgentApprovals();
+    return _sendApprovals(
+      agentId,
+      optimistic: before.withMode(actionClass, mode),
+      approvals: <String, dynamic>{
+        'classes': <String, String>{actionClass: mode},
+      },
+    );
+  }
+
+  /// Takes [site] off a class's list. The host replaces the WHOLE list of a
+  /// class it is sent, so the list goes out without the site.
+  Future<bool> removeApprovalSite(
+    String agentId,
+    String actionClass,
+    String site,
+  ) {
+    final AgentApprovals before =
+        approvalsOf(agentId) ?? const AgentApprovals();
+    final List<String> rest = <String>[
+      for (final String s in before.sitesOf(actionClass))
+        if (s != site) s,
+    ];
+    return _sendApprovals(
+      agentId,
+      optimistic: before.withSites(actionClass, rest),
+      approvals: <String, dynamic>{
+        'sites': <String, List<String>>{actionClass: rest},
+      },
+    );
+  }
+
+  Future<bool> _sendApprovals(
+    String agentId, {
+    required AgentApprovals optimistic,
+    required Map<String, dynamic> approvals,
+  }) async {
+    if (!approvalsSupported) return false;
+    _optimisticApprovals[agentId] = optimistic;
+    _errors.remove(agentId);
+    notifyListeners();
+    try {
+      await _send(<String, dynamic>{
+        'type': 'agent_permissions_set',
+        'agent_id': agentId,
+        'approvals': approvals,
+      });
+      return true;
+    } catch (_) {
+      _optimisticApprovals.remove(agentId);
+      notifyListeners();
+      return false;
+    }
+  }
+  // ── end F1 ──
 
   @override
   void dispose() {
@@ -342,5 +504,132 @@ class AgentsPermissionsService extends ChangeNotifier {
     _enforced.clear();
     _errors.clear();
     _appliesFrom.clear();
+    _budgets.clear(); // F2: cost totals
+    _approvals.clear(); // F1: approvals
+    _optimisticApprovals.clear(); // F1: approvals
   }
 }
+
+// ── F1: approvals + cost ──
+/// The capability a host names when it asks before outward actions
+/// (docs/WIRE_CONTRACT.md, "Per-action approvals"). `approvals` goes to no
+/// other host.
+const String kActionApprovalsCapability = 'action_approvals';
+
+/// One coworker's approval policy: per action class `ask`, `allow` or `deny`,
+/// the sites a class allows without asking, and the host's defaults.
+@immutable
+class AgentApprovals {
+  const AgentApprovals({
+    this.classes = const <String, String>{},
+    this.sites = const <String, List<String>>{},
+    this.defaults = const <String, String>{},
+    this.appliesFrom = 'next_action',
+  });
+
+  static const String classPublish = 'publish';
+  static const String classSendExternal = 'send_external';
+  static const String classMcpDestructive = 'mcp_destructive';
+  static const String classBrowserAct = 'browser_act';
+
+  static const String modeAsk = 'ask';
+  static const String modeAllow = 'allow';
+  static const String modeDeny = 'deny';
+
+  /// The three modes, in the order the app offers them.
+  static const List<String> modes = <String>[modeAsk, modeAllow, modeDeny];
+
+  /// The classes in the order the app shows them.
+  static const List<String> order = <String>[
+    classSendExternal,
+    classMcpDestructive,
+    classBrowserAct,
+    classPublish,
+  ];
+
+  /// The host's defaults, for a host that leaves `defaults` out.
+  static const Map<String, String> fallbackDefaults = <String, String>{
+    classPublish: modeAsk,
+    classSendExternal: modeAsk,
+    classMcpDestructive: modeAsk,
+    classBrowserAct: modeAllow,
+  };
+
+  /// Effective mode per class, as the host said.
+  final Map<String, String> classes;
+
+  /// Allowed sites per class (only `browser_act` has them today).
+  final Map<String, List<String>> sites;
+
+  /// The default mode per class.
+  final Map<String, String> defaults;
+
+  /// `next_action`: the runtime reads the policy at every class call.
+  final String appliesFrom;
+
+  /// The classes to show: the known ones the host listed, in [order], then
+  /// any newer class the host listed.
+  List<String> get shownClasses => <String>[
+    for (final String c in order)
+      if (classes.containsKey(c)) c,
+    for (final String c in classes.keys)
+      if (!order.contains(c)) c,
+  ];
+
+  String modeOf(String actionClass) =>
+      classes[actionClass] ?? defaultOf(actionClass);
+
+  String defaultOf(String actionClass) =>
+      defaults[actionClass] ?? fallbackDefaults[actionClass] ?? modeAsk;
+
+  List<String> sitesOf(String actionClass) =>
+      sites[actionClass] ?? const <String>[];
+
+  AgentApprovals withMode(String actionClass, String mode) => AgentApprovals(
+    classes: <String, String>{...classes, actionClass: mode},
+    sites: sites,
+    defaults: defaults,
+    appliesFrom: appliesFrom,
+  );
+
+  AgentApprovals withSites(String actionClass, List<String> list) =>
+      AgentApprovals(
+        classes: classes,
+        sites: <String, List<String>>{
+          ...sites,
+          actionClass: List<String>.unmodifiable(list),
+        },
+        defaults: defaults,
+        appliesFrom: appliesFrom,
+      );
+
+  /// Reads the host's `approvals` block. A mode or a site of the wrong type
+  /// is dropped, never guessed.
+  factory AgentApprovals.fromJson(Map<String, dynamic> json) {
+    Map<String, String> modesOf(Object? raw) => <String, String>{
+      if (raw is Map)
+        for (final MapEntry<Object?, Object?> e in raw.entries)
+          if (e.value is String && modes.contains(e.value))
+            '${e.key}': e.value! as String,
+    };
+    final Object? rawSites = json['sites'];
+    final Object? appliesFrom = json['applies_from'];
+    return AgentApprovals(
+      classes: modesOf(json['classes']),
+      defaults: modesOf(json['defaults']),
+      sites: <String, List<String>>{
+        if (rawSites is Map)
+          for (final MapEntry<Object?, Object?> e in rawSites.entries)
+            if (e.value is List)
+              '${e.key}': List<String>.unmodifiable(<String>[
+                for (final Object? site in e.value! as List)
+                  if (site is String && site.isNotEmpty) site,
+              ]),
+      },
+      appliesFrom: appliesFrom is String && appliesFrom.isNotEmpty
+          ? appliesFrom
+          : 'next_action',
+    );
+  }
+}
+// ── end F1 ──

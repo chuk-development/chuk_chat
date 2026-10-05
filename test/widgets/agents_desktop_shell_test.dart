@@ -23,6 +23,7 @@ import 'package:chuk_chat/widgets/agents_desktop/desktop_metrics.dart';
 import 'package:chuk_chat/widgets/agents_desktop/quick_switcher.dart';
 import 'package:chuk_chat/widgets/agents_thread_view.dart';
 import 'package:chuk_chat/widgets/room_create_sheet.dart';
+import 'package:chuk_chat/widgets/coworker_template_picker.dart';
 import 'package:chuk_chat/widgets/sidebar/sidebar_chrome.dart';
 
 import '../support/fake_relay_controller.dart';
@@ -437,8 +438,10 @@ void main() {
       await pumpDesktop(tester);
 
       await shortcut(tester, LogicalKeyboardKey.keyN);
-      expect(find.byType(CoworkerNameDialog), findsOneWidget);
+      // ── templates ──: the template picker, in the centred desktop dialog.
+      expect(find.byType(CoworkerTemplatePicker), findsOneWidget);
       expect(find.byType(BottomSheet), findsNothing);
+      expect(find.byType(AgentsDesktopDialog), findsOneWidget);
       await tester.tap(find.text('Cancel'));
       await tester.pumpAndSettle();
 

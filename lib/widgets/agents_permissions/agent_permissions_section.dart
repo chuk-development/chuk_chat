@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 
 import 'package:chuk_chat/services/agents/agents_permissions_service.dart';
 import 'package:chuk_chat/ui/expressive/feedback.dart';
+import 'package:chuk_chat/widgets/agents_permissions/agent_approvals_section.dart'; // F1
 import 'package:chuk_chat/widgets/expressive_settings.dart';
 
 /// One switch of the section: the wire key, the words and the icon.
@@ -268,6 +269,14 @@ class _AgentPermissionsSectionState extends State<AgentPermissionsSection> {
           text: _statusLine(known),
         ),
         const SizedBox(height: 8),
+        // ── F1: approvals + cost ──
+        // Only for a host that names `action_approvals` and sent a policy.
+        AgentApprovalsSection(
+          agentId: widget.agentId,
+          service: _service,
+          editable: editable,
+        ),
+        // ── end F1 ──
       ],
     );
   }
