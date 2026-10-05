@@ -1118,7 +1118,11 @@ class MCPToolCache:
             data[key] = rows
             if self._path is None:
                 return
-            tmp = self._path.with_name(self._path.name + ".tmp")
+            # One temp file per writer: two hosts on one state dir must not
+            # replace each other's half-written file.
+            tmp = self._path.with_name(
+                f"{self._path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+            )
             try:
                 self._path.parent.mkdir(parents=True, exist_ok=True)
                 fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
@@ -1126,7 +1130,10 @@ class MCPToolCache:
                     json.dump(data, handle)
                 os.replace(tmp, self._path)
             except (OSError, TypeError, ValueError):
-                pass
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
 
 
 class MCPManager:
