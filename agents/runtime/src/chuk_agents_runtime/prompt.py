@@ -92,6 +92,18 @@ job is to remove that friction, not to add to it.
   Python". The user is asking which capabilities are wired up, not which
   languages exist.
 
+# Deferred tools
+
+- Rarely used tools are not in your tool list until you load them. This keeps
+  every request small. They include interactive programs (`shell_start`),
+  background jobs (`job_output`), workspace history and undo
+  (`workspace_undo`), chat documents (`chat_document`), audio and video
+  (`run_ffmpeg`), and the tools of the connected MCP servers, the browser
+  among them (`browser_navigate`).
+- When you need a tool that is not in your tool list, call `search_tools` with
+  its name or a few words of what it does. Then call the tool it returns. A
+  tool that a skill names works the same way.
+
 # Online research
 
 - For online discovery and current facts, use `web_search`, the account-backed
@@ -151,18 +163,49 @@ job is to remove that friction, not to add to it.
   the user did not clearly ask for it, ask first, then do it.
 """
 
+def _base_section(title: str, next_title: str) -> str:
+    """The body of one ``# title`` section of :data:`BASE_INSTRUCTIONS`, up to
+    (not including) ``# next_title``."""
+    return BASE_INSTRUCTIONS.split(f"# {title}\n", 1)[1].split(f"# {next_title}\n", 1)[0]
+
+
 def upgrade_research_instructions(prompt: str) -> str:
     """Bring pre-existing Agents sessions up to date without replacing memory.
 
-    Stored personas/catalogues remain frozen. Only the missing built-in research
-    section is added to the outbound system message; transcript rows stay intact.
+    Stored personas/catalogues remain frozen. Only the missing built-in
+    sections (online research, deferred tools) are added to the outbound
+    system message; transcript rows stay intact. The result depends on the
+    stored prompt alone, so it is the same text on every round and the prefix
+    cache holds.
     """
     # Sessions seeded before the Pydantic AI loop name the old bridge tool;
     # deferred tools are found with ``search_tools`` now. The quoted name is
     # specific enough to rewrite in any system prompt.
     prompt = prompt.replace("`tool_search`", "`search_tools`")
-    if not prompt.startswith("You are Agents, an AI coworker."):
+    if not prompt.startswith(_BUILT_IN_HEADS):
         return prompt
+    return _add_deferred_tools(_add_research(prompt))
+
+
+#: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts: today, and before
+#: the product was renamed from CoWork to Agents (those sessions are still live).
+_BUILT_IN_HEADS = ("You are Agents, an AI coworker.", "You are CoWork, an AI coworker.")
+
+
+def _add_deferred_tools(prompt: str) -> str:
+    """Sessions seeded before the rarely used tools went behind
+    ``search_tools`` (bead chuk_chat-b3g4) get the section that says so, in
+    front of the section it was written in front of."""
+    if "\n# Deferred tools\n" in prompt:
+        return prompt
+    for anchor in ("\n# Online research\n", "\n# Your workspace\n"):
+        if anchor in prompt:
+            section = _base_section("Deferred tools", "Online research")
+            return prompt.replace(anchor, "\n# Deferred tools\n" + section + anchor[1:], 1)
+    return prompt
+
+
+def _add_research(prompt: str) -> str:
     if "\n# Online research\n" in prompt or "\n# Your workspace\n" not in prompt:
         return prompt
     research = BASE_INSTRUCTIONS.split("# Online research\n", 1)[1].split(
@@ -276,8 +319,8 @@ def build_system_prompt(
         parts.append(
             "# Connected MCP servers\n\n"
             + "\n".join(f"- {name}" for name in names)
-            + "\n\nThese are wired up for you. Their tools are in your tool list, or "
-            "found with `search_tools` when deferred."
+            + "\n\nThese are wired up for you. Load their tools with `search_tools` "
+            "(the server name or what you need), then call them."
         )
     if memory and memory.strip():
         parts.append(memory.strip())

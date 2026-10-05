@@ -659,7 +659,15 @@ def register_shell_tools(registry: ToolRegistry, manager: TerminalManager) -> Sh
     offered or dispatched."""
     tools = ShellTools(manager)
     for name, handler in make_shell_handlers(tools).items():
-        registry.register(name, _SHELL_SCHEMAS[name], handler, check_fn=manager.tmux_available)
+        # Deferrable (§7.2, bead chuk_chat-b3g4): behind ``search_tools`` until
+        # a task needs an interactive program.
+        registry.register(
+            name,
+            _SHELL_SCHEMAS[name],
+            handler,
+            check_fn=manager.tmux_available,
+            deferrable=True,
+        )
     return tools
 
 
@@ -678,6 +686,8 @@ def register_job_tools(registry: ToolRegistry, jobs: JobManager | None) -> None:
     def job_cancel(job_id: str) -> dict:
         return jobs.cancel(job_id)
 
-    registry.register("job_status", JOB_STATUS_SCHEMA, job_status)
-    registry.register("job_output", JOB_OUTPUT_SCHEMA, job_output)
-    registry.register("job_cancel", JOB_CANCEL_SCHEMA, job_cancel)
+    # Deferrable (§7.2, bead chuk_chat-b3g4): behind ``search_tools`` until a
+    # task needs it, so its schema is not paid on every round of every task.
+    registry.register("job_status", JOB_STATUS_SCHEMA, job_status, deferrable=True)
+    registry.register("job_output", JOB_OUTPUT_SCHEMA, job_output, deferrable=True)
+    registry.register("job_cancel", JOB_CANCEL_SCHEMA, job_cancel, deferrable=True)

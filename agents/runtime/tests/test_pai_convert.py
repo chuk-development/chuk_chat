@@ -100,3 +100,42 @@ def test_a_non_dict_entry_among_old_bridge_calls_is_ignored_safely():
     ]
     response = rows_to_messages(rows)[1]
     assert [p.tool_name for p in response.parts] == ["search_tools"]
+
+
+def test_a_deferred_call_with_a_stored_result_gets_a_discovery_record():
+    from pydantic_ai.messages import ToolSearchCallPart, ToolSearchReturnPart
+    from pydantic_ai.toolsets._tool_search import parse_discovered_tools
+
+    from chuk_agents_runtime.pai.convert import DISCOVERY_ID_PREFIX, rows_to_messages
+
+    rows = [
+        {"role": "user", "content": "ring me"},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {"id": "c1", "type": "function", "function": {"name": "call_user", "arguments": {}}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c1", "name": "call_user", "content": {"ok": True}},
+        {
+            "role": "assistant",
+            "tool_calls": [
+                {"id": "c2", "type": "function", "function": {"name": "call_user", "arguments": {}}}
+            ],
+        },
+        {"role": "tool", "tool_call_id": "c2", "name": "call_user", "content": {"ok": True}},
+    ]
+    plain = rows_to_messages(rows)
+    assert "call_user" not in parse_discovered_tools(plain)
+
+    messages = rows_to_messages(rows, deferred=["call_user"])
+    assert "call_user" in parse_discovered_tools(messages)
+    first, second = messages[1], messages[3]
+    # One search exchange, for the first call only; call and answer pair up.
+    assert isinstance(first.parts[0], ToolSearchCallPart)
+    assert first.parts[0].tool_call_id == DISCOVERY_ID_PREFIX + "c1"
+    assert not any(isinstance(p, ToolSearchCallPart) for p in second.parts)
+    answer = messages[2].parts[0]
+    assert isinstance(answer, ToolSearchReturnPart)
+    assert answer.tool_call_id == DISCOVERY_ID_PREFIX + "c1"
+    assert messages[2].parts[1].tool_call_id == "c1"

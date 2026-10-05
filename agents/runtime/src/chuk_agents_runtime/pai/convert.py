@@ -222,8 +222,16 @@ def _rewrite_bridge(rows: Iterable[dict]) -> list[dict]:
     return rows
 
 
+#: Prefix of the call id of a synthesized discovery exchange (see
+#: :func:`rows_to_messages`). Never stored; rebuilt on every read.
+DISCOVERY_ID_PREFIX = "found_"
+
+
 def rows_to_messages(
-    rows: Iterable[dict], *, include_reasoning: bool = False
+    rows: Iterable[dict],
+    *,
+    include_reasoning: bool = False,
+    deferred: Iterable[str] = (),
 ) -> list[ModelMessage]:
     """The stored conversation as Pydantic AI messages.
 
@@ -231,7 +239,23 @@ def rows_to_messages(
     :class:`ModelRequest`, each assistant row is one :class:`ModelResponse`.
     The order of the rows is kept exactly, so the tool results of one turn stay
     in the request that follows it.
+
+    ``deferred`` names the tools hidden behind ``search_tools``. A stored call
+    of one of them that has a stored result (the loop ran it although the
+    model had not searched for it) gets a discovery record: a ``search_tools``
+    call before it and its :class:`ToolSearchReturnPart` before the result.
+    Pydantic AI reads discovered tools from exactly those parts, so a later
+    call of the same tool is not refused again. The pair is a complete
+    exchange on the wire (call and answer), so no provider sees an orphan.
     """
+    rows = _rewrite_bridge(rows)
+    hidden = set(deferred)
+    discovered: set[str] = set()
+    synthesized: dict[str, str] = {}
+    if hidden:
+        answered = {
+            str(r.get("tool_call_id") or "") for r in rows if r.get("role") == "tool"
+        }
     out: list[ModelMessage] = []
     pending: list[ModelRequestPart] = []
 
@@ -240,16 +264,63 @@ def rows_to_messages(
             out.append(ModelRequest(parts=list(pending)))
             pending.clear()
 
-    for row in _rewrite_bridge(rows):
+    for row in rows:
         if row.get("role") == "assistant":
             flush()
-            out.append(row_to_response(row, include_reasoning=include_reasoning))
+            response = row_to_response(row, include_reasoning=include_reasoning)
+            if hidden:
+                response = _with_discovery(response, hidden, discovered, answered, synthesized)
+            out.append(response)
             continue
         part = row_to_request_part(row)
-        if part is not None:
-            pending.append(part)
+        if part is None:
+            continue
+        if isinstance(part, ToolSearchReturnPart):
+            discovered.update(
+                str(m.get("name")) for m in part.content.get("discovered_tools") or [] if isinstance(m, dict)
+            )
+        found = synthesized.get(str(row.get("tool_call_id") or "")) if row.get("role") == "tool" else None
+        if found is not None:
+            pending.append(
+                ToolSearchReturnPart(
+                    content={"discovered_tools": [{"name": found}]},
+                    tool_call_id=DISCOVERY_ID_PREFIX + str(row.get("tool_call_id") or ""),
+                )
+            )
+        pending.append(part)
     flush()
     return out
+
+
+def _with_discovery(
+    response: ModelResponse,
+    hidden: set[str],
+    discovered: set[str],
+    answered: set[str],
+    synthesized: dict[str, str],
+) -> ModelResponse:
+    """Put a ``search_tools`` call before each first call of a hidden tool
+    the model had not discovered (and whose result is stored)."""
+    parts: list[ModelResponsePart] = []
+    changed = False
+    for part in response.parts:
+        if (
+            isinstance(part, ToolCallPart)
+            and part.tool_name in hidden
+            and part.tool_name not in discovered
+            and part.tool_call_id in answered
+        ):
+            parts.append(
+                ToolSearchCallPart(
+                    args={"queries": [part.tool_name]},  # type: ignore[arg-type]
+                    tool_call_id=DISCOVERY_ID_PREFIX + part.tool_call_id,
+                )
+            )
+            synthesized[part.tool_call_id] = part.tool_name
+            discovered.add(part.tool_name)
+            changed = True
+        parts.append(part)
+    return ModelResponse(parts=parts) if changed else response
 
 
 # -- the other direction ------------------------------------------------------

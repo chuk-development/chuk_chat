@@ -447,3 +447,47 @@ def test_automatic_memory_is_off_for_a_scripted_writer_and_on_for_a_real_one(tmp
     assert MemoryStore(tmp_path).automatic is False
     assert MemoryStore(tmp_path, llm_client=Clonable()).automatic is True
     assert MemoryStore(tmp_path, mem0_memory=StubMemory()).automatic is True
+
+
+def test_observe_summary_runs_off_the_callers_thread(tmp_path):
+    """Bead chuk_chat-sa7r: the Mem0 summary extraction is an aux call, and the
+    context ladder may fire it from a turn that waits to send its payload. So
+    the ladder's hook (``observe_summary``) runs it on a private clone in the
+    background, like the turn extraction."""
+
+    class Clonable(StubBackend):
+        def cheap_clone(self):
+            return StubBackend()
+
+    mem = StubMemory()
+    store = MemoryStore(tmp_path, llm_client=Clonable(), mem0_memory=mem)
+    thread = store.observe_summary("GOAL: ship v2\nDECISIONS: port 8787")
+    assert thread is not None
+    thread.join(5.0)
+    assert not thread.is_alive()
+    assert len(mem.added) == 1
+    assert "port 8787" in mem.added[0][0][0]["content"]
+    assert store.observe_summary("   ") is None
+
+
+def test_the_ladder_hands_summaries_to_observe_summary(tmp_path, monkeypatch):
+    from chuk_agents_runtime.model import MockModelClient
+    from chuk_agents_runtime.runtime import build_runtime
+
+    monkeypatch.setenv("AGENTS_MEM_BACKEND", "mem0")
+
+    class Clonable(MockModelClient):
+        def cheap_clone(self):
+            return MockModelClient([])
+
+    loop = build_runtime(
+        MockModelClient([]),
+        db_path=str(tmp_path / "a.db"),
+        workspace=str(tmp_path / "ws"),
+        aux_model=Clonable([]),
+        version_workspace=False,
+    )
+    hook = loop.context_ladder.on_summary
+    assert getattr(hook, "__name__", "") == "observe_summary"
+    # A clonable aux client also gives the ladder its background summarizer.
+    assert loop.context_ladder.summarizer_factory is not None

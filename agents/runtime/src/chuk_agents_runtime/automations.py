@@ -513,21 +513,19 @@ def register_automation_tools(registry: ToolRegistry, backend: AutomationBackend
     """
     if backend is None:
         return
-    registry.register("schedule_task", SCHEDULE_TASK_SCHEMA, make_schedule_task_handler(backend))
-    registry.register("start_watcher", START_WATCHER_SCHEMA, make_start_watcher_handler(backend))
-    registry.register(
-        "list_automations", LIST_AUTOMATIONS_SCHEMA, make_list_automations_handler(backend)
+    # Deferred behind ``search_tools`` (bead chuk_chat-b3g4): rarely needed,
+    # and a call the model makes without searching still runs (the loop
+    # dispatches it and records the discovery).
+    tools = (
+        ("schedule_task", SCHEDULE_TASK_SCHEMA, make_schedule_task_handler(backend)),
+        ("start_watcher", START_WATCHER_SCHEMA, make_start_watcher_handler(backend)),
+        ("list_automations", LIST_AUTOMATIONS_SCHEMA, make_list_automations_handler(backend)),
+        ("pause_automation", PAUSE_AUTOMATION_SCHEMA, make_control_handler(backend, "pause")),
+        ("resume_automation", RESUME_AUTOMATION_SCHEMA, make_control_handler(backend, "resume")),
+        ("cancel_automation", CANCEL_AUTOMATION_SCHEMA, make_control_handler(backend, "cancel")),
     )
-    registry.register(
-        "pause_automation", PAUSE_AUTOMATION_SCHEMA, make_control_handler(backend, "pause")
-    )
-    registry.register(
-        "resume_automation", RESUME_AUTOMATION_SCHEMA, make_control_handler(backend, "resume")
-    )
-    registry.register(
-        "cancel_automation", CANCEL_AUTOMATION_SCHEMA, make_control_handler(backend, "cancel")
-    )
-
+    for name, schema, handler in tools:
+        registry.register(name, schema, handler, deferrable=True)
 
 AUTOMATION_TOOL_NAMES = (
     "schedule_task",

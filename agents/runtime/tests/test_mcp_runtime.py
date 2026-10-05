@@ -64,15 +64,30 @@ def test_no_config_means_no_servers_and_no_bridge(workspace):
     try:
         assert loop.mcp is not None
         assert loop.mcp.configs == []
-        assert loop.tool_search.active is False
+        # Built-in rarely used tools may be deferred; no MCP tool can be.
+        assert not [n for n in loop.tool_search.deferred if n.startswith("mcp__")]
         assert "tool_search" not in render_tool_docs(loop.registry)
     finally:
         loop.mcp.close()
 
 
-def test_small_server_stays_visible_in_the_prompt(workspace):
+def test_small_server_is_deferred_by_default(workspace):
+    """Bead chuk_chat-b3g4: an MCP server's tools leave the request from the
+    first round, however few they are; the core tools stay."""
     write_config(workspace, extra_tools=0)
     loop = build(workspace)
+    try:
+        docs = render_tool_docs(loop.registry)
+        assert "mcp__records__shout" not in docs
+        assert "mcp__records__shout" in loop.tool_search.deferred
+        assert "## run_command" in docs
+    finally:
+        loop.mcp.close()
+
+
+def test_small_server_stays_visible_under_the_size_rule(workspace):
+    write_config(workspace, extra_tools=0)
+    loop = build(workspace, tool_search_threshold=0.10)
     try:
         docs = render_tool_docs(loop.registry)
         assert "## mcp__records__shout" in docs

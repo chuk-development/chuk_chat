@@ -37,9 +37,10 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -535,6 +536,46 @@ def _default_effort(models: list[dict[str, Any]], model_id: str) -> str | None:
     return None
 
 
+# -- the housekeeping (aux) model ---------------------------------------------
+
+#: The default aux model (bead chuk_chat-sa7r): the context summary and the
+#: Mem0 extraction run on it. It must be cheap and fast, and it must really
+#: turn reasoning off: ``glm-5.3-flash`` has mandatory reasoning, so
+#: ``reasoning_effort="none"`` was clamped to its weakest level and every
+#: summary still thought for 5-17k tokens. DeepSeek V4 Flash lists ``none``
+#: (reasoning is optional), costs $0.05 / $0.16 per M tokens and has a 1.3M
+#: context. Keep it equal to ``model.aux`` in chuk_agents_config.
+DEFAULT_AUX_MODEL = "deepseek/deepseek-v4-flash-0731"
+DEFAULT_AUX_REASONING_EFFORT = "none"
+AUX_MODEL_ENV = "AGENTS_MODEL_AUX"
+AUX_PROVIDER_ENV = "AGENTS_MODEL_AUX_PROVIDER"
+AUX_REASONING_ENV = "AGENTS_MODEL_AUX_REASONING_EFFORT"
+
+
+@dataclass(frozen=True)
+class AuxModelSettings:
+    """What the housekeeping client runs on. ``model_id`` ``None`` = the
+    task's own model (and its provider pin)."""
+
+    model_id: str | None
+    provider_slug: str | None
+    reasoning_effort: str | None
+
+
+def aux_model_settings(environ: Mapping[str, str] | None = None) -> AuxModelSettings:
+    """``model.aux`` / ``model.aux_provider`` / ``model.aux_reasoning_effort``
+    from the environment, read at call time. An unset variable takes the
+    default; ``AGENTS_MODEL_AUX`` set to an empty string means "the task's
+    own model" (the behaviour before chuk_chat-sa7r)."""
+    env = os.environ if environ is None else environ
+    raw_model = env.get(AUX_MODEL_ENV)
+    model_id = DEFAULT_AUX_MODEL if raw_model is None else (raw_model.strip() or None)
+    provider = (env.get(AUX_PROVIDER_ENV) or "").strip() or None
+    raw_effort = env.get(AUX_REASONING_ENV)
+    effort = DEFAULT_AUX_REASONING_EFFORT if raw_effort is None else (raw_effort.strip() or None)
+    return AuxModelSettings(model_id=model_id, provider_slug=provider, reasoning_effort=effort)
+
+
 # -- the /v2/ws model client --------------------------------------------------
 
 
@@ -756,16 +797,26 @@ class BackendModelClient:
     # -- clones, tools, lifecycle ------------------------------------------
 
     def cheap_clone(self, *, max_tokens: int = 512) -> "BackendModelClient":
-        """The same model on the same session, reasoning off and a small
-        output cap: the housekeeping client (context summary, memory
-        extraction) that must not spend frontier thinking."""
+        """The housekeeping client (context summary, memory extraction) on the
+        same session: the configured aux model (:func:`aux_model_settings`,
+        by default a fast model whose reasoning really turns off), reasoning
+        off and a small output cap. It carries no tools. The task's provider
+        pin is kept only when the aux model is the task's own model: a slug
+        of another model's provider would be refused."""
+        aux = aux_model_settings()
+        if aux.model_id is None or aux.model_id == self._model_id:
+            model_id = self._model_id
+            provider = aux.provider_slug or self._provider_slug
+        else:
+            model_id = aux.model_id
+            provider = aux.provider_slug
         return BackendModelClient(
             self._session,
-            model_id=self._model_id,
-            provider_slug=self._provider_slug,
+            model_id=model_id,
+            provider_slug=provider,
             base_url=self._base_url,
             max_tokens=max_tokens,
-            reasoning_effort="none",
+            reasoning_effort=aux.reasoning_effort,
             transport=self._transport,
             timeout=self._timeout,
             clock=self._clock,
