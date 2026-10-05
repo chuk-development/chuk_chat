@@ -10,6 +10,12 @@ Storage: one JSON file in the host's state directory
 per agent, so a default that changes later still reaches every agent that
 never touched that switch. The file is rewritten atomically on every change.
 
+Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action approvals", bead
+chuk_chat-mxxm) live in the same file, under ``approvals``: per agent, the
+mode the user set for each action class and the allowed sites. They ride the
+same two frames (``approvals`` next to ``permissions``) and, unlike the
+sandbox switches, apply from the next action, also inside a running task.
+
 Enforcement is not here. The sandbox carries the policy
 (:class:`chuk_agents_sandbox.SandboxPolicy`): the host hands every per-agent
 environment a *provider* over this store, and the executor reads that provider
@@ -27,6 +33,13 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from chuk_agents_runtime.action_policy import (
+    ACTION_CLASSES,
+    SCOPE_AGENT,
+    SCOPE_SITE,
+    ActionPolicy,
+    ActionPolicyError,
+)
 from chuk_agents_sandbox import (
     PERMISSION_KEYS,
     BaseEnvironment,
@@ -51,10 +64,16 @@ FRAMES = (FRAME_GET, FRAME_SET)
 #: When a change takes effect. Always the next task: the executor reads the
 #: policy at a task's start, and a container is only rebuilt there.
 APPLIES_FROM = "next_task"
+#: When an approvals change takes effect: the next action, also in a running
+#: task (the runtime reads the policy at every call).
+APPROVALS_APPLY_FROM = "next_action"
 
 #: What the host says it can do (``host_route.capabilities``): the app sends
 #: the permission frames only to a host that names this.
 CAPABILITY = "agent_permissions"
+#: The host also keeps per-action approvals (``approvals`` in the same frames,
+#: the ``options`` / ``scope`` of ``approval_request`` / ``approval_decision``).
+APPROVALS_CAPABILITY = "action_approvals"
 
 MAX_AGENT_ID_LEN = 256
 
@@ -88,6 +107,7 @@ class AgentPermissionsStore:
         self._defaults = defaults or host_defaults()
         self._log = log or (lambda _msg: None)
         self._lock = threading.Lock()
+        self._approvals: dict[str, ActionPolicy] = {}
         self._overrides: dict[str, dict[str, Any]] = self._load()
 
     @property
@@ -121,6 +141,11 @@ class AgentPermissionsStore:
         with self._lock:
             return {agent: dict(values) for agent, values in self._overrides.items()}
 
+    def approvals(self, agent_id: str) -> ActionPolicy:
+        """The agent's per-action approval policy (the defaults when unset)."""
+        with self._lock:
+            return self._approvals.get(agent_id) or ActionPolicy()
+
     # ------------------------------------------------------------------ #
     # Writes
     # ------------------------------------------------------------------ #
@@ -148,6 +173,48 @@ class AgentPermissionsStore:
                 raise
         return policy
 
+    def update_approvals(self, agent_id: str, partial: Mapping[str, Any]) -> ActionPolicy:
+        """Apply an app ``set`` of approvals and persist it. Raises
+        :class:`ActionPolicyError` for a bad change; nothing changes then."""
+        with self._lock:
+            before = self._approvals.get(agent_id)
+            policy = (before or ActionPolicy()).updated(partial)
+            self._put_approvals_locked(agent_id, policy, before)
+        return policy
+
+    def remember_approval(
+        self, agent_id: str, action_class: str, scope: str, site: str | None = None
+    ) -> ActionPolicy | None:
+        """Store a decision with a lasting scope (``always_this_agent`` /
+        ``always_this_site``). Returns the new policy, or ``None`` when
+        nothing changed (``once``, ``deny``, a site already covered)."""
+        if action_class not in ACTION_CLASSES or scope not in (SCOPE_AGENT, SCOPE_SITE):
+            return None
+        with self._lock:
+            before = self._approvals.get(agent_id)
+            current = before or ActionPolicy()
+            policy = current.remembered(action_class, scope, site)
+            if policy == current:
+                return None
+            self._put_approvals_locked(agent_id, policy, before)
+        return policy
+
+    def _put_approvals_locked(
+        self, agent_id: str, policy: ActionPolicy, before: ActionPolicy | None
+    ) -> None:
+        if policy.to_stored():
+            self._approvals[agent_id] = policy
+        else:
+            self._approvals.pop(agent_id, None)
+        try:
+            self._save_locked()
+        except OSError:
+            if before is None:
+                self._approvals.pop(agent_id, None)
+            else:
+                self._approvals[agent_id] = before
+            raise
+
     # ------------------------------------------------------------------ #
     # File
     # ------------------------------------------------------------------ #
@@ -159,6 +226,15 @@ class AgentPermissionsStore:
         except (OSError, ValueError) as exc:
             self._log(f"[permissions] unreadable {self._path.name}: {type(exc).__name__}")
             return {}
+        approvals = raw.get("approvals") if isinstance(raw, dict) else None
+        if isinstance(approvals, dict):
+            for agent_id, values in approvals.items():
+                if not isinstance(agent_id, str):
+                    continue
+                try:
+                    self._approvals[agent_id] = ActionPolicy.from_stored(values)
+                except ActionPolicyError as exc:
+                    self._log(f"[permissions] dropped the approvals of {agent_id!r}: {exc}")
         agents = raw.get("agents") if isinstance(raw, dict) else None
         if not isinstance(agents, dict):
             return {}
@@ -178,11 +254,15 @@ class AgentPermissionsStore:
         if self._path is None:
             return
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        body = json.dumps(
-            {"version": _FILE_VERSION, "agents": self._overrides},
-            indent=2,
-            sort_keys=True,
-        )
+        document: dict[str, Any] = {"version": _FILE_VERSION, "agents": self._overrides}
+        approvals = {
+            agent: policy.to_stored()
+            for agent, policy in self._approvals.items()
+            if policy.to_stored()
+        }
+        if approvals:
+            document["approvals"] = approvals
+        body = json.dumps(document, indent=2, sort_keys=True)
         fd, tmp = tempfile.mkstemp(prefix=".agent_permissions.", dir=self._path.parent)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as handle:
@@ -233,10 +313,13 @@ def permissions_payload(
     *,
     enforced: Mapping[str, bool] | None = None,
     error: str | None = None,
+    approvals: ActionPolicy | None = None,
 ) -> dict[str, Any]:
     """The ``agent_permissions`` reply: every key, which ones this host really
     enforces, and when a change applies. ``policy`` is ``None`` only when there
-    is no agent to report (then ``error`` says why)."""
+    is no agent to report (then ``error`` says why). ``approvals`` adds the
+    agent's per-action approval policy (docs/WIRE_CONTRACT.md, "Per-action
+    approvals")."""
     payload: dict[str, Any] = {
         "type": FRAME_REPLY,
         "agent_id": agent_id,
@@ -245,6 +328,8 @@ def permissions_payload(
     }
     if policy is not None:
         payload["permissions"] = policy.to_dict()
+    if approvals is not None:
+        payload["approvals"] = {**approvals.to_dict(), "applies_from": APPROVALS_APPLY_FROM}
     if error:
         payload["error"] = error
     return payload
@@ -277,8 +362,10 @@ def handle_permissions_frame(
     raw_id = payload.get("agent_id") if isinstance(payload, Mapping) else None
     agent_id = raw_id if isinstance(raw_id, str) and len(raw_id) <= MAX_AGENT_ID_LEN else ""
 
-    def refused(error: str, policy: SandboxPolicy | None = None):
-        reply = permissions_payload(agent_id, policy, enforced=enforced, error=error)
+    def refused(error: str, policy: SandboxPolicy | None = None, approvals=None):
+        reply = permissions_payload(
+            agent_id, policy, enforced=enforced, error=error, approvals=approvals
+        )
         return reply, None, None
 
     if kind not in FRAMES:
@@ -289,28 +376,92 @@ def handle_permissions_frame(
     if not key:
         return refused(f"unknown agent {agent_id[:80]!r}")
     current = store.get(key)
+    current_approvals = store.approvals(key)
     if kind == FRAME_GET:
-        return permissions_payload(agent_id, current, enforced=enforced), None, None
+        reply = permissions_payload(
+            agent_id, current, enforced=enforced, approvals=current_approvals
+        )
+        return reply, None, None
 
     partial = payload.get("permissions")
+    approvals_partial = payload.get("approvals")
+    if partial is None and approvals_partial is not None:
+        partial = {}
     if not isinstance(partial, Mapping):
-        return refused("permissions must be an object", current)
+        return refused("permissions must be an object", current, current_approvals)
     unknown = [k for k in partial if k not in PERMISSION_KEYS]
     if unknown:
-        return refused(f"unknown permission {str(unknown[0])[:40]!r}", current)
+        return refused(
+            f"unknown permission {str(unknown[0])[:40]!r}", current, current_approvals
+        )
+    # Check both halves before either is written: a refused set changes nothing.
     try:
-        policy = store.update(key, partial)
-    except PolicyError as exc:
-        return refused(str(exc), current)
+        store.defaults.merged({**store.overrides().get(key, {}), **partial})
+        if approvals_partial is not None:
+            current_approvals.updated(approvals_partial)
+    except (PolicyError, ActionPolicyError) as exc:
+        return refused(str(exc), current, current_approvals)
+    try:
+        policy = store.update(key, partial) if partial else current
+        approvals = (
+            store.update_approvals(key, approvals_partial)
+            if approvals_partial is not None
+            else current_approvals
+        )
+    except (PolicyError, ActionPolicyError) as exc:
+        return refused(str(exc), store.get(key), store.approvals(key))
     except OSError as exc:
-        return refused(f"could not save: {type(exc).__name__}", current)
+        return refused(f"could not save: {type(exc).__name__}", store.get(key), store.approvals(key))
     if log is not None:
         changed = ", ".join(f"{k}={partial[k]}" for k in partial)
-        log(f"[permissions] {key}: {changed or 'no change'} (applies from the next task)")
-    reply = permissions_payload(agent_id, policy, enforced=enforced)
-    if policy == current:
+        if approvals_partial is not None:
+            changed = ", ".join(x for x in (changed, "approvals") if x)
+        log(f"[permissions] {key}: {changed or 'no change'}")
+    reply = permissions_payload(agent_id, policy, enforced=enforced, approvals=approvals)
+    if policy == current and approvals == current_approvals:
         return reply, None, None
     return reply, current, policy
+
+
+class ActionApprovalsBridge:
+    """The executor's view of the approval policies (``Executor(action_approvals=)``).
+
+    ``policy_for(session_key)`` maps the run's session key to the coworker it
+    belongs to (``agent_key``) and reads that coworker's policy;
+    ``remember(...)`` stores a lasting decision and calls ``on_change(key,
+    policy)`` when it changed something, so the host can tell the app."""
+
+    def __init__(
+        self,
+        store: AgentPermissionsStore,
+        agent_key: Callable[[str], str],
+        *,
+        on_change: Callable[[str, ActionPolicy], None] | None = None,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        self._store = store
+        self._agent_key = agent_key
+        self._on_change = on_change
+        self._log = log or (lambda _msg: None)
+
+    def policy_for(self, session_key: str) -> ActionPolicy:
+        return self._store.approvals(self._agent_key(session_key))
+
+    def remember(self, session_key: str, action_class: str, scope: str, site: str = "") -> None:
+        key = self._agent_key(session_key)
+        try:
+            policy = self._store.remember_approval(key, action_class, scope, site)
+        except OSError as exc:
+            self._log(f"[approvals] could not save a decision: {type(exc).__name__}")
+            return
+        if policy is None:
+            return
+        self._log(f"[approvals] {key}: {action_class} {scope}")
+        if self._on_change is not None:
+            try:
+                self._on_change(key, policy)
+            except Exception as exc:  # noqa: BLE001 — telling the app is best effort
+                self._log(f"[approvals] could not announce a change: {type(exc).__name__}")
 
 
 def restart_watchers(manager: Any, log: Callable[[str], None] | None = None) -> list[str]:

@@ -74,9 +74,28 @@ def completion_text(labels: RunLabels, *, failed: bool = False) -> tuple[str, st
     return (labels.headline, "The answer is ready. Open the app to read it.")
 
 
-def approval_text(labels: RunLabels) -> tuple[str, str]:
-    """Title and body for a run that is blocked on a publish approval."""
-    return (f"{labels.who} needs your approval", "Open the app to allow or deny the publish.")
+#: The body of an approval push per action class (docs/WIRE_CONTRACT.md,
+#: "Per-action approvals"). Class words only: a push can pass through a
+#: service that is not end-to-end, so no recipient, subject or argument.
+_APPROVAL_BODIES = {
+    "publish": "Open the app to allow or deny the publish.",
+    "send_external": "Open the app to allow or deny sending a mail.",
+    "mcp_destructive": "Open the app to allow or deny a connector action.",
+    "browser_act": "Open the app to allow or deny a browser action.",
+}
+
+
+def approval_text(
+    labels: RunLabels, *, action_class: str = "", site: str = ""
+) -> tuple[str, str]:
+    """Title and body for a run that is blocked on an approval. Without a
+    class it is the here.now publish (the old request). ``site`` is a host
+    name, never page content."""
+    body = _APPROVAL_BODIES.get(action_class or "publish", _APPROVAL_BODIES["publish"])
+    where = _clip(site)
+    if action_class == "browser_act" and where:
+        body = f"Open the app to allow or deny a browser action on {where}."
+    return (f"{labels.who} needs your approval", body)
 
 
 def takeover_text(labels: RunLabels, *, kind: str = "", site: str = "") -> tuple[str, str]:

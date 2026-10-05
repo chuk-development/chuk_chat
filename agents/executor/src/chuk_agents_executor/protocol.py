@@ -388,17 +388,91 @@ def takeover_request_payload(
     }
 
 
-def approval_decision_payload(*, approval_id: str, approved: bool) -> dict[str, Any]:
+#: The ``action`` of an ``approval_request`` for a per-action approval class
+#: that has no older action name (docs/WIRE_CONTRACT.md, "Per-action
+#: approvals"). ``publish`` keeps ``herenow_publish``.
+ACTION_ACTION_APPROVAL = "action_approval"
+
+
+def approval_class_fields(
+    *,
+    action_class: str,
+    options: list[str] | tuple[str, ...],
+    summary: str = "",
+    tool: str = "",
+    site: str = "",
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """The additive fields of a per-action approval (docs/WIRE_CONTRACT.md,
+    "Per-action approvals"): the class, the answers the card offers, one line
+    for the card, the tool, the site (browser classes) and the class details.
+    An older app ignores them and answers approve / deny, which is ``once`` /
+    ``deny``."""
+    return {
+        "action_class": action_class,
+        "options": list(options),
+        **({"summary": summary} if summary else {}),
+        **({"tool": tool} if tool else {}),
+        **({"site": site} if site else {}),
+        **({"details": dict(details)} if details else {}),
+    }
+
+
+def action_approval_request_payload(
+    *,
+    approval_id: str,
+    action_class: str,
+    options: list[str] | tuple[str, ...],
+    summary: str,
+    tool: str = "",
+    site: str = "",
+    details: dict[str, Any] | None = None,
+    session_key: str | None = None,
+) -> dict[str, Any]:
+    """Executor -> app: ask before one class action that is not a publish
+    (``send_external``, ``mcp_destructive``, ``browser_act``). The same
+    ``approval_request`` frame and the same blocking wait as a publish, with
+    ``action: action_approval``. The publish fields stay present with empty
+    values, so an older app still parses the frame."""
+    return {
+        "type": "approval_request",
+        "approval_id": approval_id,
+        "action": ACTION_ACTION_APPROVAL,
+        **approval_class_fields(
+            action_class=action_class,
+            options=options,
+            summary=summary,
+            tool=tool,
+            site=site,
+            details=details,
+        ),
+        "path": "",
+        "name": "",
+        "file_count": 0,
+        "total_bytes": 0,
+        "base_url": "",
+        "public": False,
+        **({"session_key": session_key} if session_key else {}),
+    }
+
+
+def approval_decision_payload(
+    *, approval_id: str, approved: bool, scope: str | None = None
+) -> dict[str, Any]:
     """App -> executor: the user's answer to one ``approval_request``.
 
     Correlated by ``approval_id`` (an ``approval_request`` the app never saw, or
     a decision that arrives after the run already ended, matches nothing and is
     a no-op). ``approved`` True publishes; False (or no answer) does not.
+    ``scope`` (per-action approvals, additive) is one of the request's
+    ``options``: ``once``, ``always_this_agent``, ``always_this_site`` or
+    ``deny``. Absent means ``once`` for a yes.
     """
     return {
         "type": "approval_decision",
         "approval_id": approval_id,
         "approved": bool(approved),
+        **({"scope": scope} if scope else {}),
     }
 
 
@@ -1112,20 +1186,22 @@ APPROVAL_REASONS = (APPROVAL_BY_USER, APPROVAL_TIMEOUT, APPROVAL_STOPPED, APPROV
 
 
 def approval_outcome_fields(
-    *, approved: bool, reason: str, at: float
+    *, approved: bool, reason: str, at: float, scope: str | None = None
 ) -> dict[str, Any]:
     """The fields the host patches into a stored ``approval_request`` row once
     the outcome is known: ``decision`` (``approved`` / ``denied``),
     ``decision_reason`` (``user`` / ``timeout`` / ``stopped`` / ``auto``) and
     ``decided_at`` (epoch seconds). A replayed request that carries them is an
     informational card, never a prompt (docs/WIRE_CONTRACT.md, "Persisted
-    subagent / file / approval events")."""
+    subagent / file / approval events"). ``scope`` (per-action approvals)
+    adds ``decision_scope``: what the user's answer covered."""
     if reason not in APPROVAL_REASONS:
         raise ValueError(f"unknown approval reason: {reason!r}")
     return {
         "decision": APPROVAL_APPROVED if approved else APPROVAL_DENIED,
         "decision_reason": reason,
         "decided_at": float(at),
+        **({"decision_scope": scope} if scope else {}),
     }
 
 

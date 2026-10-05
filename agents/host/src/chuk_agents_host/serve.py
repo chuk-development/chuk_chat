@@ -92,6 +92,7 @@ class TaskServer:
         calls=None,
         on_call_frame: Callable[[dict], Any] | None = None,
         agent_mail=None,
+        action_approvals=None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -165,6 +166,9 @@ class TaskServer:
                 # Agent mail (docs/AGENT_MAIL.md §7): the host's mail service,
                 # for the mail tools and the restricted mail run.
                 agent_mail=agent_mail,
+                # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
+                # approvals"): the host's store of each coworker's policy.
+                action_approvals=action_approvals,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

@@ -68,13 +68,16 @@ from .agent_mail import (
     MailKeyStore,
 )
 from .agent_permissions import (
+    APPROVALS_CAPABILITY,
     CAPABILITY as AGENT_PERMISSIONS_CAPABILITY,
     FILE_NAME as AGENT_PERMISSIONS_FILE,
     FRAMES as AGENT_PERMISSION_FRAMES,
+    ActionApprovalsBridge,
     AgentPermissionsStore,
     handle_permissions_frame,
     host_defaults,
     permissions_env_factory,
+    permissions_payload,
     restart_watchers,
 )
 from .host_credential import (
@@ -312,6 +315,15 @@ class LocalHost:
         self._permissions = AgentPermissionsStore(
             self._workspace / AGENT_PERMISSIONS_FILE,
             defaults=host_defaults(user_browser=browser_target() == USER_BROWSER),
+            log=self._log,
+        )
+        # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
+        # approvals"): kept in the same store, read by the executor at every
+        # class action. A lasting decision is announced to every device.
+        self._action_approvals = ActionApprovalsBridge(
+            self._permissions,
+            self._agent_key,
+            on_change=self._on_approvals_changed,
             log=self._log,
         )
 
@@ -1304,6 +1316,9 @@ class LocalHost:
             # Agent mail (docs/AGENT_MAIL.md §7): the mail tools, and the
             # restricted run of an unknown mail.
             agent_mail=getattr(self, "_agent_mail", None),
+            # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
+            # approvals"): each coworker's policy and the store for "always".
+            action_approvals=getattr(self, "_action_approvals", None),
         )
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
@@ -1949,7 +1964,11 @@ class LocalHost:
             "url": f"{relay_ws_url(self._relay_base_url)}?cw_device={self._relay_device_id}",
             # What this host can do beyond the base contract. The app sends a
             # frame of a named feature only to a host that names it.
-            "capabilities": [AGENT_PERMISSIONS_CAPABILITY, CHANNELS_CAPABILITY],
+            "capabilities": [
+                AGENT_PERMISSIONS_CAPABILITY,
+                APPROVALS_CAPABILITY,
+                CHANNELS_CAPABILITY,
+            ],
         })
         return handle_agent_frame(self._coworker_names, payload, log=self._log)
 
@@ -2026,6 +2045,22 @@ class LocalHost:
         if agent_id in self._primary_agent_ids():
             return self._agent.id
         return agent_id if self._is_own_coworker(agent_id) else None
+
+    def _on_approvals_changed(self, key: str, approvals) -> None:
+        """A lasting approval decision changed a coworker's policy: send the
+        whole current set to every attached device, like a ``set``, so the
+        app's settings show the new "always"."""
+        agent_id = host_agent_id(self._device_id) if key == self._agent.id else key
+        self._send_host_payload(
+            permissions_payload(
+                agent_id,
+                self._permissions.get(key),
+                enforced=enforced_permissions(
+                    "docker" if self._containers is not None else "local"
+                ),
+                approvals=approvals,
+            )
+        )
 
     def _on_permissions_frame(self, payload: dict) -> dict:
         """``agent_permissions_get`` / ``_set`` (docs/WIRE_CONTRACT.md, "Agent

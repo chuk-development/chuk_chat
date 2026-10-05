@@ -18,6 +18,7 @@ from typing import Any
 _EXPORTS = {
     "ApprovalPolicy": "approvals",
     "ApprovalRule": "approvals",
+    "action_rules": "approvals",
     "herenow_rule": "approvals",
     "messages_to_rows": "convert",
     "rows_to_messages": "convert",

@@ -107,13 +107,33 @@ def loop_setup(
     herenow_config: Any,
     herenow_gate: Any,
     expose_tools: bool = True,
+    registry: Any = None,
+    mcp: Any = None,
+    action_approvals: Any = None,
 ) -> tuple[Any, dict[str, Any]]:
     """``(model, extra kwargs)`` for the :class:`~chuk_agents_runtime.loop.AgentLoop`
-    that ``build_runtime`` builds."""
-    from .approvals import ApprovalPolicy, herenow_rule
+    that ``build_runtime`` builds.
+
+    ``action_approvals`` (docs/WIRE_CONTRACT.md, "Per-action approvals") is the
+    executor's binding for the run. With it, the class tools this run has
+    (mail sends, destructive connector tools, page-changing browser tools)
+    follow the coworker's policy, and here.now follows it too. Without it
+    (a room member, a test) only here.now in ``ask`` mode asks, as before."""
+    from .approvals import ApprovalPolicy, action_rules, bind_publish, herenow_rule
 
     policy = ApprovalPolicy()
-    if _asks(herenow_config):
+    enabled = bool(herenow_config is not None and getattr(herenow_config, "enabled", False))
+    if action_approvals is not None:
+        if enabled and (registry is None or registry.has("herenow_publish")):
+            rule = herenow_rule(env, herenow_config, action_approvals.ask)
+            policy.add(
+                "herenow_publish",
+                bind_publish(rule, action_approvals, asks=_asks(herenow_config)),
+            )
+        if registry is not None:
+            for name, rule in action_rules(registry, mcp, action_approvals).items():
+                policy.add(name, rule)
+    elif _asks(herenow_config):
         policy.add("herenow_publish", herenow_rule(env, herenow_config, herenow_gate))
     extra: dict[str, Any] = {
         "approval_policy": policy,
