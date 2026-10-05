@@ -235,6 +235,35 @@ final Map<int, HugeIconData> _map = <int, HugeIconData>{
   Icons.archive_outlined.codePoint: HugeIcons.archive02,
   Icons.how_to_reg_outlined.codePoint: HugeIcons.userCheck01,
   Icons.person_off_outlined.codePoint: HugeIcons.userBlock01,
+
+  // -- Agents profile and settings (UI audit 2026-10-05, item 9): the
+  // filled Material glyphs that used to fall back next to HugeIcons.
+  Icons.chat_rounded.codePoint: HugeIcons.message01,
+  Icons.folder_rounded.codePoint: HugeIcons.folder03,
+  Icons.assignment_rounded.codePoint: HugeIcons.task01,
+  Icons.forum_rounded.codePoint: HugeIcons.chatting01,
+  Icons.badge_rounded.codePoint: HugeIcons.id,
+  Icons.verified_rounded.codePoint: HugeIcons.checkmarkBadge01,
+  Icons.tune_rounded.codePoint: HugeIcons.settings02,
+  Icons.delete_rounded.codePoint: HugeIcons.delete02,
+  Icons.call_end_rounded.codePoint: HugeIcons.callEnd01,
+  Icons.cloud_off_rounded.codePoint: HugeIcons.cloudOff,
+  Icons.desktop_access_disabled_rounded.codePoint: HugeIcons.computerRemove,
+  Icons.phonelink_off_rounded.codePoint: HugeIcons.unlink01,
+  Icons.computer_outlined.codePoint: HugeIcons.computer,
+  Icons.desktop_windows_outlined.codePoint: HugeIcons.computer,
+  Icons.group_outlined.codePoint: HugeIcons.userGroup,
+  Icons.link_rounded.codePoint: HugeIcons.link01,
+  Icons.content_paste_rounded.codePoint: HugeIcons.clipboardPaste,
+  Icons.content_paste.codePoint: HugeIcons.clipboardPaste,
+  Icons.build_circle_outlined.codePoint: HugeIcons.wrench01,
+  Icons.credit_card.codePoint: HugeIcons.creditCard,
+  Icons.fingerprint.codePoint: HugeIcons.fingerPrint,
+  Icons.school_outlined.codePoint: HugeIcons.mortarboard01,
+  Icons.file_download_outlined.codePoint: HugeIcons.download01,
+  Icons.account_circle_outlined.codePoint: HugeIcons.userCircle,
+  Icons.developer_mode.codePoint: HugeIcons.code,
+  Icons.pause_circle_outline.codePoint: HugeIcons.pauseCircle,
 };
 
 /// An icon that prefers the app's set and falls back to Material.

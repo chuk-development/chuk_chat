@@ -318,4 +318,31 @@ void main() {
       expect(taps['model'], isNull);
     });
   });
+
+  // UI audit 2026-10-05, item 6: the page was English inside a German app.
+  testWidgets('German: rows, headers and quick actions are localised; the '
+      'row keys stay the English ids', (tester) async {
+    tester.view.physicalSize = const Size(360, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        locale: const Locale('de'),
+        localizationsDelegates: kTestLocalizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: page(optional: true),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Profil & Einstellungen'), findsOneWidget);
+    expect(find.text('Host & Aktivität'), findsOneWidget);
+    expect(find.text('Geteilte Dateien'), findsOneWidget);
+    expect(find.text('Pläne'), findsOneWidget);
+    expect(find.text('Profile & preferences'), findsNothing);
+    expect(
+      find.byKey(const ValueKey('settings_Profile & preferences')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Coworker bearbeiten'), findsOneWidget);
+  });
 }

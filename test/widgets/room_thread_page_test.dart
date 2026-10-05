@@ -12,6 +12,7 @@ import 'package:chuk_chat/models/agents_agent.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/services/agents/agents_relay_client.dart';
 import 'package:chuk_chat/widgets/chat_composer_box.dart';
+import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/messenger_typing_indicator.dart';
 import 'package:chuk_chat/widgets/room_mention_picker.dart';
 import 'package:chuk_chat/widgets/room_thread_page.dart';
@@ -155,6 +156,82 @@ void main() {
     // fromWire returns null -> no footer, and not running (no indicator).
     expect(talking(), findsNothing);
     expect(find.textContaining('Reached'), findsNothing);
+  });
+
+  group('an empty room', () {
+    Future<StreamController<AgentsRelayInbound>> pumpEmpty(
+      WidgetTester tester, {
+      void Function(String)? onSend,
+    }) async {
+      final ctrl = StreamController<AgentsRelayInbound>.broadcast();
+      addTearDown(ctrl.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: RoomThreadPage(
+              roomId: 'r1',
+              roomName: 'launch',
+              emptyHint: 'Message the room to start.',
+              inbound: ctrl.stream,
+              onSend: onSend,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      return ctrl;
+    }
+
+    testWidgets('shows a quiet line, no bubble and no typing dots', (
+      tester,
+    ) async {
+      await pumpEmpty(tester, onSend: (_) {});
+      expect(
+        find.byKey(const ValueKey<String>('room-empty-hint')),
+        findsOneWidget,
+      );
+      expect(find.text('Message the room to start.'), findsOneWidget);
+      expect(find.byType(MessageBubble), findsNothing);
+      expect(talking(), findsNothing);
+    });
+
+    testWidgets('a send replaces the line with the message and the dots', (
+      tester,
+    ) async {
+      await pumpEmpty(tester, onSend: (_) {});
+      await tester.enterText(find.byType(TextField), 'kick off');
+      await tester.tap(sendButton());
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('room-empty-hint')),
+        findsNothing,
+      );
+      expect(find.text('kick off'), findsOneWidget);
+      expect(talking(), findsOneWidget);
+    });
+
+    testWidgets('a live turn hides the line and shows the room talking', (
+      tester,
+    ) async {
+      final ctrl = await pumpEmpty(tester);
+      ctrl.add(
+        const AgentsRelayRoomTurn(
+          roomId: 'r1',
+          round: 1,
+          agentId: 'a',
+          handle: 'amber',
+          text: 'first',
+        ),
+      );
+      // The event lands after the first frame; the second draws it.
+      await tester.pump();
+      await tester.pump();
+      expect(
+        find.byKey(const ValueKey<String>('room-empty-hint')),
+        findsNothing,
+      );
+      expect(talking(), findsOneWidget);
+    });
   });
 
   testWidgets('no composer when onSend is null', (tester) async {

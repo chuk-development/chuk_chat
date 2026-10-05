@@ -604,7 +604,9 @@ class _Action extends StatelessWidget {
         const SizedBox(height: 6),
         Text(
           label,
-          maxLines: 1,
+          // Two lines before an ellipsis: a German label at 1.3 text scale
+          // does not fit one.
+          maxLines: 2,
           overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: TextStyle(

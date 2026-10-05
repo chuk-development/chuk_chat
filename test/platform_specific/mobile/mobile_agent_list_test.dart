@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/models/agents_agent.dart';
@@ -60,6 +61,7 @@ void main() {
       agent(
         id: 'design',
         name: 'Design',
+        role: 'ux',
         brief: 'Proposes UI directions',
         lastActivity: now.subtract(const Duration(days: 1)),
         threads: <AgentsThreadInfo>[
@@ -111,7 +113,9 @@ void main() {
     // No account target up here any more: settings has one way in, the
     // navigation bar.
     expect(find.text('SL'), findsNothing, reason: 'no account monogram');
-    expect(find.text('ops'), findsOneWidget, reason: 'role tag');
+    // The role tag sits after a name that leaves room for it. (A name that
+    // needs the whole width drops the tag; see the group at the end.)
+    expect(find.text('ux'), findsOneWidget, reason: 'role tag');
     // The unread mark is a count, not a dot: one thread with something new.
     expect(
       find.descendant(
@@ -363,5 +367,52 @@ void main() {
       ),
       '',
     );
+  });
+
+  group('the name comes before the role tag at 360 px and 1.3', () {
+    Future<void> pumpRow(WidgetTester tester, String name) async {
+      final DateTime now = DateTime(2026, 1, 5, 15);
+      await pumpPhone(
+        tester,
+        Builder(
+          builder: (BuildContext context) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: const TextScaler.linear(1.3)),
+            child: Align(
+              alignment: Alignment.topLeft,
+              child: SizedBox(
+                width: 360,
+                child: MobileAgentRow(
+                  agent: agent(id: 'amber', name: name),
+                  now: now,
+                  role: 'Research and long-form writing',
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('a name that fits is whole; the tag takes what is left', (
+      tester,
+    ) async {
+      await pumpRow(tester, 'Amber');
+      expect(
+        tester.renderObject<RenderParagraph>(find.text('Amber')).didExceedMaxLines,
+        isFalse,
+      );
+      expect(find.text('Research and long-form writing'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('a long name drops the tag instead of being cut for it', (
+      tester,
+    ) async {
+      await pumpRow(tester, 'Amber Fitzgerald');
+      expect(find.text('Research and long-form writing'), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
   });
 }

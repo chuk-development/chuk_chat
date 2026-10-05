@@ -247,8 +247,18 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       vertical: 10,
     );
 
+    // The bubble is the accent at 80 % over the page. Its text keeps the
+    // reader's icon colour unless that falls below 2 : 1 on the blended fill
+    // (the pastel default with a near-white icon colour was 2.0 : 1); then it
+    // is black or white, whichever reads better. White on orange stays.
+    final Color bubbleFill = accentColor.withValues(alpha: .8);
+    final Color bubbleTextColor = readableOnFill(
+      Color.alphaBlend(bubbleFill, bgColor),
+      iconFgColor,
+    );
+
     final BoxDecoration decoration = BoxDecoration(
-      color: accentColor.withValues(alpha: .8),
+      color: bubbleFill,
       borderRadius: BorderRadius.only(
         topLeft: const Radius.circular(16),
         topRight: const Radius.circular(16),
@@ -267,7 +277,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: _buildClassicLayout(
-          iconFgColor: iconFgColor,
+          iconFgColor: bubbleTextColor,
           accentColor: accentColor,
           bgColor: bgColor,
           isUserMessage: isUserMessage,

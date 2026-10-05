@@ -409,6 +409,52 @@ void main() {
       });
     }
 
+    for (final bool phone in <bool>[false, true]) {
+      final String layout = phone ? 'phone' : 'desktop';
+
+      testWidgets('$layout: the card sits in the transcript, after the last '
+          'message', (tester) async {
+        final controller = await pumpPaired(
+          tester,
+          opened: <String>[],
+          phone: phone,
+        );
+        controller.emit(
+          const AgentsRelayRunState(sessionKey: 'thread-1', state: 'idle'),
+        );
+        controller.emit(const AgentsRelayUser('Book the table', mid: 1));
+        controller.emit(
+          const AgentsRelayDelta('On it.', replay: true, mid: 2),
+        );
+        controller.emit(const AgentsRelayDone(reason: 'replay', replay: true));
+        await tester.pumpAndSettle();
+        AgentsRunLedger.instance.begin('thread-1');
+        controller.emit(_takeover());
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 400));
+
+        final Finder card = find.byKey(
+          const ValueKey<String>('agents-takeover-card'),
+        );
+        expect(card, findsOneWidget);
+        // Part of the scroll, not an overlay or a block above the chat.
+        expect(
+          find.ancestor(of: card, matching: find.byType(CustomScrollView)),
+          findsOneWidget,
+        );
+        // Below the last message, so it covers none of them.
+        final Finder last = find.textContaining('On it.');
+        expect(last, findsWidgets);
+        expect(
+          tester.getTopLeft(card).dy,
+          greaterThanOrEqualTo(tester.getBottomLeft(last.last).dy),
+        );
+        await tester.pumpWidget(const SizedBox.shrink());
+        // The chat screen's idle close of its session timer.
+        await tester.pump(const Duration(minutes: 2));
+      });
+    }
+
     testWidgets('Skip tells the host no and the card goes', (tester) async {
       final controller = await pumpPaired(tester, opened: <String>[]);
       final ledger = AgentsRunLedger.instance;
@@ -470,6 +516,43 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       // Nothing could reach the host: the card and the wait both stay.
       expect(upstream.approvalDecisions, isEmpty);
+      expect(
+        find.byKey(const ValueKey<String>('agents-takeover-card')),
+        findsOneWidget,
+      );
+      expect(ledger.runFor('thread-1')!.waitingForUser, isTrue);
+      expect(
+        find.text('Not connected to your computer — try again when it is back'),
+        findsOneWidget,
+      );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 4));
+    });
+
+    testWidgets('Skip while the socket reconnects keeps the card and says why', (
+      tester,
+    ) async {
+      final controller = await pumpPaired(tester, opened: <String>[]);
+      final ledger = AgentsRunLedger.instance;
+      ledger.begin('thread-1');
+      controller.emit(_takeover());
+      await tester.pump();
+      expect(find.text('Ada needs you in the browser'), findsOneWidget);
+
+      // The controller is still there, but its socket is not paired now.
+      controller.set(
+        const AgentsRelayState(
+          phase: AgentsRelayPhase.connecting,
+          peerDeviceId: 'cowork-host',
+        ),
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('agents-takeover-skip')),
+      );
+      await tester.pump(const Duration(milliseconds: 400));
+      // Nothing was sent: the card and the wait both stay.
+      expect(controller.approvalDecisions, isEmpty);
       expect(
         find.byKey(const ValueKey<String>('agents-takeover-card')),
         findsOneWidget,

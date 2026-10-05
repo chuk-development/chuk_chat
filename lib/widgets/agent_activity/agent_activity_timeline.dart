@@ -9,7 +9,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/utils/favicon.dart';
@@ -200,7 +200,10 @@ class _AgentActivityTimelineState extends State<AgentActivityTimeline> {
       hasSteps: entries.isNotEmpty,
       phase: widget.phase,
       runningToolLabel: hasRunningToolCall(widget.toolCalls)
-          ? runningActivityLabel(widget.toolCalls)
+          ? runningActivityLabel(
+              widget.toolCalls,
+              AppLocalizations.of(context),
+            )
           : null,
       elapsed: resolveTurnElapsed(
         finalDuration: widget.finalDuration,

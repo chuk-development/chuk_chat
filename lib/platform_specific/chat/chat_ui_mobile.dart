@@ -163,6 +163,12 @@ class ChukChatUIMobile extends StatefulWidget {
   /// Agents's; see [messengerMode].
   final bool hostRunActive;
 
+  /// A row drawn after the last message, inside the transcript's scroll (the
+  /// Agents browser takeover card). It scrolls with the messages and never
+  /// covers one. The list scrolls to it when it appears. Agents's; see
+  /// [messengerMode].
+  final Widget? transcriptFooter;
+
   const ChukChatUIMobile({
     super.key,
     required this.onToggleSidebar,
@@ -188,6 +194,7 @@ class ChukChatUIMobile extends StatefulWidget {
     this.showToolCalls = true,
     this.messengerMode = false,
     this.hostRunActive = false,
+    this.transcriptFooter,
   });
 
   @override
@@ -909,6 +916,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   @override
   void didUpdateWidget(covariant ChukChatUIMobile oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // A footer that just appeared (a takeover card) asks for the user: bring
+    // it into view, wherever the reader was.
+    if (widget.transcriptFooter != null && oldWidget.transcriptFooter == null) {
+      scrollChatToBottom(force: true);
+    }
     // While the sidebar covers the chat the composer must not hold or take
     // focus. Otherwise a menu, dialog or page that closes over the sidebar
     // hands focus back to the composer and the keyboard pops up unasked.
@@ -3417,8 +3429,17 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // 1000 px built roughly two extra tall bubbles off each end of the
     // viewport, and the viewport resizes while the keyboard animates.
     const ScrollCacheExtent cacheExtent = ScrollCacheExtent.pixels(400.0);
-    final int itemCount = _messages.length + (showHostTyping ? 1 : 0);
+    final Widget? footer = widget.transcriptFooter;
+    final int footerIndex = _messages.length + (showHostTyping ? 1 : 0);
+    final int itemCount = footerIndex + (footer != null ? 1 : 0);
     Widget rowBuilder(BuildContext _, int i) {
+      if (footer != null && i == footerIndex) {
+        return Padding(
+          key: const ValueKey<String>('transcript-footer'),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: footer,
+        );
+      }
       if (i == _messages.length) {
         final String? hostKey = _activeChatId ?? widget.selectedChatId;
         return Padding(
@@ -3676,7 +3697,9 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
               },
               child: Stack(
                 children: [
-                  (hasMessages || showHostTyping)
+                  (hasMessages ||
+                          showHostTyping ||
+                          widget.transcriptFooter != null)
                       ? Align(
                           alignment: Alignment.center,
                           child: Container(

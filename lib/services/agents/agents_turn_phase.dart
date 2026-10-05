@@ -15,10 +15,11 @@
 
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/stream_phase.dart';
+import 'package:chuk_chat/models/tool_call.dart';
 import 'package:chuk_chat/services/agents/agents_run_ledger.dart';
 import 'package:chuk_chat/ui/expressive/agent_status.dart' show humanToolLabel;
 import 'package:chuk_chat/widgets/agent_activity/agent_activity_model.dart'
-    show runningActivityLabel;
+    show knownToolActivityLabel, runningActivityLabel, toolActivityLabel;
 
 /// The phases of one Agents turn, roughly in the order they occur.
 enum AgentsTurnPhase {
@@ -63,12 +64,27 @@ enum AgentsTurnPhase {
 
 /// One status, as the line prints it.
 class AgentsTurnStatus {
-  const AgentsTurnStatus(this.phase, {this.toolLabel});
+  const AgentsTurnStatus(
+    this.phase, {
+    this.toolLabel,
+    this.toolName,
+    this.toolFromHost = false,
+  });
 
   final AgentsTurnPhase phase;
 
-  /// Present-tense name of the running tool, for [AgentsTurnPhase.tool].
+  /// Present-tense name of the running tool, for [AgentsTurnPhase.tool], in
+  /// English.
   final String? toolLabel;
+
+  /// The raw name of the running tool (`web_search`). With it, [label]
+  /// prints the tool's phrase in the reader's language.
+  final String? toolName;
+
+  /// Whether [toolName] came from the host's phase frame rather than from a
+  /// tool line in the ledger. A host tool this app has no phrase for keeps
+  /// its own name ("Browser click"); a ledger tool reads "Running …".
+  final bool toolFromHost;
 
   /// Whether the line offers Retry: only where the user can do something
   /// about it — the computer is not reachable.
@@ -76,17 +92,30 @@ class AgentsTurnStatus {
       phase == AgentsTurnPhase.offline || phase == AgentsTurnPhase.noAnswer;
 
   /// The words for the line, localised when [l10n] is given.
-  String label([AppLocalizations? l10n]) =>
-      agentsTurnPhaseLabel(phase, l10n: l10n, toolLabel: toolLabel);
+  String label([AppLocalizations? l10n]) => agentsTurnPhaseLabel(
+    phase,
+    l10n: l10n,
+    toolLabel: _localToolLabel(l10n) ?? toolLabel,
+  );
+
+  String? _localToolLabel(AppLocalizations? l10n) {
+    final String? name = toolName;
+    if (name == null || name.isEmpty || l10n == null) return null;
+    return toolFromHost
+        ? knownToolActivityLabel(name, l10n)
+        : toolActivityLabel(name, l10n);
+  }
 
   @override
   bool operator ==(Object other) =>
       other is AgentsTurnStatus &&
       other.phase == phase &&
-      other.toolLabel == toolLabel;
+      other.toolLabel == toolLabel &&
+      other.toolName == toolName &&
+      other.toolFromHost == toolFromHost;
 
   @override
-  int get hashCode => Object.hash(phase, toolLabel);
+  int get hashCode => Object.hash(phase, toolLabel, toolName, toolFromHost);
 
   @override
   String toString() => 'AgentsTurnStatus($phase, $toolLabel)';
@@ -133,7 +162,11 @@ AgentsTurnStatus? agentsTurnStatusFor({
   // A tool that is open right now is the most precise true statement.
   final String? running = runningActivityLabel(run.toolCalls);
   if (running != null) {
-    return AgentsTurnStatus(AgentsTurnPhase.tool, toolLabel: running);
+    return AgentsTurnStatus(
+      AgentsTurnPhase.tool,
+      toolLabel: running,
+      toolName: _runningToolName(run),
+    );
   }
 
   // The host's own word, when it sends one and it is newer than the last
@@ -197,7 +230,9 @@ AgentsTurnStatus? _hostStatus(AgentsRun run) {
       }
       return AgentsTurnStatus(
         AgentsTurnPhase.tool,
-        toolLabel: humanToolLabel(tool),
+        toolLabel: knownToolActivityLabel(tool) ?? humanToolLabel(tool),
+        toolName: tool,
+        toolFromHost: true,
       );
     case 'waiting_user':
       return const AgentsTurnStatus(AgentsTurnPhase.waitingForYou);
@@ -235,4 +270,16 @@ String agentsTurnPhaseLabel(
     AgentsTurnPhase.notDelivered =>
       l?.agentsPhaseNotDelivered ?? 'Did not reach your computer',
   };
+}
+
+/// The name of the most recent tool that is still open on [run].
+String? _runningToolName(AgentsRun run) {
+  String? name;
+  for (final ToolCall call in run.toolCalls) {
+    if (call.status == ToolCallStatus.running ||
+        call.status == ToolCallStatus.pending) {
+      name = call.name;
+    }
+  }
+  return name;
 }

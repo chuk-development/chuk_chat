@@ -250,11 +250,12 @@ class _AgentTelegramSectionState extends State<AgentTelegramSection> {
               ExpressiveRow(
                 key: const ValueKey<String>('agent-telegram-linked'),
                 icon: Icons.link,
-                title: state.linkedName.isEmpty
-                    ? (l?.agentsTelegramLinkedChat ??
-                          'Linked to a Telegram chat')
-                    : (l?.agentsTelegramLinkedTo(state.linkedName) ??
-                          'Linked to ${state.linkedName}'),
+                // The name on its own line (two lines at most): in one line
+                // with the Unlink button it was cut away entirely at 360 px.
+                title: l?.agentsTelegramLinkedHeading ?? 'Linked to',
+                subtitle: state.linkedName.isEmpty
+                    ? (l?.agentsTelegramLinkedChatShort ?? 'a Telegram chat')
+                    : state.linkedName,
                 trailing: _Gate(
                   enabled: editable,
                   child: ExpressiveButton(

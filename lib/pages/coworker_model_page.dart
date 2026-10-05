@@ -14,8 +14,10 @@ library;
 
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
@@ -85,6 +87,12 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
   bool _loading = true;
   bool _saving = false;
 
+  /// The catalogue did not load (offline, empty cache, a hung fetch). The
+  /// page still shows the stored choice, plus a Retry row.
+  bool _catalogueFailed = false;
+  bool _retrying = false;
+  Timer? _watchdog;
+
   AgentControlSource? _ownedSource;
   AgentControlSource? get _source => widget.controlSource ?? _ownedSource;
 
@@ -106,6 +114,7 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
 
   @override
   void dispose() {
+    _watchdog?.cancel();
     ChatModelSelectionService.instance.removeListener(_onStoreChanged);
     _ownedSource?.dispose();
     super.dispose();
@@ -113,23 +122,66 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
 
   void _onStoreChanged() => unawaited(_loadState());
 
+  /// Loads the coworker's choice, the catalogue and the pinned models, each
+  /// on its own: a catalogue that does not come never holds up the choice.
+  /// The watchdog ([_startWatchdog]) ends the wait after
+  /// [CoworkerModel.loadTimeout] with the stored choice (or the built-in
+  /// default) and a Retry row ([_catalogueFailed]); the page never stays on
+  /// a spinner.
   Future<void> _load() async {
-    List<CoworkerCatalogueModel> models = await CoworkerModel.catalogue();
-    if (models.isEmpty) {
-      await ModelPrefetchService.prefetch();
+    _startWatchdog();
+    final Future<void> state = _loadState();
+    unawaited(
+      _loadPinned().then((Set<String> pinned) {
+        if (mounted) setState(() => _pinned = pinned);
+      }),
+    );
+    List<CoworkerCatalogueModel> models = const <CoworkerCatalogueModel>[];
+    try {
       models = await CoworkerModel.catalogue();
+      if (models.isEmpty) {
+        await ModelPrefetchService.prefetch();
+        models = await CoworkerModel.catalogue();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('CoworkerModelPage: catalogue failed: $e');
     }
-    final Set<String> pinned = await _loadPinned();
     if (!mounted) return;
+    _watchdog?.cancel();
     setState(() {
       _models = models;
-      _pinned = pinned;
+      _catalogueFailed = models.isEmpty;
     });
-    await _loadState();
+    await state;
+  }
+
+  /// Ends a wait that hangs: what is known shows, and the list offers Retry.
+  void _startWatchdog() {
+    _watchdog?.cancel();
+    _watchdog = Timer(CoworkerModel.loadTimeout, () {
+      if (!mounted) return;
+      setState(() {
+        _state ??= CoworkerModel.fallbackState();
+        _loading = false;
+        _retrying = false;
+        if (_models.isEmpty) _catalogueFailed = true;
+      });
+    });
+  }
+
+  /// Retry after a catalogue that did not load.
+  Future<void> _retryCatalogue() async {
+    if (_retrying) return;
+    setState(() => _retrying = true);
+    try {
+      await _load();
+    } finally {
+      if (mounted) setState(() => _retrying = false);
+    }
   }
 
   Future<void> _loadState() async {
-    final state = await CoworkerModel.resolve(widget.chatId);
+    final state = await CoworkerModel.resolveOrFallback(widget.chatId);
     if (!mounted) return;
     setState(() {
       _state = state;
@@ -440,6 +492,7 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
       const ExpressiveSectionHeader('Model'),
       ExpressiveGroup(
         children: <Widget>[
+          if (_catalogueFailed) _catalogueRetryRow(context),
           if (!currentKnown)
             ExpressiveRow(
               leading: CoworkerModelLogoTile(modelId: state.modelId),
@@ -523,6 +576,9 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
                   ? null
                   : Theme.of(context).m3.surfaceContainerHighest,
               title: provider.name,
+              // The name keeps two lines next to the Cheapest badge and the
+              // check: at 1.3 text scale one line cut it to "RunAnywhe…".
+              titleMaxLines: 2,
               subtitle: _providerLine(provider),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -624,6 +680,34 @@ class _CoworkerModelPageState extends State<CoworkerModelPage> {
                   'the app default. Saved on this device.',
       ),
     ];
+  }
+
+  /// "Could not load the model list", with Retry. The rows under it still
+  /// show the stored choice.
+  Widget _catalogueRetryRow(BuildContext context) {
+    final AppLocalizations l =
+        AppLocalizations.of(context) ?? AppLocalizations(const Locale('en'));
+    final ColorScheme scheme = Theme.of(context).colorScheme;
+    return ExpressiveRow(
+      key: const ValueKey<String>('coworker_model_catalogue_retry'),
+      icon: Icons.error_outline,
+      tone: Theme.of(context).m3.surfaceContainerHighest,
+      title: l.coworkerModelListFailed,
+      titleMaxLines: 2,
+      trailing: _retrying
+          ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : Text(
+              l.retry,
+              style: Theme.of(
+                context,
+              ).textTheme.labelLarge?.copyWith(color: scheme.primary),
+            ),
+      onTap: _retrying ? null : () => unawaited(_retryCatalogue()),
+    );
   }
 
   Widget _check(ColorScheme scheme) =>

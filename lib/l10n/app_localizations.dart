@@ -235,6 +235,61 @@ class AppLocalizations {
   String get agentsPhaseWaitingForYou => _get('agentsPhaseWaitingForYou');
   String get agentsPhaseNotDelivered => _get('agentsPhaseNotDelivered');
   String get agentsPhaseRetry => _get('agentsPhaseRetry');
+  // UI audit fixes A: tool phase, automation states, phone coworker page.
+  String get agentsToolSearchingWeb => _get('agentsToolSearchingWeb');
+  String get agentsToolSearching => _get('agentsToolSearching');
+  String get agentsToolReadingPage => _get('agentsToolReadingPage');
+  String get agentsToolCompiling => _get('agentsToolCompiling');
+  String get agentsToolGeneratingImage => _get('agentsToolGeneratingImage');
+  String get agentsToolRunningCommand => _get('agentsToolRunningCommand');
+  String get agentsToolSendingFile => _get('agentsToolSendingFile');
+  String agentsToolRunning(String tool) =>
+      _get('agentsToolRunning').replaceAll('{tool}', tool);
+  String get agentsAutomationStateActive => _get('agentsAutomationStateActive');
+  String get agentsAutomationStatePaused => _get('agentsAutomationStatePaused');
+  String get agentsAutomationStateDone => _get('agentsAutomationStateDone');
+  String get agentsAutomationStateFailed => _get('agentsAutomationStateFailed');
+  String get agentsCwTitle => _get('agentsCwTitle');
+  String get agentsCwGone => _get('agentsCwGone');
+  String get agentsCwEdit => _get('agentsCwEdit');
+  String agentsCwRemoveTitle(String name) =>
+      _get('agentsCwRemoveTitle').replaceAll('{name}', name);
+  String get agentsCwRemoveBody => _get('agentsCwRemoveBody');
+  String get agentsCwRemove => _get('agentsCwRemove');
+  String get agentsCwRemoveCoworker => _get('agentsCwRemoveCoworker');
+  String get agentsCwRoleFallback => _get('agentsCwRoleFallback');
+  String get agentsCwModel => _get('agentsCwModel');
+  String get agentsCwModelSubtitle => _get('agentsCwModelSubtitle');
+  String get agentsCwProfile => _get('agentsCwProfile');
+  String get agentsCwProfileSubtitle => _get('agentsCwProfileSubtitle');
+  String get agentsCwHost => _get('agentsCwHost');
+  String get agentsCwHostSubtitle => _get('agentsCwHostSubtitle');
+  String get agentsCwSharedFiles => _get('agentsCwSharedFiles');
+  String get agentsCwDocuments => _get('agentsCwDocuments');
+  String get agentsCwDocumentsSubtitle => _get('agentsCwDocumentsSubtitle');
+  String get agentsCwConversation => _get('agentsCwConversation');
+  String get agentsCwShowThinking => _get('agentsCwShowThinking');
+  String get agentsCwShowThinkingSubtitle =>
+      _get('agentsCwShowThinkingSubtitle');
+  String get agentsCwShowWork => _get('agentsCwShowWork');
+  String get agentsCwShowWorkSubtitle => _get('agentsCwShowWorkSubtitle');
+  String get agentsCwExport => _get('agentsCwExport');
+  String get agentsCwAgentTools => _get('agentsCwAgentTools');
+  String get agentsCwSchedules => _get('agentsCwSchedules');
+  String get agentsCwSchedulesSubtitle => _get('agentsCwSchedulesSubtitle');
+  String get agentsCwConnections => _get('agentsCwConnections');
+  String get agentsCwConnectedApps => _get('agentsCwConnectedApps');
+  String get agentsCwApiKeys => _get('agentsCwApiKeys');
+  String get agentsCwControlRooms => _get('agentsCwControlRooms');
+  String get agentsCwOpenScreen => _get('agentsCwOpenScreen');
+  String get agentsCwApp => _get('agentsCwApp');
+  String get agentsCwAccountSettings => _get('agentsCwAccountSettings');
+  String get agentsCwAccountSettingsSubtitle =>
+      _get('agentsCwAccountSettingsSubtitle');
+  String get agentsCwActionChat => _get('agentsCwActionChat');
+  String get agentsCwActionFiles => _get('agentsCwActionFiles');
+  String get agentsCwActionSchedules => _get('agentsCwActionSchedules');
+  String get agentsCwActionSkills => _get('agentsCwActionSkills');
   String takeoverTitle(String name) =>
       _get('takeoverTitle').replaceAll('{name}', name);
   String get takeoverSomeone => _get('takeoverSomeone');
@@ -993,6 +1048,15 @@ class AppLocalizations {
   String get agentMailAddressLabel => _get('agentMailAddressLabel');
   String get agentMailAddressInvalid => _get('agentMailAddressInvalid');
   String get agentMailContactSaved => _get('agentMailContactSaved');
+  // ── UI audit fixes B (agent B) ──
+  String get agentsRoomEmptyHint => _get('agentsRoomEmptyHint');
+  String get agentsRoomConnectHostHint => _get('agentsRoomConnectHostHint');
+  String get agentsHostYourComputer => _get('agentsHostYourComputer');
+  String get coworkerModelListFailed => _get('coworkerModelListFailed');
+  String get profileSaveFailedPlain => _get('profileSaveFailedPlain');
+  String get agentsTelegramLinkedHeading => _get('agentsTelegramLinkedHeading');
+  String get agentsTelegramLinkedChatShort =>
+      _get('agentsTelegramLinkedChatShort');
 }
 
 class _AppLocalizationsDelegate

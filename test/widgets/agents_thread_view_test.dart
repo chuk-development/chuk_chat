@@ -1223,7 +1223,7 @@ void main() {
       );
       expect(input, findsOneWidget);
       expect(
-        find.descendant(of: input, matching: find.text('Ask me anything !')),
+        find.descendant(of: input, matching: find.text('Ask me anything')),
         findsOneWidget,
       );
       expect(

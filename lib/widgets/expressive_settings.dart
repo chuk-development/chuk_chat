@@ -100,10 +100,15 @@ class ExpressiveRow extends StatefulWidget {
     this.trailing,
     this.onTap,
     this.tone,
+    this.titleMaxLines = 1,
   });
 
   final String title;
   final IconData? icon;
+
+  /// Lines the title may take before it ellipsises. One by default; two for
+  /// a row whose name must stay readable next to a wide trailing widget.
+  final int titleMaxLines;
 
   /// Replaces the icon tile entirely — for an avatar or a logo.
   final Widget? leading;
@@ -142,7 +147,7 @@ class _ExpressiveRowState extends State<ExpressiveRow> {
               children: [
                 Text(
                   widget.title,
-                  maxLines: 1,
+                  maxLines: widget.titleMaxLines,
                   overflow: TextOverflow.ellipsis,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,

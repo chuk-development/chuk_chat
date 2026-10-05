@@ -46,6 +46,7 @@ class CoworkerModelTile extends StatefulWidget {
 class _CoworkerModelTileState extends State<CoworkerModelTile> {
   CoworkerModelState? _state;
   List<CoworkerCatalogueModel> _models = const <CoworkerCatalogueModel>[];
+  Timer? _watchdog;
 
   @override
   void initState() {
@@ -62,6 +63,7 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
 
   @override
   void dispose() {
+    _watchdog?.cancel();
     ChatModelSelectionService.instance.removeListener(_reload);
     super.dispose();
   }
@@ -70,16 +72,24 @@ class _CoworkerModelTileState extends State<CoworkerModelTile> {
 
   Future<void> _load() async {
     final String chatId = widget.chatId;
+    // A read that fails falls back (resolveOrFallback); one that hangs is
+    // caught by the watchdog, so the row never says "Loading…" for good.
+    _watchdog?.cancel();
+    _watchdog = Timer(CoworkerModel.loadTimeout, () {
+      if (!mounted || _state != null) return;
+      setState(() => _state = CoworkerModel.fallbackState());
+    });
+    final state = await CoworkerModel.resolveOrFallback(chatId);
+    if (!mounted || widget.chatId != chatId) return;
+    _watchdog?.cancel();
+    setState(() => _state = state);
+    // The catalogue only gives the pretty names; the row does not wait on it.
     try {
-      final state = await CoworkerModel.resolve(chatId);
       final models = await CoworkerModel.catalogue();
       if (!mounted || widget.chatId != chatId) return;
-      setState(() {
-        _state = state;
-        _models = models;
-      });
+      setState(() => _models = models);
     } catch (_) {
-      // The row keeps its last answer; the page it opens loads again.
+      // The names come from the ids; the page it opens loads again.
     }
   }
 

@@ -313,7 +313,12 @@ class AgentsThreadHeader extends StatelessWidget {
               children: <Widget>[
                 AppIcon(
                   action.icon,
-                  color: action.selected ? theme.colorScheme.primary : iconFg,
+                  color: action.selected
+                      ? theme.accentForegroundOn(
+                          theme.popupMenuTheme.color ??
+                              theme.m3.surfaceContainer,
+                        )
+                      : iconFg,
                   size: 20,
                 ),
                 const SizedBox(width: 12),

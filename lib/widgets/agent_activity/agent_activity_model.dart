@@ -6,6 +6,7 @@
 // produces, so the wording and the source extraction are testable on
 // their own.
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/models/tool_call.dart';
 
 /// What a timeline line represents. Drives the icon and the wording.
@@ -101,8 +102,10 @@ const int _maxDetailChars = 96;
 /// Longest thinking line shown.
 const int _maxThinkingChars = 120;
 
-AgentActivityKind _kindOf(ToolCall call) {
-  final name = call.name.toLowerCase();
+AgentActivityKind _kindOf(ToolCall call) => _kindOfName(call.name);
+
+AgentActivityKind _kindOfName(String rawName) {
+  final name = rawName.toLowerCase();
   if (name.contains('search') || name.contains('find')) {
     return AgentActivityKind.search;
   }
@@ -150,7 +153,7 @@ String _humanizeToolName(String name) {
 /// Reads the tool the model is currently waiting on — the most recent call
 /// that is still running or pending — and returns null when nothing is in
 /// flight (the header then falls back to the stream phase / "Working").
-String? runningActivityLabel(List<ToolCall> calls) {
+String? runningActivityLabel(List<ToolCall> calls, [AppLocalizations? l10n]) {
   ToolCall? current;
   for (final call in calls) {
     if (call.status == ToolCallStatus.running ||
@@ -159,34 +162,47 @@ String? runningActivityLabel(List<ToolCall> calls) {
     }
   }
   if (current == null) return null;
-  switch (_kindOf(current)) {
+  return toolActivityLabel(current.name, l10n);
+}
+
+/// Present-tense phrase for a running tool called [name], localised when
+/// [l10n] is given (English otherwise).
+String toolActivityLabel(String name, [AppLocalizations? l10n]) {
+  switch (_kindOfName(name)) {
     case AgentActivityKind.search:
       // The search kind also covers chat / file search, not only the web —
       // only web_search is "the web"; anything else gets a neutral verb.
-      return current.name == 'web_search' ? 'Searching the web' : 'Searching';
+      return name == 'web_search'
+          ? (l10n?.agentsToolSearchingWeb ?? 'Searching the web')
+          : (l10n?.agentsToolSearching ?? 'Searching');
     case AgentActivityKind.page:
-      return 'Reading a page';
+      return l10n?.agentsToolReadingPage ?? 'Reading a page';
     case AgentActivityKind.thinking:
     case AgentActivityKind.other:
-      return _runningVerbFor(current.name);
+      return knownToolActivityLabel(name, l10n) ??
+          (l10n?.agentsToolRunning(_humanizeToolName(name)) ??
+              'Running ${_humanizeToolName(name)}');
   }
 }
 
-/// Present-tense phrase for a non-search, non-page tool the turn is waiting on.
-/// Known tools get a natural verb; everything else falls back to the tool name.
-String _runningVerbFor(String name) {
+/// The natural verb for a tool this app knows by name, or null. Known tools
+/// get a phrase ("Running a command"); the caller picks the fallback for the
+/// rest.
+String? knownToolActivityLabel(String name, [AppLocalizations? l10n]) {
   switch (name) {
+    case 'web_search':
+      return l10n?.agentsToolSearchingWeb ?? 'Searching the web';
     case 'typst_compile':
-      return 'Compiling document';
+      return l10n?.agentsToolCompiling ?? 'Compiling document';
     case 'generate_image':
-      return 'Generating image';
+      return l10n?.agentsToolGeneratingImage ?? 'Generating image';
     case 'bash':
-      return 'Running a command';
+      return l10n?.agentsToolRunningCommand ?? 'Running a command';
     // The Agents host hands files over with this tool.
     case 'send_file_to_user':
-      return 'Sending a file';
+      return l10n?.agentsToolSendingFile ?? 'Sending a file';
     default:
-      return 'Running ${_humanizeToolName(name)}';
+      return null;
   }
 }
 

@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/services/agents/agents_chat_core.dart';
+import 'package:chuk_chat/utils/theme_extensions.dart';
 
 /// The theme has one side. The Agents build uses chuk_chat's theme as is: the
 /// on-accent colour, the pill SnackBar, the FAB, the type and the shape scale
@@ -23,8 +24,15 @@ void main() {
       debugAgentsChatCoreOverride = agents;
       final ThemeData dark = build(Brightness.dark);
       final ThemeData light = build(Brightness.light);
-      expect(dark.colorScheme.onPrimary, kDefaultIconFgColor);
-      expect(light.colorScheme.onPrimary, kDefaultIconFgColor);
+      // The default icon colour is 1.33 : 1 on the pastel default accent,
+      // so the on-accent colour is black (readableOnFill), with or without
+      // the flag.
+      expect(
+        dark.colorScheme.onPrimary,
+        readableOnFill(kDefaultAccentColor, kDefaultIconFgColor),
+      );
+      expect(dark.colorScheme.onPrimary, const Color(0xFF000000));
+      expect(light.colorScheme.onPrimary, dark.colorScheme.onPrimary);
       expect(dark.snackBarTheme.behavior, SnackBarBehavior.floating);
       expect(dark.floatingActionButtonTheme.elevation, isNull);
       expect(

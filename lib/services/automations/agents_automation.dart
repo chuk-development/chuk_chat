@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart' show immutable;
 
+import 'package:chuk_chat/l10n/app_localizations.dart';
+
 /// One automation of a coworker: a schedule (cron / every / at) or a watcher
 /// (a script that runs 24/7 in the sandbox and wakes the agent through
 /// `agents_hooks.trigger()`). docs/WIRE_CONTRACT.md, section "Automations".
@@ -71,6 +73,12 @@ class AgentsAutomation {
 
   /// `done` or `failed`: nothing more will happen.
   bool get isOver => state == 'done' || state == 'failed';
+
+  /// The words of the state chip, localised and in sentence case ("Active",
+  /// "Pausiert"). English without [l10n]. A state this app does not know is
+  /// shown as the host sent it, with a capital first letter.
+  String stateLabel([AppLocalizations? l10n]) =>
+      automationStateLabel(state, l10n);
 
   /// A short human reading of the spec (`every 5m`, `cron 0 9 * * 1-5`,
   /// `at 2026-09-06 09:00`, `watch poll.py`).
@@ -199,4 +207,24 @@ abstract interface class AgentsAutomationControl {
   /// whole host when [sessionKey] is null. The host answers with an
   /// `automation_list` frame.
   Future<void> requestAutomationList({String? sessionKey});
+}
+
+/// The words for an automation [state] (`active`, `paused`, `done`,
+/// `failed`), localised when [l10n] is given. See
+/// [AgentsAutomation.stateLabel].
+String automationStateLabel(String state, [AppLocalizations? l10n]) {
+  switch (state) {
+    case 'active':
+      return l10n?.agentsAutomationStateActive ?? 'Active';
+    case 'paused':
+      return l10n?.agentsAutomationStatePaused ?? 'Paused';
+    case 'done':
+      return l10n?.agentsAutomationStateDone ?? 'Done';
+    case 'failed':
+      return l10n?.agentsAutomationStateFailed ?? 'Failed';
+    default:
+      final String raw = state.trim();
+      if (raw.isEmpty) return raw;
+      return raw[0].toUpperCase() + raw.substring(1);
+  }
 }

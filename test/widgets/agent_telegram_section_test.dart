@@ -253,7 +253,9 @@ void main() {
       'linked_name': 'Chuk',
     });
     await tester.pump();
-    expect(find.text('Linked to Chuk'), findsOneWidget);
+    // The name sits on its own line under the label.
+    expect(find.text('Linked to'), findsOneWidget);
+    expect(find.text('Chuk'), findsOneWidget);
     expect(key('agent-telegram-code'), findsNothing);
 
     await tester.tap(key('agent-telegram-unlink'));

@@ -1,7 +1,79 @@
 import 'package:flutter/material.dart';
 
+/// The WCAG contrast ratio of two opaque colours, from 1.0 to 21.0.
+double contrastRatio(Color a, Color b) {
+  final double la = a.computeLuminance() + 0.05;
+  final double lb = b.computeLuminance() + 0.05;
+  return la > lb ? la / lb : lb / la;
+}
+
+/// The lowest contrast at which the reader's own foreground colour stays on
+/// an accent fill.
+const double kMinOnFillContrast = 2.0;
+
+/// The text or glyph colour for something that sits on a [fill] (an accent
+/// pill, a filled button, the user bubble).
+///
+/// The rule: keep [preferred] (the reader's chosen icon colour) unless its
+/// contrast against [fill] is below [minContrast]. Then use black or white,
+/// whichever has the higher contrast. So a chosen look such as white on a mid
+/// orange (about 2.95 : 1) stays, and a near-white glyph on the pastel blue
+/// default (1.33 : 1) becomes black.
+///
+/// [fill] must be opaque. For a translucent fill, blend it over what is
+/// behind it first (`Color.alphaBlend`).
+Color readableOnFill(
+  Color fill,
+  Color preferred, {
+  double minContrast = kMinOnFillContrast,
+}) {
+  if (contrastRatio(preferred, fill) >= minContrast) return preferred;
+  const Color black = Color(0xFF000000);
+  const Color white = Color(0xFFFFFFFF);
+  return contrastRatio(black, fill) >= contrastRatio(white, fill)
+      ? black
+      : white;
+}
+
+/// The lowest contrast for the accent used as a text or icon colour on a
+/// surface (the WCAG floor for large text and UI glyphs).
+const double kMinAccentForegroundContrast = 3.0;
+
+/// [accent] as a text or icon colour on [surface]. Returns [accent] when it
+/// already reaches [minContrast]; otherwise moves it in small steps towards
+/// black (light surface) or white (dark surface) until it does. The hue
+/// stays, so the colour still reads as the accent.
+Color accentForegroundFor(
+  Color accent,
+  Color surface, {
+  double minContrast = kMinAccentForegroundContrast,
+}) {
+  if (contrastRatio(accent, surface) >= minContrast) return accent;
+  final bool lightSurface =
+      ThemeData.estimateBrightnessForColor(surface) == Brightness.light;
+  final Color target = lightSurface
+      ? const Color(0xFF000000)
+      : const Color(0xFFFFFFFF);
+  Color out = accent;
+  for (int step = 1; step <= 20; step++) {
+    out = Color.lerp(accent, target, step * 0.05)!;
+    if (contrastRatio(out, surface) >= minContrast) break;
+  }
+  return out;
+}
+
 extension ThemeDataIconColorX on ThemeData {
   Color get resolvedIconColor => iconTheme.color ?? colorScheme.onSurface;
+
+  /// The accent as a text or icon colour on [surface] (by default the
+  /// scaffold background). The pastel default accent on a light surface is
+  /// about 1.4 : 1; this returns a darker shade of it that reaches 3 : 1.
+  /// Use it for a selected name, a sidebar glyph, an accent time stamp. Do
+  /// not use it for fills: a fill keeps `colorScheme.primary`.
+  Color accentForegroundOn([Color? surface]) => accentForegroundFor(
+    colorScheme.primary,
+    surface ?? scaffoldBackgroundColor,
+  );
 
   /// The glyph colour for a button that is filled with the accent — the send
   /// button, the new-chat button, every round accent circle.

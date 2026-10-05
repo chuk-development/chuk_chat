@@ -53,6 +53,13 @@ WANTED = [
     # Agent mail (docs/AGENT_MAIL.md §6).
     "Mail01Icon", "InboxIcon", "Archive02Icon", "UserCheck01Icon",
     "UserBlock01Icon",
+    # One icon set on the Agents profile and settings pages (UI audit
+    # 2026-10-05, item 9): replacements for filled Material fallbacks.
+    "CreditCardIcon", "FingerPrintIcon", "Mortarboard01Icon",
+    "UserCircleIcon", "ClipboardPasteIcon", "Task01Icon", "IdIcon",
+    "CheckmarkBadge01Icon", "CallEnd01Icon", "CloudOffIcon",
+    "ComputerRemoveIcon", "Unlink01Icon", "PauseCircleIcon",
+    "CodeIcon",
 ]
 
 CAMEL = re.compile(r"([a-z0-9])([A-Z])")

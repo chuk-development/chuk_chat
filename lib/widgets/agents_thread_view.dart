@@ -1776,40 +1776,13 @@ class AgentsThreadViewState extends State<AgentsThreadView>
                       showAutomations ? automations : null,
                     ),
                   ),
-                  // A takeover sits under the header, on the transcript's
-                  // own measure, where the reader is already looking.
-                  if (approval != null && approval.isTakeover)
-                    Positioned(
-                      top: kAgentsThreadHeaderInset,
-                      left: 0,
-                      right: 0,
-                      child: Center(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 720),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: _buildTakeoverCard(
-                              context,
-                              approval,
-                              dense: true,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
                 ],
               )
             : chat;
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            if (!desktop && (approval != null || secretRequest != null))
-              SizedBox(height: widget.topInset),
-            if (approval != null && approval.isTakeover && !desktop)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                child: _buildTakeoverCard(context, approval, dense: false),
-              ),
+            if (!desktop && _hasBarAboveChat) SizedBox(height: widget.topInset),
             if (connected && approval != null && !approval.isTakeover)
               _buildApprovalBar(context, approval),
             if (connected && secretRequest != null)
@@ -1935,7 +1908,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     // the generation, which changes the key, which remounts it on fresh rows.
     // A thread switch keeps the key (see [_screenGeneration]).
     final key = ValueKey<String>('agents-chat-$_screenGeneration');
-    if (_useDesktopChat(context)) {
+    final bool desktop = _useDesktopChat(context);
+    // A browser takeover is part of the run, so it sits where the run is: in
+    // the transcript, after the last message. It scrolls with the messages,
+    // covers none of them, and leaves the run status in view.
+    final AgentsRelayApprovalRequest? approval = _approval;
+    final Widget? takeover = approval != null && approval.isTakeover
+        ? _buildTakeoverCard(context, approval, dense: desktop)
+        : null;
+    if (desktop) {
       return ChukChatUIDesktop(
         key: key,
         onToggleSidebar: _noopToggleSidebar,
@@ -1956,6 +1937,7 @@ class AgentsThreadViewState extends State<AgentsThreadView>
         agentsThread: true,
         agentsTitle: widget.title,
         topInset: desktopTopInset,
+        transcriptFooter: takeover,
       );
     }
     return ChukChatUIMobile(
@@ -1965,9 +1947,8 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       // Reserve chrome inside the scrollable, not above its viewport: messages
       // can pass behind the floating contact pill like the messenger reference.
       // Action-required bars remain below the header and own their inset.
-      topInset: _approval != null || _secretRequest != null
-          ? 0
-          : widget.topInset,
+      topInset: _hasBarAboveChat ? 0 : widget.topInset,
+      transcriptFooter: takeover,
       onToggleSidebar: _noopToggleSidebar,
       selectedChatId: widget.threadKey,
       onChatIdChanged: _onChatIdChanged,
@@ -1980,6 +1961,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
       toolDiscoveryMode: false,
       autoSendVoiceTranscription: config?.autoSendVoiceTranscription ?? false,
     );
+  }
+
+  /// Whether a bar (an approval or a secret request) sits above the phone
+  /// chat. The bar then owns the header inset; the takeover card does not
+  /// count, because it lives inside the transcript.
+  bool get _hasBarAboveChat {
+    final AgentsRelayApprovalRequest? approval = _approval;
+    return (approval != null && !approval.isTakeover) ||
+        _secretRequest != null;
   }
 
   /// The sidebar is the shell's (the Agents roster), not the chat screen's.
@@ -2238,11 +2228,15 @@ class AgentsThreadViewState extends State<AgentsThreadView>
     );
   }
 
-  /// Answers the takeover card. With no relay controller the answer cannot
-  /// reach the host, so the card stays and the run keeps waiting on the user;
-  /// a short notice says why.
+  /// Answers the takeover card. With no relay controller, or one that is not
+  /// paired right now, the answer cannot reach the host, so the card stays
+  /// and the run keeps waiting on the user; a short notice says why.
   void _decideTakeover(bool approved) {
-    if (_controller == null) {
+    // A controller whose socket is closed or reconnecting cannot deliver the
+    // answer either: the send would fail silently, the card would go and the
+    // host would keep waiting. Treat it like no controller at all.
+    final AgentsRelayController? controller = _controller;
+    if (controller == null || !controller.state.value.isPaired) {
       AppNotifications.show(
         context,
         'Not connected to your computer — try again when it is back',

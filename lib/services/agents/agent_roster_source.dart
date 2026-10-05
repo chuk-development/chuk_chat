@@ -71,7 +71,16 @@ abstract class AgentRosterSource extends ChangeNotifier {
 
   /// Makes sure the agent that really runs on the paired host is listed, and
   /// returns it. Called once the transport reports a paired host.
-  AgentsAgent ensureHostAgent(String peerDeviceId);
+  ///
+  /// [label] is the name a person reads ("Your computer"), used instead of
+  /// the raw device id. A host agent still named after its device id, or
+  /// after one of [replaceableLabels] (the same label in another language),
+  /// takes [label]; a name the host sent is kept.
+  AgentsAgent ensureHostAgent(
+    String peerDeviceId, {
+    String? label,
+    Set<String> replaceableLabels = const <String>{},
+  });
 
   /// Adds a coworker the user just onboarded. The returned agent always has its
   /// one permanent thread, so selecting it opens the conversation immediately.
@@ -254,16 +263,38 @@ class LocalAgentRosterSource extends AgentRosterSource {
 
   /// Makes sure the agent that really runs on the paired host is in the roster.
   ///
-  /// Its name is the host's own device id — a real identifier from the pairing,
-  /// not a made-up label.
+  /// Its id keeps the host's own device id, a real identifier from the
+  /// pairing. Its name is [label] when one is given: a raw id such as
+  /// `host-laptop-1` in the inbox reads as a debug row. The host's
+  /// `agent_list` can still name it ([applyHostNames]).
   @override
-  AgentsAgent ensureHostAgent(String peerDeviceId) {
+  AgentsAgent ensureHostAgent(
+    String peerDeviceId, {
+    String? label,
+    Set<String> replaceableLabels = const <String>{},
+  }) {
     final id = 'host:$peerDeviceId';
+    final String? wanted = (label == null || label.trim().isEmpty)
+        ? null
+        : label.trim();
     final existing = byId(id);
-    if (existing != null) return existing;
+    if (existing != null) {
+      final bool placeholder =
+          existing.name == peerDeviceId ||
+          replaceableLabels.contains(existing.name);
+      if (wanted == null || !placeholder || existing.name == wanted) {
+        return existing;
+      }
+      final index = _indexOf(id, orNull: true);
+      final renamed = existing.copyWith(name: wanted);
+      _agents[index] = renamed;
+      _persist();
+      notifyListeners();
+      return renamed;
+    }
     final agent = AgentsAgent(
       id: id,
-      name: peerDeviceId,
+      name: wanted ?? peerDeviceId,
       onHost: true,
       threads: <AgentsThreadInfo>[
         // One permanent session per bot: its key is the agent id, so the
