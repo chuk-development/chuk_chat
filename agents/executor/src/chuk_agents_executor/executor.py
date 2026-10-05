@@ -5799,6 +5799,31 @@ class Executor:
             sealer = self._sealer
         return frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())
 
+    def emit_host_payload(self, payload: dict, sealer: AgentsFrameSealer) -> bool:
+        """Send a frame the HOST originates (token rotation, call ring, job
+        notice, ...) on this executor's ordered outbound path.
+
+        The host and this executor seal with the same session sealer. Before
+        this path the host sent its frames directly while the executor's
+        frames went through the loopback and the result pump, so a host frame
+        sealed later could reach the app first; the app then dropped the
+        executor frame as a replayed sequence (bead chuk_chat-9i41). Sealing
+        and enqueueing under ``_emit_lock`` puts both kinds in one order.
+
+        The envelope carries no request id, so the pump sends it to every
+        controller, as the host's direct send did. The host's payload is sent
+        as given (no secret scrub: it never held a run's text). Returns False
+        when ``sealer`` is not the codec this executor seals with now; the
+        caller then sends directly, as before."""
+        with self._emit_lock:
+            with self._codec_lock:
+                current = self._sealer
+            if current is not sealer:
+                return False
+            frame = frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())
+            self._endpoint.send(encode_frame(make_request(METHOD_EVENT, {"frame": frame})))
+        return True
+
     def _event(self, request_id: str, payload: dict) -> None:
         """Stream a progress event as a relay notification carrying a sealed frame."""
         with self._emit_lock:

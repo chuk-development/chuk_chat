@@ -166,6 +166,31 @@ def test_mcp_annotations_are_read_strictly():
     assert not is_destructive(None)
 
 
+def test_mcp_sdk_v2_tools_are_read_without_deprecation_warnings():
+    """Bead chuk_chat-ev7v: the SDK v2 models carry snake_case fields and
+    FastMCP warns per tool on every connect when the camelCase alias is read.
+    The hints keep their wire names in the output."""
+    import warnings
+
+    from chuk_agents_runtime.mcp_client import _tool_infos
+
+    types = pytest.importorskip("mcp.types")
+    tool = types.Tool(
+        name="drop_table",
+        description="Drop a table",
+        input_schema={"type": "object", "properties": {"name": {"type": "string"}}},
+        annotations=types.ToolAnnotations(destructive_hint=True, read_only_hint=False),
+    )
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        infos = _tool_infos([tool])
+    deprecations = [w for w in caught if issubclass(w.category, DeprecationWarning)]
+    assert not deprecations, [str(w.message) for w in deprecations]
+    assert infos[0].annotations == {"destructiveHint": True, "readOnlyHint": False}
+    assert infos[0].schema["properties"] == {"name": {"type": "string"}}
+    assert _annotations({"read_only_hint": True}) == {"readOnlyHint": True}
+
+
 # -- the loop ---------------------------------------------------------------------
 
 

@@ -118,7 +118,7 @@ def main() -> int:
 
     def woke():
         text = HOSTLOG.read_text(errors="replace")[log_offset:] if HOSTLOG.exists() else ""
-        lines = [l for l in text.splitlines() if "[jobs]" in l and job_id in l]
+        lines = [ln for ln in text.splitlines() if "[jobs]" in ln and job_id in ln]
         return lines or None
 
     lines = wait_until(woke, timeout=120, what="the host log line for the job")
@@ -147,7 +147,7 @@ def main() -> int:
 
     finished = wait_until(run_closed, timeout=600, every=2.0, what="the wake task to finish")
     say("runs row    ->", json.dumps({"run_id": finished[0], "state": finished[1], "reason": finished[2], "notified_at": finished[3], "final_answer": finished[5]}))
-    notify_lines = [l for l in HOSTLOG.read_text(errors="replace")[log_offset:].splitlines() if "notif" in l.lower() or "toast" in l.lower()]
+    notify_lines = [ln for ln in HOSTLOG.read_text(errors="replace")[log_offset:].splitlines() if "notif" in ln.lower() or "toast" in ln.lower()]
     say("notifier    ->", *(notify_lines[-3:] or ["(no notifier line in the host log; see runs.notified_at)"]))
     ok = finished[1] == "finished" and finished[3] is not None
     say("RESULT:", "PASS" if ok else "FAIL")

@@ -1295,7 +1295,13 @@ class LocalHost:
         # same files across sessions; the binding is the host's persistent one.
         # ``emit`` seals a room reply and sends it to the app over this session's
         # channel, the same path the executor's own results take.
+        # The task server is built below; ``emit`` reads it at call time and
+        # uses its ordered path (bead chuk_chat-9i41) once it exists.
+        built: list[TaskServer] = []
+
         def emit(payload: dict) -> None:
+            if built and built[0].send_host_payload(payload, sealer):
+                return
             sealed = sealer.seal(encode_payload(payload))
             party.send_result_frame(frame_to_b64(sealed.to_bytes()))
 
@@ -1310,7 +1316,7 @@ class LocalHost:
             members_ready=self._room_agents.ensure_room,
         )
 
-        return TaskServer(
+        task_server = TaskServer(
             roster=serve_roster,
             agent_id=self._agent.id,
             opener=opener,
@@ -1377,6 +1383,8 @@ class LocalHost:
             price_book=lambda: getattr(self, "_price_book", None),
             budget=getattr(self, "_budget", None),
         )
+        built.append(task_server)
+        return task_server
 
     # -- run ownership hooks (docs/WIRE_CONTRACT.md) ----------------------
 
@@ -1729,6 +1737,13 @@ class LocalHost:
         if party is None or sealer is None or not self._controller_attached():
             return False
         try:
+            # One ordered path with the executor's own frames (bead
+            # chuk_chat-9i41): both seal with this sealer, so a host frame sent
+            # around the result pump could overtake an executor frame sealed
+            # before it, and the app would drop that one as a replay.
+            ordered = getattr(getattr(party, "_task_server", None), "send_host_payload", None)
+            if ordered is not None and ordered(payload, sealer):
+                return True
             sealed = sealer.seal(encode_payload(payload))
             party.send_result_frame(frame_to_b64(sealed.to_bytes()))
             return True

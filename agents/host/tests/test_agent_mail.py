@@ -8,7 +8,6 @@ test mail key, as the real server does; runs are recorded, not executed.
 
 from __future__ import annotations
 
-import base64
 import json
 import os
 import stat
