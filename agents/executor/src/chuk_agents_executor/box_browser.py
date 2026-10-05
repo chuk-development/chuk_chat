@@ -91,12 +91,9 @@ def load_tools(path: str | None) -> list[MCPToolInfo]:
     return tools
 
 
-def save_tools(path: str | None, tools: list[MCPToolInfo]) -> None:
-    """Write the tool list atomically. Best effort: a failure costs the next
-    host start one eager connection, nothing else."""
-    if not path or not tools:
-        return
-    data = [
+def tools_data(tools: list[MCPToolInfo]) -> list[dict]:
+    """The tool list as it is saved: name, description, schema, annotations."""
+    return [
         {
             "name": t.name,
             "description": t.description,
@@ -105,13 +102,37 @@ def save_tools(path: str | None, tools: list[MCPToolInfo]) -> None:
         }
         for t in tools
     ]
-    tmp = f"{path}.tmp"
+
+
+def same_tools(a: list[MCPToolInfo], b: list[MCPToolInfo]) -> bool:
+    """Equal as saved, not only by name: a changed description or schema is a
+    new tool list too."""
+    try:
+        return json.dumps(tools_data(a), sort_keys=True) == json.dumps(
+            tools_data(b), sort_keys=True
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def save_tools(path: str | None, tools: list[MCPToolInfo]) -> None:
+    """Write the tool list atomically. Best effort: a failure costs the next
+    host start one eager connection, nothing else. Each writer has its own
+    temp file (pid and thread id), so two executors that save at once never
+    write into the same file."""
+    if not path or not tools:
+        return
+    tmp = f"{path}.{os.getpid()}.{threading.get_ident()}.tmp"
     try:
         with open(tmp, "w", encoding="utf-8") as handle:
-            json.dump(data, handle)
+            json.dump(tools_data(tools), handle)
         os.replace(tmp, path)
     except (OSError, TypeError, ValueError):
         logger.debug("browser tool list not saved", exc_info=True)
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
 
 
 class BoxBrowser:
@@ -222,7 +243,7 @@ class BoxBrowser:
                 self._conn = conn
                 self._error = None
                 tools = list(conn.tools)
-                if tools and [t.name for t in tools] != [t.name for t in self._known]:
+                if tools and not same_tools(tools, self._known):
                     save_tools(self._tools_path, tools)
                 self._known = tools or self._known
                 return True

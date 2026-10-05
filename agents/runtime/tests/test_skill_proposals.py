@@ -26,6 +26,7 @@ from chuk_agents_runtime.skill_proposals import (
     STATUS_NOT_FOUND,
     STATUS_PENDING,
     STATUS_SAVED,
+    STATUS_SAVING,
     RecordingProposalSink,
     SkillDraft,
     SkillProposalStore,
@@ -36,7 +37,9 @@ from chuk_agents_runtime.skill_proposals import (
     scrub_draft,
     scrub_text,
     validate_draft,
+    write_skill,
 )
+from chuk_agents_runtime import skill_proposals as skill_proposals_mod
 from chuk_agents_runtime.skills import MAX_SKILLS
 
 BODY = (
@@ -282,6 +285,103 @@ def test_an_unknown_proposal_is_reported(tmp_path):
     store, _pid, _root = _pending(tmp_path)
     result = decide_skill_proposal(store, proposal_id="sp_nope", accept=True)
     assert result["status"] == STATUS_NOT_FOUND and result["errors"] == ["no skill proposal 'sp_nope'"]
+
+
+def test_a_second_accept_during_the_write_is_already_decided_and_writes_nothing(
+    tmp_path, monkeypatch
+):
+    store, pid, root = _pending(tmp_path)
+    real_write = skill_proposals_mod.write_skill
+    writes: list[str] = []
+    inner: list[dict] = []
+
+    def racing_write(target_root, draft):
+        writes.append(draft.name)
+        if len(writes) == 1:
+            # Another device accepts (with its own edit) while this one writes.
+            inner.append(
+                decide_skill_proposal(store, proposal_id=pid, accept=True, name="other-name")
+            )
+        return real_write(target_root, draft)
+
+    monkeypatch.setattr(skill_proposals_mod, "write_skill", racing_write)
+    first = decide_skill_proposal(store, proposal_id=pid, accept=True)
+    assert first["status"] == STATUS_SAVED
+    assert inner[0]["status"] == STATUS_SAVING and inner[0]["already_decided"] is True
+    assert writes == ["invoice-export"]
+    assert not (root / "other-name").exists()
+    assert store.get(pid)["status"] == STATUS_SAVED
+    again = decide_skill_proposal(store, proposal_id=pid, accept=True)
+    assert again["status"] == STATUS_SAVED and again["already_decided"] is True
+
+
+def test_a_dismiss_during_the_write_is_already_decided_and_the_save_wins(
+    tmp_path, monkeypatch
+):
+    store, pid, root = _pending(tmp_path)
+    real_write = skill_proposals_mod.write_skill
+    inner: list[dict] = []
+
+    def racing_write(target_root, draft):
+        inner.append(decide_skill_proposal(store, proposal_id=pid, accept=False))
+        return real_write(target_root, draft)
+
+    monkeypatch.setattr(skill_proposals_mod, "write_skill", racing_write)
+    first = decide_skill_proposal(store, proposal_id=pid, accept=True)
+    assert inner[0]["status"] == STATUS_SAVING and inner[0]["already_decided"] is True
+    assert first["status"] == STATUS_SAVED
+    assert store.get(pid)["status"] == STATUS_SAVED
+    assert (root / "invoice-export" / "SKILL.md").is_file()
+
+
+def test_an_accept_after_a_dismiss_writes_nothing(tmp_path):
+    store, pid, root = _pending(tmp_path)
+    assert store.decide(pid, STATUS_DISMISSED)
+    late = decide_skill_proposal(store, proposal_id=pid, accept=False)
+    assert late["status"] == STATUS_DISMISSED and late["already_decided"] is True
+    assert not root.exists()
+
+
+def test_a_failed_write_gives_the_draft_back(tmp_path, monkeypatch):
+    store, pid, root = _pending(tmp_path)
+
+    def failing_write(target_root, draft):
+        assert store.get(pid)["status"] == STATUS_SAVING
+        raise OSError("disk full")
+
+    monkeypatch.setattr(skill_proposals_mod, "write_skill", failing_write)
+    result = decide_skill_proposal(store, proposal_id=pid, accept=True)
+    assert result["status"] == STATUS_INVALID and "disk full" in result["errors"][0]
+    assert store.get(pid)["status"] == STATUS_PENDING
+    monkeypatch.undo()
+    assert decide_skill_proposal(store, proposal_id=pid, accept=True)["status"] == STATUS_SAVED
+
+
+def test_a_stale_saving_claim_can_be_taken_over(tmp_path, monkeypatch):
+    store, pid, _root = _pending(tmp_path)
+    assert store.claim_for_save(pid)
+    assert not store.claim_for_save(pid)
+    later = skill_proposals_mod.time.time() + skill_proposals_mod.SAVING_STALE_SECONDS + 1
+    monkeypatch.setattr(skill_proposals_mod.time, "time", lambda: later)
+    assert store.claim_for_save(pid)
+
+
+def test_a_failed_write_removes_the_temp_file_and_the_new_directory(tmp_path, monkeypatch):
+    root = tmp_path / "skills"
+
+    def broken_replace(src, dst):
+        raise OSError("rename failed")
+
+    monkeypatch.setattr(skill_proposals_mod.os, "replace", broken_replace)
+    with pytest.raises(OSError):
+        write_skill(root, _draft())
+    assert not (root / "invoice-export").exists()
+    # A directory that was there before stays, only the temp file goes.
+    (root / "invoice-export").mkdir(parents=True)
+    (root / "invoice-export" / "notes.txt").write_text("keep")
+    with pytest.raises(OSError):
+        write_skill(root, _draft())
+    assert [p.name for p in (root / "invoice-export").iterdir()] == ["notes.txt"]
 
 
 # -- end to end in one runtime ------------------------------------------------

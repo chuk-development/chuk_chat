@@ -72,6 +72,12 @@ NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 STATUS_PENDING = "pending"
 STATUS_SAVED = "saved"
 STATUS_DISMISSED = "dismissed"
+#: An accept holds the row while it writes ``SKILL.md``: a second accept or a
+#: dismiss that comes in meanwhile is answered ``already_decided`` and writes
+#: nothing. A claim older than :data:`SAVING_STALE_SECONDS` is taken to be
+#: from a process that died mid-write and may be claimed again.
+STATUS_SAVING = "saving"
+SAVING_STALE_SECONDS = 120.0
 #: Decision outcomes that are not a stored status.
 STATUS_INVALID = "invalid"
 STATUS_NOT_FOUND = "not_found"
@@ -351,6 +357,55 @@ class SkillProposalStore:
                 )
             return cur.rowcount == 1
 
+    def claim_for_save(self, proposal_id: str) -> bool:
+        """Move a pending draft to ``saving`` before its file is written.
+        False when another accept or a dismiss got there first. A ``saving``
+        claim older than :data:`SAVING_STALE_SECONDS` counts as abandoned."""
+        now = time.time()
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE skill_proposals SET status = ?, decided_at = ?"
+                " WHERE proposal_id = ? AND (status = ?"
+                " OR (status = ? AND (decided_at IS NULL OR decided_at < ?)))",
+                (
+                    STATUS_SAVING,
+                    now,
+                    proposal_id,
+                    STATUS_PENDING,
+                    STATUS_SAVING,
+                    now - SAVING_STALE_SECONDS,
+                ),
+            )
+            return cur.rowcount == 1
+
+    def finish_save(self, proposal_id: str, draft: SkillDraft) -> bool:
+        """Close a claimed draft as ``saved`` with what was written."""
+        with self._connect() as conn:
+            cur = conn.execute(
+                "UPDATE skill_proposals SET status = ?, decided_at = ?,"
+                " name = ?, description = ?, body = ?"
+                " WHERE proposal_id = ? AND status = ?",
+                (
+                    STATUS_SAVED,
+                    time.time(),
+                    draft.name,
+                    draft.description,
+                    draft.body,
+                    proposal_id,
+                    STATUS_SAVING,
+                ),
+            )
+            return cur.rowcount == 1
+
+    def release_claim(self, proposal_id: str) -> None:
+        """Give a claimed draft back to the user after a failed write."""
+        with self._connect() as conn:
+            conn.execute(
+                "UPDATE skill_proposals SET status = ?, decided_at = NULL"
+                " WHERE proposal_id = ? AND status = ?",
+                (STATUS_PENDING, proposal_id, STATUS_SAVING),
+            )
+
     def close(self) -> None:  # symmetry with the other stores; nothing is held
         return None
 
@@ -367,11 +422,23 @@ def write_skill(root: str | Path, draft: SkillDraft) -> Path:
     rename), so a task that starts mid-write reads the old state or the new
     one, never half a file."""
     directory = Path(root) / draft.name
+    created = not directory.exists()
     directory.mkdir(parents=True, exist_ok=True)
     target = directory / SKILL_FILENAME
     temp = directory / f".{SKILL_FILENAME}.{uuid.uuid4().hex[:8]}.tmp"
-    temp.write_text(render_skill_md(draft), encoding="utf-8")
-    os.replace(temp, target)
+    try:
+        temp.write_text(render_skill_md(draft), encoding="utf-8")
+        os.replace(temp, target)
+    except BaseException:
+        # Leave nothing behind: no temp file, and no empty skill directory
+        # that would count as a taken name on the next try.
+        temp.unlink(missing_ok=True)
+        if created:
+            try:
+                directory.rmdir()
+            except OSError:
+                pass
+        raise
     return target
 
 
@@ -388,8 +455,9 @@ def decide_skill_proposal(
     """Apply the app's ``skill_proposal_decision``; the body of the reply.
 
     ``status`` is ``saved`` / ``dismissed`` (now or earlier — then
-    ``already_decided`` is true), ``invalid`` (the accept was refused; the
-    draft stays pending so the user can fix it) or ``not_found``.
+    ``already_decided`` is true), ``saving`` with ``already_decided`` (another
+    accept is writing the file right now), ``invalid`` (the accept was
+    refused; the draft stays pending so the user can fix it) or ``not_found``.
     """
     pid = proposal_id.strip() if isinstance(proposal_id, str) else ""
     row = store.get(pid) if pid else None
@@ -398,7 +466,8 @@ def decide_skill_proposal(
     if row["status"] != STATUS_PENDING:
         return _result(pid, row["status"], name=row["name"], already_decided=True)
     if accept is not True:
-        store.decide(pid, STATUS_DISMISSED)
+        if not store.decide(pid, STATUS_DISMISSED):
+            return _already_decided(store, pid, row["name"])
         return _result(pid, STATUS_DISMISSED, name=row["name"])
 
     # The user's edits replace the draft field by field; an absent field keeps
@@ -422,19 +491,36 @@ def decide_skill_proposal(
             )
     if errors:
         return _result(pid, STATUS_INVALID, name=draft.name, errors=errors, scrubbed=scrubbed)
+    # Claim the row before the file exists: a second accept (another device)
+    # or a dismiss that arrives during the write finds it taken and writes
+    # nothing.
+    if not store.claim_for_save(pid):
+        return _already_decided(store, pid, draft.name)
     try:
         path = write_skill(root, draft)
         parse_skill(path.read_text(encoding="utf-8"), path=str(path))
     except (OSError, SkillError) as exc:
+        store.release_claim(pid)
         return _result(
             pid, STATUS_INVALID, name=draft.name, errors=[f"could not write the skill: {exc}"]
         )
-    if not store.decide(pid, STATUS_SAVED, draft):
-        # Another device answered in between. The file is written; report the
-        # outcome the store holds.
-        current = store.get(pid) or {}
-        return _result(pid, current.get("status", STATUS_SAVED), name=draft.name, already_decided=True)
+    except BaseException:
+        store.release_claim(pid)
+        raise
+    if not store.finish_save(pid, draft):
+        # Only a stale-claim takeover gets here; report what the store holds.
+        return _already_decided(store, pid, draft.name)
     return _result(pid, STATUS_SAVED, name=draft.name, path=str(path), scrubbed=scrubbed)
+
+
+def _already_decided(store: SkillProposalStore, pid: str, name: str) -> dict:
+    current = store.get(pid) or {}
+    return _result(
+        pid,
+        current.get("status", STATUS_NOT_FOUND),
+        name=current.get("name", name),
+        already_decided=True,
+    )
 
 
 # -- the tool -----------------------------------------------------------------
