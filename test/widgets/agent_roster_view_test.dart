@@ -808,7 +808,7 @@ void main() {
       var notified = 0;
       source.addListener(() => notified++);
 
-      source.applyHostNames(
+      void list() => source.applyHostNames(
         [
           const AgentsHostAgentName(
             agentId: 'host:whatever',
@@ -825,8 +825,17 @@ void main() {
         ignore: const {'local:deleted:1:1'},
       );
 
+      // The first listing changes one thing only: the host keeps the
+      // coworker now (bead chuk_chat-89vl).
+      list();
       expect(source.agents.map((a) => a.id), [local.id]);
-      expect(notified, 0);
+      expect(source.byId(local.id)!.knownToHost, isTrue);
+      expect(source.byId(local.id)!.onHost, isFalse);
+      expect(notified, 1);
+
+      // The same listing again changes nothing.
+      list();
+      expect(notified, 1);
     });
   });
 

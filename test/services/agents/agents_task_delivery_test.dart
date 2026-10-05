@@ -70,8 +70,14 @@ void main() {
 
   /// Starts one user message and returns the events the adapter yields for it.
   /// The subscription is left open so the test can feed acks into it.
-  ({List<ChatStreamEvent> seen, Future<void> Function() cancel}) send() {
+  ({
+    List<ChatStreamEvent> seen,
+    Future<void> Function() cancel,
+    bool Function() closedFn,
+  })
+  send() {
     final List<ChatStreamEvent> seen = <ChatStreamEvent>[];
+    var closed = false;
     final sub = AgentsChatTransport.sendStreamingChat(
       accessToken: 'token',
       message: 'do the thing',
@@ -79,8 +85,12 @@ void main() {
       providerSlug: 'openai',
       chatId: sessionKey,
       reasoningEffort: 'low',
-    ).listen(seen.add);
-    return (seen: seen, cancel: () async => sub.cancel());
+    ).listen(seen.add, onDone: () => closed = true);
+    return (
+      seen: seen,
+      cancel: () async => sub.cancel(),
+      closedFn: () => closed,
+    );
   }
 
   /// What the app has no `task_ack` for, in this thread.
@@ -226,6 +236,44 @@ void main() {
     expect(run.outcome, AgentsRunOutcome.notDelivered);
     expect(run.endedWithoutAnswer, isTrue);
     expect(agentsRunEndNotice(run.outcome!), contains('did not reach'));
+  });
+
+  test('a send the ledger gives up on ends the open stream', () async {
+    // The ack window ran out three times: the ledger ends the run as
+    // notDelivered with no frame from the host. The stream must end too, or
+    // the bubble counts "Did not reach your computer" for ever.
+    final out = send();
+    await _drain();
+    expect(controller.tasks, <String>['do the thing']);
+    final AgentsRunLedger ledger = AgentsRunLedger.instance;
+    final DateTime t0 = DateTime.now();
+
+    ledger.sweep(now: t0.add(const Duration(seconds: 9)));
+    ledger.sweep(now: t0.add(const Duration(seconds: 18)));
+    await _drain();
+    expect(out.seen, isEmpty);
+    expect(ledger.isRunning(sessionKey), isTrue);
+
+    ledger.sweep(now: t0.add(const Duration(seconds: 27)));
+    await _drain();
+    expect(
+      ledger.runFor(sessionKey)?.outcome,
+      AgentsRunOutcome.notDelivered,
+    );
+    final ErrorEvent error = out.seen.whereType<ErrorEvent>().single;
+    expect(error.code, StreamErrorCodes.connectionLost);
+    expect(
+      error.message,
+      agentsRunEndNotice(AgentsRunOutcome.notDelivered),
+    );
+    expect(out.seen.last, isA<DoneEvent>());
+    expect(out.seen.whereType<DoneEvent>(), hasLength(1));
+    expect(out.closedFn(), isTrue);
+
+    // A frame that lands after the give-up changes nothing.
+    controller.emit(const AgentsRelayDelta('late'));
+    await _drain();
+    expect(out.seen.whereType<ContentEvent>(), isEmpty);
   });
 
   test('a heartbeat proves the task arrived, so it is never re-sent', () async {

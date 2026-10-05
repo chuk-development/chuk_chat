@@ -180,6 +180,7 @@ class AgentRosterStore {
               'id': agent.id,
               'name': agent.name,
               'onHost': agent.onHost,
+              if (agent.knownToHost) 'knownToHost': true,
               // The last time the app saw this coworker do something. Kept so
               // a cold start shows a real time instead of "no activity yet".
               if (agent.lastActivity != null)
@@ -239,6 +240,7 @@ class AgentRosterStore {
       id: id,
       name: name is String && name.isNotEmpty ? name : id,
       onHost: row['onHost'] == true,
+      knownToHost: row['knownToHost'] == true,
       threads: threads,
       lastActivity: _readTime(row['lastActivity']),
     );

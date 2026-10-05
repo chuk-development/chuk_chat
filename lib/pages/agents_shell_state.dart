@@ -290,6 +290,24 @@ mixin AgentsShellHost on State<MessengerShell> {
   final Set<String> _deletedAgentIds = <String>{};
 
   void _onHostInbound(AgentsRelayInbound event) {
+    // A frame that proves the host ran (or is running) a thread's turn also
+    // proves the coworker lives on the host (bead chuk_chat-89vl): a held
+    // `task_ack`, a heartbeat, a live run, or a run terminal — a replayed one
+    // too, which is a run the host has stored.
+    final String? ranOnHost = switch (event) {
+      AgentsRelayTaskAck(:final sessionKey) when event.isHeld => sessionKey,
+      AgentsRelayHeartbeat(:final sessionKey) => sessionKey,
+      AgentsRelayRunState(:final sessionKey, :final state)
+          when state == 'running' =>
+        sessionKey,
+      AgentsRelayDone(:final sessionKey) => sessionKey,
+      _ => null,
+    };
+    if (ranOnHost != null) {
+      final String? agentId = _agentIdForThread(ranOnHost);
+      if (agentId != null) _roster.markKnownToHost(agentId);
+      return;
+    }
     if (event is! AgentsRelayAgentList) return;
     _roster.applyHostNames(
       event.agents,

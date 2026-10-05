@@ -78,6 +78,7 @@ class AppLocalizations {
   String get developerOptions => _get('developerOptions');
   String get developerOptionsSubtitle => _get('developerOptionsSubtitle');
   String get modelSelection => _get('modelSelection');
+  String get modelDefaultAgentsInfo => _get('modelDefaultAgentsInfo');
   String get modelSelectionSubtitle => _get('modelSelectionSubtitle');
   String get aiIdentityMemory => _get('aiIdentityMemory');
   String get aiIdentityMemorySubtitle => _get('aiIdentityMemorySubtitle');
@@ -248,8 +249,59 @@ class AppLocalizations {
       _get('takeoverOther').replaceAll('{site}', site);
   String get takeoverOpen => _get('takeoverOpen');
   String get takeoverDone => _get('takeoverDone');
+  String get takeoverSkip => _get('takeoverSkip');
   String takeoverContinues(String name) =>
       _get('takeoverContinues').replaceAll('{name}', name);
+  // Agents: a coworker's Telegram channel.
+  String get agentsChannels => _get('agentsChannels');
+  String get agentsTelegramTitle => _get('agentsTelegramTitle');
+  String get agentsTelegramNotE2e => _get('agentsTelegramNotE2e');
+  String get agentsTelegramPaste => _get('agentsTelegramPaste');
+  String get agentsTelegramTokenLabel => _get('agentsTelegramTokenLabel');
+  String get agentsTelegramTokenHint => _get('agentsTelegramTokenHint');
+  String get agentsTelegramTurnOn => _get('agentsTelegramTurnOn');
+  String get agentsTelegramCancel => _get('agentsTelegramCancel');
+  String agentsTelegramLinkSteps(String bot) =>
+      _get('agentsTelegramLinkSteps').replaceAll('{bot}', bot);
+  String get agentsTelegramLinkStepsNoBot =>
+      _get('agentsTelegramLinkStepsNoBot');
+  String get agentsTelegramCodeLabel => _get('agentsTelegramCodeLabel');
+  String get agentsTelegramLink => _get('agentsTelegramLink');
+  String agentsTelegramLinkedTo(String name) =>
+      _get('agentsTelegramLinkedTo').replaceAll('{name}', name);
+  String get agentsTelegramLinkedChat => _get('agentsTelegramLinkedChat');
+  String get agentsTelegramUnlink => _get('agentsTelegramUnlink');
+  String get agentsTelegramForget => _get('agentsTelegramForget');
+  String get agentsTelegramStateOff => _get('agentsTelegramStateOff');
+  String get agentsTelegramStateDisallowed =>
+      _get('agentsTelegramStateDisallowed');
+  String get agentsTelegramStateStarting => _get('agentsTelegramStateStarting');
+  String agentsTelegramStatePolling(String bot) =>
+      _get('agentsTelegramStatePolling').replaceAll('{bot}', bot);
+  String get agentsTelegramStateOn => _get('agentsTelegramStateOn');
+  String get agentsTelegramStateBackoff => _get('agentsTelegramStateBackoff');
+  String get agentsTelegramStateConflict => _get('agentsTelegramStateConflict');
+  String get agentsTelegramStateUnauthorized =>
+      _get('agentsTelegramStateUnauthorized');
+  String get agentsTelegramStateStopped => _get('agentsTelegramStateStopped');
+  String get agentsTelegramOffline => _get('agentsTelegramOffline');
+  String get agentsTelegramAsking => _get('agentsTelegramAsking');
+  String get agentsTelegramNoAnswer => _get('agentsTelegramNoAnswer');
+  String get agentsTelegramErrTokenRequired =>
+      _get('agentsTelegramErrTokenRequired');
+  String get agentsTelegramErrTokenInvalid =>
+      _get('agentsTelegramErrTokenInvalid');
+  String get agentsTelegramErrTokenInUse => _get('agentsTelegramErrTokenInUse');
+  String get agentsTelegramErrNotRunning => _get('agentsTelegramErrNotRunning');
+  String get agentsTelegramErrWrongCode => _get('agentsTelegramErrWrongCode');
+  String get agentsTelegramErrTooManyAttempts =>
+      _get('agentsTelegramErrTooManyAttempts');
+  String get agentsTelegramErrNoPendingLink =>
+      _get('agentsTelegramErrNoPendingLink');
+  String get agentsTelegramErrUnknownAgent =>
+      _get('agentsTelegramErrUnknownAgent');
+  String agentsTelegramErrOther(String code) =>
+      _get('agentsTelegramErrOther').replaceAll('{code}', code);
 
   // ── Tool calling page ──────────────────────────────────────
   String get engine => _get('engine');
