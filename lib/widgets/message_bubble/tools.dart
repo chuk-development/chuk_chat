@@ -33,6 +33,9 @@ extension _MessageBubbleTools on _MessageBubbleState {
       startedAt: carriesTurnStatus && isRunning ? widget.turnStartedAt : null,
       finalDuration: carriesTurnStatus && !isRunning ? widget.workedFor : null,
       footer: carriesTurnStatus && _hasModelInfo ? _buildMetaFooter() : null,
+      liveVerb: carriesTurnStatus ? _agentsLive?.verb : null,
+      liveTrailing: carriesTurnStatus ? _agentsLive?.trailing : null,
+      liveListenable: carriesTurnStatus ? _agentsLive?.listenable : null,
     );
   }
 
@@ -51,6 +54,9 @@ extension _MessageBubbleTools on _MessageBubbleState {
       phase: _currentPhase(true),
       startedAt: widget.turnStartedAt,
       footer: _hasModelInfo ? _buildMetaFooter() : null,
+      liveVerb: _agentsLive?.verb,
+      liveTrailing: _agentsLive?.trailing,
+      liveListenable: _agentsLive?.listenable,
     );
   }
 
@@ -84,6 +90,9 @@ extension _MessageBubbleTools on _MessageBubbleState {
       startedAt: isStreaming ? widget.turnStartedAt : null,
       finalDuration: isStreaming ? null : widget.workedFor,
       footer: _hasModelInfo ? _buildMetaFooter() : null,
+      liveVerb: _agentsLive?.verb,
+      liveTrailing: _agentsLive?.trailing,
+      liveListenable: _agentsLive?.listenable,
     );
   }
 
@@ -101,6 +110,17 @@ extension _MessageBubbleTools on _MessageBubbleState {
     final chatId = widget.chatId ?? ArtifactStorageService.activeChatId;
     if (chatId == null || chatId.isEmpty) return null;
     return StreamingManager().phaseOf(chatId);
+  }
+
+  /// An Agents thread's live status — the phase the coworker's run is in,
+  /// read from the host's frames (`agents_live_status.dart`). Null in a plain
+  /// chat, and for a message that is not the one running.
+  AgentsLiveStatus? get _agentsLive {
+    if (!widget.isStreamingMessage) return null;
+    return AgentsLiveStatus.forChat(
+      widget.chatId ?? ArtifactStorageService.activeChatId,
+      turnStartedAt: widget.turnStartedAt,
+    );
   }
 
   /// The quiet line under an answer.
@@ -337,6 +357,9 @@ extension _MessageBubbleTools on _MessageBubbleState {
       startedAt: carriesTurnStatus && isRunning ? widget.turnStartedAt : null,
       finalDuration: carriesTurnStatus && !isRunning ? widget.workedFor : null,
       footer: carriesTurnStatus && _hasModelInfo ? _buildMetaFooter() : null,
+      liveVerb: carriesTurnStatus ? _agentsLive?.verb : null,
+      liveTrailing: carriesTurnStatus ? _agentsLive?.trailing : null,
+      liveListenable: carriesTurnStatus ? _agentsLive?.listenable : null,
       onStepTap: _showToolCallDetails,
       onSourceTap: _openSourceUrl,
     );

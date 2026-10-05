@@ -187,11 +187,22 @@ class AgentsRelayHeartbeat extends AgentsRelayInbound {
     this.sessionKey,
     this.seq = 0,
     this.elapsedSeconds,
+    this.phase,
+    this.tool,
   });
   final String? runId;
   final String? sessionKey;
   final int seq;
   final double? elapsedSeconds;
+
+  /// What the run is doing right now, when the host says (additive,
+  /// docs/WIRE_CONTRACT.md "`heartbeat.phase`"): `queued`, `preparing`,
+  /// `model`, `tool` or `waiting_user`. Null on a host that sends none; the
+  /// app then reads the phase from what has arrived so far.
+  final String? phase;
+
+  /// The tool the run waits on while [phase] is `tool`.
+  final String? tool;
 }
 
 /// The host says what it did with one `task` frame (wire `task_ack`).
@@ -1098,7 +1109,33 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
     this.decision,
     this.decisionReason,
     this.sessionKey,
+    this.takeoverKind,
+    this.site,
+    this.reason,
+    this.url,
   });
+
+  /// The [action] of a takeover request: the agent's browser reached a step
+  /// only the user can do (a login, a 2FA code, a CAPTCHA) and the run waits
+  /// until the user did it in the live view and said so (docs/WIRE_CONTRACT.md,
+  /// "Browser takeover"). `approved` then means "done", `denied` "skip".
+  static const String takeoverAction = 'browser_takeover';
+
+  /// True for a takeover request rather than a here.now publish.
+  bool get isTakeover => action == takeoverAction;
+
+  /// What the agent hit, on a takeover: `login`, `two_factor`, `captcha` or
+  /// `other`. Null on a publish and on a host that leaves it off.
+  final String? takeoverKind;
+
+  /// The site the agent is on (a host name, e.g. `accounts.google.com`).
+  final String? site;
+
+  /// The model's one-line reason, shown on the card. May be empty.
+  final String? reason;
+
+  /// The page the agent's browser shows, for information only.
+  final String? url;
 
   /// The thread whose run is waiting on this decision, when the host says
   /// (`session_key`, additive). A view for another thread leaves the prompt
@@ -1157,8 +1194,15 @@ class AgentsRelayApprovalRequest extends AgentsRelayInbound {
               (payload['session_key'] as String).isNotEmpty
           ? payload['session_key'] as String
           : null,
+      takeoverKind: _nonEmpty(payload['kind']),
+      site: _nonEmpty(payload['site']),
+      reason: _nonEmpty(payload['reason']),
+      url: _nonEmpty(payload['url']),
     );
   }
+
+  static String? _nonEmpty(Object? value) =>
+      value is String && value.trim().isNotEmpty ? value.trim() : null;
 
   /// Correlates the decision back to this request.
   final String approvalId;
@@ -2924,6 +2968,12 @@ class AgentsRelayClient
                 : null,
             seq: AgentsRelayTool._asInt(payload['seq']) ?? 0,
             elapsedSeconds: elapsed is num ? elapsed.toDouble() : null,
+            phase: payload['phase'] is String && payload['phase'] != ''
+                ? payload['phase'] as String
+                : null,
+            tool: payload['tool'] is String && payload['tool'] != ''
+                ? payload['tool'] as String
+                : null,
           ),
         );
       case 'tool':
