@@ -233,6 +233,13 @@ tool search apply to them.
   earlier tasks therefore stay until the next long pause (`_stale_marks`,
   `recall_end`); they used to be dropped on the next task, which changed the
   payload right after the previous prompt.
+* Under a stored context summary, the verbatim rows start exactly where the
+  summary ends (`ContextLadder._slice_start`), not at the tail budget's
+  start. The tail is counted from the end of the history, so after the idle
+  rule made old tool rows free it reached back past the summary and moved
+  forward on almost every turn: the oldest row after the summary changed and
+  the cache missed everything after it (bead chuk_chat-b61u, warm "hi" with
+  cached_tokens 0 on 2026-10-05).
 
 ## 15. Memory hooks
 

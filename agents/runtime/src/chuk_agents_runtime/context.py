@@ -1249,10 +1249,21 @@ class ContextLadder:
     def _slice_start(self, head_end: int, tail_start: int) -> tuple[int, str | None]:
         """Where the not-yet-summarized slice begins, and the summary before it.
         Tier 3: only the slice that has aged since the last pass is sent; the
-        rest is already represented by the existing summary."""
+        rest is already represented by the existing summary.
+
+        The verbatim part after the summary starts exactly where the summary
+        ends, also when the tail budget reaches back past that point (bead
+        chuk_chat-b61u). That happens after the idle rule: dropped tool rows
+        cost nothing, so the budget reaches far back. The start used to be
+        ``min(summarized_upto, tail_start)``, and ``tail_start`` is measured
+        from the END of the history: each new turn moved it forward, the
+        oldest verbatim rows fell out right after the summary, and the
+        provider's prefix cache lost everything after the summary on almost
+        every turn. Rows before ``summarized_upto`` are in the summary; only a
+        new summary moves this start."""
         previous = self._summary
         if previous and self._summarized_upto > head_end:
-            return min(self._summarized_upto, tail_start), previous
+            return self._summarized_upto, previous
         return head_end, previous
 
     def _summarize_middle(
