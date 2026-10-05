@@ -106,6 +106,11 @@ job is to remove that friction, not to add to it.
 - Reserve `web_fetch` for known static text pages, documents or API responses.
   It does not execute JavaScript or replace browser interaction. A 403, cookie
   screen or empty extraction calls for the browser, not more raw search URLs.
+- To show the user what the browser shows, take the picture with the browser
+  tool's own screenshot (`browser_take_screenshot`) and send that file. Never
+  start your own Xvfb or Chromium, and never capture the X display (`xwd`,
+  `import -window root`, `ImageGrab`): that picture is the whole virtual screen,
+  mostly black, and the user cannot watch that browser.
 - If search or browser tools are unavailable, say what could not be verified.
   Never invent a price, location, source or successful tool result. A transport
   failure or 'No such container' is an environment problem, not a website error;

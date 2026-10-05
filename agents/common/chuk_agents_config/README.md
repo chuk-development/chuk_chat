@@ -187,8 +187,8 @@ that is in neither list, so this table cannot fall behind the code.
 | `AGENTS_BROWSER_EXECUTABLE` | `browser.executable` | string | *(empty)* | A specific Chromium or Chrome binary. |
 | `AGENTS_BROWSER_PROFILE` | `browser.profile` | string | `/workspace/.agents/chrome-profile` | The persistent Chromium profile directory. |
 | `AGENTS_BROWSER_DISPLAY` | `browser.display` | string | `:99` | The X display the browser paints on and the live view reads. |
-| `AGENTS_BROWSER_SCREEN` | `browser.screen` | string | `1280x800x24` | Geometry of the virtual display, as `WIDTHxHEIGHTxDEPTH`. |
-| `AGENTS_BROWSER_VIEWPORT` | `browser.viewport` | string | `1280x800` | The browser window size, as `WIDTHxHEIGHT`. |
+| `AGENTS_BROWSER_SCREEN` | `browser.screen` | string | `1280x800x24` | Geometry of the virtual display, as `WIDTHxHEIGHTxDEPTH`. The browser window is sized to the display, so this is the one size setting. |
+| `AGENTS_BROWSER_VIEWPORT` | `browser.viewport` | string | *(empty)* | A fixed page size, as `WIDTHxHEIGHT`. Empty means the page fills the window. |
 | `AGENTS_BROWSER_CURSOR_THEME` | `browser.cursor_theme` | string | `DMZ-White` | The X cursor theme. |
 | `AGENTS_BROWSER_CURSOR_SIZE` | `browser.cursor_size` | integer | `64` | The cursor size in pixels. |
 | `AGENTS_BROWSER_RETIRED_HOSTNAME` | `browser.retired_hostname` | string | *(empty)* | The hostname of the container that last owned the browser profile. |

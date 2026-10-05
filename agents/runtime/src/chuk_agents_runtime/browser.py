@@ -238,9 +238,11 @@ HEADLESS_ENV_VAR = "AGENTS_BROWSER_HEADLESS"
 #: The X display a headful browser paints on. When it is unset or dead,
 #: :func:`ensure_display` starts one rather than falling back to headless.
 DISPLAY_ENV_VAR = "DISPLAY"
-#: Geometry of a display we start ourselves. Same as the sandbox image's
-#: (``agents/sandbox/docker/browser-mcp.sh``), so a window looks the same either way.
+#: Geometry of a display we start ourselves. Same default and same variable as
+#: the sandbox image's launcher (``agents/sandbox/docker/browser-mcp.sh``), so a
+#: window looks the same either way.
 XVFB_SCREEN = "1280x800x24"
+SCREEN_ENV_VAR = "AGENTS_BROWSER_SCREEN"
 #: Display numbers tried when starting Xvfb. Deliberately far away from ``:0``:
 #: a number in this range is a virtual display, never the user's own session.
 XVFB_DISPLAYS = tuple(range(99, 110))
@@ -445,8 +447,65 @@ def _stop_xvfb() -> None:
         proc.kill()
 
 
+def configured_screen() -> str:
+    """``AGENTS_BROWSER_SCREEN`` if it is a valid ``WxH[xDEPTH]``, else the default."""
+    raw = os.environ.get(SCREEN_ENV_VAR, "").strip()
+    return raw if _parse_size(raw) else XVFB_SCREEN
+
+
+def _parse_size(text: str) -> tuple[int, int] | None:
+    """``"1280x800"`` or ``"1280x800x24"`` -> ``(1280, 800)``; anything else ``None``."""
+    parts = text.strip().split("x")
+    if len(parts) not in (2, 3) or not all(part.isdigit() for part in parts):
+        return None
+    width, height = int(parts[0]), int(parts[1])
+    return (width, height) if width > 0 and height > 0 else None
+
+
+def display_size(display: str | None = None) -> tuple[int, int]:
+    """The pixel size of an X display, measured with ``xdpyinfo``.
+
+    Measured, not assumed: the display may exist already with another size than
+    the one we would start (an agent once started its own 1440x2000 Xvfb). When
+    it cannot be measured, the configured screen size is the answer.
+    """
+    name = (display if display is not None else os.environ.get(DISPLAY_ENV_VAR, "")).strip()
+    probe = shutil.which("xdpyinfo")
+    if name and probe is not None:
+        try:
+            done = subprocess.run(  # noqa: S603 — argv built by us
+                [probe, "-display", name], capture_output=True, text=True, timeout=5
+            )
+        except (OSError, subprocess.SubprocessError):
+            done = None
+        if done is not None and done.returncode == 0:
+            for line in done.stdout.splitlines():
+                fields = line.split()
+                if len(fields) >= 2 and fields[0] == "dimensions:":
+                    size = _parse_size(fields[1])
+                    if size:
+                        return size
+    return _parse_size(configured_screen()) or (1280, 800)
+
+
+def window_bounds(display: str | None = None) -> tuple[dict[str, int], dict[str, int]]:
+    """Window size and position that make a headful Chromium cover the display.
+
+    There is no window manager on a virtual display, so ``--start-maximized``
+    does nothing and Chromium picks its own default size, about 1050 px wide:
+    the live view and every screenshot of the display were mostly black (bead
+    chuk_chat-elw7). The window goes to 0,0 and is one pixel larger than the
+    display each way, because Chromium on X11 shrinks a window that is exactly
+    screen-sized by 1 px (so it is not taken for fullscreen), which leaves a
+    black line at the right and bottom edge. Same rule as the sandbox launcher.
+    Returned in browser-use's ``ViewportSize`` shape (``width``/``height``).
+    """
+    width, height = display_size(display)
+    return {"width": width + 1, "height": height + 1}, {"width": 0, "height": 0}
+
+
 def start_xvfb(
-    *, screen: str = XVFB_SCREEN, displays: Sequence[int] = XVFB_DISPLAYS
+    *, screen: str | None = None, displays: Sequence[int] = XVFB_DISPLAYS
 ) -> str | None:
     """Start a virtual display and return its name, or ``None``.
 
@@ -454,8 +513,10 @@ def start_xvfb(
     what to do about it. A display this process already started is reused, and a
     number that already answers is taken as-is (in the sandbox image that is the
     display the launcher put Chromium on, which is exactly the one to join).
+    ``screen`` defaults to ``AGENTS_BROWSER_SCREEN`` (:func:`configured_screen`).
     """
     global _xvfb
+    screen = screen or configured_screen()
     if _xvfb is not None and _xvfb.poll() is None:
         return os.environ.get(DISPLAY_ENV_VAR, "").strip() or None
     binary = shutil.which("Xvfb")
@@ -1063,8 +1124,9 @@ class BrowserUseRunner:
         # silently going headless, which is what the live view showed as a black
         # rectangle. With a CDP endpoint the browser is somebody else's process
         # and our own display is irrelevant.
+        display = None
         if not headless and not cdp_url:
-            ensure_display()
+            display = ensure_display()
 
         profile_kwargs: dict[str, Any] = {
             "headless": headless,
@@ -1079,6 +1141,14 @@ class BrowserUseRunner:
             # Cost: the extensions are fetched over the network on first launch.
             "enable_default_extensions": False,
         }
+        if display is not None:
+            # The window covers the display, and the page follows the window
+            # (browser-use's headful default, no fixed viewport). browser-use
+            # would otherwise size it from ``screeninfo``, which is not always
+            # installed (then 1920x1080), or not the display we paint on.
+            window_size, window_position = window_bounds(display)
+            profile_kwargs["window_size"] = window_size
+            profile_kwargs["window_position"] = window_position
         if executable:
             profile_kwargs["executable_path"] = executable
         if self._user_data_dir:
@@ -1422,6 +1492,10 @@ __all__ = [
     "EXECUTABLE_ENV_VAR",
     "HEADLESS_ENV_VAR",
     "XVFB_SCREEN",
+    "SCREEN_ENV_VAR",
+    "configured_screen",
+    "display_size",
+    "window_bounds",
     "MAX_HISTORY_ITEMS",
     "MAX_MAX_STEPS",
     "MAX_SCREENSHOTS",

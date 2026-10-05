@@ -300,12 +300,22 @@ class BrowserConfig:
     screen: str = setting(
         "1280x800x24",
         env="AGENTS_BROWSER_SCREEN",
-        doc="Geometry of the virtual display, as ``WIDTHxHEIGHTxDEPTH``.",
+        doc=(
+            "Geometry of the virtual display, as ``WIDTHxHEIGHTxDEPTH``. It is "
+            "the one size knob: the browser window is placed at 0,0 and sized "
+            "to the display, so the live view and screenshots show only the "
+            "browser, with no black area around it."
+        ),
     )
     viewport: str = setting(
-        "1280x800",
+        "",
         env="AGENTS_BROWSER_VIEWPORT",
-        doc="The browser window size, as ``WIDTHxHEIGHT``.",
+        doc=(
+            "A fixed page size, as ``WIDTHxHEIGHT``. Empty (the default) means "
+            "the page fills the window, which fills the display. Set it only to "
+            "force a page size: the window then grows to page plus browser "
+            "chrome and no longer matches the display."
+        ),
     )
     cursor_theme: str = setting(
         "DMZ-White",

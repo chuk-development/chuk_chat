@@ -109,6 +109,76 @@ def test_the_agents_mouse_is_big_enough_to_see():
     assert "dmz-cursor-theme" in BROWSER.read_text()
 
 
+def _run_launcher(tmp_path, dimensions, env_extra=None):
+    """Run browser-mcp.sh with stand-ins for xdpyinfo and python3.
+
+    The fake xdpyinfo reports an X display of ``dimensions`` (or one with no
+    size line when it is ``None``), so no real Xvfb is started; the fake python3 is where the launcher ``exec``s the MCP owner, so
+    it records the argv instead of starting a browser.
+    """
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    if dimensions is None:
+        # The display answers but reports no size line.
+        xdpyinfo = "#!/bin/sh\necho 'name of display:    :99'\n"
+    else:
+        xdpyinfo = (
+            "#!/bin/sh\n"
+            "echo 'screen #0:'\n"
+            f"echo '  dimensions:    {dimensions} pixels (338x211 millimeters)'\n"
+        )
+    (bin_dir / "xdpyinfo").write_text(xdpyinfo)
+    (bin_dir / "python3").write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$ARGV_OUT"\n')
+    for name in ("xdpyinfo", "python3"):
+        (bin_dir / name).chmod(0o755)
+    env = {
+        "PATH": f"{bin_dir}:/usr/bin:/bin",
+        "TMPDIR": str(tmp_path),
+        "ARGV_OUT": str(tmp_path / "argv"),
+        "AGENTS_BROWSER_PROFILE": str(tmp_path / "profile"),
+        **(env_extra or {}),
+    }
+    subprocess.run(["sh", str(DOCKER_DIR / "browser-mcp.sh")], env=env, check=True, timeout=30)
+    argv = (tmp_path / "argv").read_text().splitlines()
+    config_path = Path(argv[argv.index("--config") + 1])
+    import json
+
+    return argv, json.loads(config_path.read_text())
+
+
+def test_the_browser_window_covers_the_display(tmp_path):
+    """Bead chuk_chat-elw7: with no window manager Chromium opened at its own
+    default size in the top-left corner and the rest of the live view (and of
+    every screenshot of the display) was black. The window now sits at 0,0 and
+    is one pixel larger than the display (Chromium shrinks an exactly
+    screen-sized X11 window by 1 px), and the page follows the window."""
+    argv, config = _run_launcher(tmp_path, "1280x800")
+    browser = config["browser"]
+    assert browser["launchOptions"]["args"] == ["--window-position=0,0", "--window-size=1281,801"]
+    assert browser["contextOptions"] == {"viewport": None}
+    # A fixed viewport makes Playwright resize the window to viewport + chrome,
+    # taller than the screen; none is passed unless somebody asks for one.
+    assert "--viewport-size" not in argv
+
+
+def test_the_window_follows_a_display_somebody_else_started(tmp_path):
+    """The display may exist already with another size (an agent once started a
+    1440x2000 Xvfb on :99). The window follows the display that is there."""
+    _, config = _run_launcher(tmp_path, "1440x2000")
+    assert "--window-size=1441,2001" in config["browser"]["launchOptions"]["args"]
+
+
+@pytest.mark.parametrize("screen", ["1600x900x24", "1600x900"])
+def test_an_unmeasurable_display_uses_the_configured_screen(tmp_path, screen):
+    _, config = _run_launcher(tmp_path, None, {"AGENTS_BROWSER_SCREEN": screen})
+    assert "--window-size=1601,901" in config["browser"]["launchOptions"]["args"]
+
+
+def test_a_fixed_viewport_is_still_possible_on_request(tmp_path):
+    argv, _ = _run_launcher(tmp_path, "1280x800", {"AGENTS_BROWSER_VIEWPORT": "1024x600"})
+    assert argv[argv.index("--viewport-size") + 1] == "1024x600"
+
+
 def singleton(profile, host="old-container", pid=42):
     (profile / "SingletonLock").symlink_to(f"{host}-{pid}")
     (profile / "SingletonCookie").symlink_to("cookie")
