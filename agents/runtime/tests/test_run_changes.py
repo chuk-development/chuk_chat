@@ -6,8 +6,11 @@ Every test builds a real git repo under ``tmp_path``. A "run" is a
 journaling each write the way the registry does.
 """
 
+import importlib
 import shutil
 import subprocess
+import time
+from pathlib import Path
 
 import pytest
 
@@ -16,6 +19,7 @@ from chuk_agents_runtime.run_changes import (
     CONFLICT_UNCOMMITTED,
     REASON_ALREADY_UNDONE,
     REASON_CONFLICTS,
+    REASON_FAILED,
     REASON_NO_CHANGES,
     REASON_NO_HISTORY,
     REASON_RUN_ACTIVE,
@@ -27,6 +31,8 @@ from chuk_agents_runtime.run_changes import (
     undo_run,
 )
 from chuk_agents_runtime.workspace_git import GitWorkspace
+
+run_changes_module = importlib.import_module("chuk_agents_runtime.run_changes")
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="git is not installed")
 
@@ -332,8 +338,6 @@ def test_subagent_merge_counts_for_the_run(root):
     run = _Run(root, "run-a")
     info = run.ws.create_worktree("child")
     assert info is not None
-    from pathlib import Path
-
     (Path(info.path) / "child.txt").write_text("from child\n", encoding="utf-8")
     merged = run.ws.merge_worktree(info)
     assert merged["ok"] is True, merged
@@ -361,3 +365,84 @@ def test_a_glob_like_file_name_is_taken_literally(root):
     assert result["ok"] is True and result["reverted"] == ["a*.txt"]
     assert not (root / "a*.txt").exists()
     assert (root / "ab.txt").read_text(encoding="utf-8") == "plain\n"
+
+
+# -- a failed undo leaves nothing half applied -----------------------------------
+
+
+def test_failed_second_group_rolls_back_every_group(root, monkeypatch):
+    run = _Run(root, "run-a")
+    run.write("new.txt", "new\n")  # base: before the run
+    run.write("keep.txt", "changed\n")  # base: after the first write
+    run.delete("old.txt")  # base: after the second write
+    head = _git(root, "rev-parse", "HEAD").strip()
+
+    real_git = GitWorkspace._git
+    restores: list[str] = []
+
+    def flaky_git(self, *args, **kwargs):
+        proc = real_git(self, *args, **kwargs)
+        sources = [a for a in args if a.startswith("--source=")]
+        if "restore" in args and sources and sources[0] != "--source=HEAD":
+            restores.append(sources[0])
+            if len(restores) == 2:
+                # The second group's restore ran (partly applied), then failed.
+                return subprocess.CompletedProcess(proc.args, 1, "", "forced failure")
+        return proc
+
+    monkeypatch.setattr(GitWorkspace, "_git", flaky_git)
+    result = undo_run(root, "run-a")
+    assert len(restores) == 2, restores
+    assert result["ok"] is False and result["code"] == REASON_FAILED
+    assert "forced failure" in result["error"]
+    # Every group is back at HEAD: the first group's revert too.
+    assert (root / "new.txt").read_text(encoding="utf-8") == "new\n"
+    assert (root / "keep.txt").read_text(encoding="utf-8") == "changed\n"
+    assert not (root / "old.txt").exists()
+    assert _git(root, "status", "--porcelain") == ""
+    assert _git(root, "rev-parse", "HEAD").strip() == head
+
+    monkeypatch.setattr(GitWorkspace, "_git", real_git)
+    assert undo_run(root, "run-a")["ok"] is True
+    assert not (root / "new.txt").exists()
+
+
+# -- the history walk is bounded by the run's start --------------------------------
+
+
+def test_since_bounds_the_history_walk(root, monkeypatch):
+    # An old run, committed long ago: outside the window of a newer run.
+    monkeypatch.setenv("GIT_COMMITTER_DATE", "2020-01-01T00:00:00+0000")
+    _Run(root, "run-old").write("old-run.txt", "x\n")
+    monkeypatch.delenv("GIT_COMMITTER_DATE")
+    start = time.time()
+    run = _Run(root, "run-a")
+    run.write("a.txt", "a\n")
+    info = run.ws.create_worktree("child")
+    assert info is not None
+
+    (Path(info.path) / "child.txt").write_text("from child\n", encoding="utf-8")
+    assert run.ws.merge_worktree(info)["ok"] is True
+
+    calls: list[tuple[str, ...]] = []
+    real_git = run_changes_module._git
+
+    def spy(path, *args, **kwargs):
+        calls.append(args)
+        return real_git(path, *args, **kwargs)
+
+    monkeypatch.setattr(run_changes_module, "_git", spy)
+    # The run's own commits, subagent merge included, are inside the window.
+    files = _by_path(run_changes(root, "run-a", since=start))
+    assert set(files) == {"a.txt", "child.txt"}
+    walks = [a for a in calls if a[:1] == ("log",) and any(x.startswith("--grep=") for x in a)]
+    bound = int(start - run_changes_module.SINCE_MARGIN_S)
+    assert walks and all(f"--since=@{bound} +0000" in a for a in walks)
+    assert run_change_summary(root, "run-a", since=start)["files"] == 2
+
+    # The walk stops at the window: the old run's commits are not read.
+    assert run_changes(root, "run-old", since=start)["reason"] == REASON_NO_CHANGES
+    assert set(_by_path(run_changes(root, "run-old"))) == {"old-run.txt"}
+
+    result = undo_run(root, "run-a", since=start)
+    assert result["ok"] is True and result["reverted"] == ["a.txt", "child.txt"]

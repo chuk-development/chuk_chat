@@ -170,3 +170,23 @@ def test_unknown_run_and_no_git_workspace(tmp_path):
         assert result["ok"] is False and result["code"] == "no_history"
         assert "Nothing to undo" in result["error"]
         assert not (session.workspace / ".git").exists()
+
+
+@pytest.mark.parametrize("bad", ["plan.md", None, {"path": "plan.md"}, 3])
+def test_undo_refuses_paths_that_is_not_a_list(tmp_path, bad):
+    with _Session(tmp_path) as session:
+        done = session.task("write the plan")
+        payload = run_undo_payload(run_id=done["run_id"])
+        payload["paths"] = bad
+        refused = session.one(payload, "run_undo_result")
+        assert refused["ok"] is False and refused["code"] == "failed"
+        assert refused["error"] == "paths must be a list of file paths."
+        assert refused["reverted"] == [] and refused["session_key"] == "thread-A"
+        # Nothing was reverted: a bad ``paths`` never widens to the whole run.
+        assert (session.workspace / "plan.md").exists()
+        assert (session.workspace / "shared.txt").exists()
+
+        # No ``paths`` key at all still means every file.
+        everything = session.one(run_undo_payload(run_id=done["run_id"]), "run_undo_result")
+        assert everything["ok"] is True
+        assert everything["reverted"] == ["plan.md", "shared.txt"]

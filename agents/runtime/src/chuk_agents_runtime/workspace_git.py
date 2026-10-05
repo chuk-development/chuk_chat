@@ -765,6 +765,33 @@ class GitWorkspace:
             ),
         }
 
+    def _reset_paths_to_head(self, paths: list[str]) -> None:
+        """Put ``paths`` back to HEAD in the index and the working tree.
+
+        The rollback of a failed :meth:`revert_paths`. ``git restore`` refuses
+        the whole call when one pathspec matches nothing, so only the paths
+        that HEAD or the index knows go in. A path that neither knows was
+        never written by the failed restore.
+        """
+        wanted = list(dict.fromkeys(p for p in paths if p))
+        if not wanted:
+            return
+        known: set[str] = set()
+        for args in (
+            ("ls-tree", "-r", "-z", "--name-only", "HEAD"),
+            ("ls-files", "-z", "--cached"),
+        ):
+            listed = self._git("--literal-pathspecs", *args, "--", *wanted)
+            if listed.returncode == 0:
+                known.update(filter(None, listed.stdout.split("\0")))
+        todo = [p for p in wanted if p in known]
+        if todo:
+            self._git(
+                "--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree",
+                "--pathspec-from-file=-", "--pathspec-file-nul",
+                input="\0".join(todo) + "\0",
+            )
+
     def revert_paths(
         self,
         groups: list[tuple[str, list[str]]],
@@ -796,6 +823,7 @@ class GitWorkspace:
                     "diff", "--no-renames", "--name-only", "-z", base, "HEAD", "--"
                 )
                 if differ.returncode != 0:
+                    self._reset_paths_to_head(reverted)
                     return {
                         "ok": False,
                         "error": (differ.stderr or "git diff failed").strip()[:400],
@@ -817,13 +845,10 @@ class GitWorkspace:
                     input="\0".join(todo) + "\0",
                 )
                 if restored.returncode != 0:
-                    # Put the index and tree back to HEAD for those paths: a
-                    # half-applied undo must not stay behind.
-                    self._git(
-                        "--literal-pathspecs", "restore", "--source=HEAD", "--staged", "--worktree",
-                        "--pathspec-from-file=-", "--pathspec-file-nul",
-                        input="\0".join(todo) + "\0",
-                    )
+                    # Put the index and tree back to HEAD for every path this
+                    # call touched, earlier groups included: a half-applied
+                    # undo must not stay behind.
+                    self._reset_paths_to_head([*reverted, *todo])
                     return {
                         "ok": False,
                         "error": (restored.stderr or "git restore failed").strip()[:400],
