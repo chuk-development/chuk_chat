@@ -234,9 +234,15 @@ def fetch_url(
 
     Each hop (the first request and every redirect) resolves the host once,
     checks the addresses and pins the connection to the checked address.
-    ``client`` replaces the pinned client (tests with a mock transport);
+    ``client`` replaces the pinned client, and only a client with an
+    ``httpx.MockTransport`` is accepted (tests): any other client would
+    connect through its own resolver and skip the pin, so it is refused.
     ``resolver``, ``network_backend`` and ``verify`` are for tests too.
     """
+    if client is not None and not isinstance(
+        getattr(client, "_transport", None), httpx.MockTransport
+    ):
+        raise ValueError("fetch_url takes only a mock-transport client; real fetches must use the pinned client")
     resolve = resolver or _resolve
     backend = _PinnedBackend(network_backend)
     own = client is None
