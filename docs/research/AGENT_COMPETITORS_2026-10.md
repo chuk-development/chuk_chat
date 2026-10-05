@@ -396,6 +396,11 @@ Speed and UX first, then features. Effort: S = days, M = 1-2 weeks, L = more.
    `isolatedSession`: ~100K -> 2-5K). Effort M.
    Where: runs table, `.../runtime/telemetry.py`, `loop.py`,
    `lib/widgets/agent_control_panel.dart`, `agents/host/.../automations.py`.
+   Status 2026-10-05: host side done (bead chuk_chat-qcbv): euro per run at
+   the API's own prices, `aux` line for compaction, weekly budget per
+   coworker with a warning at 80 % and a stop at 100 %, opt-in light context
+   for scheduled runs. Spec and app work list in docs/WIRE_CONTRACT.md,
+   "Cost per run and weekly budget".
 
 9. **Coworker templates (preset agents) in onboarding.**
    Why: Grok Bot ships 42 presets + marketplace; Lindy's G2 praise is templates;

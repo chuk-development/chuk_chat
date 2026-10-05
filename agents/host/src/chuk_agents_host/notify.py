@@ -44,6 +44,7 @@ from .desktop_notify import DesktopNotifier, set_labels_provider
 from .notification_text import (
     RunLabels,
     approval_text,
+    budget_text,
     completion_text,
     resolve_labels,
     takeover_text,
@@ -52,6 +53,7 @@ from .notification_text import (
 KIND_COMPLETED = "completed"
 KIND_FAILED = "failed"
 KIND_APPROVAL = "approval_needed"
+KIND_BUDGET = "budget"
 
 #: A pending cloud delivery: the row to insert, as the REST API wants it.
 Record = dict[str, Any]
@@ -154,21 +156,39 @@ class SupabaseNotifier:
         session_key = str(info.get("session_key") or session_key)
         labels = self.labels(session_key=session_key)
         if info.get("action") == "browser_takeover":
-            title, body = takeover_text(
-                labels, kind=str(info.get("kind") or ""), site=str(info.get("site") or "")
-            )
+            # Never the site: a push is not end-to-end (the sealed
+            # approval_request carries it).
+            title, body = takeover_text(labels, kind=str(info.get("kind") or ""))
         else:
-            title, body = approval_text(
-                labels,
-                action_class=str(info.get("action_class") or ""),
-                site=str(info.get("site") or ""),
-            )
+            title, body = approval_text(labels, action_class=str(info.get("action_class") or ""))
         record = self._record(
             run_id=str(info.get("request_id") or info.get("approval_id") or ""),
             agent_id=self._agent_id(),
             agent_name=labels.coworker or "",
             session_key=session_key,
             kind=KIND_APPROVAL,
+            title=title,
+            body=body,
+        )
+        self._fire(title, body, record)
+
+    def notify_budget(self, info: dict) -> None:
+        """A coworker's week reached 80 % or 100 % of its budget
+        (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget"). The caller
+        sends it once per level and week; the row's ``run_id`` names that
+        (``budget:<session>:<week>:<level>``), so the table's one-row-per-run
+        rule holds."""
+        session_key = str(info.get("session_key") or "default")
+        level = str(info.get("level") or "warning")
+        labels = self.labels(session_key=session_key)
+        title, body = budget_text(labels, level=level)
+        week = int(float(info.get("week_starts_at") or 0))
+        record = self._record(
+            run_id=f"budget:{session_key}:{week}:{level}",
+            agent_id=self._agent_id(),
+            agent_name=labels.coworker or "",
+            session_key=session_key,
+            kind=KIND_BUDGET,
             title=title,
             body=body,
         )

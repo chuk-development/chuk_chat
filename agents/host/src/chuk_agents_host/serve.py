@@ -93,6 +93,8 @@ class TaskServer:
         on_call_frame: Callable[[dict], Any] | None = None,
         agent_mail=None,
         action_approvals=None,
+        price_book=None,
+        budget=None,
     ) -> None:
         self._roster = roster
         self._agent_id = agent_id
@@ -169,6 +171,10 @@ class TaskServer:
                 # Per-action approvals (docs/WIRE_CONTRACT.md, "Per-action
                 # approvals"): the host's store of each coworker's policy.
                 action_approvals=action_approvals,
+                # Cost per run and weekly budget (docs/WIRE_CONTRACT.md): the
+                # price list and each coworker's weekly budget.
+                price_book=price_book,
+                budget=budget,
             )
 
         self._supervisor = ExecutorSupervisor(roster, factory)

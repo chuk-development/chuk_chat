@@ -50,6 +50,7 @@ from .context import (
     ContextLadder,
     estimate_message_tokens,
     estimate_tokens,
+    prompt_tokens_from_usage,
     total_tokens_from_usage,
 )
 from .registry import ToolRegistry
@@ -265,6 +266,12 @@ class RunTimings:
     #: ``recall_ms`` and ``prepare_ms`` this is the turn's time to first token.
     #: ``None`` = not measured (a blocking client streams nothing).
     first_token_ms: float | None = None
+    #: The split of the run's spend over its own model calls (bead
+    #: chuk_chat-qcbv): prompt tokens (cached ones included) and completion
+    #: tokens (reasoning included), as the usage frames reported them. What
+    #: the run cost is priced from these and ``cached_tokens``.
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
 
     def as_row(self) -> dict[str, int]:
         """Integer milliseconds for the ``runs`` row."""
@@ -278,6 +285,8 @@ class RunTimings:
             "retry_ms": int(self.retry_ms),
             "cached_tokens": int(self.cached_tokens),
             "first_token_ms": int(self.first_token_ms or 0),
+            "prompt_tokens": int(self.prompt_tokens),
+            "completion_tokens": int(self.completion_tokens),
         }
 
 
@@ -1052,6 +1061,9 @@ class AgentLoop:
             if raw_usage is not None and usage.cache_read_tokens:
                 raw_usage["cached_tokens"] = usage.cache_read_tokens
         timings.cached_tokens += cached_tokens_from_usage(raw_usage)
+        prompt, completion = _split_tokens(raw_usage)
+        timings.prompt_tokens += prompt
+        timings.completion_tokens += completion
         if timings.first_token_ms is None and timings.model_calls == 1:
             # Text, thinking or a tool call: whatever the provider sent first.
             first = [
@@ -1500,6 +1512,24 @@ def _no_output(response: ModelResponse) -> bool:
         isinstance(p, ThinkingPart) or (isinstance(p, TextPart) and not p.content)
         for p in parts
     )
+
+
+def _split_tokens(usage: dict | None) -> tuple[int, int]:
+    """``(prompt, completion)`` of one usage dict, for the run's cost. When
+    only a total is reported it counts as prompt: input is the cheaper half on
+    every listed model, so the figure errs low, never invents output."""
+    if not isinstance(usage, dict):
+        return 0, 0
+    prompt = prompt_tokens_from_usage(usage)
+    completion = 0
+    for key in ("completion_tokens", "output_tokens"):
+        value = usage.get(key)
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and value > 0:
+            completion = int(value)
+            break
+    if prompt is None:
+        prompt = max(0, total_tokens_from_usage(usage) - completion)
+    return int(prompt), completion
 
 
 def cached_tokens_from_usage(usage: dict | None) -> int:

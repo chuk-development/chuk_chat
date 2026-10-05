@@ -290,7 +290,9 @@ def test_a_takeover_gets_its_own_push_text(tmp_path):
         notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["title"] == "Nova needs you in the browser"
-    assert row["body"] == "Sign in to github.com." and row["kind"] == "approval_needed"
+    # The push is not end-to-end: never the site.
+    assert row["body"] == "Sign in in the browser." and row["kind"] == "approval_needed"
+    assert "github.com" not in row["title"] + row["body"]
 
 
 def test_an_approval_push_follows_the_thread_it_names(tmp_path):

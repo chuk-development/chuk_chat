@@ -163,12 +163,16 @@ def resolve_backend_model_wiring(
     base_url: str = DEFAULT_BASE_URL,
     preferred_model_id: str | None = None,
     preferred_provider: str | None = None,
+    models: list[dict] | None = None,
     **kwargs,
 ) -> tuple[ModelFactory, ModelSelect]:
     """Fetch ``/v1/models_info`` once and build BOTH the default model factory and
     the per-task selector from the same list. One network call at wiring time. The
-    factory serves tasks that name no model; the selector serves those that do."""
-    models = fetch_models_info(session, base_url=base_url)
+    factory serves tasks that name no model; the selector serves those that do.
+    ``models`` is a list the caller already fetched (the host prices runs with
+    the same list); then no call is made here."""
+    if models is None:
+        models = fetch_models_info(session, base_url=base_url)
     resolved = resolve_model(
         models,
         preferred_model_id=preferred_model_id,

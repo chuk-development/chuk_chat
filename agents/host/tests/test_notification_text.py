@@ -66,13 +66,11 @@ def test_an_approval_names_the_coworker():
 
 
 def test_a_takeover_says_the_coworker_needs_you_in_the_browser():
-    title, body = takeover_text(RunLabels(coworker="Nova"), kind="login", site="github.com")
+    title, body = takeover_text(RunLabels(coworker="Nova"), kind="login")
     assert title == "Nova needs you in the browser"
-    assert body == "Sign in to github.com."
-    assert takeover_text(RunLabels(), kind="two_factor", site="github.com")[1] == (
-        "Enter the code for github.com."
-    )
-    assert "check" in takeover_text(RunLabels(), kind="captcha", site="google.com")[1]
+    assert body == "Sign in in the browser."
+    assert takeover_text(RunLabels(), kind="two_factor")[1] == "Enter the code in the browser."
+    assert takeover_text(RunLabels(), kind="captcha")[1] == "Solve the check in the browser."
     assert takeover_text(RunLabels(), kind="other")[1] == "Open the app to take over the browser."
     assert takeover_text(RunLabels())[0] == f"{DEFAULT_COWORKER} needs you in the browser"
 

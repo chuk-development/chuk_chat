@@ -185,9 +185,8 @@ def test_the_push_names_the_class_never_the_content():
     labels = RunLabels(coworker="Amber")
     assert approval_text(labels) == ("Amber needs your approval", "Open the app to allow or deny the publish.")
     assert approval_text(labels, action_class="send_external")[1] == "Open the app to allow or deny sending a mail."
-    assert approval_text(labels, action_class="browser_act", site="shop.example")[1] == (
-        "Open the app to allow or deny a browser action on shop.example."
-    )
+    # Never the site: the push is not end-to-end.
+    assert approval_text(labels, action_class="browser_act")[1] == "Open the app to allow or deny a browser action."
     assert approval_text(labels, action_class="mcp_destructive")[1] == (
         "Open the app to allow or deny a connector action."
     )

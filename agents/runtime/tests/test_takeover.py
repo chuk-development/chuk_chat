@@ -104,6 +104,15 @@ def test_a_broken_backend_answer_is_an_error():
     assert result == {"ok": False, "error": "no app"}
 
 
+def test_a_raising_backend_is_a_generic_error():
+    class _Raising(RecordingTakeoverBackend):
+        def request(self, kind, site, reason):
+            raise RuntimeError("socket closed: secret detail")
+
+    result = make_request_takeover_handler(_Raising())(kind="login", site="example.com")
+    assert result == {"ok": False, "error": "the takeover could not be started"}
+
+
 def test_site_is_a_host_name_and_the_reason_one_short_line():
     assert clean_site("https://accounts.google.com/v3/signin?x=1") == "accounts.google.com"
     assert clean_site("GitHub.com") == "github.com"

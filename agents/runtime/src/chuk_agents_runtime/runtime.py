@@ -309,6 +309,7 @@ def build_runtime(
     context_providers: Sequence[Callable[[], list[dict]]] | None = None,
     policy: Any = None,
     action_approvals: ActionApprovals | None = None,
+    light_context: bool = False,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -412,6 +413,11 @@ def build_runtime(
     class tools (``herenow_publish``, ``mail_send`` / ``mail_reply``, a
     connector tool marked destructive, a page-changing browser tool) follow
     that policy. Unset, only here.now in ``ask`` mode asks, as before.
+
+    ``light_context`` (docs/WIRE_CONTRACT.md, "Cost per run and weekly
+    budget") is for a scheduled run: no memory recall at the task start and
+    no fact extraction after the turn (one aux call each time). The memory
+    tools stay. Off by default.
 
     ``shell_session_key`` (docs/WIRE_CONTRACT.md, "Interactive shell and
     background commands") is the conversation a background job's end is
@@ -787,8 +793,14 @@ def build_runtime(
         # injected once per task; the finished turn's facts are extracted in
         # the background. The model still has memory_search / memory_add for
         # anything explicit.
+        # ``light_context`` (a scheduled run, bead chuk_chat-qcbv): no recall
+        # and no per-turn extraction. A fixed automation prompt recalls the
+        # same memories every time and its answer is rarely a new fact; the
+        # memory tools stay, so the run can still read or write on purpose.
         recall_provider=(
-            memory.recall_messages_bounded if memory is not None and memory.automatic else None
+            memory.recall_messages_bounded
+            if memory is not None and memory.automatic and not light_context
+            else None
         ),
         turn_observer=(
             (
@@ -799,7 +811,7 @@ def build_runtime(
                     session_key=record.session_key,
                 )
             )
-            if memory is not None and memory.automatic
+            if memory is not None and memory.automatic and not light_context
             else None
         ),
     )

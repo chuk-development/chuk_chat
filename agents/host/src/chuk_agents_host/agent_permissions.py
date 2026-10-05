@@ -16,6 +16,11 @@ mode the user set for each action class and the allowed sites. They ride the
 same two frames (``approvals`` next to ``permissions``) and, unlike the
 sandbox switches, apply from the next action, also inside a running task.
 
+The weekly budget (docs/WIRE_CONTRACT.md, "Cost per run and weekly budget",
+bead chuk_chat-qcbv) lives here too, under ``budgets``: per agent, the euro
+the user allows it to spend per week (``budget_weekly``, 0 = no budget). It
+rides the same two frames and applies from the next task.
+
 Enforcement is not here. The sandbox carries the policy
 (:class:`chuk_agents_sandbox.SandboxPolicy`): the host hands every per-agent
 environment a *provider* over this store, and the executor reads that provider
@@ -33,6 +38,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 
+from chuk_agents_runtime.cost import BudgetNotices, valid_budget
 from chuk_agents_runtime.action_policy import (
     ACTION_CLASSES,
     SCOPE_AGENT,
@@ -74,6 +80,10 @@ CAPABILITY = "agent_permissions"
 #: The host also keeps per-action approvals (``approvals`` in the same frames,
 #: the ``options`` / ``scope`` of ``approval_request`` / ``approval_decision``).
 APPROVALS_CAPABILITY = "action_approvals"
+#: The host prices every run and keeps a weekly budget per coworker
+#: (``cost`` on ``done`` / ``agent_status``, ``budget_weekly`` in these frames,
+#: ``budget_warning``, ``budget_override`` on ``task``).
+BUDGET_CAPABILITY = "cost_budget"
 
 MAX_AGENT_ID_LEN = 256
 
@@ -108,6 +118,7 @@ class AgentPermissionsStore:
         self._log = log or (lambda _msg: None)
         self._lock = threading.Lock()
         self._approvals: dict[str, ActionPolicy] = {}
+        self._budgets: dict[str, float] = {}
         self._overrides: dict[str, dict[str, Any]] = self._load()
 
     @property
@@ -146,6 +157,11 @@ class AgentPermissionsStore:
         with self._lock:
             return self._approvals.get(agent_id) or ActionPolicy()
 
+    def budget(self, agent_id: str) -> float:
+        """The agent's weekly budget in euro; 0 = none."""
+        with self._lock:
+            return self._budgets.get(agent_id, 0.0)
+
     # ------------------------------------------------------------------ #
     # Writes
     # ------------------------------------------------------------------ #
@@ -181,6 +197,26 @@ class AgentPermissionsStore:
             policy = (before or ActionPolicy()).updated(partial)
             self._put_approvals_locked(agent_id, policy, before)
         return policy
+
+    def update_budget(self, agent_id: str, value: Any) -> float:
+        """Set the agent's weekly budget (0 clears it) and persist it. Raises
+        :class:`ValueError` for a bad value; nothing changes then."""
+        budget = valid_budget(value)
+        with self._lock:
+            before = self._budgets.get(agent_id)
+            if budget > 0:
+                self._budgets[agent_id] = budget
+            else:
+                self._budgets.pop(agent_id, None)
+            try:
+                self._save_locked()
+            except OSError:
+                if before is None:
+                    self._budgets.pop(agent_id, None)
+                else:
+                    self._budgets[agent_id] = before
+                raise
+        return budget
 
     def remember_approval(
         self, agent_id: str, action_class: str, scope: str, site: str | None = None
@@ -235,6 +271,18 @@ class AgentPermissionsStore:
                     self._approvals[agent_id] = ActionPolicy.from_stored(values)
                 except ActionPolicyError as exc:
                     self._log(f"[permissions] dropped the approvals of {agent_id!r}: {exc}")
+        budgets = raw.get("budgets") if isinstance(raw, dict) else None
+        if isinstance(budgets, dict):
+            for agent_id, value in budgets.items():
+                if not isinstance(agent_id, str):
+                    continue
+                try:
+                    budget = valid_budget(value)
+                except ValueError as exc:
+                    self._log(f"[permissions] dropped the budget of {agent_id!r}: {exc}")
+                    continue
+                if budget > 0:
+                    self._budgets[agent_id] = budget
         agents = raw.get("agents") if isinstance(raw, dict) else None
         if not isinstance(agents, dict):
             return {}
@@ -262,6 +310,8 @@ class AgentPermissionsStore:
         }
         if approvals:
             document["approvals"] = approvals
+        if self._budgets:
+            document["budgets"] = dict(self._budgets)
         body = json.dumps(document, indent=2, sort_keys=True)
         fd, tmp = tempfile.mkstemp(prefix=".agent_permissions.", dir=self._path.parent)
         try:
@@ -314,6 +364,7 @@ def permissions_payload(
     enforced: Mapping[str, bool] | None = None,
     error: str | None = None,
     approvals: ActionPolicy | None = None,
+    budget_weekly: float | None = None,
 ) -> dict[str, Any]:
     """The ``agent_permissions`` reply: every key, which ones this host really
     enforces, and when a change applies. ``policy`` is ``None`` only when there
@@ -330,6 +381,10 @@ def permissions_payload(
         payload["permissions"] = policy.to_dict()
     if approvals is not None:
         payload["approvals"] = {**approvals.to_dict(), "applies_from": APPROVALS_APPLY_FROM}
+    # docs/WIRE_CONTRACT.md, "Cost per run and weekly budget": euro per week,
+    # 0 = no budget. Always present when the agent is known.
+    if budget_weekly is not None:
+        payload["budget_weekly"] = float(budget_weekly)
     if error:
         payload["error"] = error
     return payload
@@ -364,28 +419,35 @@ def handle_permissions_frame(
 
     def refused(error: str, policy: SandboxPolicy | None = None, approvals=None):
         reply = permissions_payload(
-            agent_id, policy, enforced=enforced, error=error, approvals=approvals
+            agent_id, policy, enforced=enforced, error=error, approvals=approvals,
+            budget_weekly=store.budget(key) if policy is not None else None,
         )
         return reply, None, None
+
+    key = ""
 
     if kind not in FRAMES:
         return refused(f"unknown permissions frame {str(kind)[:40]!r}")
     if not agent_id:
         return refused("agent_permissions needs an agent_id")
-    key = key_for(agent_id) if key_for is not None else agent_id
+    key = (key_for(agent_id) if key_for is not None else agent_id) or ""
     if not key:
         return refused(f"unknown agent {agent_id[:80]!r}")
     current = store.get(key)
     current_approvals = store.approvals(key)
+    current_budget = store.budget(key)
     if kind == FRAME_GET:
         reply = permissions_payload(
-            agent_id, current, enforced=enforced, approvals=current_approvals
+            agent_id, current, enforced=enforced, approvals=current_approvals,
+            budget_weekly=current_budget,
         )
         return reply, None, None
 
     partial = payload.get("permissions")
     approvals_partial = payload.get("approvals")
-    if partial is None and approvals_partial is not None:
+    has_budget = "budget_weekly" in payload
+    budget_value = payload.get("budget_weekly")
+    if partial is None and (approvals_partial is not None or has_budget):
         partial = {}
     if not isinstance(partial, Mapping):
         return refused("permissions must be an object", current, current_approvals)
@@ -399,7 +461,9 @@ def handle_permissions_frame(
         store.defaults.merged({**store.overrides().get(key, {}), **partial})
         if approvals_partial is not None:
             current_approvals.updated(approvals_partial)
-    except (PolicyError, ActionPolicyError) as exc:
+        if has_budget:
+            valid_budget(budget_value)
+    except (PolicyError, ActionPolicyError, ValueError) as exc:
         return refused(str(exc), current, current_approvals)
     try:
         policy = store.update(key, partial) if partial else current
@@ -408,7 +472,8 @@ def handle_permissions_frame(
             if approvals_partial is not None
             else current_approvals
         )
-    except (PolicyError, ActionPolicyError) as exc:
+        budget = store.update_budget(key, budget_value) if has_budget else current_budget
+    except (PolicyError, ActionPolicyError, ValueError) as exc:
         return refused(str(exc), store.get(key), store.approvals(key))
     except OSError as exc:
         return refused(f"could not save: {type(exc).__name__}", store.get(key), store.approvals(key))
@@ -416,9 +481,13 @@ def handle_permissions_frame(
         changed = ", ".join(f"{k}={partial[k]}" for k in partial)
         if approvals_partial is not None:
             changed = ", ".join(x for x in (changed, "approvals") if x)
+        if has_budget:
+            changed = ", ".join(x for x in (changed, f"budget_weekly={budget:g}") if x)
         log(f"[permissions] {key}: {changed or 'no change'}")
-    reply = permissions_payload(agent_id, policy, enforced=enforced, approvals=approvals)
-    if policy == current and approvals == current_approvals:
+    reply = permissions_payload(
+        agent_id, policy, enforced=enforced, approvals=approvals, budget_weekly=budget
+    )
+    if policy == current and approvals == current_approvals and budget == current_budget:
         return reply, None, None
     return reply, current, policy
 
@@ -462,6 +531,48 @@ class ActionApprovalsBridge:
                 self._on_change(key, policy)
             except Exception as exc:  # noqa: BLE001 — telling the app is best effort
                 self._log(f"[approvals] could not announce a change: {type(exc).__name__}")
+
+
+class BudgetBridge:
+    """The executor's view of the weekly budgets (``Executor(budget=)``,
+    docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
+
+    ``agent_key(session_key)`` maps a run's session to its coworker (the same
+    key as its permissions); ``budget_weekly(session_key)`` reads that
+    coworker's budget; ``first_notice`` says whether a warning level is new
+    this week; ``notify(payload)`` hands a ``budget_warning`` to the host
+    (the push)."""
+
+    def __init__(
+        self,
+        store: AgentPermissionsStore,
+        agent_key: Callable[[str], str],
+        *,
+        on_warning: Callable[[dict], None] | None = None,
+        log: Callable[[str], None] | None = None,
+    ) -> None:
+        self._store = store
+        self._agent_key = agent_key
+        self._on_warning = on_warning
+        self._log = log or (lambda _msg: None)
+        self._notices = BudgetNotices()
+
+    def agent_key(self, session_key: str) -> str:
+        return self._agent_key(session_key)
+
+    def budget_weekly(self, session_key: str) -> float:
+        return self._store.budget(self._agent_key(session_key))
+
+    def first_notice(self, agent_key: str, week: float, level: str) -> bool:
+        return self._notices.first(agent_key, week, level)
+
+    def notify(self, payload: dict) -> None:
+        self._log(
+            f"[budget] {payload.get('session_key')}: {payload.get('level')} "
+            f"({payload.get('spent_eur')} of {payload.get('budget_eur')} EUR)"
+        )
+        if self._on_warning is not None:
+            self._on_warning(payload)
 
 
 def restart_watchers(manager: Any, log: Callable[[str], None] | None = None) -> list[str]:
