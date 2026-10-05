@@ -862,10 +862,17 @@ def automation_list_request_payload(session_key: str | None = None) -> dict[str,
     return payload
 
 
-def agent_create_payload(*, agent_id: str, name: str) -> dict[str, Any]:
+def agent_create_payload(
+    *, agent_id: str, name: str, template: dict[str, Any] | None = None
+) -> dict[str, Any]:
     """App -> host: the user created a coworker in the app (docs/WIRE_CONTRACT.md,
-    "Coworker names"). The app owns the id; the host keeps the name."""
-    return {"type": "agent_create", "agent_id": agent_id, "name": name}
+    "Coworker names"). The app owns the id; the host keeps the name.
+    ``template`` (``{"id", "persona"}``, "Coworker templates") is additive: the
+    host writes the persona into the new coworker's soul.md."""
+    payload: dict[str, Any] = {"type": "agent_create", "agent_id": agent_id, "name": name}
+    if template:
+        payload["template"] = dict(template)
+    return payload
 
 
 def agent_rename_payload(*, agent_id: str, name: str) -> dict[str, Any]:

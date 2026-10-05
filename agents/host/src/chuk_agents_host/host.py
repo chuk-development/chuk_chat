@@ -112,6 +112,7 @@ from chuk_agents_config import resolve_state_home
 
 from .room_service import RoomService, dispatch_room_frame
 from .coworker_names import CoworkerNameStore, handle_agent_frame, host_agent_id
+from .coworker_templates import seed_persona, template_seed
 from .secrets_key import mail_key_at_rest_key, secrets_at_rest_key
 from .seed_skills import seed_skills_dir, seed_workspace_skills
 from .desktop_notify import DesktopNotifier
@@ -2044,7 +2045,33 @@ class LocalHost:
                 CHANNELS_CAPABILITY,
             ],
         })
-        return handle_agent_frame(self._coworker_names, payload, log=self._log)
+        names = handle_agent_frame(self._coworker_names, payload, log=self._log)
+        self._seed_template_persona(payload)
+        return names
+
+    # -- coworker templates (lib/services/agents/coworker_templates.dart) -
+
+    def _seed_template_persona(self, payload: dict) -> None:
+        """An ``agent_create`` with a ``template``: write its persona into the
+        new coworker's soul.md (docs/WIRE_CONTRACT.md, "Coworker templates").
+
+        Runs after the name store registered the id, so the workspace is the
+        coworker's own and never this host's agent. Best-effort: a failure is
+        logged, and the coworker still exists with the default persona.
+        """
+        seed = template_seed(payload)
+        if seed is None:
+            return
+        template_id, persona = seed
+        agent_id = payload.get("agent_id")
+        if not isinstance(agent_id, str) or not self._is_own_coworker(agent_id):
+            return
+        try:
+            workspace = self._workspace_for_agent(agent_id)
+            if seed_persona(workspace, persona, template_id=template_id):
+                self._log(f"[coworker-templates] {agent_id}: persona from {template_id!r}")
+        except Exception as exc:  # noqa: BLE001 — a persona must not fail a create
+            self._log(f"[coworker-templates] {agent_id}: persona not written: {exc}")
 
     # -- messenger channels (channels/) ---------------------------------
 
