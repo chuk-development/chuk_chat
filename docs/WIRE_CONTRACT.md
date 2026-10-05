@@ -1925,7 +1925,9 @@ Host → app, the terminal answer (same request stream):
 
 Python side IMPLEMENTED 2026-10-05 (`chuk_agents_runtime.run_changes`,
 `GitWorkspace.begin_run` / `revert_paths`, `Executor._answer_run_changes`).
-App side: open (work list below). Additive: an older app ignores `changes` on
+App side IMPLEMENTED 2026-10-05 (`lib/services/agents/agents_run_changes.dart`,
+`agents_run_changes_service.dart`, `lib/widgets/agents_run_changes_line.dart`;
+`changes` rides on the answer's hidden `agents_run_meta` call). Additive: an older app ignores `changes` on
 `done`, and an older host answers the two new frames with `unknown payload
 type`. Research item 14 (docs/research/AGENT_COMPETITORS_2026-10.md).
 
