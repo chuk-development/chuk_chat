@@ -180,8 +180,8 @@ def test_a_url_on_a_private_address_is_refused_by_default(tmp_path, site):
 
 
 def test_a_redirect_into_a_private_address_is_refused():
-    def host_check(host: str) -> bool:
-        return host != "127.0.0.1"
+    def resolver(host: str) -> list[str]:
+        return ["127.0.0.1"] if host == "127.0.0.1" else ["93.184.216.34"]
 
     import httpx
 
@@ -190,7 +190,7 @@ def test_a_redirect_into_a_private_address_is_refused():
 
     client = httpx.Client(transport=httpx.MockTransport(handler))
     with pytest.raises(url_watch.UrlWatchError, match="private network"):
-        url_watch.fetch_url("https://example.org/", client=client, host_check=host_check)
+        url_watch.fetch_url("https://example.org/", client=client, resolver=resolver)
 
 
 def test_the_body_is_cut_at_the_size_cap(site):

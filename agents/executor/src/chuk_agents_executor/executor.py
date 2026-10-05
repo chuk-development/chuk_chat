@@ -467,6 +467,9 @@ class _Run:
     priced_model: str | None = None
     priced_provider: str | None = None
     cost: dict | None = None
+    # Set once ``_finish_automation`` asked the host. A run ends once, so the
+    # host hears it once even when a later step of the run fails.
+    automation_finished: bool = False
 
 
 class _Heartbeat:
@@ -1535,11 +1538,18 @@ class Executor:
                 # The durable record closes first (docs/WIRE_CONTRACT.md): an
                 # app that reconnects later must see this run as failed too.
                 self._record_run(run, failed=message)
+                # The host's automation bookkeeping ends with the run. A no-op
+                # when the run already finished it before the crash.
+                automation_result = self._finish_automation(run, ok=False)
                 self._terminal(run.request_id, _run_error(run, message))
                 self._call_hook(
                     self._on_run_finished,
                     self._run_summary(
-                        run, reason="failed", final_answer=None, error=message
+                        run,
+                        reason="failed",
+                        final_answer=None,
+                        error=message,
+                        automation_result=automation_result,
                     ),
                 )
             finally:
@@ -2275,6 +2285,8 @@ class Executor:
                     store.close()
             except Exception:  # noqa: BLE001 — bookkeeping must not block the answer
                 stamps = {}
+        # A refused automation run ends on the host like a failed one.
+        automation_result = self._finish_automation(run, ok=False)
         self._stop_beat(request_id)
         self._terminal(
             request_id,
@@ -2287,12 +2299,18 @@ class Executor:
                 run_stamps=stamps,
                 host_notified=run.origin in UNATTENDED_ORIGINS or run.origin == "telegram",
                 session_key=session_key,
+                automation_result=automation_result,
             ),
         )
         self._forget(request_id)
         self._call_hook(
             self._on_run_finished,
-            self._run_summary(run, reason=REASON_BUDGET_EXCEEDED, final_answer=message),
+            self._run_summary(
+                run,
+                reason=REASON_BUDGET_EXCEEDED,
+                final_answer=message,
+                automation_result=automation_result,
+            ),
         )
 
     def _refuse_restricted_for_budget(self, run: _Run, over: dict) -> None:
@@ -2319,10 +2337,16 @@ class Executor:
                     store.close()
             except Exception:  # noqa: BLE001 — bookkeeping must not kill the worker
                 pass
+        automation_result = self._finish_automation(run, ok=False)
         self._forget(run.request_id)
         self._call_hook(
             self._on_run_finished,
-            self._run_summary(run, reason=REASON_BUDGET_EXCEEDED, final_answer=None),
+            self._run_summary(
+                run,
+                reason=REASON_BUDGET_EXCEEDED,
+                final_answer=None,
+                automation_result=automation_result,
+            ),
         )
 
     def _check_budget(self, run: _Run, request_id: str) -> None:
@@ -4365,13 +4389,22 @@ class Executor:
             # The durable record closes BEFORE the stream: it must exist even if
             # nobody is listening (docs/WIRE_CONTRACT.md).
             self._record_run(run, failed=message)
+            # A failed automation run still ends on the host: its result
+            # event goes out and its reported result is dropped.
+            automation_result = self._finish_automation(run, ok=False)
             self._terminal(request_id, _run_error(run, message))
             # The run is over once its terminal went out: drop it from the
             # registry now, so a replay that races the hook below reports idle.
             self._forget(request_id)
             self._call_hook(
                 self._on_run_finished,
-                self._run_summary(run, reason="failed", final_answer=None, error=message),
+                self._run_summary(
+                    run,
+                    reason="failed",
+                    final_answer=None,
+                    error=message,
+                    automation_result=automation_result,
+                ),
             )
             return
         finally:
@@ -4483,6 +4516,9 @@ class Executor:
         ``None`` for every other run (and for a host without the hook)."""
         if not run.automation_id or run.origin != "automation":
             return None
+        if run.automation_finished:
+            return None
+        run.automation_finished = True
         finish = getattr(self._automations, "finish_run", None)
         if not callable(finish):
             return None

@@ -441,3 +441,118 @@ def test_automation_create_and_update_frames_are_answered_with_one_terminal(tmp_
     assert seen[1] == {"type": "automation_update", "id": "zz", "notify": "always"}
     assert created == [{"type": "automation_saved", "ok": True, "automation": {"id": "w1", "kind": "watch_url", "notify": "on_change"}}]
     assert updated == [{"type": "automation_saved", "ok": False, "error": "not found"}]
+
+
+# -- a failed automation run still ends on the host ------------------------------
+
+
+class _BrokenModel:
+    """A model whose every round fails: the loop raises."""
+
+    def complete(self, messages):  # noqa: ANN001, ANN201
+        raise RuntimeError("model down")
+
+
+def _failing_run(tmp_path, *, model_factory, patch=None, meta=None):
+    """Fire automation ``a1`` once and return (run_id, manager, sent, finished)."""
+    channel = paired_channel()
+    _, executor_ep = loopback_pair()
+    manager = _OnChangeManager()
+    sent: list[tuple[str, dict]] = []
+    finished: list[dict] = []
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=model_factory,
+        automations=manager,
+        on_run_finished=finished.append,
+    )
+    executor._terminal = lambda rid, payload: sent.append((rid, payload))  # type: ignore[method-assign]
+    if patch is not None:
+        patch(executor)
+    executor.start()
+    try:
+        run_id = executor.submit_task(
+            "s1", "[automation a1 fired: price]\nnotify: on_change", {"automation_id": "a1", **(meta or {})}
+        )
+        assert _wait(lambda: len(finished) == 1, timeout=15.0)
+        time.sleep(0.1)  # nothing else may arrive after the one end
+    finally:
+        executor.stop()
+    return run_id, manager, sent, finished
+
+
+def test_a_loop_failure_finishes_the_automation_as_not_ok(tmp_path):
+    run_id, manager, _sent, finished = _failing_run(tmp_path, model_factory=_BrokenModel)
+    assert manager.finished == [(run_id, "a1", False)]
+    assert finished[0]["reason"] == "failed"
+    assert finished[0]["automation_result"] == {"changed": True}
+
+
+def test_a_crash_before_the_loop_finishes_the_automation_as_not_ok(tmp_path):
+    def broken_factory():
+        raise ValueError("unknown model id")
+
+    run_id, manager, sent, finished = _failing_run(tmp_path, model_factory=broken_factory)
+    assert manager.finished == [(run_id, "a1", False)]
+    assert finished[0]["reason"] == "failed" and "ValueError" in finished[0]["error"]
+    assert finished[0]["automation_result"] == {"changed": True}
+    assert [p["type"] for _, p in sent] == ["error"]
+
+
+def test_a_crash_after_the_result_does_not_finish_the_automation_twice(tmp_path):
+    def patch(executor):
+        def boom(run, request_id):  # noqa: ANN001
+            raise RuntimeError("budget check broke")
+
+        executor._check_budget = boom  # type: ignore[method-assign]
+
+    run_id, manager, _sent, finished = _failing_run(
+        tmp_path, model_factory=lambda: MockModelClient(["done"]), patch=patch
+    )
+    # The success path asked the host; the crash handler must not ask again.
+    assert manager.finished == [(run_id, "a1", True)]
+    assert finished[0]["reason"] == "failed"
+
+
+def test_a_budget_refusal_finishes_the_automation_as_not_ok(tmp_path):
+    def patch(executor):
+        executor._budget_refusal = lambda run: {"spent": 6.0, "budget": 5.0}  # type: ignore[method-assign]
+        executor._notify_budget = lambda *a, **kw: None  # type: ignore[method-assign]
+
+    run_id, manager, sent, finished = _failing_run(
+        tmp_path, model_factory=lambda: MockModelClient(["unused"]), patch=patch
+    )
+    assert manager.finished == [(run_id, "a1", False)]
+    assert finished[0]["reason"] == "budget_exceeded"
+    assert finished[0]["automation_result"] == {"changed": True}
+    done = [p for _, p in sent if p.get("type") == "done"][-1]
+    assert done["automation_result"] == {"changed": True}
+
+
+def test_a_restricted_budget_refusal_also_ends_the_automation_bookkeeping(tmp_path):
+    calls: list[tuple[str, bool]] = []
+
+    def patch(executor):
+        executor._budget_refusal = lambda run: {"spent": 6.0, "budget": 5.0}  # type: ignore[method-assign]
+        real = executor._finish_automation
+
+        def spy(run, *, ok):  # noqa: ANN001
+            calls.append((run.run_id, ok))
+            return real(run, ok=ok)
+
+        executor._finish_automation = spy  # type: ignore[method-assign]
+
+    run_id, manager, sent, finished = _failing_run(
+        tmp_path,
+        model_factory=lambda: MockModelClient(["unused"]),
+        patch=patch,
+        meta={"profile": "mail_untrusted", "message_id": "m7"},
+    )
+    # The refusal path asks, as not ok. A restricted run's origin is
+    # ``mail_untrusted``, never ``automation``, so the host is not called.
+    assert calls == [(run_id, False)]
+    assert manager.finished == []
+    assert finished[0]["reason"] == "budget_exceeded"
+    assert finished[0]["automation_result"] is None
+    # A restricted run streams nothing, not even its refusal.
+    assert sent == []
