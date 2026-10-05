@@ -70,6 +70,8 @@ class ChatVoiceBinding {
     required VoiceTurnSend send,
     required this.onRecordsChanged,
     this.agentName,
+    this.ensureChatId,
+    this.discardChat,
     bool Function()? isOffline,
     VoiceCallController? controller,
   }) : controller = controller ?? VoiceCallController.instance {
@@ -106,12 +108,32 @@ class ChatVoiceBinding {
   /// without a name uses it before it falls back to the thread title.
   final String? Function()? agentName;
 
+  /// Gives a new chat (no id yet) its id, so a call can start before the
+  /// first message. The screen assigns the id to itself, the way its first
+  /// send does, and returns it; null when it cannot.
+  final Future<String?> Function()? ensureChatId;
+
+  /// Gives back a chat id that [ensureChatId] made for a call, once that
+  /// call is over and nothing landed in the chat (no message, no call
+  /// record), so no empty chat is left behind.
+  final Future<void> Function(String chatId)? discardChat;
+
   late final VoiceTurnQueue _queue;
   StreamSubscription<VoiceCallRecord>? _endedSub;
   VoiceTurnDelegate? _delegate;
   String? _delegateChatId;
   bool _starting = false;
   bool _disposed = false;
+
+  /// [ensureChatId] runs: one creation at a time.
+  bool _creating = false;
+
+  /// The id [ensureChatId] made for a call, until that call is over.
+  String? _onDemandChatId;
+
+  /// The call in [_onDemandChatId] saved a record (something was said).
+  bool _onDemandRecorded = false;
+  bool _onDemandSettling = false;
 
   String? _recordsChatId;
   List<VoiceCallRecord> _records = const <VoiceCallRecord>[];
@@ -131,10 +153,10 @@ class ChatVoiceBinding {
       (controller.isActive || controller.phase == VoiceCallPhase.failed);
 
   /// Starts a call for the chat on screen, or hangs up the one running there.
+  /// A new chat with no id yet gets one first ([ensureChatId]).
   Future<void> toggleCall({String? agentName}) async {
     final String? chatId = currentChatId();
-    if (chatId == null || chatId.isEmpty) return;
-    if (isLiveFor(chatId)) {
+    if (chatId != null && chatId.isNotEmpty && isLiveFor(chatId)) {
       await controller.end();
       return;
     }
@@ -146,17 +168,24 @@ class ChatVoiceBinding {
   /// [callId], [callReason] and [initiatedByAgent] describe a call the agent
   /// started and the user accepted (spec §6.3, lib/voice/incoming/); a call
   /// the user starts leaves them out.
+  ///
+  /// A new chat with no id yet gets one from [ensureChatId] first. While
+  /// that runs, a second start (a double tap) is dropped.
   Future<void> startCall({
     String? agentName,
     String? callId,
     String? callReason,
     bool initiatedByAgent = false,
   }) async {
-    final String? chatId = currentChatId();
-    if (_disposed || chatId == null || chatId.isEmpty) return;
-    final VoiceCallMode mode = voiceCallModeFor(chatId);
+    if (_disposed || _creating) return;
+    final String? onScreen = currentChatId();
+    final bool needsChat = onScreen == null || onScreen.isEmpty;
+    if (needsChat && ensureChatId == null) return;
     _starting = true;
     try {
+      final String? chatId = needsChat ? await _createChat() : onScreen;
+      if (_disposed || chatId == null) return;
+      final VoiceCallMode mode = voiceCallModeFor(chatId);
       // Hang up first, so the old call's teardown cannot take the new
       // delegate down with it.
       if (controller.isActive) await controller.end();
@@ -192,6 +221,59 @@ class ChatVoiceBinding {
     }
   }
 
+  /// Runs [ensureChatId] once and remembers the id it made, so the chat can
+  /// be given back if the call leaves it empty.
+  Future<String?> _createChat() async {
+    _creating = true;
+    try {
+      final String? id = (await ensureChatId!())?.trim();
+      if (id == null || id.isEmpty) return null;
+      _onDemandChatId = id;
+      _onDemandRecorded = false;
+      return id;
+    } catch (e) {
+      if (kDebugMode) {
+        debugPrint('[ChatVoice] chat not created: ${e.runtimeType}');
+      }
+      return null;
+    } finally {
+      _creating = false;
+    }
+  }
+
+  /// The call in the chat [ensureChatId] made is over (its panel is gone):
+  /// give the chat back when it is still empty. The ended call's record, if
+  /// any, arrives on its stream just after the phase change, so the check
+  /// waits one turn of the event loop for it.
+  void _settleOnDemandChat() {
+    final String? id = _onDemandChatId;
+    if (_disposed || id == null || _onDemandSettling || showsPanelFor(id)) {
+      return;
+    }
+    _onDemandSettling = true;
+    unawaited(
+      Future<void>.delayed(Duration.zero, () {
+        _onDemandSettling = false;
+        if (_disposed || _onDemandChatId != id || showsPanelFor(id)) return;
+        _onDemandChatId = null;
+        final bool recorded = _onDemandRecorded;
+        _onDemandRecorded = false;
+        final Future<void> Function(String chatId)? discard = discardChat;
+        if (discard == null || recorded) return;
+        if (currentChatId() != id || messages().isNotEmpty) return;
+        unawaited(
+          discard(id).catchError((Object e) {
+            if (kDebugMode) {
+              debugPrint(
+                '[ChatVoice] empty chat not removed: ${e.runtimeType}',
+              );
+            }
+          }),
+        );
+      }),
+    );
+  }
+
   /// A fresh delegate for a call in [chatId], held as the current one. Each
   /// task carries its call (the delegate) as its tag, so a hang-up cancels
   /// exactly the tasks of that call that have not started.
@@ -221,7 +303,9 @@ class ChatVoiceBinding {
   }
 
   void _onController() {
-    if (_starting || _delegate == null) return;
+    if (_starting) return;
+    _settleOnDemandChat();
+    if (_delegate == null) return;
     final bool ours =
         controller.chatId == _delegateChatId && controller.isActive;
     if (!ours) _endCallTasks();
@@ -286,7 +370,9 @@ class ChatVoiceBinding {
   }
 
   void _onCallEnded(VoiceCallRecord record) {
-    if (_disposed || record.chatId != _recordsChatId) return;
+    if (_disposed) return;
+    if (record.chatId == _onDemandChatId) _onDemandRecorded = true;
+    if (record.chatId != _recordsChatId) return;
     _records = _merge(_records, <VoiceCallRecord>[record]);
     onRecordsChanged();
   }

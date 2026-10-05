@@ -8,10 +8,12 @@
 /// * **A desktop window** (`agents_desktop_layout.dart`): the roster on the
 ///   left is chuk's desktop sidebar with coworkers and rooms in it
 ///   ([AgentRosterView]), folding to chuk's mini rail. The thread sits on the
-///   page, its actions floating at the top right as chuk floats "Copy full
-///   chat": the coworker's screen, Documents, Control Rooms, the details pane
-///   and the copy, with Profile and Rename behind "…". The details pane and
-///   Control Rooms open on the right, in chuk's artifact panel slot, and
+///   page under the phone's top bar in desktop form ([AgentsThreadHeader]):
+///   the coworker's face, name and status on the left; Documents, Call and
+///   Screen on the right, with Details, Copy full chat, Profile and Rename
+///   behind "…". The details pane (a tap on the coworker, or Ctrl+.) and
+///   Control Rooms (from the roster) open on the right, in chuk's artifact
+///   panel slot, and
 ///   push the thread instead of covering it. A room opens in the centre. The
 ///   keyboard reaches all of it (Ctrl+K switcher, Ctrl+N, Ctrl+Shift+N,
 ///   Ctrl+1 … Ctrl+9, Ctrl+., Ctrl+B, Esc).
@@ -70,7 +72,6 @@ import 'package:flutter/services.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/l10n/app_localizations.dart';
 import 'package:chuk_chat/model_selector_page.dart';
 import 'package:chuk_chat/models/app_shell_config.dart';
@@ -94,6 +95,8 @@ import 'package:chuk_chat/services/storage/chat_origin.dart';
 import 'package:chuk_chat/widgets/app_mode_switch.dart';
 import 'package:chuk_chat/widgets/chat_documents_panel.dart';
 import 'package:chuk_chat/widgets/top_centre_slot.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart'
+    show ChromeChip;
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_screen.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_container_transform.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_layout.dart';
@@ -216,7 +219,7 @@ class MessengerShell extends StatefulWidget {
   final AppShellConfig? shellConfig;
 
   /// Copies one thread's debug export and returns the short note to show —
-  /// the "Copy full chat" button at the top right, the same affordance
+  /// "Copy full chat" in the thread header's "…" menu, the same affordance
   /// chuk_chat master has above its chat area (`root_wrapper_desktop.dart`,
   /// `_copyDebugChat`).
   ///

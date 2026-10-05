@@ -1,8 +1,7 @@
 // lib/voice/widgets/voice_call_button.dart
 //
-// The call target in a chat header. Same look as the header's other icon
-// targets (`ChromeIconButton` in agents_thread_header.dart): a 20 px glyph in
-// the icon colour on round ink, a tooltip, no fill. Draws the HugeIcon
+// The bare call target (`ChatVoiceCallStyle.bar`): a 20 px glyph in the
+// icon colour on round ink, a tooltip, no fill. Draws the HugeIcon
 // directly (docs/DESIGN.md §5: new code names the HugeIcon).
 //
 // Show it only when `VoiceCallService.isAvailable`.

@@ -833,8 +833,8 @@ void main() {
       // The thinking block is not part of verbose: it follows the user's own
       // "show reasoning" setting, on by default like chuk (bead cowork-0ia).
       expect(screen.showReasoningTokens, isTrue);
-      // The first message starts below the floating header row, so its
-      // buttons never cover it.
+      // The first message starts below the header's band, fade included, so
+      // neither a chip nor the fade ever covers it.
       expect(screen.topInset, kAgentsThreadHeaderInset);
       expect(
         kAgentsThreadHeaderInset,

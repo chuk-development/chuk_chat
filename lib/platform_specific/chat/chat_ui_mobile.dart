@@ -274,6 +274,10 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
   /// (`voiceCallUiEnabled`): with the flag off nothing is built or listened to.
   ChatVoiceBinding? _voice;
 
+  /// The id [_ensureChatIdForVoice] made for a call from a new chat, until
+  /// the chat gets its first message or the id is given back.
+  String? _voiceChatId;
+
   /// IDs of attachments restored into the composer when an edit started. These
   /// belong to the saved message, so removing them must NOT delete from storage
   /// (the original survives if the edit is cancelled); attachments uploaded
@@ -422,6 +426,8 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
         onRecordsChanged: () {
           if (mounted) setState(() {});
         },
+        ensureChatId: _ensureChatIdForVoice,
+        discardChat: _discardVoiceChat,
       );
     }
     AppLifecycleService.instance.addOnResumeCallback(_handleAppResumed);
@@ -1486,6 +1492,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       _messages.clear();
       _messageRenderCache.clear();
       _activeChatId = null;
+      _voiceChatId = null;
       _fileHandler.clearAll();
       composerController.clear();
       messageActionsHandler.cancelEdit();
@@ -1855,6 +1862,7 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Clear current chat and set workspace
     setState(() {
       _activeChatId = null;
+      _voiceChatId = null;
       _messages.clear();
       _messageRenderCache.clear();
       messageActionsHandler.cancelEdit();
@@ -2436,7 +2444,11 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
     // Generate chat ID if new chat and capture it immediately
     // CRITICAL: Capture the chatId in a local variable to prevent race conditions.
     // _activeChatId could be changed by callbacks during async operations below.
-    final bool isNewChat = _activeChatId == null;
+    // An id a voice call made for a new chat is still a new chat here: it
+    // is not stored yet and has no title.
+    final bool isNewChat =
+        _activeChatId == null || _activeChatId == _voiceChatId;
+    _voiceChatId = null;
     _activeChatId ??= _uuid.v4();
     final String chatIdForThisMessage = _activeChatId!;
     if (kDebugMode) {
@@ -3347,6 +3359,50 @@ class ChukChatUIMobileState extends State<ChukChatUIMobile>
       isOffline: _isOffline,
       commit: commit,
     );
+  }
+
+  /// A voice call from a chat with no id yet. The chat gets its id the way
+  /// the first send gives it one: the selected chat (an Agents thread key)
+  /// when there is one, else a fresh UUID. Nothing is stored here: the
+  /// first message stores the chat, through the normal send path (storage
+  /// keeps no chat without messages).
+  Future<String?> _ensureChatIdForVoice() async {
+    if (!mounted) return null;
+    final String? current = _activeChatId ?? widget.selectedChatId;
+    if (current != null && current.isNotEmpty) {
+      if (_activeChatId != current) setState(() => _activeChatId = current);
+      return current;
+    }
+    final String chatId = _uuid.v4();
+    _voiceChatId = chatId;
+    setState(() {
+      _activeChatId = chatId;
+    });
+    widget.onChatIdChanged(chatId);
+    unawaited(
+      MultiplexSession.openForChat(chatId).catchError((e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+        }
+      }),
+    );
+    return chatId;
+  }
+
+  /// The call that [_ensureChatIdForVoice] made [chatId] for is over and
+  /// the chat is still empty: give the id back, so no empty chat is left.
+  /// Only that id, and only while no message stored it.
+  Future<void> _discardVoiceChat(String chatId) async {
+    if (chatId != _voiceChatId) return;
+    _voiceChatId = null;
+    // A stored chat always has messages: it stays.
+    if (ChatStorageService.getChatById(chatId) != null) return;
+    if (!mounted || _activeChatId != chatId || _messages.isNotEmpty) return;
+    setState(() {
+      _activeChatId = null;
+    });
+    widget.onChatIdChanged(null);
+    MultiplexSession.closeForChat(chatId);
   }
 
   /// The message list. Upstream: the plain [ListView]. Messenger mode: the

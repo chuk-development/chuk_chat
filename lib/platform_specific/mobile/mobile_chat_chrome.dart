@@ -131,7 +131,7 @@ class MobileChatChrome extends StatelessWidget {
               constraints: const BoxConstraints(minHeight: kMobileChromeRow),
               child: Row(
                 children: <Widget>[
-                  _ChromeChip(
+                  ChromeChip(
                     icon: Icons.arrow_back_rounded,
                     onTap: onBack,
                     tooltip: 'Agents',
@@ -145,7 +145,7 @@ class MobileChatChrome extends StatelessWidget {
                     child: Align(
                       alignment: Alignment.centerLeft,
                       heightFactor: 1,
-                      child: _AgentPill(
+                      child: AgentChromePill(
                         agent: agent,
                         onTap: onOpenProfile,
                         onReconnect: onReconnect,
@@ -155,7 +155,7 @@ class MobileChatChrome extends StatelessWidget {
                   ),
                   if (onOpenFiles != null) ...<Widget>[
                     const SizedBox(width: 8 - _kReach),
-                    _ChromeChip(
+                    ChromeChip(
                       icon: Icons.folder_open_rounded,
                       tooltip: 'Shared files',
                       semanticsId: 'mobile_chat_files',
@@ -175,7 +175,7 @@ class MobileChatChrome extends StatelessWidget {
                     ),
                     const SizedBox(width: 8 - 2 * _kReach),
                   ],
-                  _ChromeChip(
+                  ChromeChip(
                     icon: Icons.desktop_windows_rounded,
                     accent: browserAvailable,
                     parked: !browserAvailable,
@@ -187,7 +187,7 @@ class MobileChatChrome extends StatelessWidget {
                   ),
                   if (onMore != null) ...<Widget>[
                     const SizedBox(width: 8 - 2 * _kReach),
-                    _ChromeChip(
+                    ChromeChip(
                       icon: Icons.more_horiz_rounded,
                       onTap: onMore,
                       tooltip: 'More',
@@ -208,8 +208,12 @@ class MobileChatChrome extends StatelessWidget {
 /// 22 px glyph in the icon colour — or, with [accent], chuk's accent-filled
 /// one. The chip paints 42 px and takes a 48 px press; the ink stays on the
 /// chip.
-class _ChromeChip extends StatelessWidget {
-  const _ChromeChip({
+///
+/// Public because the desktop thread header (`agents_thread_header.dart`)
+/// draws the same chips, so the two layouts share one look.
+class ChromeChip extends StatelessWidget {
+  const ChromeChip({
+    super.key,
     required this.icon,
     required this.tooltip,
     required this.semanticsId,
@@ -284,12 +288,17 @@ class _ChromeChip extends StatelessWidget {
 
 /// The coworker pill: chuk's title pill with the face, the name and the live
 /// state in it. It paints at the chips' height and takes a 48 px press.
-class _AgentPill extends StatelessWidget {
-  const _AgentPill({
+///
+/// Public because the desktop thread header draws the same pill.
+class AgentChromePill extends StatelessWidget {
+  const AgentChromePill({
+    super.key,
     required this.agent,
     required this.onTap,
     this.profiles,
     this.onReconnect,
+    this.paired,
+    this.semanticsId = 'mobile_chat_bot_pill',
   });
 
   final AgentsAgent agent;
@@ -297,8 +306,16 @@ class _AgentPill extends StatelessWidget {
   final VoidCallback? onReconnect;
   final AgentProfileStore? profiles;
 
+  /// The link state when the caller already knows it (the desktop thread
+  /// owns its transport). Null reads the shared [AgentsRelayLink].
+  final bool? paired;
+
+  final String semanticsId;
+
   @override
   Widget build(BuildContext context) {
+    final bool? known = paired;
+    if (known != null) return _surface(context, paired: known);
     return ValueListenableBuilder<AgentsRelayController?>(
       valueListenable: AgentsRelayLink.instance.controller,
       builder: (context, controller, _) => controller == null
@@ -355,7 +372,7 @@ class _AgentPill extends StatelessWidget {
       ),
     );
     return Semantics(
-      identifier: 'mobile_chat_bot_pill',
+      identifier: semanticsId,
       button: onTap != null,
       label: agent.name,
       child: Tooltip(

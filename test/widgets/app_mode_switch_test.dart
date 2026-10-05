@@ -518,9 +518,14 @@ void main() {
         await pumpShell(tester, size: size);
 
         final Rect sw = strip(tester);
-        // On the line of the 40 px chrome buttons.
+        // On the line of the 40 px chrome buttons, and of the header's row.
         expect(sw.center.dy, closeTo(16 + 20, 1));
-        // Nothing of the thread's floating row under it.
+        expect(
+          sw.center.dy,
+          AgentsThreadHeader.rowTop + AgentsThreadHeader.chipBox / 2,
+        );
+        // Nothing of the thread header's row under it: not the coworker
+        // pill, not a chip.
         final Finder buttons = find.descendant(
           of: find.byType(AgentsThreadHeader),
           matching: find.byType(Tooltip),
@@ -557,7 +562,9 @@ void main() {
         'of its own', (tester) async {
       await pumpShell(tester, size: const Size(800, 700));
       // The host's coworker is selected once the fake relay pairs.
-      await tester.tap(find.byTooltip('Details (Ctrl+.)'));
+      await tester.tap(find.byTooltip('More actions'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Details (Ctrl+.)'));
       await tester.pumpAndSettle();
 
       final Rect sw = strip(tester);

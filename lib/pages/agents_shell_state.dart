@@ -773,13 +773,13 @@ mixin AgentsShellHost on State<MessengerShell> {
   /// between the desktop stack and the phone screens. The phone layout only
   /// adds the floating-bar inset and forces chuk's phone screen.
   ///
-  /// [actions] and [menuActions] are the shell's own thread actions: on a
-  /// desktop window the thread floats them at the top right of the chat, with
-  /// its own Documents button.
+  /// [menuActions] are the shell's own thread actions: on a desktop window
+  /// they wait behind the header's "…", next to its Documents, Call and
+  /// Screen chips. [onOpenAgent] is a tap on the coworker in that header.
   AgentsThreadView _buildThread({
     double topInset = 0,
     bool phone = false,
-    List<AgentsThreadAction> actions = const <AgentsThreadAction>[],
+    VoidCallback? onOpenAgent,
     List<AgentsThreadAction> menuActions = const <AgentsThreadAction>[],
   }) {
     final agent = _selectedAgent;
@@ -812,7 +812,9 @@ mixin AgentsShellHost on State<MessengerShell> {
       onOpenModelScreen: _openModelScreen,
       title: agent?.name,
       onOpenAgentScreen: _openAgentScreenOrNull,
-      actions: actions,
+      agent: agent,
+      onOpenAgent: onOpenAgent,
+      profiles: _agentProfiles,
       menuActions: menuActions,
       topInset: topInset,
       phoneLayout: phone,

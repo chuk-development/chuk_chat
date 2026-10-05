@@ -334,6 +334,13 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
   /// (`voiceCallUiEnabled`): with the flag off nothing is built or listened to.
   ChatVoiceBinding? _voice;
 
+  /// The id [_ensureChatIdForVoice] made for a call from a new chat, until
+  /// the chat gets its first message or the id is given back.
+  String? _voiceChatId;
+
+  /// The pending workspace that id was linked to, for the give-back.
+  String? _voiceWorkspaceId;
+
   /// IDs of attachments restored into the composer when an edit started. These
   /// belong to the saved message, so removing them must NOT delete from storage
   /// (the original survives if the edit is cancelled); attachments uploaded
@@ -400,21 +407,7 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
       ..onResend = resendMessageAt;
     persistenceHandler = ChatPersistenceHandler()
       ..onShowSnackBar = showSnackBar
-      ..onChatIdAssigned = (chatId) {
-        if (mounted && _activeChatId != chatId) {
-          setState(() {
-            _activeChatId = chatId;
-          });
-          widget.onChatIdChanged(chatId);
-          unawaited(
-            MultiplexSession.openForChat(chatId).catchError((e) {
-              if (kDebugMode) {
-                debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
-              }
-            }),
-          );
-        }
-      };
+      ..onChatIdAssigned = _adoptAssignedChatId;
     composerFocusNode = FocusNode(
       onKeyEvent: (node, event) {
         if (event is! KeyDownEvent) return KeyEventResult.ignored;
@@ -504,6 +497,8 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
         onRecordsChanged: () {
           if (mounted) setState(() {});
         },
+        ensureChatId: _ensureChatIdForVoice,
+        discardChat: _discardVoiceChat,
       );
     }
     _selectedWorkspaceId = widget.workspaceId;
@@ -1695,6 +1690,86 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
     );
   }
 
+  /// The chat on screen got its id: its first save (`onChatIdAssigned`) or
+  /// a voice call started from a new chat.
+  void _adoptAssignedChatId(String chatId) {
+    if (!mounted || _activeChatId == chatId) return;
+    setState(() {
+      _activeChatId = chatId;
+    });
+    widget.onChatIdChanged(chatId);
+    unawaited(
+      MultiplexSession.openForChat(chatId).catchError((e) {
+        if (kDebugMode) {
+          debugPrint('⚠️ MultiplexSession.openForChat failed: $e');
+        }
+      }),
+    );
+  }
+
+  /// A voice call from a chat with no id yet. The chat gets its id the way
+  /// the first send gives it one: the selected chat (an Agents thread key)
+  /// when there is one, else a fresh UUID linked to the pending workspace.
+  /// Nothing is stored here: the first message stores the chat, through the
+  /// normal send path (storage keeps no chat without messages).
+  Future<String?> _ensureChatIdForVoice() async {
+    if (!mounted) return null;
+    final String? current = _activeChatId ?? widget.selectedChatId;
+    if (current != null && current.isNotEmpty) {
+      if (_activeChatId != current) setState(() => _activeChatId = current);
+      return current;
+    }
+    final String chatId = _uuid.v4();
+    _voiceChatId = chatId;
+    _voiceWorkspaceId = null;
+    _adoptAssignedChatId(chatId);
+    final String? workspaceId = _pendingWorkspaceId;
+    if (workspaceId != null) {
+      _pendingWorkspaceId = null;
+      _voiceWorkspaceId = workspaceId;
+      // Awaited: the first spoken task reads its workspace from this link.
+      await WorkspaceStorageService.linkChatToWorkspace(
+        workspaceId,
+        chatId,
+      ).catchError((Object error) {
+        if (kDebugMode) {
+          debugPrint('⚠️ [VOICE-DESKTOP] Failed to link chat to workspace');
+        }
+      });
+    }
+    return chatId;
+  }
+
+  /// The call that [_ensureChatIdForVoice] made [chatId] for is over and
+  /// the chat is still empty: give the id back, so no empty chat is left.
+  /// Only that id, and only while no message stored it.
+  Future<void> _discardVoiceChat(String chatId) async {
+    if (chatId != _voiceChatId) return;
+    _voiceChatId = null;
+    final String? workspaceId = _voiceWorkspaceId;
+    _voiceWorkspaceId = null;
+    // A stored chat always has messages: it stays.
+    if (ChatStorageService.getChatById(chatId) != null) return;
+    if (mounted && _activeChatId == chatId) {
+      if (_messages.isNotEmpty) return;
+      setState(() {
+        _activeChatId = null;
+        _pendingWorkspaceId ??= workspaceId;
+      });
+      widget.onChatIdChanged(null);
+      MultiplexSession.closeForChat(chatId);
+    }
+    if (workspaceId == null) return;
+    await WorkspaceStorageService.removeChatFromProject(
+      workspaceId,
+      chatId,
+    ).catchError((Object error) {
+      if (kDebugMode) {
+        debugPrint('⚠️ [VOICE-DESKTOP] Failed to unlink chat from workspace');
+      }
+    });
+  }
+
   /// The message list. Upstream: the plain [ListView]. Agents: the
   /// bottom-anchored transcript ([ChatScrollMixin.buildAnchoredTranscript]),
   /// which opens a thread at its bottom without laying out the rows above.
@@ -2087,11 +2162,14 @@ class ChukChatUIDesktopState extends State<ChukChatUIDesktop>
                       if (_voice != null && !widget.agentsThread)
                         Positioned(
                           key: const ValueKey<String>('desktop-chat-voice-call'),
-                          top: kTopInitialSpacing,
-                          right: 12 + 48 + 4,
+                          top:
+                              kTopInitialSpacing +
+                              (kButtonVisualHeight - kMinInteractiveDimension) /
+                                  2,
+                          right: 12 + kMinInteractiveDimension,
                           child: ChatVoiceCallButton(
                             binding: _voice!,
-                            size: 48,
+                            style: ChatVoiceCallStyle.chip,
                           ),
                         ),
                       Positioned(

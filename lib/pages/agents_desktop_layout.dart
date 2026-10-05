@@ -6,17 +6,19 @@ part of 'messenger_shell.dart';
 ///    Resizable between [kDeskRosterMin] and [kDeskRosterMax], folded to
 ///    chuk's mini rail with Ctrl+B. A window too narrow for roster and thread
 ///    folds it on its own, without changing what the user chose.
-///  * **Centre** — the thread (or an open room) on the page colour, its
-///    actions floating at the top right as chuk floats "Copy full chat". The
-///    one thread view stays mounted behind a room: it owns the socket.
+///  * **Centre** — the thread (or an open room) on the page colour, under
+///    the phone's top bar in desktop form ([AgentsThreadHeader]): the
+///    coworker on the left, Documents, Call, Screen and "…" on the right, on
+///    a fade the transcript scrolls under. The one thread view stays mounted
+///    behind a room: it owns the socket.
 ///  * **Right** — the details pane (the agent panel) or Control Rooms, in
 ///    chuk's artifact panel slot: its header, its left border and its
 ///    divider. Resizable between [kDeskDetailsMin] and [kDeskDetailsMax]. It
 ///    pushes the thread; it never covers it.
 ///  * **Top centre** — the Chat | Agents switch, where chuk's desktop floats
-///    it in the Chat half: on the line of the thread's buttons, clear of the
-///    roster and of those buttons. A centre pane too narrow for both gives
-///    the switch a line of its own above the thread.
+///    it in the Chat half: on the line of the thread header's row, clear of
+///    the roster, the coworker pill and the chips. A centre pane too narrow
+///    for all of them gives the switch a line of its own above the thread.
 ///
 /// The keyboard reaches everything: the shell's focus node sits above the
 /// whole body, so a shortcut works from the composer as well as from anywhere
@@ -251,17 +253,12 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   // --- build -------------------------------------------------------------------
 
-  /// The thread's floating buttons on the desktop: Control Rooms, the
-  /// details pane and, where chuk keeps it, Copy full chat. The coworker's
-  /// profile and rename wait behind "…".
-  List<AgentsThreadAction> _deskBarActions(AgentsAgent? agent) =>
+  /// The thread header's "…" menu on the desktop. Documents, Call and Screen
+  /// are the header's own chips, as on the phone; Control Rooms lives in the
+  /// roster. The details pane is also a tap on the coworker pill, and
+  /// Ctrl+.
+  List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent) =>
       <AgentsThreadAction>[
-        AgentsThreadAction(
-          icon: Icons.groups_outlined,
-          tooltip: 'Control Rooms',
-          onPressed: () => _deskToggleRightPane('rooms'),
-          selected: _deskRightPane == 'rooms',
-        ),
         if (agent != null)
           AgentsThreadAction(
             icon: Icons.tune,
@@ -274,10 +271,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           tooltip: 'Copy full chat',
           onPressed: () => unawaited(_copyFullChat()),
         ),
-      ];
-
-  List<AgentsThreadAction> _deskMenuActions(AgentsAgent? agent) =>
-      <AgentsThreadAction>[
         if (agent != null)
           AgentsThreadAction(
             icon: Icons.person_outline,
@@ -361,35 +354,36 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       onOpenSettings: widget.shellConfig == null ? null : _openSettings,
     );
 
-    // The Chat | Agents switch: at the top centre of the window on the line
-    // of the thread's buttons, kept between the roster and those buttons.
-    // What the buttons take is counted from what this layout hands the
-    // thread (the thread adds its screen, Documents and "…"), or a room's
-    // two. When the centre pane cannot hold both, the switch takes a line of
-    // its own and the centre pane starts under it.
+    // The Chat | Agents switch: at the top centre of the window, on the line
+    // of the thread header's row, kept clear of the roster, of the coworker
+    // pill at the left of the header and of its chips at the right (or a
+    // room's two). The header's fade is under it, so the transcript never
+    // runs into it. When the centre pane cannot hold all three, the switch
+    // takes a line of its own and the centre pane starts under it.
     final Widget? modeSwitch = _agentsModeSwitch();
     double centreTop = 0;
     Widget? switchSlot;
     if (modeSwitch != null) {
-      final double buttons =
-          (room != null ? 2 : _deskBarActions(agent).length + 3) *
-          AgentsThreadHeader.slot;
-      final double left = rosterW + 12;
+      final double chips = room != null
+          ? AgentsThreadHeader.edge + 2 * AgentsThreadHeader.chipBox
+          : AgentsThreadHeader.trailingExtent();
+      final double leading = room != null || agent == null
+          ? AgentsThreadHeader.edge
+          : AgentsThreadHeader.edge + AgentsThreadHeader.leadingMaxWidth;
+      final double left = rosterW + leading + 8;
       final double paneRight = (showRight ? rightW : 0) + 12;
-      final double besideButtons = paneRight + buttons + 8;
+      final double besideButtons = (showRight ? rightW : 0) + chips + 8;
       final bool inline =
           width - left - besideButtons >= AppModeSwitch.preferredWidth(context);
-      if (!inline) centreTop = kTopInitialSpacing + kButtonVisualHeight;
+      if (!inline) centreTop = AgentsThreadHeader.rowBottom;
       switchSlot = Positioned(
         key: const ValueKey<String>('desk-mode-switch'),
-        top:
-            kTopInitialSpacing +
-            (kButtonVisualHeight - AppModeSwitch.boxHeight) / 2,
+        top: AgentsThreadHeader.rowTop,
         left: 0,
         right: 0,
         height: AppModeSwitch.boxHeight,
         child: TopCentreSlot(
-          left: left,
+          left: inline ? left : rosterW + 12,
           right: inline ? besideButtons : paneRight,
           child: modeSwitch,
         ),
@@ -404,7 +398,9 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
           child: Offstage(
             offstage: room != null,
             child: _buildThread(
-              actions: _deskBarActions(agent),
+              onOpenAgent: agent == null
+                  ? null
+                  : () => _deskToggleRightPane('details'),
               menuActions: _deskMenuActions(agent),
             ),
           ),
@@ -603,31 +599,37 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
   }
 
   /// A room in the centre pane. Its name and faces are the room's own intro
-  /// line; its two actions float at the top right, where the thread's do.
+  /// line; its two actions float at the top right on the thread header's
+  /// band, as the same chips.
   Widget _buildDeskRoom(BuildContext context, AgentsRoom room) {
     return Stack(
       children: <Widget>[
+        // The room's list starts under the band's row (its intro line would
+        // sit behind the row otherwise) and scrolls up into the fade.
         Positioned.fill(
+          top: AgentsThreadHeader.rowBottom,
           child: KeyedSubtree(
             key: ValueKey<String>('desk-room-${room.id}'),
             child: _buildRoomBody(room),
           ),
         ),
         Positioned(
-          top: kTopInitialSpacing,
-          right: 12,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: <Widget>[
-              ChromeIconButton(
+          top: 0,
+          left: 0,
+          right: 0,
+          child: AgentsHeaderBand(
+            trailing: <Widget>[
+              ChromeChip(
                 icon: Icons.group_outlined,
                 tooltip: 'Members',
-                onPressed: () => unawaited(_manageRoomMembers(room.id)),
+                semanticsId: 'desk_room_members',
+                onTap: () => unawaited(_manageRoomMembers(room.id)),
               ),
-              ChromeIconButton(
-                icon: Icons.close,
+              ChromeChip(
+                icon: Icons.close_rounded,
                 tooltip: 'Close room (Esc)',
-                onPressed: _deskCloseRoom,
+                semanticsId: 'desk_room_close',
+                onTap: _deskCloseRoom,
               ),
             ],
           ),

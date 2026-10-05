@@ -288,24 +288,29 @@ panes, dense rows, hover states, keyboard control.
 - **Left pane: the roster.** Always docked, resizable (220–360 px, default
   264 px), collapsible to a 56 px rail. It holds the app name, a search field,
   the sections "Agents" and "Rooms", and the account row at the bottom.
-- **Centre pane: the thread.** A title bar of 48 px at the top, the transcript
-  in the middle, the composer at the bottom.
+- **Centre pane: the thread.** A header row on a solid band at the top (the
+  same chips as the phone), the transcript in the middle, the composer at the
+  bottom.
 - **Right pane: details.** The agent panel (model, tokens, runtime, sandbox,
   skills) is a docked, resizable pane (300–420 px), opened and closed from the
   title bar. It is not an overlay drawer. It pushes the thread; it does not
   cover it.
-- Panes are divided by a 1 px hairline in `outlineVariant`. No floating pills
-  in the corners, no veil under the title bar: the title bar is part of the
-  frame.
+- Panes are divided by a 1 px hairline in `outlineVariant`. The header row
+  sits on a solid page-colour band with a short fade below it, so scrolled
+  text never runs into a chip or into the Chat | Agents pill.
 
 ### 14.2 Title bar (centre pane)
 
-- Left: agent face (24 px), name (titleSmall, w600), status line below or
-  beside it in labelSmall ("Working", "Ready", "Offline").
-- Right: icon buttons of 32 px with a 20 px glyph, 4 px apart, each with a
-  tooltip that names the action and its shortcut. Order: call, screen, files,
-  details pane toggle, more (…). Same shape and fill for every button: no
-  button has its own dark square.
+The desktop header uses the phone's chrome (`ChromeChip`, `AgentChromePill`
+in `mobile_chat_chrome.dart`), so both layouts read the same.
+
+- Left: the coworker pill: face, name, status line ("Active now", working
+  dots, "Offline · Reconnect"). A tap toggles the details pane. No back arrow.
+- Right: round chips (42 px painted, 48 px press), in the phone's order:
+  documents, call, screen, then one "…" menu with details (Ctrl+.), copy full
+  chat, profile and rename. Control Rooms is not in the header: the rail has
+  it. In a narrow pane, documents moves into "…".
+- The plain Chat half uses the same chips for its call and copy targets.
 
 ### 14.3 Rows (roster)
 
