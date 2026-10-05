@@ -277,6 +277,73 @@ def test_a_restricted_run_without_a_mailbox_fails_without_a_model_call(tmp_path)
     assert model.calls == []
 
 
+class _OverBudget:
+    """A budget bridge whose one coworker owns every session and is over."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+        self.notices: list[tuple] = []
+
+    def agent_key(self, session_key: str) -> str:
+        return "host-agent"
+
+    def budget_weekly(self, session_key: str) -> float:
+        return 1.0
+
+    def first_notice(self, agent_key: str, week: float, level: str) -> bool:
+        self.notices.append((agent_key, week, level))
+        return True
+
+    def notify(self, payload: dict) -> None:
+        self.sent.append(payload)
+
+
+def test_a_restricted_run_over_budget_streams_nothing(tmp_path):
+    channel = paired_channel()
+    controller_ep, executor_ep = loopback_pair()
+    model = _ToolSpy(["unused"])
+    finished: list[dict] = []
+    bridge = _OverBudget()
+    key = restricted_session_key(MAIL_ID)
+    store = StateStore(str(tmp_path / "state.db"))
+    try:
+        store.add_usage_line(session_key="host:dev", kind="run", cost_eur=1.5)
+    finally:
+        store.close()
+    executor = _executor(
+        tmp_path, channel, executor_ep,
+        model_factory=lambda: model,
+        on_run_finished=finished.append,
+        agent_mail=_MailService(_Api()),
+        budget=bridge,
+    )
+    executor.start()
+    try:
+        run_id = executor.submit_task(
+            key,
+            restricted_prompt(MAIL_ID),
+            {"profile": PROFILE_MAIL_UNTRUSTED, "message_id": MAIL_ID},
+        )
+        assert _wait(lambda: len(finished) == 1)
+        frames = _drain(controller_ep, channel.controller.opener)
+    finally:
+        executor.stop()
+    (summary,) = finished
+    assert summary["run_id"] == run_id and summary["reason"] == "budget_exceeded"
+    assert summary["final_answer"] is None and summary["origin"] == "mail_untrusted"
+    # No done, no budget_warning on its request id, no push, no model.
+    assert frames == []
+    assert bridge.sent == [] and bridge.notices == []
+    assert model.calls == []
+    store = StateStore(str(tmp_path / "state.db"))
+    try:
+        row = store.get_run(run_id)
+    finally:
+        store.close()
+    assert row["state"] == "finished" and row["reason"] == "budget_exceeded"
+    assert not row.get("final_answer")
+
+
 def _send_script() -> MockModelClient:
     return _ToolSpy(
         [

@@ -217,6 +217,9 @@ RUN_RUNNING = "running"
 RUN_FINISHED = "finished"
 RUN_FAILED = "failed"
 
+# Run ids bound per ``IN (...)`` query; below SQLite's oldest 999-parameter cap.
+_USAGE_IN_CHUNK = 500
+
 
 @dataclass
 class Message:
@@ -1017,32 +1020,43 @@ class StateStore:
         """The lines one run caused, oldest first, summed per ``(kind, model,
         provider)``: one ``run`` line, one ``aux`` line per aux model, ...
         ``cost_eur`` is ``None`` when any summed row was not priced."""
-        rows = self._conn().execute(
-            "SELECT kind, model, provider, COUNT(*) AS calls, "
-            "SUM(prompt_tokens) AS prompt_tokens, "
-            "SUM(completion_tokens) AS completion_tokens, "
-            "SUM(cached_tokens) AS cached_tokens, SUM(cost_eur) AS cost_eur, "
-            "SUM(cost_eur IS NULL) AS unpriced, MIN(id) AS first "
-            "FROM usage_lines WHERE run_id=? GROUP BY kind, model, provider "
-            "ORDER BY first",
-            (run_id,),
-        ).fetchall()
-        out: list[dict] = []
-        for row in rows:
-            out.append(
-                {
-                    "kind": row["kind"],
-                    "model": row["model"],
-                    "provider": row["provider"],
-                    "calls": int(row["calls"] or 0),
-                    "prompt_tokens": int(row["prompt_tokens"] or 0),
-                    "completion_tokens": int(row["completion_tokens"] or 0),
-                    "cached_tokens": int(row["cached_tokens"] or 0),
-                    "cost_eur": (
-                        None if int(row["unpriced"] or 0) else float(row["cost_eur"] or 0.0)
-                    ),
-                }
-            )
+        return self.usage_lines_for([run_id]).get(run_id, [])
+
+    def usage_lines_for(self, run_ids: list[str]) -> dict[str, list[dict]]:
+        """:meth:`usage_lines` for many runs in one grouped query per chunk
+        of ids (SQLite caps bound parameters). A run with no line is absent."""
+        ids = list(dict.fromkeys(str(r) for r in run_ids if r))
+        out: dict[str, list[dict]] = {}
+        for at in range(0, len(ids), _USAGE_IN_CHUNK):
+            chunk = ids[at : at + _USAGE_IN_CHUNK]
+            marks = ",".join("?" * len(chunk))
+            rows = self._conn().execute(
+                "SELECT run_id, kind, model, provider, COUNT(*) AS calls, "
+                "SUM(prompt_tokens) AS prompt_tokens, "
+                "SUM(completion_tokens) AS completion_tokens, "
+                "SUM(cached_tokens) AS cached_tokens, SUM(cost_eur) AS cost_eur, "
+                "SUM(cost_eur IS NULL) AS unpriced, MIN(id) AS first "
+                f"FROM usage_lines WHERE run_id IN ({marks}) "
+                "GROUP BY run_id, kind, model, provider ORDER BY run_id, first",
+                tuple(chunk),
+            ).fetchall()
+            for row in rows:
+                out.setdefault(str(row["run_id"]), []).append(
+                    {
+                        "kind": row["kind"],
+                        "model": row["model"],
+                        "provider": row["provider"],
+                        "calls": int(row["calls"] or 0),
+                        "prompt_tokens": int(row["prompt_tokens"] or 0),
+                        "completion_tokens": int(row["completion_tokens"] or 0),
+                        "cached_tokens": int(row["cached_tokens"] or 0),
+                        "cost_eur": (
+                            None
+                            if int(row["unpriced"] or 0)
+                            else float(row["cost_eur"] or 0.0)
+                        ),
+                    }
+                )
         return out
 
     def spend_by_session(self, since: float, *, until: float | None = None) -> dict[str, float]:
@@ -1087,6 +1101,8 @@ class StateStore:
             (session_key, RUN_FINISHED, RUN_FAILED, after_id)
             + ((before_id,) if before_id > 0 else ()),
         ).fetchall()
+        # One grouped query for the window's cost lines, not one per run.
+        lines = self.usage_lines_for([r["run_id"] for r in rows])
         events: list[dict] = []
         for r in rows:
             events.append(
@@ -1109,7 +1125,7 @@ class StateStore:
             )
             # What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and
             # weekly budget"): the same block a live done carries.
-            cost = cost_block(self.usage_lines(r["run_id"]))
+            cost = cost_block(lines.get(r["run_id"], []))
             if cost:
                 events[-1]["cost"] = cost
         return events

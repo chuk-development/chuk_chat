@@ -34,7 +34,7 @@ import json
 import os
 import tempfile
 import threading
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -538,7 +538,8 @@ class BudgetBridge:
     docs/WIRE_CONTRACT.md, "Cost per run and weekly budget").
 
     ``agent_key(session_key)`` maps a run's session to its coworker (the same
-    key as its permissions); ``budget_weekly(session_key)`` reads that
+    key as its permissions); ``agent_keys(session_keys)`` maps many at once
+    (one roster read, for the spend sums); ``budget_weekly(session_key)`` reads that
     coworker's budget; ``first_notice`` says whether a warning level is new
     this week; ``notify(payload)`` hands a ``budget_warning`` to the host
     (the push)."""
@@ -548,17 +549,25 @@ class BudgetBridge:
         store: AgentPermissionsStore,
         agent_key: Callable[[str], str],
         *,
+        agent_keys: Callable[[Iterable[str]], dict[str, str]] | None = None,
         on_warning: Callable[[dict], None] | None = None,
         log: Callable[[str], None] | None = None,
     ) -> None:
         self._store = store
         self._agent_key = agent_key
+        self._agent_keys = agent_keys
         self._on_warning = on_warning
         self._log = log or (lambda _msg: None)
         self._notices = BudgetNotices()
 
     def agent_key(self, session_key: str) -> str:
         return self._agent_key(session_key)
+
+    def agent_keys(self, session_keys: Iterable[str]) -> dict[str, str]:
+        keys = list(session_keys)
+        if self._agent_keys is not None:
+            return self._agent_keys(keys)
+        return {key: self._agent_key(key) for key in keys}
 
     def budget_weekly(self, session_key: str) -> float:
         return self._store.budget(self._agent_key(session_key))

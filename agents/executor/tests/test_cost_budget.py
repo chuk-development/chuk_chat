@@ -311,6 +311,39 @@ def test_over_budget_an_automation_is_skipped(tmp_path):
     assert [p["level"] for p in bridge.sent] == ["exceeded"]
 
 
+class _BatchBridge(_Bridge):
+    """A bridge that maps many sessions with one roster read, and counts."""
+
+    def __init__(self, budget: float) -> None:
+        super().__init__(budget)
+        self.single = 0
+        self.batch = 0
+
+    def agent_key(self, session_key: str) -> str:
+        self.single += 1
+        return super().agent_key(session_key)
+
+    def agent_keys(self, session_keys) -> dict[str, str]:
+        self.batch += 1
+        return {key: key.split("/")[0] for key in session_keys}
+
+
+def test_a_spend_sum_reads_the_roster_at_most_once(tmp_path):
+    bridge = _BatchBridge(budget=1.0)
+    executor, _controller, _ = _build(tmp_path, budget=bridge)
+    for key, eur in (("amber", 0.1), ("amber/side", 0.2), ("amber/x", 0.3),
+                     ("blue", 5.0), ("blue/y", 1.0)):
+        _spend(tmp_path, key, eur)
+    total, week = executor._spend_since("amber", 0.0, time.time() - 3600)
+    assert total == pytest.approx(0.6) and week == pytest.approx(0.6)
+    assert bridge.batch == 1 and bridge.single == 0
+    # The refusal check is one roster read for the sum (plus one for its key).
+    bridge.batch = bridge.single = 0
+    run = _Run(request_id="t", session_key="blue", prompt="hi", kill=None, run_id=None)
+    assert executor._budget_refusal(run)["spent"] == pytest.approx(6.0)
+    assert bridge.batch == 1 and bridge.single <= 1
+
+
 def test_no_budget_means_no_gate(tmp_path):
     bridge = _Bridge(budget=0.0)
     _spend(tmp_path, "amber", 100.0)

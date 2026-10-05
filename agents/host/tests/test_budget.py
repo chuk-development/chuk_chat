@@ -160,6 +160,40 @@ def test_the_host_names_the_capability_and_wires_the_bridge(tmp_path):
         host.stop()
 
 
+def test_the_host_maps_many_sessions_with_one_roster_read(tmp_path):
+    host = _host(tmp_path)
+    host._coworker_names.upsert("local:amber:1", "amber", created_by_app=True)
+    names = host._coworker_names
+    reads = {"n": 0}
+    real_list = names.list
+
+    def counted():
+        reads["n"] += 1
+        return real_list()
+
+    names.list = counted
+    try:
+        keys = ["local:amber:1", "default", "mail:abc", "", "local:ghost:9", host._agent.id]
+        mapped = host._budget.agent_keys(keys)
+        assert reads["n"] == 1
+        reads["n"] = 0
+        assert mapped == {key: host._agent_key(key) for key in keys}
+        assert mapped["local:amber:1"] == "local:amber:1"
+        assert mapped["mail:abc"] == host._agent.id
+    finally:
+        host.stop()
+
+
+def test_a_bridge_without_a_batch_mapper_maps_key_by_key(tmp_path):
+    bridge = BudgetBridge(
+        AgentPermissionsStore(tmp_path / FILE_NAME),
+        lambda key: key if key.startswith("local:") else "host-agent",
+    )
+    assert bridge.agent_keys(["local:a:1", "default"]) == {
+        "local:a:1": "local:a:1", "default": "host-agent"
+    }
+
+
 class _Cloud:
     def __init__(self) -> None:
         self.rows: list[dict] = []

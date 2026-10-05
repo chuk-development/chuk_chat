@@ -2177,6 +2177,19 @@ class Executor:
                 pass
         return session_key
 
+    def _agents_of(self, session_keys: set[str]) -> dict[str, str]:
+        """:meth:`_agent_of` for many sessions at once. A bridge with
+        ``agent_keys`` answers from ONE roster read; an older bridge is asked
+        key by key."""
+        keys_for = getattr(self._budget, "agent_keys", None)
+        if callable(keys_for):
+            try:
+                found = keys_for(sorted(session_keys))
+                return {key: str(found.get(key, key)) for key in session_keys}
+            except Exception:  # noqa: BLE001 — fall back to one key at a time
+                pass
+        return {key: self._agent_of(key) for key in session_keys}
+
     def _budget_of(self, session_key: str) -> float:
         """The coworker's ``budget_weekly`` in euro; 0 = none."""
         get = getattr(self._budget, "budget_weekly", None)
@@ -2191,7 +2204,6 @@ class Executor:
     def _spend_since(self, session_key: str, *since: float) -> list[float]:
         """Euro the coworker of ``session_key`` spent since each ``since``,
         over every thread of that coworker."""
-        agent = self._agent_of(session_key)
         try:
             store = StateStore(self._db_path)
             try:
@@ -2200,14 +2212,11 @@ class Executor:
                 store.close()
         except Exception:  # noqa: BLE001 — no record, no spend
             return [0.0 for _ in since]
-        owners: dict[str, bool] = {}
-
-        def owned(key: str) -> bool:
-            if key not in owners:
-                owners[key] = key == session_key or self._agent_of(key) == agent
-            return owners[key]
-
-        return [sum(eur for key, eur in by.items() if owned(key)) for by in maps]
+        keys = {key for by in maps for key in by}
+        agents = self._agents_of(keys | {session_key})
+        agent = agents.get(session_key, session_key)
+        owned = {key for key in keys if key == session_key or agents.get(key, key) == agent}
+        return [sum(eur for key, eur in by.items() if key in owned) for by in maps]
 
     def _budget_refusal(self, run: _Run) -> dict | None:
         """The facts of a refusal when the coworker is at or over its weekly
@@ -2278,6 +2287,36 @@ class Executor:
         self._call_hook(
             self._on_run_finished,
             self._run_summary(run, reason=REASON_BUDGET_EXCEEDED, final_answer=message),
+        )
+
+    def _refuse_restricted_for_budget(self, run: _Run, over: dict) -> None:
+        """End a restricted mail run the weekly budget refused, the way that
+        run ends on a failure: a closed ``runs`` row without an answer and
+        the finished hook. No frame on its request id, no ``budget_warning``
+        and no push: nobody watches that stream (docs/AGENT_MAIL.md §7)."""
+        logger.info(
+            "run=%s session=%s origin=%s refused: weekly budget %.2f EUR reached (%.4f)",
+            run.run_id, run.session_key, run.origin, over["budget"], over["spent"],
+        )
+        if run.run_id:
+            try:
+                store = StateStore(self._db_path)
+                try:
+                    store.finish_run(
+                        run.run_id,
+                        reason=REASON_BUDGET_EXCEEDED,
+                        final_answer=None,
+                        iterations=0,
+                        tokens_spent=0,
+                    )
+                finally:
+                    store.close()
+            except Exception:  # noqa: BLE001 — bookkeeping must not kill the worker
+                pass
+        self._forget(run.request_id)
+        self._call_hook(
+            self._on_run_finished,
+            self._run_summary(run, reason=REASON_BUDGET_EXCEEDED, final_answer=None),
         )
 
     def _check_budget(self, run: _Run, request_id: str) -> None:
@@ -4019,11 +4058,16 @@ class Executor:
         # The weekly budget (docs/WIRE_CONTRACT.md, "Cost per run and weekly
         # budget"): checked before anything is built or spent.
         over = self._budget_refusal(run)
+        # The profile first: a restricted mail run streams nothing, not even
+        # its refusal (docs/AGENT_MAIL.md §7).
+        if run.profile == PROFILE_MAIL_UNTRUSTED:
+            if over is not None:
+                self._refuse_restricted_for_budget(run, over)
+            else:
+                self._run_restricted_mail(run)
+            return
         if over is not None:
             self._refuse_for_budget(run, over)
-            return
-        if run.profile == PROFILE_MAIL_UNTRUSTED:
-            self._run_restricted_mail(run)
             return
         request_id, prompt, session_key = run.request_id, run.prompt, run.session_key
         # A credential rotation that happens mid-task rides this task's stream.
