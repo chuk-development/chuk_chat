@@ -5,8 +5,9 @@
 ///
 ///  * a floating head bar with the wordmark, and the menu button that folds
 ///    the pane (Ctrl+B) where chuk's hamburger sits;
-///  * a navigation block joined under it — New agent, New room, Control
-///    Rooms and Search, whose card turns into the filter field;
+///  * a navigation block joined under it — "New" (one "+" whose menu holds
+///    New agent and New room), Control Rooms and Search, whose card turns
+///    into the filter field;
 ///  * one block per group under its own lid — Pinned, Agents, Rooms and
 ///    Hidden — with each coworker and room as a chat tile carrying its face;
 ///  * the floating account line at the foot.
@@ -232,7 +233,8 @@ class _NavRow {
     required this.icon,
     required this.label,
     required this.railTooltip,
-    required this.onTap,
+    this.onTap,
+    this.menu,
     this.isSearch = false,
   });
 
@@ -241,9 +243,28 @@ class _NavRow {
   final String railTooltip;
   final VoidCallback? onTap;
 
+  /// A row that opens a small menu under itself instead of acting at once:
+  /// the one "+" that holds New agent and New room.
+  final List<_NewEntry>? menu;
+
   /// The open pane turns this card into the filter field; the rail opens the
   /// quick switcher from it.
   final bool isSearch;
+}
+
+/// One row of the "+" menu: what it makes, its glyph and its shortcut.
+class _NewEntry {
+  const _NewEntry({
+    required this.label,
+    required this.icon,
+    required this.shortcut,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final String shortcut;
+  final VoidCallback onTap;
 }
 
 class _AgentRosterViewState extends State<AgentRosterView> {
@@ -472,6 +493,34 @@ class _AgentRosterViewState extends State<AgentRosterView> {
     if (mounted) picked?.call();
   }
 
+  /// The "+" menu: New agent and New room, each with its shortcut, under the
+  /// row that opened it.
+  Future<void> _openNewMenu(BuildContext anchor, List<_NewEntry> entries) {
+    final ThemeData theme = Theme.of(context);
+    final Color iconFg = theme.resolvedIconColor;
+    return _showMenu(anchor, <PopupMenuEntry<VoidCallback>>[
+      for (final _NewEntry entry in entries)
+        PopupMenuItem<VoidCallback>(
+          value: entry.onTap,
+          child: Row(
+            children: <Widget>[
+              AppIcon(entry.icon, color: iconFg, size: 20),
+              const SizedBox(width: 12),
+              Expanded(child: Text(entry.label)),
+              const SizedBox(width: 16),
+              Text(
+                entry.shortcut,
+                style: TextStyle(
+                  color: iconFg.withValues(alpha: 0.55),
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+    ]);
+  }
+
   /// The coworker's menu. The tile also carries the pin as a one-click toggle
   /// on hover, as chuk's chat tile does; the menu row is the same toggle for
   /// the keyboard's menu key and for touch, where there is no hover.
@@ -560,20 +609,38 @@ class _AgentRosterViewState extends State<AgentRosterView> {
   /// The navigation rows, in the one order both shapes use.
   List<_NavRow> _navRows(BuildContext context) {
     final AppLocalizations? l = AppLocalizations.of(context);
-    return <_NavRow>[
+    final List<_NewEntry> creates = <_NewEntry>[
       if (widget.onAddAgent != null)
-        _NavRow(
-          icon: Icons.edit_square,
+        _NewEntry(
           label: 'New agent',
-          railTooltip: 'New agent (${deskShortcutLabel('Ctrl+N')})',
-          onTap: widget.onAddAgent,
+          icon: Icons.person_add_alt_1_outlined,
+          shortcut: deskShortcutLabel('Ctrl+N'),
+          onTap: widget.onAddAgent!,
         ),
       if (widget.onCreateRoom != null)
-        _NavRow(
-          icon: Icons.group_add_outlined,
+        _NewEntry(
           label: 'New room',
-          railTooltip: 'New room (${deskShortcutLabel('Ctrl+Shift+N')})',
-          onTap: widget.onCreateRoom,
+          icon: Icons.group_add_outlined,
+          shortcut: deskShortcutLabel('Ctrl+Shift+N'),
+          onTap: widget.onCreateRoom!,
+        ),
+    ];
+    return <_NavRow>[
+      // One "+" for everything that can be made, as the phone's inbox has
+      // one: a menu when there is a choice, the action itself when not.
+      if (creates.length > 1)
+        _NavRow(
+          icon: Icons.add_rounded,
+          label: 'New',
+          railTooltip: 'New agent or room',
+          menu: creates,
+        )
+      else if (creates.length == 1)
+        _NavRow(
+          icon: Icons.add_rounded,
+          label: creates.single.label,
+          railTooltip: '${creates.single.label} (${creates.single.shortcut})',
+          onTap: creates.single.onTap,
         ),
       if (widget.onOpenRooms != null)
         _NavRow(
@@ -629,6 +696,20 @@ class _AgentRosterViewState extends State<AgentRosterView> {
       for (final _NavRow row in rows)
         if (row.isSearch)
           _searchEntry(row)
+        else if (row.menu != null)
+          Builder(
+            builder: (BuildContext anchor) => SbNavCard(
+              key: const ValueKey<String>('roster-new'),
+              icon: row.icon,
+              label: row.label,
+              trailing: AppIcon(
+                Icons.expand_more_rounded,
+                size: 18,
+                color: iconFg.withValues(alpha: 0.6),
+              ),
+              onTap: () => unawaited(_openNewMenu(anchor, row.menu!)),
+            ),
+          )
         else
           SbNavCard(icon: row.icon, label: row.label, onTap: row.onTap!),
     ];
@@ -1103,10 +1184,17 @@ class _AgentRosterViewState extends State<AgentRosterView> {
             Positioned(
               top: sbNavRowTop(i) + kSbNavIconTop,
               left: kSbNavIconLeft,
-              child: SbRailSlot(
-                tooltip: rows[i].railTooltip,
-                onTap: rows[i].onTap,
-                child: SbNavIcon(icon: rows[i].icon),
+              child: Builder(
+                builder: (BuildContext anchor) => SbRailSlot(
+                  key: rows[i].menu == null
+                      ? null
+                      : const ValueKey<String>('rail-new'),
+                  tooltip: rows[i].railTooltip,
+                  onTap: rows[i].menu == null
+                      ? rows[i].onTap
+                      : () => unawaited(_openNewMenu(anchor, rows[i].menu!)),
+                  child: SbNavIcon(icon: rows[i].icon),
+                ),
               ),
             ),
           Positioned(

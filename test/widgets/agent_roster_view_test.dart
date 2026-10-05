@@ -20,6 +20,8 @@ import 'package:chuk_chat/widgets/brand_wordmark.dart';
 import 'package:chuk_chat/services/agents/agent_read_marks.dart';
 import 'package:chuk_chat/ui/expressive/agent_face.dart';
 
+import '../support/icon_finder.dart';
+
 void main() {
   final DateTime now = DateTime(2026, 8, 13, 12);
 
@@ -120,6 +122,55 @@ void main() {
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('jade'), findsOneWidget);
   });
+
+  for (final bool folded in <bool>[false, true]) {
+    testWidgets('${folded ? 'the rail' : 'the open pane'}: one "+" holds New '
+        'agent and New room, each with its shortcut', (tester) async {
+      final made = <String>[];
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SizedBox(
+              width: folded ? 56 : 280,
+              child: AgentRosterView(
+                source: LocalAgentRosterSource()..addAgent(name: 'jade'),
+                collapsed: folded,
+                onAddAgent: () => made.add('agent'),
+                onCreateRoom: () => made.add('room'),
+                onOpenRooms: () {},
+                onToggleCollapsed: () {},
+                onSelect: (_, _) {},
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder plus = find.byKey(
+        ValueKey<String>(folded ? 'rail-new' : 'roster-new'),
+      );
+      expect(plus, findsOneWidget);
+      expect(findIcon(Icons.add_rounded), findsOneWidget);
+      // No second creation entry beside it, and no pencil for "new agent".
+      expect(findIcon(Icons.edit_square), findsNothing);
+      expect(find.text('New agent'), findsNothing);
+      expect(find.text('New room'), findsNothing);
+      if (folded) expect(find.byTooltip('New agent or room'), findsOneWidget);
+
+      for (final String pick in <String>['New agent', 'New room']) {
+        await tester.tap(plus);
+        await tester.pumpAndSettle();
+        expect(find.text('New agent'), findsOneWidget);
+        expect(find.text('New room'), findsOneWidget);
+        expect(find.text('Ctrl+N'), findsOneWidget);
+        expect(find.text('Ctrl+Shift+N'), findsOneWidget);
+        await tester.tap(find.text(pick));
+        await tester.pumpAndSettle();
+      }
+      expect(made, <String>['agent', 'room']);
+    }, variant: TargetPlatformVariant.only(TargetPlatform.linux));
+  }
 
   testWidgets('an empty roster says so and offers onboarding', (tester) async {
     var opened = 0;

@@ -17,7 +17,6 @@ import 'package:chuk_chat/utils/theme_extensions.dart';
 import 'package:chuk_chat/voice/voice_call.dart';
 import 'package:chuk_chat/voice/widgets/voice_call_controls.dart'
     show VoiceHangUpGlyph;
-import 'package:chuk_chat/widgets/app_notification.dart';
 import 'package:chuk_chat/widgets/floating_chrome_surface.dart';
 
 /// Which surface the target sits on.
@@ -79,21 +78,16 @@ class ChatVoiceCallButton extends StatelessWidget {
       builder: (BuildContext context, Widget? _) {
         final ChatVoiceBinding? b =
             binding ?? ChatVoiceSessions.instance.forRole(agents: true);
+        // A new chat with no id yet can call too, when the binding can give
+        // it one.
         final String? chatId = b?.currentChatId();
-        final bool ready = b != null && chatId != null && chatId.isNotEmpty;
-        final bool live = ready && b.isLiveFor(chatId);
-        final String tooltip = !ready
-            ? 'Voice call (send a message first)'
-            : (live ? 'Hang up' : 'Voice call');
+        final bool ready =
+            b != null &&
+            ((chatId != null && chatId.isNotEmpty) || b.ensureChatId != null);
+        final bool live = ready && b.isLiveFor(b.currentChatId());
+        final String tooltip = live ? 'Hang up' : 'Voice call';
         void onTap() {
-          if (!ready) {
-            AppNotifications.show(
-              context,
-              'Send a message first, then call',
-              duration: const Duration(seconds: 2),
-            );
-            return;
-          }
+          if (b == null) return;
           unawaited(b.toggleCall(agentName: agentName));
         }
 

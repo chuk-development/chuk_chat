@@ -10,6 +10,8 @@ import 'package:chuk_chat/models/app_shell_config.dart';
 import 'package:chuk_chat/models/artifact.dart';
 import 'package:chuk_chat/platform_config.dart';
 import 'package:chuk_chat/constants.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart'
+    show ChromeChip;
 import 'package:chuk_chat/services/artifact_storage_service.dart';
 import 'package:chuk_chat/services/chat_storage_service.dart';
 import 'package:chuk_chat/platform_specific/chat/chat_ui_desktop.dart';
@@ -72,6 +74,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
   /// The same in a workspace chat: the workspace panel's 300 px and a gap.
   static const double _kWorkspacePanelReserve = 300 + 8;
+
+  /// The bottom of the [RootWrapperDesktop.headerCenter] band: a 48 px box
+  /// centred on the line of the 40 px chrome buttons.
+  static const double _kHeaderCenterBottom =
+      kTopInitialSpacing + (kButtonVisualHeight + kMinInteractiveDimension) / 2;
 
   bool _isSidebarExpanded = false;
   bool _hasOpenedSidebar = false;
@@ -551,6 +558,11 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       toolDiscoveryMode: widget.config.toolDiscoveryMode,
       showToolCalls: widget.config.showToolCalls,
       autoSendVoiceTranscription: widget.config.autoSendVoiceTranscription,
+      // With a header slot (the Agents build's Chat | Agents switch) the
+      // first message starts below the slot's line instead of under the
+      // switch, as the Agents half's thread starts below its header row.
+      // Without one, chuk_chat's layout is unchanged.
+      topInset: widget.headerCenter == null ? 0 : _kHeaderCenterBottom,
     );
 
     // Right panel width for Projects/Media/Artifacts.
@@ -749,13 +761,18 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
           // Copy full chat button (top-right of chat area)
           if (showContent && _activeProjectId == null)
+            // A chrome chip like the Agents header, centred on the line of
+            // the chrome buttons (48 px press on a 40 px line).
             Positioned(
-              top: kTopInitialSpacing,
+              top:
+                  kTopInitialSpacing +
+                  (kButtonVisualHeight - kMinInteractiveDimension) / 2,
               right: (showPanel ? panelWidth : 0) + 12,
-              child: IconButton(
-                icon: AppIcon(Icons.copy_all_rounded, color: iconFg, size: 20),
-                onPressed: _copyDebugChat,
+              child: ChromeChip(
+                icon: Icons.copy_all_rounded,
                 tooltip: 'Copy full chat',
+                semanticsId: 'desktop_copy_full_chat',
+                onTap: _copyDebugChat,
               ),
             ),
 

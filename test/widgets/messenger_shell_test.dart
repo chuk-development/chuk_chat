@@ -347,9 +347,28 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Presses one of the thread's floating buttons by its tooltip.
-  Future<void> tapThreadAction(WidgetTester tester, String tooltip) async {
-    await tester.tap(find.byTooltip(tooltip));
+  /// Opens Control Rooms from the roster: its card in the open pane, its
+  /// icon in the folded rail. The thread header no longer carries it.
+  Finder controlRoomsEntry() {
+    final Finder rail = find.byTooltip('Control Rooms');
+    if (rail.evaluate().isNotEmpty) return rail;
+    return find.descendant(
+      of: find.byType(AgentRosterView),
+      matching: find.text('Control Rooms'),
+    );
+  }
+
+  /// Runs one of the thread's actions: Control Rooms from the roster, the
+  /// rest from the thread header's "…" menu.
+  Future<void> tapThreadAction(WidgetTester tester, String label) async {
+    if (label == 'Control Rooms') {
+      await tester.tap(controlRoomsEntry());
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.tap(find.byTooltip('More actions'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
     await tester.pumpAndSettle();
   }
 
@@ -385,32 +404,46 @@ void main() {
     },
   );
 
-  testWidgets("the thread's actions float at the top right, as chuk's copy "
-      'button does', (tester) async {
+  testWidgets("the thread header is the phone's top bar: the coworker on "
+      'the left, Documents and Screen on the right, the rest behind "…"', (
+    tester,
+  ) async {
     final (controller, roster) = await pumpShell(tester);
     controller.pair();
     await tester.pumpAndSettle();
 
-    // Screen, files, Control Rooms, the details toggle, the copy and the "…"
-    // menu: chuk's 40 px icon buttons, each with a tooltip, in that order.
+    final Finder header = find.byType(AgentsThreadHeader);
+    // The coworker: face, name and status, at the left of the header.
+    final String name = roster.agents.single.name;
+    expect(
+      find.descendant(of: header, matching: find.byType(AgentChromePill)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: header, matching: find.text(name)),
+      findsOneWidget,
+    );
+    // The phone's chips, in its order (the call only in a build with calls),
+    // then one "…".
     const List<String> order = <String>[
-      'No screen open right now',
       'Documents',
-      'Control Rooms',
-      'Details (Ctrl+.)',
-      'Copy full chat',
+      'No screen open right now',
       'More actions',
     ];
     for (final String tooltip in order) {
-      expect(find.byTooltip(tooltip), findsOneWidget, reason: tooltip);
+      expect(
+        find.descendant(of: header, matching: find.byTooltip(tooltip)),
+        findsOneWidget,
+        reason: tooltip,
+      );
       expect(
         tester.getSize(
           find.ancestor(
             of: find.byTooltip(tooltip),
-            matching: find.byType(ChromeIconButton),
+            matching: find.byType(ChromeChip),
           ),
         ),
-        const Size(40, 40),
+        const Size(48, 48),
         reason: tooltip,
       );
     }
@@ -418,11 +451,18 @@ void main() {
       for (final String t in order) tester.getCenter(find.byTooltip(t)).dx,
     ];
     expect(xs, orderedEquals(List<double>.of(xs)..sort()));
-    // No bar: the row is as tall as its buttons and floats over the chat.
-    expect(tester.getSize(find.byType(AgentsThreadHeader)).height, 40);
+    // Control Rooms is the roster's, not the header's.
+    expect(
+      find.descendant(of: header, matching: find.byTooltip('Control Rooms')),
+      findsNothing,
+    );
+    // The header has a band: the page colour behind the row and a fade.
+    expect(tester.getSize(header).height, AgentsThreadHeader.height);
     // The rest is in the menu.
     await tester.tap(find.byTooltip('More actions'));
     await tester.pumpAndSettle();
+    expect(find.text('Details (Ctrl+.)'), findsOneWidget);
+    expect(find.text('Copy full chat'), findsOneWidget);
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Rename'), findsOneWidget);
     expect(find.byType(AppBar), findsNothing);
@@ -590,7 +630,7 @@ void main() {
   ) async {
     await pumpShell(tester);
 
-    await tester.tap(find.byTooltip('Control Rooms'));
+    await tester.tap(controlRoomsEntry());
     await tester.pumpAndSettle();
 
     expect(find.byType(RoomListView), findsOneWidget);
@@ -1072,8 +1112,7 @@ void main() {
       controller.pair();
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byTooltip('Details (Ctrl+.)'));
-      await tester.pumpAndSettle();
+      await tapThreadAction(tester, 'Details (Ctrl+.)');
 
       // A docked pane, not an overlay drawer: it pushes the thread.
       expect(find.byType(Drawer), findsNothing);
@@ -1541,7 +1580,7 @@ void main() {
       // pumps: the thread view animates while its transport is still pending,
       // and the panel sits next to it now instead of behind a route that muted
       // its ticker.
-      await tester.tap(find.byTooltip('Control Rooms'));
+      await tester.tap(controlRoomsEntry());
       await settle(tester);
       await tester.tap(findIcon(Icons.more_vert));
       await settle(tester);

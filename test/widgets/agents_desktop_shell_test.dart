@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
+import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
 import 'package:chuk_chat/services/account_session.dart';
 import 'package:chuk_chat/services/agents/agent_control_source.dart';
 import 'package:chuk_chat/services/agents/agent_roster_source.dart';
@@ -211,17 +212,30 @@ void main() {
       expect(tester.getSize(rightPane).width, kDeskDetailsMin);
     });
 
-    testWidgets('the details toggle in the title bar opens and closes the '
-        'pane, and shows its state', (tester) async {
+    testWidgets('Details in the header\'s "…" menu, and a tap on the '
+        'coworker, open and close the pane', (tester) async {
       await pumpDesktop(tester);
 
-      await tester.tap(find.byTooltip('Details (Ctrl+.)'));
-      await tester.pumpAndSettle();
+      Future<void> details() async {
+        await tester.tap(find.byTooltip('More actions'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Details (Ctrl+.)'));
+        await tester.pumpAndSettle();
+      }
+
+      await details();
       expect(rightPane, findsOneWidget);
       expect(find.text('Details'), findsOneWidget);
       expect(find.text('MODEL'), findsOneWidget);
 
-      await tester.tap(find.byTooltip('Details (Ctrl+.)'));
+      await details();
+      expect(rightPane, findsNothing);
+
+      // The coworker pill at the left of the header is the same toggle.
+      await tester.tap(find.byType(AgentChromePill));
+      await tester.pumpAndSettle();
+      expect(rightPane, findsOneWidget);
+      await tester.tap(find.byType(AgentChromePill));
       await tester.pumpAndSettle();
       expect(rightPane, findsNothing);
 
