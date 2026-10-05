@@ -123,6 +123,94 @@ def test_the_store_keeps_the_token_encrypted_and_reloads_it(tmp_path):
     assert path.exists()
 
 
+def test_concurrent_updates_never_lose_a_record_on_disk(tmp_path, monkeypatch):
+    import random
+
+    from chuk_agents_host.channels import store as store_module
+
+    real = store_module.AESGCM
+
+    class SlowAESGCM:
+        # Widen the gap between the snapshot and the write, where a save
+        # without one lock across both lets an older snapshot land last.
+        def __init__(self, k):
+            self._inner = real(k)
+
+        def encrypt(self, nonce, data, aad):
+            time.sleep(random.uniform(0, 0.02))
+            return self._inner.encrypt(nonce, data, aad)
+
+        def decrypt(self, nonce, data, aad):
+            return self._inner.decrypt(nonce, data, aad)
+
+    monkeypatch.setattr(store_module, "AESGCM", SlowAESGCM)
+    key = os.urandom(32)
+    path = tmp_path / "channels.enc"
+    store = ChannelStore(path=path, key=key)
+    threads_n, rounds = 12, 15
+    errors: list[BaseException] = []
+
+    def worker(index: int) -> None:
+        try:
+            for r in range(rounds):
+                store.update(f"agent-{index}", "telegram", token=f"tok-{index}", offset=r)
+        except BaseException as exc:  # noqa: BLE001 - surfaced below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=worker, args=(i,)) for i in range(threads_n)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+    assert not errors
+    again = ChannelStore(path=path, key=key).all("telegram")
+    assert again == {
+        f"agent-{i}": {"token": f"tok-{i}", "offset": rounds - 1} for i in range(threads_n)
+    }
+    # Every temporary file was renamed into place; none is left behind.
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["channels.enc"]
+    assert oct(path.stat().st_mode & 0o777) == "0o600"
+
+
+def test_an_older_snapshot_never_lands_after_a_newer_save(tmp_path, monkeypatch):
+    from chuk_agents_host.channels import store as store_module
+
+    real = store_module.AESGCM
+    entered, release = threading.Event(), threading.Event()
+    first = [True]
+
+    class GatedAESGCM:
+        # The first save stops after its snapshot until it is released.
+        def __init__(self, k):
+            self._inner = real(k)
+
+        def encrypt(self, nonce, data, aad):
+            if first[0]:
+                first[0] = False
+                entered.set()
+                assert release.wait(10)
+            return self._inner.encrypt(nonce, data, aad)
+
+        def decrypt(self, nonce, data, aad):
+            return self._inner.decrypt(nonce, data, aad)
+
+    monkeypatch.setattr(store_module, "AESGCM", GatedAESGCM)
+    key = os.urandom(32)
+    path = tmp_path / "channels.enc"
+    store = ChannelStore(path=path, key=key)
+    a = threading.Thread(target=lambda: store.update("agent-a", "telegram", token="A"))
+    a.start()
+    assert entered.wait(10)
+    b = threading.Thread(target=lambda: store.update("agent-b", "telegram", token="B"))
+    b.start()
+    b.join(0.5)  # an unserialized save finishes here, before the older one
+    release.set()
+    a.join(10)
+    b.join(10)
+    again = ChannelStore(path=path, key=key).all("telegram")
+    assert again == {"agent-a": {"token": "A"}, "agent-b": {"token": "B"}}
+
+
 # --------------------------------------------------------------- the frames
 
 
@@ -542,3 +630,28 @@ def test_errors_never_carry_the_token(fake):
     with pytest.raises(TelegramError) as info:
         bad.get_me()
     assert info.value.kind == "network" and "xxxx" not in str(info.value)
+
+
+@pytest.mark.parametrize(
+    "base",
+    ["http://api.telegram.org", "http://10.0.0.5:8081", "http://example.test/bot", "ftp://x"],
+)
+def test_plain_http_is_refused_off_loopback(base):
+    # The token travels in the request path: never in clear text over a network.
+    with pytest.raises(ValueError):
+        TelegramClient(TOKEN, base_url=base)
+
+
+@pytest.mark.parametrize(
+    "base",
+    [
+        "http://127.0.0.1:8081",
+        "http://localhost:8081",
+        "http://LOCALHOST",
+        "http://[::1]:8081",
+        "https://api.telegram.org",
+        "https://tg.example.test/proxy",
+    ],
+)
+def test_https_anywhere_and_http_on_loopback_are_allowed(base):
+    TelegramClient(TOKEN, base_url=base)

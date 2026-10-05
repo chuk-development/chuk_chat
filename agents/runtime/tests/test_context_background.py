@@ -302,6 +302,101 @@ def test_a_background_result_never_replaces_a_newer_stored_summary(tmp_path):
     assert store.load_context_summary(sid)["summary"] == "NEWER"
 
 
+def test_the_summary_save_is_a_compare_and_set(tmp_path):
+    store, sid = _store(tmp_path)
+    assert store.save_context_summary(
+        sid, summary="A", summarized_upto=10, prefix_digest="d10", only_if_covers_more=True
+    )
+    # Covers less: refused, the newer row stays.
+    assert not store.save_context_summary(
+        sid, summary="B", summarized_upto=8, prefix_digest="d8", only_if_covers_more=True
+    )
+    assert store.load_context_summary(sid)["summary"] == "A"
+    # Covers more: written.
+    assert store.save_context_summary(
+        sid, summary="C", summarized_upto=12, prefix_digest="d12", only_if_covers_more=True
+    )
+    # Covers less, but the stored row is still the stale one the caller read.
+    stale = store.load_context_summary(sid)
+    assert store.save_context_summary(
+        sid,
+        summary="D",
+        summarized_upto=9,
+        prefix_digest="d9",
+        only_if_covers_more=True,
+        replaces=stale,
+    )
+    assert store.load_context_summary(sid)["summary"] == "D"
+    # The row changed after the read: the stale view does not match any more.
+    store.save_context_summary(sid, summary="E", summarized_upto=20, prefix_digest="d20")
+    assert not store.save_context_summary(
+        sid,
+        summary="F",
+        summarized_upto=9,
+        prefix_digest="d9",
+        only_if_covers_more=True,
+        replaces={"summarized_upto": 9, "prefix_digest": "d9"},
+    )
+    assert store.load_context_summary(sid)["summary"] == "E"
+
+
+class _ReadBeforeWriteStore:
+    """A real store whose reads see nothing: models a background job that
+    read the row before another writer stored a newer one. Records which
+    thread closed its connection."""
+
+    def __init__(self, inner: StateStore) -> None:
+        self._inner = inner
+        self._path = inner._path
+        self.closed_on: list[threading.Thread] = []
+
+    def load_context_summary(self, session_id):
+        return None
+
+    def save_context_summary(self, session_id, **kwargs):
+        return self._inner.save_context_summary(session_id, **kwargs)
+
+    def close_thread_connection(self):
+        self.closed_on.append(threading.current_thread())
+        self._inner.close_thread_connection()
+
+
+def test_a_newer_summary_written_after_the_job_read_survives(tmp_path):
+    inner, sid = _store(tmp_path)
+    history = _history(8)
+    inner.save_context_summary(
+        sid, summary="NEWER", summarized_upto=len(history) + 10, prefix_digest="x"
+    )
+    store = _ReadBeforeWriteStore(inner)
+    factory = Factory()
+    ladder = _ladder(store, StubSummarizer(), factory)
+    ladder.prepare(history, session_id=sid)
+    assert ladder.wait_background(5)
+    assert len(factory.built) == 1 and factory.built[0].calls
+    assert inner.load_context_summary(sid)["summary"] == "NEWER"
+
+
+def test_the_job_closes_its_thread_connection(tmp_path):
+    inner, sid = _store(tmp_path)
+    store = _ReadBeforeWriteStore(inner)
+    factory = Factory()
+    ladder = _ladder(store, StubSummarizer(), factory)
+    ladder.prepare(_history(8), session_id=sid)
+    assert ladder.wait_background(5)
+    assert len(store.closed_on) == 1
+    assert store.closed_on[0] is not threading.current_thread()
+    assert store.closed_on[0].name == "agents-context-summary"
+    # The summary was stored (no newer row competed).
+    assert inner.load_context_summary(sid) is not None
+
+
+def test_close_thread_connection_reopens_on_next_use(tmp_path):
+    store, sid = _store(tmp_path)
+    store.close_thread_connection()
+    store.close_thread_connection()  # idempotent
+    assert store.load_context_summary(sid) is None
+
+
 def test_without_a_factory_the_ladder_blocks_as_before(tmp_path):
     store, sid = _store(tmp_path)
     blocking = StubSummarizer()
