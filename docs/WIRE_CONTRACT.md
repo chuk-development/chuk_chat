@@ -1807,6 +1807,114 @@ Creating or editing a skill from the app (chuk_chat's editor wrote to Supabase
 `user_skills`, which the host never reads). Needs a `skill_put` frame that
 writes `<workspace>/skills/<name>/SKILL.md` and answers with `skills_list`.
 
+## Skill proposals: save a finished task as a skill (bead chuk_chat-al2u)
+
+Python side IMPLEMENTED 2026-10-05 (`chuk_agents_runtime.skill_proposals`,
+`Executor._skill_proposal_sink` / `_handle_skill_proposal_decision`). App side:
+open (work list below). Additive: an older app ignores the new frame type, and
+an older host answers the decision with `unknown payload type`.
+
+### The idea
+
+After a long task of many steps that worked and that will likely come back, or
+when the user says "remember how to do this", the agent offers to save the
+procedure as a skill. The agent only **proposes**. Nothing is written to
+`skills/` until the user accepts in the app.
+
+1. The agent calls `propose_skill(name, description, body)`. The tool is
+   deferred behind `search_tools`; the prompt section "Saving a skill" names
+   it. One offer per task.
+2. The tool scrubs the draft: the user's secret values (the same vault filter
+   as tool results), credential-shaped strings (`sk-…`, `ghp_…`, JWTs,
+   `password=…`), e-mail addresses (`<email>`) and phone numbers with a `+`
+   prefix (`<phone>`). A reference to a secret by name (`$TOKEN`, `${KEY}`,
+   `os.environ['KEY']`, `Bearer $TOKEN`) stays.
+3. The tool validates the draft like `tool/gen_skills.dart` validates a shipped
+   skill: `name` is lower-case letters and digits joined by single hyphens, at
+   most 64 characters; `description` is one line of at most 300 characters;
+   the body is not empty, at most 500 lines and 40 000 characters; the file
+   must read back through the host's own SKILL.md loader. A name the workspace
+   already uses is refused.
+4. The host stores the draft (table `skill_proposals` in the executor's state
+   database, with the coworker's skills directory) and streams one
+   `skill_proposal` frame on the run's stream. The frame is also persisted in
+   the thread, so a replay shows the card.
+5. The app answers `skill_proposal_decision`. Accept writes
+   `<that coworker's workspace>/skills/<name>/SKILL.md` (atomic rename). Reject
+   drops the draft. The next task of that coworker has the skill in its
+   catalogue; the running task does not (its prompt is frozen).
+
+### Frames
+
+Host → app, on the run's stream, persisted as an `event` row of the thread:
+
+```json
+{"type": "skill_proposal", "proposal_id": "sp_<16 hex>",
+ "agent_id": "<session key of the coworker>",
+ "name": "invoice-export",
+ "description": "<at most 300 characters>",
+ "body": "<Markdown: title, goal, numbered steps>"}
+```
+
+After a decision, the persisted row gets three more fields, so a replayed card
+shows the outcome and offers no buttons:
+`"status": "saved" | "dismissed"`, `"decided_at": <epoch seconds>`,
+`"saved_name": "<name as saved>" | null`. A live frame has no `status`; a
+replayed row without `status` is still pending.
+
+App → host:
+
+```json
+{"type": "skill_proposal_decision", "proposal_id": "sp_…", "accept": true,
+ "name": "<optional edit>", "description": "<optional edit>",
+ "body": "<optional edit>"}
+```
+
+- `accept` must be the JSON `true` to save. Any other value dismisses.
+- An absent edit field keeps the draft's value. Edits go through the same
+  scrub and validation as the draft.
+
+Host → app, the terminal answer (same request stream):
+
+```json
+{"type": "skill_proposal_result", "proposal_id": "sp_…",
+ "status": "saved" | "dismissed" | "invalid" | "not_found",
+ "name": "<name>", "errors": ["<reason>", …],
+ "path": "<host path of the SKILL.md, only on saved>",
+ "scrubbed": true | false, "already_decided": true}
+```
+
+- `saved`: the file is on disk. Send `skills_list` to refresh the skills page.
+- `invalid`: nothing was written and the draft stays pending. `errors` says
+  why (`invalid name 'X': …`, `description is 301 characters, the limit is
+  300`, `a skill named 'x' already exists; pick another name`, `the workspace
+  already holds 100 skills; delete one first`). Show the reasons in the edit
+  form and let the user try again.
+- `already_decided: true`: another device (or an earlier tap) decided first;
+  `status` is that decision. Redraw the card as decided.
+- `scrubbed: true`: secrets or personal data were removed from the edits.
+- `not_found`: an unknown id (`errors: ["no skill proposal 'sp_x'"]`).
+
+### App work list
+
+- Relay client: route `skill_proposal` from the run stream (live and replay)
+  into the thread as its own item, and send `skill_proposal_decision` as a
+  request that ends on `skill_proposal_result`.
+- A card in the thread, drawn with chuk's components (docs/DESIGN.md: one
+  button family, no glow): a skill icon, the label "Save as skill?", the
+  `name`, the `description`, and the body collapsed behind "Show steps"
+  (rendered Markdown, expandable).
+- Three actions: **Edit** opens a form with name, description (counter
+  `n/300`) and body, then saves with the edits; **Save skill** sends `accept:
+  true` with no edits; **Dismiss** sends `accept: false`.
+- Validate in the form before sending (same name rule, 300 characters), but
+  treat the host's `errors` as the truth and show them under the fields.
+- After `saved`: the card shows "Saved as skill `<name>`" and no buttons;
+  refresh `SkillsSource` with `skills_list`. After `dismissed`: the card
+  collapses to "Not saved". A replayed row with `status` draws the same
+  decided state.
+- Strings in `strings_en.dart` / `strings_de.dart`.
+
 ## Agent status: model, spend, clock, sandbox (bead cowork-6ag)
 
 Python side IMPLEMENTED 2026-09-07 (`chuk_agents_executor.protocol.agent_status_payload`,

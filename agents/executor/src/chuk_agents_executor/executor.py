@@ -124,6 +124,11 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
+from chuk_agents_runtime.skill_proposals import (
+    SkillDraft,
+    SkillProposalStore,
+    decide_skill_proposal,
+)
 from chuk_agents_runtime.cost import (
     BUDGET_EXCEEDED,
     BUDGET_OK,
@@ -150,6 +155,8 @@ from chuk_agents_sandbox import BaseEnvironment, make_environment
 from .environment import SandboxEnvironment
 from .secrets import SecretsVault
 from .shell import JobWakeRouter
+from . import box_browser as _box_browser
+from .box_browser import TOOLS_FILE, BoxBrowser, box_of
 from .protocol import (
     ACTION_BROWSER_TAKEOVER,
     APPROVAL_AUTO,
@@ -194,6 +201,8 @@ from .protocol import (
     reasoning_payload,
     run_state_payload,
     secret_request_payload,
+    skill_proposal_payload,
+    skill_proposal_result_payload,
     skills_list_payload,
     stop_ack_payload,
     subagent_payload,
@@ -401,6 +410,39 @@ class StreamingModelClient:
         ):
             self._on_delta(response.text)
         return response
+
+
+class _SkillProposalSink:
+    """The ``propose_skill`` sink of one run (docs/WIRE_CONTRACT.md, "Skill
+    proposals"): store the draft, persist the ``skill_proposal`` frame in the
+    thread (so a replay shows the card), stream it live."""
+
+    def __init__(self, executor: "Executor", request_id: str, run: "_Run", session_key: str) -> None:
+        self._executor = executor
+        self._request_id = request_id
+        self._run = run
+        self._session_key = session_key
+
+    def submit(self, draft: SkillDraft, *, skills_root: str) -> dict:
+        executor = self._executor
+        store = SkillProposalStore(executor._db_path)
+        proposal_id = store.add(
+            draft,
+            session_key=self._session_key,
+            skills_root=skills_root,
+            run_id=self._run.run_id,
+        )
+        payload = skill_proposal_payload(
+            proposal_id=proposal_id,
+            agent_id=self._session_key,
+            name=draft.name,
+            description=draft.description,
+            body=draft.body,
+        )
+        mid = executor._persist_event(self._session_key, payload)
+        store.set_event_mid(proposal_id, mid)
+        executor._event(self._request_id, payload)
+        return {"ok": True, "proposal_id": proposal_id}
 
 
 @dataclass
@@ -1264,6 +1306,12 @@ class Executor:
         # that happens mid-task can ride the live event stream immediately.
         self._mcp_active_request: dict[str, str] = {}
         self._mcp_lock = threading.Lock()
+        # One sandbox browser server per box (container), shared by every
+        # session of the coworker that runs there, started on first use
+        # (bead chuk_chat-wrdv, :mod:`chuk_agents_executor.box_browser`).
+        # Each session's manager holds the box's object in place of its own
+        # connection. Guarded by ``_mcp_lock``.
+        self._box_browsers: dict[str, BoxBrowser] = {}
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -1739,6 +1787,12 @@ class Executor:
             # wants to know what it holds. Answered with one terminal
             # ``mcp_tools`` frame; the dial itself runs on its own thread.
             self._handle_mcp_probe(request_id, payload)
+            return
+        if kind == "skill_proposal_decision":
+            # The user saved (maybe edited) or dismissed a skill the agent
+            # proposed (docs/WIRE_CONTRACT.md, "Skill proposals"). Answered
+            # with one terminal ``skill_proposal_result``.
+            self._handle_skill_proposal_decision(request_id, payload)
             return
         if kind in ("skills_list", "skill_control"):
             # The user manages the skills of this host (docs/WIRE_CONTRACT.md,
@@ -2381,7 +2435,7 @@ class Executor:
             except Exception:  # noqa: BLE001
                 return
         payload = budget_warning_payload(
-            agent_id=run.session_key,
+            agent_id=over["agent"],
             session_key=run.session_key,
             level=level,
             spent_eur=over["spent"],
@@ -2636,6 +2690,53 @@ class Executor:
             self._terminal(request_id, error_payload(f"skills frame failed: {type(exc).__name__}"))
             return
         self._terminal(request_id, skills_list_payload(body["skills"], body["errors"]))
+
+    # -- skill proposals (docs/WIRE_CONTRACT.md, "Skill proposals") -------
+    def _skill_proposal_sink(self, request_id: str, run: "_Run", session_key: str):
+        """The ``propose_skill`` sink of one run, or ``None`` for a run that
+        must not offer one (the restricted run of an unknown mail)."""
+        if run.profile is not None:
+            return None
+        return _SkillProposalSink(self, request_id, run, session_key)
+
+    def _handle_skill_proposal_decision(self, request_id: str, payload: dict) -> None:
+        try:
+            store = SkillProposalStore(self._db_path)
+            result = decide_skill_proposal(
+                store,
+                proposal_id=payload.get("proposal_id"),
+                accept=payload.get("accept"),
+                name=payload.get("name"),
+                description=payload.get("description"),
+                body=payload.get("body"),
+                vault=(
+                    self._secret_scrubber.scrub_obj
+                    if self._secret_scrubber is not None
+                    else None
+                ),
+            )
+            # A decided card replays decided: the outcome is patched into the
+            # persisted ``skill_proposal`` row, like an approval's.
+            row = store.get(result["proposal_id"]) if result["proposal_id"] else None
+            if row is not None and row.get("event_mid") and row["status"] != "pending":
+                state = StateStore(self._db_path)
+                try:
+                    state.update_event(
+                        int(row["event_mid"]),
+                        {
+                            "status": row["status"],
+                            "decided_at": row.get("decided_at"),
+                            "saved_name": row["name"] if row["status"] == "saved" else None,
+                        },
+                    )
+                finally:
+                    state.close()
+        except Exception as exc:  # noqa: BLE001 — the serve loop must survive a bad store
+            self._terminal(
+                request_id, error_payload(f"skill proposal failed: {type(exc).__name__}")
+            )
+            return
+        self._terminal(request_id, skill_proposal_result_payload(result))
 
     def _handle_run_ack(self, payload: dict) -> None:
         run_id = payload.get("run_id")
@@ -3195,6 +3296,9 @@ class Executor:
             "no_display",
         )
         for candidate, box, manager in attempts:
+            # The box's browser starts on first use: bring it (and the
+            # display its launcher starts) up before the view looks.
+            self._launch_box_browser(box)
             up = self._vnc_up(candidate, box, secret)
             if up is None:
                 failure = (
@@ -4364,6 +4468,10 @@ class Executor:
             # (`check_fn`), so this stays out of the prompt on the browser-free
             # base image and costs nothing there.
             browser_model=browser_client,
+            # ``propose_skill`` (docs/WIRE_CONTRACT.md, "Skill proposals"):
+            # the draft is stored here and shown to the user as a card; only
+            # the app's ``skill_proposal_decision`` writes it to disk.
+            skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
         )
 
         # The wall-clock guard (Bead cowork-qxa): armed for the loop's lifetime
@@ -5011,6 +5119,9 @@ class Executor:
                 # when the provider issued a DIFFERENT refresh token: the
                 # back-channel that brings a rotated token home (mcp_credentials).
                 on_credentials_rotated=self._mcp_rotation_listener(session_key),
+                # The sandbox browser is the box's, not the session's: every
+                # session of the box gets the same shared connection.
+                connection_factory=self._mcp_connection_factory(session_key),
             )
             with self._mcp_lock:
                 self._mcp_entry_meta[session_key] = _entry_meta(mcp_servers)
@@ -5028,6 +5139,58 @@ class Executor:
             self._mcp_refresh_baseline[session_key] = baseline
             self._mcp_refresh_seen[session_key] = seen
         return manager
+
+    def _mcp_connection_factory(self, session_key: str):
+        """The ``connection_factory`` of a session's MCPManager: the box's
+        shared :class:`BoxBrowser` for the sandbox browser entry, a connection
+        of its own for every other server."""
+        from chuk_agents_runtime import MCPConnection
+
+        rotated = self._mcp_rotation_listener(session_key)
+
+        def factory(config):
+            shared = self._box_browser_for(config)
+            if shared is not None:
+                return shared
+            return MCPConnection(config, on_credentials_rotated=rotated)
+
+        return factory
+
+    def _box_browser_for(self, config) -> BoxBrowser | None:
+        """The one :class:`BoxBrowser` of the box this entry execs into, made
+        on first sight; ``None`` for any server that is not a sandbox browser.
+
+        Two servers on one profile is not a thing (``browser-mcp-owner.py``
+        refuses the second), so all sessions of a box share this one."""
+        box = box_of(config)
+        if box is None:
+            return None
+        tools_path = None
+        if self._db_path and self._db_path != ":memory:":
+            tools_path = os.path.join(os.path.dirname(os.path.abspath(self._db_path)), TOOLS_FILE)
+        with self._mcp_lock:
+            shared = self._box_browsers.get(box)
+            if shared is None:
+                # Shared by the process: another executor that serves the
+                # same box gets the same server.
+                shared = _box_browser.acquire(box, config, tools_path=tools_path)
+                self._box_browsers[box] = shared
+            else:
+                shared.adopt(config)
+        return shared
+
+    def _launch_box_browser(self, box: str) -> None:
+        """Start the box's shared browser server if it is not running, so the
+        live view has a display to serve. It starts on first use; opening the
+        view is a use. Off with ``AGENTS_BROWSER_AUTO_OPEN=0``. Never raises."""
+        with self._mcp_lock:
+            shared = self._box_browsers.get(box)
+        if shared is None or shared.launched or not self._may_open_browser():
+            return
+        try:
+            shared.ensure()
+        except Exception:  # noqa: BLE001 — the view reports what it finds
+            pass
 
     def _adopt_rotating_credentials(
         self, session_key: str, manager: MCPManager, mcp_servers: list[dict]
@@ -5306,9 +5469,18 @@ class Executor:
             self._mcp_entry_meta.clear()
             self._mcp_pending_credentials.clear()
             self._mcp_active_request.clear()
+            boxes = list(self._box_browsers.items())
+            self._box_browsers.clear()
         for manager in managers:
             try:
                 manager.close()
+            except Exception:  # noqa: BLE001 — shutdown must not raise
+                pass
+        # A session's manager only lets go of its box's browser; the server
+        # itself stops when the last executor of the box lets go.
+        for box, shared in boxes:
+            try:
+                _box_browser.release(box, shared)
             except Exception:  # noqa: BLE001 — shutdown must not raise
                 pass
 

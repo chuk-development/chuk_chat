@@ -226,6 +226,12 @@ from .secrets import (
     status_map,
     valid_name,
 )
+from .skill_proposals import (
+    SkillDraft,
+    SkillProposalStore,
+    decide_skill_proposal,
+    register_propose_skill_tool,
+)
 from .skills import (
     MAX_DESCRIPTION_CHARS,
     Skill,
@@ -459,6 +465,8 @@ __all__ = [
     "SkillError",
     "SkillLibrary",
     "SkillSettingsStore",
+    "SkillDraft",
+    "SkillProposalStore",
     "StateStore",
     "run_stamp_fields",
     "RunTimings",
@@ -517,6 +525,8 @@ __all__ = [
     "load_skills",
     "apply_skill_control",
     "skills_inventory",
+    "decide_skill_proposal",
+    "register_propose_skill_tool",
     "login",
     "make_child_runner",
     "make_read_document_handler",

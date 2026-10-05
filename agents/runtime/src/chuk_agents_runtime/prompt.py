@@ -158,6 +158,14 @@ job is to remove that friction, not to add to it.
   for something you want kept verbatim, and `memory_search` when a task may
   depend on a decision, a preference or a fact from before.
 
+# Saving a skill
+
+- After a long task of many steps that worked and that will likely come back,
+  or when the user says "remember how to do this", offer to save it as a skill:
+  call `propose_skill` (find it with `search_tools`). Write the steps that
+  worked, generalized: no secrets, no personal data, no one-off values. The
+  user decides. Never write into `skills/` yourself.
+
 # Safety
 
 - The workspace is the user's real machine. Change only what the task needs.
@@ -188,7 +196,7 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = prompt.replace("`tool_search`", "`search_tools`")
     if not prompt.startswith(_BUILT_IN_HEADS):
         return prompt
-    return _add_takeover(_add_deferred_tools(_add_research(prompt)))
+    return _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
 
 
 #: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts: today, and before
@@ -226,6 +234,15 @@ def _add_takeover(prompt: str) -> str:
     start = BASE_INSTRUCTIONS.index(_TAKEOVER_RULE)
     rule = BASE_INSTRUCTIONS[start : BASE_INSTRUCTIONS.index(_TAKEOVER_ANCHOR)]
     return prompt.replace(_TAKEOVER_ANCHOR, rule + _TAKEOVER_ANCHOR, 1)
+
+
+def _add_skill_proposals(prompt: str) -> str:
+    """Sessions seeded before ``propose_skill`` existed (bead chuk_chat-al2u)
+    get its section, in front of the section it stands in front of."""
+    if "`propose_skill`" in prompt or "\n# Safety\n" not in prompt:
+        return prompt
+    section = _base_section("Saving a skill", "Safety")
+    return prompt.replace("\n# Safety\n", "\n# Saving a skill\n" + section + "# Safety\n", 1)
 
 
 def _add_research(prompt: str) -> str:
