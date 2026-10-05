@@ -290,3 +290,41 @@ def test_two_executors_on_one_box_share_its_browser(tmp_path, fake_server):
         one._close_mcp_managers()
         two._close_mcp_managers()
     assert not fake_server.owner._alive
+
+
+def test_a_changed_schema_with_the_same_names_is_saved_again(tmp_path):
+    from chuk_agents_runtime import MCPServerConfig
+
+    path = tmp_path / "tools.json"
+    old = [MCPToolInfo(name=t, description=t, schema={"type": "string"}) for t in TOOLS]
+    box_mod.save_tools(str(path), old)
+    assert box_mod.load_tools(str(path))[0].schema == {"type": "string"}
+    config = MCPServerConfig(
+        name="playwright", command="docker", args=["exec", "-i", "cid-z", "agents-browser-mcp"]
+    )
+    shared = BoxBrowser(config, tools_path=str(path))
+    assert shared.ensure() is True
+    # The server's list has the same names but a new schema: the file follows.
+    assert [t.schema for t in box_mod.load_tools(str(path))] == [{"type": "object"}] * len(TOOLS)
+    assert box_mod.same_tools(shared.tools, box_mod.load_tools(str(path)))
+    assert not box_mod.same_tools(old, shared.tools)
+
+
+def test_save_tools_uses_its_own_temp_file_and_removes_it_on_failure(tmp_path, monkeypatch):
+    path = tmp_path / "tools.json"
+    tools = [MCPToolInfo(name="browser_tabs", description="d", schema={})]
+    seen: list[str] = []
+    real_replace = box_mod.os.replace
+
+    def failing_replace(src, dst):
+        seen.append(str(src))
+        raise OSError("rename failed")
+
+    monkeypatch.setattr(box_mod.os, "replace", failing_replace)
+    box_mod.save_tools(str(path), tools)  # best effort: no raise
+    assert seen and seen[0] != f"{path}.tmp"
+    assert f".{box_mod.os.getpid()}.{threading.get_ident()}." in seen[0]
+    assert list(tmp_path.iterdir()) == []
+    monkeypatch.setattr(box_mod.os, "replace", real_replace)
+    box_mod.save_tools(str(path), tools)
+    assert [p.name for p in tmp_path.iterdir()] == ["tools.json"]

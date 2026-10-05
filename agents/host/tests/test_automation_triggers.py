@@ -424,3 +424,43 @@ def test_a_no_change_run_is_not_announced(tmp_path):
     finally:
         host._roster.close()
         host._coworker_names.close()
+
+
+def test_create_and_update_answers_echo_the_apps_request_id(tmp_path):
+    from types import SimpleNamespace
+
+    from chuk_agents_executor.protocol import automation_saved_payload
+
+    host = _Host()
+    manager = _manager(tmp_path, host, _Clock())
+    fake = SimpleNamespace(
+        _automations=manager, _save_automation=LocalHost._save_automation, _log=lambda _m: None
+    )
+    created = LocalHost._on_automation_frame(
+        fake,
+        {
+            "type": "automation_create",
+            "session_key": "s1",
+            "kind": "schedule",
+            "spec": "every 1h",
+            "prompt": "x",
+            "request_id": "as-1",
+        },
+    )
+    saved = automation_saved_payload(created)
+    assert saved["ok"] is True and saved["request_id"] == "as-1"
+    assert "request_id" not in saved["automation"]
+    refused = automation_saved_payload(
+        LocalHost._on_automation_frame(
+            fake, {"type": "automation_update", "id": "nope", "prompt": "y", "request_id": "as-2"}
+        )
+    )
+    assert refused["ok"] is False and refused["request_id"] == "as-2"
+    # An app that sends no id gets the old answer, unchanged.
+    plain = automation_saved_payload(
+        LocalHost._on_automation_frame(
+            fake,
+            {"type": "automation_create", "session_key": "s1", "kind": "schedule", "spec": "every 2h", "prompt": "x"},
+        )
+    )
+    assert "request_id" not in plain and plain["ok"] is True

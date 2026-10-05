@@ -847,11 +847,20 @@ def automation_update_payload(*, automation_id: str, **changes: Any) -> dict[str
 def automation_saved_payload(result: dict[str, Any]) -> dict[str, Any]:
     """Host -> app: the terminal answer to ``automation_create`` /
     ``automation_update``: ``{"ok": true, "automation": {...}}`` or
-    ``{"ok": false, "error": "<text>"}``."""
+    ``{"ok": false, "error": "<text>"}``. A ``request_id`` the host copied
+    from the app's request is sent back at the top level (both outcomes), so
+    the app matches the answer to its request."""
+    request_id = result.get("request_id")
+    echo = {"request_id": request_id} if isinstance(request_id, str) and request_id else {}
     if result.get("ok"):
-        row = {k: v for k, v in result.items() if k != "ok"}
-        return {"type": "automation_saved", "ok": True, "automation": row}
-    return {"type": "automation_saved", "ok": False, "error": str(result.get("error") or "failed")}
+        row = {k: v for k, v in result.items() if k not in ("ok", "request_id")}
+        return {"type": "automation_saved", "ok": True, "automation": row, **echo}
+    return {
+        "type": "automation_saved",
+        "ok": False,
+        "error": str(result.get("error") or "failed"),
+        **echo,
+    }
 
 
 def automation_list_request_payload(session_key: str | None = None) -> dict[str, Any]:
