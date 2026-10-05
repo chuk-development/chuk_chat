@@ -331,3 +331,33 @@ def test_cancel_kills_the_group_and_writes_no_trigger(tmp_path):
     with pytest.raises(ProcessLookupError):
         os.killpg(pid, 0)
     assert jobs.cancel(job_id)["state"] == "already finished"
+
+
+def test_a_found_tmux_is_kept_for_the_next_task_of_the_sandbox():
+    """The manager is built per task; the probe was a ``docker exec`` before
+    every task's first model call (bead chuk_chat-5o8j). A "yes" is kept for
+    the environment, a "no" is asked again."""
+    env = RecordingEnv()
+    for task in ("t1", "t2", "t3"):
+        assert TerminalManager(env, task_id=task).tmux_available() is True
+    assert env.commands.count("command -v tmux >/dev/null 2>&1") == 1
+
+    missing = RecordingEnv(exit_code=1)
+    for task in ("t1", "t2"):
+        assert TerminalManager(missing, task_id=task).tmux_available() is False
+    assert missing.commands.count("command -v tmux >/dev/null 2>&1") == 2
+
+
+def test_a_sandbox_that_is_not_up_yet_is_not_probed_for_tmux():
+    """Probing would create the container before the first model call just to
+    ask (bead chuk_chat-5o8j). The images ship tmux: "yes" for now, nothing
+    cached, and the real probe once the box is up."""
+    env = RecordingEnv(exit_code=1)
+    env.box_live = False
+    manager = TerminalManager(env, task_id="t")
+    assert manager.tmux_available() is True
+    assert manager.tmux_available() is True
+    assert env.commands == []
+    env.box_live = True
+    assert manager.tmux_available() is False  # the real answer, once asked
+    assert env.commands.count("command -v tmux >/dev/null 2>&1") == 1

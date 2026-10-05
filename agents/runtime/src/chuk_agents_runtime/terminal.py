@@ -59,9 +59,10 @@ from __future__ import annotations
 import re
 import shlex
 import time
+import weakref
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Callable
+from typing import Any, Callable
 
 from .environment import Environment
 from .registry import ToolRegistry
@@ -244,6 +245,25 @@ class TerminalSession:
 # -- the manager -----------------------------------------------------------
 
 
+#: Environments whose sandbox is known to have tmux (see
+#: :meth:`TerminalManager.tmux_available`). Weak, so a dropped sandbox goes.
+_TMUX_ENVS: weakref.WeakSet[Any] = weakref.WeakSet()
+
+
+def _env_has_tmux(env: Any) -> bool:
+    try:
+        return env in _TMUX_ENVS
+    except TypeError:  # not weak-referenceable: no cache
+        return False
+
+
+def _remember_tmux(env: Any) -> None:
+    try:
+        _TMUX_ENVS.add(env)
+    except TypeError:
+        pass
+
+
 class TerminalManager:
     """Owns the interactive terminals of one task.
 
@@ -287,12 +307,33 @@ class TerminalManager:
 
     def tmux_available(self) -> bool:
         """Probe for tmux once and cache it. Used as the tool ``check_fn``, so
-        it runs on every prompt render — it must not shell out every time."""
+        it runs on every prompt render — it must not shell out every time.
+
+        A "yes" is also kept for the environment, so the next task of the same
+        sandbox does not ask again: the manager is built per task, and the
+        probe was a ``docker exec`` before the first model call of every task
+        (bead chuk_chat-5o8j). A "no" is asked again by the next task, so a
+        failed probe never hides the shell for good.
+
+        A sandbox that says its box is not up yet (``box_live`` False: a
+        container that does not exist until the first command) is not probed:
+        the probe would create the container before the first model call just
+        to ask. The sandbox images ship tmux, so the answer is "yes" for now and
+        the real probe runs on a later call, once the box is up. Nothing is
+        cached from that guess.
+        """
         if self._tmux_ok is None:
+            if _env_has_tmux(self.env):
+                self._tmux_ok = True
+                return True
+            if getattr(self.env, "box_live", True) is False:
+                return True
             result = self.env.run_bash(
                 "command -v tmux >/dev/null 2>&1", timeout=15, internal=True
             )
             self._tmux_ok = bool(result.ok)
+            if self._tmux_ok:
+                _remember_tmux(self.env)
         return self._tmux_ok
 
     # -- tmux plumbing -----------------------------------------------------

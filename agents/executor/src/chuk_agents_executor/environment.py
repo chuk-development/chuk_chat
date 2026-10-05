@@ -51,6 +51,16 @@ class SandboxEnvironment:
     def inner(self) -> BaseEnvironment:
         return self._inner
 
+    @property
+    def box_live(self) -> bool:
+        """False while a container sandbox has no container yet: the next
+        command would create it. Lets a probe that only asks about the box
+        wait until something real needs the box (bead chuk_chat-5o8j). A
+        sandbox without containers is always live."""
+        if not hasattr(self._inner, "container_id"):
+            return True
+        return getattr(self._inner, "container_id", None) is not None
+
     def cancel(self) -> None:
         """Abort the command in flight (§7.1). Forwards to the sandbox backend.
 

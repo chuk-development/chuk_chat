@@ -160,7 +160,7 @@ from chuk_agents_crypto import (
     AgentsFrameSealer,
 )
 from chuk_agents_manager import decode_frames, encode_frame, make_request, make_response
-from chuk_agents_sandbox import BaseEnvironment, make_environment
+from chuk_agents_sandbox import DEFAULT_USER, BaseEnvironment, make_environment
 
 from .environment import SandboxEnvironment
 from .secrets import SecretsVault
@@ -1158,6 +1158,20 @@ class _Stopwatch:
         return ", ".join(parts)
 
 
+def _pid1_start(stat: str) -> str | None:
+    """The start time of PID 1 from a ``/proc/1/stat`` line, or ``None``.
+
+    Field 22 (``starttime``, clock ticks after boot). Read after the closing
+    parenthesis of the command name, which may itself hold spaces. A restart of
+    the container gives a new PID 1 and so a new value.
+    """
+    try:
+        value = stat.rsplit(")", 1)[1].split()[19]
+    except (IndexError, AttributeError):
+        return None
+    return value if value.isdecimal() else None
+
+
 def _script_window_count(stdout: bytes | None) -> int | None:
     """The ``WINDOWS=<n>`` line ``agents-vnc-up`` prints, or ``None``.
 
@@ -1446,6 +1460,9 @@ class Executor:
         # Each session's manager holds the box's object in place of its own
         # connection. Guarded by ``_mcp_lock``.
         self._box_browsers: dict[str, BoxBrowser] = {}
+        #: The sandbox behind each box name an entry was built with, so the
+        #: box browser can bring that container up on first use.
+        self._box_envs: dict[str, BaseEnvironment] = {}
 
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -3398,22 +3415,94 @@ class Executor:
             return extension_mcp_entry(session_key)
         if not self._browser_mcp:
             return None
-        prep = self._vnc_exec_prefix(session_key)
-        if prep is None:
+        # No docker here: this runs before the first model call of every task,
+        # and a "hi" needs no box (bead chuk_chat-5o8j). The entry names the
+        # box by its fixed name; the box browser brings the container up and
+        # execs into the real one on the first browser call
+        # (:meth:`_prepare_box_launch`).
+        named = self._browser_box(session_key)
+        if named is None:
             return None
-        prefix, cid = prep  # [binary, "exec", "-i", ("-u", user)?]
-        from .browser_profile import retired_browser_hostname
-
-        retired = retired_browser_hostname(
-            prefix[0], cid, getattr(self._environment_for(session_key), "workspace", None)
-        )
-        if retired:
-            prefix += ["-e", f"AGENTS_BROWSER_RETIRED_HOSTNAME={retired}"]
+        prefix, box = named  # [binary, "exec", "-i", ("-u", user)?]
+        with self._mcp_lock:
+            self._box_envs[box] = self._environment_for(session_key)
         return {
             "name": "playwright",
             "command": prefix[0],
-            "args": [*prefix[1:], cid, "agents-browser-mcp"],
+            "args": [*prefix[1:], box, self.BROWSER_MCP_LAUNCHER],
         }
+
+    def _browser_box(
+        self, session_key: str | None = None
+    ) -> tuple[list[str], str] | None:
+        """`docker exec` prefix + box name for that agent's box, or None.
+
+        Like :meth:`_vnc_exec_prefix`, but nothing runs and nothing is created:
+        the box is named by its fixed container name (``container_name``), and
+        the exec user is the one the box already resolved, or the image's
+        ``agents`` user it will resolve to (the browser image has it). The
+        entry built from this stays the same before and after the container
+        exists, so the session's MCP manager is not rebuilt when it appears.
+        """
+        env = self._environment_for(session_key)
+        binary = getattr(getattr(env, "_cli", None), "binary", None)
+        if binary is None or not hasattr(env, "container_id"):
+            return None
+        box = getattr(env, "container_name", None) or getattr(env, "container_id", None)
+        if not box:
+            return None
+        user = getattr(env, "_user", None)
+        if not user and not getattr(env, "_user_resolved", True):
+            user = DEFAULT_USER
+        prefix = [str(binary), "exec", "-i"]
+        if user:
+            prefix += ["-u", str(user)]
+        return prefix, str(box)
+
+    def _prepare_box_launch(self, box: str, config):
+        """The box browser's ``prepare`` hook: bring the box up and return the
+        entry as the server is really started, or ``None``.
+
+        Runs on the first browser call (or when the live view opens), never at
+        task start. The container is created or started here, its real id and
+        exec user replace the name in the entry, and the retired-owner hint is
+        added. That hint costs a ``docker ps`` + ``docker inspect`` when the
+        profile has a lock; it is asked once per box life (same container, same
+        start, same lock) and reused after that.
+        """
+        from .browser_profile import cached_retired_browser_hostname
+
+        with self._mcp_lock:
+            env = self._box_envs.get(box)
+        if env is None:
+            return config  # not a box this executor named (a test double)
+        binary = getattr(getattr(env, "_cli", None), "binary", None) or config.command
+        try:
+            # Realize the container; the answer is when its PID 1 started,
+            # which tells a restarted box from the one we asked about before.
+            result = env.run_bash("cat /proc/1/stat", internal=True)
+        except Exception:  # noqa: BLE001 — no container, no browser; caller reports
+            return None
+        if result is not None and not result.ok:
+            return None
+        cid = getattr(env, "container_id", None)
+        if not cid:
+            return None
+        box_start = _pid1_start(getattr(result, "stdout", "") if result is not None else "")
+        prefix = [str(binary), "exec", "-i"]
+        user = getattr(env, "_user", None)
+        if user:
+            prefix += ["-u", str(user)]
+        retired = cached_retired_browser_hostname(
+            prefix[0], str(cid), getattr(env, "workspace", None), box_start
+        )
+        if retired:
+            prefix += ["-e", f"AGENTS_BROWSER_RETIRED_HOSTNAME={retired}"]
+        return dataclass_replace(
+            config,
+            command=prefix[0],
+            args=[*prefix[1:], str(cid), self.BROWSER_MCP_LAUNCHER],
+        )
 
     #: What the app is told while the nudge below brings the browser up. The
     #: wording keeps the "no page open" phrase the app matches on today; the
@@ -3453,6 +3542,8 @@ class Executor:
         with self._mcp_lock:
             exact = self._mcp_managers.get(str(session_key or ""))
             managers = list(self._mcp_managers.values())
+            boxes = dict(self._box_browsers)
+            envs = dict(self._box_envs)
         found: list[tuple[list[str], str, MCPManager]] = []
         for manager in managers:
             try:
@@ -3460,15 +3551,31 @@ class Executor:
                 if not names:
                     continue
                 for config in manager.configs:
-                    args = list(config.args or [])
                     if config.name not in names or not config.command:
                         continue
-                    # `docker exec -i [-u <user>] <cid> agents-browser-mcp`.
+                    args = list(config.args or [])
+                    # `docker exec -i [-u <user>] <box> agents-browser-mcp`.
                     # Anything else is the user's own browser over the
                     # extension bridge: no container, nothing to serve.
                     if len(args) < 2 or args[-1] != self.BROWSER_MCP_LAUNCHER:
                         continue
-                    found.append(([config.command, *args[:-2]], args[-2], manager))
+                    command = config.command
+                    # The entry names the box; what is served is the real
+                    # container: the one the running server execs into, or
+                    # the one the box's sandbox already has. A box with
+                    # neither may not exist yet, so nothing runs against it.
+                    shared = boxes.get(args[-2])
+                    if shared is not None:
+                        launched = shared.launched_config
+                        if launched is not None:
+                            command, args = launched.command, list(launched.args or [])
+                        else:
+                            env = envs.get(args[-2])
+                            cid = getattr(env, "container_id", None) if env is not None else None
+                            if not cid:
+                                continue
+                            args = [*args[:-2], str(cid), args[-1]]
+                    found.append(([command, *args[:-2]], args[-2], manager))
             except Exception:  # noqa: BLE001 — an odd manager is simply no target
                 continue
 
@@ -5564,15 +5671,21 @@ class Executor:
         tools_path = None
         if self._db_path and self._db_path != ":memory:":
             tools_path = os.path.join(os.path.dirname(os.path.abspath(self._db_path)), TOOLS_FILE)
+
+        def prepare(launch_config, _box=box):
+            return self._prepare_box_launch(_box, launch_config)
+
         with self._mcp_lock:
             shared = self._box_browsers.get(box)
             if shared is None:
                 # Shared by the process: another executor that serves the
                 # same box gets the same server.
-                shared = _box_browser.acquire(box, config, tools_path=tools_path)
+                shared = _box_browser.acquire(
+                    box, config, tools_path=tools_path, prepare=prepare
+                )
                 self._box_browsers[box] = shared
             else:
-                shared.adopt(config)
+                shared.adopt(config, prepare)
         return shared
 
     def _launch_box_browser(self, box: str) -> None:
@@ -5581,6 +5694,17 @@ class Executor:
         view is a use. Off with ``AGENTS_BROWSER_AUTO_OPEN=0``. Never raises."""
         with self._mcp_lock:
             shared = self._box_browsers.get(box)
+            if shared is None:
+                # The view names a box by its container id; the entry by its
+                # name. A box is the one whose server runs there, or the one
+                # whose environment has that container.
+                for name, candidate in self._box_browsers.items():
+                    env = self._box_envs.get(name)
+                    if candidate.target == box or (
+                        env is not None and getattr(env, "container_id", None) == box
+                    ):
+                        shared = candidate
+                        break
         if shared is None or shared.launched or not self._may_open_browser():
             return
         try:
