@@ -11,12 +11,13 @@ here with the commit.
 ## Summary for the owner (12:15)
 
 **Speed.** A "hi" to a coworker took 110-185 s and about €0.002. It now
-takes **2.8 s** warm and **€0.0004** (99.8 % of the prompt from the
-provider cache). The causes were: a context summary re-made before every
+takes **1.4-2.0 s** warm and **€0.00016** (prompt 20k -> 8k tokens, 99 %
+of it from the provider cache). The causes were: a context summary re-made before every
 turn (100-180 s), a tool list that changed between requests (no cache
 hits), five MCP connectors dialed one after another (8.5 s), a memory
-recall that waited for its 1.5 s timeout, and Chromium started at every
-task. All fixed and measured on the real host.
+recall that waited for its 1.5 s timeout, Chromium and docker work at
+every task start, and a summary window that slid every turn (cache misses).
+All fixed and measured on the real host.
 
 **Host.** Runs from this checkout now (`~/.local/bin/agents-host` ->
 `agents/host/.venv`, unit uses `agents-browser:latest`, `AGENTS_TRACE=1`
