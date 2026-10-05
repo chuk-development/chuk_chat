@@ -313,8 +313,10 @@ void main() {
         expect(add, findsOneWidget);
         await tester.tap(add);
         await tester.pumpAndSettle();
-        // The New agent dialog.
-        expect(find.text('New agent'), findsWidgets);
+        // The New agent picker: templates first, then the name step.
+        expect(find.text('Blank coworker'), findsOneWidget);
+        await tester.tap(find.text('Blank coworker'));
+        await tester.pumpAndSettle();
         expect(find.text('Create'), findsOneWidget);
       });
 
