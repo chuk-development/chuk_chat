@@ -3352,9 +3352,12 @@ class Executor:
             # The host owns the add-on's socket for its whole life and lets one
             # coworker hold the browser at a time (user_browser.py).
             broker = _user_browser.shared_broker()
-            if broker is not None and not getattr(self, "_user_browser_listening", False):
+            # Remember WHICH broker heard us: a broker that went away is
+            # rebuilt by ``shared_broker``, and the new one needs the listener
+            # too, or the user's Stop would no longer stop the run.
+            if broker is not None and getattr(self, "_user_browser_listening", None) is not broker:
                 broker.add_stop_listener(self._on_user_browser_stop)
-                self._user_browser_listening = True
+                self._user_browser_listening = broker
             return extension_mcp_entry(session_key)
         if not self._browser_mcp:
             return None
@@ -4632,10 +4635,15 @@ class Executor:
                         str(session_key), by_user=run.origin not in (*UNATTENDED_ORIGINS, "telegram")
                     )
         mcp_manager = self._session_mcp_manager(session_key, servers or None)
-        if mcp_manager is None and run.origin in ("automation", ORIGIN_MAIL, "telegram") and online:
+        if (
+            mcp_manager is None
+            and run.origin in ("automation", ORIGIN_MAIL, "telegram", _user_browser.PANEL_ORIGIN)
+            and online
+        ):
             # A fired automation carries no forwarded connectors (no frame,
-            # no app). It runs with the connectors the session already has,
-            # exactly as the last task of that session did.
+            # no app), and neither does a message from the browser panel. It
+            # runs with the connectors the session already has, exactly as the
+            # last task of that session did.
             with self._mcp_lock:
                 mcp_manager = self._mcp_managers.get(session_key)
         # Dial now, inside the ``mcp_ready`` phase: in parallel, and without

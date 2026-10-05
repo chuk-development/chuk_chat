@@ -7,6 +7,7 @@ import { run } from "./commands.js";
 import { fail } from "./protocol.js";
 import { StopGate } from "./gate.js";
 import { Transport } from "./transport.js";
+import { pageMessageFrame, panelNote } from "./strip.js";
 
 const driver = new Driver();
 const gate = new StopGate();
@@ -22,6 +23,11 @@ const transport = new Transport({
   onFrame: (frame) => {
     // The host clears a Stop when the user sends a new task.
     if (frame.type === "browser_resume" && gate.resume()) broadcast();
+    // A coworker took the browser: its name goes on the strip.
+    if (frame.type === "browser_holder") driver.setCoworker(frame.name).then(broadcast, () => {});
+    // The host's word on a panel message, and later the coworker's answer.
+    const note = panelNote(frame);
+    if (note) api.runtime.sendMessage({ channel: "agents", op: "reply", text: note }).catch(() => {});
   },
   onStatus: (next) => {
     status = next;
@@ -35,6 +41,7 @@ function snapshotStatus() {
     engine: driver.engineName,
     driving: driver.tabId,
     stopped: gate.stopped,
+    coworker: driver.coworker,
   };
 }
 
@@ -63,6 +70,8 @@ function hello() {
  */
 async function stopAll(reason) {
   const changed = gate.stop(reason);
+  // Stop never waits behind a command that hangs.
+  transport.clear();
   await driver.stop();
   if (changed) transport.send({ type: "browser_stop", reason: String(reason) });
   broadcast();
@@ -159,9 +168,12 @@ api.runtime.onMessage.addListener((msg, sender, reply) => {
     return true;
   }
   if (msg.op === "send") {
-    // The panel's own message to the coworker rides the same transport.
-    transport.send(msg.frame);
-    reply({ sent: transport.connected });
+    // The panel's own message to the coworker rides the same transport. Only
+    // the add-on's own pages may send, never a script in a page, and only a
+    // page_message: the panel is no way to forge a result or a Stop.
+    if (sender.tab) return undefined;
+    const frame = pageMessageFrame(msg.frame?.text, msg.frame?.context);
+    reply({ sent: Boolean(frame) && msg.frame?.type === "page_message" && transport.send(frame) });
     return true;
   }
   if (msg.op === "page_context_request") {

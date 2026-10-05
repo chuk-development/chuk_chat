@@ -61,7 +61,12 @@ from chuk_agents_executor import (
     resolve_backend_model_wiring,
 )
 from chuk_agents_executor.protocol import USER_BROWSER, browser_target
-from chuk_agents_executor.user_browser import shared_broker, shared_status
+from chuk_agents_executor.user_browser import (
+    PANEL_ORIGIN,
+    panel_prompt,
+    shared_broker,
+    shared_status,
+)
 
 from .account_store import AccountStore
 from .agent_mail import (
@@ -292,6 +297,13 @@ class LocalHost:
         # ack arrives on the same thread, the timer fires on its own.
         self._ack_pending: dict[str, threading.Timer] = {}
         self._ack_lock = threading.Lock()
+        # The user's own browser (docs/WIRE_CONTRACT.md, "The user's own
+        # browser"): the last ``user_browser_status`` pushed, so an unchanged
+        # status is not sent twice, and the runs a message from the add-on's
+        # panel started (run id -> coworker name), answered in the panel.
+        self._browser_lock = threading.Lock()
+        self._browser_last_push: dict | None = None
+        self._panel_runs: dict[str, str] = {}
         # The app-free kill switch (§7.1): `touch ~/.agents/ESTOP` stops the run.
         self._estop_path = str(self._workspace / "ESTOP")
 
@@ -701,7 +713,9 @@ class LocalHost:
         # browser"): listen for the add-on from the start, on local unix
         # sockets only, so the app's pairing status is live before a task.
         try:
-            shared_broker()
+            broker = shared_broker()
+            if broker is not None:
+                self._wire_user_browser(broker)
         except Exception as exc:  # noqa: BLE001 — never blocks startup
             self._log(f"user browser broker did not start: {type(exc).__name__}")
         # Long-term memory (§12): with `memory.backend = hindsight` one
@@ -1858,6 +1872,10 @@ class LocalHost:
                 channels.on_run_finished(summary)
             except Exception as exc:  # noqa: BLE001 — a channel must not break the hook
                 self._log(f"channel reply failed: {type(exc).__name__}")
+        # A message from the browser panel is answered in the panel. Only
+        # when the panel got it: else the usual toast / push.
+        if self._answer_browser_panel(summary):
+            return
         origin = summary.get("origin") if isinstance(summary, dict) else None
         outcome = summary.get("automation_result") if isinstance(summary, dict) else None
         if isinstance(outcome, dict) and outcome.get("changed") is False:
@@ -2261,10 +2279,115 @@ class LocalHost:
             self._log(f"user browser status failed: {type(exc).__name__}")
             return
         key = self._permission_key(str(payload.get("agent_id") or "")) or ""
-        holder = status.pop("holder", None)
-        status["in_use"] = holder is not None
-        status["in_use_by_this_agent"] = bool(holder) and holder == key
-        reply["user_browser"] = status
+        reply["user_browser"] = self._user_browser_block(status, key)
+
+    def _user_browser_block(self, status: dict, key: str | None = None) -> dict:
+        """The app's ``user_browser`` block from the broker's status.
+
+        The broker knows the holder by its session key (a thread key). The
+        app gets ``in_use_by`` with the app's agent id and the coworker's
+        name instead, never the thread key. ``in_use_by_this_agent`` (only
+        with ``key``, a permission key) maps the holder to its coworker
+        first: the host's own agent runs under ``host:<device id>`` or an old
+        thread key, while its permission key is the roster id."""
+        block = dict(status)
+        holder = block.pop("holder", None)
+        block["in_use"] = bool(holder)
+        if holder:
+            agent_id, name = self._call_agent(str(holder))
+            block["in_use_by"] = {"agent_id": agent_id, "name": name}
+        else:
+            block["in_use_by"] = None
+        if key is not None:
+            block["in_use_by_this_agent"] = bool(holder) and bool(key) and (
+                self._agent_key(str(holder)) == key
+            )
+        return block
+
+    # -- the user's own browser: push, names, the panel ---------------------
+
+    def _wire_user_browser(self, broker) -> None:
+        """Hook this host into the process's browser broker: status pushes to
+        the app, coworker names for the strip on the page, and the panel's
+        messages."""
+        broker.add_change_listener(self._on_user_browser_change)
+        broker.set_name_resolver(self._browser_coworker_name)
+        broker.set_page_message_handler(self._on_browser_page_message)
+
+    def _browser_coworker_name(self, session_key: str) -> str:
+        return self._call_agent(session_key)[1]
+
+    def _on_user_browser_change(self, _status: dict | None = None) -> None:
+        """The add-on came or went, a coworker took or left the browser, or
+        Stop flipped: push ``user_browser_status`` to the attached apps, once
+        per real change (docs/WIRE_CONTRACT.md, "The user's own browser")."""
+        try:
+            block = self._user_browser_block(shared_status())
+        except Exception as exc:  # noqa: BLE001 — a status never breaks the broker
+            self._log(f"user browser status failed: {type(exc).__name__}")
+            return
+        with self._browser_lock:
+            if block == self._browser_last_push:
+                return
+            self._browser_last_push = block
+        if not self._send_host_payload({"type": "user_browser_status", "user_browser": block}):
+            # Nobody heard it: the next change sends again, also when equal.
+            with self._browser_lock:
+                if self._browser_last_push is block:
+                    self._browser_last_push = None
+
+    def _on_browser_page_message(self, session: str | None, frame: dict) -> dict:
+        """The user typed in the add-on's side panel ("Talk to Agents about
+        this page"). It becomes a normal run of the coworker that holds the
+        browser, or last held it; with none, of this host's own coworker.
+        The task starts with ``[from your browser panel]`` and carries the
+        page as data. The answer goes back to the panel."""
+        prompt = panel_prompt(frame if isinstance(frame, dict) else {})
+        if prompt is None:
+            return {"ok": False, "error": "the message was empty."}
+        session_key = str(session) if session else host_agent_id(self._device_id)
+        _agent_id, name = self._call_agent(session_key)
+        try:
+            run_id = self._submit_channel_task(session_key, prompt, {"origin": PANEL_ORIGIN})
+        except Exception as exc:  # noqa: BLE001 — the panel gets a sentence
+            self._log(f"browser panel task failed: {type(exc).__name__}")
+            run_id = None
+        if not run_id:
+            return {
+                "ok": False,
+                "coworker": name,
+                "error": "the Agents host is not ready yet. Open the Agents app once, then try again.",
+            }
+        with self._browser_lock:
+            self._panel_runs[str(run_id)] = name
+        self._log(f"browser panel: message started run {run_id}")
+        return {"ok": True, "coworker": name}
+
+    def _answer_browser_panel(self, summary: dict) -> bool:
+        """Send the answer of a panel run to the panel. True when the add-on
+        took it."""
+        if not isinstance(summary, dict) or summary.get("origin") != PANEL_ORIGIN:
+            return False
+        run_id = str(summary.get("run_id") or "")
+        with self._browser_lock:
+            name = self._panel_runs.pop(run_id, None)
+        if name is None:
+            return False
+        answer = summary.get("final_answer")
+        if isinstance(answer, str) and answer.strip():
+            text = answer.strip()
+        elif str(summary.get("reason") or "") == "interrupted":
+            text = "Stopped."
+        elif summary.get("error"):
+            text = "The run failed. The details are in the Agents app."
+        else:
+            text = "Done, with no answer in words. The run is in the Agents app."
+        if len(text) > 8000:
+            text = text[:8000].rstrip() + " [...] The full answer is in the Agents app."
+        broker = shared_broker(start=False)
+        return broker is not None and broker.send_to_extension(
+            {"type": "page_reply", "coworker": name, "text": text}
+        )
 
     # -- the agent calls the user (docs/WIRE_CONTRACT.md) -----------------
 

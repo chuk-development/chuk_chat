@@ -1,1 +1,4 @@
 dist/
+# Never commit the private key behind the public `key` in manifest.chrome.json.
+*.pem
+*.crx

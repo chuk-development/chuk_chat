@@ -1,9 +1,12 @@
 import { api, hasDebugger, hasTabGroups } from "./api.js";
 
 const id = api.runtime.id;
-const flag = hasDebugger ? `--chrome-id ${id}` : "";
-document.getElementById("install").textContent =
-  `tools/agents-browser-bridge/install_host_manifest.py ${flag}`.trim();
+// The development build pins its id with the manifest `key`, and the
+// installer knows that id, so it needs no argument. Only a build with another
+// id (a store build) has to name it.
+const PINNED_CHROME_ID = "gchdfokldhdgbjmdcjmkeapcknekogmm";
+const flag = hasDebugger && id !== PINNED_CHROME_ID ? ` --chrome-id ${id}` : "";
+document.getElementById("install").textContent = `tools/agents-browser-bridge/install_host_manifest.py${flag}`;
 
 document.getElementById("caps").textContent = [
   `extension id   ${id}`,

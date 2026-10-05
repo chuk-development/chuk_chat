@@ -485,14 +485,25 @@ def error(request_id: Any, code: int, message: str) -> dict[str, Any]:
 
 
 def connect(argv: list[str]) -> Bridge | BrokerClient:
-    """A socket path on the command line = standalone on that path. Otherwise
-    the host's broker when it runs, else standalone on the default path."""
+    """A socket path on the command line = standalone on that path.
+
+    Started by a host (``AGENTS_BROWSER_SESSION`` set): always the host's
+    broker, also when its socket is missing right now. The client dials
+    lazily, so a broker that comes up later is found, and until then every
+    call fails with "not running its broker". It never falls back to binding
+    the bridge socket itself: that would take the browser around the
+    broker's rules (one holder, Stop, the session's name).
+
+    Without a session (a person running it by hand): the broker when it
+    runs, else standalone on the default path."""
     if argv:
         return Bridge(Path(argv[0]))
     broker = broker_socket_path()
     session = os.environ.get("AGENTS_BROWSER_SESSION", "")
+    if session:
+        return BrokerClient(broker, session)
     if broker.exists():
-        return BrokerClient(broker, session or "default")
+        return BrokerClient(broker, "default")
     return Bridge(bridge_socket_path())
 
 
