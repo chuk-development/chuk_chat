@@ -52,6 +52,7 @@ from .agent_mail import MailBinding, register_agent_mail_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
 from .takeover import TakeoverBackend, register_takeover_tool
+from .skill_proposals import SkillProposalSink, register_propose_skill_tool
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
 from .state import StateStore
 from .subagents import (
@@ -310,6 +311,7 @@ def build_runtime(
     policy: Any = None,
     action_approvals: ActionApprovals | None = None,
     light_context: bool = False,
+    skill_proposals: SkillProposalSink | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -631,6 +633,11 @@ def build_runtime(
         # until a skill exists, and a skill dropped into the workspace between
         # sessions then needs no re-wiring.
         register_skill_tool(registry, library)
+        # ``propose_skill`` (docs/WIRE_CONTRACT.md, "Skill proposals"): the
+        # agent drafts a skill from the task it just finished; the executor's
+        # sink shows it to the user, and only the user's accept writes it to
+        # ``root``. ``None`` (no host, no app to ask) registers nothing.
+        register_propose_skill_tool(registry, skill_proposals, skills_root=root)
 
     # The agent's permissions (docs/WIRE_CONTRACT.md, "Agent permissions"):
     # with the network switched off, the host fetches nothing for the agent

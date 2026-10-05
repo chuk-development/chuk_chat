@@ -913,6 +913,47 @@ def skills_list_request_payload() -> dict[str, Any]:
     return {"type": "skills_list"}
 
 
+def skill_proposal_payload(
+    *, proposal_id: str, agent_id: str, name: str, description: str, body: str
+) -> dict[str, Any]:
+    """Host -> app, on the run's stream and persisted for replay: the agent
+    offers to save a skill (docs/WIRE_CONTRACT.md, "Skill proposals")."""
+    return {
+        "type": "skill_proposal",
+        "proposal_id": proposal_id,
+        "agent_id": agent_id,
+        "name": name,
+        "description": description,
+        "body": body,
+    }
+
+
+def skill_proposal_decision_payload(
+    *,
+    proposal_id: str,
+    accept: bool,
+    name: str | None = None,
+    description: str | None = None,
+    body: str | None = None,
+) -> dict[str, Any]:
+    """App -> host: save (with the user's edits) or dismiss a proposal."""
+    payload: dict[str, Any] = {
+        "type": "skill_proposal_decision",
+        "proposal_id": proposal_id,
+        "accept": accept,
+    }
+    for key, value in (("name", name), ("description", description), ("body", body)):
+        if value is not None:
+            payload[key] = value
+    return payload
+
+
+def skill_proposal_result_payload(result: dict[str, Any]) -> dict[str, Any]:
+    """Host -> app: the terminal answer to a ``skill_proposal_decision``.
+    ``result`` comes from ``chuk_agents_runtime.skill_proposals.decide_skill_proposal``."""
+    return {"type": "skill_proposal_result", **result}
+
+
 def agent_status_request_payload(session_key: str = "default") -> dict[str, Any]:
     """App -> host: what is this coworker running on, what has it spent, how
     long has it been at it (docs/WIRE_CONTRACT.md, "Agent status")."""
