@@ -108,15 +108,17 @@ After parallel connectors with a cached tool list and non-blocking recall
 | first after restart (tool lists not cached yet) | 4 820 ms | 4 648 ms | 0 | 2 225 (2 141) ms | 0 | €0.0020 | 7.2 s |
 | warm | 306 ms | 171 ms | 0 | 2 384 (2 281) ms | 20 224 | €0.0004 | 2.8 s |
 
-A "hi" now takes 2.8 s; almost all of it is the model.
+At that point a "hi" took 2.8 s, almost all of it the model.
 
 After the docker-free pre-run and the summary-window fix (14:20):
 
 | turn | pre-run | tokens | cached | cost | wall |
 |------|--------:|-------:|-------:|-----:|-----:|
 | first after restart | 150 ms | 7 967 | 0 | €0.0008 | 3.0 s |
-| warm | 39 ms | 7 983 | 7 936 | €0.00016 | 1.4-2.0 s | cached_tokens is still 0: the
-provider does not cache the prompt yet (cowork-g85d is the next lever).
+| warm | 39 ms | 7 983 | 7 936 | €0.00016 | 1.4-2.0 s |
+
+The summary-window fix (chuk_chat-b61u) restored the cache hits and cut the
+prompt from 20.3k to 8.0k tokens. A warm "hi" now takes 1.4-2.0 s.
 
 ## Plan status (gap analysis, 03:55)
 
