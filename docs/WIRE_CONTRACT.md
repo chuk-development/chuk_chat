@@ -484,6 +484,17 @@ App side: `AgentsRelayHeartbeat.phase` / `.tool`
 view (`AgentsRunLedger.hostPhase`) and mapped in
 `lib/services/agents/agents_turn_phase.dart`.
 
+Host side (implemented): the beat is armed when the task is accepted
+(`Executor._enqueue_run`), so seq 1 goes out before the task is queued.
+`queued` means "behind another task of this executor": one worker serves every
+thread of the executor, so a task can also wait behind another thread's task.
+The loop reports `preparing` / `model` / `tool` through `phase_observer`
+(`chuk_agents_runtime.loop`); every round after a tool round goes `tool` ->
+`preparing` -> `model` again. `waiting_user` covers a here.now approval, a
+`secret_request` and a browser takeover, and the phase before the wait comes
+back when it closes. `AGENTS_HEARTBEAT_SECONDS=0` still turns every beat off,
+phase beats included. Every terminal of the request stops the beat first.
+
 ### `browser_view` `started` (extended, additive)
 
 ```json
@@ -941,6 +952,26 @@ The app then shows "<Coworker> continues" and removes the card with the run's
 next frame. Every other closing (timeout, stop) needs no frame: the card goes
 away when the run ends. `auto` joins `user` / `timeout` / `stopped` as a
 valid `decision_reason` in `protocol.py`.
+
+### Host side (implemented)
+
+`request_takeover` lives in `chuk_agents_runtime.takeover` (deferred behind
+`search_tools`; the research section of the prompt names it, and an unsearched
+call still runs). The executor binds it per run (`Executor._takeover_backend`)
+only when the agent's sandbox browser is the target and its Playwright server
+is connected. The wait is `Executor._request_takeover`: the pending-approval
+table, the persisted row and the `on_approval_pending` hook of a publish, with
+`AGENTS_TAKEOVER_WAIT_SECONDS` (default 900). The hook info carries
+`action`, `kind`, `site` and `session_key`; the host push says "<Coworker>
+needs you in the browser" / "Sign in to <site>." (`notification_text.takeover_text`).
+
+Auto-resolve reads the current tab every 2.5 s with `browser_tabs
+{"action": "list"}` on the session's Playwright MCP server (a read, never a
+navigation). It closes the wait when the URL has left the start URL for a URL
+that is not a sign-in or check page (`looks_like_auth_page`), read twice in a
+row. A login that leads to a 2FA page stays open; a modal login that never
+changes the URL needs the user's Done. The decided frame carries
+`decided_at` too.
 
 ### App side (implemented)
 

@@ -840,6 +840,16 @@ class LimitsConfig:
             "answer."
         ),
     )
+    takeover_wait_seconds: float = setting(
+        900.0,
+        env="AGENTS_TAKEOVER_WAIT_SECONDS",
+        doc=(
+            "How long a browser takeover (``request_takeover``: a login, a 2FA "
+            "code or a CAPTCHA the user does in the live browser view) waits "
+            "for the user before it gives up. Longer than an approval: a 2FA "
+            "code can take a while to arrive."
+        ),
+    )
     secret_request_timeout_seconds: float = setting(
         600.0,
         env="AGENTS_SECRET_REQUEST_TIMEOUT_SECONDS",
@@ -1112,6 +1122,11 @@ del _spec
 #: variable in the tree must be either a field above or an entry here, so the
 #: schema cannot quietly fall behind the code.
 NOT_CONFIG: dict[str, str] = {
+    "AGENTS_AGENT_MAIL": (
+        "A kill switch for tests and offline runs, not a setting. ``0`` keeps "
+        "the host from starting the agent mail service, so no test reaches "
+        "the mail API; the product never sets it."
+    ),
     "AGENTS_ACCOUNT_TOKEN": (
         "A secret. The paired account's bearer token; it belongs to the "
         "account store and the encrypted vault, never to a file a person "

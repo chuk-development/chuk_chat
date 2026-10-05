@@ -515,7 +515,19 @@ def _assert_ran(events: list[dict[str, Any]]) -> None:
     assert len(tools) == 1 and tools[0]["exit_code"] == 0
 
 
-def test_host_and_executor_frames_share_sequence_after_reconnect(tmp_path):
+def test_host_and_executor_frames_share_sequence_after_reconnect(tmp_path, monkeypatch):
+    # No heartbeats here. Since ``heartbeat.phase`` the executor sends its first
+    # beat the moment the task is accepted, and that frame reaches the app
+    # through the result pump while this host notice goes out directly: the
+    # notice, sealed later, can overtake the beat, and the beat is then a
+    # replayed sequence. The app drops such a frame silently (a lost beat is
+    # harmless; the next one carries the phase), this double raises. The
+    # ordering of the two paths is bead chuk_chat-9i41; this test is about the
+    # shared sequence itself.
+    import chuk_agents_executor.executor as executor_module
+
+    monkeypatch.setattr(executor_module, "HEARTBEAT_SECONDS", 0.0)
+
     def model():
         assert host._send_host_payload({"type": "delta", "text": "host notice"})
         return MockModelClient(["done"])

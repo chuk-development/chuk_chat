@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import threading
 
-from chuk_agents_runtime import MockModelClient, ModelResponse, StateStore
+from chuk_agents_runtime import MockModelClient, ModelResponse, StateStore, tool_call_response
 from chuk_agents_sandbox import LocalEnvironment
 
 from chuk_agents_executor import ControllerSession, Executor, heartbeat_payload, loopback_pair
@@ -83,6 +83,15 @@ def test_the_payload_round_trips_what_routes_it():
 
 def test_the_payload_leaves_out_what_it_was_not_told():
     assert heartbeat_payload() == {"type": "heartbeat", "seq": 0}
+
+
+def test_the_payload_carries_the_phase_and_the_tool_only_with_phase_tool():
+    beat = heartbeat_payload(
+        run_id="r", session_key="s", seq=2, phase="tool", tool="mcp__playwright__browser_click"
+    )
+    assert beat["phase"] == "tool" and beat["tool"] == "mcp__playwright__browser_click"
+    assert "tool" not in heartbeat_payload(seq=1, phase="model", tool="leftover")
+    assert heartbeat_payload(seq=1, phase="queued")["phase"] == "queued"
 
 
 # -- the emitter -------------------------------------------------------------
@@ -173,3 +182,130 @@ def test_the_default_comes_from_the_module_constant(tmp_path, monkeypatch):
     assert executor._heartbeat_seconds == 42.0
     executor2, _ = _rig(tmp_path, lambda: MockModelClient(["x"]), heartbeat_seconds=5)
     assert executor2._heartbeat_seconds == 5.0
+
+
+# -- heartbeat.phase (docs/WIRE_CONTRACT.md) -----------------------------------
+
+
+def _beats(events: list[dict]) -> list[dict]:
+    return [e for e in events if e["type"] == "heartbeat"]
+
+
+def _collect_until(controller, request_id, predicate, *, timeout=10.0) -> list[dict]:
+    """Accumulate the stream of ``request_id`` until ``predicate(events)``."""
+    events: list[dict] = []
+    for _ in range(int(timeout / 0.05)):
+        events.extend(controller.collect(request_id, timeout=0.05))
+        if predicate(events):
+            return events
+    raise AssertionError(f"condition never met: {events}")
+
+
+def test_the_first_beat_goes_out_at_once_with_its_phase(tmp_path):
+    """Long interval: every beat seen here is an accept or a phase change."""
+    model = _GatedModel()
+    executor, controller = _rig(tmp_path, lambda: model, heartbeat_seconds=60)
+    executor.start()
+    try:
+        request_id = controller.send_task("read a huge prompt", session_key="thread-1")
+        assert model.started.wait(10.0)
+        events = _collect_until(controller, request_id, lambda ev: len(_beats(ev)) >= 2)
+        # The very first frame of the run: seq 1, before any model token.
+        assert events[0]["type"] == "heartbeat" and events[0]["seq"] == 1
+        assert events[0]["phase"] == "preparing"
+        assert events[0]["session_key"] == "thread-1" and events[0]["run_id"]
+        beats = _beats(events)
+        assert [(b["seq"], b["phase"]) for b in beats[:2]] == [(1, "preparing"), (2, "model")]
+        assert all("tool" not in b for b in beats[:2])
+    finally:
+        model.release()
+        executor.stop()
+
+
+def test_a_task_behind_another_says_queued(tmp_path):
+    first = _GatedModel()
+    executor, controller = _rig(
+        tmp_path,
+        lambda: first if not first.started.is_set() else MockModelClient(["second answer"]),
+        heartbeat_seconds=60,
+    )
+    executor.start()
+    try:
+        a = controller.send_task("long one", session_key="thread-a")
+        assert first.started.wait(10.0)
+        b = controller.send_task("short one", session_key="thread-b")
+        queued = _collect_until(controller, b, lambda ev: len(_beats(ev)) >= 1)
+        assert queued[0]["phase"] == "queued" and queued[0]["seq"] == 1
+        assert queued[0]["session_key"] == "thread-b"
+        first.release()
+        assert controller.collect(a, timeout=15.0)[-1]["type"] == "done"
+        rest = _collect_until(
+            controller, b, lambda ev: bool(ev) and ev[-1]["type"] == "done", timeout=15.0
+        )
+        phases = [e["phase"] for e in _beats(queued + rest)]
+        assert phases[:3] == ["queued", "preparing", "model"]
+        # seq keeps counting across the queue and the run.
+        seqs = [e["seq"] for e in _beats(queued + rest)]
+        assert seqs == sorted(seqs) and seqs[0] == 1
+    finally:
+        first.release()
+        executor.stop()
+
+
+def test_a_running_tool_is_named(tmp_path):
+    executor, controller = _rig(
+        tmp_path,
+        lambda: MockModelClient([tool_call_response(("list_dir", {"path": "."})), "listed"]),
+        heartbeat_seconds=60,
+    )
+    executor.start()
+    try:
+        request_id = controller.send_task("what is here", session_key="thread-1")
+        events = controller.collect(request_id, timeout=15.0)
+    finally:
+        executor.stop()
+    assert events[-1]["type"] == "done"
+    phases = [(b["phase"], b.get("tool")) for b in _beats(events)]
+    assert phases == [
+        ("preparing", None),
+        ("model", None),
+        ("tool", "list_dir"),
+        ("preparing", None),
+        ("model", None),
+    ]
+
+
+def test_zero_sends_no_beat_at_all_not_even_a_phase(tmp_path):
+    executor, controller = _rig(
+        tmp_path,
+        lambda: MockModelClient([tool_call_response(("list_dir", {"path": "."})), "listed"]),
+        heartbeat_seconds=0,
+    )
+    executor.start()
+    try:
+        request_id = controller.send_task("what is here", session_key="thread-1")
+        events = controller.collect(request_id, timeout=15.0)
+    finally:
+        executor.stop()
+    assert events[-1]["type"] == "done"
+    assert _beats(events) == []
+
+
+def test_a_failed_task_stops_its_beat_before_the_error(tmp_path):
+    """A model that cannot be built fails the task outside the loop: the
+    error terminal still comes after every beat, and nothing after it."""
+
+    def broken():
+        raise RuntimeError("no model")
+
+    executor, controller = _rig(tmp_path, broken, heartbeat_seconds=0.05)
+    executor.start()
+    try:
+        request_id = controller.send_task("hi", session_key="thread-1")
+        events = controller.collect(request_id, timeout=15.0)
+        assert events[-1]["type"] == "error"
+        extra = controller.collect(request_id, timeout=0.3)
+        assert _beats(extra) == []
+        assert not executor._beats
+    finally:
+        executor.stop()

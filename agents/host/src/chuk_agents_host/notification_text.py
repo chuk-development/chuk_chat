@@ -9,7 +9,8 @@ name, so it is an implementation detail and must never reach a toast.
 
 This module owns both halves of that:
 
-* the wording (:func:`completion_text`, :func:`approval_text`) — pure, so the
+* the wording (:func:`completion_text`, :func:`approval_text`,
+  :func:`takeover_text`) — pure, so the
   tests read like the notification;
 * the lookup (:func:`resolve_labels`) — the automation's name from the
   ``automations`` table, the coworker's from ``coworker_names``, both
@@ -76,6 +77,23 @@ def completion_text(labels: RunLabels, *, failed: bool = False) -> tuple[str, st
 def approval_text(labels: RunLabels) -> tuple[str, str]:
     """Title and body for a run that is blocked on a publish approval."""
     return (f"{labels.who} needs your approval", "Open the app to allow or deny the publish.")
+
+
+def takeover_text(labels: RunLabels, *, kind: str = "", site: str = "") -> tuple[str, str]:
+    """Title and body for a run whose browser waits on the user for one step
+    (docs/WIRE_CONTRACT.md, "Browser takeover"): a login, a 2FA code, a
+    CAPTCHA. ``site`` is a host name the agent's browser is on, never page
+    content."""
+    where = _clip(site)
+    if kind == "two_factor":
+        body = f"Enter the code for {where}." if where else "Enter the code in the browser."
+    elif kind == "captcha":
+        body = f"Solve the check on {where}." if where else "Solve the check in the browser."
+    elif where:
+        body = f"Sign in to {where}."
+    else:
+        body = "Open the app to take over the browser."
+    return (f"{labels.who} needs you in the browser", body)
 
 
 def resolve_labels(

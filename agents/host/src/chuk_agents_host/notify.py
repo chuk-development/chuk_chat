@@ -41,7 +41,13 @@ import httpx
 from chuk_agents_runtime import StateStore, SupabaseSession
 
 from .desktop_notify import DesktopNotifier, set_labels_provider
-from .notification_text import RunLabels, approval_text, completion_text, resolve_labels
+from .notification_text import (
+    RunLabels,
+    approval_text,
+    completion_text,
+    resolve_labels,
+    takeover_text,
+)
 
 KIND_COMPLETED = "completed"
 KIND_FAILED = "failed"
@@ -142,9 +148,17 @@ class SupabaseNotifier:
         return True
 
     def notify_approval_pending(self, info: dict, *, session_key: str = "default") -> None:
-        """A run is blocked on a here.now publish approval nobody can see."""
+        """A run is blocked on an approval nobody can see: a here.now publish,
+        or a browser takeover (``action: browser_takeover``, a login, a 2FA
+        code or a CAPTCHA the user must do in the live view)."""
+        session_key = str(info.get("session_key") or session_key)
         labels = self.labels(session_key=session_key)
-        title, body = approval_text(labels)
+        if info.get("action") == "browser_takeover":
+            title, body = takeover_text(
+                labels, kind=str(info.get("kind") or ""), site=str(info.get("site") or "")
+            )
+        else:
+            title, body = approval_text(labels)
         record = self._record(
             run_id=str(info.get("request_id") or info.get("approval_id") or ""),
             agent_id=self._agent_id(),

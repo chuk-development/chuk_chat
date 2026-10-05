@@ -50,6 +50,7 @@ from .secrets import SecretsAccess
 from .agent_mail import MailBinding, register_agent_mail_tools
 from .automations import AutomationBackend, register_automation_tools
 from .calls import CallBackend, register_call_tools
+from .takeover import TakeoverBackend, register_takeover_tool
 from .skills import SkillLibrary, SkillSettingsStore, load_skills, register_skill_tool
 from .state import StateStore
 from .subagents import (
@@ -298,6 +299,8 @@ def build_runtime(
     secrets: SecretsAccess | None = None,
     automations: AutomationBackend | None = None,
     calls: CallBackend | None = None,
+    takeover: TakeoverBackend | None = None,
+    phase_observer: Callable[[str, str | None], None] | None = None,
     agent_mail: MailBinding | None = None,
     tool_allowlist: Sequence[str] | None = None,
     base_instructions: str | None = None,
@@ -384,6 +387,16 @@ def build_runtime(
     ``call_user`` / ``call_status``, bound to one session by the executor.
     Unset, neither tool exists.
 
+    ``takeover`` (docs/WIRE_CONTRACT.md, "Browser takeover") adds
+    ``request_takeover``, bound to one run by the executor; its ``available``
+    keeps the tool out of the prompt unless the agent's sandbox browser is the
+    target. Unset, the tool does not exist.
+
+    ``phase_observer`` (docs/WIRE_CONTRACT.md, ``heartbeat.phase``) is told
+    what the loop is doing: ``("preparing", None)`` while it builds the
+    context of a round, ``("model", None)`` when the request goes to the
+    model, ``("tool", <name>)`` when a tool starts. Unset, nothing is called.
+
     ``agent_mail`` (docs/AGENT_MAIL.md §7) adds the mail tools: the full set,
     or the restricted set of one mail. Unset, no mail tool exists.
     ``tool_allowlist`` keeps only the named tools, after every tool is in; the
@@ -457,6 +470,12 @@ def build_runtime(
     # automations above, so a fired reminder can ring too. ``None`` (no host,
     # no app to ring) registers nothing.
     register_call_tools(registry, calls)
+
+    # The browser takeover (docs/WIRE_CONTRACT.md, "Browser takeover"):
+    # ``request_takeover`` waits while the user does a login, a 2FA code or a
+    # CAPTCHA in the live view. Bound to ONE run by the executor; ``None``
+    # registers nothing. Deferred: it is rare, and the prompt names it.
+    register_takeover_tool(registry, takeover)
 
     if enable_terminal:
         # The interactive shell (docs/WIRE_CONTRACT.md, "Interactive shell and
@@ -744,6 +763,9 @@ def build_runtime(
         # Distinct from ``tool_observer`` above, the journaling registry's
         # per-dispatch summary hook a parent uses to watch its subagents.
         tool_event_observer=tool_event_observer,
+        # What the loop is doing right now, for the ``heartbeat.phase`` the
+        # executor sends (docs/WIRE_CONTRACT.md). Unset -> not wired.
+        phase_observer=phase_observer,
         # Store writes pass the secret scrubber too (docs/WIRE_CONTRACT.md,
         # "Secrets"): a key the USER typed into the prompt, or one a model
         # echoes, is masked before it becomes a row. The same filter the

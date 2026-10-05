@@ -132,6 +132,10 @@ class RegistryToolset(AbstractToolset[Any]):
     #: ``False`` offers no tools at all (a bare run that uses its persona
     #: verbatim).
     enabled: bool = True
+    #: Told the tool name right before a handler starts (the loop's
+    #: ``heartbeat.phase`` source). Runs on the worker thread; never raises
+    #: into the call.
+    on_tool_start: Callable[[str], None] | None = None
     #: Filled per call; the loop reads and clears it after each tool round.
     calls: dict[str, CallRecord] = field(default_factory=dict)
     toolset_id: str = "chuk-registry"
@@ -187,6 +191,11 @@ class RegistryToolset(AbstractToolset[Any]):
                 # Stopped before it began: the loop already wrote "not run".
                 record.done.set()
                 return INTERRUPTED_TOOL_RESULT
+            if self.on_tool_start is not None:
+                try:
+                    self.on_tool_start(name)
+                except Exception:  # noqa: BLE001 — a status sink never fails a call
+                    pass
             try:
                 result = registry.dispatch(name, args)
                 record.result = result

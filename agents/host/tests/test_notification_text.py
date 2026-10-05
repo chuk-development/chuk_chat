@@ -17,6 +17,7 @@ from chuk_agents_host.notification_text import (
     completion_text,
     default_roster_path,
     resolve_labels,
+    takeover_text,
 )
 
 CODENAME = "ivory-lynx"
@@ -62,6 +63,18 @@ def test_an_approval_names_the_coworker():
     title, body = approval_text(RunLabels(coworker="Nova"))
     assert title == "Nova needs your approval"
     assert "publish" in body
+
+
+def test_a_takeover_says_the_coworker_needs_you_in_the_browser():
+    title, body = takeover_text(RunLabels(coworker="Nova"), kind="login", site="github.com")
+    assert title == "Nova needs you in the browser"
+    assert body == "Sign in to github.com."
+    assert takeover_text(RunLabels(), kind="two_factor", site="github.com")[1] == (
+        "Enter the code for github.com."
+    )
+    assert "check" in takeover_text(RunLabels(), kind="captcha", site="google.com")[1]
+    assert takeover_text(RunLabels(), kind="other")[1] == "Open the app to take over the browser."
+    assert takeover_text(RunLabels())[0] == f"{DEFAULT_COWORKER} needs you in the browser"
 
 
 def test_a_long_automation_name_is_clipped_to_one_line():

@@ -27,6 +27,14 @@ from .executor import Executor, ModelFactory, ModelSelect, StreamingModelClient
 from .secrets import SecretsVault, clean_entries
 from .shell import JobWakeRouter, job_payload, wake_text
 from .protocol import (
+    ACTION_BROWSER_TAKEOVER,
+    APPROVAL_AUTO,
+    HEARTBEAT_PHASES,
+    PHASE_MODEL,
+    PHASE_PREPARING,
+    PHASE_QUEUED,
+    PHASE_TOOL,
+    PHASE_WAITING_USER,
     INBOUND_METHODS,
     MAX_FILE_BYTES,
     METHOD_EVENT,
@@ -69,6 +77,7 @@ from .protocol import (
     room_done_payload,
     secret_request_payload,
     secrets_payload,
+    takeover_request_payload,
     task_payload,
     tool_payload,
 )
@@ -120,6 +129,15 @@ __all__ = [
     "file_payload",
     "frame_to_b64",
     "heartbeat_payload",
+    "takeover_request_payload",
+    "ACTION_BROWSER_TAKEOVER",
+    "APPROVAL_AUTO",
+    "HEARTBEAT_PHASES",
+    "PHASE_MODEL",
+    "PHASE_PREPARING",
+    "PHASE_QUEUED",
+    "PHASE_TOOL",
+    "PHASE_WAITING_USER",
     "stop_ack_payload",
     "stop_payload",
     "subagent_payload",

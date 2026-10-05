@@ -270,3 +270,35 @@ def test_an_approval_names_the_coworker(tmp_path):
         notifier.close()
     row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
     assert row["title"] == "Nova needs your approval" and row["kind"] == "approval_needed"
+
+
+def test_a_takeover_gets_its_own_push_text(tmp_path):
+    cloud = _Cloud()
+    _named_coworker(tmp_path, "Nova")
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    try:
+        notifier.notify_approval_pending(
+            {
+                "request_id": "req-2",
+                "approval_id": "ap-2",
+                "action": "browser_takeover",
+                "kind": "login",
+                "site": "github.com",
+            }
+        )
+    finally:
+        notifier.close()
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    assert row["title"] == "Nova needs you in the browser"
+    assert row["body"] == "Sign in to github.com." and row["kind"] == "approval_needed"
+
+
+def test_an_approval_push_follows_the_thread_it_names(tmp_path):
+    cloud = _Cloud()
+    notifier = _notifier(tmp_path, cloud, _session(cloud))
+    try:
+        notifier.notify_approval_pending({"request_id": "req-3", "session_key": "agent:x"})
+    finally:
+        notifier.close()
+    row = cloud.bodies("/rest/v1/cowork_run_notifications")[0]
+    assert row["session_key"] == "agent:x"
