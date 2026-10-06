@@ -196,6 +196,7 @@ class ToolPromptBuilder {
           'web_crawl',
           'generate_image',
           'fetch_image',
+          'fetch_files',
           'view_chat_images',
           'search_chats',
           'notes',

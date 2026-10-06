@@ -129,6 +129,7 @@ const Set<String> _knownDirectXmlToolNames = <String>{
   'web_crawl',
   'generate_image',
   'fetch_image',
+  'fetch_files',
   'view_chat_images',
   'search_places',
   'search_restaurants',

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 import 'package:chuk_chat/models/client_tool.dart';
 import 'package:chuk_chat/platform_config.dart'
     show
@@ -36,6 +38,7 @@ const Map<String, ToolCategory> toolCategoryMap = {
   'web_crawl': ToolCategory.search,
   'generate_image': ToolCategory.search,
   'fetch_image': ToolCategory.search,
+  'fetch_files': ToolCategory.search,
   'view_chat_images': ToolCategory.search,
   'weather': ToolCategory.search,
   'search_places': ToolCategory.map,
@@ -905,6 +908,51 @@ final List<ClientTool> builtinTools = [
     },
     type: ToolType.builtin,
     tags: ['image', 'fetch', 'download', 'picture', 'url', 'bild', 'foto'],
+  ),
+  ClientTool(
+    name: 'fetch_files',
+    description:
+        'Download files from URLs and hand them to the user as one file card '
+        'with a download button (banners, PDFs, logos, documents). Several '
+        'files are packed into one ZIP. Use it when the user wants the files '
+        'themselves, not only links. Max 20 files, 15 MB each, 25 MB total.',
+    parameters: {
+      'type': 'object',
+      'properties': {
+        'files': {
+          'type': 'array',
+          'items': {'type': 'object'},
+          'description':
+              'list of {url, name} objects (url required: direct file URL; '
+              'name optional: file name inside the ZIP, e.g. "banner-300x250.png")',
+        },
+        'zip_name': {
+          'type': 'string',
+          'description':
+              'string (optional ZIP file name, e.g. "seitenwechsel-banner-2026.zip")',
+        },
+        'zip': {
+          'type': 'boolean',
+          'description':
+              'boolean (optional: true packs even a single file into a ZIP)',
+        },
+      },
+      'required': ['files'],
+      'additionalProperties': false,
+    },
+    type: ToolType.builtin,
+    tags: [
+      'file',
+      'files',
+      'download',
+      'zip',
+      'archive',
+      'banner',
+      'pdf',
+      'datei',
+      'dateien',
+      'herunterladen',
+    ],
   ),
   ClientTool(
     name: 'view_chat_images',
@@ -1806,6 +1854,11 @@ void registerBuiltinTools(ToolExecutor executor) {
     // capability checks at runtime via getPlatformCapabilities().
     // Bash sandbox is desktop-only.
     if (isMobile && tool.name == 'bash') {
+      continue;
+    }
+    // fetch_files needs its own sockets to keep downloads off the local
+    // network; the browser gives the web app none.
+    if (kIsWeb && tool.name == 'fetch_files') {
       continue;
     }
     executor.registerTool(tool);

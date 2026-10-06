@@ -402,6 +402,7 @@ class AppLocalizations {
   String get toolWebCrawl => _get('toolWebCrawl');
   String get toolImageGen => _get('toolImageGen');
   String get toolFetchImage => _get('toolFetchImage');
+  String get toolFetchFiles => _get('toolFetchFiles');
   String get toolViewChatImages => _get('toolViewChatImages');
   String get toolCryptoData => _get('toolCryptoData');
   String get toolWeather => _get('toolWeather');

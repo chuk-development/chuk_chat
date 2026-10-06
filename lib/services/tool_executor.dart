@@ -19,6 +19,7 @@ import 'package:chuk_chat/services/mcp/mcp_service.dart';
 import 'package:chuk_chat/services/tool_registry.dart' as registry;
 import 'package:chuk_chat/tool_handlers/calculate_handler.dart' as calculate;
 import 'package:chuk_chat/tool_handlers/find_tools_handler.dart' as find_tools;
+import 'package:chuk_chat/tool_handlers/file_fetch_tools.dart' as file_tools;
 import 'package:chuk_chat/tool_handlers/image_tools.dart' as image_tools;
 import 'package:chuk_chat/tool_handlers/map_tools.dart' as map_tools;
 import 'package:chuk_chat/tool_handlers/notes_tools.dart' as notes_tools;
@@ -90,6 +91,7 @@ class ToolExecutor {
     'web_crawl',
     'generate_image',
     'fetch_image',
+    'fetch_files',
     'view_chat_images',
     'weather',
     'search_places',
@@ -706,6 +708,8 @@ class ToolExecutor {
         );
       case 'fetch_image':
         return _wrapOutput(await image_tools.executeFetchImage(args));
+      case 'fetch_files':
+        return _fetchFilesResult(await file_tools.executeFetchFiles(args));
       case 'view_chat_images':
         return _wrapOutput(image_tools.executeViewChatImagesUnsupported());
 
@@ -1250,6 +1254,19 @@ class ToolExecutor {
       producedBlocks: mapTag == null
           ? const []
           : <ContentBlock>[ContentBlock.text(mapTag)],
+    );
+  }
+
+  /// The downloaded files answer twice as well: a summary for the model and
+  /// a file card for the reader, attached as a produced block.
+  ToolExecutionResult _fetchFilesResult(file_tools.FetchFilesResult result) {
+    final file = result.file;
+    return ToolExecutionResult(
+      output: result.text,
+      isError: result.isError,
+      producedBlocks: file == null
+          ? const []
+          : <ContentBlock>[ContentBlock.sandboxArtifact(file)],
     );
   }
 

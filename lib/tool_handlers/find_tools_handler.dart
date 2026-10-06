@@ -9,6 +9,7 @@ const companions = <String, List<String>>{
   'generate_image': ['web_search', 'fetch_image', 'view_chat_images'],
   'fetch_image': ['web_search', 'view_chat_images', 'web_crawl'],
   'view_chat_images': ['fetch_image'],
+  'fetch_files': ['web_search', 'web_crawl'],
   'search_restaurants': ['web_search', 'web_crawl', 'get_route', 'geocode'],
   'search_places': ['web_search', 'web_crawl', 'get_route', 'geocode'],
   'get_route': ['geocode'],

@@ -155,6 +155,7 @@ const Map<String, String> stringsPt = {
   'toolWebCrawl': 'Rastreamento Web',
   'toolImageGen': 'Geração de Imagem',
   'toolFetchImage': 'Buscar Imagem',
+  'toolFetchFiles': 'Buscar Arquivos',
   'toolViewChatImages': 'Ver Imagens do Chat',
   'toolCryptoData': 'Dados de Cripto',
   'toolWeather': 'Clima',

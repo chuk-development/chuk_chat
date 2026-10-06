@@ -480,6 +480,8 @@ class ToolCallHandler {
     'calculate',
     'generate_image',
     'fetch_image',
+    // Hands files over; the result is a delivery receipt, not facts.
+    'fetch_files',
     // `skill` returns an acknowledgement, not facts. Without this entry a
     // turn whose only tool call was `skill()` would trigger a full [VERIFY]
     // round-trip that fact-checks an ack against nothing.

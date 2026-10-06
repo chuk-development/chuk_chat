@@ -23,8 +23,10 @@ class PdfAttachmentService {
 
   static void clearCache() => ImageStorageService.clearCache();
 
+  /// Not [ImageStorageService.uploadEncryptedImage]: its compressor rejects
+  /// every non-image, so a PDF or a ZIP would never upload when signed in.
   static Future<String> upload(Uint8List bytes) =>
-      ImageStorageService.uploadEncryptedImage(bytes);
+      ImageStorageService.uploadEncryptedBytes(bytes);
 
   static Future<Uint8List> download(String path, {bool bypassCache = false}) =>
       ImageStorageService.downloadAndDecryptImage(

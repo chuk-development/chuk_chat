@@ -19,7 +19,11 @@ class SandboxArtifactPayload {
     required this.mime,
     required this.sizeBytes,
     this.document,
+    this.origin,
   });
+
+  /// [origin] of a file the chat itself fetched with the `fetch_files` tool.
+  static const String originFetchFiles = 'fetch_files';
 
   /// Storage path returned by [PdfAttachmentService.upload]:
   /// `"{user_id}/{uuid}.enc"`. The bucket-level content type is `image/png`
@@ -34,12 +38,18 @@ class SandboxArtifactPayload {
   /// so a new device can read it without this device's local blob cache.
   final Map<String, dynamic>? document;
 
+  /// Who wrote the block. Null for an Agents host delivery and for the old
+  /// code sandbox; [originFetchFiles] for a file the chat fetched itself.
+  /// A plain chuk_chat build opens only blocks with an origin.
+  final String? origin;
+
   Map<String, dynamic> toJson() => {
     'storagePath': storagePath,
     'filename': filename,
     'mime': mime,
     'sizeBytes': sizeBytes,
     if (document != null) 'document': document,
+    if (origin != null) 'origin': origin,
   };
 
   factory SandboxArtifactPayload.fromJson(Map<String, dynamic> j) =>
@@ -51,6 +61,7 @@ class SandboxArtifactPayload {
         document: j['document'] is Map
             ? Map<String, dynamic>.from(j['document'] as Map)
             : null,
+        origin: j['origin'] as String?,
       );
 }
 
@@ -126,7 +137,11 @@ class ContentBlock {
     final typeName = json['type'] as String? ?? 'text';
     // Old chats can still carry a file block from the removed code sandbox.
     // It cannot be opened any more; show a plain note in its place.
-    if (typeName == _legacySandboxArtifactType && !decodesFileBlocks) {
+    // A file the chat fetched itself (`fetch_files`) carries an origin and
+    // stays a file card in every build.
+    if (typeName == _legacySandboxArtifactType &&
+        !decodesFileBlocks &&
+        !_hasOrigin(json)) {
       return ContentBlock.text(legacySandboxArtifactNote(json));
     }
     final type = ContentBlockType.values.firstWhere(
@@ -157,6 +172,11 @@ class ContentBlock {
       toolCalls: toolCalls,
       sandboxArtifact: sandboxArtifact,
     );
+  }
+
+  static bool _hasOrigin(Map<String, dynamic> json) {
+    final raw = json['sandboxArtifact'];
+    return raw is Map && raw['origin'] is String;
   }
 
   /// The note shown in place of a legacy code-sandbox file block.
