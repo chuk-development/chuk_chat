@@ -374,6 +374,7 @@ const Map<String, String> stringsEn = {
   'toolWebCrawl': 'Web Crawl',
   'toolImageGen': 'Image Generation',
   'toolFetchImage': 'Fetch Image',
+  'toolFetchFiles': 'Fetch Files',
   'toolViewChatImages': 'View Chat Images',
   'toolCryptoData': 'Crypto Data',
   'toolWeather': 'Weather',

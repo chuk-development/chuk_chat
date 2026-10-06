@@ -160,6 +160,7 @@ const Map<String, String> stringsFr = {
   'toolWebCrawl': 'Exploration Web',
   'toolImageGen': 'Génération d\'images',
   'toolFetchImage': 'Récupérer une image',
+  'toolFetchFiles': 'Récupérer des fichiers',
   'toolViewChatImages': 'Voir les images du chat',
   'toolCryptoData': 'Données crypto',
   'toolWeather': 'Météo',

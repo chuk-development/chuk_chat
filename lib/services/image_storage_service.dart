@@ -7,6 +7,7 @@
 // store instead of throwing, which is what keeps the relay working offline.
 import 'dart:async';
 import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
@@ -110,17 +111,53 @@ class ImageStorageService {
     final compressedBytes = await ImageCompressionService.compressImage(
       imageBytes,
     );
+    return _encryptAndUpload(user.id, compressedBytes);
+  }
 
-    // Step 2: Encrypt the compressed image
-    final encryptedJson = await EncryptionService.encryptBytes(compressedBytes);
+  /// Uploads [bytes] encrypted, exactly as given: no image compression.
+  ///
+  /// For files that are not images (a PDF, a ZIP). [uploadEncryptedImage]
+  /// rejects those, because its compressor only accepts image formats.
+  /// Same storage, same `{user_id}/{uuid}.enc` path, same download.
+  ///
+  /// Without a signed-in user or a key the bytes go to the plain local blob
+  /// store, which is what an Agents host delivery needs. A caller holding
+  /// data the user did not hand over itself (a fetched file) passes
+  /// [requireEncryption] and gets an exception instead.
+  static Future<String> uploadEncryptedBytes(
+    Uint8List bytes, {
+    bool requireEncryption = false,
+  }) async {
+    final user = SupabaseService.auth.currentUser;
+    if (user == null || !EncryptionService.hasKey) {
+      if (requireEncryption) {
+        throw StateError('not signed in or no encryption key');
+      }
+      return uploadLocalBlob(bytes);
+    }
+    return _encryptAndUpload(user.id, bytes, suffix: fileSuffix);
+  }
+
+  /// Name ending of files stored by [uploadEncryptedBytes]. They share the
+  /// image folder, so [listUserImages] skips this ending: a ZIP or a PDF is
+  /// not a picture for the media library.
+  static const String fileSuffix = '.file.enc';
+
+  static Future<String> _encryptAndUpload(
+    String userId,
+    Uint8List bytes, {
+    String suffix = '.enc',
+  }) async {
+    // Step 2: Encrypt the bytes
+    final encryptedJson = await EncryptionService.encryptBytes(bytes);
     final encryptedBytes = Uint8List.fromList(utf8.encode(encryptedJson));
 
     // Step 3: Generate unique filename
     final fileId = _uuid.v4();
-    final fileName = '$fileId.enc'; // .enc extension for encrypted files
+    final fileName = '$fileId$suffix'; // .enc marks encrypted files
 
     // Step 4: Upload to Supabase Storage
-    final path = '${user.id}/$fileName';
+    final path = '$userId/$fileName';
 
     try {
       await SupabaseService.client.storage
@@ -140,7 +177,7 @@ class ImageStorageService {
       // instantly instead of re-downloading and decrypting the file we already
       // have in hand — this redundant Supabase round-trip + decrypt is the main
       // cause of the multi-second lag between "image generated" and display.
-      _imageCache.put(path, compressedBytes);
+      _imageCache.put(path, bytes);
 
       // Return the storage path (not the public URL, since files are encrypted)
       return path;
@@ -282,7 +319,10 @@ class ImageStorageService {
       }
 
       final List<StoredImage> images = files
-          .where((file) => file.name.endsWith('.enc'))
+          .where(
+            (file) =>
+                file.name.endsWith('.enc') && !file.name.endsWith(fileSuffix),
+          )
           .map(
             (file) => StoredImage(
               path: '${user.id}/${file.name}',
