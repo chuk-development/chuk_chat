@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/models/agents_room.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/platform_specific/mobile/mobile_chat_chrome.dart';
@@ -169,7 +170,7 @@ void main() {
       final Rect roster = rosterRect(tester);
       final Rect thread = tester.getRect(find.byType(AgentsThreadView));
       expect(roster.left, 0);
-      expect(roster.width, kDeskRosterDefault);
+      expect(roster.width, kDesktopSidebarWidth);
       // No hairline: the panel colour changes at the border, as at chuk's
       // sidebar.
       expect(thread.left, roster.right);
@@ -186,25 +187,14 @@ void main() {
       expect(find.byType(Drawer), findsNothing);
     });
 
-    testWidgets('dragging the roster border resizes it within 220–360', (
-      tester,
-    ) async {
+    testWidgets('the roster is exactly as wide as the chat sidebar and has '
+        'no resize handle', (tester) async {
       await pumpDesktop(tester);
-      final Finder handle = find.byKey(
-        const ValueKey<String>('desk-roster-resize'),
+      expect(rosterRect(tester).width, kDesktopSidebarWidth);
+      expect(
+        find.byKey(const ValueKey<String>('desk-roster-resize')),
+        findsNothing,
       );
-
-      await tester.drag(handle, const Offset(-60, 0));
-      await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterDefault - 60);
-
-      await tester.drag(handle, const Offset(400, 0));
-      await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterMax);
-
-      await tester.drag(handle, const Offset(-600, 0));
-      await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterMin);
     });
 
     testWidgets('dragging the details border resizes it within 300–420', (
@@ -267,14 +257,14 @@ void main() {
       expect(rightPane, findsNothing);
     });
 
-    testWidgets('pane widths and the open details pane come back on the next '
-        'launch', (tester) async {
+    testWidgets('the details width and the open details pane come back on '
+        'the next launch', (tester) async {
       await pumpDesktop(tester);
+      await shortcut(tester, LogicalKeyboardKey.period);
       await tester.drag(
-        find.byKey(const ValueKey<String>('desk-roster-resize')),
+        find.byKey(const ValueKey<String>('desk-details-resize')),
         const Offset(-40, 0),
       );
-      await shortcut(tester, LogicalKeyboardKey.period);
       // Written once the reader stops dragging.
       await tester.pump(const Duration(seconds: 1));
 
@@ -282,7 +272,7 @@ void main() {
       await pumpDesktop(tester);
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pumpAndSettle();
-      expect(rosterRect(tester).width, kDeskRosterDefault - 40);
+      expect(tester.getSize(rightPane).width, kDeskDetailsDefault + 40);
       expect(rightPane, findsOneWidget);
     });
   });
@@ -499,7 +489,7 @@ void main() {
       await shortcut(tester, LogicalKeyboardKey.keyB);
       expect(rosterRect(tester).width, kDeskRailWidth);
       await shortcut(tester, LogicalKeyboardKey.keyB);
-      expect(rosterRect(tester).width, kDeskRosterDefault);
+      expect(rosterRect(tester).width, kDesktopSidebarWidth);
     });
   });
 

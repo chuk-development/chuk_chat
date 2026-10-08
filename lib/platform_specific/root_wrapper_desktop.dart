@@ -41,8 +41,9 @@ class RootWrapperDesktop extends StatefulWidget {
 
   /// Floats at the top centre of the window, on the line of the chrome
   /// buttons, kept clear of the menu button, the copy button and any open
-  /// panel. The Agents build puts its Chat | Agents switch here. Null draws
-  /// nothing, as chuk_chat always has.
+  /// panel. The Agents build puts its Chat | Agents switch here. Shown in a
+  /// new chat only; an open chat hides it. Null draws nothing, as chuk_chat
+  /// always has.
   final Widget? headerCenter;
 
   /// Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
@@ -505,11 +506,17 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
 
     final double sidebarVisibleWidth = isCompactMode
         ? screenWidth * 0.85
-        : 320.0;
+        : kDesktopSidebarWidth;
     final double effectiveSidebarWidth = math.min(
       screenWidth,
       sidebarVisibleWidth,
     );
+
+    // The header slot (the Chat | Agents switch) belongs to a new chat only.
+    // An open chat gets chuk_chat's plain layout: no switch, no inset.
+    final Widget? headerCenter = _selectedChatId == null
+        ? widget.headerCenter
+        : null;
 
     final bool isWorkspacesFullPage = _activePanel == 'workspaces';
     final bool showContent =
@@ -562,7 +569,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
       // first message starts below the slot's line instead of under the
       // switch, as the Agents half's thread starts below its header row.
       // Without one, chuk_chat's layout is unchanged.
-      topInset: widget.headerCenter == null ? 0 : _kHeaderCenterBottom,
+      topInset: headerCenter == null ? 0 : _kHeaderCenterBottom,
     );
 
     // Right panel width for Projects/Media/Artifacts.
@@ -780,7 +787,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
           // the chrome buttons, across the whole window. Its free part starts
           // right of the menu button (or of the open sidebar) and ends left
           // of the copy button, the workspace panel and the side panel.
-          if (widget.headerCenter != null &&
+          if (headerCenter != null &&
               (!isCompactMode || !_isSidebarExpanded))
             Positioned(
               key: const ValueKey<String>('root-desktop-header-center'),
@@ -802,7 +809,7 @@ class _RootWrapperDesktopState extends State<RootWrapperDesktop> {
                     (_activeProjectId != null
                         ? _kWorkspacePanelReserve
                         : _kCopyButtonReserve),
-                child: widget.headerCenter!,
+                child: headerCenter,
               ),
             ),
         ],

@@ -3,7 +3,7 @@ part of 'messenger_shell.dart';
 /// The Agents desktop layout: chuk_chat's desktop with coworkers in it.
 ///
 ///  * **Left** — the roster, which is chuk's sidebar ([AgentRosterView]).
-///    Resizable between [kDeskRosterMin] and [kDeskRosterMax], folded to
+///    Exactly as wide as chuk's sidebar ([kDeskRosterWidth]), folded to
 ///    chuk's mini rail with Ctrl+B. A window too narrow for roster and thread
 ///    folds it on its own, without changing what the user chose.
 ///  * **Centre** — the thread (or an open room) on the page colour, under
@@ -37,7 +37,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
   // --- state -------------------------------------------------------------------
 
-  double _deskRosterWidth = kDeskRosterDefault;
   bool _deskRosterCollapsed = false;
   double _deskDetailsWidth = kDeskDetailsDefault;
 
@@ -74,14 +73,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       final Object? data = jsonDecode(raw);
       if (data is! Map) return;
       setState(() {
-        final Object? roster = data['roster'];
         final Object? details = data['details'];
-        if (roster is num) {
-          _deskRosterWidth = roster.toDouble().clamp(
-            kDeskRosterMin,
-            kDeskRosterMax,
-          );
-        }
         if (details is num) {
           _deskDetailsWidth = details.toDouble().clamp(
             kDeskDetailsMin,
@@ -104,7 +96,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
       await prefs.setString(
         _kDeskPanesKey,
         jsonEncode(<String, Object>{
-          'roster': _deskRosterWidth,
           'details': _deskDetailsWidth,
           'collapsed': _deskRosterCollapsed,
           'detailsOpen': _deskRightPane == 'details',
@@ -304,10 +295,7 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
 
     // The roster folds to the rail when the user asked, or when roster,
     // thread and right pane cannot share the window.
-    final double rosterFull = _deskRosterWidth.clamp(
-      kDeskRosterMin,
-      kDeskRosterMax,
-    );
+    const double rosterFull = kDeskRosterWidth;
     final bool rail =
         _deskRosterCollapsed || width - rosterFull - rightW < kDeskThreadMin;
     final double rosterW = rail ? kDeskRailWidth : rosterFull;
@@ -449,31 +437,6 @@ mixin _AgentsDesktopLayout on State<MessengerShell>, AgentsShellHost {
               ),
           ],
         ),
-        if (!rail)
-          Positioned(
-            key: const ValueKey<String>('desk-roster-resize'),
-            left: rosterW - 3,
-            top: 0,
-            bottom: 0,
-            // No line: the panel colour already changes at this border, as
-            // it does at chuk's sidebar.
-            child: PaneResizeHandle(
-              semanticLabel: 'Resize the agent list',
-              onDrag: (double dx) => setState(
-                // From the current width, not the one this frame was built
-                // with: several moves can land between two frames.
-                () => _deskRosterWidth =
-                    (_deskRosterWidth.clamp(kDeskRosterMin, kDeskRosterMax) +
-                            dx)
-                        .clamp(kDeskRosterMin, kDeskRosterMax),
-              ),
-              onDragEnd: _deskScheduleSave,
-              onDoubleTap: () {
-                setState(() => _deskRosterWidth = kDeskRosterDefault);
-                _deskScheduleSave();
-              },
-            ),
-          ),
         if (right != null)
           Positioned(
             key: const ValueKey<String>('desk-details-resize'),

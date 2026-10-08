@@ -38,8 +38,9 @@ class RootWrapperMobile extends StatefulWidget {
   final AppShellConfig config;
 
   /// Takes the place of the title pill in the floating top bar. The Agents
-  /// build puts its Chat | Agents switch here. Null draws the title pill, as
-  /// chuk_chat always has.
+  /// build puts its Chat | Agents switch here. Shown in a new chat only; an
+  /// open chat shows its title pill. Null draws the title pill, as chuk_chat
+  /// always has.
   final Widget? headerCenter;
 
   /// Reads the chat in view. Null reads `ChatStorageService.selectedChatId`,
@@ -515,13 +516,18 @@ class _RootWrapperMobileState extends State<RootWrapperMobile>
               // the room left after the two right-hand buttons, so a long
               // title ellipsises with "…" instead of pushing the buttons off
               // the right edge. Left-aligned so a short title hugs the menu.
-              // A [RootWrapperMobile.headerCenter] takes the pill's place.
+              // A [RootWrapperMobile.headerCenter] takes the pill's place in
+              // a new chat; an open chat shows its title pill.
               Expanded(
                 child: _isSidebarExpanded
                     ? const SizedBox.shrink()
                     : Align(
                         alignment: Alignment.centerLeft,
-                        child: widget.headerCenter ?? FloatingChromeSurface(
+                        child:
+                            (_selectedChatId == null
+                                ? widget.headerCenter
+                                : null) ??
+                            FloatingChromeSurface(
                           radius: 18,
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
