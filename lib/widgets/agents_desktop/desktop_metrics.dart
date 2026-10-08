@@ -7,11 +7,11 @@
 /// for — how far a pane may be dragged.
 library;
 
-/// Left pane (roster): resizable between these. The default is the width of
-/// chuk's desktop sidebar.
-const double kDeskRosterMin = 220;
-const double kDeskRosterMax = 360;
-const double kDeskRosterDefault = 320;
+import 'package:chuk_chat/constants.dart';
+
+/// Left pane (roster): exactly as wide as chuk's desktop sidebar, and not
+/// resizable, like that sidebar.
+const double kDeskRosterWidth = kDesktopSidebarWidth;
 
 /// The roster folded to chuk's mini rail.
 const double kDeskRailWidth = 56;

@@ -11,6 +11,7 @@ import '../support/icon_finder.dart';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:chuk_chat/constants.dart';
 import 'package:chuk_chat/widgets/agents_status_panel.dart';
 import 'package:chuk_chat/pages/messenger_shell.dart';
 import 'package:chuk_chat/pages/mobile_agents_settings_page.dart';
@@ -410,7 +411,7 @@ void main() {
       // The roster sits left of the thread, side by side.
       final Rect roster = tester.getRect(find.byType(AgentRosterView));
       final Rect thread = tester.getRect(find.byType(AgentsThreadView));
-      expect(roster.width, kDeskRosterDefault);
+      expect(roster.width, kDesktopSidebarWidth);
       expect(thread.left, roster.right);
       expect(thread.right, 1200);
       // Nothing sits on top of the chat: the connection is not the user's job.
@@ -511,7 +512,7 @@ void main() {
     expect(find.byType(BrandWordmark).hitTestable(), findsOneWidget);
     expect(
       tester.getSize(find.byType(AgentRosterView)).width,
-      kDeskRosterDefault,
+      kDesktopSidebarWidth,
     );
   });
 

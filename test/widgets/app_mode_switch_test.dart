@@ -863,6 +863,28 @@ void main() {
       expect(tester.takeException(), isNull);
       await drain(tester);
     });
+    testWidgets('an open chat shows its title pill in place of the header '
+        'slot', (tester) async {
+      tester.view.physicalSize = kPhone;
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        testApp(
+          RootWrapperMobile(
+            config: testShellConfig(),
+            headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+            selectedChatIdReader: () => 'open-chat',
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(find.byType(AppModeSwitch), findsNothing);
+      // The chat has no stored title, so the pill shows the wordmark.
+      expect(wordmarksOnScreen(tester), 1);
+      expect(tester.takeException(), isNull);
+      await drain(tester);
+    });
   });
 
   group('RootWrapperDesktop', () {
@@ -926,6 +948,42 @@ void main() {
         find.byKey(kSidebarAddComputerKey, skipOffstage: false),
         findsNothing,
       );
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump(const Duration(seconds: 9));
+    });
+
+    testWidgets('an open chat hides the header slot; a new chat shows it', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(1200, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      String? chatId = 'open-chat';
+      final GlobalKey<State<StatefulWidget>> wrapperKey = GlobalKey();
+      await tester.pumpWidget(
+        testApp(
+          RootWrapperDesktop(
+            key: wrapperKey,
+            config: testShellConfig(),
+            headerCenter: AppModeSwitch(mode: AppMode.chat, onChanged: (_) {}),
+            selectedChatIdReader: () => chatId,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(find.byType(AppModeSwitch), findsNothing);
+      expect(
+        find.byKey(const ValueKey<String>('root-desktop-header-center')),
+        findsNothing,
+      );
+
+      chatId = null;
+      // ignore: invalid_use_of_protected_member
+      wrapperKey.currentState!.setState(() {});
+      await tester.pump();
+      expect(find.byType(AppModeSwitch), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
       await tester.pumpWidget(const SizedBox.shrink());
       await tester.pump(const Duration(seconds: 9));
     });

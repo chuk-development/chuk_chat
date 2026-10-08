@@ -247,6 +247,8 @@ mixin AgentsShellHost on State<MessengerShell> {
     // names — so the restore is not one shot at startup: it watches the roster
     // and lands as soon as its target exists (bead cowork-8yb).
     _roster.addListener(_onRosterChanged);
+    // The window title names the coworker of an Agents thread in view.
+    WindowTitleService.nameResolver = _windowTitleNameFor;
     // A thread whose history loads (cache, cloud, host replay) tells the roster
     // when its coworker was last active, if nothing has yet.
     _historySub = ChatStorageState.changes.listen(_seedActivityFromHistory);
@@ -418,6 +420,14 @@ mixin AgentsShellHost on State<MessengerShell> {
     if (!mounted) return;
     _seedActivityFromHistory();
     _autoSelect();
+    // A coworker's name can arrive or change after its thread is in view.
+    WindowTitleService.refresh();
+  }
+
+  /// The coworker's name for an Agents thread, or null for any other chat.
+  String? _windowTitleNameFor(String chatId) {
+    final String? agentId = _agentIdForThread(chatId);
+    return agentId == null ? null : _roster.byId(agentId)?.name;
   }
 
   StreamSubscription<String?>? _historySub;
@@ -505,6 +515,9 @@ mixin AgentsShellHost on State<MessengerShell> {
     _hostLifecycle?.dispose();
     _flushPendingWrites();
     _roster.removeListener(_onRosterChanged);
+    if (WindowTitleService.nameResolver == _windowTitleNameFor) {
+      WindowTitleService.nameResolver = null;
+    }
     _historySub?.cancel();
     NotificationRouter.instance.pending.removeListener(_onNotificationTap);
     _hostInboundSub?.cancel();

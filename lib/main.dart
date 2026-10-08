@@ -65,6 +65,7 @@ import 'package:chuk_chat/services/agents/agents_chat_core.dart';
 import 'package:chuk_chat/services/supabase_service.dart';
 import 'package:chuk_chat/services/system_tray_service.dart';
 import 'package:chuk_chat/services/window_close_service.dart';
+import 'package:chuk_chat/services/window_title_service.dart';
 import 'package:chuk_chat/widgets/chat_maintenance_gate.dart';
 import 'package:chuk_chat/widgets/app_lifecycle_observer.dart';
 import 'package:chuk_chat/widgets/auth_gate.dart';
@@ -192,6 +193,8 @@ Future<void> main() async {
 
   // Ensure clean window close on Linux desktop (see window_close_service_io.dart).
   unawaited(initializeWindowCloseHandler());
+  // The window title follows the chat in view ("Chuk Chat - <chat>").
+  WindowTitleService.start();
 
   // Non-critical startup work can run in background.
   unawaited(

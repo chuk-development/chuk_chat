@@ -559,6 +559,11 @@ Color _shiftHue(Color c, double degrees) {
 
 /* ---------- RESPONSIVE BREAKPOINTS ---------- */
 const double kCompactModeBreakpoint = 600.0;
+
+/// Width of the open desktop sidebar: chuk's chat list and the Agents roster.
+/// Both halves use this one number, so the switch between them does not move
+/// the content.
+const double kDesktopSidebarWidth = 320.0;
 const double kTabletBreakpoint = 800.0; // NEW: Define tablet breakpoint
 
 /* ---------- MAIN UI LAYOUT CONSTANTS ---------- */

@@ -171,9 +171,10 @@ static void my_application_activate(GApplication* application) {
     gtk_header_bar_set_title(header_bar, "Chuk Chat");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
-  } else {
-    gtk_window_set_title(window, "Chuk Chat");
   }
+  // Always set the window title too: the app renames the window to the chat
+  // in view (window_manager's setTitle), and a header bar follows it.
+  gtk_window_set_title(window, "Chuk Chat");
 
   gtk_window_set_default_size(window, 1280, 720);
   // Show the shell window immediately so app launch feels responsive even if
