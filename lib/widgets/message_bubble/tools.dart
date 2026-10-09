@@ -129,22 +129,27 @@ extension _MessageBubbleTools on _MessageBubbleState {
   /// answered and on which provider is not what anyone is reading an answer
   /// for; it appears only when the reader has asked for it in settings, and
   /// the tokens-per-second the same way.
-  Widget _buildMetaFooter() {
-    final theme = Theme.of(context);
-    final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+  /// What the quiet meta line says: the time the turn took, and the model,
+  /// provider and speed when the reader asked for them. Empty means no line.
+  List<String> _metaFooterParts() {
     final Duration? worked = widget.workedFor;
     // How long the answer took is always printed when it is known, including
     // a turn that took under a second: the reader asked for the time, not for
     // the time when it happens to be round.
-    final bool hasDuration = worked != null;
-
-    final parts = <String>[
-      if (hasDuration) formatAgentDuration(worked),
+    return <String>[
+      if (worked != null) formatAgentDuration(worked),
       if (_hasModelInfo) widget.modelLabel ?? '',
       if (_hasModelInfo && (widget.modelProvider?.isNotEmpty ?? false))
         widget.modelProvider!,
       if (_shouldShowTps) '${widget.tps!.toStringAsFixed(1)} tok/s',
     ].where((part) => part.trim().isNotEmpty).toList();
+  }
+
+  Widget _buildMetaFooter() {
+    final theme = Theme.of(context);
+    final Color muted = theme.colorScheme.onSurface.withValues(alpha: 0.55);
+    final bool hasDuration = widget.workedFor != null;
+    final List<String> parts = _metaFooterParts();
 
     if (parts.isEmpty) return const SizedBox.shrink();
 

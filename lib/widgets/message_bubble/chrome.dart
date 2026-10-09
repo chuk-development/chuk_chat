@@ -13,12 +13,24 @@ extension _MessageBubbleChrome on _MessageBubbleState {
   /// into one tap-to-open list — the timeline still shows each source at the
   /// step that found it, but a reader who just wants "where did this come
   /// from" gets one place to look.
-  Widget _buildBottomBar(Color iconFgColor, bool hasActions) {
+  ///
+  /// [topGap] is air above the bar, added only when there is a bar to draw.
+  Widget _buildBottomBar(
+    Color iconFgColor,
+    bool hasActions, {
+    double topGap = 0,
+  }) {
     final sources = _allSources(_collectAllToolCalls());
     final bool hasSources = sources.isNotEmpty;
     final bool hasPager = widget.variantCount > 1;
     if (!hasActions && !hasSources && !hasPager) {
       return const SizedBox.shrink();
+    }
+    if (topGap > 0) {
+      return Padding(
+        padding: EdgeInsets.only(top: topGap),
+        child: _buildBottomBar(iconFgColor, hasActions),
+      );
     }
 
     // The left cluster (actions + pager) can grow with many actions and
