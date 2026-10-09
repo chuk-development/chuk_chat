@@ -40,11 +40,11 @@ import 'package:chuk_chat/services/skills/skill_proposal.dart'; // skill proposa
 import 'package:chuk_chat/services/agents/agents_approved_devices.dart';
 import 'package:chuk_chat/services/agents/agents_frame.dart';
 import 'package:chuk_chat/services/agents/agents_frame_codec.dart';
+import 'package:chuk_chat/services/agents/agents_frame_fragments.dart';
 import 'package:chuk_chat/services/agents/agents_pairing.dart';
 import 'package:chuk_chat/services/agents/agents_pairing_store.dart';
 import 'package:chuk_chat/services/agents/agents_reconnect.dart';
 import 'package:chuk_chat/services/agents/agents_run_cost.dart'; // F1: cost
-import 'package:chuk_chat/services/agents/agents_run_changes.dart'; // run changes
 import 'package:chuk_chat/services/agents/agents_controller_session.dart';
 import 'package:chuk_chat/services/agents/agents_cloud_relay.dart'
     show AgentsCloudRelayAddress;
@@ -564,17 +564,7 @@ class AgentsRelayDone extends AgentsRelayInbound {
     // ── F1: approvals + cost ──
     this.cost,
     // ── end F1 ──
-    // ── run changes ──
-    this.changes,
-    // ── end run changes ──
   });
-
-  // ── run changes ──
-  /// What the run changed in the workspace (docs/WIRE_CONTRACT.md, "What did
-  /// it do: run changes and undo"), live and replayed. Null on an old host,
-  /// for a run that changed no file, and for a workspace without git.
-  final AgentsRunChangesSummary? changes;
-  // ── end run changes ──
 
   // ── F1: approvals + cost ──
   /// What the run cost (docs/WIRE_CONTRACT.md, "Cost per run and weekly
@@ -1897,13 +1887,6 @@ class AgentsRelayClient
   static void Function(Map<String, dynamic> payload)? userBrowserStatusSink;
   // ── end own browser ──
 
-  // ── run changes ──
-  /// Where the host's `run_changes` and `run_undo_result` answers go.
-  /// `AgentsRunChangesService` sets it; null drops the frame. A sink like
-  /// [agentPermissionsSink]: only the changes sheet reads these frames.
-  static void Function(Map<String, dynamic> payload)? runChangesSink;
-  // ── end run changes ──
-
   /// What the paired host said it can do beyond the base contract
   /// (`host_route.capabilities`). Empty until it says; a host from before the
   /// field never does, so a feature gated on it stays off there.
@@ -2114,6 +2097,18 @@ class AgentsRelayClient
 
   /// Serialises inbound pairing steps so awaited transitions never overlap.
   Future<void> _pairingQueue = Future<void>.value();
+
+  /// Serialises inbound sealed frames (bead chuk_chat-zhhd). Opening a frame
+  /// awaits signature and decryption, and a large frame takes longer than a
+  /// small one. Opened side by side, a small frame could commit its sequence
+  /// number first, and the replay guard then drops the large frame before it
+  /// (a `file`, or a part of one) as replayed. One at a time keeps the order
+  /// the host sent.
+  Future<void> _frameQueue = Future<void>.value();
+
+  /// Joins the parts of a payload the host split because it was too large for
+  /// one relay frame (docs/WIRE_CONTRACT.md, "Fragments").
+  final AgentsFragmentAssembler _fragments = AgentsFragmentAssembler();
   AgentsFrameSealer? _sealer;
   AgentsFrameOpener? _opener;
   bool _disposed = false;
@@ -3170,7 +3165,7 @@ class AgentsRelayClient
       if (type == 'controller_frame') {
         if (controller.authenticated &&
             env['connection'] == controller.connection) {
-          unawaited(_handleFrame(env));
+          _enqueueFrame(env);
         }
       } else if (type == 'controller_challenge' || type == 'controller_ready') {
         _pairingQueue = _pairingQueue
@@ -3188,7 +3183,7 @@ class AgentsRelayClient
       return;
     }
     if (type == 'frame') {
-      unawaited(_handleFrame(env));
+      _enqueueFrame(env);
       return;
     }
     if (type == 'pairing' && !(_state.value.isPaired)) {
@@ -3277,6 +3272,17 @@ class AgentsRelayClient
     );
   }
 
+  void _enqueueFrame(Map<String, dynamic> env) {
+    _frameQueue = _frameQueue
+        .then((_) => _handleFrame(env))
+        .catchError((Object error) {
+          // One bad frame must never stop the frames after it.
+          if (kDebugMode) {
+            debugPrint('[agents-relay] frame failed: ${error.runtimeType}');
+          }
+        });
+  }
+
   Future<void> _handleFrame(Map<String, dynamic> env) async {
     final opener = _opener;
     if (opener == null) return;
@@ -3297,14 +3303,18 @@ class AgentsRelayClient
       return; // Hostile or replayed frame — drop silently, never render.
     }
 
-    final Map<String, dynamic> payload;
+    final Map<String, dynamic> decoded;
     try {
-      final decoded = jsonDecode(utf8.decode(plaintext));
-      if (decoded is! Map<String, dynamic>) return;
-      payload = decoded;
+      final value = jsonDecode(utf8.decode(plaintext));
+      if (value is! Map<String, dynamic>) return;
+      decoded = value;
     } catch (_) {
       return;
     }
+    // A part of a split payload waits for the other parts; the whole payload
+    // is dispatched once, as if it had come in one frame.
+    final payload = _fragments.add(decoded);
+    if (payload == null) return;
     _dispatch(payload);
   }
 
@@ -3512,18 +3522,8 @@ class AgentsRelayClient
             oldestMid: AgentsRelayTool._asInt(payload['oldest_mid']),
             pageBeforeId: AgentsRelayTool._asInt(payload['before_id']),
             cost: AgentsRunCost.fromJson(payload['cost']), // F1: cost
-            // ── run changes ──
-            changes: AgentsRunChangesSummary.fromJson(payload['changes']),
-            // ── end run changes ──
           ),
         );
-      // ── run changes ──
-      case 'run_changes':
-      case 'run_undo_result':
-        // The terminal answers to `run_changes_get` / `run_undo`. Not a run
-        // event: only the changes sheet that asked reads them.
-        runChangesSink?.call(payload);
-      // ── end run changes ──
       // ── F1: approvals + cost ──
       case 'budget_warning':
         // A notice, not a transcript event: [AgentsRelayInbound] is sealed,
@@ -3819,6 +3819,9 @@ class AgentsRelayClient
     unawaited(_sub?.cancel());
     _sub = null;
     _socket = null;
+    // Parts from this socket can never complete: the host sends the parts of
+    // one payload together, and a new link starts new payloads.
+    _fragments.clear();
     final done = _pairingDone;
     if (done != null && !done.isCompleted) {
       done.completeError(

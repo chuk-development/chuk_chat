@@ -119,8 +119,50 @@ class StreamMapper:
         }
 
 
+#: What goes between the answer text of two model turns (passes) of one run.
+#: A run with tool calls has several turns; each turn can write text. Without a
+#: paragraph break the text of a new turn runs into the last line of the turn
+#: before, and a heading line takes the next paragraph in (bead chuk_chat-qcdt).
+#: The loop joins the final answer with the same break, so the streamed text and
+#: the stored answer agree.
+PASS_BREAK = "\n\n"
+
+
+class PassJoiner:
+    """The delta sink of one run: it forwards the text of each model turn and
+    puts :data:`PASS_BREAK` in front of the first text of a turn when an earlier
+    turn of the same run already wrote text.
+
+    The loop calls :meth:`new_pass` before each model request. Whitespace at the
+    start of a turn is not forwarded: the stored answer is stripped, and a
+    leading newline would only add to the break.
+    """
+
+    def __init__(self, sink: Sink | None) -> None:
+        self._sink = sink
+        self._said = False
+        self._open = False
+
+    def new_pass(self) -> None:
+        """A new model turn starts."""
+        self._open = False
+
+    def __call__(self, text: str) -> None:
+        if not text:
+            return
+        if not self._open:
+            text = text.lstrip()
+            if not text:
+                return
+            if self._said:
+                text = PASS_BREAK + text
+            self._open = True
+            self._said = True
+        _safe(self._sink, text)
+
+
 def _round(value: float | None) -> float | None:
     return None if value is None else round(value, 3)
 
 
-__all__ = ["StreamMapper"]
+__all__ = ["PASS_BREAK", "PassJoiner", "StreamMapper"]

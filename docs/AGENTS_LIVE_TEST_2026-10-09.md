@@ -63,3 +63,35 @@ budget review ("Main"). They need the owner's data.
   `chuk_chat-qcdt`.
 - The Grok Bot jobs "Asterix & Friends login" and "Main budget" are not
   tested. Their prompts are only in Grok Bot's private local data.
+
+## Rounds 1-4 (2026-10-09/10)
+
+After each round the host was restarted and the same prompts ran in a fresh
+coworker. The Grok answers come from the Grok CLI in headless mode
+(`grok-4.7-build`), not from the Grok Bot desktop app.
+
+| Prompt | Before | After round 3/4 | Grok CLI |
+|--------|--------|-----------------|----------|
+| P1 short research | 14 s, general news, no commit check | 23 s, 33k tokens, 10 papers, closed PR found | 46 s, 5 papers |
+| P3 thorough research | report lost, unasked daily routine, 315k tokens | 28.5 s, 48k tokens, TurnBench entry of 5 Oct right, README read, 19 papers | 277 s, 10 papers |
+| P5 case images, two colours | 95 s, 643k tokens, 4 images, pixel guess | 83 s, 199k tokens, 8 images from 3 shops, prices, a third-party case dropped by the vision check | 389 s, 13 images from 6 shops |
+| P7 Starbucks city mugs | 50 steps, 1.6M tokens, no zip, no answer | 133 s, 367k tokens, says the series is "You Are Here", 5 verified images with prices | 528 s, 16 images |
+
+The causes found and fixed:
+
+- The host sent only the last pass as `final_answer`; a `finish` summary
+  replaced a report written in the same turn.
+- Files over about 600 KB never reached the app: the cloud relay refuses
+  frames over 1 MiB. Large payloads now go as fragments.
+- The vision check called a removed backend route (404), and relative paths
+  broke after a `cd`.
+- `web_fetch` returned pretty-printed JSON, raw feeds and unlimited grep
+  output; it now has `fields`, feed lines, `extract="images"` with product
+  data, and a capped `grep` over the page scripts.
+- The model got no date or weekday; a `[clock]` row now comes with each task.
+- A run could end at its step cap with no answer; it now gets a wrap-up note,
+  a last step without tools, and the state `incomplete`.
+
+Open: the mug job still drops Berlin and gives one view per variant (bead
+`chuk_chat-xy3y`). The Druck18 shirt job is refused by GLM 5.3 Flash and by
+the Grok CLI.

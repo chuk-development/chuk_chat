@@ -54,7 +54,11 @@ DEFAULT_PERSONA = "You are a Agents coworker running on the user's own machine."
 
 #: Ceilings, in estimated tokens. Raise one only on purpose, with the reason in
 #: the commit: every token here is paid on every round of every session.
-SYSTEM_PROMPT_BUDGET = 3_300
+#: 3,300 -> 3,700 (live test 2026-10-09, compared with Grok Bot): the rules for
+#: thorough research, the `[clock]` note, no unasked routines, one language per
+#: answer and fewer rounds (~450), plus the `research` and `web-images` skills
+#: in the catalogue (~140). Fewer rounds per task pay this back many times.
+SYSTEM_PROMPT_BUDGET = 3_700
 DECLARED_TOOLS_BUDGET = 3_000
 DECLARED_TOOLS_MAX = 20
 

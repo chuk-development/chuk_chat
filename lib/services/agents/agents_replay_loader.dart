@@ -68,6 +68,20 @@ const String kReplayRunMetaCursorPrefix = 'cowork.replay_run_meta_cursor.';
 /// cache with the host's transcript — which has each turn exactly once.
 const String kReplayRepeatRepairKey = 'cowork.replay_repeat_repair.v1';
 
+/// One-time repair flag (bead chuk_chat-zhhd). Before the host split large
+/// payloads into fragments, the cloud relay refused every `file` frame over
+/// about 600 KB, live and in a replay, while the cursor moved past its row.
+/// Such a file is on the host, but no delta replay ever sends it again.
+/// Dropping every cursor once makes the next replay a full one, which now
+/// carries the file. Kept apart from [kReplayRepeatRepairKey] so an install
+/// that already ran that repair still runs this one.
+const String kReplayFileRepairKey = 'cowork.replay_file_repair.v1';
+
+/// What goes between the answer text of two model turns of one run. The host
+/// joins a run's `final_answer` and its live `delta` stream with the same
+/// break (`chuk_agents_runtime.pai.events.PASS_BREAK`).
+const String agentsPassBreak = '\n\n';
+
 /// One session's in-progress replay fold.
 class _Draft {
   _Draft(this.sessionKey);
@@ -80,6 +94,10 @@ class _Draft {
   /// The open assistant row, if a delta has arrived since the last user turn.
   Map<String, String>? aiRow;
   final StringBuffer aiText = StringBuffer();
+
+  /// True when the open assistant row holds the text of at least one stored
+  /// turn. The text of the next turn then starts a new paragraph.
+  bool aiTextHasPass = false;
 
   /// What the model thought before it answered, when the host stored it. The
   /// bubble renders it as the collapsible thinking block, so a replayed answer
@@ -191,14 +209,16 @@ class AgentsReplayLoader extends ChangeNotifier {
   Future<void> load() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool(kReplayRepeatRepairKey) != true) {
+      if (prefs.getBool(kReplayRepeatRepairKey) != true ||
+          prefs.getBool(kReplayFileRepairKey) != true) {
         // Keep no cursor this once: every thread replays whole and the host's
-        // copy replaces a cache that may show turns twice. The flag is written
-        // first, so a crash mid-replay costs one extra full replay, never a
-        // repair loop.
+        // copy replaces a cache that may show turns twice or miss a file. The
+        // flags are written first, so a crash mid-replay costs one extra full
+        // replay, never a repair loop.
         await prefs.setBool(kReplayRepeatRepairKey, true);
+        await prefs.setBool(kReplayFileRepairKey, true);
         if (kDebugMode) {
-          debugPrint('[agents-replay] repeat repair: replaying every thread');
+          debugPrint('[agents-replay] cursor repair: replaying every thread');
         }
         return;
       }
@@ -348,7 +368,7 @@ class AgentsReplayLoader extends ChangeNotifier {
       case AgentsRelayDelta(:final replay, :final text, :final mid):
         if (!replay) return;
         final draft = _draftFor();
-        _openAiRow(draft).aiText.write(text);
+        _appendPassText(_openAiRow(draft), text);
         if (event.sentAt != null) {
           draft.aiRow!['sentAt'] = event.sentAt!.toIso8601String();
         }
@@ -491,7 +511,6 @@ class AgentsReplayLoader extends ChangeNotifier {
               cost: event.cost,
               runId: event.runId,
               now: event.finishedAt,
-              changes: event.changes, // run changes
             ),
           );
         }
@@ -554,10 +573,32 @@ class AgentsReplayLoader extends ChangeNotifier {
     draft.rows.add(row);
     draft.aiRow = row;
     draft.aiText.clear();
+    draft.aiTextHasPass = false;
     draft.aiReasoning.clear();
     draft.aiToolCalls = <ToolCall>[];
     draft.aiBlocks = <ContentBlock>[];
     return draft;
+  }
+
+  /// The host replays one `delta` per stored assistant turn. A run with tool
+  /// calls has several turns that each wrote text; they are one answer, joined
+  /// with a paragraph break — the same join the host uses for the run's
+  /// `final_answer` (beads chuk_chat-6ze4, chuk_chat-qcdt). Without the break
+  /// the text of a turn runs into the last line of the turn before, and a
+  /// heading line takes in the next paragraph.
+  static void _appendPassText(_Draft draft, String text) {
+    if (text.trim().isEmpty) return;
+    if (!draft.aiTextHasPass) {
+      draft.aiText.write(text);
+      draft.aiTextHasPass = true;
+      return;
+    }
+    final prior = draft.aiText.toString().trimRight();
+    draft.aiText
+      ..clear()
+      ..write(prior)
+      ..write(agentsPassBreak)
+      ..write(text.trimLeft());
   }
 
   void _closeAiRow(_Draft draft) {
@@ -583,6 +624,7 @@ class AgentsReplayLoader extends ChangeNotifier {
     }
     draft.aiRow = null;
     draft.aiText.clear();
+    draft.aiTextHasPass = false;
     draft.aiReasoning.clear();
     draft.aiToolCalls = <ToolCall>[];
     draft.aiBlocks = <ContentBlock>[];

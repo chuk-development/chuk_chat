@@ -47,8 +47,10 @@ def test_the_shipped_seed_tree_classifies_every_skill_by_its_directory():
         "automations",
         "chart-authoring",
         "document-authoring",
+        "research",
         "secrets",
         "terminal",
+        "web-images",
         "workspace",
     }
     assert sources["youtube-transcript"] == "workspace"
@@ -139,3 +141,74 @@ def test_env_override_points_at_a_seed_dir(tmp_path, monkeypatch):
     monkeypatch.setenv("AGENTS_SEED_SKILLS", str(src))
 
     assert seed_skills_dir() == src
+
+
+# -- built-in seeds stay current (live test 2026-10-09) ----------------------
+
+VERSIONED = "---\nname: {name}\ndescription: {desc}\nmetadata:\n  version: \"{version}\"\n---\n\n{body}\n"
+
+
+def _write_versioned(root, name, version, desc="Does a thing.", extra=None):
+    directory = root / name
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "SKILL.md").write_text(
+        VERSIONED.format(name=name, desc=desc, version=version, body="Steps.")
+    )
+    for filename, text in (extra or {}).items():
+        (directory / filename).write_text(text)
+    return directory
+
+
+def test_skill_version_reads_the_metadata_block(tmp_path):
+    from chuk_agents_host.seed_skills import skill_version
+
+    assert skill_version(_write_versioned(tmp_path, "a", "1.10")) == (1, 10)
+    assert skill_version(_write_seed(tmp_path, "b")) is None
+    assert skill_version(tmp_path / "missing") is None
+
+
+def test_a_newer_builtin_seed_replaces_an_older_installed_copy(tmp_path):
+    src = tmp_path / "seed"
+    _write_versioned(src / "builtin", "automations", "1.1", desc="Only on request.",
+                     extra={"helper.py": "print(1)\n"})
+    workspace = tmp_path / "ws"
+    _write_versioned(workspace / "skills", "automations", "1.0", desc="Use whenever daily.")
+
+    assert seed_workspace_skills(workspace, source=src) == ["automations"]
+    installed = workspace / "skills" / "automations"
+    assert "Only on request." in (installed / "SKILL.md").read_text()
+    assert (installed / "helper.py").is_file()
+    # Up to date now: the next boot changes nothing.
+    assert seed_workspace_skills(workspace, source=src) == []
+
+
+def test_a_builtin_copy_without_a_version_is_never_replaced(tmp_path):
+    src = tmp_path / "seed"
+    _write_versioned(src / "builtin", "automations", "2.0", desc="Shipped.")
+    workspace = tmp_path / "ws"
+    owned = workspace / "skills" / "automations"
+    owned.mkdir(parents=True)
+    (owned / "SKILL.md").write_text("agent's own edited copy")
+
+    assert seed_workspace_skills(workspace, source=src) == []
+    assert (owned / "SKILL.md").read_text() == "agent's own edited copy"
+
+
+def test_a_workspace_seed_is_never_replaced_even_when_newer(tmp_path):
+    src = tmp_path / "seed"
+    _write_versioned(src / "workspace", "youtube-transcript", "9.0", desc="Shipped.")
+    workspace = tmp_path / "ws"
+    _write_versioned(workspace / "skills", "youtube-transcript", "1.0", desc="Mine.")
+
+    assert seed_workspace_skills(workspace, source=src) == []
+    assert "Mine." in (workspace / "skills" / "youtube-transcript" / "SKILL.md").read_text()
+
+
+def test_an_older_builtin_seed_never_downgrades_a_copy(tmp_path):
+    src = tmp_path / "seed"
+    _write_versioned(src / "builtin", "terminal", "1.0", desc="Old.")
+    workspace = tmp_path / "ws"
+    _write_versioned(workspace / "skills", "terminal", "1.2", desc="Newer.")
+
+    assert seed_workspace_skills(workspace, source=src) == []
+    assert "Newer." in (workspace / "skills" / "terminal" / "SKILL.md").read_text()

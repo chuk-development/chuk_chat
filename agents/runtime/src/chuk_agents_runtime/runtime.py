@@ -24,6 +24,7 @@ from typing import Any
 import httpx
 
 from .browser import BrowserRunner, register_browser_task
+from .clock import clock_messages
 from .context import AuxSummarizer, ContextLadder, LadderConfig
 from .environment import Environment, LocalEnvironment
 from .chat_documents import DocumentStore, register_document_tool
@@ -317,7 +318,6 @@ def build_runtime(
     action_approvals: ActionApprovals | None = None,
     light_context: bool = False,
     skill_proposals: SkillProposalSink | None = None,
-    run_id: str | None = None,
 ) -> AgentLoop:
     """Assemble the loop. ``system_prompt`` is the operator *persona*: the
     behaviour contract is prepended from :mod:`chuk_agents_runtime.prompt` and the live
@@ -422,10 +422,6 @@ def build_runtime(
     connector tool marked destructive, a page-changing browser tool) follow
     that policy. Unset, only here.now in ``ask`` mode asks, as before.
 
-    ``run_id`` (docs/WIRE_CONTRACT.md, "What did it do: run changes and
-    undo") tags every workspace commit of this run, so the app can list and
-    undo exactly what the run changed (:mod:`chuk_agents_runtime.run_changes`).
-
     ``light_context`` (docs/WIRE_CONTRACT.md, "Cost per run and weekly
     budget") is for a scheduled run: no memory recall at the task start and
     no fact extraction after the turn (one aux call each time). The memory
@@ -451,11 +447,6 @@ def build_runtime(
         if version_workspace
         else None
     )
-    if git_workspace is not None and run_id:
-        # "What did it do" (docs/WIRE_CONTRACT.md, "Run changes and undo"):
-        # every commit of this run carries ``run-id:``; edits made outside the
-        # agent since the last run are checkpointed first, untagged.
-        git_workspace.begin_run(run_id)
     registry = JournalingRegistry(git_workspace, observer=tool_observer)
     # Background jobs (docs/WIRE_CONTRACT.md, "Interactive shell and background
     # commands"): ``run_command(background=true)`` + ``job_*``. Needs no tmux,
@@ -806,6 +797,11 @@ def build_runtime(
         # What the loop is doing right now, for the ``heartbeat.phase`` the
         # executor sends (docs/WIRE_CONTRACT.md). Unset -> not wired.
         phase_observer=phase_observer,
+        # The ``[clock]`` row (bead chuk_chat-gaep): the local date, weekday
+        # and time zone, made fresh for each task and appended after its
+        # prompt, so "today" and "tomorrow" are right in a session that
+        # started days ago. Only with the built-in contract, which explains it.
+        clock_provider=clock_messages if include_tool_docs else None,
         # Store writes pass the secret scrubber too (docs/WIRE_CONTRACT.md,
         # "Secrets"): a key the USER typed into the prompt, or one a model
         # echoes, is masked before it becomes a row. The same filter the

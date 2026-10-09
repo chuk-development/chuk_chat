@@ -81,6 +81,11 @@ TRANSPORTS = (STDIO, SSE, HTTP)
 #: Cap on one tool result. An MCP server can return a whole database dump and
 #: the result travels straight into the prompt.
 RESULT_CAP = 20_000
+#: Cap on one browser tool result (live test 2026-10-09: one
+#: ``browser_evaluate`` returned 15k characters, 30 of them 75k). A page
+#: read should return the facts; the cut note says so.
+BROWSER_RESULT_CAP = 6_000
+BROWSER_CUT_NOTE = "…[cut at {cap} characters: return fewer fields or fewer rows]"
 #: Cap on a tool description taken from a server. Level-1 prompt weight.
 DESCRIPTION_CAP = 800
 #: A server that advertises hundreds of tools would drown the registry.
@@ -1018,6 +1023,31 @@ def _annotations(raw: Any) -> dict:
     return out
 
 
+def _is_browser_tool(tool: str) -> bool:
+    return str(tool).startswith("browser_") or "__browser_" in str(tool)
+
+
+_RESULT_HEAD = "### Result\n"
+
+
+def compact_browser_result(text: str) -> str:
+    """Write the JSON of a Playwright ``### Result`` block compact. The server
+    pretty-prints it with an indent of two, which is a third of the
+    characters of a list of rows. Anything that is not JSON stays as it is."""
+    start = text.find(_RESULT_HEAD)
+    if start < 0:
+        return text
+    body_start = start + len(_RESULT_HEAD)
+    end = text.find("\n### ", body_start)
+    body = text[body_start:] if end < 0 else text[body_start:end]
+    try:
+        data = json.loads(body)
+    except ValueError:
+        return text
+    compact = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+    return text[:body_start] + compact + ("" if end < 0 else text[end:])
+
+
 def _normalize_result(server: str, tool: str, result: Any) -> dict:
     """Flatten an SDK ``CallToolResult`` into the plain dict shape every other
     tool in this runtime returns, bounded so one call cannot blow the context."""
@@ -1030,11 +1060,16 @@ def _normalize_result(server: str, tool: str, result: Any) -> dict:
             continue
         kind = getattr(block, "type", None) or type(block).__name__
         chunks.append(f"[{kind} content omitted]")
+    text = "\n".join(chunks)
+    if _is_browser_tool(tool):
+        text = compact_browser_result(text)
+        if len(text) > BROWSER_RESULT_CAP:
+            text = text[:BROWSER_RESULT_CAP].rstrip() + BROWSER_CUT_NOTE.format(cap=BROWSER_RESULT_CAP)
     payload: dict[str, Any] = {
         "ok": not bool(getattr(result, "is_error", False)),
         "server": server,
         "tool": tool,
-        "content": _clip("\n".join(chunks), RESULT_CAP),
+        "content": _clip(text, RESULT_CAP),
     }
     structured = getattr(result, "structured_content", None)
     if isinstance(structured, dict) and structured:

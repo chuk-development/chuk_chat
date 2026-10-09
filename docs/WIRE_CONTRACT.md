@@ -631,6 +631,20 @@ Semantics, in this order:
    "Answer ready" affordance.
 3. `replay == false`: a live run ended, as today.
 
+`final_answer` is the answer text of ALL model turns of the run, in order, not
+only the text of the last turn (beads chuk_chat-6ze4, chuk_chat-qcdt). A run
+with tool calls has several turns, and each turn can write text (a report
+before a `schedule_task` call, then one closing line). Each turn's text is
+stripped, and two turns are joined with a paragraph break (`"\n\n"`). The text the
+model wrote is the answer: when the turn that calls `finish` wrote text, the
+`finish` summary is not added (it would repeat that text); only a finish turn
+with no text adds the summary. The
+live `delta` stream uses the same break: the first `delta` of a turn starts
+with `"\n\n"` when an earlier turn of the run wrote text. The replay sends one
+`delta` per stored turn; the app joins them with the same break. The app
+replaces the streamed text with `final_answer`, so a host that sent only the
+last turn lost the text of the earlier turns.
+
 `reason` values: `finished`, `max_iterations`, `budget_exhausted`,
 `token_budget_exhausted`, `estop`, `interrupted` (the user's stop), `failed`,
 `host_restarted`, and `timeout` (Bead cowork-qxa): the host's wall-clock guard
@@ -838,7 +852,8 @@ as an answer with nothing attached.
   `running` runs (`host_restarted`) does the same for their sessions. The
   gate's own timeout patches `denied` / `timeout`.
 - Size: `MAX_FILE_BYTES` (8 MB) already refuses a larger `file` frame live, so
-  no larger row exists. Should a row ever come back without `data` (a future
+  no larger row exists. A `file` frame over 256 KiB of payload goes out as
+  `fragment` frames, live and in a replay (see "Fragments"). Should a row ever come back without `data` (a future
   cap, a trimmed store), it replays as the same frame without `data`; the app
   shows the attachment as unavailable, never as an error of the thread.
 
@@ -884,6 +899,74 @@ never over the one the user happens to be looking at. A persisted row keeps it,
 so a replayed request carries it too. Absent on an old host: the app then
 falls back to the thread the socket is bound to, as before.
 
+
+## Fragments: payloads larger than one relay frame (bead chuk_chat-zhhd)
+
+IMPLEMENTED 2026-10-10. Executor side: `chuk_agents_executor.protocol`
+(`fragment_plaintexts`, `FragmentAssembler`), `Executor._seal_b64_parts`. App
+side: `lib/services/agents/agents_frame_fragments.dart`, used by
+`AgentsRelayClient._handleFrame`.
+
+### The problem
+
+The cloud relay refuses a frame over 1 MiB (`MAX_RELAY_FRAME_SIZE`) with
+`cowork_error` `payload_too_large`. A payload grows by 4/3 twice on the way out
+(the sealed frame is JSON with base64 ciphertext, and the relay envelope carries
+that frame in base64 again), and a `file` payload carries its bytes in base64
+too. So a file of more than about 600 KB never reached the app. The host
+logged `relay frame dropped ... payload_too_large`, the tool result said
+`ok: true`, and the thread showed no file card. The replay sent the same
+oversized frame again, so the file was also lost after a restart. Live failure:
+runs r2-p2 and r2-p5 on 2026-10-10, ZIP files of 1.6 MB and 1.4 MB.
+
+### The frame
+
+The executor encodes every outbound payload (event, terminal, host payload)
+as before. When the encoded payload is larger than `FRAGMENT_CHUNK_BYTES`
+(256 KiB), it is split, and each part is sealed as its own frame:
+
+```json
+{"type": "fragment", "fragment_id": "<16 hex>", "index": 0, "count": 5,
+ "total_bytes": 1160000, "data": "<base64 of bytes [index*256Ki, (index+1)*256Ki)>"}
+```
+
+- The receiver joins `data` of parts `0 .. count-1` in `index` order. The
+  result is the UTF-8 JSON of the original payload, exactly `total_bytes`
+  long. The receiver then handles that payload as if it had come in one frame.
+- The parts of one payload are sent in order, with no other frame between
+  them (the executor holds its emit lock). The receiver still accepts any order.
+- A terminal (`done`, `error`) that is split: all parts but the last go as
+  `event` notifications of the same request; the last part is the response.
+- A payload of 256 KiB or less goes as one frame, byte-identical to before.
+- One fragment is about 610 KiB on the relay, under the cap.
+
+### Receiver limits
+
+`count` at most 128, `total_bytes` at most 128 x 256 KiB, at most 4 incomplete
+payloads (the oldest is dropped first). A bad part (wrong types, bad base64,
+`index` out of range, a `count` or `total_bytes` that contradicts the earlier
+parts) is dropped, never raised. The app drops incomplete payloads when its
+socket closes.
+
+### Order on the app
+
+The app opens sealed frames one at a time (`AgentsRelayClient._frameQueue`).
+Opening awaits signature and decryption; side by side, a small frame could
+commit its sequence number before a large frame before it, and the replay
+guard would then drop the large frame as replayed.
+
+### Files lost before this change
+
+Their rows (`event` + `event_blobs`) are on the host, but the app's replay
+cursor is past them. The app drops every replay cursor once
+(`kReplayFileRepairKey`, `cowork.replay_file_repair.v1`), so the next replay
+of each thread is a full one and carries the file. Update the host first:
+a full replay against a host without fragments loses the file again.
+
+### Compatibility
+
+An old app ignores `fragment` (an unknown type); a large payload is then lost,
+as it was before. An old host sends no fragments; the app works as before.
 
 ## Browser takeover (IMPLEMENTED, research item 6)
 
@@ -1920,168 +2003,6 @@ Host → app, the terminal answer (same request stream):
   collapses to "Not saved". A replayed row with `status` draws the same
   decided state.
 - Strings in `strings_en.dart` / `strings_de.dart`.
-
-## What did it do: run changes and undo (bead chuk_chat-4qry)
-
-Python side IMPLEMENTED 2026-10-05 (`chuk_agents_runtime.run_changes`,
-`GitWorkspace.begin_run` / `revert_paths`, `Executor._answer_run_changes`).
-App side IMPLEMENTED 2026-10-05 (`lib/services/agents/agents_run_changes.dart`,
-`agents_run_changes_service.dart`, `lib/widgets/agents_run_changes_line.dart`;
-`changes` rides on the answer's hidden `agents_run_meta` call). Additive: an older app ignores `changes` on
-`done`, and an older host answers the two new frames with `unknown payload
-type`. Research item 14 (docs/research/AGENT_COMPETITORS_2026-10.md).
-
-### The idea
-
-The user opens a run and sees which files the agent changed. The user can
-undo the run, or only some of its files. The undo is a NEW commit in the
-workspace's git journal. History is never rewritten.
-
-- Every workspace commit a run makes carries the trailer
-  `run-id: <run_id>` in its body. A subagent's work enters through a merge
-  commit that carries the same trailer, so it counts for the run.
-- Before a run starts, the host commits all pending changes as an untagged
-  checkpoint (`checkpoint: changes outside the agent`). An edit the user made
-  by hand between runs is therefore never part of a run, and an undo never
-  reverts it. An edit the user makes WHILE a run works can be committed with
-  the run's next action; the host cannot tell those apart.
-- The agent's own state is never listed and never reverted: `.agents/`
-  (journal, jobs, automations), `memory/`, `transcript/`.
-- A file is undoable when its content now is exactly what the run left and
-  nothing is pending on it. Otherwise it is a conflict. A later change that
-  was undone again does not block.
-- A workspace without git (or a run that changed no file) answers "nothing to
-  undo". Asking never creates a repo.
-- Honest boundary (as for `workspace_undo`): only workspace files come back.
-  Sent mail, API calls and host changes are NOT undone. The app must say so.
-
-### `done` (extended)
-
-```json
-{"type": "done", ..., "changes": {"files": 3, "additions": 42, "deletions": 7,
-                                  "undone": 0}?}
-```
-
-- `files`: workspace files the run added, modified or deleted (net: a file
-  the run created and deleted again does not count).
-- `undone`: how many of those files are back to their state before the run
-  (an earlier undo, or reverted by hand).
-- Absent when the run changed no file or the workspace has no git.
-- A replayed `done` carries the same block. After an undo the host updates
-  it, so a replayed card shows the undone state.
-
-### Outbound: app → host `run_changes_get`
-
-```json
-{"type": "run_changes_get", "run_id": "<run id>"}
-{"type": "run_changes_get", "session_key": "<thread>", "last": true}
-```
-
-`run_id` names one run. Without it, `session_key` (+ `last`, default true)
-names that thread's most recently started run.
-
-### Inbound: host → app `run_changes` (terminal)
-
-```json
-{"type": "run_changes", "run_id": "<run id>", "session_key": "<thread>",
- "files": [
-   {"path": "notes/plan.md", "change": "added", "additions": 12, "deletions": 0,
-    "undoable": true},
-   {"path": "report.csv", "change": "modified", "additions": 3, "deletions": 1,
-    "undoable": false,
-    "conflict": {"path": "report.csv", "reason": "changed_later",
-                 "runs": ["<later run id>"], "outside": true}},
-   {"path": "old.txt", "change": "deleted", "additions": 0, "deletions": 9,
-    "undoable": false, "undone": true},
-   {"path": "logo.bin", "change": "added", "additions": 0, "deletions": 0,
-    "undoable": true, "binary": true}],
- "files_total": 812?,
- "commits": [{"commit": "<sha>", "short": "1a2b3c4d", "time": "<ISO 8601>",
-              "subject": "write_file: notes/plan.md", "seq": 17, "files": 1}],
- "commits_total": 260?, "actions": 23,
- "summary": {"files": 3, "additions": 15, "deletions": 10, "undone": 1},
- "undoable": true, "reason": "<reason>"?,
- "conflicts": [{"path": "...", "reason": "...", "runs": [...]?, "outside": true?}]?}
-```
-
-- `change`: `added` | `modified` | `deleted`. `additions` / `deletions` are
-  line counts; `binary: true` means no line counts.
-- `files` is capped at 500 (`files_total` then gives the real count);
-  `commits` lists the run's commits that changed a file, the newest 200
-  (`commits_total`). `actions` counts all the run's commits, journal-only
-  ones (a read, a web call) included.
-- `conflict.reason`: `changed_later` (a later commit changed the file;
-  `runs` names later runs, `outside: true` means a change outside any run,
-  for example the user's own edit) or `uncommitted` (the file has edits on
-  disk that are not committed yet).
-- `undoable`: at least one file can be undone without `force`. When true and
-  some files conflict, `conflicts` lists them.
-- `reason` (when `undoable` is false): `no_history` (no git in the
-  workspace), `not_found` (no such run), `no_changes` (the run changed no
-  file), `already_undone`, `conflicts` (every open file conflicts),
-  `run_active` (a run works in this workspace right now; the list is still
-  sent), `failed` (git could not be read).
-
-### Outbound: app → host `run_undo`
-
-```json
-{"type": "run_undo", "run_id": "<run id>", "paths": ["notes/plan.md"]?,
- "force": true?}
-```
-
-- No `paths`: undo every file of the run. With `paths`: only those (paths as
-  `run_changes` listed them).
-- `force` must be the JSON `true`. Without it a conflict refuses the whole
-  undo and nothing changes.
-
-### Inbound: host → app `run_undo_result` (terminal)
-
-```json
-{"type": "run_undo_result", "run_id": "<run id>", "session_key": "<thread>",
- "ok": true, "reverted": ["notes/plan.md"], "conflicts": [],
- "skipped": [{"path": "x.txt", "reason": "not_in_run"}]?,
- "forced": true?, "commit": "<sha of the undo commit>"?,
- "changes": {"files": 3, "additions": 15, "deletions": 10, "undone": 2}?,
- "note": "Files in the workspace are restored. Effects outside ...",
- "code": "<reason>"?, "error": "<text for the user>"?}
-```
-
-- `ok: true`: the files in `reverted` are back to their state before the run,
-  in one new commit (body trailer `undo-of: <run_id>`). Before it, pending
-  changes are committed as an untagged checkpoint, so a forced undo over an
-  uncommitted edit keeps that edit in the history. `changes` is the updated
-  `done` block.
-- `ok: false`: nothing changed. `code` is one of `no_history`, `not_found`,
-  `no_changes`, `already_undone`, `conflicts` (then `conflicts` lists the
-  files, same shape as above), `run_active`, `failed`. `error` is a sentence
-  the app can show as it is.
-- `skipped.reason`: `not_in_run` (the run did not change that path),
-  `already_undone`, `outside_workspace` (an absolute path, a `..`, or a path
-  whose real directory is outside the workspace through a symlink).
-- With `force: true` and conflicts, `ok` is true, `forced` is true and
-  `conflicts` lists the files that were overwritten.
-
-### App work list
-
-- `AgentsRelayDone`: parse `changes` (`files`, `additions`, `deletions`,
-  `undone`), live and replayed.
-- Under an answer whose `done` has `changes.files > 0`: one line
-  "3 files changed · Undo" (`lib/widgets/agent_run_views.dart`). When
-  `undone == files`: "Changes undone", no button. Partly undone:
-  "3 files changed · 1 undone · Undo".
-- Tap on the line: a sheet with `run_changes_get {run_id}`: one row per file
-  (icon for added / modified / deleted, path, `+a −d`, a check box when
-  `undoable`), the conflict reason under a conflicting row ("Changed later by
-  another run" / "Changed by you" / "Edited, not saved yet"), and the
-  commits as a collapsed timeline (time, subject).
-- "Undo" sends `run_undo` with the checked paths (all checked by default).
-  On `code: conflicts`: a dialog that lists the files and offers "Undo
-  anyway" (`force: true`) or "Cancel". On `run_active`: "Wait until the
-  agent is done" with the button off while the thread runs.
-- After `ok: true`: update the line from `changes`, show a snackbar with the
-  count, and show the `note` once (effects outside the workspace stay).
-- Strings in `strings_en.dart` / `strings_de.dart`. Chuk's components, one
-  button family, no glow (docs/DESIGN.md).
 
 ## Agent status: model, spend, clock, sandbox (bead cowork-6ag)
 

@@ -39,6 +39,7 @@ from .environment import Environment
 from .files_out import FileSink, register_send_file
 from .media import WorkspaceMount, register_media_tools
 from .registry import ToolRegistry
+from .sandbox_io import workspace_path
 from .secrets import SecretsAccess, register_secrets_tools
 from .web_fetch import Resolver, register_web_fetch
 from .web_search import DEFAULT_BASE_URL, TokenSession, register_web_search
@@ -60,7 +61,10 @@ RUN_COMMAND_SCHEMA = {
     "description": (
         "Run one shell command in the workspace and return its exit code, "
         "stdout and stderr. Use it to run scripts and tests, to inspect the "
-        "system, and for git. For a long command (a build, a download, a "
+        "system, and for git. The working directory stays between calls of this "
+        "tool: after `cd x` the next command starts in x. The file tools always "
+        "read relative paths from the workspace root. Chain steps in one "
+        "command (download && check && zip). For a long command (a build, a download, a "
         "training run) set background=true: it returns a job_id at once, the "
         "command keeps running, and you are woken with its output when it "
         "ends. For a program that asks questions use shell_start instead."
@@ -236,7 +240,7 @@ def make_write_file_handler(env: Environment):
     def write_file(path: str, content: str, append: bool = False) -> dict:
         raw = content.encode("utf-8")
         payload = base64.b64encode(raw).decode("ascii")
-        quoted = shlex.quote(path)
+        quoted = shlex.quote(workspace_path(env, path))
         redirect = ">>" if append else ">"
         cmd = (
             f"mkdir -p -- \"$(dirname -- {quoted})\" && "
@@ -262,7 +266,7 @@ def make_write_file_handler(env: Environment):
 def make_read_file_handler(env: Environment):
     def read_file(path: str, max_bytes: int = READ_CAP) -> dict:
         limit = max(1, min(int(max_bytes), READ_CAP))
-        quoted = shlex.quote(path)
+        quoted = shlex.quote(workspace_path(env, path))
         # head -c reads at most `limit` bytes; +1 tells truncation from an exact fit.
         result = env.run_bash(f"head -c {limit + 1} -- {quoted}", timeout=60)
         if not result.ok:
@@ -282,7 +286,7 @@ def make_read_file_handler(env: Environment):
 
 def make_list_dir_handler(env: Environment):
     def list_dir(path: str = ".") -> dict:
-        quoted = shlex.quote(path)
+        quoted = shlex.quote(workspace_path(env, path))
         result = env.run_bash(
             f"ls -la --time-style=long-iso -- {quoted}", timeout=30
         )

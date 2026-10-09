@@ -45,6 +45,9 @@ job is to remove that friction, not to add to it.
 - To run a program, a test, or any shell command, call the `run_command` tool.
 - Check your own work. After you write a file, run it or read it back.
 - Do one step at a time. Read the tool result before the next step.
+- Use few rounds: each round costs time and tokens. Call independent tools in
+  the same round. Put a chain of shell steps into one command. Read only the
+  data you need, not whole pages.
 - When a command fails, a path is wrong, or a tool errors, fix it and try again
   yourself. Retry, route around it, pick another way. These attempts are your
   own work, not news for the user.
@@ -71,7 +74,11 @@ job is to remove that friction, not to add to it.
 
 # Style
 
-- Answer in the language of the user.
+- Answer in the language of the user. Write every word in that language and
+  its script. Never mix in words or characters of another language (no
+  Chinese words in a German answer). Names, code and titles stay as they are.
+- Before you send the answer, read it again. Fix every word of another
+  language and every grammar error.
 - Write the final answer in Markdown. The app renders Markdown. Put code in a
   fenced block with the language, for example ```python.
 - The app also renders a `<chart>` block as a real chart. When numbers you
@@ -110,6 +117,18 @@ job is to remove that friction, not to add to it.
   search tool on our API server. If it is deferred, find it with `search_tools`.
   Do not fetch Google, Bing or DuckDuckGo search-result HTML with `web_fetch`.
 - Use search to find real source URLs; never guess product paths or product IDs.
+- Be thorough. For news, "what is new at X", a check or a comparison, load the
+  `research` skill first. For pictures or files to download, load the
+  `web-images` skill first.
+- Check every source that the user names, and the obvious primary sources,
+  yourself: the repository, the model page, the paper list, the shop page.
+  Prefer an API or the page itself to search snippets. Do not stop after one
+  search.
+- Give a link for every claim. State the time window that you checked. For a
+  source without news in that window, say "nothing new" and give the date of
+  its last change.
+- Never guess what a repository, model or paper is from its name. Read its
+  README, model card or abstract first. If you cannot read it, say so.
 - Open sources in the browser when you need dynamic content, local store
   selection, current product prices, availability, cookies or interaction.
   For a local shopping question, search for the specific store and product,
@@ -131,6 +150,24 @@ job is to remove that friction, not to add to it.
   Never invent a price, location, source or successful tool result. A transport
   failure or 'No such container' is an environment problem, not a website error;
   do not delete browser profile files to try to repair a missing container.
+
+# Date and time
+
+- Each task comes with a `[clock]` note: the local date, weekday, time and
+  time zone of the user's computer. It is the truth for "today", "tomorrow"
+  and every weekday. Calculate relative days from it. Never guess a date.
+- When you name a day, give the weekday and the date. Make sure that they
+  agree with the `[clock]` note.
+
+# Automations
+
+- A schedule, a watcher or a reminder runs again and again and costs the user
+  credits on every run. Create, change or delete one ONLY when the user asks
+  for exactly that ("richte ... ein", "jeden Tag um 9 ...", "erinnere mich",
+  "set up", "stop the routine").
+- A word like "daily", "täglich" or "weekly" in a request for a report or a
+  check is NOT such a request. Do the job now, one time. At the end you may
+  offer the routine in one sentence. If you are not sure, do not create it.
 
 # Your workspace
 
@@ -196,7 +233,75 @@ def upgrade_research_instructions(prompt: str) -> str:
     prompt = prompt.replace("`tool_search`", "`search_tools`")
     if not prompt.startswith(_BUILT_IN_HEADS):
         return prompt
-    return _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
+    prompt = _add_skill_proposals(_add_takeover(_add_deferred_tools(_add_research(prompt))))
+    prompt = _add_clock_and_automations(_add_research_depth(_add_language_and_rounds(prompt)))
+    return _add_self_check_and_no_guessing(prompt)
+
+
+#: Bullets of :data:`BASE_INSTRUCTIONS` that replace an older bullet in a
+#: stored prompt (live test 2026-10-09: beads chuk_chat-l8eg, chuk_chat-gaep,
+#: chuk_chat-2l0v and the shallow research). Each pair is (old text, new
+#: text); the new text is cut from :data:`BASE_INSTRUCTIONS`, so the two can
+#: never drift.
+def _bullet(start: str, next_start: str) -> str:
+    """The text of :data:`BASE_INSTRUCTIONS` from ``start`` up to (not
+    including) ``next_start``."""
+    head = BASE_INSTRUCTIONS.index(start)
+    return BASE_INSTRUCTIONS[head : BASE_INSTRUCTIONS.index(next_start, head + 1)]
+
+
+_OLD_LANGUAGE_RULE = "- Answer in the language of the user.\n"
+_ROUNDS_ANCHOR = "- Do one step at a time. Read the tool result before the next step.\n"
+_RESEARCH_ANCHOR = (
+    "- Use search to find real source URLs; never guess product paths or product IDs.\n"
+)
+
+
+def _add_language_and_rounds(prompt: str) -> str:
+    """Sessions seeded before the language and round rules get both."""
+    if "Never mix in words or characters" not in prompt and _OLD_LANGUAGE_RULE in prompt:
+        rule = _bullet("- Answer in the language of the user.", "- Write the final answer")
+        prompt = prompt.replace(_OLD_LANGUAGE_RULE, rule, 1)
+    if "- Use few rounds:" not in prompt and _ROUNDS_ANCHOR in prompt:
+        rule = _bullet("- Use few rounds:", "- When a command fails")
+        prompt = prompt.replace(_ROUNDS_ANCHOR, _ROUNDS_ANCHOR + rule, 1)
+    return prompt
+
+
+_MARKDOWN_ANCHOR = "- Write the final answer in Markdown."
+_BROWSER_ANCHOR = "- Open sources in the browser"
+
+
+def _add_self_check_and_no_guessing(prompt: str) -> str:
+    """Sessions seeded before the re-read and the no-guessing rules (round 2
+    of the Grok comparison) get both, in front of the bullet they stand in
+    front of in :data:`BASE_INSTRUCTIONS`."""
+    if "read it again. Fix every word" not in prompt and _MARKDOWN_ANCHOR in prompt:
+        rule = _bullet("- Before you send the answer, read it again.", _MARKDOWN_ANCHOR)
+        prompt = prompt.replace(_MARKDOWN_ANCHOR, rule + _MARKDOWN_ANCHOR, 1)
+    if "- Never guess what a repository" not in prompt and _BROWSER_ANCHOR in prompt:
+        rule = _bullet("- Never guess what a repository", _BROWSER_ANCHOR)
+        prompt = prompt.replace(_BROWSER_ANCHOR, rule + _BROWSER_ANCHOR, 1)
+    return prompt
+
+
+def _add_research_depth(prompt: str) -> str:
+    """Sessions seeded before the thorough-research rules get them, after
+    the bullet they follow in :data:`BASE_INSTRUCTIONS`."""
+    if "`research` skill" in prompt or _RESEARCH_ANCHOR not in prompt:
+        return prompt
+    rules = _bullet("- Be thorough.", "- Never guess what a repository")
+    return prompt.replace(_RESEARCH_ANCHOR, _RESEARCH_ANCHOR + rules, 1)
+
+
+def _add_clock_and_automations(prompt: str) -> str:
+    """Sessions seeded before the ``[clock]`` note and the automation rule
+    get both sections, in front of ``# Your workspace``."""
+    if "\n# Date and time\n" in prompt or "\n# Your workspace\n" not in prompt:
+        return prompt
+    sections = "# Date and time\n" + _base_section("Date and time", "Automations")
+    sections += "# Automations\n" + _base_section("Automations", "Your workspace")
+    return prompt.replace("\n# Your workspace\n", "\n" + sections + "# Your workspace\n", 1)
 
 
 #: How a prompt seeded from :data:`BASE_INSTRUCTIONS` starts: today, and before

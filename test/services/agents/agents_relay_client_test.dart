@@ -1714,6 +1714,59 @@ void main() {
     await client.dispose();
   });
 
+  // Bead chuk_chat-zhhd: the cloud relay refuses a frame over 1 MiB, so the
+  // host splits a large payload into `fragment` frames. The client joins
+  // them and dispatches ONE file, byte-exact, with its replay marks.
+  test('a file split into fragments arrives as one file', () async {
+    final (client, host, _) = await paired();
+    final events = <AgentsRelayInbound>[];
+    final sub = client.inbound.listen(events.add);
+
+    final body = Uint8List.fromList(
+      List<int>.generate(1619837, (i) => (i * 31 + 7) & 0xff),
+    );
+    final whole = utf8.encode(
+      jsonEncode(<String, dynamic>{
+        'type': 'file',
+        'name': 'raspberry-pi-5.zip',
+        'mime_type': 'application/zip',
+        'size': body.length,
+        'data': base64.encode(body),
+        'replay': true,
+        'mid': 1434,
+      }),
+    );
+    const chunk = 256 * 1024;
+    final count = (whole.length + chunk - 1) ~/ chunk;
+    expect(count, greaterThan(1));
+    for (var i = 0; i < count; i++) {
+      final end = (i + 1) * chunk < whole.length ? (i + 1) * chunk : whole.length;
+      await host.emit(<String, dynamic>{
+        'type': 'fragment',
+        'fragment_id': 'f00d',
+        'index': i,
+        'count': count,
+        'total_bytes': whole.length,
+        'data': base64.encode(whole.sublist(i * chunk, end)),
+      });
+    }
+    // A normal frame right after the parts still arrives, in order.
+    await host.emit(<String, dynamic>{'type': 'delta', 'text': 'here it is'});
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+
+    final file = events.whereType<AgentsRelayFile>().single;
+    expect(file.name, 'raspberry-pi-5.zip');
+    expect(file.isValid, isTrue);
+    expect(file.replay, isTrue);
+    expect(file.mid, 1434);
+    expect(file.bytes, body);
+    final fileAt = events.indexOf(file);
+    expect(events.indexWhere((e) => e is AgentsRelayDelta), greaterThan(fileAt));
+
+    await sub.cancel();
+    await client.dispose();
+  });
+
   test('a file event with a broken body arrives as an error, never a crash',
       () async {
     final (client, host, _) = await paired();
@@ -2279,75 +2332,4 @@ void main() {
     });
   });
   // ── end F1 ──
-
-  // ── run changes ──
-  group('run changes (bead chuk_chat-4qry)', () {
-    test('done carries changes, live and replayed; an old host none',
-        () async {
-      final (client, host, _) = await paired();
-      final events = <AgentsRelayInbound>[];
-      final sub = client.inbound.listen(events.add);
-      await host.emit(<String, dynamic>{
-        'type': 'done',
-        'reason': 'finished',
-        'run_id': 'run-1',
-        'changes': <String, dynamic>{
-          'files': 3,
-          'additions': 42,
-          'deletions': 7,
-          'undone': 0,
-        },
-      });
-      await host.emit(<String, dynamic>{
-        'type': 'done',
-        'reason': 'finished',
-        'replay': true,
-        'run_id': 'run-0',
-        'changes': <String, dynamic>{'files': 2, 'undone': 2},
-      });
-      await host.emit(<String, dynamic>{
-        'type': 'done',
-        'reason': 'finished',
-        'run_id': 'run-old',
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      final dones = events.whereType<AgentsRelayDone>().toList();
-      expect(dones, hasLength(3));
-      expect(dones[0].changes!.files, 3);
-      expect(dones[0].changes!.additions, 42);
-      expect(dones[0].changes!.deletions, 7);
-      expect(dones[1].isReplay, isTrue);
-      expect(dones[1].changes!.allUndone, isTrue);
-      expect(dones[2].changes, isNull);
-      await sub.cancel();
-      await client.dispose();
-    });
-
-    test('run_changes and run_undo_result go to the sink, not the UI',
-        () async {
-      final (client, host, _) = await paired();
-      final events = <AgentsRelayInbound>[];
-      final sub = client.inbound.listen(events.add);
-      final got = <String>[];
-      final original = AgentsRelayClient.runChangesSink;
-      AgentsRelayClient.runChangesSink = (p) => got.add('${p['type']}');
-      addTearDown(() => AgentsRelayClient.runChangesSink = original);
-      await host.emit(<String, dynamic>{
-        'type': 'run_changes',
-        'run_id': 'run-1',
-        'files': <Object>[],
-      });
-      await host.emit(<String, dynamic>{
-        'type': 'run_undo_result',
-        'run_id': 'run-1',
-        'ok': true,
-      });
-      await Future<void>.delayed(const Duration(milliseconds: 10));
-      expect(got, <String>['run_changes', 'run_undo_result']);
-      expect(events, isEmpty);
-      await sub.cancel();
-      await client.dispose();
-    });
-  });
-  // ── end run changes ──
 }

@@ -9,6 +9,9 @@ token.
 
 from __future__ import annotations
 
+import base64
+import json
+
 import io
 import zipfile
 
@@ -302,23 +305,20 @@ class FakeSession:
         self.access_token = f"tok-{self.refreshes + 1}"
 
 
-def _sse(*events: str) -> str:
-    return "".join(f"data: {e}\n\n" for e in events) + "data: [DONE]\n\n"
+def _answer(text: str) -> dict:
+    return {"choices": [{"message": {"role": "assistant", "content": text}}]}
 
 
 def _mock_client(handler) -> httpx.Client:
     return httpx.Client(transport=httpx.MockTransport(handler))
 
 
-def test_backend_vision_posts_a_multipart_image(tmp_path):
+def test_backend_vision_posts_the_image_as_a_chat_completion(tmp_path):
     seen: list[httpx.Request] = []
 
     def handle(request: httpx.Request) -> httpx.Response:
         seen.append(request)
-        return httpx.Response(
-            200,
-            text=_sse('{"content": "line one\\n"}', '{"content": "line two"}'),
-        )
+        return httpx.Response(200, json=_answer("line one\nline two"))
 
     reader = BackendVisionReader(
         FakeSession(),
@@ -335,17 +335,41 @@ def test_backend_vision_posts_a_multipart_image(tmp_path):
 
     assert text == "line one\nline two"
     request = seen[0]
-    assert request.url.path == "/v1/ai/chat"
+    # The old multipart /v1/ai/chat answered 404 (live test 2026-10-09).
+    assert request.url.path == "/v1/chat/completions"
     assert request.headers["Authorization"] == "Bearer tok-1"
-    body = request.content
-    # The verified contract: a multipart form with `message`, `model_id` and an
-    # `images` file part.
-    assert b'name="message"' in body
-    assert b'name="model_id"' in body
-    assert DEFAULT_VISION_MODEL.encode() in body
-    assert b'name="images"' in body
-    assert b'filename="scan.png"' in body
-    assert b"pixels" in body
+    body = json.loads(request.content)
+    assert body["model"] == DEFAULT_VISION_MODEL and body["stream"] is False
+    [message] = body["messages"]
+    text_part, image_part = message["content"]
+    assert text_part == {"type": "text", "text": "transcribe"}
+    url = image_part["image_url"]["url"]
+    assert url.startswith("data:image/png;base64,")
+    assert base64.b64decode(url.split(",", 1)[1]).endswith(b"pixels")
+
+
+def test_backend_vision_shrinks_a_big_picture_first(tmp_path):
+    from io import BytesIO
+
+    from PIL import Image
+
+    raw = BytesIO()
+    Image.new("RGB", (4000, 2000), (200, 30, 30)).save(raw, "PNG")
+    sent: list[dict] = []
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        return httpx.Response(200, json=_answer("a red picture"))
+
+    reader = BackendVisionReader(
+        FakeSession(), base_url="https://api.example.test", http_client=_mock_client(handle)
+    )
+    assert reader.read(filename="big.png", data=raw.getvalue(), mime_type="image/png",
+                       instruction="colour?") == "a red picture"
+    url = sent[0]["messages"][0]["content"][1]["image_url"]["url"]
+    assert url.startswith("data:image/jpeg;base64,")
+    picture = Image.open(BytesIO(base64.b64decode(url.split(",", 1)[1])))
+    assert max(picture.size) == 1600
 
 
 def test_backend_vision_refreshes_once_on_401(tmp_path):
@@ -355,7 +379,7 @@ def test_backend_vision_refreshes_once_on_401(tmp_path):
         code = codes.pop(0)
         if code != 200:
             return httpx.Response(code, json={"detail": "expired"})
-        return httpx.Response(200, text=_sse('{"content": "ok"}'))
+        return httpx.Response(200, json=_answer("ok"))
 
     session = FakeSession()
     reader = BackendVisionReader(
@@ -370,9 +394,9 @@ def test_backend_vision_refreshes_once_on_401(tmp_path):
     assert session.refreshes == 1
 
 
-def test_backend_vision_surfaces_a_stream_error(tmp_path):
+def test_backend_vision_surfaces_an_error_body(tmp_path):
     def handle(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, text=_sse('{"error": "model unavailable"}'))
+        return httpx.Response(400, json={"error": {"message": "model unavailable"}})
 
     reader = BackendVisionReader(
         FakeSession(),
@@ -388,13 +412,13 @@ def test_backend_vision_surfaces_a_stream_error(tmp_path):
 
 
 def test_backend_vision_refuses_a_non_image_part(tmp_path):
-    """The endpoint drops a non-image part silently, which would look like a
-    successful answer about nothing. Fail before sending instead."""
+    """A non-image part would get an answer about nothing. Fail before
+    sending instead."""
     called = []
 
     def handle(request: httpx.Request) -> httpx.Response:
         called.append(request)
-        return httpx.Response(200, text=_sse('{"content": "ok"}'))
+        return httpx.Response(200, json=_answer("ok"))
 
     reader = BackendVisionReader(
         FakeSession(),
@@ -418,11 +442,8 @@ def test_backend_vision_reasoning_is_never_folded_into_content(tmp_path):
     def handle(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             200,
-            text=_sse(
-                '{"reasoning": "hmm let me look"}',
-                '{"content": "the answer"}',
-                '{"usage": {"total_tokens": 12}}',
-            ),
+            json={"choices": [{"message": {"reasoning_content": "hmm let me look",
+                                           "content": "the answer"}}]},
         )
 
     reader = BackendVisionReader(

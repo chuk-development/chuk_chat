@@ -801,3 +801,57 @@ def test_the_tail_budget_is_capped():
     assert LadderConfig().tail_budget == 10_000
     assert LadderConfig(context_length=20_000).tail_budget == int(15_904 * 0.25)
     assert LadderConfig(tail_token_budget=50_000).tail_budget == 50_000
+
+
+# -- a new task drops big tool traffic of earlier tasks (cowork-g7oc) ----------
+
+
+def _two_tasks(result_chars: int) -> tuple[list[dict], int]:
+    """A first task with four tool rounds, its answer, then a second task with
+    one tool round of its own. Returns the messages and the second prompt's
+    index (``turn_start``)."""
+    messages = _sysuser()
+    for i in range(4):
+        messages += _tool_round(i, chars=result_chars)
+    messages.append({"role": "assistant", "content": "first answer"})
+    turn_start = len(messages)
+    messages.append({"role": "user", "content": "second task"})
+    messages += _tool_round(9, chars=200)
+    return messages, turn_start
+
+
+def test_a_new_task_drops_the_big_tool_traffic_of_earlier_tasks():
+    messages, turn_start = _two_tasks(result_chars=8_000)
+    out = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=turn_start)
+    before = out[: out.index({"role": "user", "content": "second task"})]
+    assert all(m.get("role") != "tool" for m in before)
+    assert "first answer" in [m.get("content") for m in before]
+    # The current task keeps its own tool round.
+    assert out[-2]["tool_calls"][0]["id"] == "call_9" and out[-1]["role"] == "tool"
+
+
+def test_small_tool_traffic_of_earlier_tasks_stays_for_the_cache():
+    messages, turn_start = _two_tasks(result_chars=100)
+    out = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=turn_start)
+    assert out == messages
+
+
+def test_the_old_task_rule_can_be_turned_off():
+    messages, turn_start = _two_tasks(result_chars=8_000)
+    config = LadderConfig(old_task_tools_drop_tokens=0)
+    out = ContextLadder(config=config).prepare(messages, turn_start=turn_start)
+    assert sum(1 for m in out if m.get("role") == "tool") == 5
+
+
+def test_the_old_task_cut_keeps_the_prefix_up_to_the_previous_prompt():
+    """The payload of the next task starts with the payload the current task
+    sent up to its own prompt: the cache keeps that part."""
+    messages, turn_start = _two_tasks(result_chars=8_000)
+    first = ContextLadder(config=LadderConfig()).prepare(messages, turn_start=turn_start)
+    head = first[: first.index({"role": "user", "content": "second task"}) + 1]
+    later = messages + [
+        {"role": "assistant", "content": "second answer"},
+        {"role": "user", "content": "third task"},
+    ]
+    second = ContextLadder(config=LadderConfig()).prepare(later, turn_start=len(later) - 1)
+    assert second[: len(head)] == head

@@ -39,6 +39,7 @@ void main() {
   setUp(() async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       kReplayRepeatRepairKey: true,
+      kReplayFileRepairKey: true,
     });
     ledger.reset();
     loader.reset();

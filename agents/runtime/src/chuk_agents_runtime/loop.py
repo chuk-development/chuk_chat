@@ -351,7 +351,7 @@ from pydantic_ai.usage import UsageLimits  # noqa: E402
 from .pai import disable_banner  # noqa: E402
 from .pai.approvals import ApprovalPolicy  # noqa: E402
 from .pai.convert import found_tools, response_to_row, rows_to_messages, tool_call_args  # noqa: E402
-from .pai.events import StreamMapper  # noqa: E402
+from .pai.events import PASS_BREAK, PassJoiner, StreamMapper  # noqa: E402
 from .pai.model import LEGACY_DETAILS_KEY, LegacyClientModel, is_legacy  # noqa: E402
 from .pai.tools import TOOL_RETRIES, UNSET, CallRecord, RegistryToolset  # noqa: E402
 
@@ -406,6 +406,30 @@ EMPTY_REPLY_NUDGE = (
     "still need one."
 )
 
+#: The share of the step limit after which the run is told to wrap up (live
+#: test 2026-10-09: an image job used all 50 steps in browser loops and ended
+#: with no file and no answer).
+WRAP_UP_SHARE = 0.8
+WRAP_UP_NOTE = (
+    "[runtime] Only {left} steps are left for this task. Stop searching now. "
+    "Finish with what you have: pack and send any files you collected, then "
+    "write the final answer. Say clearly what you found and what is missing."
+)
+#: The last step has no tools: the model must write the answer.
+LAST_STEP_NOTE = (
+    "[runtime] This is the last step of this task. You cannot call tools any "
+    "more. Write the final answer now: what you found, what you sent, what is "
+    "missing and why."
+)
+#: Appended when a limit stopped the run before the model answered, so the
+#: user never gets an empty result or an "I will now ..." line only.
+LIMIT_STOP_NOTE = (
+    "The task stopped at its limit ({reason}, {iterations} steps) before it "
+    "was done. The text above is what it found until then."
+)
+#: Reasons that mean "a limit ended the run", not "the work is done".
+LIMIT_REASONS = frozenset({"max_iterations", "budget_exhausted", "token_budget_exhausted"})
+
 #: How long a Stop waits for a call that had started to finish on its thread,
 #: so its row holds the real result. The executor kills the sandbox process on
 #: the same Stop, so a command returns at once; a web call, a publish or an MCP
@@ -428,10 +452,18 @@ class _DriveState:
     in_request: bool = False
     request_mark: int | None = None
     nudged: bool = False
+    #: The wrap-up note went out (``WRAP_UP_NOTE``) / the last step had no tools.
+    wrap_noted: bool = False
+    last_step: bool = False
     #: Why a turn ended with no answer (``length`` / ``content_filter``).
     stop_note: str | None = None
     #: The model this run talks to (built per run for the HTTP route).
     model: Any = None
+    #: The answer text of each model turn of this run, stripped, in order. A
+    #: turn with tool calls can write text too (a report before a
+    #: ``schedule_task`` call); the final answer keeps all of it, not only the
+    #: text of the last turn (bead chuk_chat-6ze4).
+    passes: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -560,6 +592,7 @@ class AgentLoop:
         recall_wait: float | None = None,
         turn_observer: Callable[[TurnRecord], None] | None = None,
         phase_observer: Callable[[str, str | None], None] | None = None,
+        clock_provider: Callable[[], list[dict]] | None = None,
         # -- Pydantic AI only -------------------------------------------
         model_settings: ModelSettings | None = None,
         on_delta: Sink | None = None,
@@ -601,6 +634,10 @@ class AgentLoop:
         #: seconds (from the run's start) for it; a later round takes it when
         #: it is late (bead chuk_chat-4xc5).
         self._recall_wait = None if recall_wait is None else max(0.0, float(recall_wait))
+        #: The ``[clock]`` row of each task (bead chuk_chat-gaep,
+        #: :mod:`chuk_agents_runtime.clock`): made when the task starts and
+        #: appended after its prompt. ``None``: no clock row.
+        self._clock_provider = clock_provider
         self._turn_observer = turn_observer
         #: Told what the run does right now (docs/WIRE_CONTRACT.md,
         #: ``heartbeat.phase``): ``preparing``, ``model`` or ``tool`` + name.
@@ -625,6 +662,9 @@ class AgentLoop:
             found=self._found_now,
         )
         self._policy.toolset = self._toolset
+        #: The toolset's own ``enabled``, kept while the last step of a run
+        #: offers no tools (:meth:`_wrap_up`).
+        self._tools_enabled = self._toolset.enabled
         self._extra_capabilities = list(capabilities)
         self._active: _ActiveRun | None = None
         self._agent = self._build_agent()
@@ -847,6 +887,7 @@ class AgentLoop:
             if resolved:
                 self._append(session_id, "system", {"role": "system", "content": resolved})
         self._append(session_id, "user", {"role": "user", "content": user_message})
+        self._append_clock(session_id)
         pending_recall: _PendingRecall | None = None
         if self._recall_provider is not None and self._recall_wait is not None:
             pending_recall = self._start_recall(user_message)
@@ -929,6 +970,9 @@ class AgentLoop:
             self._stored_rows(active.session_id), deferred=self._registry.deferred_names()
         )
         state = _DriveState()
+        # One sink for the whole run: it puts a paragraph break between the
+        # text of two turns (bead chuk_chat-qcdt).
+        joiner = PassJoiner(self._on_delta) if self._on_delta is not None else None
         tracer = get_tracer()
         # A model built for this run (the HTTP model: its client is bound to
         # this run's event loop) is closed when the run ends.
@@ -953,6 +997,7 @@ class AgentLoop:
                             if stop is not None:
                                 state.reason = stop
                                 break
+                            self._wrap_up(active, state)
                             state.iterations += 1
                             active.round = state.iterations
                             self._budget.consume()
@@ -960,7 +1005,9 @@ class AgentLoop:
                                 set_round(state.iterations)
                                 tracer.emit("round_start", iteration=state.iterations)
                             model_started = time.monotonic()
-                            mapper = StreamMapper(self._on_delta, self._on_reasoning)
+                            if joiner is not None:
+                                joiner.new_pass()
+                            mapper = StreamMapper(joiner, self._on_reasoning)
                             state.request_mark = self._legacy_mark(run_model)
                             state.in_request = True
                             if request_log is not None:
@@ -1031,7 +1078,9 @@ class AgentLoop:
                                             continue
                                     state.reason = StopReason.FINISHED
                                     break
-                                state.final_answer = _response_text(response)
+                                # This turn's text is the last pass (taken
+                                # above); the text of the earlier passes stays.
+                                state.final_answer = _join_passes(state.passes)
                                 state.reason = StopReason.FINISHED
                                 break
                             finish_summary = _finish_summary(calls, response)
@@ -1048,7 +1097,9 @@ class AgentLoop:
                                 state.reason = StopReason.INTERRUPTED
                                 break
                             if finish_summary is not None:
-                                state.final_answer = finish_summary
+                                state.final_answer = _finish_answer(
+                                    state.passes, response, finish_summary
+                                )
                                 state.reason = StopReason.FINISHED
                                 break
                             self._drain_context(active.session_id)
@@ -1074,12 +1125,45 @@ class AgentLoop:
             state.reason = StopReason.FINISHED
             state.final_answer = None
         finally:
+            if state.last_step:
+                self._toolset.enabled = self._tools_enabled
             if state.last_response is not None:
                 await self._settle_inflight()
                 self._close_calls(active, _calls(state.last_response), tools_used)
             if self._model_factory is not None:
                 await _close_model(run_model)
+        if state.reason.value in LIMIT_REASONS and not state.final_answer:
+            state.final_answer = _limit_answer(state.passes, state.reason, state.iterations)
         return state.reason, state.final_answer, state.iterations, state.stop_note
+
+    def _steps_left(self, state: _DriveState) -> int:
+        """Model steps this run may still take, this one included."""
+        return max(0, min(self._max_iterations - state.iterations, self._budget.remaining))
+
+    def _wrap_up(self, active: _ActiveRun, state: _DriveState) -> None:
+        """Before a model step: near the limit, tell the model to finish; on
+        the last step, take the tools away, so the run ends with an answer and
+        not with a half-done search (live test 2026-10-09)."""
+        left = self._steps_left(state)
+        limit = min(self._max_iterations, self._budget.initial)
+        token_near = (
+            self._token_budget is not None
+            and self._token_budget > 0
+            and self._tokens_spent >= WRAP_UP_SHARE * self._token_budget
+        )
+        steps_near = limit >= 5 and state.iterations >= int(WRAP_UP_SHARE * limit)
+        if not state.wrap_noted and (steps_near or token_near) and left > 1:
+            state.wrap_noted = True
+            self._append(
+                active.session_id,
+                "context",
+                {"role": "user", "content": WRAP_UP_NOTE.format(left=left)},
+            )
+        if left == 1 and limit >= 3 and not state.last_step:
+            state.last_step = True
+            self._tools_enabled = self._toolset.enabled
+            self._toolset.enabled = False
+            self._append(active.session_id, "context", {"role": "user", "content": LAST_STEP_NOTE})
 
     async def _stream_request(self, node: Any, run: Any, mapper: StreamMapper) -> None:
         """Stream one model request into the sinks. Nothing at all within
@@ -1104,6 +1188,9 @@ class AgentLoop:
         """A finished model turn: persist it and reset the per-turn call state
         (call ids are only unique within one turn)."""
         state.last_response = response
+        text = _response_text(response)
+        if text:
+            state.passes.append(text)
         active.written_calls.clear()
         self._toolset.calls.clear()
         self._persist_assistant(active.session_id, response)
@@ -1491,6 +1578,25 @@ class AgentLoop:
                     {k: v for k, v in message.items() if k != "role_tag"},
                 )
 
+    def _append_clock(self, session_id: int) -> None:
+        """Append this task's ``[clock]`` row after its prompt (bead
+        chuk_chat-gaep). Never raises: a missing clock must not fail a run."""
+        provider = self._clock_provider
+        if provider is None:
+            return
+        try:
+            messages = list(provider() or [])
+        except Exception:  # noqa: BLE001 — the run goes on without the note
+            return
+        for message in messages:
+            if not isinstance(message, dict) or not message.get("content"):
+                continue
+            self._append(
+                session_id,
+                str(message.get("role_tag") or "clock"),
+                {k: v for k, v in message.items() if k != "role_tag"},
+            )
+
     # -- memory ----------------------------------------------------------
 
     def _start_recall(self, user_message: str) -> _PendingRecall | None:
@@ -1688,6 +1794,36 @@ def _response_text(response: ModelResponse) -> str | None:
     text at all."""
     text = "".join(p.content for p in response.parts if isinstance(p, TextPart)).strip()
     return text or None
+
+
+def _limit_answer(passes: Sequence[str], reason: StopReason, iterations: int) -> str:
+    """The answer of a run that a limit stopped before the model answered:
+    the text the model wrote on the way, then one line that says so."""
+    note = LIMIT_STOP_NOTE.format(reason=reason.value, iterations=iterations)
+    return _join_passes([*passes, note]) or note
+
+
+def _join_passes(passes: Sequence[str]) -> str | None:
+    """The run's answer: the text of all its turns, in order, with a paragraph
+    break between two turns. ``None`` when no turn wrote text."""
+    text = PASS_BREAK.join(p for p in passes if p)
+    return text or None
+
+
+def _finish_answer(passes: Sequence[str], response: ModelResponse, summary: str) -> str:
+    """The answer of a run that a ``finish`` call ended. The text the model
+    wrote is the answer: the user saw it stream.
+
+    - The finish turn wrote text (often the full report, with a short
+      summary in the call): the answer is the text of all turns. The summary
+      is not added; it would repeat the report, and the answer must never be
+      less than what streamed.
+    - The finish turn wrote no text: the summary is that turn's answer, after
+      the text of the earlier turns. It did not stream, so nothing repeats.
+    """
+    if _response_text(response):
+        return _join_passes(passes) or ""
+    return _join_passes([*passes, summary]) or ""
 
 
 def _count_retries(request_log: Any, timings: RunTimings) -> None:

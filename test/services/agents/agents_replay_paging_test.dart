@@ -29,6 +29,7 @@ void main() {
     // the steady state these tests describe: mark it done.
     SharedPreferences.setMockInitialValues(<String, Object>{
       kReplayRepeatRepairKey: true,
+      kReplayFileRepairKey: true,
     });
     loader.reset();
     AgentsRelayLink.instance.reset();

@@ -165,11 +165,36 @@ void _repairTests() {
     expect(loader.cursorFor('thread-1'), 0);
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getBool(kReplayRepeatRepairKey), isTrue);
+    expect(prefs.getBool(kReplayFileRepairKey), isTrue);
+  });
+
+  // Bead chuk_chat-zhhd: an install that already ran the repeat repair still
+  // drops its cursors once, so a file the relay refused (its row now below
+  // the cursor) comes back in a full replay.
+  test('the file repair drops the cursors once more', () async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      kReplayRepeatRepairKey: true,
+      '${kReplayCursorPrefix}thread-1': 1436,
+      '${kReplayTimestampCursorPrefix}thread-1': true,
+      '${kReplayRunMetaCursorPrefix}thread-1': true,
+    });
+    final loader = AgentsReplayLoader.instance..reset();
+    await loader.load();
+    expect(loader.cursorFor('thread-1'), 0);
+    final prefs = await SharedPreferences.getInstance();
+    expect(prefs.getBool(kReplayFileRepairKey), isTrue);
+
+    // The next start reads the cursor again: the repair runs once.
+    await prefs.setInt('${kReplayCursorPrefix}thread-1', 1436);
+    final again = AgentsReplayLoader.instance..reset();
+    await again.load();
+    expect(again.cursorFor('thread-1'), 1436);
   });
 
   test('a later load reads the cursors as before', () async {
     SharedPreferences.setMockInitialValues(<String, Object>{
       kReplayRepeatRepairKey: true,
+      kReplayFileRepairKey: true,
       '${kReplayCursorPrefix}thread-1': 106,
       '${kReplayTimestampCursorPrefix}thread-1': true,
       '${kReplayRunMetaCursorPrefix}thread-1': true,

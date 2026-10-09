@@ -76,7 +76,9 @@ final List<AgentsRelayInbound> _liveRun = <AgentsRelayInbound>[
     state: 'succeeded',
     result: 'the summary',
   ),
-  const AgentsRelayDelta(' Done.'),
+  // The host puts a paragraph break in front of the text of a new turn
+  // (bead chuk_chat-qcdt).
+  const AgentsRelayDelta('\n\nDone.'),
   AgentsRelayDone(
     reason: 'finished',
     iterations: 3,
@@ -128,7 +130,7 @@ final List<AgentsRelayInbound> _replayedRun = <AgentsRelayInbound>[
     replay: true,
     mid: 5,
   ),
-  const AgentsRelayDelta(' Done.', replay: true, mid: 6),
+  const AgentsRelayDelta('Done.', replay: true, mid: 6),
   AgentsRelayDone(
     reason: 'finished',
     iterations: 3,
@@ -203,7 +205,7 @@ void main() {
     );
     final result = await handler.processAssistantResponse(
       session: session,
-      content: 'Let me look. Done.',
+      content: 'Let me look.\n\nDone.',
       reasoning: '',
     );
     return result.toolCalls;
@@ -285,7 +287,9 @@ void main() {
     final row = chat.messages.last.toJson();
     // The same flat shape the imported screen writes after a live turn:
     // text, reasoning, toolCalls — and no content blocks without a file.
-    expect(row['text'], 'Let me look. Done.');
+    // Two stored turns, two paragraphs: the replay joins them as the host
+    // joins the live stream (beads chuk_chat-6ze4, chuk_chat-qcdt).
+    expect(row['text'], 'Let me look.\n\nDone.');
     expect(row.containsKey('toolCalls'), isTrue);
     expect(row['contentBlocks'], isNull);
     // "Worked for 26s": the run's length from the host, on the answer row —

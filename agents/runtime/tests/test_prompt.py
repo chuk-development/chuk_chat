@@ -171,3 +171,73 @@ def test_system_prompt_states_the_workspace_hygiene_transcript_and_memory_rules(
     # Memory: recall block + the explicit tools.
     assert "[memory recall]" in prompt
     assert "`memory_search`" in prompt and "`memory_add`" in prompt
+
+
+# -- live test 2026-10-09 ------------------------------------------------------
+
+
+def test_system_prompt_carries_the_rules_from_the_grok_comparison():
+    from chuk_agents_runtime.prompt import BASE_INSTRUCTIONS as text
+
+    # Thorough, source-checked research (Grok Bot checked each source).
+    assert "`research` skill" in text and "`web-images` skill" in text
+    assert "Do not stop after one" in text and '"nothing new"' in text
+    # Bead chuk_chat-l8eg: no Chinese words in a German answer.
+    assert "Never mix in words or characters of another language" in text
+    # Bead chuk_chat-gaep: the clock note is the truth for dates.
+    assert "# Date and time" in text and "`[clock]` note" in text
+    # Bead chuk_chat-2l0v: no routine without an explicit request.
+    assert "# Automations" in text
+    assert 'is NOT such a request' in text
+    # Fewer rounds (the image job took 17).
+    assert "Use few rounds" in text
+
+
+def test_an_old_session_prompt_gets_the_new_rules_once():
+    from chuk_agents_runtime.prompt import BASE_INSTRUCTIONS, _bullet, upgrade_research_instructions
+
+    old = BASE_INSTRUCTIONS
+    for new, before in (
+        (_bullet("- Answer in the language of the user.", "- Write the final answer"),
+         "- Answer in the language of the user.\n"),
+        (_bullet("- Use few rounds:", "- When a command fails"), ""),
+        (_bullet("- Be thorough.", "- Open sources in the browser"), ""),
+    ):
+        assert new in old
+        old = old.replace(new, before, 1)
+    old = old[: old.index("# Date and time\n")] + old[old.index("# Your workspace\n"):]
+    old += "\n# Operator instructions\n\nBe terse."
+    assert "# Automations" not in old and "`research` skill" not in old
+
+    upgraded = upgrade_research_instructions(old)
+    assert upgraded == BASE_INSTRUCTIONS + "\n# Operator instructions\n\nBe terse."
+    # Same input, same bytes, and a second pass changes nothing.
+    assert upgrade_research_instructions(old) == upgraded
+    assert upgrade_research_instructions(upgraded) == upgraded
+
+
+def test_a_session_from_before_the_research_section_gets_every_rule_once():
+    from chuk_agents_runtime.prompt import BASE_INSTRUCTIONS, upgrade_research_instructions
+
+    before, rest = BASE_INSTRUCTIONS.split("# Online research\n", 1)
+    old = before + "# Your workspace\n" + rest.split("# Your workspace\n", 1)[1]
+    assert "# Date and time" not in old
+    upgraded = upgrade_research_instructions(old)
+    for heading in ("# Online research", "# Date and time", "# Automations"):
+        assert upgraded.count(heading) == 1, heading
+    assert upgraded.count("`research` skill") == 1
+
+
+def test_a_prompt_from_round_one_gets_the_self_check_and_the_no_guessing_rule():
+    """Sessions seeded on 2026-10-09 already have the first language and
+    research rules, but not the re-read step or the rule against guessing
+    what a repository is (round 2 of the Grok comparison)."""
+    from chuk_agents_runtime.prompt import BASE_INSTRUCTIONS, _bullet, upgrade_research_instructions
+
+    check = _bullet("- Before you send the answer, read it again.", "- Write the final answer")
+    guess = _bullet("- Never guess what a repository", "- Open sources in the browser")
+    old = BASE_INSTRUCTIONS.replace(check, "", 1).replace(guess, "", 1)
+    assert "read it again" not in old and "Never guess what a repository" not in old
+    upgraded = upgrade_research_instructions(old)
+    assert upgraded == BASE_INSTRUCTIONS
+    assert upgrade_research_instructions(upgraded) == upgraded

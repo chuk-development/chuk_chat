@@ -39,7 +39,7 @@ def test_a_mock_writer_gets_no_automatic_memory(tmp_path, monkeypatch):
         "Memory Extractor" in str(m.get("content", "")) for m in model.calls[0]
     )
     rows = loop.store.get_conversation(result.session_id)
-    assert [m.role for m in rows] == ["system", "user", "assistant"]
+    assert [m.role for m in rows] == ["system", "user", "clock", "assistant"]
     # Mem0 was never even built for this run.
     assert built == []
     # The explicit tools are still there for the model.

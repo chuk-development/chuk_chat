@@ -165,6 +165,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+import secrets
 import sys
 from pathlib import Path
 from typing import Any
@@ -730,7 +731,6 @@ def done_payload(
     session_key: str | None = None,
     cost: dict[str, Any] | None = None,
     automation_result: dict[str, Any] | None = None,
-    changes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "type": "done",
@@ -769,54 +769,7 @@ def done_payload(
     # did not notify, and the app collapses the run to "no change".
     if automation_result is not None:
         payload["automation_result"] = dict(automation_result)
-    # docs/WIRE_CONTRACT.md, "What did it do: run changes and undo": how many
-    # workspace files the run changed (``files`` / ``additions`` /
-    # ``deletions`` / ``undone``). Absent when it changed none.
-    if changes:
-        payload["changes"] = dict(changes)
     return payload
-
-
-# -- what did it do (docs/WIRE_CONTRACT.md, "Run changes and undo") ----------
-
-
-def run_changes_get_payload(
-    *, run_id: str | None = None, session_key: str | None = None
-) -> dict[str, Any]:
-    """App -> host: the files one run changed. ``run_id``, or ``session_key``
-    alone for that thread's latest run."""
-    payload: dict[str, Any] = {"type": "run_changes_get"}
-    if run_id:
-        payload["run_id"] = run_id
-    if session_key:
-        payload["session_key"] = session_key
-        if not run_id:
-            payload["last"] = True
-    return payload
-
-
-def run_undo_payload(
-    *, run_id: str, paths: list[str] | None = None, force: bool = False
-) -> dict[str, Any]:
-    """App -> host: revert one run's changes (or only ``paths``)."""
-    payload: dict[str, Any] = {"type": "run_undo", "run_id": run_id}
-    if paths is not None:
-        payload["paths"] = list(paths)
-    if force:
-        payload["force"] = True
-    return payload
-
-
-def run_changes_payload(body: dict[str, Any]) -> dict[str, Any]:
-    """Host -> app: the terminal answer to ``run_changes_get``
-    (:func:`chuk_agents_runtime.run_changes.run_changes`)."""
-    return {"type": "run_changes", **body}
-
-
-def run_undo_result_payload(body: dict[str, Any]) -> dict[str, Any]:
-    """Host -> app: the terminal answer to ``run_undo``
-    (:func:`chuk_agents_runtime.run_changes.undo_run`)."""
-    return {"type": "run_undo_result", **body}
 
 
 #: ``done.reason`` of a run the weekly budget refused before it started
@@ -1369,6 +1322,138 @@ def frame_to_b64(sealed_bytes: bytes) -> str:
 def b64_to_frame(value: str) -> bytes:
     """Recover the sealed Agents frame bytes from an envelope ``frame`` field."""
     return base64.b64decode(value)
+
+
+# -- fragments (docs/WIRE_CONTRACT.md, "Fragments", bead chuk_chat-zhhd) -------
+
+#: The in-frame type of one part of a payload that is too large for one frame.
+TYPE_FRAGMENT = "fragment"
+
+#: The largest encoded payload that goes out as one frame, and the size of the
+#: payload slice in each fragment. The cloud relay refuses a frame over 1 MiB
+#: (``MAX_RELAY_FRAME_SIZE`` in the API server). On the way out, a payload grows
+#: by 4/3 twice: the sealed frame is JSON with base64 ciphertext, and the relay
+#: envelope carries that frame in base64 again. A fragment adds a third 4/3 (its
+#: slice in base64). So 256 KiB of payload is about 455 KiB on the relay, and
+#: one fragment about 610 KiB. A ``file`` frame of 415 KB was about 1 000 000
+#: bytes on the relay, just under the cap; 1.4 MB was refused.
+FRAGMENT_CHUNK_BYTES = 256 * 1024
+
+#: Limits for the receiver. A sender never makes more parts or more bytes than
+#: this: ``MAX_FILE_BYTES`` (8 MiB) in base64 is about 11 MiB of payload, which
+#: is 43 fragments.
+MAX_FRAGMENT_COUNT = 128
+MAX_FRAGMENT_TOTAL_BYTES = MAX_FRAGMENT_COUNT * FRAGMENT_CHUNK_BYTES
+#: Incomplete payloads a receiver keeps at one time. The oldest goes first.
+MAX_PENDING_FRAGMENTS = 4
+
+
+def fragment_plaintexts(
+    encoded: bytes,
+    *,
+    chunk_bytes: int = FRAGMENT_CHUNK_BYTES,
+    fragment_id: str | None = None,
+) -> list[bytes]:
+    """Split one encoded payload into the plaintexts to seal, in send order.
+
+    A payload of ``chunk_bytes`` or less is returned as it is (one frame,
+    byte-identical to before). A larger one becomes ``fragment`` payloads::
+
+        {"type": "fragment", "fragment_id": "<hex>", "index": 0, "count": 3,
+         "total_bytes": 1048576, "data": "<base64 of the slice>"}
+
+    The receiver joins the slices in ``index`` order and decodes the result as
+    the original payload. The sender seals each fragment as its own frame and
+    sends all of them in order, with nothing else between them.
+    """
+    if chunk_bytes <= 0:
+        raise ValueError("chunk_bytes must be positive")
+    if len(encoded) <= chunk_bytes:
+        return [encoded]
+    fid = fragment_id or secrets.token_hex(8)
+    count = -(-len(encoded) // chunk_bytes)
+    return [
+        encode_payload(
+            {
+                "type": TYPE_FRAGMENT,
+                "fragment_id": fid,
+                "index": index,
+                "count": count,
+                "total_bytes": len(encoded),
+                "data": base64.b64encode(
+                    encoded[index * chunk_bytes : (index + 1) * chunk_bytes]
+                ).decode("ascii"),
+            }
+        )
+        for index in range(count)
+    ]
+
+
+class FragmentAssembler:
+    """Joins ``fragment`` payloads back into the payload they came from.
+
+    The Python mirror of the app's assembler (``agents_frame_fragments.dart``).
+    :meth:`add` returns a payload that is not a fragment unchanged, ``None``
+    while a fragmented payload is incomplete, and the whole payload when its
+    last part arrives. Bad parts are dropped; they never raise.
+    """
+
+    def __init__(self, *, max_pending: int = MAX_PENDING_FRAGMENTS) -> None:
+        self._max_pending = max_pending
+        # fragment_id -> (count, total_bytes, {index: bytes}), oldest first.
+        self._pending: dict[str, tuple[int, int, dict[int, bytes]]] = {}
+
+    def add(self, payload: dict[str, Any]) -> dict[str, Any] | None:
+        if payload.get("type") != TYPE_FRAGMENT:
+            return payload
+        fid = payload.get("fragment_id")
+        index = payload.get("index")
+        count = payload.get("count")
+        total = payload.get("total_bytes")
+        data = payload.get("data")
+        if (
+            not isinstance(fid, str)
+            or not fid
+            or not isinstance(index, int)
+            or not isinstance(count, int)
+            or not isinstance(total, int)
+            or not isinstance(data, str)
+            or not 1 <= count <= MAX_FRAGMENT_COUNT
+            or not 0 <= index < count
+            or not 0 < total <= MAX_FRAGMENT_TOTAL_BYTES
+        ):
+            return None
+        try:
+            part = base64.b64decode(data, validate=True)
+        except (ValueError, TypeError):
+            return None
+        entry = self._pending.get(fid)
+        if entry is None:
+            while len(self._pending) >= self._max_pending:
+                self._pending.pop(next(iter(self._pending)))
+            entry = (count, total, {})
+            self._pending[fid] = entry
+        if entry[0] != count or entry[1] != total:
+            self._pending.pop(fid, None)
+            return None
+        parts = entry[2]
+        parts[index] = part
+        if sum(len(p) for p in parts.values()) > total:
+            self._pending.pop(fid, None)
+            return None
+        if len(parts) < count:
+            return None
+        self._pending.pop(fid, None)
+        joined = b"".join(parts[i] for i in range(count))
+        if len(joined) != total:
+            return None
+        try:
+            whole = decode_payload(joined)
+        except (ValueError, UnicodeDecodeError):
+            return None
+        if not isinstance(whole, dict) or whole.get("type") == TYPE_FRAGMENT:
+            return None
+        return whole
 
 
 # -- persisted approval outcome (docs/WIRE_CONTRACT.md, bead cowork-266) ------

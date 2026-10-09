@@ -127,13 +127,6 @@ from chuk_agents_runtime.takeover import (
     host_of,
 )
 from chuk_agents_runtime.runtime import SKILLS_DIRNAME
-from chuk_agents_runtime.run_changes import (
-    REASON_FAILED as RUN_REASON_FAILED,
-    REASON_NOT_FOUND as RUN_REASON_NOT_FOUND,
-    run_change_summary,
-    run_changes,
-    undo_run,
-)
 from chuk_agents_runtime.skill_proposals import (
     SkillDraft,
     SkillProposalStore,
@@ -206,6 +199,7 @@ from .protocol import (
     error_payload,
     extension_mcp_entry,
     file_payload,
+    fragment_plaintexts,
     frame_to_b64,
     heartbeat_payload,
     mcp_credentials_payload,
@@ -215,8 +209,6 @@ from .protocol import (
     secret_request_payload,
     skill_proposal_payload,
     skill_proposal_result_payload,
-    run_changes_payload,
-    run_undo_result_payload,
     skills_list_payload,
     stop_ack_payload,
     subagent_payload,
@@ -538,9 +530,6 @@ class _Run:
     priced_model: str | None = None
     priced_provider: str | None = None
     cost: dict | None = None
-    # docs/WIRE_CONTRACT.md, "What did it do: run changes and undo": the
-    # ``changes`` block of its ``done`` (files changed in the workspace).
-    changes: dict | None = None
     # Set once ``_finish_automation`` asked the host. A run ends once, so the
     # host hears it once even when a later step of the run fails.
     automation_finished: bool = False
@@ -1339,7 +1328,7 @@ class Executor:
         # the host and shared by every task: ``run_command`` / ``python`` get
         # the values as child environment, the model gets ``set`` / ``missing``,
         # and the vault's scrubber masks every value in every frame sealed
-        # below (``_seal_b64``). ``None`` -> no secrets tools, no masking.
+        # below (``_seal_b64_parts``). ``None`` -> no secrets tools, no masking.
         self._secrets = secrets
         self._secret_scrubber = secrets.scrubber() if secrets is not None else None
         # In-flight ``secret_request``s, by their own request id. The worker
@@ -1813,17 +1802,6 @@ class Executor:
         env = self._environment_for(session_key)
         return getattr(env, "workspace", None) or self._workspace
 
-    def _known_workspace_for(self, session_key: str | None) -> str | None:
-        """Like :meth:`_workspace_for`, but never creates a sandbox: a session
-        that has none yet (a restricted mail run) has no workspace here."""
-        if self._is_primary_session(session_key):
-            return self._workspace
-        with self._env_lock:
-            env = self._session_envs.get(str(session_key))
-        if env is None:
-            return None
-        return getattr(env, "workspace", None) or self._workspace
-
     def _session_environments(self) -> list[BaseEnvironment]:
         """Every sandbox this executor owns: its own plus one per served agent."""
         with self._env_lock:
@@ -1979,13 +1957,6 @@ class Executor:
                 self._terminal(request_id, error_payload("calls not enabled"))
                 return
             self._call_hook(self._on_call_frame, payload)
-            return
-        if kind in ("run_changes_get", "run_undo"):
-            # "What did it do" (docs/WIRE_CONTRACT.md, "What did it do: run
-            # changes and undo"): the files a run changed, and undoing them as
-            # a new commit. Answered with one terminal ``run_changes`` /
-            # ``run_undo_result``; git runs on its own thread.
-            self._handle_run_changes_frame(kind, request_id, payload)
             return
         if kind == "run_ack":
             # The app saw a live ``done`` for this run. Record it so a later
@@ -2936,99 +2907,6 @@ class Executor:
             )
             return
         self._terminal(request_id, skill_proposal_result_payload(result))
-
-    # -- what did it do (docs/WIRE_CONTRACT.md, "Run changes and undo") ----
-    def _handle_run_changes_frame(self, kind: str, request_id: str, payload: dict) -> None:
-        threading.Thread(
-            target=self._answer_run_changes,
-            args=(kind, request_id, dict(payload)),
-            name="run-changes",
-            daemon=True,
-        ).start()
-
-    def _resolve_run_row(self, payload: dict) -> dict | None:
-        """``run_id``, or ``session_key`` + ``last``: the run's row, or None."""
-        store = StateStore(self._db_path)
-        try:
-            run_id = payload.get("run_id")
-            if isinstance(run_id, str) and run_id:
-                return store.get_run(run_id)
-            session_key = payload.get("session_key")
-            if isinstance(session_key, str) and session_key and payload.get("last", True):
-                return store.latest_run(session_key)
-            return None
-        finally:
-            store.close()
-
-    def _workspace_busy(self, workspace: str | None) -> bool:
-        """A run is queued or in flight in this workspace right now."""
-        if not workspace:
-            return False
-        with self._runs_lock:
-            keys = [run.session_key for run in self._runs.values()]
-        return any(self._known_workspace_for(key) == workspace for key in keys)
-
-    def _answer_run_changes(self, kind: str, request_id: str, payload: dict) -> None:
-        try:
-            row = self._resolve_run_row(payload)
-            if row is None:
-                asked = payload.get("run_id") if isinstance(payload.get("run_id"), str) else ""
-                if kind == "run_changes_get":
-                    body = {"run_id": asked, "files": [], "commits": [],
-                            "undoable": False, "reason": RUN_REASON_NOT_FOUND}
-                    self._terminal(request_id, run_changes_payload(body))
-                else:
-                    self._terminal(request_id, run_undo_result_payload({
-                        "run_id": asked, "ok": False, "reverted": [], "conflicts": [],
-                        "code": RUN_REASON_NOT_FOUND, "error": "No such run.",
-                    }))
-                return
-            run_id = str(row["run_id"])
-            session_key = str(row.get("session_key") or "")
-            workspace = self._workspace_for(session_key)
-            busy = self._workspace_busy(workspace)
-            # The run's start bounds the history walk (no full-history scan).
-            since = row.get("started_at") or None
-            if kind == "run_changes_get":
-                body = run_changes(workspace, run_id, busy=busy, since=since)
-                body["session_key"] = session_key
-                self._terminal(request_id, run_changes_payload(body))
-                return
-            # Only an absent ``paths`` means every file; anything else that is
-            # not a list must not widen a partial undo to the whole run.
-            paths: list[str] | None = None
-            if "paths" in payload:
-                raw_paths = payload["paths"]
-                if not isinstance(raw_paths, list):
-                    self._terminal(request_id, run_undo_result_payload({
-                        "run_id": run_id, "ok": False, "reverted": [], "conflicts": [],
-                        "code": RUN_REASON_FAILED,
-                        "error": "paths must be a list of file paths.",
-                        "session_key": session_key,
-                    }))
-                    return
-                paths = [p for p in raw_paths if isinstance(p, str)]
-            result = undo_run(
-                workspace, run_id, paths=paths, force=payload.get("force") is True,
-                busy=busy, since=since,
-            )
-            result["session_key"] = session_key
-            if result.get("ok"):
-                # The done's ``changes`` block follows the undo, so a replayed
-                # card can say "undone" instead of offering Undo again.
-                summary = run_change_summary(workspace, run_id, since=since)
-                store = StateStore(self._db_path)
-                try:
-                    store.set_run_changes(run_id, summary)
-                finally:
-                    store.close()
-                if summary:
-                    result["changes"] = summary
-            self._terminal(request_id, run_undo_result_payload(result))
-        except Exception as exc:  # noqa: BLE001 — the serve loop must survive git
-            self._terminal(
-                request_id, error_payload(f"{kind} failed: {type(exc).__name__}")
-            )
 
     def _handle_run_ack(self, payload: dict) -> None:
         run_id = payload.get("run_id")
@@ -4939,9 +4817,6 @@ class Executor:
             # the draft is stored here and shown to the user as a card; only
             # the app's ``skill_proposal_decision`` writes it to disk.
             skill_proposals=self._skill_proposal_sink(request_id, run, session_key),
-            # "What did it do" (docs/WIRE_CONTRACT.md, "Run changes and
-            # undo"): every workspace commit of this run carries its id.
-            run_id=run.run_id or None,
         )
 
         clock.lap("runtime_built")
@@ -5059,7 +4934,6 @@ class Executor:
                 session_key=session_key,
                 cost=run.cost,
                 automation_result=automation_result,
-                changes=run.changes,
             ),
         )
         # The run is over once its terminal went out: drop it from the registry
@@ -5458,17 +5332,6 @@ class Executor:
                             cost_eur=run_cost,
                         )
                     run.cost = cost_block(store.usage_lines(run.run_id))
-                # What the run changed in its workspace (docs/WIRE_CONTRACT.md,
-                # "What did it do"): on the done, and on the row for a replay.
-                row = store.get_run(run.run_id) or {}
-                starts = [v for v in (row.get("started_at"), run.started_at) if v]
-                run.changes = run_change_summary(
-                    self._known_workspace_for(run.session_key),
-                    run.run_id,
-                    since=min(float(v) for v in starts) if starts else None,
-                )
-                if run.changes:
-                    store.set_run_changes(run.run_id, run.changes)
                 return run_stamp_fields(store.get_run(run.run_id))
             finally:
                 store.close()
@@ -6170,17 +6033,27 @@ class Executor:
         return scrubber.scrub_text(text)
 
     # -- outbound (all sealed) -------------------------------------------
-    def _seal_b64(self, payload: dict) -> str:
-        # The second of the two scrubber chokepoints (docs/WIRE_CONTRACT.md,
-        # "Secrets"): EVERYTHING that goes to the app — events, terminals,
-        # replays — passes here. Raw RFB bytes (browser_data) are not text and
-        # are left alone; every other frame has its strings masked.
+    def _seal_b64_parts(self, payload: dict) -> list[str]:
+        """Seal one outbound payload: one sealed frame, or one per
+        ``fragment`` when the encoded payload is too large for one relay frame
+        (docs/WIRE_CONTRACT.md, "Fragments", bead chuk_chat-zhhd). The cloud
+        relay refuses a frame over 1 MiB, so a ``file`` of more than about
+        600 KB, sent whole, never reached the app, live or in a replay.
+
+        The second of the two scrubber chokepoints (docs/WIRE_CONTRACT.md,
+        "Secrets"): EVERYTHING that goes to the app — events, terminals,
+        replays — passes here. Raw RFB bytes (browser_data) are not text and
+        are left alone; every other frame has its strings masked. The scrub
+        runs on the whole payload, before any split."""
         scrubber = self._secret_scrubber
         if scrubber is not None and payload.get("type") != "browser_data":
             payload = scrubber.scrub_obj(payload)
         with self._codec_lock:
             sealer = self._sealer
-        return frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())
+        return [
+            frame_to_b64(sealer.seal(part).to_bytes())
+            for part in fragment_plaintexts(encode_payload(payload))
+        ]
 
     def emit_host_payload(self, payload: dict, sealer: AgentsFrameSealer) -> bool:
         """Send a frame the HOST originates (token rotation, call ring, job
@@ -6203,23 +6076,39 @@ class Executor:
                 current = self._sealer
             if current is not sealer:
                 return False
-            frame = frame_to_b64(sealer.seal(encode_payload(payload)).to_bytes())
-            self._endpoint.send(encode_frame(make_request(METHOD_EVENT, {"frame": frame})))
+            for part in fragment_plaintexts(encode_payload(payload)):
+                frame = frame_to_b64(sealer.seal(part).to_bytes())
+                self._endpoint.send(
+                    encode_frame(make_request(METHOD_EVENT, {"frame": frame}))
+                )
         return True
 
     def _event(self, request_id: str, payload: dict) -> None:
         """Stream a progress event as a relay notification carrying a sealed frame."""
         with self._emit_lock:
-            envelope = make_request(
-                METHOD_EVENT,
-                {"requestId": request_id, "frame": self._seal_b64(payload)},
-            )
-            self._endpoint.send(encode_frame(envelope))
+            # A large payload goes out as several ``fragment`` frames. They are
+            # sent here, under the lock, so nothing comes between them.
+            for frame in self._seal_b64_parts(payload):
+                envelope = make_request(
+                    METHOD_EVENT, {"requestId": request_id, "frame": frame}
+                )
+                self._endpoint.send(encode_frame(envelope))
 
     def _terminal(self, request_id: str, payload: dict) -> None:
         """Close the stream with a relay response correlated to the task."""
         # The run's heartbeat ends first: no beat may follow the terminal.
         self._stop_beat(request_id)
         with self._emit_lock:
-            envelope = make_response(request_id, {"frame": self._seal_b64(payload)})
+            frames = self._seal_b64_parts(payload)
+            # A fragmented terminal: all parts but the last are events of the
+            # same request; the last part is the response that closes it.
+            for frame in frames[:-1]:
+                self._endpoint.send(
+                    encode_frame(
+                        make_request(
+                            METHOD_EVENT, {"requestId": request_id, "frame": frame}
+                        )
+                    )
+                )
+            envelope = make_response(request_id, {"frame": frames[-1]})
             self._endpoint.send(encode_frame(envelope))

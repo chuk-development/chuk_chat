@@ -62,8 +62,10 @@ message it sends on the loopback relay) means *attached*, and a
 ``controller_offline`` error for a frame we just sent means *gone*.
 
 **Frame cap.** The relay refuses a frame over 1 MB with a correlatable
-``cowork_error``. Chunking large payloads is work item 4 of the plan and is not
-done here; a too-large frame is reported, never silently dropped.
+``cowork_error``. The executor splits a large payload into ``fragment`` frames
+before it seals them (docs/WIRE_CONTRACT.md, "Fragments"), so no executor frame
+gets near the cap. A too-large frame from elsewhere is reported, never silently
+dropped.
 """
 
 from __future__ import annotations
