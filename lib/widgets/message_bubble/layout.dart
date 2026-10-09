@@ -379,6 +379,7 @@ extension _MessageBubbleLayout on _MessageBubbleState {
     // stay in step with them. Now nothing rendered means no bubble, by
     // construction.
     _artifactPayloads.clear();
+    _metaBelowFiles = null;
     final List<Widget> bodyChildren = useContentBlocks
         ? _buildContentBlocksLayout(
             iconFgColor: iconFgColor,
@@ -488,15 +489,36 @@ extension _MessageBubbleLayout on _MessageBubbleState {
             for (int i = 0; i < _artifactPayloads.length; i++)
               Padding(
                 padding: EdgeInsets.only(
-                  top: bubbleCarriesContent ? _kArtifactGap : _runGapAbove,
+                  top: i > 0
+                      ? _kArtifactGap
+                      : bubbleCarriesContent
+                      // The body already ends in the file gap of its own: a
+                      // text block's 4 px, its last line's 4 px margin and
+                      // the bubble's 2 + 2 px.
+                      ? 0
+                      : _runGapAbove,
                 ),
                 child: SandboxArtifactBlock(
                   payload: _artifactPayloads[i],
                   borderRadius: kBorderRadiusCard,
                 ),
               ),
+            // The meta line draws 2 px of air above itself.
+            if (_metaBelowFiles case final Widget meta?)
+              Padding(
+                padding: const EdgeInsets.only(top: _kFileGap - 2),
+                child: meta,
+              ),
             if (showContinueButton) _buildContinueButton(context, accentColor),
-            _buildBottomBar(iconFgColor, hasActions && !widget.messengerMode),
+            _buildBottomBar(
+              iconFgColor,
+              hasActions && !widget.messengerMode,
+              // Under a file with no meta line between them, the action row
+              // keeps the file gap; the meta line carries its own rhythm.
+              topGap: _artifactPayloads.isNotEmpty && _metaBelowFiles == null
+                  ? _kFileGap
+                  : 0,
+            ),
           ],
         ),
       ),
@@ -997,6 +1019,9 @@ extension _MessageBubbleLayout on _MessageBubbleState {
       if (widget.isStreamingMessage) {
         children.insert(0, status);
         children.insert(1, const SizedBox(height: _kInfoBarGap));
+      } else if (_artifactPayloads.isNotEmpty) {
+        // The files follow the text; the settled line goes under them.
+        if (_metaFooterParts().isNotEmpty) _metaBelowFiles = status;
       } else {
         children.add(status);
       }

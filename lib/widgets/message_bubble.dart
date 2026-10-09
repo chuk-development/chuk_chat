@@ -120,6 +120,11 @@ const double _kCardStackGap = 6;
 /// a block of its own, and at the card gap it read as detached.
 const double _kInfoBarGap = 2;
 
+/// Visible air around a file a coworker hands over: between the answer text
+/// and the file card, and between the card and what follows it (the meta
+/// line or the action row). One value, so the card sits evenly between them.
+const double _kFileGap = 12;
+
 /// AI action / user long-press action bars share this fixed height on mobile
 /// so the two button strips look the same size.
 const double _kMobileBottomBarHeight = 36.0;
@@ -348,6 +353,13 @@ class _MessageBubbleState extends State<MessageBubble> {
   /// that is after the body is built.
   final List<SandboxArtifactPayload> _artifactPayloads =
       <SandboxArtifactPayload>[];
+
+  /// The settled "12s · model" line of an answer that hands over files. The
+  /// files belong to the answer, so they follow its text; the line describes
+  /// the whole turn, so it goes under the files, next to the action row, as
+  /// it sits right above the action row in every other answer. Null when the
+  /// line stays at the end of the body (no files) or the turn has none.
+  Widget? _metaBelowFiles;
 
   bool _complexBubbleLogged = false;
   bool _showUserActions = false;
