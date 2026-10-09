@@ -585,6 +585,67 @@ List<_Screen> _screens() => <_Screen>[
       AgentControlPanel(agent: _agent(id: 'host:amber'), source: source),
     );
   }),
+  // The desktop details pane draws the same panel in its profile layout:
+  // face, fields, the settings group, and the technical details opened.
+  // The desktop details pane's first page: the screen box and the routines.
+  _Screen(
+    'widgets/agent_details_overview',
+    (_) => _hosted(
+      AgentDetailsOverview(
+        name: 'Amber Fitzgerald-Okonkwo',
+        sessionKey: 'amber-main',
+        onOpenScreen: () {},
+      ),
+    ),
+  ),
+  _Screen(
+    'widgets/agent_control_panel (desktop details pane)',
+    (_Bag bag) {
+      final FakeAgentControlSource source = _keepControl(
+        bag,
+        FakeAgentControlSource(
+          initial: const AgentControlSnapshot(
+            model: ControlAvailable<AgentModelChoice>(
+              AgentModelChoice(
+                id: 'anthropic/claude-sonnet-4-5-20260101',
+                provider: 'anthropic',
+                reasoningEffort: 'medium',
+              ),
+            ),
+            tokens: ControlAvailable<AgentTokenUsage>(
+              AgentTokenUsage(total: 12345678, runs: 31, lastRun: 54321),
+            ),
+            sandbox: ControlAvailable<AgentSandbox>(
+              AgentSandbox(
+                kind: 'docker',
+                container: 'agents-amber-0a1b2c3d',
+                containerId: 'deadbeef0011',
+                workspace: '/home/chuk/.agents/agents/amber/workspace',
+              ),
+            ),
+          ),
+        ),
+      );
+      return _hosted(
+        AgentControlPanel(
+          agent: _agent(id: 'host:amber'),
+          source: source,
+          profileLayout: true,
+          onRename: (_) {},
+          profiles: AgentProfileStore(),
+        ),
+      );
+    },
+    after: (WidgetTester tester) async {
+      final Finder toggle = find.byKey(
+        const ValueKey<String>('details-technical-toggle'),
+      );
+      await tester.ensureVisible(toggle);
+      await tester.pumpAndSettle();
+      await tester.tap(toggle);
+      await tester.pumpAndSettle();
+    },
+  ),
   _Screen(
     'widgets/agent_telegram_section (token refused, error)',
     (_Bag bag) => _telegram(bag, <String, dynamic>{

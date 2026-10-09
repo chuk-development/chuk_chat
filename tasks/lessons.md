@@ -41,3 +41,14 @@ round outcome).
   das Absenden. Tippen ist nur dann der Hook, wenn das Tippen die Geschichte ist.
 - Regel: Lesbarkeit an Einzelframes in voller Aufloesung pruefen, nicht an
   verkleinerten Kontaktbogen-Kacheln (Schaetzungen waren um Faktor 4 zu klein).
+
+## 2026-10-09 "Schau dir X ab" heisst ein Teil, nicht das ganze Design
+- Fehler: Auf "hol dir Screenshots von Grok Bot, mach das Desktop-Design
+  ungefaehr nach, mehr von der Platzierung" die ganze Agents-Desktopansicht
+  (Sidebar, Header, Blasen, Composer) im Grok-Stil umgebaut. Gemeint war nur
+  das rechte Detail-Panel. Alles wurde zurueckgerollt.
+- Regel: Bei "nachmachen/abgucken" von einer fremden App erst das konkrete
+  Teil benennen und bestaetigen lassen, bevor mehrere Flaechen umgebaut werden.
+  Unsere UI bleibt der Standard; uebernommen wird nur das genannte Element.
+- Regel: Ein grosser Umbau zuerst als ein Bild im echten Target zeigen und
+  die Richtung absegnen lassen, nicht alle Flaechen parallel fertig bauen.

@@ -398,19 +398,11 @@ class AgentProfilePage extends StatelessWidget {
     navigator.maybePop();
   }
 
-  String? _roleOf(AgentsAgent agent, AgentProfile profile) {
-    final String? stored = profile.role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final String? own = agent.role?.trim();
-    return (own == null || own.isEmpty) ? null : own;
-  }
+  String? _roleOf(AgentsAgent agent, AgentProfile profile) =>
+      profile.roleOver(agent.role);
 
-  String? _briefOf(AgentsAgent agent, AgentProfile profile) {
-    final String? stored = profile.brief?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final String? own = agent.brief?.trim();
-    return (own == null || own.isEmpty) ? null : own;
-  }
+  String? _briefOf(AgentsAgent agent, AgentProfile profile) =>
+      profile.briefOver(agent.brief);
 }
 
 /// The small capitals over a block of the profile body.

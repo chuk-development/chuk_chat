@@ -10,7 +10,6 @@ import 'package:chuk_chat/services/chat_runtime_registry.dart';
 import 'package:chuk_chat/services/offline_retry_manager.dart';
 import 'package:chuk_chat/widgets/agents_quiet_run_fold.dart';
 import 'package:chuk_chat/widgets/agents_run_changes_line.dart'; // run changes
-import 'package:chuk_chat/widgets/agents_run_cost_meta.dart';
 import 'package:chuk_chat/widgets/message_bubble.dart';
 import 'package:chuk_chat/widgets/message_fly_in.dart';
 
@@ -109,15 +108,15 @@ class ChatMessageListItem extends StatelessWidget {
     // AGENTS: what a coworker's run cost, and its run id, ride on its answer
     // as one synthetic call (docs/WIRE_CONTRACT.md, "Cost per run and weekly
     // budget"). It is lifted off here, so the bubble never draws it as a tool
-    // line: the cost becomes the answer's meta line, and the run id folds a
-    // quiet automation run to one line. Rows without it pass through
+    // line. The cost is not shown under the answer (the owner does not want
+    // cost or token counts in the chat); the run id folds a quiet automation
+    // run to one line. Rows without it pass through
     // unchanged (the same lists).
     final costSplit = data.isUser
         ? null
         : splitRunMeta(data.toolCalls, data.contentBlocks);
-    final AgentsRunCost? runCost = costSplit?.cost;
     final String? runId = costSplit?.runId;
-    // ── run changes ── "3 files changed · Undo" next to the cost line. It
+    // ── run changes ── "3 files changed · Undo" under the answer. It
     // needs the run id: the sheet behind it asks the host by run.
     final AgentsRunChangesSummary? runChanges = runId == null
         ? null
@@ -214,7 +213,7 @@ class ChatMessageListItem extends StatelessWidget {
         : data.reasoning;
     final Widget answer = buildBubble(data.displayText, reasoning);
     final Widget withCost =
-        (runCost == null && runChanges == null) || data.isStreamingMessage
+        runChanges == null || data.isStreamingMessage
         ? answer
         : Column(
             mainAxisSize: MainAxisSize.min,
@@ -227,9 +226,8 @@ class ChatMessageListItem extends StatelessWidget {
                 spacing: 12,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
-                  if (runCost != null) AgentsRunCostMeta(cost: runCost),
                   // ── run changes ──
-                  if (runChanges != null && runId != null)
+                  if (runId != null)
                     AgentsRunChangesLine(
                       runId: runId,
                       changes: runChanges,

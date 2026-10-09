@@ -300,10 +300,7 @@ class _MobileAgentListState extends State<MobileAgentList> {
   /// The role line: the one the user set in the profile wins over the one the
   /// agent was created with.
   String? _roleOf(AgentsAgent agent) {
-    final String? stored = _profiles.profileOf(agent.id).role?.trim();
-    if (stored != null && stored.isNotEmpty) return stored;
-    final String? own = agent.role?.trim();
-    return (own == null || own.isEmpty) ? null : own;
+    return _profiles.profileOf(agent.id).roleOver(agent.role);
   }
 
   Future<void> _openRowMenu(BuildContext rowContext, AgentsAgent agent) async {
@@ -986,15 +983,11 @@ class MobileAgentRow extends StatelessWidget {
         return title;
       }
     }
-    final String stored =
-        (profiles ?? AgentProfileStore.instance)
-            .profileOf(agent.id)
-            .brief
-            ?.trim() ??
-        '';
-    if (stored.isNotEmpty) return stored;
-    final String brief = agent.brief?.trim() ?? '';
-    if (brief.isNotEmpty) return brief;
+    // The user's own brief wins, a cleared one included (nothing shows).
+    final String? brief = (profiles ?? AgentProfileStore.instance)
+        .profileOf(agent.id)
+        .briefOver(agent.brief);
+    if (brief != null) return brief;
     // Nothing to say beats saying "No activity yet" on every row of a fresh
     // install: the line is for what happened, and an empty line reads as
     // "nothing yet" without spelling it out. The real last message lands here
